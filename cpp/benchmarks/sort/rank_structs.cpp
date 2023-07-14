@@ -26,7 +26,7 @@ void nvbench_rank_structs(nvbench::state& state, nvbench::type_list<nvbench::enu
 {
   auto const table = create_structs_data(state);
 
-  const bool nulls{static_cast<bool>(state.get_int64("Nulls"))};
+  bool const nulls{static_cast<bool>(state.get_int64("Nulls"))};
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     cudf::rank(table->view().column(0),
