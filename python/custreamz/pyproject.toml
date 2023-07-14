@@ -98,16 +98,3 @@ skip = [
     "dist",
     "__init__.py",
 ]
-
-[tool.ruff]
-select = ["E", "F", "W"]
-ignore = [
-    # whitespace before :
-    "E203",
-]
-fixable = ["ALL"]
-exclude = [
-    # TODO: Remove this in a follow-up where we fix __all__.
-    "__init__.py",
-]
-line-length = 88
