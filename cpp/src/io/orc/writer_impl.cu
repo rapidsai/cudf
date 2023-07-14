@@ -2058,6 +2058,8 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
 
   hostdevice_2dvector<gpu::stripe_dictionary> stripe_dicts(
     orc_table.num_string_columns(), segmentation.num_stripes(), stream);
+  if (stripe_dicts.count() == 0) return {std::move(stripe_dicts), {}, {}};
+
   // Initialize stripe dictionaries
   for (auto col_idx : orc_table.string_column_indices) {
     auto& str_column       = orc_table.column(col_idx);
