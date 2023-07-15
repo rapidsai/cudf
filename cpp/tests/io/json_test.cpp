@@ -1235,6 +1235,49 @@ TEST_P(JsonReaderParamTest, JsonLinesMultipleFileInputs)
                                  float64_wrapper{{1.1, 2.2, 3.3, 4.4}, validity});
 }
 
+TEST_P(JsonReaderParamTest, JsonLinesMultipleFileInputsNoNL)
+{
+  auto const test_opt = GetParam();
+  std::vector<std::string> row_orient{"[11, 1.1]\n[22, 2.2]\n", "[33, 3.3]\n[44, 4.4]"};
+  std::vector<std::string> record_orient{
+    to_records_orient({{{"0", "11"}, {"1", "1.1"}}, {{"0", "22"}, {"1", "2.2"}}}, "\n"),
+    to_records_orient({{{"0", "33"}, {"1", "3.3"}}, {{"0", "44"}, {"1", "4.4"}}}, "\n")};
+  auto const& data = is_row_orient_test(test_opt) ? row_orient : record_orient;
+
+  const std::string file1 = temp_env->get_temp_dir() + "JsonLinesFileTest1.json";
+  std::ofstream outfile(file1, std::ofstream::out);
+  outfile << data[0];
+  outfile.close();
+
+  const std::string file2 = temp_env->get_temp_dir() + "JsonLinesFileTest2.json";
+  std::ofstream outfile2(file2, std::ofstream::out);
+  outfile2 << data[1];
+  outfile2.close();
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{{file1, file2}})
+      .lines(true)
+      .legacy(is_legacy_test(test_opt));
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 2);
+  EXPECT_EQ(result.tbl->num_rows(), 4);
+
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
+
+  EXPECT_EQ(result.metadata.schema_info[0].name, "0");
+  EXPECT_EQ(result.metadata.schema_info[1].name, "1");
+
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 int64_wrapper{{11, 22, 33, 44}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
+                                 float64_wrapper{{1.1, 2.2, 3.3, 4.4}, validity});
+}
+
 TEST_F(JsonReaderTest, BadDtypeParams)
 {
   std::string buffer = "[1,2,3,4]";
