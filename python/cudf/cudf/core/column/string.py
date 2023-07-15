@@ -990,9 +990,9 @@ class StringMethods(ColumnMethods):
         .. pandas-compat::
             **StringMethods.replace**
 
-            The parameters `case` and `flags` are not yet supported and will raise
-            a `NotImplementedError` if anything other than the default value
-            is set.
+            The parameters `case` and `flags` are not yet supported and will
+            raise a `NotImplementedError` if anything other than the default
+            value is set.
         """
         if case is not None:
             raise NotImplementedError("`case` parameter is not yet supported")
@@ -2822,7 +2822,9 @@ class StringMethods(ColumnMethods):
             **StringMethods.partition**
 
             The parameter `expand` is not yet supported and will raise a
-            `NotImplementedError` if anything other than the default value is set.
+            `NotImplementedError` if anything other than the default
+            value is set.
+
         """
         if expand is not True:
             raise NotImplementedError(

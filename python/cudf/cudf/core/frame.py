@@ -2524,7 +2524,8 @@ class Frame(BinaryOperand, Scannable):
         .. pandas-compat::
             **DataFrame.all, Series.all**
 
-            Parameters currently not supported are `axis`, `bool_only`, `level`.
+            Parameters currently not supported are `axis`, `bool_only`,
+            `level`.
         """
         return self._reduce(
             "all",
@@ -2577,7 +2578,8 @@ class Frame(BinaryOperand, Scannable):
         .. pandas-compat::
             **DataFrame.any, Series.any**
 
-            Parameters currently not supported are `axis`, `bool_only`, `level`.
+            Parameters currently not supported are `axis`, `bool_only`,
+            `level`.
         """
         return self._reduce(
             "any",
