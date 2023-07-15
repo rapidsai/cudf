@@ -3348,8 +3348,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             * Not Supporting: level
 
-            Rename will not overwrite column names. If a list with duplicates is
-            passed, column names will be postfixed with a number.
+            Rename will not overwrite column names. If a list with
+            duplicates is passed, column names will be postfixed
+            with a number.
         """
         if errors != "ignore":
             raise NotImplementedError(
@@ -3776,7 +3777,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         .. pandas-compat::
             **DataFrame.transpose, DataFrame.T**
 
-            Not supporting *copy* because default and only behavior is copy=True
+            Not supporting *copy* because default and only behavior is
+            copy=True
         """
 
         index = self._data.to_pandas_index()
@@ -3964,7 +3966,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         .. pandas-compat::
             **DataFrame.merge**
 
-            **DataFrames merges in cuDF result in non-deterministic row ordering.**
+            DataFrames merges in cuDF result in non-deterministic row
+            ordering.
         """
         if indicator:
             raise NotImplementedError(
@@ -5825,7 +5828,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         .. pandas-compat::
             **DataFrame.count**
 
-            Parameters currently not supported are `axis`, `level`, `numeric_only`.
+            Parameters currently not supported are `axis`, `level`,
+            `numeric_only`.
         """
         axis = self._get_axis_from_axis_arg(axis)
         if axis != 0:
@@ -6738,9 +6742,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         .. pandas-compat::
             **DataFrame.append**
 
-            If a list of dict/series is passed and the keys are all contained in
-            the DataFrame's index, the order of the columns in the resulting
-            DataFrame will be unchanged.
+            If a list of dict/series is passed and the keys are all contained
+              in the DataFrame's index, the order of the columns in
+            the resulting DataFrame will be unchanged.
             Iteratively appending rows to a cudf DataFrame can be more
             computationally intensive than a single concatenate. A better
             solution is to append those rows to a list and then concatenate

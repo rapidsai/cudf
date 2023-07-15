@@ -3226,15 +3226,16 @@ class IndexedFrame(Frame):
         .. pandas-compat::
             **DataFrame.sample, Series.sample**
 
-            When sampling from ``axis=0/'index'``, ``random_state`` can be either
-            a numpy random state (``numpy.random.RandomState``) or a cupy random
-            state (``cupy.random.RandomState``). When a numpy random state is
-            used, the output is guaranteed to match the output of the corresponding
-            pandas method call, but generating the sample may be slow. If exact
-            pandas equivalence is not required, using a cupy random state will
-            achieve better performance, especially when sampling large number of
-            items. It's advised to use the matching `ndarray` type to the random
-            state for the `weights` array.
+            When sampling from ``axis=0/'index'``, ``random_state`` can be
+            either a numpy random state (``numpy.random.RandomState``)
+            or a cupy random state (``cupy.random.RandomState``). When a numpy
+            random state is used, the output is guaranteed to match the output
+            of the corresponding pandas method call, but generating the sample
+            maybe slow. If exact pandas equivalence is not required, using a
+            cupy random state will achieve better performance,
+            especially when sampling large number of
+            items. It's advised to use the matching `ndarray` type to
+            the random state for the `weights` array.
         """
         axis = self._get_axis_from_axis_arg(axis)
         size = self.shape[axis]
