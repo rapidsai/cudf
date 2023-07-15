@@ -735,8 +735,6 @@ void generate_offsets_for_list(device_span<list_buffer_data const> buff_data,
     thrust::exclusive_scan(
       rmm::exec_policy(stream), list_data.data, list_data.data + list_data.size, list_data.data);
   }
-
-  stream.synchronize();
 }
 
 /**
