@@ -34,7 +34,7 @@ dtype: int64
 ```
 
 
-### Removed various `Index` sub-classes, use `cudf.Index`
+### Removed various numeric `Index` sub-classes, use `cudf.Index`
 
 `Float32Index`, `Float64Index`, `GenericIndex`, `Int8Index`, `Int16Index`, `Int32Index`, `Int64Index`, `StringIndex`, `UInt8Index`, `UInt16Index`, `UInt32Index`, `UInt64Index` have all been removed, use `cudf.Index` directly with a `dtype` to construct the index instead.
 
@@ -82,7 +82,7 @@ dtype: datetime64[us]
 ### Change in bitwise operation results
 
 
-Bitwise operations between two in-equally indexed objects will now not result in boolean results.
+Bitwise operations between two unequally indexed objects will now not result in boolean results.
 
 
 Old behavior:
@@ -157,7 +157,7 @@ Out[6]:
 
 ### `DataFrame` vs `Series` comparisons need to have matching index
 
-Going forward any comparison between `DataFrame` & `Series` objects will need to have matching indexe's, i.e., the column names of `DataFrame` should match index of `Series`:
+Going forward any comparison between `DataFrame` & `Series` objects will need to have matching axes, i.e., the column names of `DataFrame` should match index of `Series`:
 
 Old behavior:
 ```python
