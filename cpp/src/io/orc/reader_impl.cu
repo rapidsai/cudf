@@ -721,108 +721,23 @@ struct list_buffer_data {
   size_type size;
 };
 
-// template <int BlockSize, int ItemsPerThread=1>
-//__global__ void BlockedScanKernel(device_span<list_buffer_data const> buff_data)
-//{
-//     typedef cub::BlockScan<size_type, BlockSize> BlockScan;
-//
-//     __shared__ typename BlockScan::TempStorage temp_storage;
-//
-//     auto list_data = buff_data[blockIdx.x];
-//
-//     cudf::size_type thread_data = (threadIdx.x < list_data.size) ? list_data.data[threadIdx.x] :
-//     0;
-//     // print current block id, thread id, and thread_data value
-//     BlockScan(temp_storage).ExclusiveSum(thread_data, thread_data);
-//     if (threadIdx.x < list_data.size) {
-//         list_data.data[threadIdx.x] = thread_data;
-//     }
-// }
-
-// Write a kernel that accepts a device_span of buff data and prints out the contents of each
-// list_data element
-//__global__ void PrintListData(device_span<list_buffer_data const> buff_data)
-//{
-//    for (auto i = 0; i < buff_data[0].size; ++i) {
-//      printf("i=%i, list_data %d\n", i, buff_data[0].data[i]);
-//    }
-//}
-
+// Generates offsets for list buffer from number of elements in a row.
 void generate_offsets_for_list(device_span<list_buffer_data const> buff_data,
                                rmm::cuda_stream_view stream)
 {
-  // To start with, write a switch statement based on the max size of all the
-  // lists. Dispatch to kernels with different block sizes depending on the
-  // largest list size. Then in the kernel, skip work on any threads that
-  // would be idle. This will be extremely work inefficient for imbalanced
-  // blocks, but would help me figure out if that's a viable solution.
-
-  // auto d_largest_list =
-  //   thrust::max_element(rmm::exec_policy(stream),
-  //                       buff_data.begin(),
-  //                       buff_data.end(),
-  //                       [] __device__(list_buffer_data const left, list_buffer_data const right)
-  //                       {
-  //                         return left.size < right.size;
-  //                       });
-  //  list_buffer_data largest_list_data;
-  //// Note that the device data pointer here is going to get copied to host but will be invalid if
-  /// dereferenced
-  // CUDF_CUDA_TRY(cudaMemcpyAsync(
-  //   &largest_list_data, d_largest_list, sizeof(list_buffer_data), cudaMemcpyDeviceToHost,
-  //   stream.value()));
-  // cudf::size_type largest_block = largest_list_data.size;
-
-  // printf("The size: %lu\n", buff_data.size());
-  // printf("The largest block: %d\n", largest_block);
-  // printf("Before\n");
-  // PrintListData<<<1, 1, 0, stream.value()>>>(buff_data);
-  //// Write a switch statement on largest block being 32, 64, or 128
-  // if (largest_block < 32) {
-  //   BlockedScanKernel<32><<<buff_data.size(), 32, 0, stream.value()>>>(buff_data);
-  // } else if (largest_block < 64) {
-  //   BlockedScanKernel<64><<<buff_data.size(), 64, 0, stream.value()>>>(buff_data);
-  // } else if (largest_block < 128) {
-  //   BlockedScanKernel<128><<<buff_data.size(), 128, 0, stream.value()>>>(buff_data);
-  // } else {
-  //     auto const transformer = [] __device__(list_buffer_data const list_data) {
-  //       thrust::exclusive_scan(
-  //         thrust::seq, list_data.data, list_data.data + list_data.size, list_data.data);
-  //     };
-  //     thrust::for_each(rmm::exec_policy(stream), buff_data.begin(), buff_data.end(),
-  //     transformer);
-  // }
-
-  // New approach, instead of one thread per column launch one kernel per
-  // column and do a DeviceScan
   std::vector<list_buffer_data> buff_data_vec(buff_data.size());
   CUDF_CUDA_TRY(cudaMemcpyAsync(buff_data_vec.data(),
                                 buff_data.data(),
                                 sizeof(list_buffer_data) * buff_data.size(),
                                 cudaMemcpyDeviceToHost,
                                 stream.value()));
-  // Note that all the underlying pointers will be invalid on the host, but that's OK
-  // printf("Finished the copy\n");
   for (auto list_data : buff_data_vec) {
     thrust::exclusive_scan(
       rmm::exec_policy(stream), list_data.data, list_data.data + list_data.size, list_data.data);
   }
 
   stream.synchronize();
-  // printf("After\n");
-  // PrintListData<<<1, 1, 0, stream.value()>>>(buff_data);
 }
-
-// void generate_offsets_for_list(device_span<list_buffer_data const> buff_data,
-//                                rmm::cuda_stream_view stream)
-//{
-//   auto const transformer = [] __device__(list_buffer_data const list_data) {
-//     thrust::exclusive_scan(
-//       thrust::seq, list_data.data, list_data.data + list_data.size, list_data.data);
-//   };
-//   thrust::for_each(rmm::exec_policy(stream), buff_data.begin(), buff_data.end(), transformer);
-//   stream.synchronize();
-// }
 
 /**
  * @brief Function that translates ORC data kind to cuDF type enum
