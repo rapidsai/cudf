@@ -36,7 +36,7 @@
 #include <iterator>
 
 namespace cudf {
-
+namespace hashing {
 namespace detail {
 
 namespace {
@@ -81,7 +81,7 @@ struct MD5Hasher {
                sizeof(message_length_in_bits));
 
     for (int i = 0; i < 4; ++i) {
-      uint32ToLowercaseHexString(hash_values[i], result_location + (8 * i));
+      cudf::detail::uint32ToLowercaseHexString(hash_values[i], result_location + (8 * i));
     }
   }
 
@@ -93,8 +93,8 @@ struct MD5Hasher {
   template <typename Element>
   void __device__ inline process(Element const& element)
   {
-    auto const normalized_element  = normalize_nans_and_zeros(element);
-    auto const [element_ptr, size] = get_element_pointer_and_size(normalized_element);
+    auto const normalized_element  = cudf::detail::normalize_nans_and_zeros(element);
+    auto const [element_ptr, size] = cudf::detail::get_element_pointer_and_size(normalized_element);
     buffer.put(element_ptr, size);
     message_length += size;
   }
@@ -142,7 +142,7 @@ struct MD5Hasher {
         A = D;
         D = C;
         C = B;
-        B = B + rotate_bits_left(F, md5_shift_constants[((j / 16) * 4) + (j % 4)]);
+        B = B + cudf::detail::rotate_bits_left(F, md5_shift_constants[((j / 16) * 4) + (j % 4)]);
       }
 
       hash_values[0] += A;
@@ -153,7 +153,7 @@ struct MD5Hasher {
   };
 
   char* result_location;
-  hash_circular_buffer<message_chunk_size, md5_hash_step> buffer;
+  cudf::detail::hash_circular_buffer<message_chunk_size, md5_hash_step> buffer;
   uint64_t message_length = 0;
   uint32_t hash_values[4] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
 };
@@ -215,9 +215,9 @@ inline bool md5_leaf_type_check(data_type dt)
 
 }  // namespace
 
-std::unique_ptr<column> md5_hash(table_view const& input,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> md5(table_view const& input,
+                            rmm::cuda_stream_view stream,
+                            rmm::mr::device_memory_resource* mr)
 {
   if (input.num_columns() == 0 || input.num_rows() == 0) {
     // Return the MD5 hash of a zero-length input.
@@ -281,4 +281,5 @@ std::unique_ptr<column> md5_hash(table_view const& input,
 }
 
 }  // namespace detail
+}  // namespace hashing
 }  // namespace cudf
