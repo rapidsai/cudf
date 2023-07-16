@@ -55,8 +55,8 @@ TEST_F(MurmurHashTest, MultiValue)
   auto const input1 = cudf::table_view({strings_col, ints_col, bools_col1, secs_col});
   auto const input2 = cudf::table_view({strings_col, ints_col, bools_col2, secs_col});
 
-  auto const output1 = cudf::hashing::murmur_hash3_32(input1);
-  auto const output2 = cudf::hashing::murmur_hash3_32(input2);
+  auto const output1 = cudf::hashing::murmurhash3_x86_32(input1);
+  auto const output2 = cudf::hashing::murmurhash3_x86_32(input2);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
@@ -112,8 +112,8 @@ TEST_F(MurmurHashTest, MultiValueNulls)
   auto const input1 = cudf::table_view({strings_col1, ints_col1, bools_col1, secs_col1});
   auto const input2 = cudf::table_view({strings_col2, ints_col2, bools_col2, secs_col2});
 
-  auto const output1 = cudf::hashing::murmur_hash3_32(input1);
-  auto const output2 = cudf::hashing::murmur_hash3_32(input2);
+  auto const output1 = cudf::hashing::murmurhash3_x86_32(input1);
+  auto const output2 = cudf::hashing::murmurhash3_x86_32(input2);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
@@ -139,7 +139,7 @@ TEST_F(MurmurHashTest, BasicList)
                           -1023787369,
                           -1023787369};
 
-  auto const output = cudf::hashing::murmur_hash3_32(input);
+  auto const output = cudf::hashing::murmurhash3_x86_32(input);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
 
   auto const expect_seeded = ICW{1607594268u,
@@ -155,7 +155,7 @@ TEST_F(MurmurHashTest, BasicList)
                                  1756855002u,
                                  1756855002u};
 
-  auto const seeded_output = cudf::hashing::murmur_hash3_32(input, 15);
+  auto const seeded_output = cudf::hashing::murmurhash3_x86_32(input, 15);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect_seeded, seeded_output->view(), verbosity);
 }
 
@@ -179,7 +179,7 @@ TEST_F(MurmurHashTest, NullableList)
                     -1205248335,
                     -2023148682};
 
-  auto const output = cudf::hashing::murmur_hash3_32(cudf::table_view({col}));
+  auto const output = cudf::hashing::murmurhash3_x86_32(cudf::table_view({col}));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
 
   auto const expect_seeded = ICW{2271820643u,
@@ -194,7 +194,7 @@ TEST_F(MurmurHashTest, NullableList)
                                  595138041u,
                                  2271820578u};
 
-  auto const seeded_output = cudf::hashing::murmur_hash3_32(cudf::table_view({col}), 31);
+  auto const seeded_output = cudf::hashing::murmurhash3_x86_32(cudf::table_view({col}), 31);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect_seeded, seeded_output->view(), verbosity);
 }
 
@@ -236,7 +236,7 @@ TEST_F(MurmurHashTest, ListOfStruct)
                                                                  -319840811,
                                                                  -319840811};
 
-  auto const output = cudf::hashing::murmur_hash3_32(cudf::table_view({*list_column}));
+  auto const output = cudf::hashing::murmurhash3_x86_32(cudf::table_view({*list_column}));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
 
   auto expect_seeded = cudf::test::fixed_width_column_wrapper<uint32_t>{81710442u,
@@ -257,7 +257,8 @@ TEST_F(MurmurHashTest, ListOfStruct)
                                                                         1696730835u,
                                                                         1696730835u};
 
-  auto const seeded_output = cudf::hashing::murmur_hash3_32(cudf::table_view({*list_column}), 619);
+  auto const seeded_output =
+    cudf::hashing::murmurhash3_x86_32(cudf::table_view({*list_column}), 619);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect_seeded, seeded_output->view(), verbosity);
 }
 
@@ -304,7 +305,7 @@ TEST_F(MurmurHashTest, ListOfEmptyStruct)
                                                                  3954409052u,
                                                                  3954409052u};
 
-  auto output = cudf::hashing::murmur_hash3_32(cudf::table_view({*list_column}));
+  auto output = cudf::hashing::murmurhash3_x86_32(cudf::table_view({*list_column}));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
 }
 
@@ -329,7 +330,7 @@ TEST_F(MurmurHashTest, EmptyDeepList)
   auto expect = cudf::test::fixed_width_column_wrapper<uint32_t>{
     2271818677u, 2271818677u, 2271818614u, 2271818614u};
 
-  auto output = cudf::hashing::murmur_hash3_32(cudf::table_view({*list_column}));
+  auto output = cudf::hashing::murmurhash3_x86_32(cudf::table_view({*list_column}));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
 }
 
@@ -344,8 +345,8 @@ TYPED_TEST(MurmurHashTestTyped, Equality)
   auto const input = cudf::table_view({col});
 
   // Hash of same input should be equal
-  auto const output1 = cudf::hashing::murmur_hash3_32(input);
-  auto const output2 = cudf::hashing::murmur_hash3_32(input);
+  auto const output1 = cudf::hashing::murmurhash3_x86_32(input);
+  auto const output2 = cudf::hashing::murmurhash3_x86_32(input);
 
   EXPECT_EQ(input.num_rows(), output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
@@ -362,8 +363,8 @@ TYPED_TEST(MurmurHashTestTyped, EqualityNulls)
   auto const input1 = cudf::table_view({col1});
   auto const input2 = cudf::table_view({col2});
 
-  auto const output1 = cudf::hashing::murmur_hash3_32(input1);
-  auto const output2 = cudf::hashing::murmur_hash3_32(input2);
+  auto const output1 = cudf::hashing::murmurhash3_x86_32(input1);
+  auto const output2 = cudf::hashing::murmurhash3_x86_32(input2);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
@@ -393,9 +394,9 @@ TYPED_TEST(MurmurHashTestFloatTyped, TestExtremes)
   auto const table_col_neg_zero = cudf::table_view({col_neg_zero});
   auto const table_col_neg_nan  = cudf::table_view({col_neg_nan});
 
-  auto const hash_col          = cudf::hashing::murmur_hash3_32(table_col);
-  auto const hash_col_neg_zero = cudf::hashing::murmur_hash3_32(table_col_neg_zero);
-  auto const hash_col_neg_nan  = cudf::hashing::murmur_hash3_32(table_col_neg_nan);
+  auto const hash_col          = cudf::hashing::murmurhash3_x86_32(table_col);
+  auto const hash_col_neg_zero = cudf::hashing::murmurhash3_x86_32(table_col_neg_zero);
+  auto const hash_col_neg_nan  = cudf::hashing::murmurhash3_x86_32(table_col_neg_nan);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_col, *hash_col_neg_zero, verbosity);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_col, *hash_col_neg_nan, verbosity);
