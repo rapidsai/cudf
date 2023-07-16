@@ -42,9 +42,10 @@ namespace cudf::io::fst {
  * @brief Describes the kind of stack operation.
  */
 enum class stack_op_type : int8_t {
-  READ = 0,  ///< Operation reading what is currently on top of the stack
-  PUSH = 1,  ///< Operation pushing a new item on top of the stack
-  POP  = 2   ///< Operation popping the item currently on top of the stack
+  READ  = 0,  ///< Operation reading what is currently on top of the stack
+  PUSH  = 1,  ///< Operation pushing a new item on top of the stack
+  POP   = 2,  ///< Operation popping the item currently on top of the stack
+  RESET = 3   ///< Operation popping all items currently on the stack
 };
 
 namespace detail {
@@ -119,9 +120,9 @@ struct StackSymbolToStackOp {
   {
     stack_op_type stack_op = symbol_to_stack_op_type(stack_symbol);
     // PUSH => +1, POP => -1, READ => 0
-    int32_t level_delta = stack_op == stack_op_type::PUSH  ? 1
-                          : stack_op == stack_op_type::POP ? -1
-                                                           : 0;
+    int32_t level_delta = (stack_op == stack_op_type::PUSH)  ? 1
+                          : (stack_op == stack_op_type::POP) ? -1
+                                                             : 0;
     return StackOpT{static_cast<decltype(StackOpT::stack_level)>(level_delta), stack_symbol};
   }
 
@@ -133,14 +134,20 @@ struct StackSymbolToStackOp {
  * @brief Binary reduction operator to compute the absolute stack level from relative stack levels
  * (i.e., +1 for a PUSH, -1 for a POP operation).
  */
+template <typename StackSymbolToStackOpTypeT>
 struct AddStackLevelFromStackOp {
   template <typename StackLevelT, typename ValueT>
   constexpr CUDF_HOST_DEVICE StackOp<StackLevelT, ValueT> operator()(
     StackOp<StackLevelT, ValueT> const& lhs, StackOp<StackLevelT, ValueT> const& rhs) const
   {
-    StackLevelT new_level = lhs.stack_level + rhs.stack_level;
+    StackLevelT new_level = (symbol_to_stack_op_type(rhs.value) == stack_op_type::RESET)
+                              ? 0
+                              : (lhs.stack_level + rhs.stack_level);
     return StackOp<StackLevelT, ValueT>{new_level, rhs.value};
   }
+
+  /// Function object returning a stack operation type for a given stack symbol
+  StackSymbolToStackOpTypeT symbol_to_stack_op_type;
 };
 
 /**
@@ -323,13 +330,14 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
 
   // Getting temporary storage requirements for the prefix sum of the stack level after each
   // operation
-  CUDF_CUDA_TRY(cub::DeviceScan::InclusiveScan(nullptr,
-                                               stack_level_scan_bytes,
-                                               stack_symbols_in,
-                                               d_kv_operations.Current(),
-                                               detail::AddStackLevelFromStackOp{},
-                                               num_symbols_in,
-                                               stream));
+  CUDF_CUDA_TRY(cub::DeviceScan::InclusiveScan(
+    nullptr,
+    stack_level_scan_bytes,
+    stack_symbols_in,
+    d_kv_operations.Current(),
+    detail::AddStackLevelFromStackOp<StackSymbolToStackOpTypeT>{symbol_to_stack_op},
+    num_symbols_in,
+    stream));
 
   // Getting temporary storage requirements for the stable radix sort (sorting by stack level of the
   // operations)
@@ -393,13 +401,14 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   d_kv_operations = cub::DoubleBuffer<StackOpT>{d_kv_ops_current.data(), d_kv_ops_alt.data()};
 
   // Compute prefix sum of the stack level after each operation
-  CUDF_CUDA_TRY(cub::DeviceScan::InclusiveScan(temp_storage.data(),
-                                               total_temp_storage_bytes,
-                                               stack_symbols_in,
-                                               d_kv_operations.Current(),
-                                               detail::AddStackLevelFromStackOp{},
-                                               num_symbols_in,
-                                               stream));
+  CUDF_CUDA_TRY(cub::DeviceScan::InclusiveScan(
+    temp_storage.data(),
+    total_temp_storage_bytes,
+    stack_symbols_in,
+    d_kv_operations.Current(),
+    detail::AddStackLevelFromStackOp<StackSymbolToStackOpTypeT>{symbol_to_stack_op},
+    num_symbols_in,
+    stream));
 
   // Stable radix sort, sorting by stack level of the operations
   d_kv_operations_unsigned = cub::DoubleBuffer<StackOpUnsignedT>{
