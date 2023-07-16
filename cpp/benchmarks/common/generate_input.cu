@@ -118,13 +118,27 @@ size_t non_fixed_width_size<cudf::string_view>(data_profile const& profile)
   return get_distribution_mean(dist);
 }
 
+double geometric_sum(size_t n, double p)
+{
+  if (p == 1) { return n; }
+  return (1 - std::pow(p, n)) / (1 - p);
+}
+
 template <>
 size_t non_fixed_width_size<cudf::list_view>(data_profile const& profile)
 {
   auto const dist_params       = profile.get_distribution_params<cudf::list_view>();
   auto const single_level_mean = get_distribution_mean(dist_params.length_params);
-  auto const element_size = avg_element_size(profile, cudf::data_type{dist_params.element_type});
-  return element_size * pow(single_level_mean, dist_params.max_depth);
+
+  auto const element_size  = avg_element_size(profile, cudf::data_type{dist_params.element_type});
+  auto const element_count = std::pow(single_level_mean, dist_params.max_depth);
+
+  // Each nesting level includes offsets, this is the sum of all levels
+  // Also include an additional offset per level for the size of the last element
+  auto const total_offset_count =
+    geometric_sum(dist_params.max_depth, single_level_mean) + dist_params.max_depth;
+
+  return sizeof(cudf::size_type) * total_offset_count + element_size * element_count;
 }
 
 template <>
