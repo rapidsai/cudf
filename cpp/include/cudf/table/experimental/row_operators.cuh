@@ -558,14 +558,12 @@ class device_row_comparator {
       // TODO: At what point do we verify that the columns of lhs and rhs are
       // all of the same types? I assume that it's already happened before
       // here, otherwise the current code would be failing.
-      auto [l_dremel_i, r_dremel_i] = [&]() {
-        if (_lhs.column(i).type().id() == type_id::LIST) {
-          return std::make_tuple(optional_dremel_view(_l_dremel[list_column_index]),
-                                 optional_dremel_view(_r_dremel[list_column_index]));
-        } else {
-          return std::make_tuple(optional_dremel_view{}, optional_dremel_view{});
-        }
-      }();
+      auto const [l_dremel_i, r_dremel_i] =
+        _lhs.column(i).type().id() == type_id::LIST
+          ? std::make_tuple(optional_dremel_view(_l_dremel[list_column_index]),
+                            optional_dremel_view(_r_dremel[list_column_index]))
+          : std::make_tuple(optional_dremel_view{}, optional_dremel_view{});
+
       auto element_comp = element_comparator{_check_nulls,
                                              _lhs.column(i),
                                              _rhs.column(i),
