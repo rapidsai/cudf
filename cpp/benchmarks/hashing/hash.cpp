@@ -15,47 +15,44 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/hashing.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-class HashBenchmark : public cudf::benchmark {};
+#include <nvbench/nvbench.cuh>
 
-enum contains_nulls { no_nulls, nulls };
-
-static void BM_hash(benchmark::State& state, cudf::hash_id hid, contains_nulls has_nulls)
+static void bench_hash(nvbench::state& state)
 {
-  cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
-  auto const data = create_random_table({cudf::type_id::INT64}, row_count{n_rows});
-  if (has_nulls == contains_nulls::no_nulls)
-    data->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
+  auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const nulls     = static_cast<bool>(state.get_float64("nulls"));
+  auto const hash_name = state.get_string("hash_name");
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::get_default_stream());
-    cudf::hash(data->view(), hid);
+  data_profile const profile = data_profile_builder().null_probability(nulls);
+  auto const data            = create_random_table(
+    {cudf::type_id::INT64, cudf::type_id::STRING}, row_count{num_rows}, profile);
+
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+
+  if (hash_name == "murmurhash3_x86_32") {
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      auto result = cudf::hashing::murmurhash3_x86_32(data->view());
+    });
+  } else if (hash_name == "md5") {
+    state.exec(nvbench::exec_tag::sync,
+               [&](nvbench::launch& launch) { auto result = cudf::hashing::md5(data->view()); });
+  } else if (hash_name == "spark_murmurhash3_x86_32") {
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      auto result = cudf::hashing::spark_murmurhash3_x86_32(data->view());
+    });
+  } else {
+    state.skip(hash_name + ": unknown hash name");
   }
 }
 
-#define concat(a, b, c) a##b##c
-
-#define H_BENCHMARK_DEFINE(name, hid, n)                                            \
-  BENCHMARK_DEFINE_F(HashBenchmark, name)                                           \
-  (::benchmark::State & st) { BM_hash(st, cudf::hash_id::hid, contains_nulls::n); } \
-  BENCHMARK_REGISTER_F(HashBenchmark, name)                                         \
-    ->RangeMultiplier(4)                                                            \
-    ->Ranges({{1 << 14, 1 << 24}})                                                  \
-    ->UseManualTime()                                                               \
-    ->Unit(benchmark::kMillisecond);
-
-#define HASH_BENCHMARK_DEFINE(hid, n) H_BENCHMARK_DEFINE(concat(hid, _, n), hid, n)
-
-HASH_BENCHMARK_DEFINE(HASH_MURMUR3, nulls)
-HASH_BENCHMARK_DEFINE(HASH_SPARK_MURMUR3, nulls)
-HASH_BENCHMARK_DEFINE(HASH_MD5, nulls)
-
-HASH_BENCHMARK_DEFINE(HASH_MURMUR3, no_nulls)
-HASH_BENCHMARK_DEFINE(HASH_SPARK_MURMUR3, no_nulls)
-HASH_BENCHMARK_DEFINE(HASH_MD5, no_nulls)
+NVBENCH_BENCH(bench_hash)
+  .set_name("hashing")
+  .add_int64_axis("num_rows", {65536, 16777216})
+  .add_float64_axis("nulls", {0.0, 0.1})
+  .add_string_axis("hash_name", {"murmurhash3_x86_32", "md5", "spark_murmurhash3_x86_32"});
