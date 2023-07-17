@@ -80,7 +80,7 @@ struct XXHash_64 {
     }
 
     // remaining data can be processed in 4-byte chunks
-    if (((nbytes % 32) % 8) >= 4) {
+    if ((nbytes % 8) >= 4) {
       for (; offset <= nbytes - 4; offset += 4) {
         h64 ^= (getblock32(data, offset) & 0xfffffffful) * prime1;
         h64 = rotate_bits_left(h64, 23) * prime2 + prime3;
