@@ -132,7 +132,7 @@ TEST_F(XXHash_64_Test, StringType)
      "!@#$%^&*(())",
      "0123456789",
      "{}|:<>?,./;[]=-"});
-  // clang-format on     
+  // clang-format on
 
   auto output = cudf::hashing::xxhash64(cudf::table_view({col1}));
 
