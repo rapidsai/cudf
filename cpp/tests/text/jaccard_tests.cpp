@@ -72,9 +72,9 @@ TEST_F(JaccardTest, Errors)
   auto input = cudf::test::strings_column_wrapper({"1", "2", "3"});
   auto view  = cudf::strings_column_view(input);
   // invalid parameter value
-  EXPECT_THROW(nvtext::jaccard_index(view, view), cudf::logic_error);
+  EXPECT_THROW(nvtext::jaccard_index(view, view, 2), std::invalid_argument);
   // invalid size
   auto input2 = cudf::test::strings_column_wrapper({"1", "2"});
-  auto view2  = cudf::strings_column_view(input);
-  EXPECT_THROW(nvtext::jaccard_index(view, view2), cudf::logic_error);
+  auto view2  = cudf::strings_column_view(input2);
+  EXPECT_THROW(nvtext::jaccard_index(view, view2), std::invalid_argument);
 }

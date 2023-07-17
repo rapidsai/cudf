@@ -200,9 +200,7 @@ std::unique_ptr<cudf::column> hash_substrings(cudf::strings_column_view const& c
                                               cudf::size_type width,
                                               rmm::cuda_stream_view stream)
 {
-  auto const def_mr = rmm::mr::get_current_device_resource();
-
-  auto hashes  = hash_character_ngrams(col, width, stream, def_mr);
+  auto hashes  = hash_character_ngrams(col, width, stream, rmm::mr::get_current_device_resource());
   auto input   = cudf::lists_column_view(hashes->view());
   auto offsets = input.offsets_begin();
   auto data    = input.child().data<uint32_t>();
@@ -240,7 +238,7 @@ std::unique_ptr<cudf::column> hash_substrings(cudf::strings_column_view const& c
     0,
     rmm::device_buffer{},
     stream,
-    def_mr);
+    rmm::mr::get_current_device_resource());
 }
 }  // namespace
 
