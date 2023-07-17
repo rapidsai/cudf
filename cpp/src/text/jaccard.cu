@@ -23,22 +23,142 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/lists/detail/stream_compaction.hpp>
 #include <cudf/reduction/detail/segmented_reduction.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 #include <lists/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
+#include <cub/cub.cuh>
+
 namespace nvtext {
 namespace detail {
 namespace {
+
+/**
+ * @brief Retrieve the row data (span) for the given column/row-index
+ *
+ * @param d_input Input lists column
+ * @param idx Row index to retrieve
+ * @return A device-span of the row values
+ */
+__device__ auto get_row(cudf::column_device_view const& d_input, cudf::size_type idx)
+{
+  auto const offsets =
+    d_input.child(cudf::lists_column_view::offsets_column_index).data<cudf::size_type>();
+  auto const offset = offsets[idx];
+  auto const size   = offsets[idx + 1] - offset;
+  auto const begin =
+    d_input.child(cudf::lists_column_view::child_column_index).data<uint32_t>() + offset;
+  return cudf::device_span<uint32_t const>(begin, size);
+}
+
+/**
+ * @brief Count the unique values within each row of the input column
+ *
+ * This is called with a warp per row
+ */
+struct jaccard_unique_fn {
+  cudf::column_device_view const d_input;
+  cudf::size_type* d_results;
+
+  // warp per row
+  __device__ void operator()(cudf::size_type idx)
+  {
+    using warp_reduce = cub::WarpReduce<cudf::size_type>;
+    __shared__ typename warp_reduce::TempStorage temp_storage;
+
+    auto const row_idx  = idx / cudf::detail::warp_size;
+    auto const lane_idx = idx % cudf::detail::warp_size;
+    auto const row      = get_row(d_input, row_idx);
+    auto const begin    = row.begin();
+
+    cudf::size_type count = 0;
+    for (auto itr = begin + lane_idx; itr < row.end(); itr += cudf::detail::warp_size) {
+      count += (itr == begin || *itr != *(itr - 1));
+    }
+    auto const result = warp_reduce(temp_storage).Sum(count);
+    if (lane_idx == 0) { d_results[row_idx] = result; }
+  }
+};
+
+rmm::device_uvector<cudf::size_type> compute_unique_counts(cudf::column_view const& input,
+                                                           rmm::cuda_stream_view stream)
+{
+  auto d_input   = cudf::column_device_view::create(input, stream);
+  auto d_results = rmm::device_uvector<cudf::size_type>(input.size(), stream);
+  jaccard_unique_fn fn{*d_input, d_results.data()};
+  thrust::for_each_n(rmm::exec_policy(stream),
+                     thrust::counting_iterator<cudf::size_type>(0),
+                     input.size() * cudf::detail::warp_size,
+                     fn);
+  return d_results;
+}
+
+/**
+ * @brief Count the number of common values within each row of the 2 input columns
+ *
+ * This is called with a warp per row
+ */
+struct jaccard_intersect_fn {
+  cudf::column_device_view const d_input1;
+  cudf::column_device_view const d_input2;
+  cudf::size_type* d_results;
+
+  // warp per row
+  __device__ float operator()(cudf::size_type idx)
+  {
+    using warp_reduce = cub::WarpReduce<cudf::size_type>;
+    __shared__ typename warp_reduce::TempStorage temp_storage;
+
+    auto const row_idx  = idx / cudf::detail::warp_size;
+    auto const lane_idx = idx % cudf::detail::warp_size;
+
+    auto const needles  = get_row(d_input1, row_idx);
+    auto const haystack = get_row(d_input2, row_idx);
+
+    auto begin     = haystack.begin();
+    auto const end = haystack.end();
+
+    cudf::size_type count = 0;
+    for (auto itr = needles.begin() + lane_idx; itr < needles.end() && begin < end;
+         itr += cudf::detail::warp_size) {
+      if (itr != needles.begin() && *itr == *(itr - 1)) { continue; }  // skip duplicates
+      // search haystack for this needle (*itr)
+      auto const found = thrust::lower_bound(thrust::seq, begin, end, *itr);
+      count += found != end && *found == *itr;  // increment if found;
+      begin = found;                            // shorten the next lower-bound range
+    }
+    // sum up the counts across this warp
+    auto const result = warp_reduce(temp_storage).Sum(count);
+    if (lane_idx == 0) { d_results[row_idx] = result; }
+  }
+};
+
+rmm::device_uvector<cudf::size_type> compute_intersect_counts(cudf::column_view const& input1,
+                                                              cudf::column_view const& input2,
+                                                              rmm::cuda_stream_view stream)
+{
+  auto const d_input1 = cudf::column_device_view::create(input1, stream);
+  auto const d_input2 = cudf::column_device_view::create(input2, stream);
+  auto d_results      = rmm::device_uvector<cudf::size_type>(input1.size(), stream);
+  jaccard_intersect_fn fn{*d_input1, *d_input2, d_results.data()};
+  thrust::for_each_n(rmm::exec_policy(stream),
+                     thrust::counting_iterator<cudf::size_type>(0),
+                     input1.size() * cudf::detail::warp_size,
+                     fn);
+  return d_results;
+}
 
 /**
  * @brief Compute the jaccard distance for each row
@@ -50,50 +170,78 @@ namespace {
  * and |x| is the number of unique values in x.
  */
 struct jaccard_fn {
-  cudf::size_type const* d_offsets1;
-  cudf::size_type const* d_offsets2;
-  cudf::size_type const* d_inters;
+  cudf::size_type const* d_uniques1;
+  cudf::size_type const* d_uniques2;
+  cudf::size_type const* d_intersects;
 
   __device__ float operator()(cudf::size_type idx)
   {
-    auto const size1  = d_offsets1[idx + 1] - d_offsets1[idx];
-    auto const size2  = d_offsets2[idx + 1] - d_offsets2[idx];
-    auto const inters = d_inters[idx];
+    auto const count1     = d_uniques1[idx];
+    auto const count2     = d_uniques2[idx];
+    auto const intersects = d_intersects[idx];
     // the intersect values are in both sets so a union count
     // would need to subtract the intersect count from one set
-    auto const unions = size1 + size2 - inters;
-    return unions ? ((float)inters / (float)unions) : 0.f;
+    // (see formula in comment above)
+    auto const unions = count1 + count2 - intersects;
+    return unions ? ((float)intersects / (float)unions) : 0.f;
   }
 };
 
 /**
- * @brief Compute the number of common values within each row
+ * @brief Create hashes for each substring
+ *
+ * Uses the hash_character_ngrams to hash substrings of the input column
+ * which returns a lists column where each row is the hashes for the substrings
+ * of the input string row.
+ *
+ * The hashes are then sorted using a segmented sort to make it easier to
+ * perform the unique and intersect operations.
  */
-rmm::device_uvector<cudf::size_type> intersect_counts(cudf::lists_column_view const& lhs,
-                                                      cudf::lists_column_view const& rhs,
-                                                      rmm::cuda_stream_view stream,
-                                                      rmm::mr::device_memory_resource* mr)
+std::unique_ptr<cudf::column> hash_substrings(cudf::strings_column_view const& col,
+                                              cudf::size_type width,
+                                              rmm::cuda_stream_view stream)
 {
-  CUDF_FUNC_RANGE();
-  auto const lhs_child  = lhs.child();
-  auto const rhs_child  = rhs.child();
-  auto const lhs_labels = cudf::lists::detail::generate_labels(lhs, lhs_child.size(), stream, mr);
-  auto const rhs_labels = cudf::lists::detail::generate_labels(rhs, rhs_child.size(), stream, mr);
-  auto const lhs_table  = cudf::table_view{{lhs_labels->view(), lhs_child}};
-  auto const rhs_table  = cudf::table_view{{rhs_labels->view(), rhs_child}};
+  auto const def_mr = rmm::mr::get_current_device_resource();
 
-  auto const nulls_eq  = cudf::null_equality::EQUAL;
-  auto const nans_eq   = cudf::nan_equality::ALL_EQUAL;
-  auto const contained =  // lhs = haystack, rhs = needles
-    cudf::detail::contains(lhs_table, rhs_table, nulls_eq, nans_eq, stream, mr);
+  auto hashes  = hash_character_ngrams(col, width, stream, def_mr);
+  auto input   = cudf::lists_column_view(hashes->view());
+  auto offsets = input.offsets_begin();
+  auto data    = input.child().data<uint32_t>();
 
-  // contained values are in context of the rhs/needles
-  rmm::device_uvector<cudf::size_type> result(rhs.size(), stream);
-  auto sum  = thrust::plus<cudf::size_type>{};
-  auto init = cudf::size_type{0};
-  cudf::reduction::detail::segmented_reduce(
-    contained.begin(), rhs.offsets_begin(), rhs.offsets_end(), result.begin(), sum, init, stream);
-  return result;
+  rmm::device_uvector<uint32_t> sorted(input.child().size(), stream);
+
+  // this is wicked fast and much faster than cudf::lists::detail::sort_list
+  rmm::device_buffer d_temp_storage;
+  size_t temp_storage_bytes = 0;
+  cub::DeviceSegmentedSort::SortKeys(d_temp_storage.data(),
+                                     temp_storage_bytes,
+                                     data,
+                                     sorted.data(),
+                                     sorted.size(),
+                                     input.size(),
+                                     offsets,
+                                     offsets + 1,
+                                     stream.value());
+  d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
+  cub::DeviceSegmentedSort::SortKeys(d_temp_storage.data(),
+                                     temp_storage_bytes,
+                                     data,
+                                     sorted.data(),
+                                     sorted.size(),
+                                     input.size(),
+                                     offsets,
+                                     offsets + 1,
+                                     stream.value());
+
+  auto contents = hashes->release();
+  return cudf::make_lists_column(
+    col.size(),
+    std::move(contents.children.front()),
+    std::make_unique<cudf::column>(std::move(sorted), rmm::device_buffer{}, 0),
+    0,
+    rmm::device_buffer{},
+    stream,
+    def_mr);
 }
 }  // namespace
 
@@ -112,45 +260,25 @@ std::unique_ptr<cudf::column> jaccard_index(cudf::strings_column_view const& inp
   auto output_type = cudf::data_type{cudf::type_id::FLOAT32};
   if (input1.is_empty()) { return cudf::make_empty_column(output_type); }
 
-  // build the unique values for each input and then intersect them
-  auto const [offsets1, offsets2, inters] = [&] {
-    auto const def_mr = rmm::mr::get_current_device_resource();
-    // using hash values to reduce memory and speed up distinct and intersect
-    // collisions should be minimal for smallish width values
-    auto hash1 = hash_character_ngrams(input1, width, stream, def_mr);
-    auto hash2 = hash_character_ngrams(input2, width, stream, def_mr);
-    auto view1 = cudf::lists_column_view(hash1->view());
-    auto view2 = cudf::lists_column_view(hash2->view());
+  // build hashes of the substrings
+  auto const hash1 = hash_substrings(input1, width, stream);
+  auto const hash2 = hash_substrings(input2, width, stream);
 
-    auto nulls_eq = cudf::null_equality::EQUAL;
-    auto nans_eq  = cudf::nan_equality::ALL_EQUAL;
-    // remove any duplicates within each row for each input
-    hash1 = cudf::lists::detail::distinct(view1, nulls_eq, nans_eq, stream, def_mr);
-    hash2 = cudf::lists::detail::distinct(view2, nulls_eq, nans_eq, stream, def_mr);
-    view1 = cudf::lists_column_view(hash1->view());
-    view2 = cudf::lists_column_view(hash2->view());
-    // compute the intersection counts for each row
-    auto inters = intersect_counts(view1, view2, stream, def_mr);
-
-    // only the offsets are needed for calculating the unique sizes
-    return std::tuple{std::move(hash1->release().children.front()),
-                      std::move(hash2->release().children.front()),
-                      std::move(inters)};
-  }();
-
-  auto const d_offsets1 = offsets1->view().data<cudf::size_type>();
-  auto const d_offsets2 = offsets2->view().data<cudf::size_type>();
+  // compute the unique counts in each set and the intersection counts
+  auto const d_uniques1   = compute_unique_counts(hash1->view(), stream);
+  auto const d_uniques2   = compute_unique_counts(hash2->view(), stream);
+  auto const d_intersects = compute_intersect_counts(hash1->view(), hash2->view(), stream);
 
   auto results = cudf::make_numeric_column(
     output_type, input1.size(), cudf::mask_state::UNALLOCATED, stream, mr);
   auto d_results = results->mutable_view().data<float>();
 
-  // compute the jaccard using the unique sizes and the intersect counts
+  // compute the jaccard using the unique counts and the intersect counts
   thrust::transform(rmm::exec_policy(stream),
                     thrust::counting_iterator<cudf::size_type>(0),
                     thrust::counting_iterator<cudf::size_type>(results->size()),
                     d_results,
-                    jaccard_fn{d_offsets1, d_offsets2, inters.data()});
+                    jaccard_fn{d_uniques1.data(), d_uniques2.data(), d_intersects.data()});
 
   if (input1.null_count() || input2.null_count()) {
     auto [null_mask, null_count] =
