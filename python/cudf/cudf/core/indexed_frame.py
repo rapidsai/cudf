@@ -2109,6 +2109,7 @@ class IndexedFrame(Frame):
         -------
             Object with missing values filled or None if ``inplace=True``.
         """
+        # Do not remove until pandas removes this.
         warnings.warn(
             "DataFrame.backfill/Series.backfill is deprecated. Use "
             "DataFrame.bfill/Series.bfill instead",
@@ -2145,6 +2146,7 @@ class IndexedFrame(Frame):
         -------
             Object with missing values filled or None if ``inplace=True``.
         """
+        # Do not remove until pandas removes this.
         warnings.warn(
             "DataFrame.pad/Series.pad is deprecated. Use "
             "DataFrame.ffill/Series.ffill instead",
