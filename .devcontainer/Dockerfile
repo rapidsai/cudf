@@ -10,7 +10,7 @@ ARG PYTHON_PACKAGE_MANAGER=conda
 
 FROM ${REPO}:${RAPIDS}-cpp-llvm${LLVM}-cuda${CUDA}-${DISTRO} as pip-base
 
-FROM ${REPO}:${RAPIDS}-cpp-llvm${LLVM}-cuda${CUDA}-mambaforge-${DISTRO} as conda-base
+FROM ${REPO}:${RAPIDS}-cpp-llvm${LLVM}-mambaforge-${DISTRO} as conda-base
 
 FROM ${PYTHON_PACKAGE_MANAGER}-base
 
