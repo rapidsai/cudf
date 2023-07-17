@@ -128,11 +128,16 @@ cdef extern from "cudf/io/data_sink.hpp" \
     cdef cppclass data_sink:
         pass
 
+# TODO move to separate pxd file
 cdef extern from "cudf/io/datasource.hpp" \
         namespace "cudf::io" nogil:
 
     cdef cppclass datasource:
         pass
+
+# TODO move to new pxd file
+cdef extern from "cudf/io/arrow_io_source.hpp" \
+        namespace "cudf::io" nogil:
 
     cdef cppclass arrow_io_source(datasource):
         arrow_io_source(string arrow_uri) except +
