@@ -1559,21 +1559,10 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return self._column.indices_of(value)
 
     def __dask_tokenize__(self):
-        try:
-            # Import dask_cudf (if available) in case
-            # this is being called within Dask Dataframe
-            import dask_cudf  # noqa: F401
-
-        except ImportError:
-            warnings.warn(
-                f"Using dask to tokenize a {type(self)} object, "
-                f"but `dask_cudf` is not installed. Please install "
-                f"`dask_cudf` for proper dispatching."
-            )
-
-        # TODO: Avoid `to_pandas` once gpu hashing can
-        # produce a single (deterministic) token
-        return (type(self), self.to_pandas())
+        # We can use caching, because an index is immutable
+        if not hasattr(self, "_dask_token"):
+            self._dask_token = super().__dask_tokenize__()
+        return self._dask_token
 
 
 class NumericIndex(GenericIndex):

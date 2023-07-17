@@ -2857,6 +2857,7 @@ class Frame(BinaryOperand, Scannable):
         return [
             type(self),
             self._dtypes,
+            self.index if hasattr(self, "index") else None,
             (
                 self.hash_values() if hasattr(self, "hash_values") else self
             ).to_pandas(),

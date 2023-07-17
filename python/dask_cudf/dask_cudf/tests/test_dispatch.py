@@ -59,7 +59,18 @@ def test_deterministic_tokenize(index):
     assert tokenize(df.A) == tokenize(df.A.copy(deep=True))
     assert tokenize(df.index) == tokenize(df.index.copy(deep=True))
 
-    # Modifying an element should change the token
-    original_token = tokenize(df.A)
+    # Modifying a column element should change the token
+    original_token = tokenize(df)
+    original_token_a = tokenize(df.A)
     df.A.iloc[2] = 10
-    assert original_token != tokenize(df.A)
+    assert original_token != tokenize(df)
+    assert original_token_a != tokenize(df.A)
+
+    # Modifying an index element should change the token
+    original_token = tokenize(df)
+    original_token_index = tokenize(df.index)
+    new_index = df.index.values
+    new_index[2] = 10
+    df.index = new_index
+    assert original_token != tokenize(df)
+    assert original_token_index != tokenize(df.index)
