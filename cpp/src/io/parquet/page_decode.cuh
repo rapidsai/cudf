@@ -872,7 +872,7 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
 {
   int32_t len;
   int const level_bits = s->col.level_bits[lvl];
-  Encoding encoding    = lvl == level_type::DEFINITION ? s->page.definition_level_encoding
+  auto const encoding  = lvl == level_type::DEFINITION ? s->page.definition_level_encoding
                                                        : s->page.repetition_level_encoding;
 
   auto start = cur;
