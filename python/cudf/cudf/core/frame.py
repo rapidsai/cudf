@@ -2854,13 +2854,17 @@ class Frame(BinaryOperand, Scannable):
 
         # TODO: Avoid `to_pandas` once gpu hashing can
         # produce a single (deterministic) token
+        if hasattr(self, "hash_values"):
+            return [
+                type(self),
+                self._dtypes,
+                self.index,
+                self.hash_values().values_host,
+            ]
         return [
             type(self),
             self._dtypes,
-            self.index if hasattr(self, "index") else None,
-            (
-                self.hash_values() if hasattr(self, "hash_values") else self
-            ).to_pandas(),
+            self.to_pandas(),
         ]
 
 

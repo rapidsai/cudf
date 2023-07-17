@@ -47,7 +47,7 @@ def test_deterministic_tokenize(index):
     # dispatches to the logic defined in `backends.py`
     # (making `tokenize(<cudf-data>)` deterministic).
     df = cudf.DataFrame(
-        {"A": list(range(10)), "B": ["dog", "cat"] * 5},
+        {"A": range(10), "B": ["dog", "cat"] * 5, "C": range(10, 0, -1)},
         index=index,
     )
 
@@ -74,3 +74,8 @@ def test_deterministic_tokenize(index):
     df.index = new_index
     assert original_token != tokenize(df)
     assert original_token_index != tokenize(df.index)
+
+    # Check MultiIndex case
+    df2 = df.set_index(["B", "C"], drop=False)
+    assert tokenize(df) != tokenize(df2)
+    assert tokenize(df2) == tokenize(df2)
