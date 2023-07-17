@@ -259,14 +259,18 @@ std::unique_ptr<cudf::column> jaccard_index(cudf::strings_column_view const& inp
   auto output_type = cudf::data_type{cudf::type_id::FLOAT32};
   if (input1.is_empty()) { return cudf::make_empty_column(output_type); }
 
-  // build hashes of the substrings
-  auto const hash1 = hash_substrings(input1, width, stream);
-  auto const hash2 = hash_substrings(input2, width, stream);
+  auto const [d_uniques1, d_uniques2, d_intersects] = [&] {
+    // build hashes of the substrings
+    auto const hash1 = hash_substrings(input1, width, stream);
+    auto const hash2 = hash_substrings(input2, width, stream);
 
-  // compute the unique counts in each set and the intersection counts
-  auto const d_uniques1   = compute_unique_counts(hash1->view(), stream);
-  auto const d_uniques2   = compute_unique_counts(hash2->view(), stream);
-  auto const d_intersects = compute_intersect_counts(hash1->view(), hash2->view(), stream);
+    // compute the unique counts in each set and the intersection counts
+    auto d_uniques1   = compute_unique_counts(hash1->view(), stream);
+    auto d_uniques2   = compute_unique_counts(hash2->view(), stream);
+    auto d_intersects = compute_intersect_counts(hash1->view(), hash2->view(), stream);
+
+    return std::tuple{std::move(d_uniques1), std::move(d_uniques2), std::move(d_intersects)};
+  }();
 
   auto results = cudf::make_numeric_column(
     output_type, input1.size(), cudf::mask_state::UNALLOCATED, stream, mr);
