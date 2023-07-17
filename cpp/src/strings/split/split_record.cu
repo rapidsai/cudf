@@ -77,15 +77,15 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& input,
                            mr);
 }
 
-enum class Dir { FORWARD, BACKWARD };
+enum class Direction { FORWARD, BACKWARD };
 
 /**
  * @brief Identify the tokens from the `idx'th` string element of `d_strings`.
  */
-template <Dir dir>
+template <Direction direction>
 struct whitespace_token_reader_fn {
   column_device_view const d_strings;  // strings to split
-  size_type const max_tokens{};
+  size_type const max_tokens = std::numeric_limits<size_type>::max();
   size_type const* d_token_offsets{};
   string_index_pair* d_tokens{};
 
@@ -105,10 +105,10 @@ struct whitespace_token_reader_fn {
     auto d_result = d_tokens + token_offset;
 
     auto const d_str = d_strings.element<string_view>(idx);
-    whitespace_string_tokenizer tokenizer(d_str, dir != Dir::FORWARD);
+    whitespace_string_tokenizer tokenizer(d_str, direction != Direction::FORWARD);
     size_type token_idx = 0;
     position_pair token{0, 0};
-    if constexpr (dir == Dir::FORWARD) {
+    if constexpr (direction == Direction::FORWARD) {
       while (tokenizer.next_token() && (token_idx < token_count)) {
         token = tokenizer.get_token();
         d_result[token_idx++] =
@@ -166,7 +166,7 @@ std::unique_ptr<column> whitespace_split_record_fn(strings_column_view const& in
                            mr);
 }
 
-template <Dir dir>
+template <Direction direction>
 std::unique_ptr<column> split_record(strings_column_view const& strings,
                                      string_scalar const& delimiter,
                                      size_type maxsplit,
@@ -181,10 +181,13 @@ std::unique_ptr<column> split_record(strings_column_view const& strings,
   auto d_strings_column_ptr = column_device_view::create(strings.parent(), stream);
   if (delimiter.size() == 0) {
     return whitespace_split_record_fn(
-      strings, whitespace_token_reader_fn<dir>{*d_strings_column_ptr, max_tokens}, stream, mr);
+      strings,
+      whitespace_token_reader_fn<direction>{*d_strings_column_ptr, max_tokens},
+      stream,
+      mr);
   } else {
     string_view d_delimiter(delimiter.data(), delimiter.size());
-    if (dir == Dir::FORWARD) {
+    if (direction == Direction::FORWARD) {
       return split_record_fn(
         strings, split_tokenizer_fn{*d_strings_column_ptr, d_delimiter, max_tokens}, stream, mr);
     } else {
@@ -204,7 +207,7 @@ std::unique_ptr<column> split_record(strings_column_view const& strings,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::split_record<detail::Dir::FORWARD>(
+  return detail::split_record<detail::Direction::FORWARD>(
     strings, delimiter, maxsplit, cudf::get_default_stream(), mr);
 }
 
@@ -214,7 +217,7 @@ std::unique_ptr<column> rsplit_record(strings_column_view const& strings,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::split_record<detail::Dir::BACKWARD>(
+  return detail::split_record<detail::Direction::BACKWARD>(
     strings, delimiter, maxsplit, cudf::get_default_stream(), mr);
 }
 
