@@ -63,7 +63,7 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: "gpu-v100-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci:latest"
+      container_image: "rapidsai/ci:cuda11.8.0-centos7-py3.10"
       run_script: "ci/test_java.sh"
   conda-notebook-tests:
     secrets: inherit
