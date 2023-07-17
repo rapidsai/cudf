@@ -23,7 +23,10 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/exec_policy.hpp>
+
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/scatter.h>
 
 #include <numeric>
 
@@ -49,7 +52,7 @@ rmm::device_uvector<char> ingest_raw_input(host_span<std::unique_ptr<datasource>
 {
   CUDF_FUNC_RANGE();
   // We append a line delimiter between two files to make sure the last line of file i and the first
-  // line of file i+1 don't end up on the sae JSON line, if file i does not already end with a line
+  // line of file i+1 don't end up on the same JSON line, if file i does not already end with a line
   // delimiter.
   auto const num_delimiter_chars  = 1;
   auto const num_extra_delimiters = num_delimiter_chars * (sources.size() - 1);
@@ -70,17 +73,15 @@ rmm::device_uvector<char> ingest_raw_input(host_span<std::unique_ptr<datasource>
         auto destination = reinterpret_cast<uint8_t*>(d_buffer.data()) + bytes_read;
         if (source->is_device_read_preferred(data_size)) {
           bytes_read += source->device_read(range_offset, data_size, destination, stream);
-          delimiter_map.push_back(bytes_read);
-          bytes_read += num_delimiter_chars;
         } else {
           h_buffers.emplace_back(source->host_read(range_offset, data_size));
           auto const& h_buffer = h_buffers.back();
           CUDF_CUDA_TRY(cudaMemcpyAsync(
             destination, h_buffer->data(), h_buffer->size(), cudaMemcpyDefault, stream.value()));
           bytes_read += h_buffer->size();
-          delimiter_map.push_back(bytes_read);
-          bytes_read += num_delimiter_chars;
         }
+        delimiter_map.push_back(bytes_read);
+        bytes_read += num_delimiter_chars;
       }
     }
 
