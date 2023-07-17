@@ -1824,7 +1824,6 @@ def test_loc_repeated_index_label_issue_8693():
     assert_eq(expect, actual)
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/13268")
 @pytest.mark.parametrize(
     "indexer", [(..., 0), (0, ...)], ids=["row_ellipsis", "column_ellipsis"]
 )
@@ -1870,6 +1869,17 @@ def test_iloc_integer_categorical_issue_13013(indexer):
     expect = s.iloc[index]
     c = cudf.from_pandas(s)
     actual = c.iloc[index]
+    assert_eq(expect, actual)
+
+
+@pytest.mark.parametrize("indexer", [[1], [0, 2]])
+def test_loc_integer_categorical_issue_13014(indexer):
+    # https://github.com/rapidsai/cudf/issues/13014
+    s = pd.Series([0, 1, 2])
+    index = pd.Categorical(indexer)
+    expect = s.loc[index]
+    c = cudf.from_pandas(s)
+    actual = c.loc[index]
     assert_eq(expect, actual)
 
 
@@ -1959,7 +1969,6 @@ def test_loc_unsorted_index_slice_lookup_keyerror_issue_12833():
         cdf.loc[1:5]
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/13379")
 @pytest.mark.parametrize("index", [range(5), list(range(5))])
 def test_loc_missing_label_keyerror_issue_13379(index):
     # https://github.com/rapidsai/cudf/issues/13379
@@ -1971,6 +1980,16 @@ def test_loc_missing_label_keyerror_issue_13379(index):
 
     with pytest.raises(KeyError):
         cdf.loc[[0, 5]]
+
+
+def test_loc_categorical_no_integer_fallback_issue_13653():
+    # https://github.com/rapidsai/cudf/issues/13653
+    s = cudf.Series(
+        [1, 2], index=cudf.CategoricalIndex([3, 4], categories=[3, 4])
+    )
+    actual = s.loc[3]
+    expect = s.to_pandas().loc[3]
+    assert_eq(actual, expect)
 
 
 @pytest.mark.parametrize("series", [True, False], ids=["Series", "DataFrame"])
