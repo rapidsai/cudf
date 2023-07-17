@@ -20,12 +20,12 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/hashing.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sequence.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/hashing/detail/hashing.hpp>
+#include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -91,7 +91,8 @@ struct minhash_fn {
       // hashing with each seed on the same section of the string is 10x faster than
       // computing the substrings for each seed
       for (std::size_t seed_idx = 0; seed_idx < seeds.size(); ++seed_idx) {
-        auto const hasher = cudf::detail::MurmurHash3_32<cudf::string_view>{seeds[seed_idx]};
+        auto const hasher =
+          cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>{seeds[seed_idx]};
         auto const hvalue = hasher(hash_str);
         cuda::atomic_ref<cudf::hash_value_type, cuda::thread_scope_block> ref{
           *(d_output + seed_idx)};
