@@ -94,7 +94,8 @@ rmm::device_uvector<char> ingest_raw_input(host_span<std::unique_ptr<datasource>
         host_span<size_type const>{delimiter_map.data(), delimiter_map.size() - 1},
         stream,
         rmm::mr::get_current_device_resource());
-      thrust::scatter(delimiter_source,
+      thrust::scatter(rmm::exec_policy_nosync(stream),
+                      delimiter_source,
                       delimiter_source + d_delimiter_map.size(),
                       d_delimiter_map.data(),
                       d_buffer.data());

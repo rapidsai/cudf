@@ -199,6 +199,12 @@ struct JsonReaderDualTest : public cudf::test::BaseFixture,
                             public testing::WithParamInterface<json_test_t> {};
 
 /**
+ * @brief Test fixture for parametrized JSON reader tests that only tests the new nested JSON reader
+ */
+struct JsonReaderNoLegacy : public cudf::test::BaseFixture,
+                            public testing::WithParamInterface<json_test_t> {};
+
+/**
  * @brief Generates a JSON lines string that uses the record orient
  *
  * @param records An array of a map of key-value pairs
@@ -285,6 +291,12 @@ INSTANTIATE_TEST_CASE_P(JsonReaderParamTest,
 INSTANTIATE_TEST_CASE_P(JsonReaderDualTest,
                         JsonReaderDualTest,
                         ::testing::Values(json_test_t::legacy_lines_record_orient,
+                                          json_test_t::json_experimental_record_orient));
+
+// Parametrize qualifying JSON tests for executing nested reader only
+INSTANTIATE_TEST_CASE_P(JsonReaderNoLegacy,
+                        JsonReaderNoLegacy,
+                        ::testing::Values(json_test_t::json_experimental_row_orient,
                                           json_test_t::json_experimental_record_orient));
 
 TEST_P(JsonReaderParamTest, BasicJsonLines)
@@ -1235,10 +1247,10 @@ TEST_P(JsonReaderParamTest, JsonLinesMultipleFileInputs)
                                  float64_wrapper{{1.1, 2.2, 3.3, 4.4}, validity});
 }
 
-TEST_P(JsonReaderParamTest, JsonLinesMultipleFileInputsNoNL)
+TEST_P(JsonReaderNoLegacy, JsonLinesMultipleFileInputsNoNL)
 {
   auto const test_opt = GetParam();
-  std::vector<std::string> row_orient{"[11, 1.1]\n[22, 2.2]\n", "[33, 3.3]\n[44, 4.4]"};
+  std::vector<std::string> row_orient{"[11, 1.1]\n[22, 2.2]", "[33, 3.3]\n[44, 4.4]"};
   std::vector<std::string> record_orient{
     to_records_orient({{{"0", "11"}, {"1", "1.1"}}, {{"0", "22"}, {"1", "2.2"}}}, "\n"),
     to_records_orient({{{"0", "33"}, {"1", "3.3"}}, {{"0", "44"}, {"1", "4.4"}}}, "\n")};
