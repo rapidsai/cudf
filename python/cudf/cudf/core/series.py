@@ -1362,6 +1362,17 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def __getitem__(self, arg):
         if isinstance(arg, slice):
             return self.iloc[arg]
+        elif is_integer(arg) and self.index.dtype.kind not in {"i", "u", "f"}:
+            # Series getitem looks up integers by position if the
+            # index is non-numeric, but is deprecated in pandas 2
+            # https://github.com/pandas-dev/pandas/issues/50617
+            # warnings.warn(
+            #     "Treating integer keys positionally is deprecated and "
+            #     "will be removed in a future version. To find a value "
+            #     "by position use ser.iloc[pos] instead",
+            #     FutureWarning,
+            # )
+            return self.iloc[arg]
         else:
             return self.loc[arg]
 
