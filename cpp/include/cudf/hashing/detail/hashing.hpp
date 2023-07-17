@@ -41,10 +41,10 @@ std::unique_ptr<column> md5(table_view const& input,
                             rmm::cuda_stream_view stream,
                             rmm::mr::device_memory_resource* mr);
 
-std::unique_ptr<column> xxhash64(table_view const& input,
-                                 uint64_t seed,
-                                 rmm::cuda_stream_view,
-                                 rmm::mr::device_memory_resource* mr);
+std::unique_ptr<column> xxhash_64(table_view const& input,
+                                  uint64_t seed,
+                                  rmm::cuda_stream_view,
+                                  rmm::mr::device_memory_resource* mr);
 
 /* Copyright 2005-2014 Daniel James.
  *
