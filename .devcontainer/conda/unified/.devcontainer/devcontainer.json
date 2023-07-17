@@ -1,0 +1,62 @@
+{
+  "shutdownAction": "stopContainer",
+
+  "build": {
+    "context": "${localWorkspaceFolder}/.devcontainer",
+    "dockerfile": "${localWorkspaceFolder}/.devcontainer/Dockerfile",
+    "args": {
+      "CUDA": "12.0",
+      "LLVM": "16",
+      "PYTHON_PACKAGE_MANAGER": "conda"
+    }
+  },
+  "hostRequirements": {
+    "gpu": true
+  },
+
+  "features": {
+    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:23.8": {}
+  },
+
+  "overrideFeatureInstallOrder": [
+    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils"
+  ],
+
+  "initializeCommand": [
+    "/bin/bash", "-c", "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config,conda/pkgs,conda/${localWorkspaceFolderBasename}/unified}"
+  ],
+
+  "containerEnv": {
+    "DEFAULT_CONDA_ENV": "rapids"
+  },
+
+  "workspaceFolder": "/home/coder",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/home/coder/${localWorkspaceFolderBasename},type=bind,consistency=consistent",
+  "mounts": [
+    "source=${localWorkspaceFolder}/../rmm,target=/home/coder/rmm,type=bind,consistency=consistent",
+    "source=${localWorkspaceFolder}/../cudf,target=/home/coder/cudf,type=bind,consistency=consistent",
+    "source=${localWorkspaceFolder}/../.aws,target=/home/coder/.aws,type=bind,consistency=consistent",
+    "source=${localWorkspaceFolder}/../.cache,target=/home/coder/.cache,type=bind,consistency=consistent",
+    "source=${localWorkspaceFolder}/../.config,target=/home/coder/.config,type=bind,consistency=consistent",
+    "source=${localWorkspaceFolder}/../.conda/pkgs,target=/home/coder/.conda/pkgs,type=bind,consistency=consistent",
+    "source=${localWorkspaceFolder}/../.conda/${localWorkspaceFolderBasename}/unified,target=/home/coder/.conda/envs,type=bind,consistency=consistent"
+  ],
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "mutantdino.resourcemonitor",
+        "tamasfe.even-better-toml"
+      ],
+      "settings": {
+        "files.trimFinalNewlines": true,
+        "files.insertFinalNewline": true,
+        "files.trimTrailingWhitespace": true,
+        "files.watcherExclude": {
+          "**/target/**": true
+        },
+        "python.linting.flake8Enabled": true
+      }
+    }
+  }
+}

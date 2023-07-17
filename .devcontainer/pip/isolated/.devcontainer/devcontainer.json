@@ -1,0 +1,62 @@
+{
+  "shutdownAction": "stopContainer",
+
+  "build": {
+    "context": "${localWorkspaceFolder}/.devcontainer",
+    "dockerfile": "${localWorkspaceFolder}/.devcontainer/Dockerfile",
+    "args": {
+      "CUDA": "12.0",
+      "LLVM": "16",
+      "PYTHON_PACKAGE_MANAGER": "pip"
+    }
+  },
+  "hostRequirements": {
+    "gpu": true
+  },
+
+  "features": {
+    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:23.8": {}
+  },
+
+  "overrideFeatureInstallOrder": [
+    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils"
+  ],
+
+  "initializeCommand": [
+    "/bin/bash", "-c", "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config/pip}"
+  ],
+
+  "updateContentCommand": [
+    "/bin/bash", "-c", "cp -ar /workspaces/${localWorkspaceFolderBasename} /home/coder/${localWorkspaceFolderBasename} && rapids-make-vscode-workspace --update"
+  ],
+
+  "containerEnv": {
+    "DEFAULT_VIRTUAL_ENV": "rapids"
+  },
+
+  "workspaceFolder": "/home/coder",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=consistent",
+  "mounts": [
+    "source=${localWorkspaceFolder}/../.aws,target=/home/coder/.aws,type=bind,consistency=consistent",
+    "source=${localWorkspaceFolder}/../.cache,target=/home/coder/.cache,type=bind,consistency=consistent",
+    "source=${localWorkspaceFolder}/../.config,target=/home/coder/.config,type=bind,consistency=consistent"
+  ],
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "mutantdino.resourcemonitor",
+        "tamasfe.even-better-toml"
+      ],
+      "settings": {
+        "files.trimFinalNewlines": true,
+        "files.insertFinalNewline": true,
+        "files.trimTrailingWhitespace": true,
+        "files.watcherExclude": {
+          "**/target/**": true
+        },
+        "python.linting.flake8Enabled": true
+      }
+    }
+  }
+}
