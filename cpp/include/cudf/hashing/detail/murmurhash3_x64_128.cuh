@@ -13,7 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/hashing/detail/hash_functions.cuh>
+#include <cudf/strings/string_view.cuh>
 
 #include <thrust/pair.h>
 
@@ -87,7 +88,7 @@ struct MurmurHash3_x64_128 {
       case 9:
         k2 ^= static_cast<uint64_t>(tail[8]) << 0;
         k2 *= c2;
-        k2 = cudf::detail::rotate_bits_left(k2, 33);
+        k2 = rotate_bits_left(k2, 33);
         k2 *= c1;
         h.second ^= k2;
 
@@ -101,7 +102,7 @@ struct MurmurHash3_x64_128 {
       case 1:
         k1 ^= static_cast<uint64_t>(tail[0]) << 0;
         k1 *= c1;
-        k1 = cudf::detail::rotate_bits_left(k1, 31);
+        k1 = rotate_bits_left(k1, 31);
         k1 *= c2;
         h.first ^= k1;
     };
@@ -120,20 +121,20 @@ struct MurmurHash3_x64_128 {
       uint64_t k2 = getblock64(data, (i * BLOCK_SIZE) + (BLOCK_SIZE / 2));  // 2nd 8 bytes
 
       k1 *= c1;
-      k1 = cudf::detail::rotate_bits_left(k1, 31);
+      k1 = rotate_bits_left(k1, 31);
       k1 *= c2;
 
       h1 ^= k1;
-      h1 = cudf::detail::rotate_bits_left(h1, 27);
+      h1 = rotate_bits_left(h1, 27);
       h1 += h2;
       h1 = h1 * 5 + 0x52dce729;
 
       k2 *= c2;
-      k2 = cudf::detail::rotate_bits_left(k2, 33);
+      k2 = rotate_bits_left(k2, 33);
       k2 *= c1;
 
       h2 ^= k2;
-      h2 = cudf::detail::rotate_bits_left(h2, 31);
+      h2 = rotate_bits_left(h2, 31);
       h2 += h1;
       h2 = h2 * 5 + 0x38495ab5;
     }
@@ -175,14 +176,14 @@ template <>
 MurmurHash3_x64_128<float>::result_type __device__ inline MurmurHash3_x64_128<float>::operator()(
   float const& key) const
 {
-  return compute(cudf::detail::normalize_nans(key));
+  return compute(normalize_nans(key));
 }
 
 template <>
 MurmurHash3_x64_128<double>::result_type __device__ inline MurmurHash3_x64_128<double>::operator()(
   double const& key) const
 {
-  return compute(cudf::detail::normalize_nans(key));
+  return compute(normalize_nans(key));
 }
 
 template <>
