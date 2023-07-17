@@ -18,8 +18,9 @@
 
 #include <hash/helper_functions.cuh>
 
-#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -39,7 +40,7 @@ namespace detail {
  *  Device view of the unordered multiset
  */
 template <typename Element,
-          typename Hasher   = default_hash<Element>,
+          typename Hasher   = cudf::hashing::detail::default_hash<Element>,
           typename Equality = equal_to<Element>>
 class unordered_multiset_device_view {
  public:
@@ -73,7 +74,7 @@ class unordered_multiset_device_view {
  * Fixed size set on a device.
  */
 template <typename Element,
-          typename Hasher   = default_hash<Element>,
+          typename Hasher   = cudf::hashing::detail::default_hash<Element>,
           typename Equality = equal_to<Element>>
 class unordered_multiset {
  public:
