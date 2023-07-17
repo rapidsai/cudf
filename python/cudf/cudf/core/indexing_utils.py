@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import partial, reduce
 from typing import TYPE_CHECKING, Any, Tuple, Union
 
+import cupy as cp
 import numpy as np
+import pandas as pd
 from typing_extensions import TypeAlias
 
 import cudf
@@ -462,6 +465,42 @@ def ordered_find(needles: "ColumnBase", haystack: "ColumnBase") -> GatherMap:
     )
 
 
+def find_label_range_or_mask(
+    key: slice, index: cudf.BaseIndex
+) -> EmptyIndexer | MapIndexer | MaskIndexer | SliceIndexer:
+    # TODO: datetime index must only be handled specially until pandas 2
+    if (
+        not (key.start is None and key.stop is None)
+        and isinstance(index, cudf.core.index.DatetimeIndex)
+        and not index.is_monotonic_increasing
+    ):
+        start = pd.to_datetime(key.start)
+        stop = pd.to_datetime(key.stop)
+        mask = []
+        if start is not None:
+            mask.append(index >= start)
+        if stop is not None:
+            mask.append(index <= stop)
+        bool_mask = reduce(partial(cp.logical_and, out=mask[0]), mask)
+        if key.step is None or key.step == 1:
+            return MaskIndexer(BooleanMask(bool_mask, len(index)))
+        else:
+            (map_,) = bool_mask.nonzero()
+            return MapIndexer(
+                GatherMap.from_column_unchecked(
+                    cudf.core.column.as_column(map_[:: key.step]),
+                    len(index),
+                    nullify=False,
+                )
+            )
+    else:
+        parsed_key = index.find_label_range(key)
+        if len(range(len(index))[parsed_key]) == 0:
+            return EmptyIndexer()
+        else:
+            return SliceIndexer(parsed_key)
+
+
 def parse_single_row_loc_key(
     key: Any,
     index: cudf.BaseIndex,
@@ -499,14 +538,7 @@ def parse_single_row_loc_key(
     """
     n = len(index)
     if isinstance(key, slice):
-        # Convert label slice to index slice
-        # TODO: datetime index must be handled specially (unless we go for
-        # pandas 2 compatibility)
-        parsed_key = index.find_label_range(key)
-        if len(range(n)[parsed_key]) == 0:
-            return EmptyIndexer()
-        else:
-            return SliceIndexer(parsed_key)
+        return find_label_range_or_mask(key, index)
     else:
         is_scalar = _is_scalar_or_zero_d_array(key)
         if is_scalar and isinstance(key, np.ndarray):

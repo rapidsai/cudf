@@ -75,7 +75,6 @@ from cudf.core.index import BaseIndex, RangeIndex, _index_from_data, as_index
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
-    _get_label_range_or_mask,
     _indices_from_labels,
     doc_reset_index_template,
 )
@@ -279,10 +278,16 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             columns_df = self._frame._get_columns_by_label(key[1])
         except KeyError:
             if not self._frame.empty and isinstance(key[0], slice):
-                pos_range = _get_label_range_or_mask(
-                    self._frame.index, key[0].start, key[0].stop, key[0].step
+                indexer = indexing_utils.find_label_range_or_mask(
+                    key[0], self._frame.index
                 )
-                idx = self._frame.index[pos_range]
+                index = self._frame.index
+                if isinstance(indexer, indexing_utils.EmptyIndexer):
+                    idx = index[0:0:1]
+                elif isinstance(indexer, indexing_utils.SliceIndexer):
+                    idx = index[indexer.key]
+                else:
+                    idx = index[indexer.key.column]
             elif self._frame.empty and isinstance(key[0], slice):
                 idx = None
             else:

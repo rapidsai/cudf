@@ -66,7 +66,6 @@ from cudf.core.index import BaseIndex, DatetimeIndex, RangeIndex, as_index
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
-    _get_label_range_or_mask,
     _indices_from_labels,
     doc_reset_index_template,
 )
@@ -322,9 +321,15 @@ class _SeriesLocIndexer(_FrameIndexer):
                 raise KeyError("Label scalar is out of bounds")
 
         elif isinstance(arg, slice):
-            return _get_label_range_or_mask(
-                self._frame.index, arg.start, arg.stop, arg.step
+            indexer = indexing_utils.find_label_range_or_mask(
+                arg, self._frame.index
             )
+            if isinstance(indexer, indexing_utils.EmptyIndexer):
+                return slice(0, 0, 1)
+            elif isinstance(indexer, indexing_utils.SliceIndexer):
+                return indexer.key
+            else:
+                return indexer.key.column
         elif isinstance(arg, (cudf.MultiIndex, pd.MultiIndex)):
             if isinstance(arg, pd.MultiIndex):
                 arg = cudf.MultiIndex.from_pandas(arg)

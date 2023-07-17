@@ -193,29 +193,6 @@ def _indices_from_labels(obj, labels):
     return lhs.join(rhs).sort_values(by=["__", "_"])["_"]
 
 
-def _get_label_range_or_mask(index, start, stop, step):
-    if (
-        not (start is None and stop is None)
-        and type(index) is cudf.core.index.DatetimeIndex
-        and index.is_monotonic_increasing is False
-    ):
-        start = pd.to_datetime(start)
-        stop = pd.to_datetime(stop)
-        if start is not None and stop is not None:
-            if start > stop:
-                return slice(0, 0, None)
-            # TODO: Once Index binary ops are updated to support logical_and,
-            # can use that instead of using cupy.
-            boolean_mask = cp.logical_and((index >= start), (index <= stop))
-        elif start is not None:
-            boolean_mask = index >= start
-        else:
-            boolean_mask = index <= stop
-        return boolean_mask
-    else:
-        return index.find_label_range(slice(start, stop, step))
-
-
 class _FrameIndexer:
     """Parent class for indexers."""
 
