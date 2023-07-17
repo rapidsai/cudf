@@ -28,11 +28,11 @@ using NumericTypesNoBools =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
 
 template <typename T>
-class HashXX64TestTyped : public cudf::test::BaseFixture {};
+class XXHash_64_TestTyped : public cudf::test::BaseFixture {};
 
-TYPED_TEST_SUITE(HashXX64TestTyped, NumericTypesNoBools);
+TYPED_TEST_SUITE(XXHash_64_TestTyped, NumericTypesNoBools);
 
-TYPED_TEST(HashXX64TestTyped, TestAllNumeric)
+TYPED_TEST(XXHash_64_TestTyped, TestAllNumeric)
 {
   using T   = TypeParam;
   auto col1 = cudf::test::fixed_width_column_wrapper<T, int32_t>{
@@ -51,9 +51,9 @@ TYPED_TEST(HashXX64TestTyped, TestAllNumeric)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
-class HashXX64Test : public cudf::test::BaseFixture {};
+class XXHash_64_Test : public cudf::test::BaseFixture {};
 
-TEST_F(HashXX64Test, TestInteger)
+TEST_F(XXHash_64_Test, TestInteger)
 {
   auto col1 =
     cudf::test::fixed_width_column_wrapper<int32_t>{{-127,
@@ -80,7 +80,7 @@ TEST_F(HashXX64Test, TestInteger)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(), expected);
 }
 
-TEST_F(HashXX64Test, TestDouble)
+TEST_F(XXHash_64_Test, TestDouble)
 {
   auto col1 =
     cudf::test::fixed_width_column_wrapper<double>{{-127.,
@@ -113,15 +113,17 @@ TEST_F(HashXX64Test, TestDouble)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(), expected);
 }
 
-TEST_F(HashXX64Test, StringType)
+TEST_F(XXHash_64_Test, StringType)
 {
+  // clang-format off
   auto col1 = cudf::test::strings_column_wrapper(
     {"The",
      "quick",
      "brown fox",
      "jumps over the lazy dog.",
      "I am Jack's complete lack of null value",
-     "A very long (greater than 128 bytes/char string) to test a a very long string",
+     "A very long (greater than 128 bytes/characters) to test a very long string. "
+     "2nd half of the very long string to verify the long string hashing happening.",
      "Some multi-byte characters here: ééé",
      "ééé",
      "ééé ééé",
@@ -130,17 +132,20 @@ TEST_F(HashXX64Test, StringType)
      "!@#$%^&*(())",
      "0123456789",
      "{}|:<>?,./;[]=-"});
+  // clang-format on
 
   auto output = cudf::hashing::xxhash64(cudf::table_view({col1}));
 
   // these were generated using the CPU compiled version of the cuco xxhash64 source
   // https://github.com/NVIDIA/cuCollections/blob/dev/include/cuco/detail/hash_functions/xxhash.cuh
+  // Also verified these with https://pypi.org/project/xxhash/
+  // using xxhash.xxh64(bytes(s,'utf-8')).intdigest()
   auto expected = cudf::test::fixed_width_column_wrapper<uint64_t>({4686269239494003989ul,
                                                                     6715983472207430822ul,
                                                                     8148134898123095730ul,
                                                                     17291005374665645904ul,
                                                                     2631835514925512071ul,
-                                                                    17518648592268952189ul,
+                                                                    4181420602165187991ul,
                                                                     8749004388517322364ul,
                                                                     17701789113925815768ul,
                                                                     8612485687958712810ul,
@@ -152,7 +157,7 @@ TEST_F(HashXX64Test, StringType)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(), expected);
 }
 
-TEST_F(HashXX64Test, TestFixedPoint)
+TEST_F(XXHash_64_Test, TestFixedPoint)
 {
   auto const col1 = cudf::test::fixed_point_column_wrapper<int32_t>(
     {0, 100, -100, -999999999, 999999999}, numeric::scale_type{-3});

@@ -154,10 +154,8 @@ def copy_range(Column source_column,
     example via ``slice.indices``.
     """
 
-    assert (
-        source_end - source_begin == target_end - target_begin,
-        "Source and target ranges must be same length"
-    )
+    msg = "Source and target ranges must be same length"
+    assert source_end - source_begin == target_end - target_begin, msg
     if target_end >= target_begin and inplace:
         # FIXME: Are we allowed to do this when inplace=False?
         return target_column
