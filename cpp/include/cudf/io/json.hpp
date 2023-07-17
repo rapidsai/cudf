@@ -55,6 +55,14 @@ struct schema_element {
 };
 
 /**
+ * @brief Control the error recovery behavior of the json parser
+ */
+enum class json_recovery_mode_t {
+  FAIL,              ///< Does not recover from an error when encountering an invalid format
+  RECOVER_WITH_NULL  ///< Recovers from an error, replacing invalid records with null
+};
+
+/**
  * @brief Input arguments to the `read_json` interface.
  *
  * Available parameters are closely patterned after PANDAS' `read_json` API.
@@ -104,6 +112,9 @@ class json_reader_options {
 
   // Whether to keep the quote characters of string values
   bool _keep_quotes = false;
+
+  // Whether to recover after an invalid JSON line
+  json_recovery_mode_t _recovery_mode = json_recovery_mode_t::FAIL;
 
   /**
    * @brief Constructor from source info.
@@ -236,6 +247,13 @@ class json_reader_options {
   bool is_enabled_keep_quotes() const { return _keep_quotes; }
 
   /**
+   * @brief Queries the JSON reader's behavior on invalid JSON lines.
+   *
+   * @returns An enum that specifies the JSON reader's behavior on invalid JSON lines.
+   */
+  json_recovery_mode_t recovery_mode() const { return _recovery_mode; }
+
+  /**
    * @brief Set data types for columns to be read.
    *
    * @param types Vector of dtypes
@@ -305,6 +323,13 @@ class json_reader_options {
    * of string values
    */
   void enable_keep_quotes(bool val) { _keep_quotes = val; }
+
+  /**
+   * @brief Specifies the JSON reader's behavior on invalid JSON lines.
+   *
+   * @param val An enum value to indicate the JSON reader's behavior on invalid JSON lines.
+   */
+  void set_recovery_mode(json_recovery_mode_t val) { _recovery_mode = val; }
 };
 
 /**
@@ -446,6 +471,18 @@ class json_reader_options_builder {
   json_reader_options_builder& keep_quotes(bool val)
   {
     options._keep_quotes = val;
+    return *this;
+  }
+
+  /**
+   * @brief Specifies the JSON reader's behavior on invalid JSON lines.
+   *
+   * @param val An enum value to indicate the JSON reader's behavior on invalid JSON lines.
+   * @return this for chaining
+   */
+  json_reader_options_builder& recovery_mode(json_recovery_mode_t val)
+  {
+    options._recovery_mode = val;
     return *this;
   }
 

@@ -139,7 +139,6 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/groupby.hpp
         - test -f $PREFIX/include/cudf/detail/groupby/group_replace_nulls.hpp
         - test -f $PREFIX/include/cudf/detail/groupby/sort_helper.hpp
-        - test -f $PREFIX/include/cudf/detail/hashing.hpp
         - test -f $PREFIX/include/cudf/detail/interop.hpp
         - test -f $PREFIX/include/cudf/detail/is_element_valid.hpp
         - test -f $PREFIX/include/cudf/detail/join.hpp
@@ -192,6 +191,7 @@ outputs:
         - test -f $PREFIX/include/cudf/fixed_point/temporary.hpp
         - test -f $PREFIX/include/cudf/groupby.hpp
         - test -f $PREFIX/include/cudf/hashing.hpp
+        - test -f $PREFIX/include/cudf/hashing/detail/hashing.hpp
         - test -f $PREFIX/include/cudf/interop.hpp
         - test -f $PREFIX/include/cudf/io/avro.hpp
         - test -f $PREFIX/include/cudf/io/csv.hpp

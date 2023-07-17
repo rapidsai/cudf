@@ -16,10 +16,10 @@ import numpy as np
 import pandas as pd
 from pandas._config import get_option
 from pandas.core.dtypes.common import is_float
+from typing_extensions import Self, assert_never
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.scalar import _is_null_host_scalar
 from cudf._typing import (
     ColumnLike,
     DataFrameOrSeries,
@@ -40,6 +40,7 @@ from cudf.api.types import (
     is_string_dtype,
     is_struct_dtype,
 )
+from cudf.core import indexing_utils
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
@@ -181,22 +182,15 @@ class _SeriesIlocIndexer(_FrameIndexer):
     For integer-location based selection.
     """
 
+    _frame: cudf.Series
+
     @_cudf_nvtx_annotate
     def __getitem__(self, arg):
-        if isinstance(arg, tuple):
-            arg = list(arg)
-        data = self._frame._get_elements_from_column(arg)
-
-        if (
-            isinstance(data, (dict, list))
-            or _is_scalar_or_zero_d_array(data)
-            or _is_null_host_scalar(data)
-        ):
-            return data
-        return self._frame._from_data(
-            {self._frame.name: data},
-            index=cudf.Index(self._frame.index[arg]),
+        indexing_spec = indexing_utils.parse_row_iloc_indexer(
+            indexing_utils.destructure_series_iloc_indexer(arg, self._frame),
+            len(self._frame),
         )
+        return self._frame._getitem_preprocessed(indexing_spec)
 
     @_cudf_nvtx_annotate
     def __setitem__(self, key, value):
@@ -1308,6 +1302,41 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         else:
             result = self.apply(arg)
         return result
+
+    def _getitem_preprocessed(
+        self,
+        spec: indexing_utils.IndexingSpec,
+    ) -> Union[Self, ScalarLike]:
+        """Get subset of entries given structured data
+
+        Parameters
+        ----------
+        spec
+            Indexing specification
+
+        Returns
+        -------
+        Subsetted Series or else scalar (if a scalar entry is
+        requested)
+
+        Notes
+        -----
+        This function performs no bounds-checking or massaging of the
+        inputs.
+        """
+        if isinstance(spec, indexing_utils.MapIndexer):
+            return self._gather(spec.key, keep_index=True)
+        elif isinstance(spec, indexing_utils.MaskIndexer):
+            return self._apply_boolean_mask(spec.key, keep_index=True)
+        elif isinstance(spec, indexing_utils.SliceIndexer):
+            return self._slice(spec.key)
+        elif isinstance(spec, indexing_utils.ScalarIndexer):
+            return self._gather(
+                spec.key, keep_index=False
+            )._column.element_indexing(0)
+        elif isinstance(spec, indexing_utils.EmptyIndexer):
+            return self._empty_like(keep_index=True)
+        assert_never(spec)
 
     @_cudf_nvtx_annotate
     def __getitem__(self, arg):
