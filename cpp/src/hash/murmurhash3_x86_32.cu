@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/hashing.hpp>
-#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/hashing/detail/hashing.hpp>
+#include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 
@@ -29,10 +30,10 @@ namespace cudf {
 namespace hashing {
 namespace detail {
 
-std::unique_ptr<column> murmur_hash3_32(table_view const& input,
-                                        uint32_t seed,
-                                        rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> murmurhash3_x86_32(table_view const& input,
+                                           uint32_t seed,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
 {
   auto output = make_numeric_column(data_type(type_to_id<hash_value_type>()),
                                     input.num_rows(),
@@ -51,11 +52,21 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
   thrust::tabulate(rmm::exec_policy(stream),
                    output_view.begin<hash_value_type>(),
                    output_view.end<hash_value_type>(),
-                   row_hasher.device_hasher<cudf::detail::MurmurHash3_32>(nullable, seed));
+                   row_hasher.device_hasher<MurmurHash3_x86_32>(nullable, seed));
 
   return output;
 }
 
 }  // namespace detail
+
+std::unique_ptr<column> murmurhash3_x86_32(table_view const& input,
+                                           uint32_t seed,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::murmurhash3_x86_32(input, seed, stream, mr);
+}
+
 }  // namespace hashing
 }  // namespace cudf

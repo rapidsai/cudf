@@ -17,11 +17,11 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/hashing.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/assert.cuh>
-#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/hashing/detail/default_hash.cuh>
+#include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/list_device_view.cuh>
 #include <cudf/lists/lists_column_device_view.cuh>
@@ -542,8 +542,10 @@ class device_row_comparator {
                                                 size_type const rhs_index) const noexcept
   {
     int last_null_depth = std::numeric_limits<int>::max();
-    size_type list_column_index{0};
+    size_type list_column_index{-1};
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
+      if (_lhs.column(i).type().id() == type_id::LIST) { ++list_column_index; }
+
       int const depth = _depth.has_value() ? (*_depth)[i] : 0;
       if (depth > last_null_depth) { continue; }
 
@@ -556,15 +558,12 @@ class device_row_comparator {
       // TODO: At what point do we verify that the columns of lhs and rhs are
       // all of the same types? I assume that it's already happened before
       // here, otherwise the current code would be failing.
-      auto [l_dremel_i, r_dremel_i] = [&]() {
-        if (_lhs.column(i).type().id() == type_id::LIST) {
-          auto idx = list_column_index++;
-          return std::make_tuple(optional_dremel_view(_l_dremel[idx]),
-                                 optional_dremel_view(_r_dremel[idx]));
-        } else {
-          return std::make_tuple(optional_dremel_view{}, optional_dremel_view{});
-        }
-      }();
+      auto const [l_dremel_i, r_dremel_i] =
+        _lhs.column(i).type().id() == type_id::LIST
+          ? std::make_tuple(optional_dremel_view(_l_dremel[list_column_index]),
+                            optional_dremel_view(_r_dremel[list_column_index]))
+          : std::make_tuple(optional_dremel_view{}, optional_dremel_view{});
+
       auto element_comp = element_comparator{_check_nulls,
                                              _lhs.column(i),
                                              _rhs.column(i),
@@ -1942,7 +1941,7 @@ class row_hasher {
    * @param seed The seed to use for the hash function
    * @return A hash operator to use on the device
    */
-  template <template <typename> class hash_function = detail::default_hash,
+  template <template <typename> class hash_function = cudf::hashing::detail::default_hash,
             template <template <typename> class, typename>
             class DeviceRowHasher = device_row_hasher,
             typename Nullate>

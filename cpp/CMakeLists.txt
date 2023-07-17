@@ -344,8 +344,8 @@ add_library(
   src/groupby/sort/sort_helper.cu
   src/hash/hashing.cu
   src/hash/md5_hash.cu
-  src/hash/murmur_hash.cu
-  src/hash/spark_murmur_hash.cu
+  src/hash/murmurhash3_x86_32.cu
+  src/hash/spark_murmurhash3_x86_32.cu
   src/interop/dlpack.cpp
   src/interop/from_arrow.cu
   src/interop/to_arrow.cu
