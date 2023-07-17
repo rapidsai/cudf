@@ -193,10 +193,11 @@ cudf::size_type expression_parser::visit(operation const& expr)
   return index;
 }
 
-// TODO: Eliminate column name references from expression_parser because 
+// TODO: Eliminate column name references from expression_parser because
 // 2 code paths diverge in supporting column name references:
 // 1. column name references are specific to cuIO
-// 2. column name references are not supported in the libcudf table operations such as join, transform.
+// 2. column name references are not supported in the libcudf table operations such as join,
+// transform.
 cudf::size_type expression_parser::visit(column_name_reference const& expr)
 {
   CUDF_FAIL("Column name references are not supported in the AST expression parser.");
