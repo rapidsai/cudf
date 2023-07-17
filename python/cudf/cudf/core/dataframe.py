@@ -122,22 +122,6 @@ def _shape_mismatch_error(x, y):
 
 
 class _DataFrameIndexer(_FrameIndexer):
-    def __getitem__(self, arg):
-        if (
-            isinstance(self._frame.index, MultiIndex)
-            or self._frame._data.multiindex
-        ):
-            # This try/except block allows the use of pandas-like
-            # tuple arguments into MultiIndex dataframes.
-            try:
-                return self._getitem_tuple_arg(arg)
-            except (TypeError, KeyError, IndexError, ValueError):
-                return self._getitem_tuple_arg((arg, slice(None)))
-        else:
-            if not isinstance(arg, tuple):
-                arg = (arg, slice(None))
-            return self._getitem_tuple_arg(arg)
-
     def __setitem__(self, key, value):
         if not isinstance(key, tuple):
             key = (key, slice(None))
@@ -229,14 +213,30 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
     For selection by label.
     """
 
-    @_cudf_nvtx_annotate
-    def _getitem_scalar(self, arg):
-        return self._frame[arg[1]].loc[arg[0]]
+    def __getitem__(self, arg):
+        if isinstance(self._frame.index, cudf.MultiIndex):
+            # This try/except block allows the use of pandas-like
+            # tuple arguments into MultiIndex dataframes.
+            try:
+                return self._getitem_tuple_arg(arg)
+            except (TypeError, KeyError, IndexError, ValueError):
+                return self._getitem_tuple_arg((arg, slice(None)))
+        else:
+            row_key, (
+                col_is_scalar,
+                ca,
+            ) = indexing_utils.destructure_dataframe_loc_indexer(
+                arg, self._frame
+            )
+            row_spec = indexing_utils.parse_row_loc_indexer(
+                row_key, self._frame.index
+            )
+            return self._frame._getitem_preprocessed(
+                row_spec, col_is_scalar, ca
+            )
 
     @_cudf_nvtx_annotate
     def _getitem_tuple_arg(self, arg):
-        from uuid import uuid4
-
         # Step 1: Gather columns
         if isinstance(arg, tuple):
             columns_df = self._frame._get_columns_by_label(arg[1])
@@ -262,64 +262,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     row_arg = arg
                 return columns_df.index._get_row_major(columns_df, row_arg)
         else:
-            if isinstance(arg[0], slice):
-                out = _get_label_range_or_mask(
-                    columns_df.index, arg[0].start, arg[0].stop, arg[0].step
-                )
-                if isinstance(out, slice):
-                    df = columns_df._slice(out)
-                else:
-                    df = columns_df._apply_boolean_mask(
-                        BooleanMask.from_column_unchecked(
-                            cudf.core.column.as_column(out)
-                        )
-                    )
-            else:
-                tmp_arg = arg
-                if is_scalar(arg[0]):
-                    # If a scalar, there is possibility of having duplicates.
-                    # Join would get all the duplicates. So, converting it to
-                    # an array kind.
-                    tmp_arg = ([tmp_arg[0]], tmp_arg[1])
-                if len(tmp_arg[0]) == 0:
-                    return columns_df._empty_like(keep_index=True)
-                tmp_arg = (as_column(tmp_arg[0]), tmp_arg[1])
-
-                if is_bool_dtype(tmp_arg[0]):
-                    df = columns_df._apply_boolean_mask(
-                        BooleanMask(tmp_arg[0], len(columns_df))
-                    )
-                else:
-                    tmp_col_name = str(uuid4())
-                    cantor_name = "_" + "_".join(
-                        map(str, columns_df._data.names)
-                    )
-                    if columns_df._data.multiindex:
-                        # column names must be appropriate length tuples
-                        extra = tuple(
-                            "" for _ in range(columns_df._data.nlevels - 1)
-                        )
-                        tmp_col_name = (tmp_col_name, *extra)
-                        cantor_name = (cantor_name, *extra)
-                    other_df = DataFrame(
-                        {tmp_col_name: column.arange(len(tmp_arg[0]))},
-                        index=as_index(tmp_arg[0]),
-                    )
-                    columns_df[cantor_name] = column.arange(len(columns_df))
-                    df = other_df.join(columns_df, how="inner")
-                    # as join is not assigning any names to index,
-                    # update it over here
-                    df.index.name = columns_df.index.name
-                    df = df.sort_values(by=[tmp_col_name, cantor_name])
-                    df.drop(columns=[tmp_col_name, cantor_name], inplace=True)
-                    # There were no indices found
-                    if len(df) == 0:
-                        raise KeyError(arg)
-
-        # Step 3: Downcast
-        if self._can_downcast_to_series(df, arg):
-            return self._downcast_to_series(df, arg)
-        return df
+            raise RuntimeError("Should have been handled by now")
 
     @_cudf_nvtx_annotate
     def _setitem_tuple_arg(self, key, value):
