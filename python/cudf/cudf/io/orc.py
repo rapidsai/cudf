@@ -296,14 +296,14 @@ def read_orc(
     from cudf import DataFrame
 
     if skiprows is not None:
-        # Do not remove until cuIO team approves it's removal.
+        # Do not remove until cuIO team approves its removal.
         warnings.warn(
             "skiprows is deprecated and will be removed.",
             FutureWarning,
         )
 
     if num_rows is not None:
-        # Do not remove until cuIO team approves it's removal.
+        # Do not remove until cuIO team approves its removal.
         warnings.warn(
             "num_rows is deprecated and will be removed.",
             FutureWarning,
