@@ -26,9 +26,9 @@
 
 static void bench_jaccard(nvbench::state& state)
 {
-  auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const row_width = static_cast<cudf::size_type>(state.get_int64("row_width"));
-  auto const width     = static_cast<cudf::size_type>(state.get_int64("width"));
+  auto const num_rows        = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const row_width       = static_cast<cudf::size_type>(state.get_int64("row_width"));
+  auto const substring_width = static_cast<cudf::size_type>(state.get_int64("substring_width"));
 
   if (static_cast<std::size_t>(num_rows) * static_cast<std::size_t>(row_width) >=
       static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
@@ -51,7 +51,7 @@ static void bench_jaccard(nvbench::state& state)
   state.add_global_memory_writes<nvbench::float32_t>(num_rows);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    auto result = nvtext::jaccard_index(input1, input2, width);
+    auto result = nvtext::jaccard_index(input1, input2, substring_width);
   });
 }
 
@@ -59,4 +59,4 @@ NVBENCH_BENCH(bench_jaccard)
   .set_name("jaccard")
   .add_int64_axis("num_rows", {1024, 4096, 8192, 16364, 32768, 262144})
   .add_int64_axis("row_width", {128, 512, 2048})
-  .add_int64_axis("width", {5, 10});
+  .add_int64_axis("substring_width", {5, 10});

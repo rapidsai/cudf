@@ -855,3 +855,21 @@ def test_minhash():
     with pytest.raises(ValueError):
         seeds = cudf.Series([0, 1, 2], dtype=np.int32)
         strings.str.minhash(seeds=seeds)
+
+
+def test_jaccard_index():
+    str1 = cudf.Series(["the brown dog", "jumped about"])
+    str2 = cudf.Series(["the black cat", "jumped around"])
+
+    expected = cudf.Series([0.058824, 0.307692], dtype=np.float32)
+    actual = str1.str.jaccard_index(str2)
+    assert_eq(expected, actual)
+
+    actual = str2.str.jaccard_index(str1)
+    assert_eq(expected, actual)
+
+    with pytest.raises(ValueError):
+        str1.str.jaccard_index(str2, 2)
+    with pytest.raises(ValueError):
+        str3 = cudf.Series(["not enough rows"])
+        str1.str.jaccard_index(str3)

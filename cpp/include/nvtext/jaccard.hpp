@@ -16,10 +16,7 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
-#include <cudf/hashing.hpp>
-#include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/utilities/span.hpp>
 
 namespace nvtext {
 /**

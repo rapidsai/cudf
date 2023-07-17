@@ -22,14 +22,11 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/search.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/lists/detail/stream_compaction.hpp>
-#include <cudf/reduction/detail/segmented_reduction.cuh>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
-#include <lists/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -129,6 +126,8 @@ struct jaccard_intersect_fn {
 
     auto begin     = haystack.begin();
     auto const end = haystack.end();
+
+    // TODO: investigate cuCollections device-side static-map to match row values
 
     cudf::size_type count = 0;
     for (auto itr = needles.begin() + lane_idx; itr < needles.end() && begin < end;
