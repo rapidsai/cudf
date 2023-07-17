@@ -871,17 +871,34 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
                                             level_type lvl)
 {
   int32_t len;
-  int level_bits    = s->col.level_bits[lvl];
-  Encoding encoding = lvl == level_type::DEFINITION ? s->page.definition_level_encoding
-                                                    : s->page.repetition_level_encoding;
+  int const level_bits = s->col.level_bits[lvl];
+  Encoding encoding    = lvl == level_type::DEFINITION ? s->page.definition_level_encoding
+                                                       : s->page.repetition_level_encoding;
 
   auto start = cur;
+
+  auto init_rle = [s, lvl, end, level_bits](uint8_t const* cur) {
+    uint32_t const run      = get_vlq32(cur, end);
+    s->initial_rle_run[lvl] = run;
+    if (!(run & 1)) {
+      int v = (cur < end) ? cur[0] : 0;
+      cur++;
+      if (level_bits > 8) {
+        v |= ((cur < end) ? cur[0] : 0) << 8;
+        cur++;
+      }
+      s->initial_rle_value[lvl] = v;
+    }
+    s->lvl_start[lvl] = cur;
+
+    if (cur > end) { s->error = 2; }
+  };
 
   // this is a little redundant. if level_bits == 0, then nothing should be encoded
   // for the level, but some V2 files in the wild violate this and encode the data anyway.
   // thus we will handle V2 headers separately.
   if (s->page.flags & PAGEINFO_FLAGS_V2 != 0) {
-     // V2 only uses RLE encoding so no need to check encoding
+    // V2 only uses RLE encoding so no need to check encoding
     len = lvl == level_type::DEFINITION ? s->page.def_lvl_bytes : s->page.rep_lvl_bytes;
     s->abs_lvl_start[lvl] = cur;
     if (len == 0) {
@@ -889,26 +906,15 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
       s->initial_rle_value[lvl] = 0;
       s->lvl_start[lvl]         = cur;
     } else {
-      s->initial_rle_run[lvl] = run;
-      if (!(run & 1)) {
-        int v = (cur < end) ? cur[0] : 0;
-        cur++;
-        if (level_bits > 8) {
-          v |= ((cur < end) ? cur[0] : 0) << 8;
-          cur++;
-        }
-        s->initial_rle_value[lvl] = v;
-      }
-      s->lvl_start[lvl] = cur;
+      init_rle(cur);
     }
-  }
-  else if (level_bits == 0) {
+  } else if (level_bits == 0) {
     len                       = 0;
     s->initial_rle_run[lvl]   = s->page.num_input_values * 2;  // repeated value
     s->initial_rle_value[lvl] = 0;
     s->lvl_start[lvl]         = cur;
     s->abs_lvl_start[lvl]     = cur;
-  } else if (encoding == Encoding::RLE) {
+  } else if (encoding == Encoding::RLE) {  // V1 header with RLE encoding
     if (cur + 4 < end) {
       len = 4 + (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);
       cur += 4;
@@ -917,22 +923,7 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
       s->error = 2;
     }
     s->abs_lvl_start[lvl] = cur;
-    if (!s->error) {
-      uint32_t run            = get_vlq32(cur, end);
-      s->initial_rle_run[lvl] = run;
-      if (!(run & 1)) {
-        int v = (cur < end) ? cur[0] : 0;
-        cur++;
-        if (level_bits > 8) {
-          v |= ((cur < end) ? cur[0] : 0) << 8;
-          cur++;
-        }
-        s->initial_rle_value[lvl] = v;
-      }
-      s->lvl_start[lvl] = cur;
-    }
-
-    if (cur > end) { s->error = 2; }
+    init_rle(cur);
   } else if (encoding == Encoding::BIT_PACKED) {
     len                       = (s->page.num_input_values * level_bits + 7) >> 3;
     s->initial_rle_run[lvl]   = ((s->page.num_input_values + 7) >> 3) * 2 + 1;  // literal run
