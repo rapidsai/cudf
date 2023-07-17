@@ -364,6 +364,7 @@ dependencies:
       - output_types: [conda, requirements]
         packages:
           - pre-commit
+          - identify>=2.5.20
       - output_types: conda
         packages:
           - doxygen=1.8.20 # pre-commit hook needs a specific version.
