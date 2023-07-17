@@ -98,7 +98,7 @@ struct hash_functor {
   column_device_view const& col;
   __device__ auto operator()(size_type idx) const
   {
-    return cudf::detail::MurmurHash3_32<string_view>{}(col.element<string_view>(idx));
+    return cudf::hashing::detail::MurmurHash3_x86_32<string_view>{}(col.element<string_view>(idx));
   }
 };
 

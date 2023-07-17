@@ -21,8 +21,8 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/partitioning.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
@@ -724,6 +724,32 @@ struct dispatch_map_type {
 
 namespace detail {
 namespace {
+
+/**
+ * @brief This hash function simply returns the input value cast to the
+ * result_type of the functor.
+ */
+template <typename Key>
+struct IdentityHash {
+  using result_type        = uint32_t;
+  constexpr IdentityHash() = default;
+  constexpr IdentityHash(uint32_t) {}
+
+  template <typename return_type = result_type>
+  constexpr std::enable_if_t<!std::is_arithmetic_v<Key>, return_type> operator()(
+    Key const& key) const
+  {
+    CUDF_UNREACHABLE("IdentityHash does not support this data type");
+  }
+
+  template <typename return_type = result_type>
+  constexpr std::enable_if_t<std::is_arithmetic_v<Key>, return_type> operator()(
+    Key const& key) const
+  {
+    return static_cast<result_type>(key);
+  }
+};
+
 template <template <typename> class hash_function>
 std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
@@ -789,10 +815,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
         if (!is_numeric(input.column(column_id).type()))
           CUDF_FAIL("IdentityHash does not support this data type");
       }
-      return detail::hash_partition<detail::IdentityHash>(
+      return detail::hash_partition<cudf::detail::IdentityHash>(
         input, columns_to_hash, num_partitions, seed, stream, mr);
     case (hash_id::HASH_MURMUR3):
-      return detail::hash_partition<detail::MurmurHash3_32>(
+      return detail::hash_partition<cudf::hashing::detail::MurmurHash3_x86_32>(
         input, columns_to_hash, num_partitions, seed, stream, mr);
     default: CUDF_FAIL("Unsupported hash function in hash_partition");
   }

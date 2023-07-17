@@ -86,7 +86,7 @@ namespace hashing {
  *
  * @returns A column where each row is the hash of a row from the input
  */
-std::unique_ptr<column> murmur_hash3_32(
+std::unique_ptr<column> murmurhash3_x86_32(
   table_view const& input,
   uint32_t seed                       = DEFAULT_HASH_SEED,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
@@ -95,7 +95,7 @@ std::unique_ptr<column> murmur_hash3_32(
 /**
  * @brief Computes the MurmurHash3 32-bit of each row in the given table
  *
- * This function computes the hash similar to MurmurHash3_32 with special processing
+ * This function computes the hash similar to MurmurHash3_x86_32 with special processing
  * to match Spark's implementation results.
  *
  * @param input The table of columns to hash
@@ -105,7 +105,7 @@ std::unique_ptr<column> murmur_hash3_32(
  *
  * @returns A column where each row is the hash of a row from the input
  */
-std::unique_ptr<column> spark_murmur_hash3_32(
+std::unique_ptr<column> spark_murmurhash3_x86_32(
   table_view const& input,
   uint32_t seed                       = DEFAULT_HASH_SEED,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
