@@ -54,8 +54,8 @@ rmm::device_uvector<char> ingest_raw_input(host_span<std::unique_ptr<datasource>
   // We append a line delimiter between two files to make sure the last line of file i and the first
   // line of file i+1 don't end up on the same JSON line, if file i does not already end with a line
   // delimiter.
-  auto const num_delimiter_chars  = 1;
-  auto const num_extra_delimiters = num_delimiter_chars * (sources.size() - 1);
+  auto constexpr num_delimiter_chars = 1;
+  auto const num_extra_delimiters    = num_delimiter_chars * (sources.size() - 1);
 
   // Iterate through the user defined sources and read the contents into the local buffer
   auto const total_source_size =

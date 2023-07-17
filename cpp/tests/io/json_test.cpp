@@ -1250,7 +1250,9 @@ TEST_P(JsonReaderParamTest, JsonLinesMultipleFileInputs)
 TEST_P(JsonReaderNoLegacy, JsonLinesMultipleFileInputsNoNL)
 {
   auto const test_opt = GetParam();
+  // Strings for the two separate input files in row-orient that do not end with a newline
   std::vector<std::string> row_orient{"[11, 1.1]\n[22, 2.2]", "[33, 3.3]\n[44, 4.4]"};
+  // Strings for the two separate input files in record-orient that do not end with a newline
   std::vector<std::string> record_orient{
     to_records_orient({{{"0", "11"}, {"1", "1.1"}}, {{"0", "22"}, {"1", "2.2"}}}, "\n"),
     to_records_orient({{{"0", "33"}, {"1", "3.3"}}, {{"0", "44"}, {"1", "4.4"}}}, "\n")};
