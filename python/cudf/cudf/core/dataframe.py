@@ -36,7 +36,7 @@ from pandas._config import get_option
 from pandas.core.dtypes.common import is_float, is_integer
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
-from typing_extensions import assert_never
+from typing_extensions import Self, assert_never
 
 import cudf
 import cudf.core.common
@@ -426,39 +426,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         row_spec = indexing_utils.parse_row_iloc_indexer(
             row_key, len(self._frame)
         )
-        if col_is_scalar:
-            series = Series._from_data(ca, index=self._frame.index)
-            return series._getitem_preprocessed(row_spec)
-        if ca.names != self._frame._data.names:
-            frame = self._frame._from_data(ca, index=self._frame.index)
-        else:
-            frame = self._frame
-        if isinstance(row_spec, indexing_utils.MapIndexer):
-            return frame._gather(row_spec.key, keep_index=True)
-        elif isinstance(row_spec, indexing_utils.MaskIndexer):
-            return frame._apply_boolean_mask(row_spec.key, keep_index=True)
-        elif isinstance(row_spec, indexing_utils.SliceIndexer):
-            return frame._slice(row_spec.key)
-        elif isinstance(row_spec, indexing_utils.ScalarIndexer):
-            result = frame._gather(row_spec.key, keep_index=True)
-            # Attempt to turn into series.
-            try:
-                # Behaviour difference from pandas, which will merrily
-                # turn any heterogeneous set of columns into a series if
-                # you only ask for one row.
-                new_name = result.index[0]
-                result = Series._concat(
-                    [result[name] for name in frame._data.names],
-                    index=result.keys(),
-                )
-                result.name = new_name
-                return result
-            except TypeError:
-                # Couldn't find a common type, just return a 1xN dataframe.
-                return result
-        elif isinstance(row_spec, indexing_utils.EmptyIndexer):
-            return frame._empty_like(keep_index=True)
-        assert_never(row_spec)
+        return self._frame._getitem_preprocessed(row_spec, col_is_scalar, ca)
 
     @_cudf_nvtx_annotate
     def _setitem_tuple_arg(self, key, value):
@@ -957,7 +925,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         data: MutableMapping,
         index: Optional[BaseIndex] = None,
         columns: Any = None,
-    ) -> DataFrame:
+    ) -> Self:
         out = super()._from_data(data=data, index=index)
         if columns is not None:
             out.columns = columns
@@ -1115,6 +1083,67 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             super().__setattr__(key, col)
         else:
             super().__setattr__(key, col)
+
+    def _getitem_preprocessed(
+        self,
+        spec: indexing_utils.IndexingSpec,
+        col_is_scalar: bool,
+        ca: ColumnAccessor,
+    ) -> Union[Self, Series]:
+        """Get a subset of rows and columns given structured data
+
+        Parameters
+        ----------
+        spec
+            Indexing specification for the rows
+        col_is_scalar
+            Was the indexer of the columns a scalar (return a Series)
+        ca
+            ColumnAccessor representing the subsetted column data
+
+        Returns
+        -------
+        Subsetted DataFrame or Series (if a scalar row is requested
+        and the concatenation of the column types is possible)
+
+        Notes
+        -----
+        This function performs no bounds-checking or massaging of the
+        inputs.
+        """
+        if col_is_scalar:
+            series = Series._from_data(ca, index=self.index)
+            return series._getitem_preprocessed(spec)
+        if ca.names != self._data.names:
+            frame = self._from_data(ca, index=self.index)
+        else:
+            frame = self
+        if isinstance(spec, indexing_utils.MapIndexer):
+            return frame._gather(spec.key, keep_index=True)
+        elif isinstance(spec, indexing_utils.MaskIndexer):
+            return frame._apply_boolean_mask(spec.key, keep_index=True)
+        elif isinstance(spec, indexing_utils.SliceIndexer):
+            return frame._slice(spec.key)
+        elif isinstance(spec, indexing_utils.ScalarIndexer):
+            result = frame._gather(spec.key, keep_index=True)
+            # Attempt to turn into series.
+            try:
+                # Behaviour difference from pandas, which will merrily
+                # turn any heterogeneous set of columns into a series if
+                # you only ask for one row.
+                new_name = result.index[0]
+                result = Series._concat(
+                    [result[name] for name in frame._data.names],
+                    index=result.keys(),
+                )
+                result.name = new_name
+                return result
+            except TypeError:
+                # Couldn't find a common type, just return a 1xN dataframe.
+                return result
+        elif isinstance(spec, indexing_utils.EmptyIndexer):
+            return frame._empty_like(keep_index=True)
+        assert_never(spec)
 
     @_cudf_nvtx_annotate
     def __getitem__(self, arg):
