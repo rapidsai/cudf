@@ -43,7 +43,11 @@ from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type
-from cudf.utils.utils import _array_ufunc, _cudf_nvtx_annotate
+from cudf.utils.utils import (
+    _array_ufunc,
+    _cudf_nvtx_annotate,
+    _warn_no_dask_cudf,
+)
 
 
 # TODO: It looks like Frame is missing a declaration of `copy`, need to add
@@ -2839,28 +2843,8 @@ class Frame(BinaryOperand, Scannable):
 
         return libcudf.filling.repeat(columns, repeats)
 
+    @_warn_no_dask_cudf
     def __dask_tokenize__(self):
-        try:
-            # Import dask_cudf (if available) in case
-            # this is being called within Dask Dataframe
-            import dask_cudf  # noqa: F401
-
-        except ImportError:
-            warnings.warn(
-                f"Using dask to tokenize a {type(self)} object, "
-                f"but `dask_cudf` is not installed. Please install "
-                f"`dask_cudf` for proper dispatching."
-            )
-
-        # TODO: Avoid `to_pandas` once gpu hashing can
-        # produce a single (deterministic) token
-        if hasattr(self, "hash_values"):
-            return [
-                type(self),
-                self._dtypes,
-                self.index,
-                self.hash_values().values_host,
-            ]
         return [
             type(self),
             self._dtypes,

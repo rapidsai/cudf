@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import pickle
 import warnings
-from functools import cached_property
+from functools import cached_property, lru_cache
 from numbers import Number
 from typing import (
     Any,
@@ -63,7 +63,11 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     numeric_normalize_types,
 )
-from cudf.utils.utils import _cudf_nvtx_annotate, search_range
+from cudf.utils.utils import (
+    _cudf_nvtx_annotate,
+    _warn_no_dask_cudf,
+    search_range,
+)
 
 
 def _lexsorted_equal_range(
@@ -915,19 +919,8 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def __abs__(self):
         return abs(self._as_int_index())
 
+    @_warn_no_dask_cudf
     def __dask_tokenize__(self):
-        try:
-            # Import dask_cudf (if available) in case
-            # this is being called within Dask Dataframe
-            import dask_cudf  # noqa: F401
-
-        except ImportError:
-            warnings.warn(
-                f"Using dask to tokenize a {type(self)} object, "
-                f"but `dask_cudf` is not installed. Please install "
-                f"`dask_cudf` for proper dispatching."
-            )
-
         return (type(self), self.start, self.stop, self.step)
 
 
@@ -1558,11 +1551,11 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         """Return indices of value in index"""
         return self._column.indices_of(value)
 
+    @lru_cache
+    @_warn_no_dask_cudf
     def __dask_tokenize__(self):
         # We can use caching, because an index is immutable
-        if not hasattr(self, "_dask_token"):
-            self._dask_token = super().__dask_tokenize__()
-        return self._dask_token
+        return super().__dask_tokenize__()
 
 
 class NumericIndex(GenericIndex):
