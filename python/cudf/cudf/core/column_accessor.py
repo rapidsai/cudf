@@ -404,6 +404,10 @@ class ColumnAccessor(abc.MutableMapping):
         ColumnAccessor
         """
         keys = self.get_labels_by_index(index)
+        if len(set(keys)) != len(keys):
+            raise NotImplementedError(
+                "cudf DataFrames do not support repeated column names"
+            )
         data = {k: self._data[k] for k in keys}
         return self.__class__(
             data,
@@ -499,6 +503,10 @@ class ColumnAccessor(abc.MutableMapping):
                 if keep
             )
         else:
+            if len(set(key)) != len(key):
+                raise NotImplementedError(
+                    "cudf DataFrames do not support repeated column names"
+                )
             data = {k: self._grouped_data[k] for k in key}
         if self.multiindex:
             data = _to_flat_dict(data)
