@@ -2129,6 +2129,11 @@ class DatetimeIndex(GenericIndex):
             value, side=side, ascending=ascending, na_position=na_position
         )
 
+    def get_slice_bound(self, label, side: str, kind=None) -> int:
+        if isinstance(label, str):
+            label = pd.to_datetime(label)
+        return super().get_slice_bound(label, side, kind=kind)
+
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def year(self):
