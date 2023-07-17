@@ -421,22 +421,16 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     def __getitem__(self, arg):
         row_key, (
             col_is_scalar,
-            column_names,
+            ca,
         ) = indexing_utils.destructure_dataframe_iloc_indexer(arg, self._frame)
         row_spec = indexing_utils.parse_row_iloc_indexer(
             row_key, len(self._frame)
         )
-        ca = self._frame._data
-        index = self._frame.index
         if col_is_scalar:
-            s = Series._from_data(
-                ca._select_by_names(column_names), index=index
-            )
-            return s._getitem_preprocessed(row_spec)
-        if column_names != list(self._frame._column_names):
-            frame = self._frame._from_data(
-                ca._select_by_names(column_names), index=index
-            )
+            series = Series._from_data(ca, index=self._frame.index)
+            return series._getitem_preprocessed(row_spec)
+        if ca.names != self._frame._data.names:
+            frame = self._frame._from_data(ca, index=self._frame.index)
         else:
             frame = self._frame
         if isinstance(row_spec, indexing_utils.MapIndexer):
@@ -454,7 +448,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 # you only ask for one row.
                 new_name = result.index[0]
                 result = Series._concat(
-                    [result[name] for name in column_names],
+                    [result[name] for name in frame._data.names],
                     index=result.keys(),
                 )
                 result.name = new_name

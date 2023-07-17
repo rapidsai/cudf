@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, List, Tuple, Union
+from typing import Any, Tuple, Union
 
 from typing_extensions import TypeAlias
 
@@ -14,6 +14,7 @@ from cudf.api.types import (
     is_integer,
     is_integer_dtype,
 )
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import BooleanMask, GatherMap
 
 
@@ -54,8 +55,6 @@ class ScalarIndexer:
 IndexingSpec: TypeAlias = Union[
     EmptyIndexer, MapIndexer, MaskIndexer, ScalarIndexer, SliceIndexer
 ]
-
-ColumnLabels: TypeAlias = List[str]
 
 
 def destructure_iloc_key(
@@ -124,7 +123,7 @@ def destructure_iloc_key(
 
 def destructure_dataframe_iloc_indexer(
     key: Any, frame: cudf.DataFrame
-) -> Tuple[Any, Tuple[bool, ColumnLabels]]:
+) -> Tuple[Any, Tuple[bool, ColumnAccessor]]:
     """Destructure an index key for DataFrame iloc getitem.
 
     Parameters
@@ -154,13 +153,7 @@ def destructure_dataframe_iloc_indexer(
         cols = slice(None)
     scalar = is_integer(cols)
     try:
-        column_names: ColumnLabels = list(
-            frame._data.get_labels_by_index(cols)
-        )
-        if len(set(column_names)) != len(column_names):
-            raise NotImplementedError(
-                "cudf DataFrames do not support repeated column names"
-            )
+        ca = frame._data.select_by_index(cols)
     except TypeError:
         raise TypeError(
             "Column indices must be integers, slices, "
@@ -168,10 +161,10 @@ def destructure_dataframe_iloc_indexer(
         )
     if scalar:
         assert (
-            len(column_names) == 1
+            len(ca) == 1
         ), "Scalar column indexer should not produce more than one column"
 
-    return rows, (scalar, column_names)
+    return rows, (scalar, ca)
 
 
 def destructure_series_iloc_indexer(key: Any, frame: cudf.Series) -> Any:
