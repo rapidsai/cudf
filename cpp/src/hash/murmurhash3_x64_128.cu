@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/hashing.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/algorithm.cuh>
+#include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/hashing/detail/murmurhash3_x64_128.cuh>
 #include <cudf/table/table_device_view.cuh>
 
@@ -93,7 +93,7 @@ class murmur_device_row_hasher {
                                           Nullate const,
                                           hash_value_type const) const noexcept
     {
-      CUDF_UNREACHABLE("Unsupported type for MurmurHash64");
+      CUDF_UNREACHABLE("Unsupported type for MurmurHash3_x64_128");
     }
   };
 
