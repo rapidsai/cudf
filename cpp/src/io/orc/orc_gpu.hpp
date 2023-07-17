@@ -31,6 +31,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuco/static_map.cuh>
+
 namespace cudf {
 namespace io {
 namespace orc {
@@ -38,6 +40,19 @@ namespace gpu {
 
 using cudf::detail::device_2dspan;
 using cudf::detail::host_2dspan;
+
+auto constexpr KEY_SENTINEL   = size_type{-1};
+auto constexpr VALUE_SENTINEL = size_type{-1};
+
+using map_type = cuco::static_map<size_type, size_type>;
+
+/**
+ * @brief The alias of `map_type::pair_atomic_type` class.
+ *
+ * Declare this struct by trivial subclassing instead of type aliasing so we can have forward
+ * declaration of this struct somewhere else.
+ */
+struct slot_type : public map_type::slot_type {};
 
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;
@@ -172,36 +187,63 @@ struct StripeStream {
 };
 
 /**
- * @brief Struct to describe a dictionary chunk
+ * @brief Struct to describe a stripe dictionary
  */
-struct DictionaryChunk {
-  uint32_t* dict_data;   // dictionary data (index of non-null rows)
-  uint32_t* dict_index;  // row indices of corresponding string (row from dictionary index)
-  uint32_t start_row;    // start row of this chunk
-  uint32_t num_rows;     // num rows in this chunk
-  uint32_t num_strings;  // number of strings in this chunk
-  uint32_t
-    string_char_count;   // total size of string data (NOTE: assumes less than 4G bytes per chunk)
-  uint32_t num_dict_strings;                  // number of strings in dictionary
-  uint32_t dict_char_count;                   // size of dictionary string data for this chunk
+struct stripe_dictionary {
+  // input
+  device_span<slot_type> map_slots;  // hash map storage
+  uint32_t column_idx      = 0;      // column index
+  size_type start_row      = 0;      // first row in the stripe
+  size_type start_rowgroup = 0;      // first rowgroup in the stripe
+  size_type num_rows       = 0;      // number of rows in the stripe
 
-  orc_column_device_view const* leaf_column;  //!< Pointer to string column
+  // output
+  device_span<uint32_t> data;     // index of elements in the column to include in the dictionary
+  device_span<uint32_t> index;    // index into the dictionary for each row in the column
+  size_type entry_count = 0;      // number of entries in the dictionary
+  size_type char_count  = 0;      // number of characters in the dictionary
+  bool is_enabled       = false;  // true if dictionary encoding is enabled for this stripe
 };
 
 /**
- * @brief Struct to describe a dictionary
+ * @brief Initializes the hash maps storage for dictionary encoding to sentinel values.
+ *
+ * @param dictionaries Dictionary descriptors
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
-struct StripeDictionary {
-  uint32_t* dict_data;       // row indices of corresponding string (row from dictionary index)
-  uint32_t* dict_index;      // dictionary index from row index
-  uint32_t column_id;        // real column id
-  uint32_t start_chunk;      // first chunk in stripe
-  uint32_t num_chunks;       // number of chunks in the stripe
-  uint32_t num_strings;      // number of unique strings in the dictionary
-  uint32_t dict_char_count;  // total size of dictionary string data
+void initialize_dictionary_hash_maps(device_2dspan<stripe_dictionary> dictionaries,
+                                     rmm::cuda_stream_view stream);
 
-  orc_column_device_view const* leaf_column;  //!< Pointer to string column
-};
+/**
+ * @brief Populates the hash maps with unique values from the stripe.
+ *
+ * @param dictionaries Dictionary descriptors
+ * @param columns  Pre-order flattened device array of ORC column views
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
+void populate_dictionary_hash_maps(device_2dspan<stripe_dictionary> dictionaries,
+                                   device_span<orc_column_device_view const> columns,
+                                   rmm::cuda_stream_view stream);
+
+/**
+ * @brief Stores the indices of the hash map entries in the dictionary data buffer.
+ *
+ * @param dictionaries Dictionary descriptors
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
+void collect_map_entries(device_2dspan<stripe_dictionary> dictionaries,
+                         rmm::cuda_stream_view stream);
+
+/**
+ * @brief Stores the corresponding dictionary indices for each row in the column.
+ *
+ * @param dictionaries Dictionary descriptors
+ * @param columns Pre-order flattened device array of ORC column views
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
+void get_dictionary_indices(device_2dspan<stripe_dictionary> dictionaries,
+                            device_span<orc_column_device_view const> columns,
+                            rmm::cuda_stream_view stream);
 
 constexpr uint32_t encode_block_size = 512;
 
@@ -317,14 +359,16 @@ void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
 /**
  * @brief Launches kernel for encoding column dictionaries
  *
- * @param[in] stripes Stripe dictionaries device array [stripe][string_column]
+ * @param[in] stripes Stripe dictionaries device array
+ * @param[in] columns Pre-order flattened device array of ORC column views
  * @param[in] chunks encoder chunk device array [column][rowgroup]
  * @param[in] num_string_columns Number of string columns
  * @param[in] num_stripes Number of stripes
  * @param[in,out] enc_streams chunk streams device array [column][rowgroup]
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
-void EncodeStripeDictionaries(StripeDictionary const* stripes,
+void EncodeStripeDictionaries(stripe_dictionary const* stripes,
+                              device_span<orc_column_device_view const> columns,
                               device_2dspan<EncChunk const> chunks,
                               uint32_t num_string_columns,
                               uint32_t num_stripes,
@@ -373,38 +417,19 @@ std::optional<writer_compression_statistics> CompressOrcDataStreams(
   rmm::cuda_stream_view stream);
 
 /**
- * @brief Launches kernel for initializing dictionary chunks
+ * @brief Counts the number of characters in each rowgroup of each string column.
  *
- * @param[in] orc_columns Pre-order flattened device array of ORC column views
- * @param[in,out] chunks DictionaryChunk device array [rowgroup][column]
- * @param[in] dict_data dictionary data (index of non-null rows)
- * @param[in] dict_index row indices of corresponding string (row from dictionary index)
- * @param[in] tmp_indices Temporary buffer for dictionary indices
- * @param[in] rowgroup_bounds Ranges of rows in each rowgroup [rowgroup][column]
- * @param[in] str_col_indexes List of columns that are strings type
- * @param[in] stream CUDA stream used for device memory operations and kernel launches
+ * @param counts Output array of character counts [column][rowgroup]
+ * @param orc_columns Pre-order flattened device array of ORC column views
+ * @param rowgroup_bounds Ranges of rows in each rowgroup [rowgroup][column]
+ * @param str_col_indexes Indexes of string columns in orc_columns
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
-void InitDictionaryIndices(device_span<orc_column_device_view const> orc_columns,
-                           device_2dspan<DictionaryChunk> chunks,
-                           device_span<device_span<uint32_t>> dict_data,
-                           device_span<device_span<uint32_t>> dict_index,
-                           device_span<device_span<uint32_t>> tmp_indices,
-                           device_2dspan<rowgroup_rows const> rowgroup_bounds,
-                           device_span<uint32_t const> str_col_indexes,
-                           rmm::cuda_stream_view stream);
-
-/**
- * @brief Launches kernel for building stripe dictionaries
- *
- * @param[in] d_stripes StripeDictionary device 2D array [stripe][column]
- * @param[in] h_stripes StripeDictionary host 2D array [stripe][column]
- * @param[in] chunks DictionaryChunk device array [rowgroup][column]
- * @param[in] stream CUDA stream used for device memory operations and kernel launches
- */
-void BuildStripeDictionaries(device_2dspan<StripeDictionary> d_stripes,
-                             host_2dspan<StripeDictionary const> h_stripes,
-                             device_2dspan<DictionaryChunk const> chunks,
-                             rmm::cuda_stream_view stream);
+void rowgroup_char_counts(device_2dspan<size_type> counts,
+                          device_span<orc_column_device_view const> orc_columns,
+                          device_2dspan<rowgroup_rows const> rowgroup_bounds,
+                          device_span<uint32_t const> str_col_indexes,
+                          rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernels to initialize statistics collection

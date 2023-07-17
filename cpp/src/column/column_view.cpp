@@ -15,8 +15,8 @@
  */
 
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/hashing.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
