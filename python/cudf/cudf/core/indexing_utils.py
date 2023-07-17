@@ -468,12 +468,42 @@ def ordered_find(needles: "ColumnBase", haystack: "ColumnBase") -> GatherMap:
 def find_label_range_or_mask(
     key: slice, index: cudf.BaseIndex
 ) -> EmptyIndexer | MapIndexer | MaskIndexer | SliceIndexer:
-    # TODO: datetime index must only be handled specially until pandas 2
+    """
+    Convert a slice of labels into a slice of positions
+
+    Parameters
+    ----------
+    key
+        Slice to convert
+    index
+        Index to look up in
+
+    Returns
+    -------
+    IndexingSpec
+        Structured data for indexing (but never a :class:`ScalarIndexer`)
+
+    Raises
+    ------
+    KeyError
+        If the index is unsorted and not a DatetimeIndex
+
+    Notes
+    -----
+    Until Pandas 2, looking up slices in an unsorted DatetimeIndex
+    constructs a mask by checking which dates fall in the range.
+
+    From Pandas 2, slice lookup in DatetimeIndexes will behave
+    identically to other index types and fail with a KeyError for
+    an unsorted index if either of the slice endpoints are not unique
+    in the index or are not in the index at all.
+    """
     if (
         not (key.start is None and key.stop is None)
         and isinstance(index, cudf.core.index.DatetimeIndex)
         and not index.is_monotonic_increasing
     ):
+        # TODO: datetime index must only be handled specially until pandas 2
         start = pd.to_datetime(key.start)
         stop = pd.to_datetime(key.stop)
         mask = []
