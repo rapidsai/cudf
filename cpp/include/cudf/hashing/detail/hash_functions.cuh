@@ -52,9 +52,9 @@ __device__ inline uint32_t rotate_bits_left(uint32_t x, uint32_t r)
   return __funnelshift_l(x, x, r);
 }
 
-__device__ inline uint64_t rotate_bits_left(uint64_t h, uint32_t r)
+__device__ inline uint64_t rotate_bits_left(uint64_t x, uint32_t r)
 {
-  return ((h << r) | (h >> (64 - r)));
+  return ((x << r) | (x >> (64 - r)));
 }
 
 __device__ inline uint32_t rotate_bits_right(uint32_t x, uint32_t r)
