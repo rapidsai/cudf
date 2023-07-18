@@ -46,8 +46,10 @@ TYPED_TEST(XXHash_64_TestTyped, TestAllNumeric)
   auto output2 = cudf::hashing::xxhash_64(cudf::table_view({col2}));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 
-  output1 = cudf::hashing::xxhash_64(cudf::table_view({col1}), 7);
-  output2 = cudf::hashing::xxhash_64(cudf::table_view({col2}), 7);
+  constexpr uint64_t seed = 7;
+
+  output1 = cudf::hashing::xxhash_64(cudf::table_view({col1}), seed);
+  output2 = cudf::hashing::xxhash_64(cudf::table_view({col2}), seed);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 

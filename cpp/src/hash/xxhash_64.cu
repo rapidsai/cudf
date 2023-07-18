@@ -266,7 +266,7 @@ class device_row_hasher {
    public:
     template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
     __device__ hash_value_type operator()(column_device_view const& col,
-                                          size_type row_index,
+                                          size_type const row_index,
                                           Nullate const _check_nulls,
                                           hash_value_type const _seed) const noexcept
     {
@@ -279,7 +279,7 @@ class device_row_hasher {
 
     template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
     __device__ hash_value_type operator()(column_device_view const&,
-                                          size_type,
+                                          size_type const,
                                           Nullate const,
                                           hash_value_type const) const noexcept
     {
