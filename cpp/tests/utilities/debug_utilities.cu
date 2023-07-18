@@ -43,6 +43,7 @@ namespace cudf {
 
 namespace debug {
 
+// Forward declaration.
 namespace detail {
 
 /**
@@ -50,8 +51,7 @@ namespace detail {
  *
  * @param col The column view
  * @param delimiter The delimiter to put between strings
- * @param indent Indentation for all output. See detail::to_strings for detailed
- * explanation.
+ * @param indent Indentation for all output
  */
 std::string to_string(cudf::column_view const& col,
                       std::string const& delimiter,
@@ -62,8 +62,7 @@ std::string to_string(cudf::column_view const& col,
  *
  * @param null_mask The null mask buffer
  * @param null_mask_size Size of the null mask (in rows)
- * @param indent Indentation for all output. See detail::to_strings for detailed
- * explanation.
+ * @param indent Indentation for all output
  */
 std::string to_string(std::vector<bitmask_type> const& null_mask,
                       size_type null_mask_size,
