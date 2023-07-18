@@ -16,7 +16,7 @@
 
 //
 // Do NOT include any header that directly or indirectly depends on gtest.
-// This is to make sure this file can be used and compiled outside of the test framework.
+// It is to make sure this file can be used and compiled outside of the test framework.
 //
 
 #include <cudf_test/column_utilities.hpp>
@@ -459,36 +459,24 @@ std::string to_string(std::vector<bitmask_type> const& null_mask,
 
 }  // namespace detail
 
-/**
- * @copydoc cudf::test::to_strings
- */
 std::vector<std::string> to_strings(cudf::column_view const& col)
 {
   return detail::to_strings(col);
 }
 
-/**
- * @copydoc cudf::test::to_string(cudf::column_view, std::string)
- */
 std::string to_string(cudf::column_view const& col, std::string const& delimiter)
 {
   return detail::to_string(col, delimiter);
 }
 
-/**
- * @copydoc cudf::test::to_string(std::vector<bitmask_type>, size_type)
- */
 std::string to_string(std::vector<bitmask_type> const& null_mask, size_type null_mask_size)
 {
   return detail::to_string(null_mask, null_mask_size);
 }
 
-/**
- * @copydoc cudf::test::print
- */
 void print(cudf::column_view const& col, std::ostream& os, std::string const& delimiter)
 {
-  os << to_string(col, delimiter) << std::endl;
+  os << to_string(col, ",") << std::endl;
 }
 
 }  // namespace debug
