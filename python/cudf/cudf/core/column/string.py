@@ -5339,7 +5339,7 @@ class StringMethods(ColumnMethods):
 
     def jaccard_index(self, input: cudf.Series, n: int = 5) -> SeriesOrIndex:
         """
-        Compute the jaccard index with this column against the given
+        Compute the Jaccard index between this column and the given
         input strings column.
 
         Parameters
@@ -5354,8 +5354,8 @@ class StringMethods(ColumnMethods):
         Examples
         --------
         >>> import cudf
-        >>> str1 = cudf.Series(['the brown dog','jumped about'])
-        >>> str2 = cudf.Series(['the black cat','jumped around'])
+        >>> str1 = cudf.Series(["the brown dog", "jumped about"])
+        >>> str2 = cudf.Series(["the black cat", "jumped around"])
         >>> str1.str.jaccard_index(str2, 5)
         0    0.058824
         1    0.307692

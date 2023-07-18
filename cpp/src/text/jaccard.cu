@@ -135,8 +135,8 @@ struct jaccard_intersect_fn {
       if (itr != needles.begin() && *itr == *(itr - 1)) { continue; }  // skip duplicates
       // search haystack for this needle (*itr)
       auto const found = thrust::lower_bound(thrust::seq, begin, end, *itr);
-      count += found != end && *found == *itr;  // increment if found;
-      begin = found;                            // shorten the next lower-bound range
+      count += (found != end) && (*found == *itr);  // increment if found;
+      begin = found;                                // shorten the next lower-bound range
     }
     // sum up the counts across this warp
     auto const result = warp_reduce(temp_storage).Sum(count);
@@ -254,7 +254,7 @@ std::unique_ptr<cudf::column> jaccard_index(cudf::strings_column_view const& inp
                "Parameter width should be an integer value of 5 or greater",
                std::invalid_argument);
 
-  auto const output_type = cudf::data_type{cudf::type_id::FLOAT32};
+  auto constexpr output_type = cudf::data_type{cudf::type_id::FLOAT32};
   if (input1.is_empty()) { return cudf::make_empty_column(output_type); }
 
   auto const [d_uniques1, d_uniques2, d_intersects] = [&] {
@@ -295,10 +295,11 @@ std::unique_ptr<cudf::column> jaccard_index(cudf::strings_column_view const& inp
 std::unique_ptr<cudf::column> jaccard_index(cudf::strings_column_view const& input1,
                                             cudf::strings_column_view const& input2,
                                             cudf::size_type width,
+                                            rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::jaccard_index(input1, input2, width, cudf::get_default_stream(), mr);
+  return detail::jaccard_index(input1, input2, width, stream, mr);
 }
 
 }  // namespace nvtext

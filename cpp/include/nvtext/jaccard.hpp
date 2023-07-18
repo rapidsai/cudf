@@ -26,7 +26,7 @@ namespace nvtext {
  */
 
 /**
- * @brief Computes the jaccard similarity between individual rows
+ * @brief Computes the Jaccard similarity between individual rows
  * in two strings columns
  *
  * The similarity is calculated between strings in corresponding rows
@@ -65,6 +65,7 @@ namespace nvtext {
  * @param input2 Strings column to compare with `input1`
  * @param width The character width used for apply substrings;
  *              Default is 5 characters.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Index calculation values
  */
@@ -72,6 +73,7 @@ std::unique_ptr<cudf::column> jaccard_index(
   cudf::strings_column_view const& input1,
   cudf::strings_column_view const& input2,
   cudf::size_type width               = 5,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
