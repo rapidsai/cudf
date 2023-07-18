@@ -102,7 +102,7 @@ class TimeDeltaColumn(ColumnBase):
             null_count=null_count,
         )
 
-        if not (self.dtype.type is np.timedelta64):
+        if self.dtype.type is not np.timedelta64:
             raise TypeError(f"{self.dtype} is not a supported duration type")
 
         self._time_unit, _ = np.datetime_data(self.dtype)

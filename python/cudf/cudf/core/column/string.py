@@ -4850,6 +4850,49 @@ class StringMethods(ColumnMethods):
             return result.explode()
         return result
 
+    def hash_character_ngrams(
+        self, n: int = 5, as_list: bool = False
+    ) -> SeriesOrIndex:
+        """
+        Generate hashes of n-grams from characters in a column of strings.
+        The MurmurHash32 algorithm is used to produce the hash results.
+
+        Parameters
+        ----------
+        n : int
+            The degree of the n-gram (number of consecutive characters).
+            Default is 5. Minimum is 5.
+        as_list : bool
+            Set to True to return the hashes in a list column where each
+            list element is the hashes for each string.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> str_series = cudf.Series(['abcdefg','stuvwxyz'])
+        >>> str_series.str.hash_character_ngrams(5,True)
+        0               [3902511862, 570445242, 4202475763]
+        1    [556054766, 3166857694, 3760633458, 192452857]
+        dtype: list
+        >>> str_series.str.hash_character_ngrams(5)
+        0    3902511862
+        0     570445242
+        0    4202475763
+        1     556054766
+        1    3166857694
+        1    3760633458
+        1     192452857
+        dtype: uint32
+        """
+
+        result = self._return_or_inplace(
+            libstrings.hash_character_ngrams(self._column, n),
+            retain_index=True,
+        )
+        if isinstance(result, cudf.Series) and not as_list:
+            return result.explode()
+        return result
+
     def ngrams_tokenize(
         self, n: int = 2, delimiter: str = " ", separator: str = "_"
     ) -> SeriesOrIndex:

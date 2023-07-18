@@ -287,8 +287,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             level = [self._level_index_from_level(lev) for lev in level]
 
         existing_names = list(self.names)
-        for i, l in enumerate(level):
-            existing_names[l] = names[i]
+        for i, lev in enumerate(level):
+            existing_names[lev] = names[i]
         names = existing_names
 
         return self._set_names(names=names, inplace=inplace)

@@ -15,7 +15,6 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
 
 #include <cudf/groupby.hpp>
 
@@ -24,7 +23,7 @@
 template <typename Type>
 void bench_groupby_max(nvbench::state& state, nvbench::type_list<Type>)
 {
-  const auto size = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const size = static_cast<cudf::size_type>(state.get_int64("num_rows"));
 
   auto const keys = [&] {
     data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(

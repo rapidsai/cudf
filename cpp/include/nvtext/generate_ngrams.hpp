@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,6 +88,39 @@ std::unique_ptr<cudf::column> generate_ngrams(
 std::unique_ptr<cudf::column> generate_character_ngrams(
   cudf::strings_column_view const& strings,
   cudf::size_type ngrams              = 2,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Hashes ngrams of characters within each string
+ *
+ * Each character of a string used to build the ngrams and ngrams are not
+ * produced across adjacent strings rows.
+ *
+ * ```
+ * "abcdefg" would generate ngrams=5 as ["abcde", "bcdef" "cdefg"]
+ * ```
+ *
+ * The ngrams for each string are hashed and returned in a list column where
+ * the offsets specify rows of hash values for each string.
+ *
+ * The size of the child column will be the total number of ngrams generated from
+ * the input strings column.
+ *
+ * All null row entries are ignored and the output contains all valid rows.
+ *
+ * The hash algorithm uses MurmurHash32 on each ngram.
+ *
+ * @throw cudf::logic_error if `ngrams < 5`
+ * @throw cudf::logic_error if there are not enough characters to generate any ngrams
+ *
+ * @param strings Strings column to produce ngrams from.
+ * @param ngrams The ngram number to generate. Default is 5.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return A lists column of hash values
+ */
+std::unique_ptr<cudf::column> hash_character_ngrams(
+  cudf::strings_column_view const& strings,
+  cudf::size_type ngrams              = 5,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

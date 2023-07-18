@@ -253,7 +253,6 @@ class CategoricalAccessor(ColumnMethods):
         dtype: category
         Categories (2, int64): [1, 2]
         """
-
         old_categories = self._column.categories
         new_categories = column.as_column(
             new_categories,
@@ -427,7 +426,6 @@ class CategoricalAccessor(ColumnMethods):
         dtype: category
         Categories (2, int64): [1, 10]
         """
-
         return self._return_or_inplace(
             self._column.set_categories(
                 new_categories=new_categories, ordered=ordered, rename=rename
@@ -494,7 +492,6 @@ class CategoricalAccessor(ColumnMethods):
         ValueError: items in new_categories are not the same as in
         old categories
         """
-
         return self._return_or_inplace(
             self._column.reorder_categories(new_categories, ordered=ordered),
         )
@@ -862,14 +859,7 @@ class CategoricalColumn(column.ColumnBase):
     ) -> cuda.devicearray.DeviceNDArray:
         return self.codes.data_array_view(mode=mode)
 
-    def unique(self, preserve_order=True) -> CategoricalColumn:
-        if preserve_order is not True:
-            warnings.warn(
-                "The preserve_order argument is deprecated. It will be "
-                "removed in a future version. As of now, unique always "
-                "preserves order regardless of the argument's value.",
-                FutureWarning,
-            )
+    def unique(self) -> CategoricalColumn:
         codes = self.as_numerical.unique()
         return column.build_categorical_column(
             categories=self.categories,
@@ -1294,7 +1284,7 @@ class CategoricalColumn(column.ColumnBase):
             )
         else:
             out_col = self
-            if not (type(out_col.categories) is type(new_categories)):
+            if type(out_col.categories) is not type(new_categories):
                 # If both categories are of different Column types,
                 # return a column full of Nulls.
                 out_col = _create_empty_categorical_column(

@@ -1,4 +1,5 @@
 # Copyright (c) 2019-2023, NVIDIA CORPORATION.
+import itertools
 import warnings
 from contextlib import ExitStack
 from functools import partial
@@ -87,6 +88,19 @@ class CudfEngine(ArrowDatasetEngine):
         if row_groups == [None for path in paths]:
             row_groups = None
 
+        # Make sure we read in the columns needed for row-wise
+        # filtering after IO. This means that one or more columns
+        # will be dropped almost immediately after IO. However,
+        # we do NEED these columns for accurate filtering.
+        filters = _normalize_filters(filters)
+        projected_columns = None
+        if columns and filters:
+            projected_columns = [c for c in columns if c is not None]
+            columns = sorted(
+                set(v[0] for v in itertools.chain.from_iterable(filters))
+                | set(projected_columns)
+            )
+
         dataset_kwargs = dataset_kwargs or {}
         dataset_kwargs["partitioning"] = partitioning or "hive"
         with ExitStack() as stack:
@@ -140,8 +154,15 @@ class CudfEngine(ArrowDatasetEngine):
                     raise err
 
         # Apply filters (if any are defined)
-        filters = _normalize_filters(filters)
         df = _apply_post_filters(df, filters)
+
+        if projected_columns:
+            # Elements of `projected_columns` may now be in the index.
+            # We must filter these names from our projection
+            projected_columns = [
+                col for col in projected_columns if col in df._column_names
+            ]
+            df = df[projected_columns]
 
         if partitions and partition_keys is None:
 
