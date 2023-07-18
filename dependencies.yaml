@@ -288,6 +288,7 @@ dependencies:
             packages:
               - cuda-version=12.0
               - cuda-cudart-dev
+              - cuda-cupti-dev
               - cuda-nvrtc-dev
               - libcurand-dev
           - matrix:
