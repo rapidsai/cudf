@@ -630,6 +630,10 @@ def parse_row_loc_indexer(key: Any, index: cudf.BaseIndex) -> IndexingSpec:
     TypeError
         If the indexing key is otherwise invalid.
     """
+    if isinstance(index, cudf.MultiIndex):
+        raise NotImplementedError(
+            "This code path is not designed for multiindices"
+        )
     # TODO: multiindices need to be treated separately
     if key is Ellipsis:
         # Ellipsis is handled here because multiindex level-based
