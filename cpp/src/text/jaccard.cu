@@ -70,7 +70,7 @@ struct jaccard_unique_fn {
   cudf::size_type* d_results;
 
   // warp per row
-  __device__ void operator()(cudf::size_type idx)
+  __device__ void operator()(cudf::size_type idx) const
   {
     using warp_reduce = cub::WarpReduce<cudf::size_type>;
     __shared__ typename warp_reduce::TempStorage temp_storage;
@@ -92,8 +92,8 @@ struct jaccard_unique_fn {
 rmm::device_uvector<cudf::size_type> compute_unique_counts(cudf::column_view const& input,
                                                            rmm::cuda_stream_view stream)
 {
-  auto d_input   = cudf::column_device_view::create(input, stream);
-  auto d_results = rmm::device_uvector<cudf::size_type>(input.size(), stream);
+  auto const d_input = cudf::column_device_view::create(input, stream);
+  auto d_results     = rmm::device_uvector<cudf::size_type>(input.size(), stream);
   jaccard_unique_fn fn{*d_input, d_results.data()};
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::counting_iterator<cudf::size_type>(0),
@@ -113,7 +113,7 @@ struct jaccard_intersect_fn {
   cudf::size_type* d_results;
 
   // warp per row
-  __device__ float operator()(cudf::size_type idx)
+  __device__ float operator()(cudf::size_type idx) const
   {
     using warp_reduce = cub::WarpReduce<cudf::size_type>;
     __shared__ typename warp_reduce::TempStorage temp_storage;
@@ -173,7 +173,7 @@ struct jaccard_fn {
   cudf::size_type const* d_uniques2;
   cudf::size_type const* d_intersects;
 
-  __device__ float operator()(cudf::size_type idx)
+  __device__ float operator()(cudf::size_type idx) const
   {
     auto const count1     = d_uniques1[idx];
     auto const count2     = d_uniques2[idx];
@@ -191,23 +191,23 @@ struct jaccard_fn {
  *
  * Uses the hash_character_ngrams to hash substrings of the input column
  * which returns a lists column where each row is the hashes for the substrings
- * of the input string row.
+ * of the corresponding input string row.
  *
- * The hashes are then sorted using a segmented sort to make it easier to
+ * The hashes are then sorted using a segmented-sort as setup to
  * perform the unique and intersect operations.
  */
 std::unique_ptr<cudf::column> hash_substrings(cudf::strings_column_view const& col,
                                               cudf::size_type width,
                                               rmm::cuda_stream_view stream)
 {
-  auto hashes  = hash_character_ngrams(col, width, stream, rmm::mr::get_current_device_resource());
-  auto input   = cudf::lists_column_view(hashes->view());
-  auto offsets = input.offsets_begin();
-  auto data    = input.child().data<uint32_t>();
+  auto hashes = hash_character_ngrams(col, width, stream, rmm::mr::get_current_device_resource());
+  auto const input   = cudf::lists_column_view(hashes->view());
+  auto const offsets = input.offsets_begin();
+  auto const data    = input.child().data<uint32_t>();
 
   rmm::device_uvector<uint32_t> sorted(input.child().size(), stream);
 
-  // this is wicked fast and much faster than cudf::lists::detail::sort_list
+  // this is wicked fast and much faster than using cudf::lists::detail::sort_list
   rmm::device_buffer d_temp_storage;
   size_t temp_storage_bytes = 0;
   cub::DeviceSegmentedSort::SortKeys(d_temp_storage.data(),
@@ -254,7 +254,7 @@ std::unique_ptr<cudf::column> jaccard_index(cudf::strings_column_view const& inp
                "Parameter width should be an integer value of 5 or greater",
                std::invalid_argument);
 
-  auto output_type = cudf::data_type{cudf::type_id::FLOAT32};
+  auto const output_type = cudf::data_type{cudf::type_id::FLOAT32};
   if (input1.is_empty()) { return cudf::make_empty_column(output_type); }
 
   auto const [d_uniques1, d_uniques2, d_intersects] = [&] {
