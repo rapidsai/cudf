@@ -30,17 +30,8 @@ repos:
                 files: python/.*
                 # Explicitly specify the pyproject.toml at the repo root, not per-project.
                 args: ["--config", "pyproject.toml"]
-      - repo: https://github.com/PyCQA/flake8
-        rev: 5.0.4
-        hooks:
-              - id: flake8
-                args: ["--config=.flake8"]
-                files: python/.*$
-                types: [file]
-                types_or: [python, cython]
-                additional_dependencies: ["flake8-force"]
       - repo: https://github.com/MarcoGorelli/cython-lint
-        rev: v0.1.10
+        rev: v0.15.0
         hooks:
               - id: cython-lint
       - repo: https://github.com/pre-commit/mirrors-mypy
@@ -165,6 +156,12 @@ repos:
         hooks:
             - id: rapids-dependency-file-generator
               args: ["--clean"]
+      - repo: https://github.com/astral-sh/ruff-pre-commit
+        rev: v0.0.278
+        hooks:
+          - id: ruff
+            files: python/.*$
+
 
 default_language_version:
       python: python3

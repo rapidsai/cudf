@@ -51,7 +51,6 @@ from cudf._lib.cpp.io.parquet cimport (
     write_parquet as parquet_writer,
 )
 from cudf._lib.cpp.io.types cimport column_in_metadata, table_input_metadata
-from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type, size_type
 from cudf._lib.io.datasource cimport NativeFileDatasource

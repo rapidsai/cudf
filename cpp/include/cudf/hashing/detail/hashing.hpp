@@ -27,15 +27,20 @@ namespace cudf {
 namespace hashing {
 namespace detail {
 
-std::unique_ptr<column> murmur_hash3_32(table_view const& input,
-                                        uint32_t seed,
-                                        rmm::cuda_stream_view,
-                                        rmm::mr::device_memory_resource* mr);
+std::unique_ptr<column> murmurhash3_x86_32(table_view const& input,
+                                           uint32_t seed,
+                                           rmm::cuda_stream_view,
+                                           rmm::mr::device_memory_resource* mr);
 
-std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
-                                              uint32_t seed,
-                                              rmm::cuda_stream_view,
-                                              rmm::mr::device_memory_resource* mr);
+std::unique_ptr<table> murmurhash3_x64_128(table_view const& input,
+                                           uint64_t seed,
+                                           rmm::cuda_stream_view,
+                                           rmm::mr::device_memory_resource* mr);
+
+std::unique_ptr<column> spark_murmurhash3_x86_32(table_view const& input,
+                                                 uint32_t seed,
+                                                 rmm::cuda_stream_view,
+                                                 rmm::mr::device_memory_resource* mr);
 
 std::unique_ptr<column> md5(table_view const& input,
                             rmm::cuda_stream_view stream,
@@ -84,17 +89,6 @@ constexpr std::size_t hash_combine(std::size_t lhs, std::size_t rhs)
 }
 
 }  // namespace detail
-
-/**
- * @copydoc cudf::hash
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
- */
-std::unique_ptr<column> hash(table_view const& input,
-                             hash_id hash_function,
-                             uint32_t seed,
-                             rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr);
 }  // namespace hashing
 }  // namespace cudf
 

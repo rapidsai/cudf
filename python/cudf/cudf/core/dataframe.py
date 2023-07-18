@@ -6258,26 +6258,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         encoding=None,
         compression=None,
         lineterminator=None,
-        line_terminator=None,
         chunksize=None,
         storage_options=None,
     ):
         """{docstring}"""
         from cudf.io import csv
 
-        if line_terminator is not None:
-            warnings.warn(
-                "line_terminator is a deprecated keyword argument, "
-                "use lineterminator instead.",
-                FutureWarning,
-            )
-            if lineterminator is not None:
-                warnings.warn(
-                    f"Ignoring {line_terminator=} in favor "
-                    f"of {lineterminator=}"
-                )
-            else:
-                lineterminator = line_terminator
         if lineterminator is None:
             lineterminator = os.linesep
         return csv.to_csv(

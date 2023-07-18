@@ -1780,7 +1780,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             val3  0.714575  1.000000  1.000000
         """
 
-        if not method.lower() in ("pearson",):
+        if method.lower() not in ("pearson",):
             raise NotImplementedError(
                 "Only pearson correlation is currently supported"
             )
@@ -2245,6 +2245,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if fill_method in ("pad", "backfill"):
             alternative = "ffill" if fill_method == "pad" else "bfill"
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 f"{fill_method} is deprecated and will be removed in a future "
                 f"version. Use f{alternative} instead.",

@@ -950,7 +950,7 @@ class BaseIndex(Serializable):
         >>> idx.is_numeric()
         False
         """
-        # TODO: Only remove this deprecation after pandas removes this API.
+        # Do not remove until pandas removes this.
         warnings.warn(
             f"{type(self).__name__}.is_numeric is deprecated. "
             "Use cudf.api.types.is_any_real_numeric_dtype instead",
@@ -995,7 +995,7 @@ class BaseIndex(Serializable):
         >>> idx.is_boolean()
         False
         """
-        # TODO: Only remove this deprecation after pandas removes this API.
+        # Do not remove until pandas removes this.
         warnings.warn(
             f"{type(self).__name__}.is_boolean is deprecated. "
             "Use cudf.api.types.is_bool_dtype instead",
@@ -1040,7 +1040,7 @@ class BaseIndex(Serializable):
         >>> idx.is_integer()
         False
         """
-        # TODO: Only remove this deprecation after pandas removes this API.
+        # Do not remove until pandas removes this.
         warnings.warn(
             f"{type(self).__name__}.is_integer is deprecated. "
             "Use cudf.api.types.is_integer_dtype instead",
@@ -1092,7 +1092,7 @@ class BaseIndex(Serializable):
         >>> idx.is_floating()
         False
         """
-        # TODO: Only remove this deprecation after pandas removes this API.
+        # Do not remove until pandas removes this.
         warnings.warn(
             f"{type(self).__name__}.is_floating is deprecated. "
             "Use cudf.api.types.is_float_dtype instead",
@@ -1138,7 +1138,7 @@ class BaseIndex(Serializable):
         >>> idx.is_object()
         False
         """
-        # TODO: Only remove this deprecation after pandas removes this API.
+        # Do not remove until pandas removes this.
         warnings.warn(
             f"{type(self).__name__}.is_object is deprecated. "
             "Use cudf.api.types.is_object_dtype instead",
@@ -1191,7 +1191,7 @@ class BaseIndex(Serializable):
         >>> s.index.is_categorical()
         False
         """
-        # TODO: Only remove this deprecation after pandas removes this API.
+        # Do not remove until pandas removes this.
         warnings.warn(
             f"{type(self).__name__}.is_categorical is deprecated. "
             "Use cudf.api.types.is_categorical_dtype instead",
@@ -1238,7 +1238,7 @@ class BaseIndex(Serializable):
         >>> idx.is_interval()
         False
         """
-        # TODO: Only remove this deprecation after pandas removes this API.
+        # Do not remove until pandas removes this.
         warnings.warn(
             f"{type(self).__name__}.is_interval is deprecated. "
             "Use cudf.api.types.is_interval_dtype instead",
@@ -1616,7 +1616,6 @@ class BaseIndex(Serializable):
         int
             Index of label.
         """
-
         if side not in {"left", "right"}:
             raise ValueError(f"Invalid side argument {side}")
         if self.is_monotonic_increasing or self.is_monotonic_decreasing:

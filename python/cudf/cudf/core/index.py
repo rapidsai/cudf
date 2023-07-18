@@ -5,7 +5,7 @@ from __future__ import annotations
 import operator
 import pickle
 import warnings
-from functools import cached_property
+from functools import cache, cached_property
 from numbers import Number
 from typing import (
     Any,
@@ -64,7 +64,11 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     numeric_normalize_types,
 )
-from cudf.utils.utils import _cudf_nvtx_annotate, search_range
+from cudf.utils.utils import (
+    _cudf_nvtx_annotate,
+    _warn_no_dask_cudf,
+    search_range,
+)
 
 
 class IndexMeta(type):
@@ -903,6 +907,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def __abs__(self):
         return abs(self._as_int_index())
 
+    @_warn_no_dask_cudf
+    def __dask_tokenize__(self):
+        return (type(self), self.start, self.stop, self.step)
+
 
 class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     """
@@ -1092,7 +1100,6 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         -------
         New index instance.
         """
-
         name = self.name if name is None else name
 
         return _index_from_data(
@@ -1488,6 +1495,12 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             raise AttributeError(
                 "Can only use .str accessor with string values!"
             )
+
+    @cache
+    @_warn_no_dask_cudf
+    def __dask_tokenize__(self):
+        # We can use caching, because an index is immutable
+        return super().__dask_tokenize__()
 
 
 class DatetimeIndex(Index):

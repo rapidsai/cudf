@@ -2002,7 +2002,7 @@ def test_series_ordered_dedup():
     sr = cudf.Series(np.random.randint(0, 100, 1000))
     # pandas unique() preserves order
     expect = pd.Series(sr.to_pandas().unique())
-    got = cudf.Series(sr._column.unique(preserve_order=True))
+    got = cudf.Series(sr._column.unique())
     assert_eq(expect.values, got.values)
 
 

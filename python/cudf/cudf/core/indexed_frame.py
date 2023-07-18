@@ -69,7 +69,7 @@ from cudf.core.udf.utils import (
 )
 from cudf.utils import docutils
 from cudf.utils._numba import _CUDFNumbaConfig
-from cudf.utils.utils import _cudf_nvtx_annotate
+from cudf.utils.utils import _cudf_nvtx_annotate, _warn_no_dask_cudf
 
 doc_reset_index_template = """
         Reset the index of the {klass}, or a level of it.
@@ -2109,6 +2109,7 @@ class IndexedFrame(Frame):
         -------
             Object with missing values filled or None if ``inplace=True``.
         """
+        # Do not remove until pandas removes this.
         warnings.warn(
             "DataFrame.backfill/Series.backfill is deprecated. Use "
             "DataFrame.bfill/Series.bfill instead",
@@ -2145,6 +2146,7 @@ class IndexedFrame(Frame):
         -------
             Object with missing values filled or None if ``inplace=True``.
         """
+        # Do not remove until pandas removes this.
         warnings.warn(
             "DataFrame.pad/Series.pad is deprecated. Use "
             "DataFrame.ffill/Series.ffill instead",
@@ -5026,6 +5028,15 @@ class IndexedFrame(Frame):
                     if cp.allclose(col, col.astype("int64")):
                         result._data[name] = col.astype("int64")
         return result
+
+    @_warn_no_dask_cudf
+    def __dask_tokenize__(self):
+        return [
+            type(self),
+            self._dtypes,
+            self.index,
+            self.hash_values().values_host,
+        ]
 
 
 def _check_duplicate_level_names(specified, level_names):

@@ -1149,17 +1149,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             values, side, ascending=ascending, na_position=na_position
         )
 
-    def unique(self, preserve_order=True) -> ColumnBase:
+    def unique(self) -> ColumnBase:
         """
         Get unique values in the data
         """
-        if preserve_order is not True:
-            warnings.warn(
-                "The preserve_order argument is deprecated. It will be "
-                "removed in a future version. As of now, unique always "
-                "preserves order regardless of the argument's value.",
-                FutureWarning,
-            )
         return drop_duplicates([self], keep="first")[0]
 
     def serialize(self) -> Tuple[dict, list]:
