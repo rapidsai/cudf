@@ -24,4 +24,4 @@ cd python/dask_cudf
 # Hardcode the output dir
 python -m pip wheel . -w dist -vvv --no-deps --disable-pip-version-check
 
-RAPIDS_PY_WHEEL_NAME="dask_cudf_${RAPIDS_PY_CUDA_SUFFIX}" /tmp/gha-tools/tools/rapids-upload-wheels-to-s3 final_dist
+RAPIDS_PY_WHEEL_NAME="dask_cudf_${RAPIDS_PY_CUDA_SUFFIX}" /tmp/gha-tools/tools/rapids-upload-wheels-to-s3 dist
