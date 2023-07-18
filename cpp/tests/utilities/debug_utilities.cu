@@ -184,20 +184,20 @@ std::string nested_offsets_to_string(NestedColumnView const& c, std::string cons
 
   // the first offset value to normalize everything against
   size_type first =
-    cudf::detail::get_value<size_type>(offsets, c.offset(), cudf::test::get_default_stream());
-  rmm::device_uvector<size_type> shifted_offsets(output_size, cudf::test::get_default_stream());
+    cudf::detail::get_value<size_type>(offsets, c.offset(), cudf::get_default_stream());
+  rmm::device_uvector<size_type> shifted_offsets(output_size, cudf::get_default_stream());
 
   // normalize the offset values for the column offset
   size_type const* d_offsets = offsets.head<size_type>() + c.offset();
   thrust::transform(
-    rmm::exec_policy(cudf::test::get_default_stream()),
+    rmm::exec_policy(cudf::get_default_stream()),
     d_offsets,
     d_offsets + output_size,
     shifted_offsets.begin(),
     [first] __device__(int32_t offset) { return static_cast<size_type>(offset - first); });
 
   auto const h_shifted_offsets =
-    cudf::detail::make_host_vector_sync(shifted_offsets, cudf::test::get_default_stream());
+    cudf::detail::make_host_vector_sync(shifted_offsets, cudf::get_default_stream());
   std::ostringstream buffer;
   for (size_t idx = 0; idx < h_shifted_offsets.size(); idx++) {
     buffer << h_shifted_offsets[idx];
@@ -367,7 +367,7 @@ struct column_view_printer {
     lists_column_view lcv(col);
 
     // propagate slicing to the child if necessary
-    column_view child    = lcv.get_sliced_child(cudf::test::get_default_stream());
+    column_view child    = lcv.get_sliced_child(cudf::get_default_stream());
     bool const is_sliced = lcv.offset() > 0 || child.offset() > 0;
 
     std::string tmp =
@@ -411,7 +411,7 @@ struct column_view_printer {
       iter + view.num_children(),
       std::ostream_iterator<std::string>(out_stream, "\n"),
       [&](size_type index) {
-        auto child = view.get_sliced_child(index, cudf::test::get_default_stream());
+        auto child = view.get_sliced_child(index, cudf::get_default_stream());
 
         // non-nested types don't typically display their null masks, so do it here for convenience.
         return (!is_nested(child.type()) && child.nullable()
