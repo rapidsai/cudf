@@ -928,7 +928,7 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
     }
     s->abs_lvl_start[lvl] = cur;
     // subtract 4 because we've already incremented cur by 4
-    init_rle(cur, cur + len - 4);
+    if (s->error == 0) { init_rle(cur, cur + len - 4); }
   } else if (encoding == Encoding::BIT_PACKED) {
     len                       = (s->page.num_input_values * level_bits + 7) >> 3;
     s->initial_rle_run[lvl]   = ((s->page.num_input_values + 7) >> 3) * 2 + 1;  // literal run
