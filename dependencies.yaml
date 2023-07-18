@@ -290,6 +290,7 @@ dependencies:
               - cuda-cudart-dev
               - cuda-cupti-dev
               - cuda-nvrtc-dev
+              - cuda-nvtx-dev
               - libcurand-dev
           - matrix:
               cuda: "11.8"
