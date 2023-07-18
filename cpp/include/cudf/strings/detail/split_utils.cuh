@@ -24,28 +24,32 @@ namespace detail {
 
 constexpr bool is_whitespace(char_utf8 ch) { return ch <= ' '; }
 
-struct whitespace_token_counter_fn {
-  __device__ size_type count_tokens(string_view d_str) const
-  {
-    auto token_count = size_type{0};
-    auto spaces      = true;
-    auto itr         = d_str.data();
-    auto const end   = itr + d_str.size_bytes();
-    while (itr < end && token_count < max_tokens) {
-      cudf::char_utf8 ch   = 0;
-      auto const chr_width = cudf::strings::detail::to_char_utf8(itr, ch);
-      if (spaces == is_whitespace(ch)) {
-        itr += chr_width;
-      } else {
-        token_count += static_cast<size_type>(spaces);
-        spaces = !spaces;
-      }
+/**
+ * @brief Count tokens delimited by whitespace
+ *
+ * @param d_str String to tokenize
+ * @param max_tokens Maximum number of tokens to count
+ * @return Number of tokens delimited by whitespace
+ */
+__device__ inline size_type count_tokens_whitespace(
+  string_view d_str, size_type const max_tokens = std::numeric_limits<size_type>::max())
+{
+  auto token_count = size_type{0};
+  auto spaces      = true;
+  auto itr         = d_str.data();
+  auto const end   = itr + d_str.size_bytes();
+  while (itr < end && token_count < max_tokens) {
+    cudf::char_utf8 ch   = 0;
+    auto const chr_width = cudf::strings::detail::to_char_utf8(itr, ch);
+    if (spaces == is_whitespace(ch)) {
+      itr += chr_width;
+    } else {
+      token_count += static_cast<size_type>(spaces);
+      spaces = !spaces;
     }
-    return token_count;
   }
-
-  size_type const max_tokens = std::numeric_limits<size_type>::max();
-};
+  return token_count;
+}
 
 // JIT has trouble including thrust/pair.h
 struct position_pair {

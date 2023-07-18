@@ -93,8 +93,7 @@ struct whitespace_token_reader_fn {
   {
     if (d_strings.is_null(idx)) { return 0; }
     auto const d_str = d_strings.element<string_view>(idx);
-    whitespace_token_counter_fn counter{max_tokens};
-    return counter.count_tokens(d_str);
+    return count_tokens_whitespace(d_str, max_tokens);
   }
 
   __device__ void operator()(size_type idx)
