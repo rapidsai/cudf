@@ -191,6 +191,7 @@ class CategoricalAccessor(ColumnMethods):
         Categories (3, int64): [1 < 2 < 10]
         """
         if inplace:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "The inplace parameter is deprecated and will be removed in a "
                 "future release. set_ordered will always return a new Series "
@@ -272,6 +273,7 @@ class CategoricalAccessor(ColumnMethods):
         Categories (3, int64): [1, 2, 10]
         """
         if inplace:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "The inplace parameter is deprecated and will be removed in a "
                 "future release. set_ordered will always return a new Series "
@@ -341,6 +343,7 @@ class CategoricalAccessor(ColumnMethods):
         Categories (5, int64): [1, 2, 0, 3, 4]
         """
         if inplace:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "The `inplace` parameter in cudf.Series.cat.add_categories "
                 "is deprecated and will be removed in a future version of "
@@ -460,6 +463,7 @@ class CategoricalAccessor(ColumnMethods):
         Categories (2, int64): [1, 2]
         """
         if inplace:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "The `inplace` parameter in "
                 "cudf.Series.cat.remove_categories is deprecated and "
@@ -578,6 +582,7 @@ class CategoricalAccessor(ColumnMethods):
         Categories (2, int64): [1, 10]
         """
         if inplace:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "The `inplace` parameter in cudf.Series.cat.set_categories is "
                 "deprecated and will be removed in a future version of cudf. "
@@ -666,6 +671,7 @@ class CategoricalAccessor(ColumnMethods):
         old categories
         """
         if inplace:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "The `inplace` parameter in "
                 "cudf.Series.cat.reorder_categories is deprecated "
@@ -1042,14 +1048,7 @@ class CategoricalColumn(column.ColumnBase):
     ) -> cuda.devicearray.DeviceNDArray:
         return self.codes.data_array_view(mode=mode)
 
-    def unique(self, preserve_order=True) -> CategoricalColumn:
-        if preserve_order is not True:
-            warnings.warn(
-                "The preserve_order argument is deprecated. It will be "
-                "removed in a future version. As of now, unique always "
-                "preserves order regardless of the argument's value.",
-                FutureWarning,
-            )
+    def unique(self) -> CategoricalColumn:
         codes = self.as_numerical.unique()
         return column.build_categorical_column(
             categories=self.categories,

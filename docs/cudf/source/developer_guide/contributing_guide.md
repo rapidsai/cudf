@@ -40,6 +40,8 @@ For more information on how to use pre-commit hooks, see the code formatting sec
 cuDF follows the policy of deprecating code for one release prior to removal.
 For example, if we decide to remove an API during the 22.08 release cycle,
 it will be marked as deprecated in the 22.08 release and removed in the 22.10 release.
+Note that if it is explicitly mentioned in a comment (like `# Do not remove until..`),
+do not enforce the deprecation by removing the affected code until the condition in the comment is met.
 All internal usage of deprecated APIs in cuDF should be removed when the API is deprecated.
 This prevents users from encountering unexpected deprecation warnings when using other (non-deprecated) APIs.
 The documentation for the API should also be updated to reflect its deprecation.
