@@ -275,6 +275,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     def __iter__(self):
         if isinstance(self._by, list) and len(self._by) == 1:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "In a future version of cudf, a length 1 tuple will be "
                 "returned when iterating over a groupby with a grouper equal "
@@ -2062,6 +2063,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         if limit is not None:
             raise NotImplementedError("Does not support limit param yet.")
 
+        # Do not remove until pandas 2.0 support is added.
         warnings.warn(
             "pad is deprecated and will be removed in a future version. "
             "Use ffill instead.",
@@ -2098,6 +2100,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         if limit is not None:
             raise NotImplementedError("Does not support limit param yet.")
 
+        # Do not remove until pandas 2.0 support is added.
         warnings.warn(
             "backfill is deprecated and will be removed in a future version. "
             "Use bfill instead.",
@@ -2278,6 +2281,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if fill_method in ("pad", "backfill"):
             alternative = "ffill" if fill_method == "pad" else "bfill"
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 f"{fill_method} is deprecated and will be removed in a future "
                 f"version. Use f{alternative} instead.",

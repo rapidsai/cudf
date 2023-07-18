@@ -704,6 +704,7 @@ def get_dummies(
         raise NotImplementedError("drop_first is not supported yet")
 
     if dtype is no_default:
+        # Do not remove until pandas 2.0 support is added.
         warnings.warn(
             "Default `dtype` value will be changed to 'bool' in a future "
             "release, please update `dtype='bool'` to adapt for "

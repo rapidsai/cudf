@@ -89,7 +89,7 @@ struct Spark_MurmurHash3_x86_32 {
       k1 = rotate_bits_left(k1, rot_c1);
       k1 *= c2;
       h ^= k1;
-      h = rotate_bits_left(h, rot_c2);
+      h = rotate_bits_left(static_cast<uint32_t>(h), rot_c2);
       h = h * 5 + c3;
     }
     return h;
@@ -109,7 +109,7 @@ struct Spark_MurmurHash3_x86_32 {
       k1 = rotate_bits_left(k1, rot_c1);
       k1 *= c2;
       h ^= k1;
-      h = rotate_bits_left(h, rot_c2);
+      h = rotate_bits_left(static_cast<uint32_t>(h), rot_c2);
       h = h * 5 + c3;
     }
 
