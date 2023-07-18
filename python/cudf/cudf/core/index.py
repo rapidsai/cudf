@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import pickle
 import warnings
-from functools import cached_property
+from functools import cache, cached_property
 from numbers import Number
 from typing import (
     Any,
@@ -63,7 +63,11 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     numeric_normalize_types,
 )
-from cudf.utils.utils import _cudf_nvtx_annotate, search_range
+from cudf.utils.utils import (
+    _cudf_nvtx_annotate,
+    _warn_no_dask_cudf,
+    search_range,
+)
 
 
 def _lexsorted_equal_range(
@@ -342,6 +346,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         New RangeIndex instance with same range, casted to new dtype
         """
         if dtype is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "parameter dtype is deprecated and will be removed in a "
                 "future version. Use the astype method instead.",
@@ -349,6 +354,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             )
 
         if names is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "parameter names is deprecated and will be removed in a "
                 "future version. Use the name parameter instead.",
@@ -554,6 +560,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         # get_indexers method as an alternative, see
         # https://github.com/rapidsai/cudf/issues/12312
         if method is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 f"Passing method to {self.__class__.__name__}.get_loc is "
                 "deprecated and will raise in a future version.",
@@ -915,6 +922,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def __abs__(self):
         return abs(self._as_int_index())
 
+    @_warn_no_dask_cudf
+    def __dask_tokenize__(self):
+        return (type(self), self.start, self.stop, self.step)
+
 
 class GenericIndex(SingleColumnFrame, BaseIndex):
     """
@@ -1128,6 +1139,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         New index instance, casted to new dtype
         """
         if dtype is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "parameter dtype is deprecated and will be removed in a "
                 "future version. Use the astype method instead.",
@@ -1135,6 +1147,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             )
 
         if names is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "parameter names is deprecated and will be removed in a "
                 "future version. Use the name parameter instead.",
@@ -1197,6 +1210,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         # get_indexers method as an alternative, see
         # https://github.com/rapidsai/cudf/issues/12312
         if method is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 f"Passing method to {self.__class__.__name__}.get_loc is "
                 "deprecated and will raise in a future version.",
@@ -1543,6 +1557,12 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         """Return indices of value in index"""
         return self._column.indices_of(value)
 
+    @cache
+    @_warn_no_dask_cudf
+    def __dask_tokenize__(self):
+        # We can use caching, because an index is immutable
+        return super().__dask_tokenize__()
+
 
 class NumericIndex(GenericIndex):
     """Immutable, ordered and sliceable sequence of labels.
@@ -1568,6 +1588,7 @@ class NumericIndex(GenericIndex):
 
     @_cudf_nvtx_annotate
     def __init__(self, data=None, dtype=None, copy=False, name=None):
+        # Do not remove until pandas 2.0 support is added.
         warnings.warn(
             f"cudf.{self.__class__.__name__} is deprecated and will be "
             "removed from cudf in a future version. Use cudf.Index with the "
@@ -3065,6 +3086,7 @@ class StringIndex(GenericIndex):
 
     @_cudf_nvtx_annotate
     def __init__(self, values, copy=False, **kwargs):
+        # Do not remove until pandas 2.0 support is added.
         warnings.warn(
             f"cudf.{self.__class__.__name__} is deprecated and will be "
             "removed from cudf in a future version. Use cudf.Index with the "

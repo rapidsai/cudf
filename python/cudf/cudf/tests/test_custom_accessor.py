@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import pandas as pd
 import pytest
@@ -50,7 +50,7 @@ def test_dataframe_accessor_idendity(gdf1, gdf2):
     """
 
     assert gdf1.point is gdf1.point
-    assert not (gdf1.point is gdf2.point)
+    assert gdf1.point is not gdf2.point
 
 
 @pd.api.extensions.register_index_accessor("odd")
