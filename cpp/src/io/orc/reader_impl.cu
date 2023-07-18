@@ -1285,35 +1285,35 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
       out_buffers[level].emplace_back(column_types[i], n_rows, is_nullable, _stream, _mr);
     }
 
-    if (not is_level_data_empty) {
-      // Setup table for converting timestamp columns from local to UTC time
-      auto const tz_table = [&, &selected_stripes = selected_stripes] {
-        auto const has_timestamp_column = std::any_of(
-          _selected_columns.levels.cbegin(),
-          _selected_columns.levels.cend(),
-          [&](auto const& col_lvl) {
-            return std::any_of(col_lvl.cbegin(), col_lvl.cend(), [&](auto const& col_meta) {
-              return _metadata.get_col_type(col_meta.id).kind == TypeKind::TIMESTAMP;
-            });
+    // if (not is_level_data_empty) {
+    //  Setup table for converting timestamp columns from local to UTC time
+    auto const tz_table = [&, &selected_stripes = selected_stripes] {
+      auto const has_timestamp_column = std::any_of(
+        _selected_columns.levels.cbegin(),
+        _selected_columns.levels.cend(),
+        [&](auto const& col_lvl) {
+          return std::any_of(col_lvl.cbegin(), col_lvl.cend(), [&](auto const& col_meta) {
+            return _metadata.get_col_type(col_meta.id).kind == TypeKind::TIMESTAMP;
           });
+        });
 
-        return has_timestamp_column
-                 ? cudf::detail::make_timezone_transition_table(
-                     {}, selected_stripes[0].stripe_info[0].second->writerTimezone, _stream)
-                 : std::make_unique<cudf::table>();
-      }();
+      return has_timestamp_column
+               ? cudf::detail::make_timezone_transition_table(
+                   {}, selected_stripes[0].stripe_info[0].second->writerTimezone, _stream)
+               : std::make_unique<cudf::table>();
+    }();
 
-      decode_stream_data(num_dict_entries,
-                         rows_to_skip,
-                         _metadata.get_row_index_stride(),
-                         level,
-                         tz_table->view(),
-                         chunks,
-                         row_groups,
-                         out_buffers[level],
-                         _stream,
-                         _mr);
-    }
+    decode_stream_data(num_dict_entries,
+                       rows_to_skip,
+                       _metadata.get_row_index_stride(),
+                       level,
+                       tz_table->view(),
+                       chunks,
+                       row_groups,
+                       out_buffers[level],
+                       _stream,
+                       _mr);
+    //}
 
     if (nested_col.size()) {
       // Extract information to process nested child columns
