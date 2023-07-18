@@ -294,10 +294,10 @@ class device_row_hasher {
 
 }  // namespace
 
-std::unique_ptr<column> xxhash64(table_view const& input,
-                                 uint64_t seed,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> xxhash_64(table_view const& input,
+                                  uint64_t seed,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
 {
   auto output = make_numeric_column(data_type(type_to_id<hash_value_type>()),
                                     input.num_rows(),
@@ -323,13 +323,13 @@ std::unique_ptr<column> xxhash64(table_view const& input,
 
 }  // namespace detail
 
-std::unique_ptr<column> xxhash64(table_view const& input,
-                                 uint64_t seed,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> xxhash_64(table_view const& input,
+                                  uint64_t seed,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::xxhash64(input, seed, stream, mr);
+  return detail::xxhash_64(input, seed, stream, mr);
 }
 
 }  // namespace hashing

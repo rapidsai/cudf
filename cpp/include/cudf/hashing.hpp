@@ -138,7 +138,7 @@ std::unique_ptr<column> md5(
  *
  * @returns A column where each row is the hash of a row from the input
  */
-std::unique_ptr<column> xxhash64(
+std::unique_ptr<column> xxhash_64(
   table_view const& input,
   uint64_t seed                       = DEFAULT_HASH_SEED,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
