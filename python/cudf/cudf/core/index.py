@@ -342,6 +342,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         New RangeIndex instance with same range, casted to new dtype
         """
         if dtype is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "parameter dtype is deprecated and will be removed in a "
                 "future version. Use the astype method instead.",
@@ -349,6 +350,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             )
 
         if names is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "parameter names is deprecated and will be removed in a "
                 "future version. Use the name parameter instead.",
@@ -554,6 +556,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         # get_indexers method as an alternative, see
         # https://github.com/rapidsai/cudf/issues/12312
         if method is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 f"Passing method to {self.__class__.__name__}.get_loc is "
                 "deprecated and will raise in a future version.",
@@ -1128,6 +1131,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         New index instance, casted to new dtype
         """
         if dtype is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "parameter dtype is deprecated and will be removed in a "
                 "future version. Use the astype method instead.",
@@ -1135,6 +1139,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             )
 
         if names is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "parameter names is deprecated and will be removed in a "
                 "future version. Use the name parameter instead.",
@@ -1197,6 +1202,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         # get_indexers method as an alternative, see
         # https://github.com/rapidsai/cudf/issues/12312
         if method is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 f"Passing method to {self.__class__.__name__}.get_loc is "
                 "deprecated and will raise in a future version.",
@@ -1568,6 +1574,7 @@ class NumericIndex(GenericIndex):
 
     @_cudf_nvtx_annotate
     def __init__(self, data=None, dtype=None, copy=False, name=None):
+        # Do not remove until pandas 2.0 support is added.
         warnings.warn(
             f"cudf.{self.__class__.__name__} is deprecated and will be "
             "removed from cudf in a future version. Use cudf.Index with the "
@@ -3065,6 +3072,7 @@ class StringIndex(GenericIndex):
 
     @_cudf_nvtx_annotate
     def __init__(self, values, copy=False, **kwargs):
+        # Do not remove until pandas 2.0 support is added.
         warnings.warn(
             f"cudf.{self.__class__.__name__} is deprecated and will be "
             "removed from cudf in a future version. Use cudf.Index with the "

@@ -2484,35 +2484,6 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @_cudf_nvtx_annotate
-    def sum_of_squares(self, dtype=None):
-        """Return the sum of squares of values.
-
-        Parameters
-        ----------
-        dtype: data type
-            Data type to cast the result to.
-
-        Returns
-        -------
-        Series
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [3, 2, 3, 4], 'b': [7, 0, 10, 10]})
-        >>> df.sum_of_squares()
-        a     38
-        b    249
-        dtype: int64
-        """
-        warnings.warn(
-            f"Support for {self.__class__}.sum_of_squares is deprecated and "
-            "will be removed",
-            FutureWarning,
-        )
-        return self._reduce("sum_of_squares", dtype=dtype)
-
-    @_cudf_nvtx_annotate
     def median(
         self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
     ):

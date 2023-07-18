@@ -120,6 +120,7 @@ def factorize(
                 "Specify `use_na_sentinel=True` to use the sentinel value -1, "
                 "and `use_na_sentinel=False` to encode NA values.",
             )
+        # Do not remove until pandas 2.0 support is added.
         warnings.warn(msg, FutureWarning)
 
     if size_hint:
