@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import partial, reduce
-from typing import TYPE_CHECKING, Any, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Tuple, Union
 
 import cupy as cp
 import numpy as np
@@ -67,6 +67,52 @@ IndexingSpec: TypeAlias = Union[
 ]
 
 
+# Helpers for code-sharing between loc and iloc paths
+def expand_key(key, frame):
+    """Slice-expand key into a tuple of length frame.dim
+
+    Also apply callables on each piece.
+    """
+    dim = len(frame.shape)
+    if isinstance(key, tuple):
+        # Key potentially indexes rows and columns, slice-expand to
+        # shape of frame
+        indexers = key + (slice(None),) * (dim - len(key))
+        if len(indexers) > dim:
+            raise IndexError(
+                f"Too many indexers: got {len(indexers)} expected {dim}"
+            )
+    else:
+        # Key indexes rows, slice-expand to shape of frame
+        indexers = (key, *(slice(None),) * (dim - 1))
+    return tuple(k(frame) if callable(k) else k for k in indexers)
+
+
+def destructure_dataframe_indexer(
+    key: Any,
+    frame: cudf.DataFrame,
+    destructure: Callable[[Any, cudf.DataFrame], tuple[Any, ...]],
+    is_scalar: Callable[[Any, ColumnAccessor], bool],
+    get_ca: str,
+):
+    rows, cols = destructure(key, frame)
+    if cols is Ellipsis:
+        cols = slice(None)
+    try:
+        ca = getattr(frame._data, get_ca)(cols)
+    except TypeError as e:
+        raise TypeError(
+            "Column indices must be names, slices, "
+            "list-like of names, or boolean mask"
+        ) from e
+    scalar = is_scalar(cols, ca)
+    if scalar:
+        assert (
+            len(ca) == 1
+        ), "Scalar column indexer should not produce more than one column"
+    return rows, (scalar, ca)
+
+
 def destructure_iloc_key(
     key: Any, frame: Union[cudf.Series, cudf.DataFrame]
 ) -> tuple[Any, ...]:
@@ -111,19 +157,7 @@ def destructure_iloc_key(
     IndexError
         If there are too many indexers, or any individual indexer is a tuple.
     """
-    n = len(frame.shape)
-    if isinstance(key, tuple):
-        # Key potentially indexes rows and columns, slice-expand to
-        # shape of frame
-        indexers = key + (slice(None),) * (n - len(key))
-        if len(indexers) > n:
-            raise IndexError(
-                f"Too many indexers: got {len(indexers)} expected {n}"
-            )
-    else:
-        # Key indexes rows, slice-expand to shape of frame
-        indexers = (key, *(slice(None),) * (n - 1))
-    indexers = tuple(k(frame) if callable(k) else k for k in indexers)
+    indexers = expand_key(key, frame)
     if any(isinstance(k, tuple) for k in indexers):
         raise IndexError(
             "Too many indexers: can't have nested tuples in iloc indexing"
@@ -147,7 +181,7 @@ def destructure_dataframe_iloc_indexer(
     -------
     tuple
         2-tuple of a key for the rows and tuple of
-        (column_index_is_scalar, column_names) for the columns
+        (column_index_is_scalar, ColumnAccessor) for the columns
 
     Raises
     ------
@@ -158,23 +192,13 @@ def destructure_dataframe_iloc_indexer(
     NotImplementedError
         If the requested column indexer repeats columns
     """
-    rows, cols = destructure_iloc_key(key, frame)
-    if cols is Ellipsis:
-        cols = slice(None)
-    scalar = is_integer(cols)
-    try:
-        ca = frame._data.select_by_index(cols)
-    except TypeError:
-        raise TypeError(
-            "Column indices must be integers, slices, "
-            "or list-like of integers"
-        )
-    if scalar:
-        assert (
-            len(ca) == 1
-        ), "Scalar column indexer should not produce more than one column"
-
-    return rows, (scalar, ca)
+    return destructure_dataframe_indexer(
+        key,
+        frame,
+        destructure_iloc_key,
+        lambda col, _ca: is_integer(col),
+        "select_by_index",
+    )
 
 
 def destructure_series_iloc_indexer(key: Any, frame: cudf.Series) -> Any:
@@ -292,10 +316,9 @@ def destructure_loc_key(
     IndexError
         If there are too many indexers.
     """
-    n = len(frame.shape)
     if (
         isinstance(frame.index, cudf.MultiIndex)
-        and n == 2
+        and len(frame.shape) == 2
         and isinstance(key, tuple)
         and all(map(is_scalar, key))
     ):
@@ -313,18 +336,7 @@ def destructure_loc_key(
         else:
             # key just indexes rows
             key = (key,)
-    if isinstance(key, tuple):
-        # Key potentially indexes rows and columns, slice-expand to
-        # shape of frame
-        indexers = key + (slice(None),) * (n - len(key))
-        if len(indexers) > n:
-            raise IndexError(
-                f"Too many indexers: got {len(indexers)} expected {n}"
-            )
-    else:
-        # Key indexes rows, slice-expand to shape of frame
-        indexers = (key, *(slice(None),) * (n - 1))
-    return tuple(k(frame) if callable(k) else k for k in indexers)
+    return expand_key(key, frame)
 
 
 def destructure_dataframe_loc_indexer(
@@ -343,7 +355,7 @@ def destructure_dataframe_loc_indexer(
     -------
     tuple
         2-tuple of a key for the rows and tuple of
-        (column_index_is_scalar, column_names) for the columns
+        (column_index_is_scalar, ColumnAccessor) for the columns
 
     Raises
     ------
@@ -354,26 +366,16 @@ def destructure_dataframe_loc_indexer(
     NotImplementedError
         If the requested column indexer repeats columns
     """
-    rows, cols = destructure_loc_key(key, frame)
-    if cols is Ellipsis:
-        cols = slice(None)
-    try:
-        scalar = cols in frame._data
-    except TypeError:
-        scalar = False
-    try:
-        ca = frame._data.select_by_label(cols)
-    except TypeError:
-        raise TypeError(
-            "Column indices must be names, slices, "
-            "list-like of names, or boolean mask"
-        )
-    if scalar:
-        assert (
-            len(ca) == 1
-        ), "Scalar column indexer should not produce more than one column"
 
-    return rows, (scalar, ca)
+    def is_scalar(name, ca):
+        try:
+            return name in ca
+        except TypeError:
+            return False
+
+    return destructure_dataframe_indexer(
+        key, frame, destructure_loc_key, is_scalar, "select_by_label"
+    )
 
 
 def destructure_series_loc_indexer(key: Any, frame: cudf.Series) -> Any:
