@@ -14,6 +14,12 @@
  * limitations under the License.
  */
 
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/debug_utilities.hpp>
+#include <cudf_test/default_stream.hpp>
+
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/get_value.cuh>
@@ -29,12 +35,6 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/default_stream.hpp>
-#include <cudf_test/detail/column_utilities.hpp>
 
 #include <rmm/exec_policy.hpp>
 
@@ -501,9 +501,9 @@ std::string stringify_column_differences(cudf::device_span<int const> difference
       fixed_width_column_wrapper<int32_t>(h_differences.begin(), h_differences.end());
     auto diff_table = cudf::gather(source_table, diff_column);
     //  Need to pull back the differences
-    auto const h_left_strings = to_strings(diff_table->get_column(0));
+    auto const h_left_strings = cudf::debug::to_strings(diff_table->get_column(0));
 
-    auto const h_right_strings = to_strings(diff_table->get_column(1));
+    auto const h_right_strings = cudf::debug::to_strings(diff_table->get_column(1));
     for (size_t i = 0; i < h_differences.size(); ++i)
       buffer << depth_str << "lhs[" << h_differences[i] << "] = " << h_left_strings[i] << ", rhs["
              << h_differences[i] << "] = " << h_right_strings[i] << std::endl;
@@ -518,8 +518,8 @@ std::string stringify_column_differences(cudf::device_span<int const> difference
     auto diff_lhs = cudf::slice(lhs, {lhs_index, lhs_index + 1}).front();
     auto diff_rhs = cudf::slice(rhs, {rhs_index, rhs_index + 1}).front();
     return depth_str + "first difference: " + "lhs[" + std::to_string(index) +
-           "] = " + to_string(diff_lhs, "") + ", rhs[" + std::to_string(index) +
-           "] = " + to_string(diff_rhs, "");
+           "] = " + cudf::debug::to_string(diff_lhs, "") + ", rhs[" + std::to_string(index) +
+           "] = " + cudf::debug::to_string(diff_rhs, "");
   }
 }
 
@@ -926,391 +926,6 @@ std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c)
   } else {
     return std::vector<bitmask_type>{};
   }
-}
-
-namespace {
-
-template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-static auto numeric_to_string_precise(T value)
-{
-  return std::to_string(value);
-}
-
-template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-static auto numeric_to_string_precise(T value)
-{
-  std::ostringstream o;
-  o << std::setprecision(std::numeric_limits<T>::max_digits10) << value;
-  return o.str();
-}
-
-static auto duration_suffix(cudf::duration_D) { return " days"; }
-
-static auto duration_suffix(cudf::duration_s) { return " seconds"; }
-
-static auto duration_suffix(cudf::duration_ms) { return " milliseconds"; }
-
-static auto duration_suffix(cudf::duration_us) { return " microseconds"; }
-
-static auto duration_suffix(cudf::duration_ns) { return " nanoseconds"; }
-
-std::string get_nested_type_str(cudf::column_view const& view)
-{
-  if (view.type().id() == cudf::type_id::LIST) {
-    lists_column_view lcv(view);
-    return cudf::type_to_name(view.type()) + "<" + (get_nested_type_str(lcv.child())) + ">";
-  }
-
-  if (view.type().id() == cudf::type_id::STRUCT) {
-    std::ostringstream out;
-
-    out << cudf::type_to_name(view.type()) + "<";
-    std::transform(view.child_begin(),
-                   view.child_end(),
-                   std::ostream_iterator<std::string>(out, ","),
-                   [&out](auto const col) { return get_nested_type_str(col); });
-    out << ">";
-    return out.str();
-  }
-
-  return cudf::type_to_name(view.type());
-}
-
-template <typename NestedColumnView>
-std::string nested_offsets_to_string(NestedColumnView const& c, std::string const& delimiter = ", ")
-{
-  column_view offsets = (c.parent()).child(NestedColumnView::offsets_column_index);
-  CUDF_EXPECTS(offsets.type().id() == type_id::INT32,
-               "Column does not appear to be an offsets column");
-  CUDF_EXPECTS(offsets.offset() == 0, "Offsets column has an internal offset!");
-  size_type output_size = c.size() + 1;
-
-  // the first offset value to normalize everything against
-  size_type first =
-    cudf::detail::get_value<size_type>(offsets, c.offset(), cudf::test::get_default_stream());
-  rmm::device_uvector<size_type> shifted_offsets(output_size, cudf::test::get_default_stream());
-
-  // normalize the offset values for the column offset
-  size_type const* d_offsets = offsets.head<size_type>() + c.offset();
-  thrust::transform(
-    rmm::exec_policy(cudf::test::get_default_stream()),
-    d_offsets,
-    d_offsets + output_size,
-    shifted_offsets.begin(),
-    [first] __device__(int32_t offset) { return static_cast<size_type>(offset - first); });
-
-  auto const h_shifted_offsets =
-    cudf::detail::make_host_vector_sync(shifted_offsets, cudf::test::get_default_stream());
-  std::ostringstream buffer;
-  for (size_t idx = 0; idx < h_shifted_offsets.size(); idx++) {
-    buffer << h_shifted_offsets[idx];
-    if (idx < h_shifted_offsets.size() - 1) { buffer << delimiter; }
-  }
-  return buffer.str();
-}
-
-struct column_view_printer {
-  template <typename Element, std::enable_if_t<is_numeric<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
-  {
-    auto h_data = cudf::test::to_host<Element>(col);
-
-    out.resize(col.size());
-
-    if (col.nullable()) {
-      std::transform(thrust::make_counting_iterator(size_type{0}),
-                     thrust::make_counting_iterator(col.size()),
-                     out.begin(),
-                     [&h_data](auto idx) {
-                       return bit_is_set(h_data.second.data(), idx)
-                                ? numeric_to_string_precise(h_data.first[idx])
-                                : std::string("NULL");
-                     });
-
-    } else {
-      std::transform(h_data.first.begin(), h_data.first.end(), out.begin(), [](Element el) {
-        return numeric_to_string_precise(el);
-      });
-    }
-  }
-
-  template <typename Element, std::enable_if_t<is_timestamp<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col,
-                  std::vector<std::string>& out,
-                  std::string const& indent)
-  {
-    //  For timestamps, convert timestamp column to column of strings, then
-    //  call string version
-    std::string format = [&]() {
-      if constexpr (std::is_same_v<cudf::timestamp_s, Element>) {
-        return std::string{"%Y-%m-%dT%H:%M:%SZ"};
-      } else if constexpr (std::is_same_v<cudf::timestamp_ms, Element>) {
-        return std::string{"%Y-%m-%dT%H:%M:%S.%3fZ"};
-      } else if constexpr (std::is_same_v<cudf::timestamp_us, Element>) {
-        return std::string{"%Y-%m-%dT%H:%M:%S.%6fZ"};
-      } else if constexpr (std::is_same_v<cudf::timestamp_ns, Element>) {
-        return std::string{"%Y-%m-%dT%H:%M:%S.%9fZ"};
-      }
-      return std::string{"%Y-%m-%d"};
-    }();
-
-    auto col_as_strings = cudf::strings::from_timestamps(col, format);
-    if (col_as_strings->size() == 0) { return; }
-
-    this->template operator()<cudf::string_view>(*col_as_strings, out, indent);
-  }
-
-  template <typename Element, std::enable_if_t<cudf::is_fixed_point<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
-  {
-    auto const h_data = cudf::test::to_host<Element>(col);
-    if (col.nullable()) {
-      std::transform(thrust::make_counting_iterator(size_type{0}),
-                     thrust::make_counting_iterator(col.size()),
-                     std::back_inserter(out),
-                     [&h_data](auto idx) {
-                       return h_data.second.empty() || bit_is_set(h_data.second.data(), idx)
-                                ? static_cast<std::string>(h_data.first[idx])
-                                : std::string("NULL");
-                     });
-    } else {
-      std::transform(std::cbegin(h_data.first),
-                     std::cend(h_data.first),
-                     std::back_inserter(out),
-                     [col](auto const& fp) { return static_cast<std::string>(fp); });
-    }
-  }
-
-  template <typename Element,
-            std::enable_if_t<std::is_same_v<Element, cudf::string_view>>* = nullptr>
-  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
-  {
-    //
-    //  Implementation for strings, call special to_host variant
-    //
-    if (col.is_empty()) return;
-    auto h_data = cudf::test::to_host<std::string>(col);
-
-    // explicitly replace '\r' and '\n' characters with "\r" and "\n" strings respectively.
-    auto cleaned = [](std::string_view in) {
-      std::string out(in);
-      auto replace_char = [](std::string& out, char c, std::string_view repl) {
-        for (std::string::size_type pos{}; out.npos != (pos = out.find(c, pos)); pos++) {
-          out.replace(pos, 1, repl);
-        }
-      };
-      replace_char(out, '\r', "\\r");
-      replace_char(out, '\n', "\\n");
-      return out;
-    };
-
-    out.resize(col.size());
-    std::transform(thrust::make_counting_iterator(size_type{0}),
-                   thrust::make_counting_iterator(col.size()),
-                   out.begin(),
-                   [&](auto idx) {
-                     return h_data.second.empty() || bit_is_set(h_data.second.data(), idx)
-                              ? cleaned(h_data.first[idx])
-                              : std::string("NULL");
-                   });
-  }
-
-  template <typename Element,
-            std::enable_if_t<std::is_same_v<Element, cudf::dictionary32>>* = nullptr>
-  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
-  {
-    cudf::dictionary_column_view dictionary(col);
-    if (col.is_empty()) return;
-    std::vector<std::string> keys    = to_strings(dictionary.keys());
-    std::vector<std::string> indices = to_strings({dictionary.indices().type(),
-                                                   dictionary.size(),
-                                                   dictionary.indices().head(),
-                                                   dictionary.null_mask(),
-                                                   dictionary.null_count(),
-                                                   dictionary.offset()});
-    out.insert(out.end(), keys.begin(), keys.end());
-    if (!indices.empty()) {
-      std::string first = "\x08 : " + indices.front();  // use : as delimiter
-      out.push_back(first);                             // between keys and indices
-      out.insert(out.end(), indices.begin() + 1, indices.end());
-    }
-  }
-
-  // Print the tick counts with the units
-  template <typename Element, std::enable_if_t<is_duration<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
-  {
-    auto h_data = cudf::test::to_host<Element>(col);
-
-    out.resize(col.size());
-
-    if (col.nullable()) {
-      std::transform(thrust::make_counting_iterator(size_type{0}),
-                     thrust::make_counting_iterator(col.size()),
-                     out.begin(),
-                     [&h_data](auto idx) {
-                       return bit_is_set(h_data.second.data(), idx)
-                                ? numeric_to_string_precise(h_data.first[idx].count()) +
-                                    duration_suffix(h_data.first[idx])
-                                : std::string("NULL");
-                     });
-
-    } else {
-      std::transform(h_data.first.begin(), h_data.first.end(), out.begin(), [](Element el) {
-        return numeric_to_string_precise(el.count()) + duration_suffix(el);
-      });
-    }
-  }
-
-  template <typename Element, std::enable_if_t<std::is_same_v<Element, cudf::list_view>>* = nullptr>
-  void operator()(cudf::column_view const& col,
-                  std::vector<std::string>& out,
-                  std::string const& indent)
-  {
-    lists_column_view lcv(col);
-
-    // propagate slicing to the child if necessary
-    column_view child    = lcv.get_sliced_child(cudf::test::get_default_stream());
-    bool const is_sliced = lcv.offset() > 0 || child.offset() > 0;
-
-    std::string tmp =
-      get_nested_type_str(col) + (is_sliced ? "(sliced)" : "") + ":\n" + indent +
-      "Length : " + std::to_string(lcv.size()) + "\n" + indent +
-      "Offsets : " + (lcv.size() > 0 ? nested_offsets_to_string(lcv) : "") + "\n" +
-      (lcv.parent().nullable()
-         ? indent + "Null count: " + std::to_string(lcv.null_count()) + "\n" +
-             detail::to_string(bitmask_to_host(col), col.size(), indent) + "\n"
-         : "") +
-      // non-nested types don't typically display their null masks, so do it here for convenience.
-      (!is_nested(child.type()) && child.nullable()
-         ? "   " + detail::to_string(bitmask_to_host(child), child.size(), indent) + "\n"
-         : "") +
-      (detail::to_string(child, ", ", indent + "   ")) + "\n";
-
-    out.push_back(tmp);
-  }
-
-  template <typename Element,
-            std::enable_if_t<std::is_same_v<Element, cudf::struct_view>>* = nullptr>
-  void operator()(cudf::column_view const& col,
-                  std::vector<std::string>& out,
-                  std::string const& indent)
-  {
-    structs_column_view view{col};
-
-    std::ostringstream out_stream;
-
-    out_stream << get_nested_type_str(col) << ":\n"
-               << indent << "Length : " << view.size() << ":\n";
-    if (view.nullable()) {
-      out_stream << indent << "Null count: " << view.null_count() << "\n"
-                 << detail::to_string(bitmask_to_host(col), col.size(), indent) << "\n";
-    }
-
-    auto iter = thrust::make_counting_iterator(0);
-    std::transform(
-      iter,
-      iter + view.num_children(),
-      std::ostream_iterator<std::string>(out_stream, "\n"),
-      [&](size_type index) {
-        auto child = view.get_sliced_child(index, cudf::test::get_default_stream());
-
-        // non-nested types don't typically display their null masks, so do it here for convenience.
-        return (!is_nested(child.type()) && child.nullable()
-                  ? "   " + detail::to_string(bitmask_to_host(child), child.size(), indent) + "\n"
-                  : "") +
-               detail::to_string(child, ", ", indent + "   ");
-      });
-
-    out.push_back(out_stream.str());
-  }
-};
-
-}  // namespace
-
-namespace detail {
-
-/**
- * @copydoc cudf::test::detail::to_strings
- */
-std::vector<std::string> to_strings(cudf::column_view const& col, std::string const& indent)
-{
-  std::vector<std::string> reply;
-  cudf::type_dispatcher(col.type(), column_view_printer{}, col, reply, indent);
-  return reply;
-}
-
-/**
- * @copydoc cudf::test::detail::to_string(cudf::column_view, std::string, std::string)
- *
- * @param indent Indentation for all output
- */
-std::string to_string(cudf::column_view const& col,
-                      std::string const& delimiter,
-                      std::string const& indent)
-{
-  std::ostringstream buffer;
-  std::vector<std::string> h_data = to_strings(col, indent);
-
-  buffer << indent;
-  std::copy(h_data.begin(),
-            h_data.end() - (!h_data.empty()),
-            std::ostream_iterator<std::string>(buffer, delimiter.c_str()));
-  if (!h_data.empty()) buffer << h_data.back();
-
-  return buffer.str();
-}
-
-/**
- * @copydoc cudf::test::detail::to_string(std::vector<bitmask_type>, size_type, std::string)
- *
- * @param indent Indentation for all output.  See comment in `to_strings` for
- * a detailed description.
- */
-std::string to_string(std::vector<bitmask_type> const& null_mask,
-                      size_type null_mask_size,
-                      std::string const& indent)
-{
-  std::ostringstream buffer;
-  buffer << indent;
-  for (int idx = null_mask_size - 1; idx >= 0; idx--) {
-    buffer << (cudf::bit_is_set(null_mask.data(), idx) ? "1" : "0");
-  }
-  return buffer.str();
-}
-
-}  // namespace detail
-
-/**
- * @copydoc cudf::test::to_strings
- */
-std::vector<std::string> to_strings(cudf::column_view const& col)
-{
-  return detail::to_strings(col);
-}
-
-/**
- * @copydoc cudf::test::to_string(cudf::column_view, std::string)
- */
-std::string to_string(cudf::column_view const& col, std::string const& delimiter)
-{
-  return detail::to_string(col, delimiter);
-}
-
-/**
- * @copydoc cudf::test::to_string(std::vector<bitmask_type>, size_type)
- */
-std::string to_string(std::vector<bitmask_type> const& null_mask, size_type null_mask_size)
-{
-  return detail::to_string(null_mask, null_mask_size);
-}
-
-/**
- * @copydoc cudf::test::print
- */
-void print(cudf::column_view const& col, std::ostream& os, std::string const& delimiter)
-{
-  os << to_string(col, delimiter) << std::endl;
 }
 
 /**
