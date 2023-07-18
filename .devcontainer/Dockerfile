@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.5
 
-ARG CUDA=11.8
+ARG CUDA=12.0
 ARG LLVM=16
 ARG RAPIDS=23.08
 ARG DISTRO=ubuntu22.04
@@ -10,9 +10,12 @@ ARG PYTHON_PACKAGE_MANAGER=conda
 
 FROM ${REPO}:${RAPIDS}-cpp-llvm${LLVM}-cuda${CUDA}-${DISTRO} as pip-base
 
-FROM ${REPO}:${RAPIDS}-cpp-llvm${LLVM}-cuda${CUDA}-mambaforge-${DISTRO} as conda-base
+FROM ${REPO}:${RAPIDS}-cpp-mambaforge-${DISTRO} as conda-base
 
 FROM ${PYTHON_PACKAGE_MANAGER}-base
+
+ARG CUDA
+ENV CUDA_VERSION="${CUDA_VERSION:-${CUDA}}"
 
 ARG PYTHON_PACKAGE_MANAGER
 ENV PYTHON_PACKAGE_MANAGER="${PYTHON_PACKAGE_MANAGER}"

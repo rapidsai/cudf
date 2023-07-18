@@ -5,7 +5,7 @@
     "context": "${localWorkspaceFolder}/.devcontainer",
     "dockerfile": "${localWorkspaceFolder}/.devcontainer/Dockerfile",
     "args": {
-      "CUDA": "11.8",
+      "CUDA": "12.0",
       "LLVM": "16",
       "PYTHON_PACKAGE_MANAGER": "conda"
     }
