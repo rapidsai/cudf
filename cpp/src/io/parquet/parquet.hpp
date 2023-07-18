@@ -182,11 +182,15 @@ struct SchemaElement {
   //   repeated value_type name
   [[nodiscard]] bool is_one_level_list(SchemaElement const& parent) const
   {
-    return repetition_type == REPEATED and num_children == 0 and not parent.is_list();
+    return repetition_type == REPEATED and num_children == 0 and not parent.is_list(*this);
   }
 
   // returns true if the element is a list
-  [[nodiscard]] bool is_list() const { return converted_type == LIST; }
+  [[nodiscard]] bool is_list(SchemaElement const& child) const
+  {
+    return converted_type == LIST ||
+           (type == UNDEFINED_TYPE && num_children == 1 && child.repetition_type == REPEATED);
+  }
 
   // in parquet terms, a group is a level of nesting in the schema. a group
   // can be a struct or a list

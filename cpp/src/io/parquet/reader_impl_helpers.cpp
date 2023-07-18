@@ -233,7 +233,13 @@ int64_t aggregate_reader_metadata::calc_num_rows() const
 {
   return std::accumulate(
     per_file_metadata.begin(), per_file_metadata.end(), 0l, [](auto& sum, auto& pfm) {
-      return sum + pfm.num_rows;
+      auto const rowgroup_rows = std::accumulate(
+        pfm.row_groups.begin(), pfm.row_groups.end(), 0l, [](auto& rg_sum, auto& rg) {
+          return rg_sum + rg.num_rows;
+        });
+      CUDF_EXPECTS(pfm.num_rows == 0 || pfm.num_rows == rowgroup_rows,
+                   "Header and row groups disagree about number of rows in file!");
+      return sum + (pfm.num_rows == 0 && rowgroup_rows > 0 ? rowgroup_rows : pfm.num_rows);
     });
 }
 
@@ -428,7 +434,9 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
       }
 
       // if we're at the root, this is a new output column
-      auto const col_type = schema_elem.is_one_level_list(get_schema(schema_elem.parent_idx))
+      auto const col_type = schema_elem.is_one_level_list(get_schema(schema_elem.parent_idx)) ||
+                                (schema_elem.num_children >= 1 &&
+                                 schema_elem.is_list(get_schema(schema_elem.children_idx[0])))
                               ? type_id::LIST
                               : to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
       auto const dtype    = to_data_type(col_type, schema_elem);
