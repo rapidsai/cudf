@@ -121,6 +121,8 @@ def _shape_mismatch_error(x, y):
 
 
 class _DataFrameIndexer(_FrameIndexer):
+    _frame: DataFrame
+
     def __setitem__(self, key, value):
         if not isinstance(key, tuple):
             key = (key, slice(None))
@@ -363,8 +365,6 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     """
     For selection by index.
     """
-
-    _frame: DataFrame
 
     def __getitem__(self, arg):
         row_key, (
