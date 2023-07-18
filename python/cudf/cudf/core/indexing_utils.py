@@ -19,7 +19,6 @@ from cudf.api.types import (
     is_bool_dtype,
     is_integer,
     is_integer_dtype,
-    is_scalar,
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import BooleanMask, GatherMap
@@ -316,26 +315,6 @@ def destructure_loc_key(
     IndexError
         If there are too many indexers.
     """
-    if (
-        isinstance(frame.index, cudf.MultiIndex)
-        and len(frame.shape) == 2
-        and isinstance(key, tuple)
-        and all(map(is_scalar, key))
-    ):
-        # This is "best-effort" and ambiguous
-        if len(key) == 2:
-            if key[1] in frame.index._columns[1]:
-                # key just indexes the rows
-                key = (key,)
-            elif key[1] in frame._data:
-                # key indexes rows and columns
-                key = key
-            else:
-                # key indexes rows and we will raise a keyerror
-                key = (key,)
-        else:
-            # key just indexes rows
-            key = (key,)
     return expand_key(key, frame)
 
 
