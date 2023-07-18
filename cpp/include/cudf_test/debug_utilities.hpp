@@ -24,7 +24,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/null_mask.hpp>
 
-namespace cudf::debug {
+namespace cudf::test {
 
 /**
  * @brief Formats a column view as a string
@@ -49,4 +49,4 @@ std::vector<std::string> to_strings(cudf::column_view const& col);
  */
 void print(cudf::column_view const& col, std::ostream& os = std::cout);
 
-}  // namespace cudf::debug
+}  // namespace cudf::test

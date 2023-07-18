@@ -39,9 +39,7 @@
 #include <iomanip>
 #include <sstream>
 
-namespace cudf {
-
-namespace debug {
+namespace cudf::test {
 
 // Forward declaration.
 namespace detail {
@@ -296,13 +294,13 @@ struct column_view_printer {
   {
     cudf::dictionary_column_view dictionary(col);
     if (col.is_empty()) return;
-    std::vector<std::string> keys    = cudf::debug::to_strings(dictionary.keys());
-    std::vector<std::string> indices = cudf::debug::to_strings({dictionary.indices().type(),
-                                                                dictionary.size(),
-                                                                dictionary.indices().head(),
-                                                                dictionary.null_mask(),
-                                                                dictionary.null_count(),
-                                                                dictionary.offset()});
+    std::vector<std::string> keys    = to_strings(dictionary.keys());
+    std::vector<std::string> indices = to_strings({dictionary.indices().type(),
+                                                   dictionary.size(),
+                                                   dictionary.indices().head(),
+                                                   dictionary.null_mask(),
+                                                   dictionary.null_count(),
+                                                   dictionary.offset()});
     out.insert(out.end(), keys.begin(), keys.end());
     if (!indices.empty()) {
       std::string first = "\x08 : " + indices.front();  // use : as delimiter
@@ -479,5 +477,4 @@ void print(cudf::column_view const& col, std::ostream& os, std::string const& de
   os << to_string(col, ",") << std::endl;
 }
 
-}  // namespace debug
-}  // namespace cudf
+}  // namespace cudf::test

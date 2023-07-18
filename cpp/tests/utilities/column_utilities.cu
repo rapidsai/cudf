@@ -497,9 +497,9 @@ std::string stringify_column_differences(cudf::device_span<int const> difference
       fixed_width_column_wrapper<int32_t>(h_differences.begin(), h_differences.end());
     auto diff_table = cudf::gather(source_table, diff_column);
     //  Need to pull back the differences
-    auto const h_left_strings = cudf::debug::to_strings(diff_table->get_column(0));
+    auto const h_left_strings = to_strings(diff_table->get_column(0));
 
-    auto const h_right_strings = cudf::debug::to_strings(diff_table->get_column(1));
+    auto const h_right_strings = to_strings(diff_table->get_column(1));
     for (size_t i = 0; i < h_differences.size(); ++i)
       buffer << depth_str << "lhs[" << h_differences[i] << "] = " << h_left_strings[i] << ", rhs["
              << h_differences[i] << "] = " << h_right_strings[i] << std::endl;
@@ -514,8 +514,8 @@ std::string stringify_column_differences(cudf::device_span<int const> difference
     auto diff_lhs = cudf::slice(lhs, {lhs_index, lhs_index + 1}).front();
     auto diff_rhs = cudf::slice(rhs, {rhs_index, rhs_index + 1}).front();
     return depth_str + "first difference: " + "lhs[" + std::to_string(index) +
-           "] = " + cudf::debug::to_string(diff_lhs, "") + ", rhs[" + std::to_string(index) +
-           "] = " + cudf::debug::to_string(diff_rhs, "");
+           "] = " + to_string(diff_lhs, "") + ", rhs[" + std::to_string(index) +
+           "] = " + to_string(diff_rhs, "");
   }
 }
 
