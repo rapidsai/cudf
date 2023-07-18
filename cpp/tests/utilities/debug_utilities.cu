@@ -22,44 +22,22 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/debug_utilities.hpp>
 
-#include <cudf/column/column_view.hpp>
-#include <cudf/copying.hpp>
 #include <cudf/detail/get_value.cuh>
-#include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
-#include <cudf/structs/struct_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
-#include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/copy.h>
-#include <thrust/distance.h>
-#include <thrust/equal.h>
-#include <thrust/execution_policy.h>
-#include <thrust/generate.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
-#include <thrust/logical.h>
-#include <thrust/reduce.h>
-#include <thrust/remove.h>
-#include <thrust/scan.h>
-#include <thrust/scatter.h>
-#include <thrust/sequence.h>
 #include <thrust/transform.h>
 
-#include <numeric>
-#include <sstream>
-
-// need
 #include <iomanip>
+#include <sstream>
 
 namespace cudf {
 
