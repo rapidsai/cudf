@@ -41,10 +41,6 @@
 
 namespace cudf {
 
-namespace test {
-std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c);
-}
-
 namespace debug {
 
 namespace detail {
