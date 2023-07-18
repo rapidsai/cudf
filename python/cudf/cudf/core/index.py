@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import pickle
 import warnings
-from functools import cached_property, lru_cache
+from functools import cache, cached_property
 from numbers import Number
 from typing import (
     Any,
@@ -1557,7 +1557,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         """Return indices of value in index"""
         return self._column.indices_of(value)
 
-    @lru_cache
+    @cache
     @_warn_no_dask_cudf
     def __dask_tokenize__(self):
         # We can use caching, because an index is immutable
