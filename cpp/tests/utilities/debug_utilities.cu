@@ -472,7 +472,7 @@ std::string to_string(std::vector<bitmask_type> const& null_mask, size_type null
   return detail::to_string(null_mask, null_mask_size);
 }
 
-void print(cudf::column_view const& col, std::ostream& os, std::string const& delimiter)
+void print(cudf::column_view const& col, std::ostream& os)
 {
   os << to_string(col, ",") << std::endl;
 }
