@@ -2361,10 +2361,25 @@ def test_binops_reflect_decimal(
     utils.assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("powers", [0, 1, 2, 3])
+def test_binops_decimal_pow(powers):
+    s = cudf.Series(
+        [
+            decimal.Decimal("1.324324"),
+            None,
+            decimal.Decimal("2"),
+            decimal.Decimal("3"),
+            decimal.Decimal("5"),
+        ]
+    )
+    ps = s.to_pandas()
+
+    utils.assert_eq(s**powers, ps**powers, check_dtype=False)
+
+
 def test_binops_raise_error():
     s = cudf.Series([decimal.Decimal("1.324324")])
-    with pytest.raises(TypeError):
-        s**1
+
     with pytest.raises(TypeError):
         s // 1
 

@@ -3162,6 +3162,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """{docstring}"""
 
         if not datetime_is_numeric:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "`datetime_is_numeric` is deprecated and will be removed in "
                 "a future release. Specify `datetime_is_numeric=True` to "
