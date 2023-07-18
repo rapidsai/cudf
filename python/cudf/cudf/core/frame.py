@@ -43,7 +43,11 @@ from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type
-from cudf.utils.utils import _array_ufunc, _cudf_nvtx_annotate
+from cudf.utils.utils import (
+    _array_ufunc,
+    _cudf_nvtx_annotate,
+    _warn_no_dask_cudf,
+)
 
 
 # TODO: It looks like Frame is missing a declaration of `copy`, need to add
@@ -2809,6 +2813,14 @@ class Frame(BinaryOperand, Scannable):
             repeats = as_column(repeats)
 
         return libcudf.filling.repeat(columns, repeats)
+
+    @_warn_no_dask_cudf
+    def __dask_tokenize__(self):
+        return [
+            type(self),
+            self._dtypes,
+            self.to_pandas(),
+        ]
 
 
 def _apply_inverse_column(col: ColumnBase) -> ColumnBase:
