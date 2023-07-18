@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+//
+// Do NOT include any header that directly or indirectly depends on gtest.
+// This is to make sure this file can be used and compiled outside of the test framework.
+//
+
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/debug_utilities.hpp>
 
