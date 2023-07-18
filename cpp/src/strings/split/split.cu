@@ -154,26 +154,11 @@ std::unique_ptr<table> split_fn(strings_column_view const& input,
  */
 struct base_whitespace_split_tokenizer {
   // count the tokens only between non-whitespace characters
-  [[nodiscard]] __device__ size_type count_tokens(size_type idx) const
+  __device__ size_type count_tokens(size_type idx) const
   {
     if (d_strings.is_null(idx)) return 0;
     string_view const d_str = d_strings.element<string_view>(idx);
-    size_type token_count   = 0;
-    // run of whitespace is considered a single delimiter
-    bool spaces = true;
-    auto itr    = d_str.begin();
-    while (itr != d_str.end()) {
-      char_utf8 ch = *itr;
-      if (spaces == (ch <= ' '))
-        itr++;
-      else {
-        token_count += static_cast<size_type>(spaces);
-        spaces = !spaces;
-      }
-    }
-    if (max_tokens && (token_count > max_tokens)) token_count = max_tokens;
-    if (token_count == 0) token_count = 1;  // always at least 1 token
-    return token_count;
+    return count_tokens_whitespace(d_str, max_tokens);
   }
 
   base_whitespace_split_tokenizer(column_device_view const& d_strings, size_type max_tokens)
@@ -401,8 +386,7 @@ std::unique_ptr<table> split(strings_column_view const& strings_column,
 {
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
 
-  size_type max_tokens = 0;
-  if (maxsplit > 0) max_tokens = maxsplit + 1;  // makes consistent with Pandas
+  size_type max_tokens = maxsplit > 0 ? maxsplit + 1 : std::numeric_limits<size_type>::max();
 
   auto strings_device_view = column_device_view::create(strings_column.parent(), stream);
   if (delimiter.size() == 0) {
@@ -425,8 +409,7 @@ std::unique_ptr<table> rsplit(strings_column_view const& strings_column,
 {
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
 
-  size_type max_tokens = 0;
-  if (maxsplit > 0) max_tokens = maxsplit + 1;  // makes consistent with Pandas
+  size_type max_tokens = maxsplit > 0 ? maxsplit + 1 : std::numeric_limits<size_type>::max();
 
   auto strings_device_view = column_device_view::create(strings_column.parent(), stream);
   if (delimiter.size() == 0) {
