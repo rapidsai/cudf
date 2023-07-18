@@ -375,7 +375,7 @@ add_library(
   src/io/json/nested_json_gpu.cu
   src/io/json/reader_impl.cu
   src/io/json/experimental/byte_range_info.cu
-  src/io/json/experimental/read_json.cpp
+  src/io/json/experimental/read_json.cu
   src/io/json/write_json.cu
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
