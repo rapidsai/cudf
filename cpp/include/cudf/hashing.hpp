@@ -74,7 +74,7 @@ std::unique_ptr<column> hash(
 namespace hashing {
 
 /**
- * @brief Computes the MurmurHash3 32-bit of each row in the given table
+ * @brief Computes the MurmurHash3 32-bit hash value of each row in the given table
  *
  * This function computes the hash of each column using the `seed` for the first column
  * and the resulting hash as a seed for the next column and so on.
@@ -94,7 +94,7 @@ std::unique_ptr<column> murmurhash3_x86_32(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Computes the hash values of each row in the input set of columns
+ * @brief Computes the MurmurHash3 64-bit hash value of each row in the given table
  *
  * This function takes a 64-bit seed value and returns hash values using the
  * MurmurHash3_x64_128 algorithm. The hash produces in two uint64 values per row.
@@ -113,7 +113,7 @@ std::unique_ptr<table> murmurhash3_x64_128(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Computes the MurmurHash3 32-bit of each row in the given table
+ * @brief Computes the MurmurHash3 32-bit hash value of each row in the given table
  *
  * This function computes the hash similar to MurmurHash3_x86_32 with special processing
  * to match Spark's implementation results.
@@ -132,7 +132,7 @@ std::unique_ptr<column> spark_murmurhash3_x86_32(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Computes the MD5 hash of each row in the given table
+ * @brief Computes the MD5 hash value of each row in the given table
  *
  * @param input The table of columns to hash
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -146,7 +146,7 @@ std::unique_ptr<column> md5(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Computes the hash value of each row in the input set of columns
+ * @brief Computes the XXHash_64 hash value of each row in the given table
  *
  * This function takes a 64-bit seed value and returns a column of type UINT64.
  *
