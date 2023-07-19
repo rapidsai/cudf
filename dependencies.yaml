@@ -364,6 +364,9 @@ dependencies:
       - output_types: [conda, requirements]
         packages:
           - pre-commit
+          # pre-commit requires identify minimum version 1.0, but clang-format requires textproto support and that was
+          # added in 2.5.20, so we need to call out the minimum version needed for our plugins
+          - identify>=2.5.20
       - output_types: conda
         packages:
           - doxygen=1.8.20 # pre-commit hook needs a specific version.
