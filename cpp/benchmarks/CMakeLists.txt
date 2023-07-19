@@ -224,7 +224,8 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * hashing benchmark -----------------------------------------------------------------------------
-ConfigureBench(HASHING_BENCH hashing/hash.cpp hashing/partition.cpp)
+ConfigureBench(HASHING_BENCH hashing/partition.cpp)
+ConfigureNVBench(HASHING_NVBENCH hashing/hash.cpp)
 
 # ##################################################################################################
 # * merge benchmark -------------------------------------------------------------------------------
@@ -295,7 +296,6 @@ ConfigureBench(
   string/repeat_strings.cpp
   string/replace.cpp
   string/slice.cpp
-  string/split.cpp
   string/translate.cpp
   string/url_decode.cu
 )
@@ -313,6 +313,7 @@ ConfigureNVBench(
   string/like.cpp
   string/replace_re.cpp
   string/reverse.cpp
+  string/split.cpp
   string/split_re.cpp
 )
 

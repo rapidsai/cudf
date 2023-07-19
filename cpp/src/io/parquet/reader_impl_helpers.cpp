@@ -233,7 +233,13 @@ int64_t aggregate_reader_metadata::calc_num_rows() const
 {
   return std::accumulate(
     per_file_metadata.begin(), per_file_metadata.end(), 0l, [](auto& sum, auto& pfm) {
-      return sum + pfm.num_rows;
+      auto const rowgroup_rows = std::accumulate(
+        pfm.row_groups.begin(), pfm.row_groups.end(), 0l, [](auto& rg_sum, auto& rg) {
+          return rg_sum + rg.num_rows;
+        });
+      CUDF_EXPECTS(pfm.num_rows == 0 || pfm.num_rows == rowgroup_rows,
+                   "Header and row groups disagree about number of rows in file!");
+      return sum + (pfm.num_rows == 0 && rowgroup_rows > 0 ? rowgroup_rows : pfm.num_rows);
     });
 }
 
