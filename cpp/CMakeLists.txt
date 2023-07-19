@@ -62,6 +62,10 @@ option(
          stream to external libraries."
   OFF
 )
+option(CUDF_INTEGRATE_TEST_DEBUG_UTIL
+       "Integrate the debugging utilities from the test framework into libcudf" OFF
+)
+mark_as_advanced(CUDF_INTEGRATE_TEST_DEBUG_UTIL)
 # Option to add all symbols to the dynamic symbol table in the library file, allowing to retrieve
 # human-readable stacktrace for debugging.
 option(
@@ -631,6 +635,10 @@ add_library(
   src/utilities/type_dispatcher.cpp
 )
 
+if(CUDF_INTEGRATE_TEST_DEBUG_UTIL)
+  target_sources(cudf PRIVATE tests/utilities/debug_utilities.cu)
+endif()
+
 # Anything that includes jitify needs to be compiled with _FILE_OFFSET_BITS=64 due to a limitation
 # in how conda builds glibc
 set_source_files_properties(
@@ -821,10 +829,13 @@ if(CUDF_BUILD_TESTUTIL)
     tests/io/metadata_utilities.cpp
     tests/utilities/base_fixture.cpp
     tests/utilities/column_utilities.cu
-    tests/utilities/debug_utilities.cu
     tests/utilities/table_utilities.cu
     tests/utilities/tdigest_utilities.cu
   )
+
+  if(NOT CUDF_INTEGRATE_TEST_DEBUG_UTIL)
+    target_sources(cudftestutil PRIVATE tests/utilities/debug_utilities.cu)
+  endif()
 
   set_target_properties(
     cudftestutil
