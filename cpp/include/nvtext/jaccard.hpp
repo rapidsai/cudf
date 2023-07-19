@@ -59,12 +59,11 @@ namespace nvtext {
  *
  * If either input column's row is null, the output for that row will also be null.
  *
- * @throw std::invalid_argument if the `width < 5` or `input1.size() != input2.size()`
+ * @throw std::invalid_argument if the `width < 2` or `input1.size() != input2.size()`
  *
  * @param input1 Strings column to compare with `input2`
  * @param input2 Strings column to compare with `input1`
- * @param width The character width used for apply substrings;
- *              Default is 5 characters.
+ * @param width The character width used for apply substrings
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Index calculation values
@@ -72,7 +71,7 @@ namespace nvtext {
 std::unique_ptr<cudf::column> jaccard_index(
   cudf::strings_column_view const& input1,
   cudf::strings_column_view const& input2,
-  cudf::size_type width               = 5,
+  cudf::size_type width,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

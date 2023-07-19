@@ -862,14 +862,14 @@ def test_jaccard_index():
     str2 = cudf.Series(["the black cat", "jumped around"])
 
     expected = cudf.Series([0.058824, 0.307692], dtype=np.float32)
-    actual = str1.str.jaccard_index(str2)
+    actual = str1.str.jaccard_index(str2, 5)
     assert_eq(expected, actual)
 
-    actual = str2.str.jaccard_index(str1)
+    actual = str2.str.jaccard_index(str1, 5)
     assert_eq(expected, actual)
 
     with pytest.raises(ValueError):
-        str1.str.jaccard_index(str2, 2)
+        str1.str.jaccard_index(str2, 1)
     with pytest.raises(ValueError):
         str3 = cudf.Series(["not enough rows"])
-        str1.str.jaccard_index(str3)
+        str1.str.jaccard_index(str3, 5)

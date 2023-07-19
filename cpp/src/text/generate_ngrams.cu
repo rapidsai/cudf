@@ -308,7 +308,7 @@ std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view co
                                                     rmm::cuda_stream_view stream,
                                                     rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(ngrams > 4, "Parameter ngrams should be an integer value of 5 or greater");
+  CUDF_EXPECTS(ngrams >= 2, "Parameter ngrams should be an integer value of 2 or greater");
 
   auto output_type = cudf::data_type{cudf::type_to_id<cudf::hash_value_type>()};
   if (input.is_empty()) { return cudf::make_empty_column(output_type); }

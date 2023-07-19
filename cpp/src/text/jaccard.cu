@@ -250,8 +250,8 @@ std::unique_ptr<cudf::column> jaccard_index(cudf::strings_column_view const& inp
 {
   CUDF_EXPECTS(
     input1.size() == input2.size(), "input columns must be the same size", std::invalid_argument);
-  CUDF_EXPECTS(width >= 5,
-               "Parameter width should be an integer value of 5 or greater",
+  CUDF_EXPECTS(width >= 2,
+               "Parameter width should be an integer value of 2 or greater",
                std::invalid_argument);
 
   auto constexpr output_type = cudf::data_type{cudf::type_id::FLOAT32};
