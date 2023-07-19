@@ -17,8 +17,8 @@
 #include <io/json/nested_json.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
-#include <cudf/detail/hashing.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
@@ -258,6 +258,7 @@ tree_meta_t2 get_tree_representation_cpu(
       case cuio_json::token_t::ValueEnd: return "VE";
       case cuio_json::token_t::StructMemberBegin: return " <";
       case cuio_json::token_t::StructMemberEnd: return " >";
+      case cuio_json::token_t::LineEnd: return ";";
       default: return ".";
     }
   };

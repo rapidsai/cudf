@@ -5,7 +5,7 @@ from __future__ import annotations
 import pickle
 import warnings
 from functools import cached_property
-from typing import Any, Set
+from typing import Any, Set, Tuple
 
 import pandas as pd
 from typing_extensions import Self
@@ -70,6 +70,10 @@ class BaseIndex(Serializable):
     dtype: DtypeObj
     _accessors: Set[Any] = set()
     _data: ColumnAccessor
+
+    @property
+    def _columns(self) -> Tuple[Any, ...]:
+        raise NotImplementedError
 
     @cached_property
     def _values(self) -> ColumnBase:
@@ -198,6 +202,7 @@ class BaseIndex(Serializable):
         -------
         bool
         """
+        # Do not remove until pandas 2.0 support is added.
         warnings.warn(
             "is_monotonic is deprecated and will be removed in a future "
             "version. Use is_monotonic_increasing instead.",
@@ -876,6 +881,7 @@ class BaseIndex(Serializable):
         >>> idx.is_numeric()
         False
         """
+        # Do not remove until pandas removes this.
         warnings.warn(
             f"{type(self).__name__}.is_numeric is deprecated. "
             "Use cudf.api.types.is_any_real_numeric_dtype instead",
@@ -920,6 +926,7 @@ class BaseIndex(Serializable):
         >>> idx.is_boolean()
         False
         """
+        # Do not remove until pandas removes this.
         warnings.warn(
             f"{type(self).__name__}.is_boolean is deprecated. "
             "Use cudf.api.types.is_bool_dtype instead",
@@ -964,6 +971,7 @@ class BaseIndex(Serializable):
         >>> idx.is_integer()
         False
         """
+        # Do not remove until pandas removes this.
         warnings.warn(
             f"{type(self).__name__}.is_integer is deprecated. "
             "Use cudf.api.types.is_integer_dtype instead",
@@ -1015,6 +1023,7 @@ class BaseIndex(Serializable):
         >>> idx.is_floating()
         False
         """
+        # Do not remove until pandas removes this.
         warnings.warn(
             f"{type(self).__name__}.is_floating is deprecated. "
             "Use cudf.api.types.is_float_dtype instead",
@@ -1060,6 +1069,7 @@ class BaseIndex(Serializable):
         >>> idx.is_object()
         False
         """
+        # Do not remove until pandas removes this.
         warnings.warn(
             f"{type(self).__name__}.is_object is deprecated. "
             "Use cudf.api.types.is_object_dtype instead",
@@ -1112,6 +1122,7 @@ class BaseIndex(Serializable):
         >>> s.index.is_categorical()
         False
         """
+        # Do not remove until pandas removes this.
         warnings.warn(
             f"{type(self).__name__}.is_categorical is deprecated. "
             "Use cudf.api.types.is_categorical_dtype instead",
@@ -1158,6 +1169,7 @@ class BaseIndex(Serializable):
         >>> idx.is_interval()
         False
         """
+        # Do not remove until pandas removes this.
         warnings.warn(
             f"{type(self).__name__}.is_interval is deprecated. "
             "Use cudf.api.types.is_interval_dtype instead",
@@ -1537,6 +1549,7 @@ class BaseIndex(Serializable):
             Index of label.
         """
         if kind is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "'kind' argument in get_slice_bound is deprecated and will be "
                 "removed in a future version.",
