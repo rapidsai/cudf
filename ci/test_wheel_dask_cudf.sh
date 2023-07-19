@@ -1,0 +1,23 @@
+#!/bin/bash
+# Copyright (c) 2023, NVIDIA CORPORATION.
+
+set -eoxu pipefail
+
+mkdir -p ./dist
+RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
+RAPIDS_PY_WHEEL_NAME="rmm_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./dist
+
+# TODO: Remove when this is set in the container
+PIP_EXTRA_INDEX_URL="https://pypi.k8s.rapids.ai/simple"
+
+# Download the cudf built in the previous step
+RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
+python -m pip install --no-deps ./local-cudf-dep/cudf*.whl
+
+# Always install latest dask for testing
+python -m pip install git+https://github.com/dask/dask.git@main git+https://github.com/dask/distributed.git@main git+https://github.com/rapidsai/dask-cuda.git@branch-23.08
+
+# echo to expand wildcard before adding `[extra]` requires for pip
+python -m pip install -v $(echo ./dist/dask_cudf*.whl)[test]
+
+python -m pytest -n 8 ./python/dask_cudf/dask_cudf/tests
