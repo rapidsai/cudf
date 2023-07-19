@@ -18,7 +18,7 @@
 
 #include <io/utilities/column_buffer.hpp>
 
-#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/hashing/detail/default_hash.cuh>
 
 #include <rmm/exec_policy.hpp>
 #include <thrust/reduce.h>
