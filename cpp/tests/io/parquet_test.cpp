@@ -6040,7 +6040,6 @@ TEST_F(ParquetReaderTest, FilterSupported2)
     const cudf::io::parquet_writer_options out_opts =
       cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, written_table)
         .row_group_size_rows(1000);
-    // .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP);
     cudf::io::write_parquet(out_opts);
   }
   auto si          = cudf::io::source_info(filepath);
@@ -6214,5 +6213,56 @@ TEST_F(ParquetReaderTest, FilterNoStats)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result);
 }
+
+// Filter for float column with NaN values
+TEST_F(ParquetReaderTest, FilterFloatNAN)
+{
+  constexpr auto num_rows = 24000;
+  auto elements =
+    cudf::detail::make_counting_transform_iterator(0, [num_rows](auto i) { return i > num_rows/2 ? NAN : i; });
+  auto col0 = cudf::test::fixed_width_column_wrapper<float>(elements, elements + num_rows);
+  auto col1 = cudf::test::fixed_width_column_wrapper<double>(elements, elements + num_rows);
+
+  cudf::test::print(col0);
+  auto const written_table = table_view{{col0, col1}};
+  auto const filepath      = temp_env->get_temp_filepath("FilterFloatNAN.parquet");
+  {
+    const cudf::io::parquet_writer_options out_opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, written_table)
+        .row_group_size_rows(8000);
+    cudf::io::write_parquet(out_opts);
+  }
+  auto si          = cudf::io::source_info(filepath);
+  auto filter_col0 = cudf::ast::column_reference(0);
+  auto filter_col1 = cudf::ast::column_reference(1);
+  auto s0_value     = cudf::numeric_scalar<float>(NAN, true);
+  auto lit0_value   = cudf::ast::literal(s0_value);
+  auto s1_value     = cudf::numeric_scalar<double>(NAN, true);
+  auto lit1_value   = cudf::ast::literal(s1_value);
+
+  // row groups min, max:
+  // table[0] 0-0, 1-1, 2-2, 3-3
+  // Filtering AST - table[0] == NAN, table[1] != NAN
+  auto expr_eq  = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, filter_col0, lit0_value);
+  auto expr_neq = cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, filter_col1, lit1_value);
+
+  // Expected result
+  auto predicate0 = cudf::compute_column(written_table, expr_eq);
+  auto expected0  = cudf::apply_boolean_mask(written_table, *predicate0);
+  auto predicate1 = cudf::compute_column(written_table, expr_neq);
+  auto expected1  = cudf::apply_boolean_mask(written_table, *predicate1);
+
+  // tests
+  auto builder0             = cudf::io::parquet_reader_options::builder(si).filter(expr_eq);
+  auto table_with_metadata0 = cudf::io::read_parquet(builder0);
+  auto result0              = table_with_metadata0.tbl->view();
+  auto builder1             = cudf::io::parquet_reader_options::builder(si).filter(expr_neq);
+  auto table_with_metadata1 = cudf::io::read_parquet(builder1);
+  auto result1              = table_with_metadata1.tbl->view();
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected0->view(), result0);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected1->view(), result1);
+}
+
 
 CUDF_TEST_PROGRAM_MAIN()

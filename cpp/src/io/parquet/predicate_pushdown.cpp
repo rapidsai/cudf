@@ -130,7 +130,7 @@ struct stats_caster {
     size_t col_idx, cudf::data_type dtype) const
   {
     // List, Struct, Dictionary types are not supported
-    if constexpr (is_compound<T>() && !std::is_same_v<T, string_view>) {
+    if constexpr (cudf::is_compound<T>() && !std::is_same_v<T, string_view>) {
       CUDF_FAIL("Compound types do not have statistics");
     } else {
       // Local struct to hold host columns
