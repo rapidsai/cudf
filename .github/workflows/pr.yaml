@@ -125,5 +125,6 @@ jobs:
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-test.yml@feat/local-test
     with:
+      matrix_filter: map(select(.arch == "amd64" and .python == "3.10" and (.ctk == "11.8.0" or .ctk == "12.0.1")))
       build_type: pull-request
       test_script: ci/test_wheel_dask_cudf.sh
