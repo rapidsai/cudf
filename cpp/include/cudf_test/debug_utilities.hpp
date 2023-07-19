@@ -20,6 +20,9 @@
 // Do NOT include any header that directly or indirectly depends on gtest.
 // It is to make sure this file can be used and compiled outside of the test framework.
 //
+// In order to use the APIs in this file outside of the test framework, simply include the source
+// file `test/utilities/debug_utilities.cu` into the list of source files of the target build.
+//
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/null_mask.hpp>
