@@ -6218,8 +6218,8 @@ TEST_F(ParquetReaderTest, FilterNoStats)
 TEST_F(ParquetReaderTest, FilterFloatNAN)
 {
   constexpr auto num_rows = 24000;
-  auto elements =
-    cudf::detail::make_counting_transform_iterator(0, [num_rows](auto i) { return i > num_rows/2 ? NAN : i; });
+  auto elements           = cudf::detail::make_counting_transform_iterator(
+    0, [num_rows](auto i) { return i > num_rows / 2 ? NAN : i; });
   auto col0 = cudf::test::fixed_width_column_wrapper<float>(elements, elements + num_rows);
   auto col1 = cudf::test::fixed_width_column_wrapper<double>(elements, elements + num_rows);
 
@@ -6235,10 +6235,10 @@ TEST_F(ParquetReaderTest, FilterFloatNAN)
   auto si          = cudf::io::source_info(filepath);
   auto filter_col0 = cudf::ast::column_reference(0);
   auto filter_col1 = cudf::ast::column_reference(1);
-  auto s0_value     = cudf::numeric_scalar<float>(NAN, true);
-  auto lit0_value   = cudf::ast::literal(s0_value);
-  auto s1_value     = cudf::numeric_scalar<double>(NAN, true);
-  auto lit1_value   = cudf::ast::literal(s1_value);
+  auto s0_value    = cudf::numeric_scalar<float>(NAN, true);
+  auto lit0_value  = cudf::ast::literal(s0_value);
+  auto s1_value    = cudf::numeric_scalar<double>(NAN, true);
+  auto lit1_value  = cudf::ast::literal(s1_value);
 
   // row groups min, max:
   // table[0] 0-0, 1-1, 2-2, 3-3
@@ -6263,6 +6263,5 @@ TEST_F(ParquetReaderTest, FilterFloatNAN)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected0->view(), result0);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected1->view(), result1);
 }
-
 
 CUDF_TEST_PROGRAM_MAIN()
