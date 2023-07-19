@@ -164,8 +164,12 @@ ConfigureTest(DATETIME_OPS_TEST datetime/datetime_ops_test.cpp)
 # ##################################################################################################
 # * hashing tests ---------------------------------------------------------------------------------
 ConfigureTest(
-  HASHING_TEST hashing/md5_test.cpp hashing/murmurhash3_x86_32_test.cpp
-  hashing/murmurhash3_x64_128_test.cpp hashing/spark_murmurhash3_x86_32_test.cpp
+  HASHING_TEST
+  hashing/md5_test.cpp
+  hashing/murmurhash3_x86_32_test.cpp
+  hashing/murmurhash3_x64_128_test.cpp
+  hashing/spark_murmurhash3_x86_32_test.cpp
+  hashing/xxhash_64_test.cpp
 )
 
 # ##################################################################################################
