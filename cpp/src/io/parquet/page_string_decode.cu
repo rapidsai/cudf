@@ -123,7 +123,13 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
     int row_fudge             = -1;
 
     // short circuit for no nulls
-    if (max_def == 0 && !has_repetition) { return {begin_row, end_row}; }
+    if (max_def == 0 && !has_repetition) {
+      if (t == 0) {
+        pp->num_nulls  = 0;
+        pp->num_valids = end_row - begin_row;
+      }
+      return {begin_row, end_row};
+    }
 
     int row_count           = 0;
     int leaf_count          = 0;
