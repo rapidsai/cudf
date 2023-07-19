@@ -65,7 +65,7 @@ __device__ auto get_row(cudf::column_device_view const& d_input, cudf::size_type
  *
  * This is called with a warp per row
  */
-struct jaccard_unique_fn {
+struct sorted_unique_fn {
   cudf::column_device_view const d_input;
   cudf::size_type* d_results;
 
@@ -94,7 +94,7 @@ rmm::device_uvector<cudf::size_type> compute_unique_counts(cudf::column_view con
 {
   auto const d_input = cudf::column_device_view::create(input, stream);
   auto d_results     = rmm::device_uvector<cudf::size_type>(input.size(), stream);
-  jaccard_unique_fn fn{*d_input, d_results.data()};
+  sorted_unique_fn fn{*d_input, d_results.data()};
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::counting_iterator<cudf::size_type>(0),
                      input.size() * cudf::detail::warp_size,
@@ -107,7 +107,7 @@ rmm::device_uvector<cudf::size_type> compute_unique_counts(cudf::column_view con
  *
  * This is called with a warp per row
  */
-struct jaccard_intersect_fn {
+struct sorted_interset_fn {
   cudf::column_device_view const d_input1;
   cudf::column_device_view const d_input2;
   cudf::size_type* d_results;
@@ -151,7 +151,7 @@ rmm::device_uvector<cudf::size_type> compute_intersect_counts(cudf::column_view 
   auto const d_input1 = cudf::column_device_view::create(input1, stream);
   auto const d_input2 = cudf::column_device_view::create(input2, stream);
   auto d_results      = rmm::device_uvector<cudf::size_type>(input1.size(), stream);
-  jaccard_intersect_fn fn{*d_input1, *d_input2, d_results.data()};
+  sorted_interset_fn fn{*d_input1, *d_input2, d_results.data()};
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::counting_iterator<cudf::size_type>(0),
                      input1.size() * cudf::detail::warp_size,
@@ -182,15 +182,15 @@ struct jaccard_fn {
     // would need to subtract the intersect count from one set
     // (see formula in comment above)
     auto const unions = count1 + count2 - intersects;
-    return unions ? ((float)intersects / (float)unions) : 0.f;
+    return unions ? (static_cast<float>(intersects) / static_cast<float>(unions)) : 0.f;
   }
 };
 
 /**
  * @brief Create hashes for each substring
  *
- * Uses the hash_character_ngrams to hash substrings of the input column
- * which returns a lists column where each row is the hashes for the substrings
+ * Uses the hash_character_ngrams to hash substrings of the input column.
+ * This returns a lists column where each row is the hashes for the substrings
  * of the corresponding input string row.
  *
  * The hashes are then sorted using a segmented-sort as setup to
@@ -231,6 +231,8 @@ std::unique_ptr<cudf::column> hash_substrings(cudf::strings_column_view const& c
                                      stream.value());
 
   auto contents = hashes->release();
+  // the offsets are taken from the hashes column since they are the same
+  // before and after the segmented-sort
   return cudf::make_lists_column(
     col.size(),
     std::move(contents.children.front()),
@@ -254,7 +256,7 @@ std::unique_ptr<cudf::column> jaccard_index(cudf::strings_column_view const& inp
                "Parameter width should be an integer value of 2 or greater",
                std::invalid_argument);
 
-  auto constexpr output_type = cudf::data_type{cudf::type_id::FLOAT32};
+  constexpr auto output_type = cudf::data_type{cudf::type_id::FLOAT32};
   if (input1.is_empty()) { return cudf::make_empty_column(output_type); }
 
   auto const [d_uniques1, d_uniques2, d_intersects] = [&] {

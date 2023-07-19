@@ -868,6 +868,32 @@ def test_jaccard_index():
     actual = str2.str.jaccard_index(str1, 5)
     assert_eq(expected, actual)
 
+    # adopted from https://github.com/rapidsai/rapids-deduplication/issues/36
+    da = str1.str.character_ngrams(5, True)
+    db = str2.str.character_ngrams(5, True)
+    da = da.list.unique()
+    db = db.list.unique()
+    da = da.explode()
+    db = db.explode()
+    da = da.to_frame()
+    db = db.to_frame()
+    da = da.reset_index()
+    db = db.reset_index()
+    da = da.rename(columns={0: "token"})
+    db = db.rename(columns={0: "token"})
+    db["match"] = 1
+    inter = da.merge(db, on=["index", "token"], how="left")
+    inter = inter.groupby("index")["match"].sum()
+    union = da.merge(db, on=["index", "token"], how="outer")
+    union = union.groupby("index").size()
+    res = inter / union
+    res = res.sort_index()
+    res = res.values.astype("float32")
+    expected = cudf.Series(res)
+
+    actual = str1.str.jaccard_index(str2, 5)
+    assert_eq(expected, actual)
+
     with pytest.raises(ValueError):
         str1.str.jaccard_index(str2, 1)
     with pytest.raises(ValueError):
