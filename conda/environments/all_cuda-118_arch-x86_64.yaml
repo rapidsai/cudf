@@ -36,6 +36,7 @@ dependencies:
 - gmock>=1.13.0
 - gtest>=1.13.0
 - hypothesis
+- identify>=2.5.20
 - ipython
 - libarrow==11.0.0.*
 - libcufile-dev=1.4.0.31
