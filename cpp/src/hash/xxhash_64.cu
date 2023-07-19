@@ -19,6 +19,7 @@
 #include <cudf/hashing/detail/hash_functions.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -40,7 +41,7 @@ struct XXHash_64 {
   constexpr XXHash_64() = default;
   constexpr XXHash_64(hash_value_type seed) : m_seed(seed) {}
 
-  __device__ inline uint32_t getblock32(std::byte const* data, cudf::size_type offset) const
+  __device__ inline uint32_t getblock32(std::byte const* data, std::size_t offset) const
   {
     // Read a 4-byte value from the data pointer as individual bytes for safe
     // unaligned access (very likely for string types).
@@ -48,7 +49,7 @@ struct XXHash_64 {
     return block[0] | (block[1] << 8) | (block[2] << 16) | (block[3] << 24);
   }
 
-  __device__ inline uint64_t getblock64(std::byte const* data, cudf::size_type offset) const
+  __device__ inline uint64_t getblock64(std::byte const* data, std::size_t offset) const
   {
     uint64_t result = getblock32(data, offset + 4);
     result          = result << 32;
@@ -60,18 +61,18 @@ struct XXHash_64 {
   template <typename T>
   result_type __device__ inline compute(T const& key) const
   {
-    return compute_bytes(reinterpret_cast<std::byte const*>(&key), sizeof(T));
+    auto data = device_span<std::byte const>(reinterpret_cast<std::byte const*>(&key), sizeof(T));
+    return compute_bytes(data);
   }
 
-  result_type __device__ inline compute_remaining_bytes(std::byte const* data,
-                                                        cudf::size_type nbytes,
-                                                        cudf::size_type offset,
+  result_type __device__ inline compute_remaining_bytes(device_span<std::byte const>& in,
+                                                        std::size_t offset,
                                                         result_type h64) const
   {
     // remaining data can be processed in 8-byte chunks
-    if ((nbytes % 32) >= 8) {
-      for (; offset <= nbytes - 8; offset += 8) {
-        uint64_t k1 = getblock64(data, offset) * prime2;
+    if ((in.size() % 32) >= 8) {
+      for (; offset <= in.size() - 8; offset += 8) {
+        uint64_t k1 = getblock64(in.data(), offset) * prime2;
 
         k1 = rotate_bits_left(k1, 31) * prime1;
         h64 ^= k1;
@@ -80,17 +81,17 @@ struct XXHash_64 {
     }
 
     // remaining data can be processed in 4-byte chunks
-    if ((nbytes % 8) >= 4) {
-      for (; offset <= nbytes - 4; offset += 4) {
-        h64 ^= (getblock32(data, offset) & 0xfffffffful) * prime1;
+    if ((in.size() % 8) >= 4) {
+      for (; offset <= in.size() - 4; offset += 4) {
+        h64 ^= (getblock32(in.data(), offset) & 0xfffffffful) * prime1;
         h64 = rotate_bits_left(h64, 23) * prime2 + prime3;
       }
     }
 
     // and the rest
-    if (nbytes % 4) {
-      while (offset < nbytes) {
-        h64 ^= (static_cast<uint8_t>(data[offset]) & 0xff) * prime5;
+    if (in.size() % 4) {
+      while (offset < in.size()) {
+        h64 ^= (std::to_integer<uint8_t>(in[offset]) & 0xff) * prime5;
         h64 = rotate_bits_left(h64, 11) * prime1;
         ++offset;
       }
@@ -98,13 +99,13 @@ struct XXHash_64 {
     return h64;
   }
 
-  result_type __device__ compute_bytes(std::byte const* data, cudf::size_type const nbytes) const
+  result_type __device__ compute_bytes(device_span<std::byte const>& in) const
   {
     uint64_t offset = 0;
     uint64_t h64;
     // data can be processed in 32-byte chunks
-    if (nbytes >= 32) {
-      auto limit  = nbytes - 32;
+    if (in.size() >= 32) {
+      auto limit  = in.size() - 32;
       uint64_t v1 = m_seed + prime1 + prime2;
       uint64_t v2 = m_seed + prime2;
       uint64_t v3 = m_seed;
@@ -112,19 +113,19 @@ struct XXHash_64 {
 
       do {
         // pipeline 4*8byte computations
-        v1 += getblock64(data, offset) * prime2;
+        v1 += getblock64(in.data(), offset) * prime2;
         v1 = rotate_bits_left(v1, 31);
         v1 *= prime1;
         offset += 8;
-        v2 += getblock64(data, offset) * prime2;
+        v2 += getblock64(in.data(), offset) * prime2;
         v2 = rotate_bits_left(v2, 31);
         v2 *= prime1;
         offset += 8;
-        v3 += getblock64(data, offset) * prime2;
+        v3 += getblock64(in.data(), offset) * prime2;
         v3 = rotate_bits_left(v3, 31);
         v3 *= prime1;
         offset += 8;
-        v4 += getblock64(data, offset) * prime2;
+        v4 += getblock64(in.data(), offset) * prime2;
         v4 = rotate_bits_left(v4, 31);
         v4 *= prime1;
         offset += 8;
@@ -160,9 +161,9 @@ struct XXHash_64 {
       h64 = m_seed + prime5;
     }
 
-    h64 += nbytes;
+    h64 += in.size();
 
-    h64 = compute_remaining_bytes(data, nbytes, offset, h64);
+    h64 = compute_remaining_bytes(in, offset, h64);
 
     return finalize(h64);
   }
@@ -208,9 +209,9 @@ template <>
 hash_value_type __device__ inline XXHash_64<cudf::string_view>::operator()(
   cudf::string_view const& key) const
 {
-  auto const data = reinterpret_cast<std::byte const*>(key.data());
-  auto const len  = key.size_bytes();
-  return compute_bytes(data, len);
+  auto const len = key.size_bytes();
+  auto data = device_span<std::byte const>(reinterpret_cast<std::byte const*>(key.data()), len);
+  return compute_bytes(data);
 }
 
 template <>
