@@ -98,25 +98,25 @@ jobs:
   wheel-build-cudf:
     needs: checks
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-build.yml@branch-23.08
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-build.yml@feat/local-test
     with:
       build_type: pull-request
-      build_script: "ci/build_wheel_cudf.sh"
+      script: "ci/build_wheel_cudf.sh"
   wheel-tests-cudf:
     needs: wheel-build-cudf
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-test.yaml@feat/local-test
     with:
       build_type: pull-request
-      test_script: ci/test_wheel_cudf.sh
+      script: ci/test_wheel_cudf.sh
   wheel-build-dask-cudf:
     needs: wheel-tests-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-build.yml@branch-23.08
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-build.yml@feat/local-test
     with:
       matrix_filter: map(select(.arch == "amd64" and .python == "3.10" and (.ctk == "11.8.0" or .ctk == "12.0.1")))
       build_type: pull-request
-      build_script: "ci/build_wheel_dask_cudf.sh"
+      script: "ci/build_wheel_dask_cudf.sh"
   wheel-tests-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
@@ -124,4 +124,25 @@ jobs:
     with:
       matrix_filter: map(select(.arch == "amd64" and .python == "3.10" and (.ctk == "11.8.0" or .ctk == "12.0.1")))
       build_type: pull-request
-      test_script: ci/test_wheel_dask_cudf.sh
+      script: ci/test_wheel_dask_cudf.sh
+  # WARNING: Remove before merge
+  wheel-publish-cudf:
+    needs: wheel-build-cudf
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-publish.yml@feat/local-test
+    with:
+      build_type: ${{ inputs.build_type || 'branch' }}
+      branch: ${{ inputs.branch }}
+      sha: ${{ inputs.sha }}
+      date: ${{ inputs.date }}
+      package-name: cudf
+  wheel-publish-dask-cudf:
+    needs: wheel-build-dask-cudf
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-publish.yml@feat/local-test
+    with:
+      build_type: ${{ inputs.build_type || 'branch' }}
+      branch: ${{ inputs.branch }}
+      sha: ${{ inputs.sha }}
+      date: ${{ inputs.date }}
+      package-name: dask_cudf
