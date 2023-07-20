@@ -101,7 +101,7 @@ jobs:
   wheel-build-cudf:
     needs: checks
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-build.yml@feat/local-test
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-build.yaml@feat/local-test
     with:
       build_type: pull-request
       script: "ci/build_wheel_cudf.sh"
@@ -115,7 +115,7 @@ jobs:
   wheel-build-dask-cudf:
     needs: wheel-tests-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-build.yml@feat/local-test
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-build.yaml@feat/local-test
     with:
       matrix_filter: map(select(.arch == "amd64" and .python == "3.10" and (.ctk == "11.8.0" or .ctk == "12.0.1")))
       build_type: pull-request
