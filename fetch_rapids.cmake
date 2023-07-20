@@ -12,15 +12,6 @@
 # the License.
 # =============================================================================
 if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake)
-
-  # TODO: TEMPORARY
-  if(NOT rapids-cmake-repo)
-    set(rapids-cmake-repo trxcllnt/rapids-cmake)
-  endif()
-  if(NOT rapids-cmake-branch)
-    set(rapids-cmake-branch fix/support_conda_env-modify-cmake_prefix_path-envvar)
-  endif()
-
   file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-23.08/RAPIDS.cmake
        ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake
   )
