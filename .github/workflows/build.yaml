@@ -79,7 +79,7 @@ jobs:
   wheel-publish-cudf:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-publish.yml@feat/local-test
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-publish.yaml@feat/local-test
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -99,7 +99,7 @@ jobs:
   wheel-publish-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-publish.yml@feat/local-test
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-publish.yaml@feat/local-test
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
