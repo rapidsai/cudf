@@ -186,7 +186,6 @@ class parquet_metadata {
    */
   [[nodiscard]] auto const& schema() const { return _schema; }
 
-  ///< Number of rows in the root column; can vary for nested columns
   /**
    * @brief Returns the number of rows of the root column.
    *

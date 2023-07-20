@@ -490,7 +490,7 @@ parquet_metadata read_parquet_metadata(source_info const& src_info)
   CUDF_FUNC_RANGE();
 
   auto datasources = make_datasources(src_info);
-  return detail_parquet::read_parquet_metadata(std::move(datasources));
+  return detail_parquet::read_parquet_metadata(datasources);
 }
 
 /**

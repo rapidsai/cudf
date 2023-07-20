@@ -220,6 +220,6 @@ class writer {
  * @return parquet_metadata with parquet schema, number of rows, number of row groups and key-value
  * metadata.
  */
-parquet_metadata read_parquet_metadata(std::vector<std::unique_ptr<datasource>>&& sources);
+parquet_metadata read_parquet_metadata(std::vector<std::unique_ptr<datasource>> const& sources);
 }  // namespace detail::parquet
 }  // namespace cudf::io

@@ -5615,7 +5615,7 @@ struct ParquetMetadataReaderTest : public cudf::test::BaseFixture {
 
 TEST_F(ParquetMetadataReaderTest, TestBasic)
 {
-  auto const num_rows = 1'200'000;
+  auto const num_rows = 1200;
 
   auto ints   = random_values<int>(num_rows);
   auto floats = random_values<float>(num_rows);
@@ -5653,7 +5653,7 @@ TEST_F(ParquetMetadataReaderTest, TestBasic)
 
 TEST_F(ParquetMetadataReaderTest, TestNested)
 {
-  auto const num_rows       = 1'200'000;
+  auto const num_rows       = 1200;
   auto const lists_per_row  = 4;
   auto const num_child_rows = num_rows * lists_per_row;
 

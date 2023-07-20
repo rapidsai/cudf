@@ -115,6 +115,8 @@ class aggregate_reader_metadata {
 
   [[nodiscard]] auto const& get_key_value_metadata() const { return keyval_maps; }
 
+  [[nodiscard]] auto&& get_key_value_metadata() { return std::move(keyval_maps); }
+
   /**
    * @brief Gets the concrete nesting depth of output cudf columns
    *
