@@ -93,7 +93,7 @@ std::unique_ptr<column> aggregation_based_rolling_window(table_view const& group
                                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(group_keys.num_columns() > 0,
-               "Ungrouped rolling window not supported in optimized path.");
+               "Ungrouped rolling window not supported in aggregation path.");
 
   auto agg_requests = std::vector<cudf::groupby::aggregation_request>{};
   agg_requests.push_back(cudf::groupby::aggregation_request());
@@ -101,8 +101,7 @@ std::unique_ptr<column> aggregation_based_rolling_window(table_view const& group
   agg_requests.front().aggregations.push_back(convert_to<cudf::groupby_aggregation>(aggr));
 
   auto group_by = cudf::groupby::groupby{group_keys, cudf::null_policy::INCLUDE, cudf::sorted::YES};
-  // TODO: Create detail API for groupby.aggregate() to take stream. But use default mr, for temp.
-  auto aggregation_results           = group_by.aggregate(agg_requests);
+  auto aggregation_results           = group_by.aggregate(agg_requests, stream);
   auto const& aggregation_result_col = aggregation_results.second.front().results.front();
 
   using cudf::groupby::detail::sort::sort_groupby_helper;

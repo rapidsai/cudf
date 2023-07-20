@@ -20,6 +20,7 @@
 #include <cudf/groupby.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 enum class force_use_sort_impl : bool { NO, YES };
 
@@ -33,7 +34,8 @@ void test_single_agg(cudf::column_view const& keys,
                      cudf::sorted keys_are_sorted                 = cudf::sorted::NO,
                      std::vector<cudf::order> const& column_order = {},
                      std::vector<cudf::null_order> const& null_precedence = {},
-                     cudf::sorted reference_keys_are_sorted               = cudf::sorted::NO);
+                     cudf::sorted reference_keys_are_sorted               = cudf::sorted::NO,
+                     rmm::cuda_stream_view test_stream = cudf::get_default_stream());
 
 void test_sum_agg(cudf::column_view const& keys,
                   cudf::column_view const& values,
