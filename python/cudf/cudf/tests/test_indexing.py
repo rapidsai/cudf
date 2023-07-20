@@ -1982,6 +1982,28 @@ def test_loc_missing_label_keyerror_issue_13379(index):
         cdf.loc[[0, 5]]
 
 
+@pytest.mark.parametrize("index_is_ordered", [False, True])
+@pytest.mark.parametrize("label_is_ordered", [False, True])
+def test_loc_categorical_ordering_mismatch_issue_13652(
+    index_is_ordered, label_is_ordered
+):
+    # https://github.com/rapidsai/cudf/issues/13652
+    s = cudf.Series(
+        [0, 2, 8, 4, 2],
+        index=cudf.CategoricalIndex(
+            [1, 2, 3, 4, 5],
+            categories=[1, 2, 3, 4, 5],
+            ordered=index_is_ordered,
+        ),
+    )
+    labels = cudf.CategoricalIndex(
+        [1, 4], categories=[1, 4], ordered=label_is_ordered
+    )
+    actual = s.loc[labels]
+    expect = s.to_pandas().loc[labels.to_pandas()]
+    assert_eq(actual, expect)
+
+
 def test_loc_categorical_no_integer_fallback_issue_13653():
     # https://github.com/rapidsai/cudf/issues/13653
     s = cudf.Series(
