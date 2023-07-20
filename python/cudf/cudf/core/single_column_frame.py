@@ -231,6 +231,7 @@ class SingleColumnFrame(Frame, NotIterable):
         -------
         bool
         """
+        # Do not remove until pandas 2.0 support is added.
         warnings.warn(
             "is_monotonic is deprecated and will be removed in a future "
             "version. Use is_monotonic_increasing instead.",

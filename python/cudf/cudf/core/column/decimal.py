@@ -62,6 +62,27 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 "cudf.core.column.StringColumn", as_column([], dtype="object")
             )
 
+    def __pow__(self, other):
+        if isinstance(other, int):
+            if other == 0:
+                res = cudf.core.column.full(
+                    size=len(self), fill_value=1, dtype=self.dtype
+                )
+                if self.nullable:
+                    res = res.set_mask(self.mask)
+                return res
+            elif other < 0:
+                raise TypeError("Power of negative integers not supported.")
+            res = self
+            for _ in range(other - 1):
+                res = self * res
+            return res
+        else:
+            raise NotImplementedError(
+                f"__pow__ of types {self.dtype} and {type(other)} is "
+                "not yet implemented."
+            )
+
     # Decimals in libcudf don't support truediv, see
     # https://github.com/rapidsai/cudf/pull/7435 for explanation.
     def __truediv__(self, other):

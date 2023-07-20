@@ -16,7 +16,6 @@
 
 #include <join/join_common_utils.cuh>
 
-#include <cudf/detail/join.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>

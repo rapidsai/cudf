@@ -33,8 +33,8 @@ def column_to_string_view_array(Column strings_col):
     with nogil:
         c_buffer = move(cpp_to_string_view_array(input_view))
 
-    device_buffer = DeviceBuffer.c_from_unique_ptr(move(c_buffer))
-    return as_buffer(device_buffer, exposed=True)
+    db = DeviceBuffer.c_from_unique_ptr(move(c_buffer))
+    return as_buffer(db, exposed=True)
 
 
 def column_from_udf_string_array(DeviceBuffer d_buffer):

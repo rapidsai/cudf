@@ -170,10 +170,11 @@ std::unique_ptr<column> shift(column_view const& input,
 std::unique_ptr<column> shift(column_view const& input,
                               size_type offset,
                               scalar const& fill_value,
+                              rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::shift(input, offset, fill_value, cudf::get_default_stream(), mr);
+  return detail::shift(input, offset, fill_value, stream, mr);
 }
 
 }  // namespace cudf
