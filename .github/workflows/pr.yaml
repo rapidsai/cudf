@@ -25,6 +25,9 @@ jobs:
       - wheel-tests-cudf
       - wheel-build-dask-cudf
       - wheel-tests-dask-cudf
+      # WARNING: Remove before merge
+      - wheel-publish-cudf
+      - wheel-publish-dask-cudf
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/pr-builder.yaml@branch-23.08
   checks:
