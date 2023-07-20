@@ -1,5 +1,8 @@
 # Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
+import random
+import string
+
 import numpy as np
 import pytest
 
@@ -868,6 +871,31 @@ def test_jaccard_index():
     actual = str2.str.jaccard_index(str1, 5)
     assert_eq(expected, actual)
 
+    with pytest.raises(ValueError):
+        str1.str.jaccard_index(str2, 1)
+    with pytest.raises(ValueError):
+        str3 = cudf.Series(["not enough rows"])
+        str1.str.jaccard_index(str3, 5)
+
+
+def _make_list_of_strings_of_random_length(num_strings, max_length):
+    return [
+        "".join(
+            random.choice(string.ascii_lowercase)
+            for _ in range(random.randint(1, max_length))
+        )
+        for _ in range(num_strings)
+    ]
+
+
+def test_jaccard_index_random_strings():
+    num_strings = 100
+    common_strings = _make_list_of_strings_of_random_length(num_strings, 50)
+    uncommon_strings1 = _make_list_of_strings_of_random_length(num_strings, 10)
+    uncommon_strings2 = _make_list_of_strings_of_random_length(num_strings, 20)
+    str1 = cudf.Series(uncommon_strings1).str.cat(cudf.Series(common_strings))
+    str2 = cudf.Series(uncommon_strings2).str.cat(cudf.Series(common_strings))
+
     # adopted from https://github.com/rapidsai/rapids-deduplication/issues/36
     da = str1.str.character_ngrams(5, True)
     db = str2.str.character_ngrams(5, True)
@@ -887,15 +915,10 @@ def test_jaccard_index():
     union = da.merge(db, on=["index", "token"], how="outer")
     union = union.groupby("index").size()
     res = inter / union
+    res.fillna(0, inplace=True)
     res = res.sort_index()
     res = res.values.astype("float32")
     expected = cudf.Series(res)
 
     actual = str1.str.jaccard_index(str2, 5)
     assert_eq(expected, actual)
-
-    with pytest.raises(ValueError):
-        str1.str.jaccard_index(str2, 1)
-    with pytest.raises(ValueError):
-        str3 = cudf.Series(["not enough rows"])
-        str1.str.jaccard_index(str3, 5)
