@@ -20,7 +20,7 @@
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/groupby.hpp>
-#include <cudf/reduction.hpp>
+#include <cudf/reduction/detail/reduction.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
@@ -128,10 +128,14 @@ std::unique_ptr<column> reduction_based_rolling_window(column_view const& input,
     if (aggr.kind == aggregation::COUNT_ALL) {
       return cudf::make_fixed_width_scalar(input.size(), stream);
     } else if (aggr.kind == aggregation::COUNT_VALID) {
-      return cudf::make_fixed_width_scalar(input.size() - input.null_count());
+      return cudf::make_fixed_width_scalar(input.size() - input.null_count(), stream);
     } else {
-      // TODO: Create detail API for reduce(), to take the stream.
-      return cudf::reduce(input, *convert_to<cudf::reduce_aggregation>(aggr), return_dtype);
+      return cudf::reduction::detail::reduce(input,
+                                             *convert_to<cudf::reduce_aggregation>(aggr),
+                                             return_dtype,
+                                             std::nullopt,
+                                             stream,
+                                             rmm::mr::get_current_device_resource());
     }
   }();
   // Blow up results into separate column.
