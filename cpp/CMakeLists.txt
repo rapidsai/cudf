@@ -345,7 +345,9 @@ add_library(
   src/hash/hashing.cu
   src/hash/md5_hash.cu
   src/hash/murmurhash3_x86_32.cu
+  src/hash/murmurhash3_x64_128.cu
   src/hash/spark_murmurhash3_x86_32.cu
+  src/hash/xxhash_64.cu
   src/interop/dlpack.cpp
   src/interop/from_arrow.cu
   src/interop/to_arrow.cu
@@ -374,7 +376,7 @@ add_library(
   src/io/json/nested_json_gpu.cu
   src/io/json/reader_impl.cu
   src/io/json/experimental/byte_range_info.cu
-  src/io/json/experimental/read_json.cpp
+  src/io/json/experimental/read_json.cu
   src/io/json/write_json.cu
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
