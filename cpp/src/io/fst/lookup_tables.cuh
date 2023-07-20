@@ -195,6 +195,7 @@ class SymbolGroupLookupOp {
   using TempStorage = cub::Uninitialized<_TempStorage>;
 
   struct KernelParameter {
+    // Declare the member type that the DFA is going to instantiate
     using LookupTableT = SymbolGroupLookupOp<SymbolGroupLookupOpT>;
     SymbolGroupLookupOpT sgid_lookup_op;
   };
@@ -230,14 +231,15 @@ class SymbolGroupLookupOp {
 };
 
 /**
- * @brief Creates a simple symbol group lookup wrapper that uses a simple function object to
+ * @brief Prepares a simple symbol group lookup wrapper that uses a simple function object to
  * retrieve the symbol group id for a symbol.
  *
  * @tparam FunctorT A function object type that must implement the signature `int32_t
  * operator()(symbol)`, where `symbol` is a symbol from the input type.
  * @param sgid_lookup_op A function object that must implement the signature `int32_t
  * operator()(symbol)`, where `symbol` is a symbol from the input type.
- * @return A symbol group lookup table of type SymbolGroupLookupOp
+ * @return The kernel parameter of type SymbolGroupLookupOp::KernelParameter that is used to
+ * initialize a simple symbol group id lookup wrapper
  */
 template <typename FunctorT>
 auto make_symbol_group_lookup_op(FunctorT sgid_lookup_op)
