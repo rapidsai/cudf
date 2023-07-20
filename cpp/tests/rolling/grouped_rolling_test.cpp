@@ -2345,9 +2345,6 @@ TYPED_TEST(TypedUnboundedWindowTest, UnboundedFollowingWindowSingleGroup)
 
 TYPED_TEST(TypedUnboundedWindowTest, UnboundedPrecedingAndFollowingWindowSingleGroup)
 {
-  std::cout << "CALEB: Running "
-               "TypedUnboundedWindowTest/\\*.UnboundedPrecedingAndFollowingWindowSingleGroup."
-            << std::endl;
   using T = TypeParam;
 
   auto const grp_col = cudf::test::fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
