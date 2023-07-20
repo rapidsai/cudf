@@ -42,7 +42,7 @@ CUDF_CHANNEL_20=$(rapids-get-artifact ci/cudf/pull-request/13599/${COMMIT}/cudf_
 rapids-logger $LIBCUDF_CHANNEL_20
 rapids-logger $CUDF_CHANNEL_20
 
-rapids-mamba-retry remove --force cudf libcudf dask-cudf pandas python-tzdata
+conda remove --force cudf libcudf dask-cudf pandas python-tzdata
 
 rapids-mamba-retry install \
   --channel "${CUDF_CHANNEL_20}" \
