@@ -1422,17 +1422,17 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   auto const recover_from_error = (format == tokenizer_pda::json_format_cfg_t::JSON_LINES_RECOVER);
 
   // Memory holding the top-of-stack stack context for the input
-  rmm::device_uvector<StackSymbolT> stack_op_indices{json_in.size(), stream};
+  rmm::device_uvector<StackSymbolT> stack_symbols{json_in.size(), stream};
 
   // Identify what is the stack context for each input character (JSON-root, struct, or list)
   auto const stack_behavior =
     recover_from_error ? stack_behavior_t::ResetOnDelimiter : stack_behavior_t::PushPopWithoutReset;
-  get_stack_context(json_in, stack_op_indices.data(), stack_behavior, stream);
+  get_stack_context(json_in, stack_symbols.data(), stack_behavior, stream);
 
   // Input to the full pushdown automaton finite-state transducer, where a input symbol comprises
   // the combination of a character from the JSON input together with the stack context for that
   // character.
-  auto zip_in = thrust::make_zip_iterator(json_in.data(), stack_op_indices.data());
+  auto zip_in = thrust::make_zip_iterator(json_in.data(), stack_symbols.data());
 
   constexpr auto max_translation_table_size =
     tokenizer_pda::NUM_PDA_SGIDS *
