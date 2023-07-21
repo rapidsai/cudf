@@ -26,6 +26,12 @@
     "/bin/bash", "-c", "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config/pip,local/${localWorkspaceFolderBasename}/single}"
   ],
 
+  "updateContentCommand": [
+    "/bin/bash",
+    "-c",
+    "mkdir -m 0755 -p ~/.config/clangd && cp -n /etc/skel/.config/clangd/config.yaml ~/.config/clangd/config.yaml"
+  ],
+
   "containerEnv": {
     "PYTHONSAFEPATH": "true",
     "PYTHONUNBUFFERED": "true",

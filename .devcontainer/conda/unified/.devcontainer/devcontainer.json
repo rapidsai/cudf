@@ -26,6 +26,12 @@
     "/bin/bash", "-c", "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config,conda/pkgs,conda/${localWorkspaceFolderBasename}/unified}"
   ],
 
+  "updateContentCommand": [
+    "/bin/bash",
+    "-c",
+    "mkdir -m 0755 -p ~/.config/clangd && cp -n /etc/skel/.config/clangd/config.yaml ~/.config/clangd/config.yaml"
+  ],
+
   "containerEnv": {
     "DEFAULT_CONDA_ENV": "rapids"
   },

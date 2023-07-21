@@ -14,6 +14,8 @@ FROM ${REPO}:${RAPIDS}-cpp-mambaforge-${DISTRO} as conda-base
 
 FROM ${PYTHON_PACKAGE_MANAGER}-base
 
+COPY --from=pip-base /etc/skel/.config/clangd/config.yaml /etc/skel/.config/clangd/config.yaml
+
 ARG CUDA
 ENV CUDAARCHS="RAPIDS"
 ENV CUDA_VERSION="${CUDA_VERSION:-${CUDA}}"
