@@ -920,10 +920,12 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
     s->abs_lvl_start[lvl]     = cur;
   } else if (encoding == Encoding::RLE) {  // V1 header with RLE encoding
     if (cur + 4 < end) {
-      len = 4 + (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);
-      init_rle(cur + 4, cur + len);
+      len = (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);
       cur += 4;
       s->abs_lvl_start[lvl] = cur;
+      init_rle(cur, cur + len);
+      // add back the 4 bytes for the length
+      len += 4;
     } else {
       len      = 0;
       s->error = 2;
