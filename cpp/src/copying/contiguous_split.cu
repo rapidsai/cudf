@@ -1403,9 +1403,11 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
   rmm::device_uvector<offset_type> d_batch_offsets(num_bufs + 1, stream, temp_mr);
 
   auto const buf_count_iter = cudf::detail::make_counting_transform_iterator(
-    0, [num_bufs, num_batches = num_batches_func{batches.begin()}] __device__(size_type i) {
-      return i == num_bufs ? 0 : num_batches(i);
-    });
+    0,
+    cuda::proclaim_return_type<std::size_t>(
+      [num_bufs, num_batches = num_batches_func{batches.begin()}] __device__(size_type i) {
+        return i == num_bufs ? 0 : num_batches(i);
+      }));
 
   thrust::exclusive_scan(rmm::exec_policy(stream, temp_mr),
                          buf_count_iter,
