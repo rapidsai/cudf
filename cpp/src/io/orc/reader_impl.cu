@@ -1013,7 +1013,7 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
     return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
   }
 
-  // Setup table for converting timestamp columns from local to UTC time
+  // Set up table for converting timestamp columns from local to UTC time
   auto const tz_table = [&, &selected_stripes = selected_stripes] {
     auto const has_timestamp_column = std::any_of(
       _selected_columns.levels.cbegin(), _selected_columns.levels.cend(), [&](auto const& col_lvl) {
