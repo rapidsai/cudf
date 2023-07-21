@@ -8,7 +8,7 @@ requires = [
     "ninja",
     "numpy>=1.21",
     "protoc-wheel",
-    "pyarrow==11.0.0.*",
+    "pyarrow==12.0.1.*",
     "rmm==23.8.*",
     "scikit-build>=0.13.1",
     "setuptools",
