@@ -45,17 +45,46 @@
   "customizations": {
     "vscode": {
       "extensions": [
+        "llvm-vs-code-extensions.vscode-clangd",
         "mutantdino.resourcemonitor",
+        "ms-vscode.cpptools",
+        "nvidia.nsight-vscode-edition",
+        "seaube.clangformat",
         "tamasfe.even-better-toml"
       ],
       "settings": {
+        "C_Cpp.vcpkg.enabled": false,
+        "C_Cpp.formatting": "disabled",
+        "C_Cpp.autocomplete": "disabled",
+        "C_Cpp.errorSquiggles": "disabled",
+        "C_Cpp.intelliSenseEngine": "disabled",
+        "C_Cpp.configurationWarnings": "disabled",
+        "C_Cpp.autoAddFileAssociations": false,
+        "clang-format.fallbackStyle": "none",
         "files.trimFinalNewlines": true,
         "files.insertFinalNewline": true,
         "files.trimTrailingWhitespace": true,
+        "files.associations": {
+          "*.cu": "cuda-cpp",
+          "*.cuh": "cuda-cpp",
+          "**/libcudacxx/include/**/*": "cpp",
+          "**/libcudacxx-src/include/**/*": "cpp"
+        },
         "files.watcherExclude": {
+          "**/build/**": true,
+          "**/_skbuild/**": true,
           "**/target/**": true
         },
-        "python.linting.flake8Enabled": true
+        "python.linting.flake8Enabled": true,
+        "[c]": {
+          "editor.defaultFormatter": "seaube.clangformat"
+        },
+        "[cpp]": {
+          "editor.defaultFormatter": "seaube.clangformat"
+        },
+        "[cuda-cpp]": {
+          "editor.defaultFormatter": "seaube.clangformat"
+        }
       }
     }
   }
