@@ -133,7 +133,6 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                     following_window_bounds.is_unbounded,
                                     min_periods,
                                     aggr)) {
-    std::cout << "CALEB: Short circuit via aggs." << std::endl;
     return optimized_unbounded_window(group_keys, input, aggr, stream, mr);
   }
 
