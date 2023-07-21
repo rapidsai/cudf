@@ -23,7 +23,7 @@
   ],
 
   "initializeCommand": [
-    "/bin/bash", "-c", "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config,conda/pkgs,conda/unified}"
+    "/bin/bash", "-c", "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config,conda/pkgs,conda/unified} ${localWorkspaceFolder}/../{rmm,cudf,raft,cumlprims_mg,cuml,cugraph-ops,cugraph,cuspatial}"
   ],
 
   "updateContentCommand": [
