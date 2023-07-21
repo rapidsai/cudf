@@ -90,6 +90,7 @@ jobs:
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-test.yml@feat/local-test
     with:
+      matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: nightly
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
