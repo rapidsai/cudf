@@ -347,6 +347,7 @@ add_library(
   src/hash/murmurhash3_x86_32.cu
   src/hash/murmurhash3_x64_128.cu
   src/hash/spark_murmurhash3_x86_32.cu
+  src/hash/xxhash_64.cu
   src/interop/dlpack.cpp
   src/interop/from_arrow.cu
   src/interop/to_arrow.cu
@@ -597,6 +598,7 @@ add_library(
   src/text/detokenize.cu
   src/text/edit_distance.cu
   src/text/generate_ngrams.cu
+  src/text/jaccard.cu
   src/text/minhash.cu
   src/text/ngrams_tokenize.cu
   src/text/normalize.cu
