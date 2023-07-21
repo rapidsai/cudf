@@ -1013,6 +1013,21 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
     return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
   }
 
+  // Set up table for converting timestamp columns from local to UTC time
+  auto const tz_table = [&, &selected_stripes = selected_stripes] {
+    auto const has_timestamp_column = std::any_of(
+      _selected_columns.levels.cbegin(), _selected_columns.levels.cend(), [&](auto const& col_lvl) {
+        return std::any_of(col_lvl.cbegin(), col_lvl.cend(), [&](auto const& col_meta) {
+          return _metadata.get_col_type(col_meta.id).kind == TypeKind::TIMESTAMP;
+        });
+      });
+
+    return has_timestamp_column
+             ? cudf::detail::make_timezone_transition_table(
+                 {}, selected_stripes[0].stripe_info[0].second->writerTimezone, _stream)
+             : std::make_unique<cudf::table>();
+  }();
+
   std::vector<std::vector<rmm::device_buffer>> lvl_stripe_data(_selected_columns.num_levels());
   std::vector<std::vector<rmm::device_uvector<uint32_t>>> null_count_prefix_sums;
 
@@ -1097,7 +1112,6 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
     std::size_t num_rowgroups    = 0;
     int stripe_idx               = 0;
 
-    bool is_level_data_empty = true;
     std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
     for (auto const& stripe_source_mapping : selected_stripes) {
       // Iterate through the source files selected stripes
@@ -1118,7 +1132,6 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
                                                         chunks);
 
         auto const is_stripe_data_empty = total_data_size == 0;
-        if (not is_stripe_data_empty) { is_level_data_empty = false; }
         CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
                      "Invalid index rowgroup stream data");
 
@@ -1242,7 +1255,7 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
                      });
     }
     // Setup row group descriptors if using indexes
-    if (_metadata.per_file_metadata[0].ps.compression != orc::NONE and not is_level_data_empty) {
+    if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
       auto decomp_data = decompress_stripe_data(*_metadata.per_file_metadata[0].decompressor,
                                                 stripe_data,
                                                 stream_info,
@@ -1285,41 +1298,21 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
       out_buffers[level].emplace_back(column_types[i], n_rows, is_nullable, _stream, _mr);
     }
 
-    if (not is_level_data_empty) {
-      // Setup table for converting timestamp columns from local to UTC time
-      auto const tz_table = [&, &selected_stripes = selected_stripes] {
-        auto const has_timestamp_column = std::any_of(
-          _selected_columns.levels.cbegin(),
-          _selected_columns.levels.cend(),
-          [&](auto const& col_lvl) {
-            return std::any_of(col_lvl.cbegin(), col_lvl.cend(), [&](auto const& col_meta) {
-              return _metadata.get_col_type(col_meta.id).kind == TypeKind::TIMESTAMP;
-            });
-          });
-
-        return has_timestamp_column
-                 ? cudf::detail::make_timezone_transition_table(
-                     {}, selected_stripes[0].stripe_info[0].second->writerTimezone, _stream)
-                 : std::make_unique<cudf::table>();
-      }();
-
-      decode_stream_data(num_dict_entries,
-                         rows_to_skip,
-                         _metadata.get_row_index_stride(),
-                         level,
-                         tz_table->view(),
-                         chunks,
-                         row_groups,
-                         out_buffers[level],
-                         _stream,
-                         _mr);
-    }
+    decode_stream_data(num_dict_entries,
+                       rows_to_skip,
+                       _metadata.get_row_index_stride(),
+                       level,
+                       tz_table->view(),
+                       chunks,
+                       row_groups,
+                       out_buffers[level],
+                       _stream,
+                       _mr);
 
     if (nested_col.size()) {
       // Extract information to process nested child columns
-      if (not is_level_data_empty) {
-        scan_null_counts(chunks, null_count_prefix_sums[level], _stream);
-      }
+      scan_null_counts(chunks, null_count_prefix_sums[level], _stream);
+
       row_groups.device_to_host_sync(_stream);
       aggregate_child_meta(
         level, _selected_columns, chunks, row_groups, nested_col, out_buffers[level], col_meta);
