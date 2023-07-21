@@ -20,9 +20,9 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/transform.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -46,7 +46,6 @@ struct stats_caster {
   size_type total_row_groups;
   std::vector<metadata> const& per_file_metadata;
   host_span<std::vector<size_type> const> row_group_indices;
-  rmm::cuda_stream_view stream;
 
   template <typename ToType, typename FromType>
   static ToType targetType(FromType const value)
@@ -84,11 +83,11 @@ struct stats_caster {
     switch (type) {
       case INT32: return targetType<T>(*reinterpret_cast<int32_t const*>(stats_val));
       case INT64: return targetType<T>(*reinterpret_cast<int64_t const*>(stats_val));
-      case INT96:  // Deprecated
+      case INT96:  // Deprecated in parquet specification
         return targetType<T>(static_cast<__int128_t>(reinterpret_cast<int64_t const*>(stats_val)[0])
                                << 32 |
                              reinterpret_cast<int32_t const*>(stats_val)[2]);
-      case BYTE_ARRAY:
+      case BYTE_ARRAY: [[fallthrough]];
       case FIXED_LEN_BYTE_ARRAY:
         if (stats_size == sizeof(T)) {
           // if type size == length of stats_val. then typecast and return.
@@ -117,7 +116,7 @@ struct stats_caster {
   static T convert(uint8_t const* stats_val, size_t stats_size, cudf::io::parquet::Type const type)
   {
     switch (type) {
-      case BYTE_ARRAY:
+      case BYTE_ARRAY: [[fallthrough]];
       case FIXED_LEN_BYTE_ARRAY:
         return string_view(reinterpret_cast<char const*>(stats_val), stats_size);
       default: CUDF_FAIL("Invalid type and stats combination");
@@ -127,7 +126,10 @@ struct stats_caster {
   // Creates device columns from column statistics (min, max)
   template <typename T>
   std::pair<std::unique_ptr<column>, std::unique_ptr<column>> operator()(
-    size_t col_idx, cudf::data_type dtype) const
+    size_t col_idx,
+    cudf::data_type dtype,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr) const
   {
     // List, Struct, Dictionary types are not supported
     if constexpr (cudf::is_compound<T>() && !std::is_same_v<T, string_view>) {
@@ -160,7 +162,8 @@ struct stats_caster {
         }
 
         static auto make_strings_children(host_span<string_view> host_strings,
-                                          rmm::cuda_stream_view stream)
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr)
         {
           std::vector<char> chars{};
           std::vector<cudf::size_type> offsets(1, 0);
@@ -170,33 +173,31 @@ struct stats_caster {
             chars.insert(chars.end(), std::cbegin(tmp), std::cend(tmp));
             offsets.push_back(offsets.back() + tmp.length());
           }
-          auto d_chars = cudf::detail::make_device_uvector_async(
-            chars, stream, rmm::mr::get_current_device_resource());
-          auto d_offsets = cudf::detail::make_device_uvector_sync(
-            offsets, stream, rmm::mr::get_current_device_resource());
+          auto d_chars   = cudf::detail::make_device_uvector_async(chars, stream, mr);
+          auto d_offsets = cudf::detail::make_device_uvector_sync(offsets, stream, mr);
           return std::tuple{std::move(d_chars), std::move(d_offsets)};
         }
 
-        auto to_device(cudf::data_type dtype, rmm::cuda_stream_view stream)
+        auto to_device(cudf::data_type dtype,
+                       rmm::cuda_stream_view stream,
+                       rmm::mr::device_memory_resource* mr)
         {
           if constexpr (std::is_same_v<T, string_view>) {
-            auto [d_chars, d_offsets] = make_strings_children(val, stream);
+            auto [d_chars, d_offsets] = make_strings_children(val, stream, mr);
             return cudf::make_strings_column(
               val.size(),
               std::move(d_offsets),
               std::move(d_chars),
               rmm::device_buffer{
-                null_mask.data(), cudf::bitmask_allocation_size_bytes(val.size()), stream},
+                null_mask.data(), cudf::bitmask_allocation_size_bytes(val.size()), stream, mr},
               null_count);
           }
           return std::make_unique<column>(
             dtype,
             val.size(),
-            cudf::detail::make_device_uvector_async(
-              val, stream, rmm::mr::get_current_device_resource())
-              .release(),
+            cudf::detail::make_device_uvector_async(val, stream, mr).release(),
             rmm::device_buffer{
-              null_mask.data(), cudf::bitmask_allocation_size_bytes(val.size()), stream},
+              null_mask.data(), cudf::bitmask_allocation_size_bytes(val.size()), stream, mr},
             null_count);
         }
       };  // local struct host_column
@@ -221,7 +222,7 @@ struct stats_caster {
           stats_idx++;
         }
       };
-      return {min.to_device(dtype, stream), max.to_device(dtype, stream)};
+      return {min.to_device(dtype, stream, mr), max.to_device(dtype, stream, mr)};
     }
   }
 };
@@ -333,10 +334,11 @@ class stats_expression_converter : public ast::detail::expression_transformer {
       };
     } else {
       auto new_operands = visit_operands(operands);
-      if (cudf::ast::detail::ast_operator_arity(op) == 2)
+      if (cudf::ast::detail::ast_operator_arity(op) == 2) {
         _operators.emplace_back(op, new_operands.front(), new_operands.back());
-      else if (cudf::ast::detail::ast_operator_arity(op) == 1)
+      } else if (cudf::ast::detail::ast_operator_arity(op) == 1) {
         _operators.emplace_back(op, new_operands.front());
+      }
     }
     _stats_expr = std::reference_wrapper<ast::expression const>(_operators.back());
     return std::reference_wrapper<ast::expression const>(_operators.back());
@@ -375,13 +377,15 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
   host_span<data_type const> output_dtypes,
   std::reference_wrapper<ast::expression const> filter) const
 {
+  auto stream = cudf::get_default_stream();
+  auto mr     = rmm::mr::get_current_device_resource();
   // Create row group indices.
   std::vector<std::vector<size_type>> filtered_row_group_indices;
   std::vector<std::vector<size_type>> all_row_group_indices;
   host_span<std::vector<size_type> const> input_row_group_indices;
   if (row_group_indices.empty()) {
-    std::transform(per_file_metadata.begin(),
-                   per_file_metadata.end(),
+    std::transform(per_file_metadata.cbegin(),
+                   per_file_metadata.cend(),
                    std::back_inserter(all_row_group_indices),
                    [](auto const& file_meta) {
                      std::vector<size_type> rg_idx(file_meta.row_groups.size());
@@ -403,21 +407,20 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
   // where min(col[i]) = columns[i*2], max(col[i])=columns[i*2+1]
   // For each column, it contains #sources * #column_chunks_per_src rows.
   std::vector<std::unique_ptr<column>> columns;
-  stats_caster stats_col{
-    total_row_groups, per_file_metadata, input_row_group_indices, cudf::get_default_stream()};
+  stats_caster stats_col{total_row_groups, per_file_metadata, input_row_group_indices};
   for (size_t col_idx = 0; col_idx < output_dtypes.size(); col_idx++) {
     auto const& dtype = output_dtypes[col_idx];
     // Only comparable types except fixed point are supported.
     if (cudf::is_compound(dtype) && dtype.id() != cudf::type_id::STRING) {
       // placeholder only for unsupported types.
-      columns.push_back(
-        cudf::make_numeric_column(data_type{cudf::type_id::BOOL8}, total_row_groups));
-      columns.push_back(
-        cudf::make_numeric_column(data_type{cudf::type_id::BOOL8}, total_row_groups));
+      columns.push_back(cudf::make_numeric_column(
+        data_type{cudf::type_id::BOOL8}, total_row_groups, rmm::device_buffer{}, 0, stream, mr));
+      columns.push_back(cudf::make_numeric_column(
+        data_type{cudf::type_id::BOOL8}, total_row_groups, rmm::device_buffer{}, 0, stream, mr));
       continue;
     }
     auto [min_col, max_col] =
-      cudf::type_dispatcher<dispatch_storage_type>(dtype, stats_col, col_idx, dtype);
+      cudf::type_dispatcher<dispatch_storage_type>(dtype, stats_col, col_idx, dtype, stream, mr);
     columns.push_back(std::move(min_col));
     columns.push_back(std::move(max_col));
   }
@@ -425,32 +428,31 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
 
   // Converts AST to StatsAST with reference to min, max columns in above `stats_table`.
   stats_expression_converter stats_expr{filter, static_cast<size_type>(output_dtypes.size())};
-  auto stats_ast = stats_expr.get_stats_expr();
-  auto predicate_col =
-    cudf::compute_column(stats_table, stats_ast.get(), rmm::mr::get_current_device_resource());
-  auto predicate = predicate_col->view();
+  auto stats_ast     = stats_expr.get_stats_expr();
+  auto predicate_col = cudf::detail::compute_column(stats_table, stats_ast.get(), stream, mr);
+  auto predicate     = predicate_col->view();
   CUDF_EXPECTS(predicate.type().id() == cudf::type_id::BOOL8,
                "Filter expression must return a boolean column");
 
   auto num_bitmasks = num_bitmask_words(predicate.size());
   std::vector<bitmask_type> host_bitmask(num_bitmasks, ~bitmask_type{0});
   if (predicate.nullable()) {
-    CUDF_CUDA_TRY(cudaMemcpy(host_bitmask.data(),
-                             predicate.null_mask(),
-                             num_bitmasks * sizeof(bitmask_type),
-                             cudaMemcpyDefault));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(host_bitmask.data(),
+                                  predicate.null_mask(),
+                                  num_bitmasks * sizeof(bitmask_type),
+                                  cudaMemcpyDefault,
+                                  stream.value()));
   }
   auto validity_it = cudf::detail::make_counting_transform_iterator(
     0, [bitmask = host_bitmask.data()](auto bit_index) { return bit_is_set(bitmask, bit_index); });
 
   auto is_row_group_required = cudf::detail::make_std_vector_sync(
-    device_span<uint8_t const>(predicate.data<uint8_t>(), predicate.size()),
-    cudf::get_default_stream());
+    device_span<uint8_t const>(predicate.data<uint8_t>(), predicate.size()), stream);
 
   // Return only filtered row groups based on predicate
   // if all are required or all are nulls, return.
-  if (std::all_of(is_row_group_required.begin(),
-                  is_row_group_required.end(),
+  if (std::all_of(is_row_group_required.cbegin(),
+                  is_row_group_required.cend(),
                   [](auto i) { return bool(i); }) or
       predicate.null_count() == predicate.size()) {
     return std::nullopt;
@@ -504,10 +506,11 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
   auto const operands = expr.get_operands();
   auto op             = expr.get_operator();
   auto new_operands   = visit_operands(operands);
-  if (cudf::ast::detail::ast_operator_arity(op) == 2)
+  if (cudf::ast::detail::ast_operator_arity(op) == 2) {
     _operators.emplace_back(op, new_operands.front(), new_operands.back());
-  else if (cudf::ast::detail::ast_operator_arity(op) == 1)
+  } else if (cudf::ast::detail::ast_operator_arity(op) == 1) {
     _operators.emplace_back(op, new_operands.front());
+  }
   _stats_expr = std::reference_wrapper<ast::expression const>(_operators.back());
   return std::reference_wrapper<ast::expression const>(_operators.back());
 }

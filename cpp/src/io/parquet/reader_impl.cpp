@@ -74,7 +74,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
     col_sizes = calculate_page_string_offsets();
 
     // check for overflow
-    if (std::any_of(col_sizes.begin(), col_sizes.end(), [](size_t sz) {
+    if (std::any_of(col_sizes.cbegin(), col_sizes.cend(), [](size_t sz) {
           return sz > std::numeric_limits<size_type>::max();
         })) {
       CUDF_FAIL("String column exceeds the column size limit", std::overflow_error);
@@ -320,8 +320,8 @@ void reader::impl::prepare_data(int64_t skip_rows,
   // if filter is not empty, then create output types as vector and pass for filtering.
   std::vector<data_type> output_types;
   if (filter.has_value()) {
-    std::transform(_output_buffers.begin(),
-                   _output_buffers.end(),
+    std::transform(_output_buffers.cbegin(),
+                   _output_buffers.cend(),
                    std::back_inserter(output_types),
                    [](auto const& col) { return col.type; });
   }

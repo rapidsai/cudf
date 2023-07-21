@@ -25,6 +25,9 @@
 #include <cudf/io/datasource.hpp>
 #include <cudf/types.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
+
 #include <list>
 #include <tuple>
 #include <vector>
@@ -227,10 +230,16 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
   {
     if (!expr.has_value()) return;
     // create map for column name.
-    std::transform(metadata.schema_info.begin(),
-                   metadata.schema_info.end(),
-                   std::inserter(column_name_to_index, column_name_to_index.end()),
-                   [i = 0](auto const& data) mutable { return make_pair(data.name, i++); });
+    std::transform(
+      thrust::make_zip_iterator(metadata.schema_info.cbegin(),
+                                thrust::counting_iterator<size_t>(0)),
+      thrust::make_zip_iterator(metadata.schema_info.cend(),
+                                thrust::counting_iterator(metadata.schema_info.size())),
+      std::inserter(column_name_to_index, column_name_to_index.end()),
+      [](auto const& name_index) {
+        return std::make_pair(thrust::get<0>(name_index).name, thrust::get<1>(name_index));
+      });
+
     expr.value().get().accept(*this);
   }
 

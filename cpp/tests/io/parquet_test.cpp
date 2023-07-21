@@ -5931,14 +5931,16 @@ TEST_F(ParquetReaderTest, FilterMultiple3)
   // row groups min, max:
   // table[0] 0-80, 81-160, 161-200.
   // table[1] 200-121, 120-41, 40-0.
-  auto filter_col1 = cudf::ast::column_reference(0);
-  auto filter_col2 = cudf::ast::column_name_reference("col1");
-  T constexpr low1 = 70, high1 = 90;
-  T constexpr low2 = 100, high2 = 120;
-  auto lov     = cudf::numeric_scalar(low1, true);
-  auto hiv     = cudf::numeric_scalar(high1, true);
-  auto lo_lit1 = cudf::ast::literal(lov);
-  auto hi_lit1 = cudf::ast::literal(hiv);
+  auto filter_col1  = cudf::ast::column_reference(0);
+  auto filter_col2  = cudf::ast::column_name_reference("col1");
+  T constexpr low1  = 70;
+  T constexpr high1 = 90;
+  T constexpr low2  = 100;
+  T constexpr high2 = 120;
+  auto lov          = cudf::numeric_scalar(low1, true);
+  auto hiv          = cudf::numeric_scalar(high1, true);
+  auto lo_lit1      = cudf::ast::literal(lov);
+  auto hi_lit1      = cudf::ast::literal(hiv);
   auto expr_1  = cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, filter_col1, lo_lit1);
   auto expr_2  = cudf::ast::operation(cudf::ast::ast_operator::LESS, filter_col1, hi_lit1);
   auto expr_3  = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr_1, expr_2);
@@ -5983,10 +5985,12 @@ TEST_F(ParquetReaderTest, FilterSupported)
   // row groups min, max:
   // table[0] 0-80, 81-160, 161-200.
   // table[1] 200-121, 120-41, 40-0.
-  auto filter_col1 = cudf::ast::column_reference(0);
-  auto filter_col2 = cudf::ast::column_reference(1);
-  T constexpr low1 = 70, high1 = 90;
-  T constexpr low2 = 100, high2 = 120;
+  auto filter_col1       = cudf::ast::column_reference(0);
+  auto filter_col2       = cudf::ast::column_reference(1);
+  T constexpr low1       = 70;
+  T constexpr high1      = 90;
+  T constexpr low2       = 100;
+  T constexpr high2      = 120;
   T constexpr skip_value = 110;
   auto lov               = cudf::numeric_scalar(low1, true);
   auto hiv               = cudf::numeric_scalar(high1, true);
@@ -6110,7 +6114,6 @@ TEST_F(ParquetReaderTest, FilterErrors)
 
     auto builder = cudf::io::parquet_reader_options::builder(si).filter(expr);
     EXPECT_THROW(cudf::io::read_parquet(builder), cudf::logic_error);
-    // FIXME: compute_column does not throw logic error
   }
 
   // Filtering AST - invalid column name

@@ -90,5 +90,6 @@ cdef extern from "cudf/ast/expressions.hpp" namespace "cudf::ast" nogil:
         operation(ast_operator, const expression &, const expression&)
 
     cdef cppclass column_name_reference(expression):
-        # Only use in file io readers. eg. parquet reader.
+        # column_name_reference is only meant for use in file I/O such as the
+        # Parquet reader.
         column_name_reference(string) except +

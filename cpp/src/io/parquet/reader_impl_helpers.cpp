@@ -232,9 +232,9 @@ aggregate_reader_metadata::collect_keyval_metadata() const
 int64_t aggregate_reader_metadata::calc_num_rows() const
 {
   return std::accumulate(
-    per_file_metadata.begin(), per_file_metadata.end(), 0l, [](auto& sum, auto& pfm) {
+    per_file_metadata.cbegin(), per_file_metadata.cend(), 0l, [](auto& sum, auto& pfm) {
       auto const rowgroup_rows = std::accumulate(
-        pfm.row_groups.begin(), pfm.row_groups.end(), 0l, [](auto& rg_sum, auto& rg) {
+        pfm.row_groups.cbegin(), pfm.row_groups.cend(), 0l, [](auto& rg_sum, auto& rg) {
           return rg_sum + rg.num_rows;
         });
       CUDF_EXPECTS(pfm.num_rows == 0 || pfm.num_rows == rowgroup_rows,
@@ -246,7 +246,7 @@ int64_t aggregate_reader_metadata::calc_num_rows() const
 size_type aggregate_reader_metadata::calc_num_row_groups() const
 {
   return std::accumulate(
-    per_file_metadata.begin(), per_file_metadata.end(), 0, [](auto& sum, auto& pfm) {
+    per_file_metadata.cbegin(), per_file_metadata.cend(), 0, [](auto& sum, auto& pfm) {
       return sum + pfm.row_groups.size();
     });
 }
@@ -580,8 +580,8 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
 
     // Now construct paths as vector of strings for further consumption
     std::vector<std::vector<std::string>> use_names3;
-    std::transform(valid_selected_paths.begin(),
-                   valid_selected_paths.end(),
+    std::transform(valid_selected_paths.cbegin(),
+                   valid_selected_paths.cend(),
                    std::back_inserter(use_names3),
                    [&](path_info const& valid_path) {
                      auto schema_idx = valid_path.schema_idx;
