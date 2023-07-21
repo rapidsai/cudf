@@ -120,7 +120,6 @@ def _parse_metadata(meta):
 
 
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
-                   strings_to_categorical=False,
                    use_pandas_metadata=True):
     """
     Cython function to call into libcudf API, see `read_parquet`.
@@ -144,7 +143,6 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     cdef cudf_io_types.source_info source = make_source_info(
         filepaths_or_buffers)
 
-    cdef bool cpp_strings_to_categorical = strings_to_categorical
     cdef bool cpp_use_pandas_metadata = use_pandas_metadata
 
     cdef vector[vector[size_type]] cpp_row_groups
@@ -160,7 +158,6 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     args = move(
         parquet_reader_options.builder(source)
         .row_groups(cpp_row_groups)
-        .convert_strings_to_categories(cpp_strings_to_categorical)
         .use_pandas_metadata(cpp_use_pandas_metadata)
         .timestamp_type(cpp_timestamp_type)
         .build()
