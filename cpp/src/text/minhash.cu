@@ -20,13 +20,12 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/hashing.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sequence.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/device_atomics.cuh>
-#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/hashing/detail/hashing.hpp>
+#include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -40,6 +39,8 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <limits>
+
+#include <cuda/atomic>
 
 namespace nvtext {
 namespace detail {
@@ -74,25 +75,28 @@ struct minhash_fn {
     }
     __syncwarp();
 
-    auto const begin = d_str.begin() + lane_idx;
-    auto const end   = [d_str, width = width] {
-      auto const length = d_str.length();
-      if (length > width) { return (d_str.end() - (width - 1)); }
-      return d_str.begin() + static_cast<cudf::size_type>(length > 0);
-    }();
+    auto const begin = d_str.data() + lane_idx;
+    auto const end   = d_str.data() + d_str.size_bytes();
 
-    // each lane hashes substrings of the given width
+    // each lane hashes 'width'  substrings of d_str
     for (auto itr = begin; itr < end; itr += cudf::detail::warp_size) {
-      auto const offset = itr.byte_offset();
-      auto const hash_str =
-        cudf::string_view(d_str.data() + offset, (itr + width).byte_offset() - offset);
+      if (cudf::strings::detail::is_utf8_continuation_char(*itr)) { continue; }
+      auto const check_str =  // used for counting 'width' characters
+        cudf::string_view(itr, static_cast<cudf::size_type>(thrust::distance(itr, end)));
+      auto const [bytes, left] =
+        cudf::strings::detail::bytes_to_character_position(check_str, width);
+      if ((itr != d_str.data()) && (left > 0)) { continue; }  // true if past the end of the string
 
-      // hashing each seed on the same section of string is 10x faster than
+      auto const hash_str = cudf::string_view(itr, bytes);
+      // hashing with each seed on the same section of the string is 10x faster than
       // computing the substrings for each seed
       for (std::size_t seed_idx = 0; seed_idx < seeds.size(); ++seed_idx) {
-        auto const hasher = cudf::detail::MurmurHash3_32<cudf::string_view>{seeds[seed_idx]};
+        auto const hasher =
+          cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>{seeds[seed_idx]};
         auto const hvalue = hasher(hash_str);
-        atomicMin(d_output + seed_idx, hvalue);
+        cuda::atomic_ref<cudf::hash_value_type, cuda::thread_scope_block> ref{
+          *(d_output + seed_idx)};
+        ref.fetch_min(hvalue, cuda::std::memory_order_relaxed);
       }
     }
   }
@@ -114,11 +118,10 @@ std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
   CUDF_EXPECTS(hash_function == cudf::hash_id::HASH_MURMUR3,
                "Only murmur3 hash algorithm supported",
                std::invalid_argument);
-  CUDF_EXPECTS(
-    (static_cast<std::size_t>(input.size()) * seeds.size()) <
-      static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
-    "The number of seeds times the number of input rows must not exceed maximum of size_type",
-    std::invalid_argument);
+  CUDF_EXPECTS((static_cast<std::size_t>(input.size()) * seeds.size()) <
+                 static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
+               "The number of seeds times the number of input rows exceeds the column size limit",
+               std::overflow_error);
 
   auto output_type = cudf::data_type{cudf::type_to_id<cudf::hash_value_type>()};
   if (input.is_empty()) { return cudf::make_empty_column(output_type); }

@@ -118,13 +118,27 @@ size_t non_fixed_width_size<cudf::string_view>(data_profile const& profile)
   return get_distribution_mean(dist);
 }
 
+double geometric_sum(size_t n, double p)
+{
+  if (p == 1) { return n; }
+  return (1 - std::pow(p, n)) / (1 - p);
+}
+
 template <>
 size_t non_fixed_width_size<cudf::list_view>(data_profile const& profile)
 {
   auto const dist_params       = profile.get_distribution_params<cudf::list_view>();
   auto const single_level_mean = get_distribution_mean(dist_params.length_params);
-  auto const element_size = avg_element_size(profile, cudf::data_type{dist_params.element_type});
-  return element_size * pow(single_level_mean, dist_params.max_depth);
+
+  auto const element_size  = avg_element_size(profile, cudf::data_type{dist_params.element_type});
+  auto const element_count = std::pow(single_level_mean, dist_params.max_depth);
+
+  // Each nesting level includes offsets, this is the sum of all levels
+  // Also include an additional offset per level for the size of the last element
+  auto const total_offset_count =
+    geometric_sum(dist_params.max_depth, single_level_mean) + dist_params.max_depth;
+
+  return sizeof(cudf::size_type) * total_offset_count + element_size * element_count;
 }
 
 template <>
@@ -441,7 +455,8 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     dtype,
     num_rows,
     data.release(),
-    profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{});
+    profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{},
+    profile.get_null_probability().has_value() ? null_count : 0);
 }
 
 struct valid_or_zero {
@@ -721,8 +736,11 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     thrust::device_pointer_cast(offsets.end())[-1] =
       current_child_column->size();  // Always include all elements
 
-    auto offsets_column = std::make_unique<cudf::column>(
-      cudf::data_type{cudf::type_id::INT32}, num_rows + 1, offsets.release());
+    auto offsets_column = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
+                                                         num_rows + 1,
+                                                         offsets.release(),
+                                                         rmm::device_buffer{},
+                                                         0);
 
     auto [null_mask, null_count] = cudf::detail::valid_if(valids.begin(),
                                                           valids.end(),
@@ -778,6 +796,25 @@ std::vector<cudf::type_id> cycle_dtypes(std::vector<cudf::type_id> const& dtype_
   out_dtypes.reserve(num_cols);
   for (cudf::size_type col = 0; col < num_cols; ++col)
     out_dtypes.push_back(dtype_ids[col % dtype_ids.size()]);
+  return out_dtypes;
+}
+
+/**
+ * @brief Repeat the given two data types with a given ratio of a:b.
+ *
+ * The first dtype will have 'first_num' columns and the second will have 'num_cols - first_num'
+ * columns.
+ */
+std::vector<cudf::type_id> mix_dtypes(std::pair<cudf::type_id, cudf::type_id> const& dtype_ids,
+                                      cudf::size_type num_cols,
+                                      int first_num)
+{
+  std::vector<cudf::type_id> out_dtypes;
+  out_dtypes.reserve(num_cols);
+  for (cudf::size_type col = 0; col < first_num; ++col)
+    out_dtypes.push_back(dtype_ids.first);
+  for (cudf::size_type col = first_num; col < num_cols; ++col)
+    out_dtypes.push_back(dtype_ids.second);
   return out_dtypes;
 }
 

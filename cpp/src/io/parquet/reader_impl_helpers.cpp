@@ -180,18 +180,18 @@ metadata::metadata(datasource* source)
   constexpr auto header_len = sizeof(file_header_s);
   constexpr auto ender_len  = sizeof(file_ender_s);
 
-  const auto len           = source->size();
-  const auto header_buffer = source->host_read(0, header_len);
-  const auto header        = reinterpret_cast<const file_header_s*>(header_buffer->data());
-  const auto ender_buffer  = source->host_read(len - ender_len, ender_len);
-  const auto ender         = reinterpret_cast<const file_ender_s*>(ender_buffer->data());
+  auto const len           = source->size();
+  auto const header_buffer = source->host_read(0, header_len);
+  auto const header        = reinterpret_cast<file_header_s const*>(header_buffer->data());
+  auto const ender_buffer  = source->host_read(len - ender_len, ender_len);
+  auto const ender         = reinterpret_cast<file_ender_s const*>(ender_buffer->data());
   CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
   CUDF_EXPECTS(header->magic == parquet_magic && ender->magic == parquet_magic,
                "Corrupted header or footer");
   CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
                "Incorrect footer length");
 
-  const auto buffer = source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
+  auto const buffer = source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
   CompactProtocolReader cp(buffer->data(), ender->footer_len);
   CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
   CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
@@ -233,7 +233,13 @@ int64_t aggregate_reader_metadata::calc_num_rows() const
 {
   return std::accumulate(
     per_file_metadata.begin(), per_file_metadata.end(), 0l, [](auto& sum, auto& pfm) {
-      return sum + pfm.num_rows;
+      auto const rowgroup_rows = std::accumulate(
+        pfm.row_groups.begin(), pfm.row_groups.end(), 0l, [](auto& rg_sum, auto& rg) {
+          return rg_sum + rg.num_rows;
+        });
+      CUDF_EXPECTS(pfm.num_rows == 0 || pfm.num_rows == rowgroup_rows,
+                   "Header and row groups disagree about number of rows in file!");
+      return sum + (pfm.num_rows == 0 && rowgroup_rows > 0 ? rowgroup_rows : pfm.num_rows);
     });
 }
 
@@ -383,7 +389,9 @@ aggregate_reader_metadata::select_row_groups(
   return {rows_to_skip, rows_to_read, std::move(selection)};
 }
 
-std::tuple<std::vector<input_column_info>, std::vector<column_buffer>, std::vector<size_type>>
+std::tuple<std::vector<input_column_info>,
+           std::vector<inline_column_buffer>,
+           std::vector<size_type>>
 aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>> const& use_names,
                                           bool include_index,
                                           bool strings_to_categorical,
@@ -400,17 +408,17 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
              : -1;
   };
 
-  std::vector<column_buffer> output_columns;
+  std::vector<inline_column_buffer> output_columns;
   std::vector<input_column_info> input_columns;
   std::vector<int> nesting;
 
   // Return true if column path is valid. e.g. if the path is {"struct1", "child1"}, then it is
   // valid if "struct1.child1" exists in this file's schema. If "struct1" exists but "child1" is
   // not a child of "struct1" then the function will return false for "struct1"
-  std::function<bool(column_name_info const*, int, std::vector<column_buffer>&, bool)>
+  std::function<bool(column_name_info const*, int, std::vector<inline_column_buffer>&, bool)>
     build_column = [&](column_name_info const* col_name_info,
                        int schema_idx,
-                       std::vector<column_buffer>& out_col_array,
+                       std::vector<inline_column_buffer>& out_col_array,
                        bool has_list_parent) {
       if (schema_idx < 0) { return false; }
       auto const& schema_elem = get_schema(schema_idx);
@@ -431,7 +439,7 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
                               : to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
       auto const dtype    = to_data_type(col_type, schema_elem);
 
-      column_buffer output_col(dtype, schema_elem.repetition_type == OPTIONAL);
+      inline_column_buffer output_col(dtype, schema_elem.repetition_type == OPTIONAL);
       if (has_list_parent) { output_col.user_data |= PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT; }
       // store the index of this element if inserted in out_col_array
       nesting.push_back(static_cast<int>(out_col_array.size()));
@@ -471,7 +479,7 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
             to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
           auto const element_dtype = to_data_type(element_type, schema_elem);
 
-          column_buffer element_col(element_dtype, schema_elem.repetition_type == OPTIONAL);
+          inline_column_buffer element_col(element_dtype, schema_elem.repetition_type == OPTIONAL);
           if (has_list_parent || col_type == type_id::LIST) {
             element_col.user_data |= PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT;
           }

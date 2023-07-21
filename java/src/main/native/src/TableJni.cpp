@@ -45,6 +45,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/device_memory_resource.hpp>
 #include <thrust/iterator/counting_iterator.h>
 
 #include "csv_chunked_writer.hpp"
@@ -58,16 +59,34 @@
 namespace cudf {
 namespace jni {
 
-template <typename WRITER> class jni_table_writer_handle final {
-public:
-  explicit jni_table_writer_handle(std::unique_ptr<WRITER> writer)
-      : writer(std::move(writer)), sink() {}
-  jni_table_writer_handle(std::unique_ptr<WRITER> writer,
-                          std::unique_ptr<jni_writer_data_sink> sink)
-      : writer(std::move(writer)), sink(std::move(sink)) {}
+/**
+ * @brief The base class for table writer.
+ *
+ * By storing a pointer to this base class instead of pointer to specific writer class, we can
+ * retrieve common data like `sink` and `stats` for any derived writer class without the need of
+ * casting or knowing its type.
+ */
+struct jni_table_writer_handle_base {
+  explicit jni_table_writer_handle_base(
+      std::unique_ptr<jni_writer_data_sink> &&sink_,
+      std::shared_ptr<cudf::io::writer_compression_statistics> &&stats_)
+      : sink{std::move(sink_)}, stats{std::move(stats_)} {}
 
-  std::unique_ptr<WRITER> writer;
   std::unique_ptr<jni_writer_data_sink> sink;
+  std::shared_ptr<cudf::io::writer_compression_statistics> stats;
+};
+
+template <typename Writer>
+struct jni_table_writer_handle final : public jni_table_writer_handle_base {
+  explicit jni_table_writer_handle(std::unique_ptr<Writer> &&writer_)
+      : jni_table_writer_handle_base(nullptr, nullptr), writer{std::move(writer_)} {}
+  explicit jni_table_writer_handle(
+      std::unique_ptr<Writer> &&writer_, std::unique_ptr<jni_writer_data_sink> &&sink_,
+      std::shared_ptr<cudf::io::writer_compression_statistics> &&stats_)
+      : jni_table_writer_handle_base(std::move(sink_), std::move(stats_)),
+        writer{std::move(writer_)} {}
+
+  std::unique_ptr<Writer> writer;
 };
 
 typedef jni_table_writer_handle<cudf::io::parquet_chunked_writer> native_parquet_writer_handle;
@@ -1391,20 +1410,19 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_TableWithMeta_releaseTable(JNIE
   CATCH_STD(env, nullptr);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readJSON(
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(
     JNIEnv *env, jclass, jobjectArray col_names, jintArray j_types, jintArray j_scales,
     jstring inputfilepath, jlong buffer, jlong buffer_length, jboolean day_first, jboolean lines) {
 
   bool read_buffer = true;
   if (buffer == 0) {
-    JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
+    JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", 0);
     read_buffer = false;
   } else if (inputfilepath != NULL) {
     JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                  "cannot pass in both a buffer and an inputfilepath", NULL);
+                  "cannot pass in both a buffer and an inputfilepath", 0);
   } else if (buffer_length <= 0) {
-    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "An empty buffer is not supported",
-                  NULL);
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "An empty buffer is not supported", 0);
   }
 
   try {
@@ -1414,13 +1432,13 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readJSON(
     cudf::jni::native_jintArray n_scales(env, j_scales);
     if (n_types.is_null() != n_scales.is_null()) {
       JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "types and scales must match null",
-                    NULL);
+                    0);
     }
     std::vector<cudf::data_type> data_types;
     if (!n_types.is_null()) {
       if (n_types.size() != n_scales.size()) {
         JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "types and scales must match size",
-                      NULL);
+                      0);
       }
       data_types.reserve(n_types.size());
       std::transform(n_types.begin(), n_types.end(), n_scales.begin(),
@@ -1431,8 +1449,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readJSON(
 
     cudf::jni::native_jstring filename(env, inputfilepath);
     if (!read_buffer && filename.is_empty()) {
-      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "inputfilepath can't be empty",
-                    NULL);
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "inputfilepath can't be empty", 0);
     }
 
     auto source = read_buffer ? cudf::io::source_info{reinterpret_cast<char *>(buffer),
@@ -1446,7 +1463,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readJSON(
     if (!n_col_names.is_null() && data_types.size() > 0) {
       if (n_col_names.size() != n_types.size()) {
         JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                      "types and column names must match size", NULL);
+                      "types and column names must match size", 0);
       }
 
       std::map<std::string, cudf::data_type> map;
@@ -1462,47 +1479,12 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readJSON(
       // should infer the types
     }
 
-    cudf::io::table_with_metadata result = cudf::io::read_json(opts.build());
+    auto result =
+        std::make_unique<cudf::io::table_with_metadata>(cudf::io::read_json(opts.build()));
 
-    // there is no need to re-order columns when inferring schema
-    if (result.metadata.schema_info.empty() || n_col_names.size() <= 0) {
-      return convert_table_for_return(env, result.tbl);
-    } else {
-      // json reader will not return the correct column order,
-      // so we need to re-order the column of table according to table meta.
-
-      // turn name and its index in table into map<name, index>
-      std::map<std::string, cudf::size_type> m;
-      std::transform(result.metadata.schema_info.cbegin(), result.metadata.schema_info.cend(),
-                     thrust::make_counting_iterator(0), std::inserter(m, m.end()),
-                     [](auto const &column_info, auto const &index) {
-                       return std::make_pair(column_info.name, index);
-                     });
-
-      auto col_names_vec = n_col_names.as_cpp_vector();
-      std::vector<cudf::size_type> indices;
-
-      bool match = true;
-      for (size_t i = 0; i < col_names_vec.size(); i++) {
-        if (m.find(col_names_vec[i]) == m.end()) {
-          match = false;
-          break;
-        } else {
-          indices.push_back(m.at(col_names_vec[i]));
-        }
-      }
-
-      if (!match) {
-        // can't find some input column names in table meta, return what json reader reads.
-        return convert_table_for_return(env, result.tbl);
-      } else {
-        auto tbv = result.tbl->view().select(std::move(indices));
-        auto table = std::make_unique<cudf::table>(tbv);
-        return convert_table_for_return(env, table);
-      }
-    }
+    return reinterpret_cast<jlong>(result.release());
   }
-  CATCH_STD(env, NULL);
+  CATCH_STD(env, 0);
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
@@ -1620,16 +1602,18 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
                    std::inserter(kv_metadata, kv_metadata.end()),
                    [](auto const &key, auto const &value) { return std::make_pair(key, value); });
 
+    auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
     chunked_parquet_writer_options opts =
         chunked_parquet_writer_options::builder(sink)
-            .metadata(&metadata)
+            .metadata(std::move(metadata))
             .compression(static_cast<compression_type>(j_compression))
             .stats_level(static_cast<statistics_freq>(j_stats_freq))
             .key_value_metadata({kv_metadata})
+            .compression_statistics(stats)
             .build();
     auto writer_ptr = std::make_unique<cudf::io::parquet_chunked_writer>(opts);
-    cudf::jni::native_parquet_writer_handle *ret =
-        new cudf::jni::native_parquet_writer_handle(std::move(writer_ptr), std::move(data_sink));
+    cudf::jni::native_parquet_writer_handle *ret = new cudf::jni::native_parquet_writer_handle(
+        std::move(writer_ptr), std::move(data_sink), std::move(stats));
     return ptr_as_jlong(ret);
   }
   CATCH_STD(env, 0)
@@ -1665,17 +1649,19 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
                    [](auto const &key, auto const &value) { return std::make_pair(key, value); });
 
     sink_info sink{output_path.get()};
+    auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
     chunked_parquet_writer_options opts =
         chunked_parquet_writer_options::builder(sink)
-            .metadata(&metadata)
+            .metadata(std::move(metadata))
             .compression(static_cast<compression_type>(j_compression))
             .stats_level(static_cast<statistics_freq>(j_stats_freq))
             .key_value_metadata({kv_metadata})
+            .compression_statistics(stats)
             .build();
 
     auto writer_ptr = std::make_unique<cudf::io::parquet_chunked_writer>(opts);
-    cudf::jni::native_parquet_writer_handle *ret =
-        new cudf::jni::native_parquet_writer_handle(std::move(writer_ptr));
+    cudf::jni::native_parquet_writer_handle *ret = new cudf::jni::native_parquet_writer_handle(
+        std::move(writer_ptr), nullptr, std::move(stats));
     return ptr_as_jlong(ret);
   }
   CATCH_STD(env, 0)
@@ -1803,15 +1789,18 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCBufferBegin(
     std::unique_ptr<cudf::jni::jni_writer_data_sink> data_sink(
         new cudf::jni::jni_writer_data_sink(env, consumer));
     sink_info sink{data_sink.get()};
+
+    auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
     chunked_orc_writer_options opts = chunked_orc_writer_options::builder(sink)
-                                          .metadata(&metadata)
+                                          .metadata(std::move(metadata))
                                           .compression(static_cast<compression_type>(j_compression))
                                           .enable_statistics(ORC_STATISTICS_ROW_GROUP)
                                           .key_value_metadata(kv_metadata)
+                                          .compression_statistics(stats)
                                           .build();
     auto writer_ptr = std::make_unique<cudf::io::orc_chunked_writer>(opts);
-    cudf::jni::native_orc_writer_handle *ret =
-        new cudf::jni::native_orc_writer_handle(std::move(writer_ptr), std::move(data_sink));
+    cudf::jni::native_orc_writer_handle *ret = new cudf::jni::native_orc_writer_handle(
+        std::move(writer_ptr), std::move(data_sink), std::move(stats));
     return ptr_as_jlong(ret);
   }
   CATCH_STD(env, 0)
@@ -1852,15 +1841,17 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCFileBegin(
                    [](const std::string &k, const std::string &v) { return std::make_pair(k, v); });
 
     sink_info sink{output_path.get()};
+    auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
     chunked_orc_writer_options opts = chunked_orc_writer_options::builder(sink)
-                                          .metadata(&metadata)
+                                          .metadata(std::move(metadata))
                                           .compression(static_cast<compression_type>(j_compression))
                                           .enable_statistics(ORC_STATISTICS_ROW_GROUP)
                                           .key_value_metadata(kv_metadata)
+                                          .compression_statistics(stats)
                                           .build();
     auto writer_ptr = std::make_unique<cudf::io::orc_chunked_writer>(opts);
     cudf::jni::native_orc_writer_handle *ret =
-        new cudf::jni::native_orc_writer_handle(std::move(writer_ptr));
+        new cudf::jni::native_orc_writer_handle(std::move(writer_ptr), nullptr, std::move(stats));
     return ptr_as_jlong(ret);
   }
   CATCH_STD(env, 0)
@@ -1900,6 +1891,31 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCEnd(JNIEnv *env, jclass
     state->writer->close();
   }
   CATCH_STD(env, )
+}
+
+JNIEXPORT jdoubleArray JNICALL Java_ai_rapids_cudf_TableWriter_getWriteStatistics(JNIEnv *env,
+                                                                                  jclass,
+                                                                                  jlong j_state) {
+  JNI_NULL_CHECK(env, j_state, "null state", nullptr);
+
+  using namespace cudf::io;
+  auto const state = reinterpret_cast<cudf::jni::jni_table_writer_handle_base const *>(j_state);
+  try {
+    cudf::jni::auto_set_device(env);
+    if (!state->stats) {
+      return nullptr;
+    }
+
+    auto const &stats = *state->stats;
+    auto output = cudf::jni::native_jdoubleArray(env, 4);
+    output[0] = static_cast<jdouble>(stats.num_compressed_bytes());
+    output[1] = static_cast<jdouble>(stats.num_failed_bytes());
+    output[2] = static_cast<jdouble>(stats.num_skipped_bytes());
+    output[3] = static_cast<jdouble>(stats.compression_ratio());
+
+    return output.get_jArray();
+  }
+  CATCH_STD(env, nullptr)
 }
 
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCBufferBegin(JNIEnv *env, jclass,
@@ -2905,6 +2921,20 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_filter(JNIEnv *env, jclas
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Table_distinctCount(JNIEnv *env, jclass,
+                                                               jlong input_jtable,
+                                                               jboolean nulls_equal) {
+  JNI_NULL_CHECK(env, input_jtable, "input table is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const input = reinterpret_cast<cudf::table_view const *>(input_jtable);
+
+    return cudf::distinct_count(*input, nulls_equal ? cudf::null_equality::EQUAL :
+                                                      cudf::null_equality::UNEQUAL);
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_dropDuplicates(JNIEnv *env, jclass,
                                                                       jlong input_jtable,
                                                                       jintArray key_columns,
@@ -3156,6 +3186,26 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplit(JNIEnv 
     return n_result.wrapped();
   }
   CATCH_STD(env, NULL);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_makeChunkedPack(JNIEnv *env, jclass,
+                                                                  jlong input_table,
+                                                                  jlong bounce_buffer_size,
+                                                                  jlong memoryResourceHandle) {
+  JNI_NULL_CHECK(env, input_table, "native handle is null", 0);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::table_view *n_table = reinterpret_cast<cudf::table_view *>(input_table);
+    // `temp_mr` is the memory resource that `cudf::chunked_pack` will use to create temporary
+    // and scratch memory only.
+    auto temp_mr = memoryResourceHandle != 0 ?
+                       reinterpret_cast<rmm::mr::device_memory_resource *>(memoryResourceHandle) :
+                       rmm::mr::get_current_device_resource();
+    auto chunked_pack = cudf::chunked_pack::create(*n_table, bounce_buffer_size, temp_mr);
+    return reinterpret_cast<jlong>(chunked_pack.release());
+  }
+  CATCH_STD(env, 0);
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
@@ -3480,8 +3530,8 @@ JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_Table_contiguousSplitGroups(
       auto const vec = thrust::host_vector<cudf::size_type>(begin, end);
       auto buf = rmm::device_buffer{vec.data(), size * sizeof(cudf::size_type),
                                     cudf::get_default_stream()};
-      auto gather_map_col = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
-                                                           size, std::move(buf));
+      auto gather_map_col = std::make_unique<cudf::column>(
+          cudf::data_type{cudf::type_id::INT32}, size, std::move(buf), rmm::device_buffer{}, 0);
 
       // gather the first key in each group to remove duplicated ones.
       group_by_result_table = cudf::gather(groups.keys->view(), gather_map_col->view());

@@ -38,6 +38,8 @@ class file_sink : public data_sink {
 
     if (detail::cufile_integration::is_kvikio_enabled()) {
       _kvikio_file = kvikio::FileHandle(filepath, "w");
+      CUDF_LOG_INFO("Writing a file using kvikIO, with compatibility mode {}.",
+                    _kvikio_file.is_compat_mode_on() ? "on" : "off");
     } else {
       _cufile_out = detail::make_cufile_output(filepath);
     }
@@ -194,7 +196,7 @@ class user_sink_wrapper : public data_sink {
   cudf::io::data_sink* const user_sink;
 };
 
-std::unique_ptr<data_sink> data_sink::create(const std::string& filepath)
+std::unique_ptr<data_sink> data_sink::create(std::string const& filepath)
 {
   return std::make_unique<file_sink>(filepath);
 }

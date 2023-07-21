@@ -79,8 +79,8 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
   // Convert the sizes to offsets
   auto const bytes =
     cudf::detail::sizes_to_offsets(d_offsets, d_offsets + strings_count + 1, d_offsets, stream);
-  CUDF_EXPECTS(bytes <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
-               "Size of output exceeds column size limit",
+  CUDF_EXPECTS(bytes <= std::numeric_limits<size_type>::max(),
+               "Size of output exceeds the column size limit",
                std::overflow_error);
 
   // Now build the chars column

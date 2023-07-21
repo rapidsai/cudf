@@ -131,31 +131,32 @@ enum class jni_serialized_expression_type : int8_t {
 cudf::ast::ast_operator jni_to_unary_operator(jbyte jni_op_value) {
   switch (jni_op_value) {
     case 0: return cudf::ast::ast_operator::IDENTITY;
-    case 1: return cudf::ast::ast_operator::SIN;
-    case 2: return cudf::ast::ast_operator::COS;
-    case 3: return cudf::ast::ast_operator::TAN;
-    case 4: return cudf::ast::ast_operator::ARCSIN;
-    case 5: return cudf::ast::ast_operator::ARCCOS;
-    case 6: return cudf::ast::ast_operator::ARCTAN;
-    case 7: return cudf::ast::ast_operator::SINH;
-    case 8: return cudf::ast::ast_operator::COSH;
-    case 9: return cudf::ast::ast_operator::TANH;
-    case 10: return cudf::ast::ast_operator::ARCSINH;
-    case 11: return cudf::ast::ast_operator::ARCCOSH;
-    case 12: return cudf::ast::ast_operator::ARCTANH;
-    case 13: return cudf::ast::ast_operator::EXP;
-    case 14: return cudf::ast::ast_operator::LOG;
-    case 15: return cudf::ast::ast_operator::SQRT;
-    case 16: return cudf::ast::ast_operator::CBRT;
-    case 17: return cudf::ast::ast_operator::CEIL;
-    case 18: return cudf::ast::ast_operator::FLOOR;
-    case 19: return cudf::ast::ast_operator::ABS;
-    case 20: return cudf::ast::ast_operator::RINT;
-    case 21: return cudf::ast::ast_operator::BIT_INVERT;
-    case 22: return cudf::ast::ast_operator::NOT;
-    case 23: return cudf::ast::ast_operator::CAST_TO_INT64;
-    case 24: return cudf::ast::ast_operator::CAST_TO_UINT64;
-    case 25: return cudf::ast::ast_operator::CAST_TO_FLOAT64;
+    case 1: return cudf::ast::ast_operator::IS_NULL;
+    case 2: return cudf::ast::ast_operator::SIN;
+    case 3: return cudf::ast::ast_operator::COS;
+    case 4: return cudf::ast::ast_operator::TAN;
+    case 5: return cudf::ast::ast_operator::ARCSIN;
+    case 6: return cudf::ast::ast_operator::ARCCOS;
+    case 7: return cudf::ast::ast_operator::ARCTAN;
+    case 8: return cudf::ast::ast_operator::SINH;
+    case 9: return cudf::ast::ast_operator::COSH;
+    case 10: return cudf::ast::ast_operator::TANH;
+    case 11: return cudf::ast::ast_operator::ARCSINH;
+    case 12: return cudf::ast::ast_operator::ARCCOSH;
+    case 13: return cudf::ast::ast_operator::ARCTANH;
+    case 14: return cudf::ast::ast_operator::EXP;
+    case 15: return cudf::ast::ast_operator::LOG;
+    case 16: return cudf::ast::ast_operator::SQRT;
+    case 17: return cudf::ast::ast_operator::CBRT;
+    case 18: return cudf::ast::ast_operator::CEIL;
+    case 19: return cudf::ast::ast_operator::FLOOR;
+    case 20: return cudf::ast::ast_operator::ABS;
+    case 21: return cudf::ast::ast_operator::RINT;
+    case 22: return cudf::ast::ast_operator::BIT_INVERT;
+    case 23: return cudf::ast::ast_operator::NOT;
+    case 24: return cudf::ast::ast_operator::CAST_TO_INT64;
+    case 25: return cudf::ast::ast_operator::CAST_TO_UINT64;
+    case 26: return cudf::ast::ast_operator::CAST_TO_FLOAT64;
     default: throw std::invalid_argument("unexpected JNI AST unary operator value");
   }
 }

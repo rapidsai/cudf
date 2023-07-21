@@ -43,6 +43,7 @@ class ASTOperator(Enum):
     NULL_LOGICAL_OR = libcudf_exp.ast_operator.NULL_LOGICAL_OR
     # Unary operators
     IDENTITY = libcudf_exp.ast_operator.IDENTITY
+    IS_NULL = libcudf_exp.ast_operator.IS_NULL
     SIN = libcudf_exp.ast_operator.SIN
     COS = libcudf_exp.ast_operator.COS
     TAN = libcudf_exp.ast_operator.TAN
@@ -103,11 +104,6 @@ cdef class ColumnReference(Expression):
 
 cdef class Operation(Expression):
     def __cinit__(self, op, Expression left, Expression right=None):
-        # This awkward double casting is the only way to get Cython to generate
-        # valid C++. Cython doesn't support scoped enumerations, so it assumes
-        # that enums correspond to their underlying value types and will thus
-        # attempt operations that are invalid without first explicitly casting
-        # to the underlying before casting to the desired type.
         cdef libcudf_exp.ast_operator op_value = <libcudf_exp.ast_operator>(
             <underlying_type_ast_operator> op.value
         )

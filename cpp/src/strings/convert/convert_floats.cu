@@ -51,7 +51,7 @@ namespace {
  */
 template <typename FloatType>
 struct string_to_float_fn {
-  const column_device_view strings_column;  // strings to convert
+  column_device_view const strings_column;  // strings to convert
 
   __device__ FloatType operator()(size_type idx)
   {
@@ -147,9 +147,9 @@ struct ftos_converter {
   static constexpr double lower_limit = 0.0001;      // printf uses scientific notation below this
   // Tables for doing normalization: converting to exponent form
   // IEEE double float has maximum exponent of 305 so these should cover everything
-  const double upper10[9]  = {10, 100, 10000, 1e8, 1e16, 1e32, 1e64, 1e128, 1e256};
-  const double lower10[9]  = {.1, .01, .0001, 1e-8, 1e-16, 1e-32, 1e-64, 1e-128, 1e-256};
-  const double blower10[9] = {1.0, .1, .001, 1e-7, 1e-15, 1e-31, 1e-63, 1e-127, 1e-255};
+  double const upper10[9]  = {10, 100, 10000, 1e8, 1e16, 1e32, 1e64, 1e128, 1e256};
+  double const lower10[9]  = {.1, .01, .0001, 1e-8, 1e-16, 1e-32, 1e-64, 1e-128, 1e-256};
+  double const blower10[9] = {1.0, .1, .001, 1e-7, 1e-15, 1e-31, 1e-63, 1e-127, 1e-255};
 
   // utility for quickly converting known integer range to character array
   __device__ char* int2str(int value, char* output)

@@ -92,9 +92,10 @@ std::unique_ptr<table> sample(table_view const& input,
                               size_type const n,
                               sample_with_replacement replacement,
                               int64_t const seed,
+                              rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sample(input, n, replacement, seed, cudf::get_default_stream(), mr);
+  return detail::sample(input, n, replacement, seed, stream, mr);
 }
 }  // namespace cudf

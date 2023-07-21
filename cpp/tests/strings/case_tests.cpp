@@ -31,9 +31,9 @@ struct StringsCaseTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsCaseTest, ToLower)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "Éxamples aBc", "123 456", nullptr, "ARE THE", "tést strings", ""};
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "éxamples abc", "123 456", nullptr, "are the", "tést strings", ""};
 
   cudf::test::strings_column_wrapper strings(
@@ -53,9 +53,9 @@ TEST_F(StringsCaseTest, ToLower)
 
 TEST_F(StringsCaseTest, ToUpper)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "Éxamples aBc", "123 456", nullptr, "ARE THE", "tést strings", ""};
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "ÉXAMPLES ABC", "123 456", nullptr, "ARE THE", "TÉST STRINGS", ""};
 
   cudf::test::strings_column_wrapper strings(
@@ -75,9 +75,9 @@ TEST_F(StringsCaseTest, ToUpper)
 
 TEST_F(StringsCaseTest, Swapcase)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "Éxamples aBc", "123 456", nullptr, "ARE THE", "tést strings", ""};
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "éXAMPLES AbC", "123 456", nullptr, "are the", "TÉST STRINGS", ""};
 
   cudf::test::strings_column_wrapper strings(
@@ -200,6 +200,64 @@ TEST_F(StringsCaseTest, MultiCharLower)
   auto results = cudf::strings::to_lower(strings_view);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsCaseTest, Ascii)
+{
+  // triggering the ascii code path requires some long-ish strings
+  cudf::test::strings_column_wrapper input{
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"};
+  auto view     = cudf::strings_column_view(input);
+  auto expected = cudf::test::strings_column_wrapper{
+    "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"};
+  auto results = cudf::strings::to_lower(view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  expected = cudf::test::strings_column_wrapper{
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=-"};
+  results = cudf::strings::to_upper(view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  results = cudf::strings::to_upper(cudf::strings_column_view(cudf::slice(input, {1, 3}).front()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, cudf::slice(expected, {1, 3}).front());
+}
+
+TEST_F(StringsCaseTest, LongStrings)
+{
+  // average string length >= AVG_CHAR_BYTES_THRESHOLD as defined in case.cu
+  cudf::test::strings_column_wrapper input{
+    "ABCDÉFGHIJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "ABCDÉFGHIJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "ABCDÉFGHIJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "ABCDÉFGHIJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"};
+  auto view     = cudf::strings_column_view(input);
+  auto expected = cudf::test::strings_column_wrapper{
+    "abcdéfghijklmnopqrstuvwxyzabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "abcdéfghijklmnopqrstuvwxyzabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "abcdéfghijklmnopqrstuvwxyzabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "abcdéfghijklmnopqrstuvwxyzabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"};
+  auto results = cudf::strings::to_lower(view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  expected = cudf::test::strings_column_wrapper{
+    "ABCDÉFGHIJKLMNOPQRSTUVWXYZABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+    "ABCDÉFGHIJKLMNOPQRSTUVWXYZABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+    "ABCDÉFGHIJKLMNOPQRSTUVWXYZABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+    "ABCDÉFGHIJKLMNOPQRSTUVWXYZABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=-"};
+  results = cudf::strings::to_upper(view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  results = cudf::strings::to_upper(cudf::strings_column_view(cudf::slice(input, {1, 3}).front()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, cudf::slice(expected, {1, 3}).front());
 }
 
 TEST_F(StringsCaseTest, EmptyStringsColumn)

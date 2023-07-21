@@ -17,8 +17,8 @@
 #include <io/json/nested_json.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
-#include <cudf/detail/hashing.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
@@ -258,6 +258,7 @@ tree_meta_t2 get_tree_representation_cpu(
       case cuio_json::token_t::ValueEnd: return "VE";
       case cuio_json::token_t::StructMemberBegin: return " <";
       case cuio_json::token_t::StructMemberEnd: return " >";
+      case cuio_json::token_t::LineEnd: return ";";
       default: return ".";
     }
   };
@@ -466,18 +467,18 @@ records_orient_tree_traversal_cpu(cudf::host_span<cuio_json::SymbolT const> inpu
   auto hash_path = [&](auto node_id) {
     size_t seed = 0;
     while (node_id != top_node) {
-      seed = cudf::detail::hash_combine(
+      seed = cudf::hashing::detail::hash_combine(
         seed, std::hash<cuio_json::TreeDepthT>{}(tree.node_levels[node_id]));
-      seed = cudf::detail::hash_combine(
+      seed = cudf::hashing::detail::hash_combine(
         seed, std::hash<cuio_json::NodeT>{}(tree.node_categories[node_id]));
       if (tree.node_categories[node_id] == cuio_json::node_t::NC_FN) {
         auto field_name =
           std::string_view(input.data() + tree.node_range_begin[node_id],
                            tree.node_range_end[node_id] - tree.node_range_begin[node_id]);
-        seed = cudf::detail::hash_combine(seed, std::hash<std::string_view>{}(field_name));
+        seed = cudf::hashing::detail::hash_combine(seed, std::hash<std::string_view>{}(field_name));
       }
       if (is_array_of_arrays and tree.node_levels[node_id] == row_array_children_level)
-        seed = cudf::detail::hash_combine(seed, list_indices[node_id]);
+        seed = cudf::hashing::detail::hash_combine(seed, list_indices[node_id]);
       node_id = tree.parent_node_ids[node_id];
     }
     return seed;
@@ -585,7 +586,7 @@ TEST_F(JsonTest, TreeRepresentation)
   cudf::io::json_reader_options const options{};
 
   // Parse the JSON and get the token stream
-  const auto [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
+  auto const [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
     d_input, options, stream, rmm::mr::get_current_device_resource());
 
   // Get the JSON's tree representation
@@ -672,7 +673,7 @@ TEST_F(JsonTest, TreeRepresentation2)
   cudf::io::json_reader_options const options{};
 
   // Parse the JSON and get the token stream
-  const auto [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
+  auto const [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
     d_input, options, stream, rmm::mr::get_current_device_resource());
 
   // Get the JSON's tree representation
@@ -746,7 +747,7 @@ TEST_F(JsonTest, TreeRepresentation3)
   options.enable_lines(true);
 
   // Parse the JSON and get the token stream
-  const auto [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
+  auto const [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
     d_input, options, stream, rmm::mr::get_current_device_resource());
 
   // Get the JSON's tree representation
@@ -771,7 +772,7 @@ TEST_F(JsonTest, TreeRepresentationError)
   cudf::io::json_reader_options const options{};
 
   // Parse the JSON and get the token stream
-  const auto [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
+  auto const [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
     d_input, options, stream, rmm::mr::get_current_device_resource());
 
   // Get the JSON's tree representation
@@ -853,7 +854,7 @@ TEST_P(JsonTreeTraversalTest, CPUvsGPUTraversal)
                                                              static_cast<size_t>(d_scalar.size())};
 
   // Parse the JSON and get the token stream
-  const auto [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
+  auto const [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
     d_input, options, stream, rmm::mr::get_current_device_resource());
   // host tree generation
   auto cpu_tree = get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);

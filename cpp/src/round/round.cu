@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -331,7 +331,7 @@ std::unique_ptr<column> round(column_view const& input,
   if (input.is_empty()) {
     if (is_fixed_point(input.type())) {
       auto const type = data_type{input.type().id(), numeric::scale_type{-decimal_places}};
-      return std::make_unique<cudf::column>(type, 0, rmm::device_buffer{});
+      return make_empty_column(type);
     }
     return empty_like(input);
   }

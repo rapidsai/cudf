@@ -379,13 +379,23 @@ public class CompiledExpressionTest extends CudfTestBase {
     }
   }
 
-  @Test
-  void testUnaryLogicalOperationTransform() {
-    UnaryOperation expr = new UnaryOperation(UnaryOperator.NOT, new ColumnReference(0));
-    try (Table t = new Table.TestBuilder().column(-5L, 0L, null, 2L, 1L).build();
+  private static Stream<Arguments> createUnaryLogicalOperationParams() {
+    Long[] input = new Long[] { -5L, 0L, null, 2L, 1L };
+    return Stream.of(
+        Arguments.of(UnaryOperator.NOT, input, Arrays.asList(false, true, null, false, false)),
+        Arguments.of(UnaryOperator.IS_NULL, input, Arrays.asList(false, false, true, false, false)));
+  }
+
+  @ParameterizedTest
+  @MethodSource("createUnaryLogicalOperationParams")
+  void testUnaryLogicalOperationTransform(UnaryOperator op, Long[] input,
+                                          List<Boolean> expectedValues) {
+    UnaryOperation expr = new UnaryOperation(op, new ColumnReference(0));
+    try (Table t = new Table.TestBuilder().column(input).build();
          CompiledExpression compiledExpr = expr.compile();
          ColumnVector actual = compiledExpr.computeColumn(t);
-         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, true, null, false, false)) {
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(
+             expectedValues.toArray(new Boolean[0]))) {
       assertColumnsAreEqual(expected, actual);
     }
   }

@@ -1694,18 +1694,30 @@ def test_nonmatching_index_setitem(nrows):
     assert_eq(gdf["c"].to_pandas(), gdf_series.to_pandas())
 
 
-def test_from_pandas():
-    df = pd.DataFrame({"x": [1, 2, 3]}, index=[4.0, 5.0, 6.0])
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "int",
+        pytest.param(
+            "int64[pyarrow]",
+            marks=pytest.mark.skipif(
+                not PANDAS_GE_150, reason="pyarrow support only in >=1.5"
+            ),
+        ),
+    ],
+)
+def test_from_pandas(dtype):
+    df = pd.DataFrame({"x": [1, 2, 3]}, index=[4.0, 5.0, 6.0], dtype=dtype)
     gdf = cudf.DataFrame.from_pandas(df)
     assert isinstance(gdf, cudf.DataFrame)
 
-    assert_eq(df, gdf)
+    assert_eq(df, gdf, check_dtype="pyarrow" not in dtype)
 
     s = df.x
     gs = cudf.Series.from_pandas(s)
     assert isinstance(gs, cudf.Series)
 
-    assert_eq(s, gs)
+    assert_eq(s, gs, check_dtype="pyarrow" not in dtype)
 
 
 @pytest.mark.parametrize("dtypes", [int, float])
@@ -4114,7 +4126,7 @@ def test_as_column_types():
     assert_eq(pds, gds)
 
     pds = pd.Series(pd.Index(["1", "18", "9"]), dtype="int")
-    gds = cudf.Series(cudf.StringIndex(["1", "18", "9"]), dtype="int")
+    gds = cudf.Series(cudf.Index(["1", "18", "9"]), dtype="int")
 
     assert_eq(pds, gds)
 
@@ -9794,6 +9806,7 @@ def df_eval(request):
         ("a / b", float),
         ("a * b", int),
         ("a > b", int),
+        ("a >= b", int),
         ("a > b > c", int),
         ("a > b < c", int),
         ("a & b", int),
@@ -9835,7 +9848,7 @@ def test_dataframe_eval(df_eval, expr, dtype):
     assert_eq(expect, got, check_names=False)
 
     # Test inplace
-    if re.search("[^=]=[^=]", expr) is not None:
+    if re.search("[^=><]=[^=]", expr) is not None:
         pdf_eval = df_eval.to_pandas()
         pdf_eval.eval(expr, inplace=True)
         df_eval.eval(expr, inplace=True)
@@ -9855,6 +9868,15 @@ def test_dataframe_eval(df_eval, expr, dtype):
 def test_dataframe_eval_errors(df_eval, expr):
     with pytest.raises(ValueError):
         df_eval.eval(expr)
+
+
+def test_dataframe_eval_misc():
+    df = cudf.DataFrame({"a": [1, 2, 3, None, 5]})
+    got = df.eval("isnull(a)")
+    assert_eq(got, cudf.Series.isnull(df["a"]), check_names=False)
+
+    df.eval("c = isnull(1)", inplace=True)
+    assert_eq(df["c"], cudf.Series([False] * len(df), name="c"))
 
 
 @pytest.mark.parametrize(

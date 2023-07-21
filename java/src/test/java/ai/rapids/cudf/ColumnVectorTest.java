@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -93,6 +94,14 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector expected = ColumnVector.fromBoxedInts(2*2-2, 3*3-3, null, 4*4-4)) {
       assertColumnsAreEqual(expected, cv1);
       assertColumnsAreEqual(expected, cv2);
+    }
+  }
+
+  @Test
+  void testDistinctCount() {
+    try (ColumnVector cv = ColumnVector.fromBoxedLongs(5L, 3L, null, null, 5L)) {
+      assertEquals(3, cv.distinctCount());
+      assertEquals(2, cv.distinctCount(NullPolicy.EXCLUDE));
     }
   }
 
@@ -2091,6 +2100,15 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testTrimEmptyStringsWithNulls() {
+    try (ColumnVector cv = ColumnVector.fromStrings("", null);
+         ColumnVector trimmed = cv.strip();
+         ColumnVector expected = ColumnVector.fromStrings("", null)) {
+      assertColumnsAreEqual(expected, trimmed);
+    }
+  }
+
+  @Test
   void testAppendStrings() {
     try (HostColumnVector cv = HostColumnVector.build(10, 0, (b) -> {
       b.append("123456789");
@@ -2863,6 +2881,42 @@ public class ColumnVectorTest extends CudfTestBase {
              Arrays.asList(1.23, 0.0, Double.NaN, 1.23, 0.0, Double.NaN, 1.23, 0.0, Double.NaN),
              Arrays.asList(), null, Arrays.asList(-1.23e10, null, -1.23e10, null, -1.23e10, null))) {
       assertColumnsAreEqual(expect, result);
+    }
+  }
+
+  @Test
+  void testFlattenLists() {
+    HostColumnVector.ListType listType = new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.INT32));
+    HostColumnVector.ListType listOfListsType = new HostColumnVector.ListType(true, listType);
+
+    // Input does not have nulls.
+    try (ColumnVector input = ColumnVector.fromLists(listOfListsType,
+           Arrays.asList(Arrays.asList(1, 2), Arrays.asList(3), Arrays.asList(4, 5, 6)),
+           Arrays.asList(Arrays.asList(7, 8, 9), Arrays.asList(10, 11, 12, 13, 14, 15)));
+         ColumnVector result = input.flattenLists();
+         ColumnVector expected = ColumnVector.fromLists(listType,
+           Arrays.asList(1, 2, 3, 4, 5, 6),
+           Arrays.asList(7, 8, 9, 10, 11, 12, 13, 14, 15))) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    // Input has nulls.
+    try (ColumnVector input = ColumnVector.fromLists(listOfListsType,
+          Arrays.asList(null, Arrays.asList(3), Arrays.asList(4, 5, 6)),
+          Arrays.asList(Arrays.asList(null, 8, 9), Arrays.asList(10, 11, 12, 13, 14, null)))) {
+      try (ColumnVector result = input.flattenLists(false);
+           ColumnVector expected = ColumnVector.fromLists(listType,
+             null,
+             Arrays.asList(null, 8, 9, 10, 11, 12, 13, 14, null))) {
+        assertColumnsAreEqual(expected, result);
+      }
+      try (ColumnVector result = input.flattenLists(true);
+           ColumnVector expected = ColumnVector.fromLists(listType,
+             Arrays.asList(3, 4, 5, 6),
+             Arrays.asList(null, 8, 9, 10, 11, 12, 13, 14, null))) {
+        assertColumnsAreEqual(expected, result);
+      }
     }
   }
 
@@ -6678,10 +6732,61 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testColumnViewWithNonEmptyNullsIsCleared() {
+    List<Integer> list0 = Arrays.asList(1, 2, 3);
+    List<Integer> list1 = Arrays.asList(4, 5, null);
+    List<Integer> list2 = Arrays.asList(7, 8, 9);
+    List<Integer> list3 = null;
+    try (ColumnVector input = ColumnVectorTest.makeListsColumn(DType.INT32, list0, list1, list2, list3);
+         BaseDeviceMemoryBuffer baseValidityBuffer = input.getDeviceBufferFor(BufferType.VALIDITY);
+         BaseDeviceMemoryBuffer baseOffsetBuffer = input.getDeviceBufferFor(BufferType.OFFSET);
+         HostMemoryBuffer newValidity = HostMemoryBuffer.allocate(BitVectorHelper.getValidityAllocationSizeInBytes(4))) {
+
+      newValidity.copyFromDeviceBuffer(baseValidityBuffer);
+      // we are setting list1 with 3 elements to null. This will result in a non-empty null in the
+      // ColumnView at index 1
+      BitVectorHelper.setNullAt(newValidity, 1);
+      // validityBuffer will be closed by offHeapState later
+      DeviceMemoryBuffer validityBuffer = DeviceMemoryBuffer.allocate(BitVectorHelper.getValidityAllocationSizeInBytes(4));
+      try {
+        // offsetBuffer will be closed by offHeapState later
+        DeviceMemoryBuffer offsetBuffer = DeviceMemoryBuffer.allocate(baseOffsetBuffer.getLength());
+        try {
+          validityBuffer.copyFromHostBuffer(newValidity);
+          offsetBuffer.copyFromMemoryBuffer(0, baseOffsetBuffer, 0,
+              baseOffsetBuffer.length, Cuda.DEFAULT_STREAM);
+
+          // The new offHeapState will have 2 nulls, one null at index 4 from the original ColumnVector
+          // the other at index 1 which is non-empty
+          ColumnVector.OffHeapState offHeapState = ColumnVector.makeOffHeap(input.type, input.rows, Optional.of(2L),
+              null, validityBuffer, offsetBuffer,
+              null, Arrays.stream(input.getChildColumnViews()).mapToLong((c) -> c.viewHandle).toArray());
+          try {
+            new ColumnView(offHeapState);
+          } catch (AssertionError ae) {
+            assert offHeapState.isClean();
+          }
+        } catch (Exception e) {
+          if (!offsetBuffer.closed) {
+            offsetBuffer.close();
+          }
+        }
+      } catch (Exception e) {
+        if (!validityBuffer.closed) {
+          validityBuffer.close();
+        }
+      }
+    }
+  }
+
+  @Test
   public void testEventHandlerIsCalledForEachClose() {
     final AtomicInteger onClosedWasCalled = new AtomicInteger(0);
     try (ColumnVector cv = ColumnVector.fromInts(1,2,3,4)) {
-      cv.setEventHandler(refCount -> onClosedWasCalled.incrementAndGet());
+      cv.setEventHandler((col, refCount) -> {
+        assertEquals(cv, col);
+        onClosedWasCalled.incrementAndGet();
+      });
     }
     assertEquals(1, onClosedWasCalled.get());
   }
@@ -6695,10 +6800,28 @@ public class ColumnVectorTest extends CudfTestBase {
     assertEquals(0, onClosedWasCalled.get());
 
     try (ColumnVector cv = ColumnVector.fromInts(1,2,3,4)) {
-      cv.setEventHandler(refCount -> onClosedWasCalled.incrementAndGet());
+      cv.setEventHandler((col, refCount) -> {
+        onClosedWasCalled.incrementAndGet();
+      });
       cv.setEventHandler(null);
     }
     assertEquals(0, onClosedWasCalled.get());
   }
 
+  /**
+   * Test that the ColumnView with unknown null-counts still returns
+   * the correct null-count when queried.
+   */
+  @Test
+  public void testColumnViewNullCount() {
+    try (ColumnVector vector = ColumnVector.fromBoxedInts(1, 2, null, 3, null, 4, null, 5, null, 6);
+         ColumnView view = new ColumnView(DType.INT32,
+                                          vector.getRowCount(),
+                                          Optional.empty(), // Unknown null count.
+                                          vector.getDeviceBufferFor(BufferType.DATA),
+                                          vector.getDeviceBufferFor(BufferType.VALIDITY),
+                                          vector.getDeviceBufferFor(BufferType.OFFSET))) {
+      assertEquals(vector.getNullCount(), view.getNullCount());
+    }
+  }
 }

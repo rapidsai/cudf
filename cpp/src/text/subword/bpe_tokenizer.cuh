@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,13 +21,13 @@
 #include <hash/hash_allocator.cuh>
 
 #include <cudf/column/column.hpp>
-#include <cudf/detail/utilities/hash_functions.cuh>
-
-#include <cuco/static_map.cuh>
+#include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/device/polymorphic_allocator.hpp>
+
+#include <cuco/static_map.cuh>
 
 #include <cstdint>
 
@@ -41,7 +41,7 @@ using merge_pairs_map_type = cuco::static_map<cudf::hash_value_type,
                                               cuda::thread_scope_device,
                                               hash_table_allocator_type>;
 
-using string_hasher_type = cudf::detail::MurmurHash3_32<cudf::string_view>;
+using string_hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>;
 
 }  // namespace detail
 

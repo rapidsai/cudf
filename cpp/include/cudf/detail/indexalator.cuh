@@ -582,7 +582,7 @@ struct indexalator_factory {
   };
 
   /**
-   * @brief An index accessor that returns an index value if corresponding validity flag is true.
+   * @brief An index accessor that returns an index value if the scalar's validity flag is true.
    *
    * This is suitable as an `optional_iterator`.
    */
@@ -605,7 +605,7 @@ struct indexalator_factory {
   };
 
   /**
-   * @brief Create an index iterator with a nullable index accessor.
+   * @brief Create an index iterator with an optional index accessor.
    */
   static auto make_input_optional_iterator(column_view const& col)
   {
@@ -613,7 +613,7 @@ struct indexalator_factory {
   }
 
   /**
-   * @brief Create an index iterator with a nullable index accessor for a scalar.
+   * @brief Create an index iterator with an optional index accessor for a scalar.
    */
   static auto make_input_optional_iterator(scalar const& input)
   {

@@ -124,6 +124,9 @@ CUDF_HOST_DEVICE inline constexpr void ast_operator_dispatcher(ast_operator op, 
     case ast_operator::IDENTITY:
       f.template operator()<ast_operator::IDENTITY>(std::forward<Ts>(args)...);
       break;
+    case ast_operator::IS_NULL:
+      f.template operator()<ast_operator::IS_NULL>(std::forward<Ts>(args)...);
+      break;
     case ast_operator::SIN:
       f.template operator()<ast_operator::SIN>(std::forward<Ts>(args)...);
       break;
@@ -535,6 +538,17 @@ struct operator_functor<ast_operator::IDENTITY, false> {
 };
 
 template <>
+struct operator_functor<ast_operator::IS_NULL, false> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  __device__ inline auto operator()(InputT input) -> bool
+  {
+    return false;
+  }
+};
+
+template <>
 struct operator_functor<ast_operator::SIN, false> {
   static constexpr auto arity{1};
 
@@ -828,6 +842,19 @@ struct operator_functor<op, true> {
   {
     using Out = possibly_null_value_t<decltype(NonNullOperator{}(*input)), true>;
     return input.has_value() ? Out{NonNullOperator{}(*input)} : Out{};
+  }
+};
+
+// IS_NULL(null) is true, IS_NULL(valid) is false
+template <>
+struct operator_functor<ast_operator::IS_NULL, true> {
+  using NonNullOperator       = operator_functor<ast_operator::IS_NULL, false>;
+  static constexpr auto arity = NonNullOperator::arity;
+
+  template <typename LHS>
+  __device__ inline auto operator()(LHS const lhs) -> decltype(!lhs.has_value())
+  {
+    return !lhs.has_value();
   }
 };
 

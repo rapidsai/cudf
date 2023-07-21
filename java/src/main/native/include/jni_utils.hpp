@@ -788,6 +788,13 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
 } // namespace jni
 } // namespace cudf
 
+#define JNI_EXCEPTION_OCCURRED_CHECK(env, ret_val)                                                 \
+  {                                                                                                \
+    if (env->ExceptionOccurred()) {                                                                \
+      return ret_val;                                                                              \
+    }                                                                                              \
+  }
+
 #define JNI_THROW_NEW(env, class_name, message, ret_val)                                           \
   {                                                                                                \
     jclass ex_class = env->FindClass(class_name);                                                  \
@@ -799,33 +806,65 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
   }
 
 // Throw a new exception only if one is not pending then always return with the specified value
-#define JNI_CHECK_THROW_NEW(env, class_name, message, ret_val)                                     \
+#define JNI_CHECK_THROW_CUDF_EXCEPTION(env, class_name, message, stacktrace, ret_val)              \
   {                                                                                                \
-    if (env->ExceptionOccurred()) {                                                                \
+    JNI_EXCEPTION_OCCURRED_CHECK(env, ret_val);                                                    \
+    auto const ex_class = env->FindClass(class_name);                                              \
+    if (ex_class == nullptr) {                                                                     \
       return ret_val;                                                                              \
     }                                                                                              \
-    JNI_THROW_NEW(env, class_name, message, ret_val)                                               \
+    auto const ctor_id =                                                                           \
+        env->GetMethodID(ex_class, "<init>", "(Ljava/lang/String;Ljava/lang/String;)V");           \
+    if (ctor_id == nullptr) {                                                                      \
+      return ret_val;                                                                              \
+    }                                                                                              \
+    auto const empty_str = std::string{""};                                                        \
+    auto const jmessage = env->NewStringUTF(message == nullptr ? empty_str.c_str() : message);     \
+    if (jmessage == nullptr) {                                                                     \
+      return ret_val;                                                                              \
+    }                                                                                              \
+    auto const jstacktrace =                                                                       \
+        env->NewStringUTF(stacktrace == nullptr ? empty_str.c_str() : stacktrace);                 \
+    if (jstacktrace == nullptr) {                                                                  \
+      return ret_val;                                                                              \
+    }                                                                                              \
+    auto const jobj = env->NewObject(ex_class, ctor_id, jmessage, jstacktrace);                    \
+    if (jobj == nullptr) {                                                                         \
+      return ret_val;                                                                              \
+    }                                                                                              \
+    env->Throw(reinterpret_cast<jthrowable>(jobj));                                                \
+    return ret_val;                                                                                \
   }
 
 // Throw a new exception only if one is not pending then always return with the specified value
-#define JNI_CHECK_CUDA_ERROR(env, class_name, e, ret_val)                                          \
+#define JNI_CHECK_THROW_CUDA_EXCEPTION(env, class_name, message, stacktrace, error_code, ret_val)  \
   {                                                                                                \
-    if (env->ExceptionOccurred()) {                                                                \
+    JNI_EXCEPTION_OCCURRED_CHECK(env, ret_val);                                                    \
+    auto const ex_class = env->FindClass(class_name);                                              \
+    if (ex_class == nullptr) {                                                                     \
       return ret_val;                                                                              \
     }                                                                                              \
-    std::string n_msg = e.what() == nullptr ? "" : e.what();                                       \
-    jstring j_msg = env->NewStringUTF(n_msg.c_str());                                              \
-    jint e_code = static_cast<jint>(e.error_code());                                               \
-    jclass ex_class = env->FindClass(class_name);                                                  \
-    if (ex_class != NULL) {                                                                        \
-      jmethodID ctor_id = env->GetMethodID(ex_class, "<init>", "(Ljava/lang/String;I)V");          \
-      if (ctor_id != NULL) {                                                                       \
-        jobject cuda_error = env->NewObject(ex_class, ctor_id, j_msg, e_code);                     \
-        if (cuda_error != NULL) {                                                                  \
-          env->Throw((jthrowable)cuda_error);                                                      \
-        }                                                                                          \
-      }                                                                                            \
+    auto const ctor_id =                                                                           \
+        env->GetMethodID(ex_class, "<init>", "(Ljava/lang/String;Ljava/lang/String;I)V");          \
+    if (ctor_id == nullptr) {                                                                      \
+      return ret_val;                                                                              \
     }                                                                                              \
+    auto const empty_str = std::string{""};                                                        \
+    auto const jmessage = env->NewStringUTF(message == nullptr ? empty_str.c_str() : message);     \
+    if (jmessage == nullptr) {                                                                     \
+      return ret_val;                                                                              \
+    }                                                                                              \
+    auto const jstacktrace =                                                                       \
+        env->NewStringUTF(stacktrace == nullptr ? empty_str.c_str() : stacktrace);                 \
+    if (jstacktrace == nullptr) {                                                                  \
+      return ret_val;                                                                              \
+    }                                                                                              \
+    auto const jerror_code = static_cast<jint>(error_code);                                        \
+    auto const jobj = env->NewObject(ex_class, ctor_id, jmessage, jstacktrace, jerror_code);       \
+    if (jobj == nullptr) {                                                                         \
+      return ret_val;                                                                              \
+    }                                                                                              \
+    env->Throw(reinterpret_cast<jthrowable>(jobj));                                                \
     return ret_val;                                                                                \
   }
 
@@ -843,41 +882,41 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
     }                                                                                              \
   }
 
-#define JNI_EXCEPTION_OCCURRED_CHECK(env, ret_val)                                                 \
-  {                                                                                                \
-    if (env->ExceptionOccurred()) {                                                                \
-      return ret_val;                                                                              \
-    }                                                                                              \
-  }
-
 #define CATCH_STD_CLASS(env, class_name, ret_val)                                                  \
   catch (const rmm::out_of_memory &e) {                                                            \
-    auto what =                                                                                    \
+    JNI_EXCEPTION_OCCURRED_CHECK(env, ret_val);                                                    \
+    auto const what =                                                                              \
         std::string("Could not allocate native memory: ") + (e.what() == nullptr ? "" : e.what()); \
-    JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, what.c_str(), ret_val);                         \
+    JNI_THROW_NEW(env, cudf::jni::OOM_CLASS, what.c_str(), ret_val);                               \
   }                                                                                                \
   catch (const cudf::fatal_cuda_error &e) {                                                        \
-    JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_FATAL_ERROR_CLASS, e, ret_val);                      \
+    JNI_CHECK_THROW_CUDA_EXCEPTION(env, cudf::jni::CUDA_FATAL_ERROR_CLASS, e.what(),               \
+                                   e.stacktrace(), e.error_code(), ret_val);                       \
   }                                                                                                \
   catch (const cudf::cuda_error &e) {                                                              \
-    JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_ERROR_CLASS, e, ret_val);                            \
+    JNI_CHECK_THROW_CUDA_EXCEPTION(env, cudf::jni::CUDA_ERROR_CLASS, e.what(), e.stacktrace(),     \
+                                   e.error_code(), ret_val);                                       \
   }                                                                                                \
   catch (const cudf::data_type_error &e) {                                                         \
-    JNI_CHECK_THROW_NEW(env, cudf::jni::CUDF_DTYPE_ERROR_CLASS, e.what(), ret_val);                \
+    JNI_CHECK_THROW_CUDF_EXCEPTION(env, cudf::jni::CUDF_DTYPE_ERROR_CLASS, e.what(),               \
+                                   e.stacktrace(), ret_val);                                       \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \
+    char const *stacktrace = "No native stacktrace is available.";                                 \
+    if (auto const cudf_ex = dynamic_cast<cudf::logic_error const *>(&e); cudf_ex != nullptr) {    \
+      stacktrace = cudf_ex->stacktrace();                                                          \
+    }                                                                                              \
     /* Double check whether the thrown exception is unrecoverable CUDA error or not. */            \
     /* Like cudf::detail::throw_cuda_error, it is nearly certain that a fatal error  */            \
     /* occurred if the second call doesn't return with cudaSuccess. */                             \
     cudaGetLastError();                                                                            \
     auto const last = cudaFree(0);                                                                 \
     if (cudaSuccess != last && last == cudaDeviceSynchronize()) {                                  \
-      auto msg = e.what() == nullptr ? std::string{""} : e.what();                                 \
-      auto cuda_error = cudf::fatal_cuda_error{msg, last};                                         \
-      JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_FATAL_ERROR_CLASS, cuda_error, ret_val);           \
+      /* Throw CudaFatalException since the thrown exception is unrecoverable CUDA error */        \
+      JNI_CHECK_THROW_CUDA_EXCEPTION(env, cudf::jni::CUDA_FATAL_ERROR_CLASS, e.what(), stacktrace, \
+                                     last, ret_val);                                               \
     }                                                                                              \
-    /* If jni_exception caught then a Java exception is pending and this will not overwrite it. */ \
-    JNI_CHECK_THROW_NEW(env, class_name, e.what(), ret_val);                                       \
+    JNI_CHECK_THROW_CUDF_EXCEPTION(env, class_name, e.what(), stacktrace, ret_val);                \
   }
 
 #define CATCH_STD(env, ret_val) CATCH_STD_CLASS(env, cudf::jni::CUDF_ERROR_CLASS, ret_val)

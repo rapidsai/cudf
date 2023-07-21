@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, Dict, Optional, Tuple, TypeVar, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import cupy
 import numpy as np
@@ -19,8 +19,6 @@ from cudf.api.types import (
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.frame import Frame
 from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
-
-T = TypeVar("T", bound="Frame")
 
 
 class SingleColumnFrame(Frame, NotIterable):
@@ -140,7 +138,6 @@ class SingleColumnFrame(Frame, NotIterable):
         return super().to_numpy(dtype, copy, na_value).flatten()
 
     def tolist(self):  # noqa: D102
-
         raise TypeError(
             "cuDF does not support conversion to host memory "
             "via the `tolist()` method. Consider using "
@@ -234,6 +231,7 @@ class SingleColumnFrame(Frame, NotIterable):
         -------
         bool
         """
+        # Do not remove until pandas 2.0 support is added.
         warnings.warn(
             "is_monotonic is deprecated and will be removed in a future "
             "version. Use is_monotonic_increasing instead.",
@@ -406,6 +404,10 @@ class SingleColumnFrame(Frame, NotIterable):
             if is_integer_dtype(arg.dtype):
                 return self._column.take(arg)
             if is_bool_dtype(arg.dtype):
+                if (bn := len(arg)) != (n := len(self)):
+                    raise IndexError(
+                        f"Boolean mask has wrong length: {bn} not {n}"
+                    )
                 return self._column.apply_boolean_mask(arg)
             raise NotImplementedError(f"Unknown indexer {type(arg)}")
 

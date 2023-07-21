@@ -118,9 +118,7 @@ TEST_F(MinHashTest, ErrorsTest)
   auto view  = cudf::strings_column_view(input);
   EXPECT_THROW(nvtext::minhash(view, 0, 0), std::invalid_argument);
   EXPECT_THROW(nvtext::minhash(view, 0, 0, cudf::hash_id::HASH_MD5), std::invalid_argument);
-  auto seeds = cudf::test::fixed_width_column_wrapper<
-    cudf::hash_value_type>();  // cudf::device_span<cudf::hash_value_type
-                               // const>{};
+  auto seeds = cudf::test::fixed_width_column_wrapper<cudf::hash_value_type>();
   EXPECT_THROW(nvtext::minhash(view, cudf::column_view(seeds)), std::invalid_argument);
 
   std::vector<std::string> h_input(50000, "");
@@ -129,5 +127,5 @@ TEST_F(MinHashTest, ErrorsTest)
 
   auto const zeroes = thrust::constant_iterator<cudf::hash_value_type>(0);
   seeds = cudf::test::fixed_width_column_wrapper<cudf::hash_value_type>(zeroes, zeroes + 50000);
-  EXPECT_THROW(nvtext::minhash(view, cudf::column_view(seeds)), std::invalid_argument);
+  EXPECT_THROW(nvtext::minhash(view, cudf::column_view(seeds)), std::overflow_error);
 }

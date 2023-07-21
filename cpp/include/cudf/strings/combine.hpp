@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -258,8 +258,8 @@ std::unique_ptr<column> concatenate(
  * @return New strings column with concatenated results.
  */
 std::unique_ptr<column> join_list_elements(
-  const lists_column_view& lists_strings_column,
-  const strings_column_view& separators,
+  lists_column_view const& lists_strings_column,
+  strings_column_view const& separators,
   string_scalar const& separator_narep   = string_scalar("", false),
   string_scalar const& string_narep      = string_scalar("", false),
   separator_on_nulls separate_nulls      = separator_on_nulls::YES,
@@ -316,7 +316,7 @@ std::unique_ptr<column> join_list_elements(
  * @return New strings column with concatenated results.
  */
 std::unique_ptr<column> join_list_elements(
-  const lists_column_view& lists_strings_column,
+  lists_column_view const& lists_strings_column,
   string_scalar const& separator         = string_scalar(""),
   string_scalar const& narep             = string_scalar("", false),
   separator_on_nulls separate_nulls      = separator_on_nulls::YES,

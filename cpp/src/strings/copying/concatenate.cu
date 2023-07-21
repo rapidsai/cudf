@@ -216,9 +216,11 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   if (strings_count == 0) { return make_empty_column(type_id::STRING); }
 
   CUDF_EXPECTS(offsets_count <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
-               "total number of strings is too large for cudf column");
+               "total number of strings exceeds the column size limit",
+               std::overflow_error);
   CUDF_EXPECTS(total_bytes <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
-               "total size of strings is too large for cudf column");
+               "total size of strings exceeds the column size limit",
+               std::overflow_error);
 
   bool const has_nulls =
     std::any_of(columns.begin(), columns.end(), [](auto const& col) { return col.has_nulls(); });

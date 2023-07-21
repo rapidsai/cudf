@@ -36,6 +36,8 @@ namespace cudf {
  * @brief Returns the null count for a null mask of the specified `state`
  * representing `size` elements.
  *
+ * @throw std::invalid_argument if state is UNINITIALIZED
+ *
  * @param state The state of the null mask
  * @param size The number of elements represented by the mask
  * @return The count of null elements
@@ -168,5 +170,21 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(
   table_view const& view,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief Given a validity bitmask, counts the number of null elements (unset bits)
+ * in the range `[start, stop)`.
+ *
+ * If `bitmask == nullptr`, all elements are assumed to be valid and the
+ * function returns ``.
+ *
+ * @throws cudf::logic_error if `start > stop`
+ * @throws cudf::logic_error if `start < 0`
+ *
+ * @param bitmask Validity bitmask residing in device memory.
+ * @param start Index of the first bit to count (inclusive).
+ * @param stop Index of the last bit to count (exclusive).
+ * @return The number of null elements in the specified range.
+ */
+cudf::size_type null_count(bitmask_type const* bitmask, size_type start, size_type stop);
 /** @} */  // end of group
 }  // namespace cudf

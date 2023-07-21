@@ -20,6 +20,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+namespace cudf::detail {
+
 template <typename T>
 class hostdevice_span {
  public:
@@ -144,18 +146,28 @@ class hostdevice_span {
     return hostdevice_span<T>(_host_data + offset, _device_data + offset, count);
   }
 
-  void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
+  void host_to_device_async(rmm::cuda_stream_view stream)
   {
     CUDF_CUDA_TRY(
       cudaMemcpyAsync(device_ptr(), host_ptr(), size_bytes(), cudaMemcpyDefault, stream.value()));
-    if (synchronize) { stream.synchronize(); }
   }
 
-  void device_to_host(rmm::cuda_stream_view stream, bool synchronize = false)
+  void host_to_device_sync(rmm::cuda_stream_view stream)
+  {
+    host_to_device_async(stream);
+    stream.synchronize();
+  }
+
+  void device_to_host_async(rmm::cuda_stream_view stream)
   {
     CUDF_CUDA_TRY(
       cudaMemcpyAsync(host_ptr(), device_ptr(), size_bytes(), cudaMemcpyDefault, stream.value()));
-    if (synchronize) { stream.synchronize(); }
+  }
+
+  void device_to_host_sync(rmm::cuda_stream_view stream)
+  {
+    device_to_host_async(stream);
+    stream.synchronize();
   }
 
  private:
@@ -163,3 +175,5 @@ class hostdevice_span {
   T* _device_data{};  ///< Pointer to device memory containing elements
   T* _host_data{};    ///< Pointer to host memory containing elements
 };
+
+}  // namespace cudf::detail

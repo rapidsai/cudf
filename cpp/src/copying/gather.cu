@@ -68,10 +68,13 @@ std::unique_ptr<table> gather(table_view const& source_table,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(gather_map.size() <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
-               "invalid gather map size");
+               "gather map size exceeds the column size limit",
+               std::overflow_error);
   auto map_col = column_view(data_type{type_to_id<size_type>()},
                              static_cast<size_type>(gather_map.size()),
-                             gather_map.data());
+                             gather_map.data(),
+                             nullptr,
+                             0);
   return gather(source_table, map_col, bounds_policy, neg_indices, stream, mr);
 }
 
@@ -80,6 +83,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
 std::unique_ptr<table> gather(table_view const& source_table,
                               column_view const& gather_map,
                               out_of_bounds_policy bounds_policy,
+                              rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -87,8 +91,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
   auto index_policy = is_unsigned(gather_map.type()) ? detail::negative_index_policy::NOT_ALLOWED
                                                      : detail::negative_index_policy::ALLOWED;
 
-  return detail::gather(
-    source_table, gather_map, bounds_policy, index_policy, cudf::get_default_stream(), mr);
+  return detail::gather(source_table, gather_map, bounds_policy, index_policy, stream, mr);
 }
 
 }  // namespace cudf

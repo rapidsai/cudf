@@ -78,7 +78,7 @@ TEST_F(GatherTestStr, GatherSlicedStringsColumn)
 
 TEST_F(GatherTestStr, Gather)
 {
-  std::vector<const char*> h_strings{"eee", "bb", "", "aa", "bbb", "ééé"};
+  std::vector<char const*> h_strings{"eee", "bb", "", "aa", "bbb", "ééé"};
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   cudf::table_view source_table({strings});
 
@@ -91,7 +91,7 @@ TEST_F(GatherTestStr, Gather)
                                       cudf::get_default_stream(),
                                       rmm::mr::get_current_device_resource());
 
-  std::vector<const char*> h_expected;
+  std::vector<char const*> h_expected;
   std::vector<int32_t> expected_validity;
   for (auto itr = h_map.begin(); itr != h_map.end(); ++itr) {
     auto index = *itr;
@@ -110,7 +110,7 @@ TEST_F(GatherTestStr, Gather)
 
 TEST_F(GatherTestStr, GatherDontCheckOutOfBounds)
 {
-  std::vector<const char*> h_strings{"eee", "bb", "", "aa", "bbb", "ééé"};
+  std::vector<char const*> h_strings{"eee", "bb", "", "aa", "bbb", "ééé"};
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   cudf::table_view source_table({strings});
 
@@ -123,7 +123,7 @@ TEST_F(GatherTestStr, GatherDontCheckOutOfBounds)
                                       cudf::get_default_stream(),
                                       rmm::mr::get_current_device_resource());
 
-  std::vector<const char*> h_expected;
+  std::vector<char const*> h_expected;
   for (auto itr = h_map.begin(); itr != h_map.end(); ++itr) {
     h_expected.push_back(h_strings[*itr]);
   }

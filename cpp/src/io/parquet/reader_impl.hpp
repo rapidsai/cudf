@@ -24,8 +24,6 @@
 #include "parquet_gpu.hpp"
 #include "reader_impl_helpers.hpp"
 
-#include <io/utilities/column_buffer.hpp>
-
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>
@@ -38,6 +36,7 @@
 #include <vector>
 
 namespace cudf::io::detail::parquet {
+
 /**
  * @brief Implementation for Parquet reader
  */
@@ -182,6 +181,14 @@ class reader::impl {
   void allocate_nesting_info();
 
   /**
+   * @brief Allocate space for use when decoding definition/repetition levels.
+   *
+   * One large contiguous buffer of data allocated and
+   * distributed among the PageInfo structs.
+   */
+  void allocate_level_decode_space();
+
+  /**
    * @brief Read a chunk of data and return an output table.
    *
    * This function is called internally and expects all preprocessing steps have already been done.
@@ -214,6 +221,13 @@ class reader::impl {
   void allocate_columns(size_t skip_rows, size_t num_rows, bool uses_custom_row_bounds);
 
   /**
+   * @brief Calculate per-page offsets for string data
+   *
+   * @return Vector of total string data sizes for each column
+   */
+  std::vector<size_t> calculate_page_string_offsets();
+
+  /**
    * @brief Converts the page data and outputs to columns.
    *
    * @param skip_rows Minimum number of rows from start
@@ -232,10 +246,10 @@ class reader::impl {
   std::vector<input_column_info> _input_columns;
 
   // Buffers for generating output columns
-  std::vector<column_buffer> _output_buffers;
+  std::vector<inline_column_buffer> _output_buffers;
 
   // Buffers copied from `_output_buffers` after construction for reuse
-  std::vector<column_buffer> _output_buffers_template;
+  std::vector<inline_column_buffer> _output_buffers_template;
 
   // _output_buffers associated schema indices
   std::vector<int> _output_column_schemas;

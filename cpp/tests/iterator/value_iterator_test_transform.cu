@@ -25,7 +25,7 @@ struct TransformedIteratorTest : public IteratorTest<int8_t> {};
 // cudf::detail::make_null_replacement_iterator(col, T{0})
 TEST_F(TransformedIteratorTest, null_iterator_upcast)
 {
-  const int column_size{1000};
+  int const column_size{1000};
   using T        = int8_t;
   using T_upcast = int64_t;
   T init{0};
@@ -67,7 +67,7 @@ TEST_F(TransformedIteratorTest, null_iterator_upcast)
 //        cudf::detail::transformer_squared<T_upcast>)
 TEST_F(TransformedIteratorTest, null_iterator_square)
 {
-  const int column_size{1000};
+  int const column_size{1000};
   using T        = int8_t;
   using T_upcast = int64_t;
   T init{0};
@@ -109,7 +109,7 @@ TEST_F(TransformedIteratorTest, large_size_reduction)
 {
   using T = int64_t;
 
-  const int column_size{1000000};
+  int const column_size{1000000};
   const T init{0};
 
   // data and valid arrays

@@ -32,7 +32,7 @@ struct TextStemmerTest : public cudf::test::BaseFixture {};
 
 TEST_F(TextStemmerTest, PorterStemmer)
 {
-  std::vector<const char*> h_strings{"abandon",
+  std::vector<char const*> h_strings{"abandon",
                                      nullptr,
                                      "abbey",
                                      "cleans",
@@ -58,7 +58,7 @@ TEST_F(TextStemmerTest, PorterStemmer)
 
 TEST_F(TextStemmerTest, IsLetterIndex)
 {
-  std::vector<const char*> h_strings{"abandon",
+  std::vector<char const*> h_strings{"abandon",
                                      nullptr,
                                      "abbey",
                                      "cleans",
@@ -117,7 +117,7 @@ TEST_F(TextStemmerTest, IsLetterIndex)
 
 TEST_F(TextStemmerTest, IsLetterIndices)
 {
-  std::vector<const char*> h_strings{"abandon",
+  std::vector<char const*> h_strings{"abandon",
                                      nullptr,
                                      "abbey",
                                      "cleans",

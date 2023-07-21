@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,7 +87,7 @@ std::filesystem::path get_cache_dir()
     try {
       // `mkdir -p` the kernel cache path if it doesn't exist
       std::filesystem::create_directories(kernel_cache_path);
-    } catch (const std::exception& e) {
+    } catch (std::exception const& e) {
       // if directory creation fails for any reason, return empty path
       return std::filesystem::path();
     }

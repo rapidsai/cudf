@@ -127,7 +127,7 @@ TYPED_TEST(groupby_collect_list_test, CollectListsWithNullExclusion)
   using LCW = cudf::test::lists_column_wrapper<V, int32_t>;
 
   cudf::test::fixed_width_column_wrapper<K, int32_t> keys{1, 1, 2, 2, 3, 3, 4, 4};
-  const bool validity_mask[] = {true, false, false, true, true, true, false, false};
+  bool const validity_mask[] = {true, false, false, true, true, true, false, false};
   LCW values{{{1, 2}, {3, 4}, {5, 6, 7}, LCW{}, {9, 10}, {11}, {20, 30, 40}, LCW{}}, validity_mask};
 
   cudf::test::fixed_width_column_wrapper<K, int32_t> expect_keys{1, 2, 3, 4};

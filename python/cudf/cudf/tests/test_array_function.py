@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 import numpy as np
 import pandas as pd
 import pytest
@@ -94,15 +94,26 @@ def test_array_func_missing_cudf_dataframe(pd_df, func):
         func(cudf_df)
 
 
-# we only implement sum among all numpy non-ufuncs
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize("np_ar", [np.random.random(100)])
-@pytest.mark.parametrize("func", [lambda x: np.sum(x), lambda x: np.dot(x, x)])
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda x: np.mean(x),
+        lambda x: np.sum(x),
+        lambda x: np.var(x, ddof=1),
+        lambda x: np.unique(x),
+        lambda x: np.dot(x, x),
+    ],
+)
 def test_array_func_cudf_index(np_ar, func):
     cudf_index = cudf.core.index.as_index(cudf.Series(np_ar))
     expect = func(np_ar)
     got = func(cudf_index)
-    assert_eq(expect, got)
+    if np.isscalar(expect):
+        assert_eq(expect, got)
+    else:
+        assert_eq(expect, got.to_numpy())
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)

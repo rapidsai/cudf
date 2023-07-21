@@ -30,7 +30,7 @@
 
 struct StringsTranslateTest : public cudf::test::BaseFixture {};
 
-std::pair<cudf::char_utf8, cudf::char_utf8> make_entry(const char* from, const char* to)
+std::pair<cudf::char_utf8, cudf::char_utf8> make_entry(char const* from, char const* to)
 {
   cudf::char_utf8 in  = 0;
   cudf::char_utf8 out = 0;
@@ -41,7 +41,7 @@ std::pair<cudf::char_utf8, cudf::char_utf8> make_entry(const char* from, const c
 
 TEST_F(StringsTranslateTest, Translate)
 {
-  std::vector<const char*> h_strings{"eee ddd", "bb cc", nullptr, "", "aa", "débd"};
+  std::vector<char const*> h_strings{"eee ddd", "bb cc", nullptr, "", "aa", "débd"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
@@ -52,7 +52,7 @@ TEST_F(StringsTranslateTest, Translate)
     make_entry("b", 0), make_entry("a", "A"), make_entry("é", "E"), make_entry("e", "_")};
   auto results = cudf::strings::translate(strings_view, translate_table);
 
-  std::vector<const char*> h_expected{"___ ddd", " cc", nullptr, "", "AA", "dEd"};
+  std::vector<char const*> h_expected{"___ ddd", " cc", nullptr, "", "AA", "dEd"};
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
     h_expected.end(),
@@ -74,7 +74,7 @@ TEST_F(StringsTranslateTest, ZeroSizeStringsColumn)
 
 TEST_F(StringsTranslateTest, FilterCharacters)
 {
-  std::vector<const char*> h_strings{"eee ddd", "bb cc", nullptr, "", "12309", "débd"};
+  std::vector<char const*> h_strings{"eee ddd", "bb cc", nullptr, "", "12309", "débd"};
   auto validity =
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end(), validity);

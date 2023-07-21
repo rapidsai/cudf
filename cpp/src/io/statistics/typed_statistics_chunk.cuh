@@ -42,7 +42,7 @@ namespace io {
  */
 class union_member {
   template <typename U, typename V>
-  using reference_type = std::conditional_t<std::is_const_v<U>, const V&, V&>;
+  using reference_type = std::conditional_t<std::is_const_v<U>, V const&, V&>;
 
  public:
   template <typename T, typename U>
@@ -127,7 +127,7 @@ struct typed_statistics_chunk<T, true> {
   {
   }
 
-  __device__ void reduce(const T& elem)
+  __device__ void reduce(T const& elem)
   {
     non_nulls++;
     minimum_value = thrust::min<E>(minimum_value, detail::extrema_type<T>::convert(elem));
@@ -136,7 +136,7 @@ struct typed_statistics_chunk<T, true> {
     has_minmax = true;
   }
 
-  __device__ void reduce(const statistics_chunk& chunk)
+  __device__ void reduce(statistics_chunk const& chunk)
   {
     if (chunk.has_minmax) {
       minimum_value = thrust::min<E>(minimum_value, union_member::get<E>(chunk.min_value));
@@ -166,7 +166,7 @@ struct typed_statistics_chunk<T, false> {
   {
   }
 
-  __device__ void reduce(const T& elem)
+  __device__ void reduce(T const& elem)
   {
     non_nulls++;
     minimum_value = thrust::min<E>(minimum_value, detail::extrema_type<T>::convert(elem));
@@ -174,7 +174,7 @@ struct typed_statistics_chunk<T, false> {
     has_minmax    = true;
   }
 
-  __device__ void reduce(const statistics_chunk& chunk)
+  __device__ void reduce(statistics_chunk const& chunk)
   {
     if (chunk.has_minmax) {
       minimum_value = thrust::min<E>(minimum_value, union_member::get<E>(chunk.min_value));
@@ -236,7 +236,7 @@ __inline__ __device__ typed_statistics_chunk<T, include_aggregate> block_reduce(
  */
 template <typename T, bool include_aggregate>
 __inline__ __device__ statistics_chunk
-get_untyped_chunk(const typed_statistics_chunk<T, include_aggregate>& chunk)
+get_untyped_chunk(typed_statistics_chunk<T, include_aggregate> const& chunk)
 {
   using E = typename detail::extrema_type<T>::type;
   statistics_chunk stat{};

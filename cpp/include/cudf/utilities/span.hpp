@@ -246,7 +246,7 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
             std::enable_if_t<(Extent == OtherExtent || Extent == dynamic_extent) &&
                                std::is_convertible_v<OtherT (*)[], T (*)[]>,
                              void>* = nullptr>
-  constexpr host_span(const host_span<OtherT, OtherExtent>& other) noexcept
+  constexpr host_span(host_span<OtherT, OtherExtent> const& other) noexcept
     : base(other.data(), other.size())
   {
   }
@@ -313,7 +313,7 @@ struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Ex
             std::enable_if_t<(Extent == OtherExtent || Extent == dynamic_extent) &&
                                std::is_convertible_v<OtherT (*)[], T (*)[]>,
                              void>* = nullptr>
-  constexpr device_span(const device_span<OtherT, OtherExtent>& other) noexcept
+  constexpr device_span(device_span<OtherT, OtherExtent> const& other) noexcept
     : base(other.data(), other.size())
   {
   }

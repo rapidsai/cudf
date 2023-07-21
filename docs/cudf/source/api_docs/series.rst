@@ -44,6 +44,7 @@ Conversion
    :toctree: api/
 
    Series.astype
+   Series.convert_dtypes
    Series.copy
    Series.to_list
    Series.__array__

@@ -16,7 +16,6 @@
 
 #include <join/join_common_utils.cuh>
 
-#include <cudf/detail/join.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
@@ -28,8 +27,6 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <cuco/static_map.cuh>
-
-#include <cuda/functional>
 
 #include <type_traits>
 
@@ -108,7 +105,7 @@ struct strong_index_comparator_adapter {
 /**
  * @brief Build a row bitmask for the input table.
  *
- * The output bitmask will have invalid bits corresponding to the the input rows having nulls (at
+ * The output bitmask will have invalid bits corresponding to the input rows having nulls (at
  * any nested level) and vice versa.
  *
  * @param input The input table
@@ -192,8 +189,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
   {
     auto const haystack_it = cudf::detail::make_counting_transform_iterator(
       size_type{0},
-      cuda::proclaim_return_type<cuco::pair<lhs_index_type&, size_type&>>(
-        [] __device__(auto const idx) { return cuco::make_pair(lhs_index_type{idx}, 0); }));
+      [] __device__(auto const idx) { return cuco::make_pair(lhs_index_type{idx}, 0); });
 
     auto const hasher = cudf::experimental::row::hash::row_hasher(preprocessed_haystack);
     auto const d_hasher =
@@ -263,9 +259,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
   // Check existence for each row of the needles table in the haystack table.
   {
     auto const needles_it = cudf::detail::make_counting_transform_iterator(
-      size_type{0}, cuda::proclaim_return_type<rhs_index_type>([] __device__(auto const idx) {
-        return rhs_index_type{idx};
-      }));
+      size_type{0}, [] __device__(auto const idx) { return rhs_index_type{idx}; });
 
     auto const hasher = cudf::experimental::row::hash::row_hasher(preprocessed_needles);
     auto const d_hasher =

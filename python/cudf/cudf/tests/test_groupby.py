@@ -7,6 +7,7 @@ import operator
 import string
 import textwrap
 from decimal import Decimal
+from functools import partial
 
 import numpy as np
 import pandas as pd
@@ -218,20 +219,22 @@ def test_groupby_getitem_getattr(as_index):
     pdf = pd.DataFrame({"x": [1, 3, 1], "y": [1, 2, 3], "z": [1, 4, 5]})
     gdf = cudf.from_pandas(pdf)
     assert_groupby_results_equal(
-        pdf.groupby("x")["y"].sum(),
-        gdf.groupby("x")["y"].sum(),
+        pdf.groupby("x", as_index=as_index)["y"].sum(),
+        gdf.groupby("x", as_index=as_index)["y"].sum(),
         as_index=as_index,
         by="x",
     )
     assert_groupby_results_equal(
-        pdf.groupby("x").y.sum(),
-        gdf.groupby("x").y.sum(),
+        pdf.groupby("x", as_index=as_index).y.sum(),
+        gdf.groupby("x", as_index=as_index).y.sum(),
         as_index=as_index,
         by="x",
     )
     assert_groupby_results_equal(
-        pdf.groupby("x")[["y"]].sum(),
-        gdf.groupby("x")[["y"]].sum(),
+        pdf.groupby("x", as_index=as_index)[["y"]].sum(),
+        gdf.groupby("x", as_index=as_index)[["y"]].sum(),
+        as_index=as_index,
+        by="x",
     )
     assert_groupby_results_equal(
         pdf.groupby(["x", "y"], as_index=as_index).sum(),
@@ -569,6 +572,25 @@ def test_groupby_apply_caching():
     run_groupby_apply_jit_test(data, f, ["a"])
 
     assert precompiled.currsize == 3
+
+
+def test_groupby_apply_no_bytecode_fallback():
+    # tests that a function which contains no bytecode
+    # attribute, but would still be executable using
+    # the iterative groupby apply approach, still works.
+
+    gdf = cudf.DataFrame({"a": [0, 1, 1], "b": [1, 2, 3]})
+    pdf = gdf.to_pandas()
+
+    def f(group):
+        return group.sum()
+
+    part = partial(f)
+
+    expect = pdf.groupby("a").apply(part)
+    got = gdf.groupby("a").apply(part, engine="auto")
+
+    assert_groupby_results_equal(expect, got)
 
 
 @pytest.mark.parametrize("func", [lambda group: group.x + group.y])
@@ -1306,11 +1328,6 @@ def test_groupby_quantile(request, interpolation, q):
 
     pdresult = pdg.quantile(q, interpolation=interpolation)
     gdresult = gdg.quantile(q, interpolation=interpolation)
-
-    # There's a lot left to add to python bindings like index name
-    # so this is a temporary workaround
-    pdresult = pdresult["y"].reset_index(drop=True)
-    gdresult = gdresult["y"].reset_index(drop=True)
 
     assert_groupby_results_equal(pdresult, gdresult)
 
@@ -2117,6 +2134,35 @@ def test_groupby_rank_fails():
     )
     with pytest.raises(NotImplementedError):
         gdf.groupby(["a"]).rank(method="min", axis=1)
+
+
+@pytest.mark.parametrize(
+    "with_nan", [False, True], ids=["just-NA", "also-NaN"]
+)
+@pytest.mark.parametrize("dropna", [False, True], ids=["keepna", "dropna"])
+@pytest.mark.parametrize(
+    "duplicate_index", [False, True], ids=["rangeindex", "dupindex"]
+)
+def test_groupby_scan_null_keys(with_nan, dropna, duplicate_index):
+    key_col = [None, 1, 2, None, 3, None, 3, 1, None, 1]
+    if with_nan:
+        df = pd.DataFrame(
+            {"key": pd.Series(key_col, dtype="float32"), "value": range(10)}
+        )
+    else:
+        df = pd.DataFrame(
+            {"key": pd.Series(key_col, dtype="Int32"), "value": range(10)}
+        )
+
+    if duplicate_index:
+        # Non-default index with duplicates
+        df.index = [1, 2, 3, 1, 3, 2, 4, 1, 6, 10]
+
+    cdf = cudf.from_pandas(df)
+
+    expect = df.groupby("key", dropna=dropna).cumsum()
+    got = cdf.groupby("key", dropna=dropna).cumsum()
+    assert_eq(expect, got)
 
 
 def test_groupby_mix_agg_scan():
@@ -3044,6 +3090,23 @@ def test_groupby_by_index_names(index_names):
     )
 
 
+@pytest.mark.parametrize(
+    "groups", ["a", "b", "c", ["a", "c"], ["a", "b", "c"]]
+)
+def test_group_by_pandas_compat(groups):
+    with cudf.option_context("mode.pandas_compatible", True):
+        df = cudf.DataFrame(
+            {
+                "a": [1, 3, 2, 3, 3],
+                "b": ["x", "a", "y", "z", "a"],
+                "c": [10, 13, 11, 12, 12],
+            }
+        )
+        pdf = df.to_pandas()
+
+        assert_eq(pdf.groupby(groups).max(), df.groupby(groups).max())
+
+
 class TestSample:
     @pytest.fixture(params=["default", "rangeindex", "intindex", "strindex"])
     def index(self, request):
@@ -3055,7 +3118,7 @@ class TestSample:
                 [2, 3, 4, 1, 0, 5, 6, 8, 7, 9, 10, 13], dtype="int32"
             )
         elif request.param == "strindex":
-            return cudf.StringIndex(list(string.ascii_lowercase[:n]))
+            return cudf.Index(list(string.ascii_lowercase[:n]))
         elif request.param == "default":
             return None
 
@@ -3202,3 +3265,40 @@ class TestHeadTail:
         else:
             actual = df.groupby("a").tail(n=n, preserve_order=preserve_order)
         assert_eq(actual, expected)
+
+
+def test_head_tail_empty():
+    # GH #13397
+
+    values = [1, 2, 3]
+    pdf = pd.DataFrame({}, index=values)
+    df = cudf.DataFrame({}, index=values)
+
+    expected = pdf.groupby(pd.Series(values)).head()
+    got = df.groupby(cudf.Series(values)).head()
+    assert_eq(expected, got)
+
+    expected = pdf.groupby(pd.Series(values)).tail()
+    got = df.groupby(cudf.Series(values)).tail()
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "groups", ["a", "b", "c", ["a", "c"], ["a", "b", "c"]]
+)
+@pytest.mark.parametrize("sort", [True, False])
+def test_group_by_pandas_sort_order(groups, sort):
+    with cudf.option_context("mode.pandas_compatible", True):
+        df = cudf.DataFrame(
+            {
+                "a": [10, 1, 10, 3, 2, 1, 3, 3],
+                "b": [5, 6, 7, 1, 2, 3, 4, 9],
+                "c": [20, 20, 10, 11, 13, 11, 12, 12],
+            }
+        )
+        pdf = df.to_pandas()
+
+        assert_eq(
+            pdf.groupby(groups, sort=sort).sum(),
+            df.groupby(groups, sort=sort).sum(),
+        )
