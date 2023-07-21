@@ -1,1 +1,96 @@
-../../devcontainer.json
+{
+  "shutdownAction": "stopContainer",
+
+  "build": {
+    "context": "${localWorkspaceFolder}/.devcontainer",
+    "dockerfile": "${localWorkspaceFolder}/.devcontainer/Dockerfile",
+    "args": {
+      "CUDA": "12.0",
+      "LLVM": "16",
+      "PYTHON_PACKAGE_MANAGER": "pip"
+    }
+  },
+  "hostRequirements": {
+    "gpu": true
+  },
+
+  "features": {
+    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:23.8": {}
+  },
+
+  "overrideFeatureInstallOrder": [
+    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils"
+  ],
+
+  "initializeCommand": [
+    "/bin/bash", "-c", "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config/pip,local/${localWorkspaceFolderBasename}/single}"
+  ],
+
+  "updateContentCommand": [
+    "/bin/bash",
+    "-c",
+    "mkdir -m 0755 -p ~/.config/clangd && cp -n /etc/skel/.config/clangd/config.yaml ~/.config/clangd/config.yaml"
+  ],
+
+  "containerEnv": {
+    "PYTHONSAFEPATH": "true",
+    "PYTHONUNBUFFERED": "true",
+    "DEFAULT_VIRTUAL_ENV": "rapids"
+  },
+
+  "workspaceFolder": "/home/coder",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/home/coder/${localWorkspaceFolderBasename},type=bind,consistency=consistent",
+  "mounts": [
+    "source=${localWorkspaceFolder}/../.aws,target=/home/coder/.aws,type=bind,consistency=consistent",
+    "source=${localWorkspaceFolder}/../.cache,target=/home/coder/.cache,type=bind,consistency=consistent",
+    "source=${localWorkspaceFolder}/../.config,target=/home/coder/.config,type=bind,consistency=consistent",
+    "source=${localWorkspaceFolder}/../.local/${localWorkspaceFolderBasename}/single,target=/home/coder/.local,type=bind,consistency=consistent"
+  ],
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "llvm-vs-code-extensions.vscode-clangd",
+        "mutantdino.resourcemonitor",
+        "ms-vscode.cpptools",
+        "nvidia.nsight-vscode-edition",
+        "seaube.clangformat",
+        "tamasfe.even-better-toml"
+      ],
+      "settings": {
+        "C_Cpp.vcpkg.enabled": false,
+        "C_Cpp.formatting": "disabled",
+        "C_Cpp.autocomplete": "disabled",
+        "C_Cpp.errorSquiggles": "disabled",
+        "C_Cpp.intelliSenseEngine": "disabled",
+        "C_Cpp.configurationWarnings": "disabled",
+        "C_Cpp.autoAddFileAssociations": false,
+        "clang-format.fallbackStyle": "none",
+        "files.trimFinalNewlines": true,
+        "files.insertFinalNewline": true,
+        "files.trimTrailingWhitespace": true,
+        "files.associations": {
+          "*.cu": "cuda-cpp",
+          "*.cuh": "cuda-cpp",
+          "**/libcudacxx/include/**/*": "cpp",
+          "**/libcudacxx-src/include/**/*": "cpp"
+        },
+        "files.watcherExclude": {
+          "**/build/**": true,
+          "**/_skbuild/**": true,
+          "**/target/**": true
+        },
+        "python.linting.flake8Enabled": true,
+        "[c]": {
+          "editor.defaultFormatter": "seaube.clangformat"
+        },
+        "[cpp]": {
+          "editor.defaultFormatter": "seaube.clangformat"
+        },
+        "[cuda-cpp]": {
+          "editor.defaultFormatter": "seaube.clangformat"
+        }
+      }
+    }
+  }
+}
