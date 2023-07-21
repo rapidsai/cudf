@@ -5632,7 +5632,7 @@ TEST_F(ParquetMetadataReaderTest, TestBasic)
   auto filepath = temp_env->get_temp_filepath("MetadataTest.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&expected_metadata);
+      .metadata(std::move(expected_metadata));
   cudf::io::write_parquet(out_opts);
 
   auto meta = read_parquet_metadata(cudf::io::source_info{filepath});
@@ -5685,7 +5685,7 @@ TEST_F(ParquetMetadataReaderTest, TestNested)
   auto filepath = temp_env->get_temp_filepath("MetadataTest.orc");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&expected_metadata);
+      .metadata(std::move(expected_metadata));
   cudf::io::write_parquet(out_opts);
 
   auto meta = read_parquet_metadata(cudf::io::source_info{filepath});

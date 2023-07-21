@@ -451,7 +451,7 @@ static parquet_column_schema walk_schema(aggregate_reader_metadata const* mt, in
     sch.name, static_cast<parquet::TypeKind>(sch.type), std::move(children)};
 }
 
-parquet_metadata read_parquet_metadata(std::vector<std::unique_ptr<datasource>> const& sources)
+parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> const> sources)
 {
   // Open and parse the source dataset metadata
   auto metadata = aggregate_reader_metadata(sources);
