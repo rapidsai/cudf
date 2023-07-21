@@ -4861,7 +4861,7 @@ class StringMethods(ColumnMethods):
         ----------
         n : int
             The degree of the n-gram (number of consecutive characters).
-            Default is 5. Minimum is 5.
+            Default is 5.
         as_list : bool
             Set to True to return the hashes in a list column where each
             list element is the hashes for each string.
@@ -4870,7 +4870,7 @@ class StringMethods(ColumnMethods):
         --------
         >>> import cudf
         >>> str_series = cudf.Series(['abcdefg','stuvwxyz'])
-        >>> str_series.str.hash_character_ngrams(5,True)
+        >>> str_series.str.hash_character_ngrams(5, True)
         0               [3902511862, 570445242, 4202475763]
         1    [556054766, 3166857694, 3760633458, 192452857]
         dtype: list
@@ -5335,6 +5335,34 @@ class StringMethods(ColumnMethods):
             )
         return self._return_or_inplace(
             libstrings.minhash(self._column, seeds_column, n, method)
+        )
+
+    def jaccard_index(self, input: cudf.Series, width: int) -> SeriesOrIndex:
+        """
+        Compute the Jaccard index between this column and the given
+        input strings column.
+
+        Parameters
+        ----------
+        input : Series
+            The input strings column to compute the Jaccard index against.
+            Must have the same number of strings as this column.
+        width : int
+            The number of characters for the sliding window calculation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> str1 = cudf.Series(["the brown dog", "jumped about"])
+        >>> str2 = cudf.Series(["the black cat", "jumped around"])
+        >>> str1.str.jaccard_index(str2, 5)
+        0    0.058824
+        1    0.307692
+        dtype: float32
+        """
+
+        return self._return_or_inplace(
+            libstrings.jaccard_index(self._column, input._column, width),
         )
 
 
