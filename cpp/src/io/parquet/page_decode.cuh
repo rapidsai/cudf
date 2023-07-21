@@ -921,14 +921,13 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
   } else if (encoding == Encoding::RLE) {  // V1 header with RLE encoding
     if (cur + 4 < end) {
       len = 4 + (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);
+      init_rle(cur + 4, cur + len);
       cur += 4;
+      s->abs_lvl_start[lvl] = cur;
     } else {
       len      = 0;
       s->error = 2;
     }
-    s->abs_lvl_start[lvl] = cur;
-    // subtract 4 because we've already incremented cur by 4
-    if (s->error == 0) { init_rle(cur, cur + len - 4); }
   } else if (encoding == Encoding::BIT_PACKED) {
     len                       = (s->page.num_input_values * level_bits + 7) >> 3;
     s->initial_rle_run[lvl]   = ((s->page.num_input_values + 7) >> 3) * 2 + 1;  // literal run
