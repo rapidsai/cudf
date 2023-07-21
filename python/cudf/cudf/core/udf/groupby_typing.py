@@ -17,9 +17,9 @@ from numba.np import numpy_support
 
 index_default_type = types.int64
 group_size_type = types.int64
-SUPPORTED_GROUPBY_NUMBA_TYPES = [types.int64, types.float64]
+SUPPORTED_GROUPBY_NUMBA_TYPES = [types.int32, types.int64, types.float64]
 SUPPORTED_GROUPBY_NUMPY_TYPES = [
-    numpy_support.as_dtype(dt) for dt in [types.int64, types.float64]
+    numpy_support.as_dtype(dt) for dt in SUPPORTED_GROUPBY_NUMBA_TYPES
 ]
 
 
@@ -133,6 +133,23 @@ def _register_cuda_idx_reduction_caller(funcname, inputty):
     call_cuda_functions[funcname.lower()][type_key] = caller
 
 
+class GroupSum(AbstractTemplate):
+    key = "GroupType.sum"
+
+    def generic(self, args, kws):
+        if self.this.group_scalar_type in types.integer_domain:
+            retty = types.int64
+        else:
+            retty = self.this.group_scalar_type
+        return nb_signature(retty, recvr=self.this)
+
+
+def _group_sum_attr(self, mod):
+    return types.BoundFunction(
+        GroupSum, GroupType(mod.group_scalar_type, mod.index_type)
+    )
+
+
 def _create_reduction_attr(name, retty=None):
     class Attr(AbstractTemplate):
         key = name
@@ -173,7 +190,7 @@ class GroupAttr(AttributeTemplate):
 
     resolve_max = _create_reduction_attr("GroupType.max")
     resolve_min = _create_reduction_attr("GroupType.min")
-    resolve_sum = _create_reduction_attr("GroupType.sum")
+    resolve_sum = _group_sum_attr
 
     resolve_size = _create_reduction_attr(
         "GroupType.size", retty=group_size_type
@@ -201,13 +218,15 @@ class GroupAttr(AttributeTemplate):
 for ty in SUPPORTED_GROUPBY_NUMBA_TYPES:
     _register_cuda_reduction_caller("Max", ty, ty)
     _register_cuda_reduction_caller("Min", ty, ty)
-    _register_cuda_reduction_caller("Sum", ty, ty)
     _register_cuda_reduction_caller("Mean", ty, types.float64)
     _register_cuda_reduction_caller("Std", ty, types.float64)
     _register_cuda_reduction_caller("Var", ty, types.float64)
     _register_cuda_idx_reduction_caller("IdxMax", ty)
     _register_cuda_idx_reduction_caller("IdxMin", ty)
 
+_register_cuda_reduction_caller("Sum", types.int32, types.int64)
+_register_cuda_reduction_caller("Sum", types.int64, types.int64)
+_register_cuda_reduction_caller("Sum", types.float64, types.float64)
 
 for attr in ("group_data", "index", "size"):
     make_attribute_wrapper(GroupType, attr, attr)
