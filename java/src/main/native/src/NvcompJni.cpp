@@ -20,19 +20,20 @@
 
 #include "check_nvcomp_output_sizes.hpp"
 #include "cudf_jni_apis.hpp"
+#include "jni_utils.hpp"
 
 namespace {
 
 constexpr char const *NVCOMP_ERROR_CLASS = "ai/rapids/cudf/nvcomp/NvcompException";
 constexpr char const *NVCOMP_CUDA_ERROR_CLASS = "ai/rapids/cudf/nvcomp/NvcompCudaException";
-constexpr char const *ILLEGAL_ARG_CLASS = "java/lang/IllegalArgumentException";
 constexpr char const *UNSUPPORTED_CLASS = "java/lang/UnsupportedOperationException";
 
 void check_nvcomp_status(JNIEnv *env, nvcompStatus_t status) {
   switch (status) {
     case nvcompSuccess: break;
     case nvcompErrorInvalidValue:
-      cudf::jni::throw_java_exception(env, ILLEGAL_ARG_CLASS, "nvcomp invalid value");
+      cudf::jni::throw_java_exception(env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
+                                      "nvcomp invalid value");
       break;
     case nvcompErrorNotSupported:
       cudf::jni::throw_java_exception(env, UNSUPPORTED_CLASS, "nvcomp unsupported");

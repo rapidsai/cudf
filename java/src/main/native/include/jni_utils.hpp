@@ -29,14 +29,16 @@ namespace jni {
 
 constexpr jint MINIMUM_JNI_VERSION = JNI_VERSION_1_6;
 
-constexpr char const *CUDA_ERROR_CLASS = "ai/rapids/cudf/CudaException";
-constexpr char const *CUDA_FATAL_ERROR_CLASS = "ai/rapids/cudf/CudaFatalException";
-constexpr char const *CUDF_ERROR_CLASS = "ai/rapids/cudf/CudfException";
-constexpr char const *CUDF_DTYPE_ERROR_CLASS = "ai/rapids/cudf/CudfException";
-constexpr char const *INDEX_OOB_CLASS = "java/lang/ArrayIndexOutOfBoundsException";
-constexpr char const *ILLEGAL_ARG_CLASS = "java/lang/IllegalArgumentException";
-constexpr char const *NPE_CLASS = "java/lang/NullPointerException";
-constexpr char const *OOM_CLASS = "java/lang/OutOfMemoryError";
+// Wrapper for native C++ exception classes, which also support stacktrace.
+constexpr char const *CUDA_EXCEPTION_CLASS = "ai/rapids/cudf/CudaException";
+constexpr char const *CUDA_FATAL_EXCEPTION_CLASS = "ai/rapids/cudf/CudaFatalException";
+constexpr char const *CUDF_EXCEPTION_CLASS = "ai/rapids/cudf/CudfException";
+
+// Java exceptions classes.
+constexpr char const *INDEX_OOB_EXCEPTION_CLASS = "java/lang/ArrayIndexOutOfBoundsException";
+constexpr char const *ILLEGAL_ARG_EXCEPTION_CLASS = "java/lang/IllegalArgumentException";
+constexpr char const *NPE_EXCEPTION_CLASS = "java/lang/NullPointerException";
+constexpr char const *OOM_EXCEPTION_CLASS = "java/lang/OutOfMemoryError";
 
 /**
  * @brief indicates that a JNI error of some kind was thrown and the main
@@ -245,20 +247,20 @@ public:
 
   N_TYPE operator[](int index) const {
     if (orig == NULL) {
-      throw_java_exception(env, NPE_CLASS, "pointer is NULL");
+      throw_java_exception(env, NPE_EXCEPTION_CLASS, "pointer is NULL");
     }
     if (index < 0 || index >= len) {
-      throw_java_exception(env, INDEX_OOB_CLASS, "NOT IN BOUNDS");
+      throw_java_exception(env, INDEX_OOB_EXCEPTION_CLASS, "NOT IN BOUNDS");
     }
     return data()[index];
   }
 
   N_TYPE &operator[](int index) {
     if (orig == NULL) {
-      throw_java_exception(env, NPE_CLASS, "pointer is NULL");
+      throw_java_exception(env, NPE_EXCEPTION_CLASS, "pointer is NULL");
     }
     if (index < 0 || index >= len) {
-      throw_java_exception(env, INDEX_OOB_CLASS, "NOT IN BOUNDS");
+      throw_java_exception(env, INDEX_OOB_EXCEPTION_CLASS, "NOT IN BOUNDS");
     }
     return data()[index];
   }
@@ -375,20 +377,20 @@ public:
 
   T *operator[](int index) const {
     if (data() == NULL) {
-      throw_java_exception(env, NPE_CLASS, "pointer is NULL");
+      throw_java_exception(env, NPE_EXCEPTION_CLASS, "pointer is NULL");
     }
     if (index < 0 || index >= wrapped.size()) {
-      throw_java_exception(env, INDEX_OOB_CLASS, "NOT IN BOUNDS");
+      throw_java_exception(env, INDEX_OOB_EXCEPTION_CLASS, "NOT IN BOUNDS");
     }
     return data()[index];
   }
 
   T *&operator[](int index) {
     if (data() == NULL) {
-      throw_java_exception(env, NPE_CLASS, "pointer is NULL");
+      throw_java_exception(env, NPE_EXCEPTION_CLASS, "pointer is NULL");
     }
     if (index < 0 || index >= wrapped.size()) {
-      throw_java_exception(env, INDEX_OOB_CLASS, "NOT IN BOUNDS");
+      throw_java_exception(env, INDEX_OOB_EXCEPTION_CLASS, "NOT IN BOUNDS");
     }
     return data()[index];
   }
@@ -406,7 +408,7 @@ public:
 
   void assert_no_nulls() const {
     if (std::any_of(data(), data() + size(), [](T *const ptr) { return ptr == nullptr; })) {
-      throw_java_exception(env, NPE_CLASS, "pointer is NULL");
+      throw_java_exception(env, NPE_EXCEPTION_CLASS, "pointer is NULL");
     }
   }
 
@@ -612,7 +614,7 @@ public:
 
   T get(int index) const {
     if (orig == NULL) {
-      throw_java_exception(env, NPE_CLASS, "jobjectArray pointer is NULL");
+      throw_java_exception(env, NPE_EXCEPTION_CLASS, "jobjectArray pointer is NULL");
     }
     T ret = static_cast<T>(env->GetObjectArrayElement(orig, index));
     check_java_exception(env);
@@ -621,7 +623,7 @@ public:
 
   void set(int index, const T &val) {
     if (orig == NULL) {
-      throw_java_exception(env, NPE_CLASS, "jobjectArray pointer is NULL");
+      throw_java_exception(env, NPE_EXCEPTION_CLASS, "jobjectArray pointer is NULL");
     }
     env->SetObjectArrayElement(orig, index, val);
     check_java_exception(env);
@@ -701,7 +703,7 @@ public:
 
   native_jstring &get(int index) const {
     if (arr.is_null()) {
-      throw_java_exception(env, cudf::jni::NPE_CLASS, "jstringArray pointer is NULL");
+      throw_java_exception(env, cudf::jni::NPE_EXCEPTION_CLASS, "jstringArray pointer is NULL");
     }
     init_cache();
     return cache[index];
@@ -748,9 +750,9 @@ inline jthrowable cuda_exception(JNIEnv *const env, cudaError_t status, jthrowab
   // Call cudaDeviceSynchronize to ensure `last` did not result from an asynchronous error.
   // between two calls.
   if (status == last && last == cudaDeviceSynchronize()) {
-    ex_class_name = cudf::jni::CUDA_FATAL_ERROR_CLASS;
+    ex_class_name = cudf::jni::CUDA_FATAL_EXCEPTION_CLASS;
   } else {
-    ex_class_name = cudf::jni::CUDA_ERROR_CLASS;
+    ex_class_name = cudf::jni::CUDA_EXCEPTION_CLASS;
   }
 
   jclass ex_class = env->FindClass(ex_class_name);
@@ -832,14 +834,14 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
 #define JNI_NULL_CHECK(env, obj, error_msg, ret_val)                                               \
   {                                                                                                \
     if ((obj) == 0) {                                                                              \
-      JNI_THROW_NEW(env, cudf::jni::NPE_CLASS, error_msg, ret_val);                                \
+      JNI_THROW_NEW(env, cudf::jni::NPE_EXCEPTION_CLASS, error_msg, ret_val);                      \
     }                                                                                              \
   }
 
 #define JNI_ARG_CHECK(env, obj, error_msg, ret_val)                                                \
   {                                                                                                \
     if (!(obj)) {                                                                                  \
-      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, error_msg, ret_val);                        \
+      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, error_msg, ret_val);              \
     }                                                                                              \
   }
 
@@ -854,16 +856,16 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
   catch (const rmm::out_of_memory &e) {                                                            \
     auto what =                                                                                    \
         std::string("Could not allocate native memory: ") + (e.what() == nullptr ? "" : e.what()); \
-    JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, what.c_str(), ret_val);                         \
+    JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_EXCEPTION_CLASS, what.c_str(), ret_val);               \
   }                                                                                                \
   catch (const cudf::fatal_cuda_error &e) {                                                        \
-    JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_FATAL_ERROR_CLASS, e, ret_val);                      \
+    JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_FATAL_EXCEPTION_CLASS, e, ret_val);                  \
   }                                                                                                \
   catch (const cudf::cuda_error &e) {                                                              \
-    JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_ERROR_CLASS, e, ret_val);                            \
+    JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_EXCEPTION_CLASS, e, ret_val);                        \
   }                                                                                                \
   catch (const cudf::data_type_error &e) {                                                         \
-    JNI_CHECK_THROW_NEW(env, cudf::jni::CUDF_DTYPE_ERROR_CLASS, e.what(), ret_val);                \
+    JNI_CHECK_THROW_NEW(env, cudf::jni::CUDF_EXCEPTION_CLASS, e.what(), ret_val);                  \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \
     /* Double check whether the thrown exception is unrecoverable CUDA error or not. */            \
@@ -874,10 +876,10 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
     if (cudaSuccess != last && last == cudaDeviceSynchronize()) {                                  \
       auto msg = e.what() == nullptr ? std::string{""} : e.what();                                 \
       auto cuda_error = cudf::fatal_cuda_error{msg, last};                                         \
-      JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_FATAL_ERROR_CLASS, cuda_error, ret_val);           \
+      JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_FATAL_EXCEPTION_CLASS, cuda_error, ret_val);       \
     }                                                                                              \
     /* If jni_exception caught then a Java exception is pending and this will not overwrite it. */ \
     JNI_CHECK_THROW_NEW(env, class_name, e.what(), ret_val);                                       \
   }
 
-#define CATCH_STD(env, ret_val) CATCH_STD_CLASS(env, cudf::jni::CUDF_ERROR_CLASS, ret_val)
+#define CATCH_STD(env, ret_val) CATCH_STD_CLASS(env, cudf::jni::CUDF_EXCEPTION_CLASS, ret_val)

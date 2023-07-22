@@ -134,7 +134,7 @@ JNIEXPORT jbyteArray JNICALL Java_ai_rapids_cudf_Scalar_getUTF8(JNIEnv *env, jcl
     auto s = reinterpret_cast<cudf::string_scalar *>(scalar_handle);
     std::string val{s->to_string()};
     if (val.size() > 0x7FFFFFFF) {
-      cudf::jni::throw_java_exception(env, "java/lang/IllegalArgumentException",
+      cudf::jni::throw_java_exception(env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
                                       "string scalar too large");
     }
     cudf::jni::native_jbyteArray jbytes{env, reinterpret_cast<jbyte const *>(val.data()),
