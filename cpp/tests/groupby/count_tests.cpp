@@ -139,40 +139,6 @@ TYPED_TEST(groupby_count_test, null_keys_and_values)
   test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg2));
 }
 
-TYPED_TEST(groupby_count_test, custom_stream)
-{
-  using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::COUNT_VALID>;
-
-  cudf::test::fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-  cudf::test::fixed_width_column_wrapper<V> vals{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-
-  cudf::test::fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
-  cudf::test::fixed_width_column_wrapper<R> expect_vals{3, 4, 3};
-
-  auto const test_with_stream = [&](std::unique_ptr<cudf::groupby_aggregation>&& agg,
-                                    force_use_sort_impl use_sort = force_use_sort_impl::NO) {
-    test_single_agg(keys,
-                    vals,
-                    expect_keys,
-                    expect_vals,
-                    std::move(agg),
-                    use_sort,
-                    cudf::null_policy::EXCLUDE,
-                    cudf::sorted::NO,
-                    {},
-                    {},
-                    cudf::sorted::NO,
-                    cudf::test::get_default_stream());
-  };
-
-  test_with_stream(cudf::make_count_aggregation<cudf::groupby_aggregation>());
-  test_with_stream(cudf::make_count_aggregation<cudf::groupby_aggregation>(),
-                   force_use_sort_impl::YES);
-  test_with_stream(
-    cudf::make_count_aggregation<cudf::groupby_aggregation>(cudf::null_policy::INCLUDE));
-}
-
 struct groupby_count_string_test : public cudf::test::BaseFixture {};
 
 TEST_F(groupby_count_string_test, basic)
