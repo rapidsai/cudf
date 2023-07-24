@@ -32,6 +32,10 @@ struct window_bounds;
 namespace detail {
 /**
  * @brief Checks if it is possible to optimize fully UNBOUNDED window function.
+ *
+ * @return true if the window aggregation can optimized, i.e. if it is unbounded-preceding,
+ * unbounded-following, if it has a supported aggregation type, and if min_periods is 1.
+ * @return false if the window aggregation cannot be optimized.
  */
 bool can_optimize_unbounded_window(bool unbounded_preceding,
                                    bool unbounded_following,
@@ -40,6 +44,9 @@ bool can_optimize_unbounded_window(bool unbounded_preceding,
 
 /**
  * @brief Optimized bypass for fully UNBOUNDED window functions.
+ *
+ * @return the result column from running the unbounded window aggregation,
+ * via the optimized aggregation/reduction path.
  */
 std::unique_ptr<column> optimized_unbounded_window(table_view const& group_keys,
                                                    column_view const& input,
