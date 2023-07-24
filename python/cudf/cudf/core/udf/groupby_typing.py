@@ -139,6 +139,12 @@ def _register_cuda_idx_reduction_caller(funcname, inputty):
 
 
 def _group_sum_attr(self, mod):
+    """
+    `sum` is special because integer source columns
+    are promoted to int64 regardless of the width of the
+    input dtype. Floats return the source dtype.
+    """
+
     class GroupSum(AbstractTemplate):
         key = "GroupType.sum"
 
