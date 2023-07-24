@@ -2199,7 +2199,7 @@ void writer::impl::write_parquet_data_to_sink(
             auto const& enc_page = h_pages[curr_page_idx++];
 
             // skip dict pages
-            if (enc_page.page_type != PageType::DATA_PAGE) { continue; }
+            if (enc_page.page_type == PageType::DICTIONARY_PAGE) { continue; }
 
             int32_t this_page_size = enc_page.hdr_size + enc_page.max_data_size;
             // first_row_idx is relative to start of row group

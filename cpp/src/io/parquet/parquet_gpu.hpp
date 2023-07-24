@@ -421,7 +421,10 @@ struct EncPage {
   uint32_t num_leaf_values;  //!< Values in page. Different from num_rows in case of nested types
   uint32_t num_values;  //!< Number of def/rep level values in page. Includes null/empty elements in
                         //!< non-leaf levels
+  uint32_t def_lvl_bytes;        //!< Number of bytes of encoded definition level data (V2 only)
+  uint32_t rep_lvl_bytes;        //!< Number of bytes of encoded repetition level data (V2 only)
   compression_result* comp_res;  //!< Ptr to compression result
+  uint32_t num_nulls;            //!< Number of null values (V2 only) (down here for alignment)
 };
 
 /**
