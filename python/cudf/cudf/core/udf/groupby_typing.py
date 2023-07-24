@@ -17,7 +17,12 @@ from numba.np import numpy_support
 
 index_default_type = types.int64
 group_size_type = types.int64
-SUPPORTED_GROUPBY_NUMBA_TYPES = [types.int32, types.int64, types.float64]
+SUPPORTED_GROUPBY_NUMBA_TYPES = [
+    types.int32,
+    types.int64,
+    types.float32,
+    types.float64,
+]
 SUPPORTED_GROUPBY_NUMPY_TYPES = [
     numpy_support.as_dtype(dt) for dt in SUPPORTED_GROUPBY_NUMBA_TYPES
 ]
@@ -133,21 +138,55 @@ def _register_cuda_idx_reduction_caller(funcname, inputty):
     call_cuda_functions[funcname.lower()][type_key] = caller
 
 
-class GroupSum(AbstractTemplate):
-    key = "GroupType.sum"
-
-    def generic(self, args, kws):
-        if self.this.group_scalar_type in types.integer_domain:
-            retty = types.int64
-        else:
-            retty = self.this.group_scalar_type
-        return nb_signature(retty, recvr=self.this)
-
-
 def _group_sum_attr(self, mod):
+    class GroupSum(AbstractTemplate):
+        key = "GroupType.sum"
+
+        def generic(self, args, kws):
+            if self.this.group_scalar_type in types.integer_domain:
+                retty = types.int64
+            else:
+                retty = self.this.group_scalar_type
+            return nb_signature(retty, recvr=self.this)
+
     return types.BoundFunction(
         GroupSum, GroupType(mod.group_scalar_type, mod.index_type)
     )
+
+
+def _create_summary_statistic_attr(funcname):
+    """
+    Create an attribute that implements typing for a
+    summary statistic. These attributes are invoked when
+    syntax such as `df['x'].mean()` is typed. These functions
+    all return a scalar whose type depends on the type of
+    the source column. If the source is of integer dtype,
+    the result is float64. However if the source is of
+    floating point dtype, the result is the source dtype
+    and is not promoted to float64.
+    Supports:
+      * mean
+      * std
+      * var
+    """
+
+    class GroupSummaryStatistic(AbstractTemplate):
+        key = f"GroupType.{funcname}"
+
+        def generic(self, args, kws):
+            if self.this.group_scalar_type in types.integer_domain:
+                retty = types.float64
+            else:
+                retty = self.this.group_scalar_type
+            return nb_signature(retty, recvr=self.this)
+
+    def _attr(self, mod):
+        return types.BoundFunction(
+            GroupSummaryStatistic,
+            GroupType(mod.group_scalar_type, mod.index_type),
+        )
+
+    return _attr
 
 
 def _create_reduction_attr(name, retty=None):
@@ -198,11 +237,9 @@ class GroupAttr(AttributeTemplate):
     resolve_count = _create_reduction_attr(
         "GroupType.count", retty=types.int64
     )
-    resolve_mean = _create_reduction_attr(
-        "GroupType.mean", retty=types.float64
-    )
-    resolve_var = _create_reduction_attr("GroupType.var", retty=types.float64)
-    resolve_std = _create_reduction_attr("GroupType.std", retty=types.float64)
+    resolve_mean = _create_summary_statistic_attr("mean")
+    resolve_var = _create_summary_statistic_attr("var")
+    resolve_std = _create_summary_statistic_attr("std")
 
     def resolve_idxmax(self, mod):
         return types.BoundFunction(
@@ -218,15 +255,30 @@ class GroupAttr(AttributeTemplate):
 for ty in SUPPORTED_GROUPBY_NUMBA_TYPES:
     _register_cuda_reduction_caller("Max", ty, ty)
     _register_cuda_reduction_caller("Min", ty, ty)
-    _register_cuda_reduction_caller("Mean", ty, types.float64)
-    _register_cuda_reduction_caller("Std", ty, types.float64)
-    _register_cuda_reduction_caller("Var", ty, types.float64)
     _register_cuda_idx_reduction_caller("IdxMax", ty)
     _register_cuda_idx_reduction_caller("IdxMin", ty)
 
 _register_cuda_reduction_caller("Sum", types.int32, types.int64)
 _register_cuda_reduction_caller("Sum", types.int64, types.int64)
+_register_cuda_reduction_caller("Sum", types.float32, types.float32)
 _register_cuda_reduction_caller("Sum", types.float64, types.float64)
+
+
+_register_cuda_reduction_caller("Mean", types.int32, types.float64)
+_register_cuda_reduction_caller("Mean", types.int64, types.float64)
+_register_cuda_reduction_caller("Mean", types.float32, types.float32)
+_register_cuda_reduction_caller("Mean", types.float64, types.float64)
+
+_register_cuda_reduction_caller("Std", types.int32, types.float64)
+_register_cuda_reduction_caller("Std", types.int64, types.float64)
+_register_cuda_reduction_caller("Std", types.float32, types.float32)
+_register_cuda_reduction_caller("Std", types.float64, types.float64)
+
+_register_cuda_reduction_caller("Var", types.int32, types.float64)
+_register_cuda_reduction_caller("Var", types.int64, types.float64)
+_register_cuda_reduction_caller("Var", types.float32, types.float32)
+_register_cuda_reduction_caller("Var", types.float64, types.float64)
+
 
 for attr in ("group_data", "index", "size"):
     make_attribute_wrapper(GroupType, attr, attr)
