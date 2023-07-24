@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "detail/optimized_unbounded_window.hpp"
 #include "detail/range_comparator_utils.cuh"
 #include "detail/range_window_bounds.hpp"
 #include "detail/rolling.cuh"
@@ -92,19 +93,6 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
 }
 
 namespace detail {
-
-/// Checks if it is possible to optimize fully UNBOUNDED window function.
-bool can_optimize_unbounded_window(bool unbounded_preceding,
-                                   bool unbounded_following,
-                                   size_type min_periods,
-                                   rolling_aggregation const& agg);
-
-/// Optimized bypass for fully UNBOUNDED window functions.
-std::unique_ptr<column> optimized_unbounded_window(table_view const& group_keys,
-                                                   column_view const& input,
-                                                   rolling_aggregation const& aggr,
-                                                   rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr);
 
 std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                column_view const& input,

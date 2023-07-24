@@ -35,10 +35,10 @@ bool can_optimize_unbounded_window(bool unbounded_preceding,
 {
   auto is_supported = [](auto const& agg) {
     switch (agg.kind) {
-      case cudf::aggregation::Kind::COUNT_ALL:
-      case cudf::aggregation::Kind::COUNT_VALID:
-      case cudf::aggregation::Kind::SUM:
-      case cudf::aggregation::Kind::MIN:
+      case cudf::aggregation::Kind::COUNT_ALL: [[fallthrough]];
+      case cudf::aggregation::Kind::COUNT_VALID: [[fallthrough]];
+      case cudf::aggregation::Kind::SUM: [[fallthrough]];
+      case cudf::aggregation::Kind::MIN: [[fallthrough]];
       case cudf::aggregation::Kind::MAX: return true;
       default:
         // COLLECT_LIST and COLLECT_SET can be added at a later date.
@@ -75,7 +75,7 @@ struct aggregation_converter {
     } else if constexpr (k == aggregation::Kind::MAX) {
       return cudf::make_max_aggregation<Base>();
     } else {
-      CUDF_FAIL("Unsupported aggregation kind: " + std::to_string(static_cast<int>(k)));
+      CUDF_FAIL("Unsupported aggregation kind for optimized unbounded windows.");
     }
   }
 };
