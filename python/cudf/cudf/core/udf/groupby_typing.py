@@ -138,57 +138,18 @@ def _register_cuda_idx_reduction_caller(funcname, inputty):
     call_cuda_functions[funcname.lower()][type_key] = caller
 
 
-def _group_sum_attr(self, mod):
-    """
-    `sum` is special because integer source columns
-    are promoted to int64 regardless of the width of the
-    input dtype. Floats return the source dtype.
-    """
-
-    class GroupSum(AbstractTemplate):
-        key = "GroupType.sum"
-
-        def generic(self, args, kws):
-            if self.this.group_scalar_type in types.integer_domain:
-                retty = types.int64
-            else:
-                retty = self.this.group_scalar_type
-            return nb_signature(retty, recvr=self.this)
-
-    return types.BoundFunction(
-        GroupSum, GroupType(mod.group_scalar_type, mod.index_type)
-    )
-
-
-def _create_summary_statistic_attr(funcname):
-    """
-    Create an attribute that implements typing for a
-    summary statistic. These attributes are invoked when
-    syntax such as `df['x'].mean()` is typed. These functions
-    all return a scalar whose type depends on the type of
-    the source column. If the source is of integer dtype,
-    the result is float64. However if the source is of
-    floating point dtype, the result is the source dtype
-    and is not promoted to float64.
-    Supports:
-      * mean
-      * std
-      * var
-    """
-
-    class GroupSummaryStatistic(AbstractTemplate):
+def _make_unary_attr(funcname):
+    class GroupUnaryReductionAttrTyping(AbstractTemplate):
         key = f"GroupType.{funcname}"
 
         def generic(self, args, kws):
-            if self.this.group_scalar_type in types.integer_domain:
-                retty = types.float64
-            else:
-                retty = self.this.group_scalar_type
-            return nb_signature(retty, recvr=self.this)
+            for retty, inputty in call_cuda_functions[funcname.lower()].keys():
+                if self.this.group_scalar_type == inputty:
+                    return nb_signature(retty, recvr=self.this)
 
     def _attr(self, mod):
         return types.BoundFunction(
-            GroupSummaryStatistic,
+            GroupUnaryReductionAttrTyping,
             GroupType(mod.group_scalar_type, mod.index_type),
         )
 
@@ -233,9 +194,13 @@ class GroupIdxMin(AbstractTemplate):
 class GroupAttr(AttributeTemplate):
     key = GroupType
 
-    resolve_max = _create_reduction_attr("GroupType.max")
-    resolve_min = _create_reduction_attr("GroupType.min")
-    resolve_sum = _group_sum_attr
+    resolve_max = _make_unary_attr("max")
+    resolve_min = _make_unary_attr("min")
+    resolve_sum = _make_unary_attr("sum")
+
+    resolve_mean = _make_unary_attr("mean")
+    resolve_var = _make_unary_attr("var")
+    resolve_std = _make_unary_attr("std")
 
     resolve_size = _create_reduction_attr(
         "GroupType.size", retty=group_size_type
@@ -243,9 +208,6 @@ class GroupAttr(AttributeTemplate):
     resolve_count = _create_reduction_attr(
         "GroupType.count", retty=types.int64
     )
-    resolve_mean = _create_summary_statistic_attr("mean")
-    resolve_var = _create_summary_statistic_attr("var")
-    resolve_std = _create_summary_statistic_attr("std")
 
     def resolve_idxmax(self, mod):
         return types.BoundFunction(
