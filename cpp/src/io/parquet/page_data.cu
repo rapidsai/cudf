@@ -147,6 +147,8 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s* s,
   uint8_t const* src8;
   uint32_t dict_pos, dict_size = s->dict_size, ofs;
 
+  printf("\nGERA_DEBUG __device__ void gpuOutputInt96Timestamp\n");
+
   if (s->dict_base) {
     // Dictionary
     dict_pos = (s->dict_bits > 0) ? sb->dict_idx[rolling_index(src_pos)] : 0;

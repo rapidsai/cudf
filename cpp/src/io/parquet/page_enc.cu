@@ -16,6 +16,7 @@
 
 #include "parquet_gpu.cuh"
 
+#include <cstdint>
 #include <io/utilities/block_utils.cuh>
 
 #include <cudf/detail/iterator.cuh>
@@ -948,6 +949,9 @@ static __device__ std::pair<duration_ns, duration_D> convert_nanoseconds(timesta
   auto const julian_days      = gregorian_days + ceil<days>(julian_calendar_epoch_diff());
 
   auto const last_day_ticks = nanosecond_ticks - gregorian_days;
+  printf("\nGERA_DEBUG static convert_nanoseconds last_day_ticks=%lld juli_days=%lld\n",
+    static_cast<uint64_t>(last_day_ticks.count()),
+    static_cast<uint64_t>(julian_days.count()));
   return {last_day_ticks, julian_days};
 }
 
@@ -1226,6 +1230,7 @@ __global__ void __launch_bounds__(128, 8)
             dst[pos + 7] = v >> 56;
           } break;
           case INT96: {
+            printf("\nGERA_DEBUG INT96 gpuEncodePages val_idx=%d\n", val_idx );
             int64_t v        = s->col.leaf_column->element<int64_t>(val_idx);
             int32_t ts_scale = s->col.ts_scale;
             if (ts_scale != 0) {
@@ -1240,13 +1245,16 @@ __global__ void __launch_bounds__(128, 8)
               switch (s->col.leaf_column->type().id()) {
                 case type_id::TIMESTAMP_SECONDS:
                 case type_id::TIMESTAMP_MILLISECONDS: {
+                  printf("\nGERA_DEBUG INT96 gpuEncodePages convert_nanoseconds TIMESTAMP_(MILLI)SECONDS\n");
                   return timestamp_ns{duration_ms{v}};
                 } break;
                 case type_id::TIMESTAMP_MICROSECONDS:
                 case type_id::TIMESTAMP_NANOSECONDS: {
+                  printf("\nGERA_DEBUG INT96 gpuEncodePages convert_nanoseconds TIMESTAMP_(MICRO/NANO)SECONDS\n");
                   return timestamp_ns{duration_us{v}};
                 } break;
               }
+              printf("\nGERA_DEBUG INT96 gpuEncodePages convert_nanoseconds return\n");
               return timestamp_ns{duration_ns{0}};
             }());
 

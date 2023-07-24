@@ -1673,7 +1673,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeParquetChunk(JNIEnv *env, 
   JNI_NULL_CHECK(env, j_table, "null table", );
   JNI_NULL_CHECK(env, j_state, "null state", );
 
-  fprintf(stderr, "GERA_DEBUG (L%d) Java_ai_rapids_cudf_Table_writeParquetChunk\n", __LINE__);
+  fprintf(stderr, "\nGERA_DEBUG (L%d) Java_ai_rapids_cudf_Table_writeParquetChunk\n", __LINE__);
 
   using namespace cudf::io;
   cudf::table_view *tview_with_empty_nullmask = reinterpret_cast<cudf::table_view *>(j_table);
