@@ -1351,8 +1351,13 @@ __global__ void __launch_bounds__(128, 8)
     }
     s->page.max_data_size = actual_data_size;
     if (not comp_in.empty()) {
-      comp_in[blockIdx.x]  = {base, actual_data_size};
-      comp_out[blockIdx.x] = {s->page.compressed_data + s->page.max_hdr_size, 0};  // size is unused
+      // V2 does not compress rep and def level data
+      size_t offset        = s->page.def_lvl_bytes + s->page.rep_lvl_bytes;
+      comp_in[blockIdx.x]  = {base + offset, actual_data_size - offset};
+      comp_out[blockIdx.x] = {s->page.compressed_data + s->page.max_hdr_size + offset,
+                              0};  // size is unused
+      // copy uncompressed bytes over
+      memcpy(s->page.compressed_data + s->page.max_hdr_size, base, offset);
     }
     pages[blockIdx.x] = s->page;
     if (not comp_results.empty()) {
@@ -1393,9 +1398,10 @@ __global__ void __launch_bounds__(decide_compression_block_size)
   for (auto page_id = lane_id; page_id < num_pages; page_id += cudf::detail::warp_size) {
     auto const& curr_page     = ck_g[warp_id].pages[page_id];
     auto const page_data_size = curr_page.max_data_size;
+    auto const lvl_bytes      = curr_page.def_lvl_bytes + curr_page.rep_lvl_bytes;
     uncompressed_data_size += page_data_size;
     if (auto comp_res = curr_page.comp_res; comp_res != nullptr) {
-      compressed_data_size += comp_res->bytes_written;
+      compressed_data_size += comp_res->bytes_written + lvl_bytes;
       if (comp_res->status != compression_status::SUCCESS) {
         atomicOr(&compression_error[warp_id], 1);
       }
@@ -1845,8 +1851,9 @@ __global__ void __launch_bounds__(128)
     }
     uncompressed_page_size = page_g.max_data_size;
     if (ck_g.is_compressed) {
+      auto const lvl_bytes = page_g.def_lvl_bytes + page_g.rep_lvl_bytes;
       hdr_start            = page_g.compressed_data;
-      compressed_page_size = (uint32_t)comp_results[blockIdx.x].bytes_written;
+      compressed_page_size = (uint32_t)comp_results[blockIdx.x].bytes_written + lvl_bytes;
       page_g.max_data_size = compressed_page_size;
     } else {
       hdr_start            = page_g.page_data;
