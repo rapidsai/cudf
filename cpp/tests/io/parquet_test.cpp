@@ -4501,6 +4501,80 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStruct)
   }
 }
 
+TEST_P(ParquetV2Test, CheckColumnOffsetIndexStructNulls)
+{
+  auto const is_v2 = GetParam();
+  auto const expected_hdr_type =
+    is_v2 ? cudf::io::parquet::PageType::DATA_PAGE_V2 : cudf::io::parquet::PageType::DATA_PAGE;
+
+  auto validity2 =
+    cudf::detail::make_counting_transform_iterator(0, [](cudf::size_type i) { return i % 2; });
+  auto validity3 = cudf::detail::make_counting_transform_iterator(
+    0, [](cudf::size_type i) { return (i % 3) != 0; });
+  auto validity4 = cudf::detail::make_counting_transform_iterator(
+    0, [](cudf::size_type i) { return (i % 4) != 0; });
+  auto validity5 = cudf::detail::make_counting_transform_iterator(
+    0, [](cudf::size_type i) { return (i % 5) != 0; });
+
+  auto c0 = testdata::ascending<uint32_t>();
+
+  auto col1_data = random_values<int32_t>(num_ordered_rows);
+  auto col2_data = random_values<int32_t>(num_ordered_rows);
+  auto col3_data = random_values<int32_t>(num_ordered_rows);
+
+  // col1 is all nulls
+  auto col1 =
+    cudf::test::fixed_width_column_wrapper<int32_t>(col1_data.begin(), col1_data.end(), validity2);
+  auto col2 =
+    cudf::test::fixed_width_column_wrapper<int32_t>(col2_data.begin(), col2_data.end(), validity3);
+  auto col3 =
+    cudf::test::fixed_width_column_wrapper<int32_t>(col2_data.begin(), col2_data.end(), validity4);
+
+  std::vector<std::unique_ptr<cudf::column>> struct_children;
+  struct_children.push_back(col1.release());
+  struct_children.push_back(col2.release());
+  struct_children.push_back(col3.release());
+  auto struct_validity = std::vector<bool>(validity5, validity5 + num_ordered_rows);
+  cudf::test::structs_column_wrapper c1(std::move(struct_children), struct_validity);
+  table_view expected({c0, c1});
+
+  auto const filepath = temp_env->get_temp_filepath("CheckColumnOffsetIndexStructNulls.parquet");
+  const cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .write_v2_headers(is_v2)
+      .max_page_size_rows(page_size_for_ordered_tests);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+
+  read_footer(source, &fmd);
+
+  for (size_t r = 0; r < fmd.row_groups.size(); r++) {
+    auto const& rg = fmd.row_groups[r];
+    for (size_t c = 0; c < rg.columns.size(); c++) {
+      auto const& chunk = rg.columns[c];
+
+      // loop over offsets, read each page header, make sure it's a data page and that
+      // the first row index is correct
+      auto const oi = read_offset_index(source, chunk);
+      auto const ci = read_column_index(source, chunk);
+
+      int64_t num_vals = 0;
+      for (size_t o = 0; o < oi.page_locations.size(); o++) {
+        auto const& page_loc = oi.page_locations[o];
+        auto const ph        = read_page_header(source, page_loc);
+        EXPECT_EQ(ph.type, expected_hdr_type);
+        EXPECT_EQ(page_loc.first_row_index, num_vals);
+        num_vals += is_v2 ? ph.data_page_header_v2.num_rows : ph.data_page_header.num_values;
+        // check that null counts match
+        if (is_v2) { EXPECT_EQ(ci.null_counts[o], ph.data_page_header_v2.num_nulls); }
+      }
+    }
+  }
+}
+
 TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
 {
   auto const is_v2 = GetParam();
