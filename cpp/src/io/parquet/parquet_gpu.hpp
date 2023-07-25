@@ -650,6 +650,7 @@ void get_dictionary_indices(cudf::detail::device_2dspan<gpu::PageFragment const>
  * @param[in] num_columns Number of columns
  * @param[in] page_grstats Setup for page-level stats
  * @param[in] page_align Required alignment for uncompressed pages
+ * @param[in] write_v2_headers True if V2 page headers should be written
  * @param[in] chunk_grstats Setup for chunk-level stats
  * @param[in] max_page_comp_data_size Calculated maximum compressed data size of pages
  * @param[in] stream CUDA stream to use, default 0
@@ -663,6 +664,7 @@ void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                       size_t max_page_size_bytes,
                       size_type max_page_size_rows,
                       uint32_t page_align,
+                      bool write_v2_headers,
                       statistics_merge_group* page_grstats,
                       statistics_merge_group* chunk_grstats,
                       rmm::cuda_stream_view stream);

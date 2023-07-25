@@ -309,7 +309,8 @@ __global__ void __launch_bounds__(128)
                int32_t num_columns,
                size_t max_page_size_bytes,
                size_type max_page_size_rows,
-               uint32_t page_align)
+               uint32_t page_align,
+               bool write_v2_headers)
 {
   // TODO: All writing seems to be done by thread 0. Could be replaced by thrust foreach
   __shared__ __align__(8) parquet_column_device_view col_g;
@@ -318,10 +319,8 @@ __global__ void __launch_bounds__(128)
   __shared__ __align__(8) EncPage page_g;
   __shared__ __align__(8) statistics_merge_group pagestats_g;
 
-  uint32_t t = threadIdx.x;
-
-  // FIXME pass in variable
-  auto const data_page_type = PageType::DATA_PAGE_V2;
+  uint32_t const t          = threadIdx.x;
+  auto const data_page_type = write_v2_headers ? PageType::DATA_PAGE_V2 : PageType::DATA_PAGE;
 
   if (t == 0) {
     col_g  = col_desc[blockIdx.x];
@@ -2211,6 +2210,7 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                       size_t max_page_size_bytes,
                       size_type max_page_size_rows,
                       uint32_t page_align,
+                      bool write_v2_headers,
                       statistics_merge_group* page_grstats,
                       statistics_merge_group* chunk_grstats,
                       rmm::cuda_stream_view stream)
@@ -2227,7 +2227,8 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                                                      num_columns,
                                                      max_page_size_bytes,
                                                      max_page_size_rows,
-                                                     page_align);
+                                                     page_align,
+                                                     write_v2_headers);
 }
 
 void EncodePages(device_span<gpu::EncPage> pages,
