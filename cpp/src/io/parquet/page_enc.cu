@@ -1043,7 +1043,6 @@ __global__ void __launch_bounds__(128, 8)
         RleEncode(s, rle_numvals, def_lvl_bits, (rle_numvals == s->page.num_rows), t);
         __syncthreads();
       }
-
       if (t < 32) {
         uint8_t* const cur       = s->cur;
         uint8_t* const rle_out   = s->rle_out;
@@ -1848,7 +1847,8 @@ __global__ void __launch_bounds__(128)
     if (ck_g.is_compressed) {
       auto const lvl_bytes = page_g.def_lvl_bytes + page_g.rep_lvl_bytes;
       hdr_start            = page_g.compressed_data;
-      compressed_page_size = (uint32_t)comp_results[blockIdx.x].bytes_written + lvl_bytes;
+      compressed_page_size =
+        static_cast<uint32_t>(comp_results[blockIdx.x].bytes_written) + lvl_bytes;
       page_g.max_data_size = compressed_page_size;
     } else {
       hdr_start            = page_g.page_data;
