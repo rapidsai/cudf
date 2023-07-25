@@ -4127,6 +4127,8 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndex)
 {
   constexpr auto num_rows = 100000;
   auto const is_v2        = GetParam();
+  auto const expected_hdr_type =
+    is_v2 ? cudf::io::parquet::PageType::DATA_PAGE_V2 : cudf::io::parquet::PageType::DATA_PAGE;
 
   // fixed length strings
   auto str1_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
@@ -4186,15 +4188,9 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndex)
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
         auto const& page_loc = oi.page_locations[o];
         auto const ph        = read_page_header(source, page_loc);
-        if (is_v2) {
-          EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE_V2);
-          EXPECT_EQ(page_loc.first_row_index, num_vals);
-          num_vals += ph.data_page_header_v2.num_values;
-        } else {
-          EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE);
-          EXPECT_EQ(page_loc.first_row_index, num_vals);
-          num_vals += ph.data_page_header.num_values;
-        }
+        EXPECT_EQ(ph.type, expected_hdr_type);
+        EXPECT_EQ(page_loc.first_row_index, num_vals);
+        num_vals += is_v2 ? ph.data_page_header_v2.num_rows : ph.data_page_header.num_values;
       }
 
       // loop over page stats from the column index. check that stats.min <= page.min
@@ -4222,6 +4218,8 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNulls)
 {
   constexpr auto num_rows = 100000;
   auto const is_v2        = GetParam();
+  auto const expected_hdr_type =
+    is_v2 ? cudf::io::parquet::PageType::DATA_PAGE_V2 : cudf::io::parquet::PageType::DATA_PAGE;
 
   // fixed length strings
   auto str1_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
@@ -4291,15 +4289,9 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNulls)
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
         auto const& page_loc = oi.page_locations[o];
         auto const ph        = read_page_header(source, page_loc);
-        if (is_v2) {
-          EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE_V2);
-          EXPECT_EQ(page_loc.first_row_index, num_vals);
-          num_vals += ph.data_page_header_v2.num_values;
-        } else {
-          EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE);
-          EXPECT_EQ(page_loc.first_row_index, num_vals);
-          num_vals += ph.data_page_header.num_values;
-        }
+        EXPECT_EQ(ph.type, expected_hdr_type);
+        EXPECT_EQ(page_loc.first_row_index, num_vals);
+        num_vals += is_v2 ? ph.data_page_header_v2.num_rows : ph.data_page_header.num_values;
       }
 
       // loop over page stats from the column index. check that stats.min <= page.min
@@ -4333,6 +4325,8 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNullColumn)
 {
   constexpr auto num_rows = 100000;
   auto const is_v2        = GetParam();
+  auto const expected_hdr_type =
+    is_v2 ? cudf::io::parquet::PageType::DATA_PAGE_V2 : cudf::io::parquet::PageType::DATA_PAGE;
 
   // fixed length strings
   auto str1_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
@@ -4387,15 +4381,9 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNullColumn)
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
         auto const& page_loc = oi.page_locations[o];
         auto const ph        = read_page_header(source, page_loc);
-        if (is_v2) {
-          EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE_V2);
-          EXPECT_EQ(page_loc.first_row_index, num_vals);
-          num_vals += ph.data_page_header_v2.num_values;
-        } else {
-          EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE);
-          EXPECT_EQ(page_loc.first_row_index, num_vals);
-          num_vals += ph.data_page_header.num_values;
-        }
+        EXPECT_EQ(ph.type, expected_hdr_type);
+        EXPECT_EQ(page_loc.first_row_index, num_vals);
+        num_vals += is_v2 ? ph.data_page_header_v2.num_rows : ph.data_page_header.num_values;
       }
 
       // loop over page stats from the column index. check that stats.min <= page.min
@@ -4432,6 +4420,8 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNullColumn)
 TEST_P(ParquetV2Test, CheckColumnOffsetIndexStruct)
 {
   auto const is_v2 = GetParam();
+  auto const expected_hdr_type =
+    is_v2 ? cudf::io::parquet::PageType::DATA_PAGE_V2 : cudf::io::parquet::PageType::DATA_PAGE;
 
   auto c0 = testdata::ascending<uint32_t>();
 
@@ -4487,17 +4477,11 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStruct)
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
         auto const& page_loc = oi.page_locations[o];
         auto const ph        = read_page_header(source, page_loc);
-        if (is_v2) {
-          EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE_V2);
-          // last column has 2 values per row
-          EXPECT_EQ(page_loc.first_row_index * (c == rg.columns.size() - 1 ? 2 : 1), num_vals);
-          num_vals += ph.data_page_header_v2.num_values;
-        } else {
-          EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE);
-          // last column has 2 values per row
-          EXPECT_EQ(page_loc.first_row_index * (c == rg.columns.size() - 1 ? 2 : 1), num_vals);
-          num_vals += ph.data_page_header.num_values;
-        }
+        EXPECT_EQ(ph.type, expected_hdr_type);
+        EXPECT_EQ(page_loc.first_row_index, num_vals);
+        // last column has 2 values per row
+        num_vals += is_v2 ? ph.data_page_header_v2.num_rows
+                          : ph.data_page_header.num_values / (c == rg.columns.size() - 1 ? 2 : 1);
       }
 
       // loop over page stats from the column index. check that stats.min <= page.min
@@ -4520,6 +4504,8 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStruct)
 TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
 {
   auto const is_v2 = GetParam();
+  auto const expected_hdr_type =
+    is_v2 ? cudf::io::parquet::PageType::DATA_PAGE_V2 : cudf::io::parquet::PageType::DATA_PAGE;
 
   using cudf::test::iterators::null_at;
   using cudf::test::iterators::nulls_at;
@@ -4625,21 +4611,12 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
       // the first row index is correct
       auto const oi = read_offset_index(source, chunk);
 
-      int64_t num_vals = 0;
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
         auto const& page_loc = oi.page_locations[o];
         auto const ph        = read_page_header(source, page_loc);
-        if (is_v2) {
-          EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE_V2);
-          // last column has 2 values per row
-          EXPECT_EQ(page_loc.first_row_index * (c == rg.columns.size() - 1 ? 2 : 1), num_vals);
-          num_vals += ph.data_page_header_v2.num_values;
-        } else {
-          EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE);
-          // last column has 2 values per row
-          EXPECT_EQ(page_loc.first_row_index * (c == rg.columns.size() - 1 ? 2 : 1), num_vals);
-          num_vals += ph.data_page_header.num_values;
-        }
+        EXPECT_EQ(ph.type, expected_hdr_type);
+        // check null counts in V2 header
+        if (is_v2) { EXPECT_EQ(ph.data_page_header_v2.num_nulls, expected_null_counts[c]); }
       }
 
       // check null counts in column chunk stats and page indexes

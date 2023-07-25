@@ -1005,7 +1005,6 @@ __global__ void __launch_bounds__(128, 8)
         }
       }
       __syncthreads();
-      uint32_t num_nulls = 0;
       while (s->rle_numvals < s->page.num_rows) {
         uint32_t rle_numvals = s->rle_numvals;
         uint32_t nrows       = min(s->page.num_rows - rle_numvals, 128);
@@ -1026,8 +1025,6 @@ __global__ void __launch_bounds__(128, 8)
                 ++def;
               } else {
                 // We have found the shallowest level at which this row is null
-                // TODO: need to test with struct with nulls
-                num_nulls++;
                 break;
               }
             }
@@ -1047,8 +1044,6 @@ __global__ void __launch_bounds__(128, 8)
         __syncthreads();
       }
 
-      uint32_t const null_count = block_reduce(temp_storage.reduce_storage).Sum(num_nulls);
-
       if (t < 32) {
         uint8_t* const cur       = s->cur;
         uint8_t* const rle_out   = s->rle_out;
@@ -1059,10 +1054,7 @@ __global__ void __launch_bounds__(128, 8)
           cur[t] = rle_bytes >> (t * 8);
         }
         __syncwarp();
-        if (t == 0) {
-          s->cur            = rle_out;
-          s->page.num_nulls = null_count;
-        }
+        if (t == 0) { s->cur = rle_out; }
       }
     }
   } else if (s->page.page_type != PageType::DICTIONARY_PAGE &&
@@ -1105,10 +1097,7 @@ __global__ void __launch_bounds__(128, 8)
           cur[t] = rle_bytes >> (t * 8);
         }
         __syncwarp();
-        if (t == 0) {
-          s->cur            = rle_out;
-          s->page.num_nulls = s->page.num_values - s->page.num_leaf_values;
-        }
+        if (t == 0) { s->cur = rle_out; }
       }
     };
     encode_levels(s->col.rep_values, s->col.num_rep_level_bits(), s->page.rep_lvl_bytes);
@@ -1144,6 +1133,7 @@ __global__ void __launch_bounds__(128, 8)
     s->chunk_start_val = row_to_value_idx(s->ck.start_row, s->col);
   }
   __syncthreads();
+  uint32_t num_valid = 0;
   for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
     uint32_t nvals = min(s->page.num_leaf_values - cur_val_idx, 128);
     uint32_t len, pos;
@@ -1169,6 +1159,8 @@ __global__ void __launch_bounds__(128, 8)
       }
       return std::make_tuple(is_valid, val_idx);
     }();
+
+    if (cur_val_idx + t < s->page.num_leaf_values && is_valid) num_valid++;
 
     cur_val_idx += nvals;
     if (dict_bits >= 0) {
@@ -1342,7 +1334,11 @@ __global__ void __launch_bounds__(128, 8)
       __syncthreads();
     }
   }
+
+  uint32_t const valid_count = block_reduce(temp_storage.reduce_storage).Sum(num_valid);
+
   if (t == 0) {
+    s->page.num_nulls     = s->page.num_values - valid_count;
     uint8_t* base         = s->page.page_data + s->page.max_hdr_size;
     auto actual_data_size = static_cast<uint32_t>(s->cur - base);
     if (actual_data_size > s->page.max_data_size) {
