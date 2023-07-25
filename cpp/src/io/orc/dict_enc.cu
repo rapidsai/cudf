@@ -45,7 +45,9 @@ __global__ void rowgroup_char_counts_kernel(device_2dspan<size_type> char_counts
 
   auto const& offsets = str_col.child(strings_column_view::offsets_column_index);
   char_counts[str_col_idx][row_group_idx] =
-    offsets.element<size_type>(start_row + num_rows) - offsets.element<size_type>(start_row);
+    (num_rows == 0)
+      ? 0
+      : offsets.element<size_type>(start_row + num_rows) - offsets.element<size_type>(start_row);
 }
 
 void rowgroup_char_counts(device_2dspan<size_type> counts,
