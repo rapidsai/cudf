@@ -256,7 +256,7 @@ bool CompactProtocolReader::read(PageHeader* p)
                             ParquetFieldInt32(3, p->compressed_page_size),
                             ParquetFieldStruct(5, p->data_page_header),
                             ParquetFieldStruct(7, p->dictionary_page_header),
-                            ParquetFieldStruct(8, p->dictionary_page_header));
+                            ParquetFieldStruct(8, p->data_page_header_v2));
   return function_builder(this, op);
 }
 

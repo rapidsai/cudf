@@ -1526,8 +1526,8 @@ class header_encoder {
 
   inline __device__ void field_bool(int field, bool value)
   {
-    current_header_ptr = cpw_put_fldh(current_header_ptr, field, current_field_index, ST_FLD_I32);
-    put_bool(value);
+    current_header_ptr = cpw_put_fldh(
+      current_header_ptr, field, current_field_index, value ? ST_FLD_TRUE : ST_FLD_FALSE);
     current_field_index = field;
   }
 
