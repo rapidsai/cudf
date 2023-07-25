@@ -1201,6 +1201,7 @@ build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
  * @param compression Compression format
  * @param max_page_size_bytes Maximum uncompressed page size, in bytes
  * @param max_page_size_rows Maximum page size, in rows
+ * @param write_v2_headers True if version 2 page headers are to be written
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
@@ -1430,6 +1431,7 @@ void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta)
  * @param max_dictionary_size Maximum dictionary size, in bytes
  * @param single_write_mode Flag to indicate that we are guaranteeing a single table write
  * @param int96_timestamps Flag to indicate if timestamps will be written as INT96
+ * @param write_v2_headers True if V2 page headers are to be written
  * @param out_sink Sink for checking if device write is supported, should not be used to write any
  *        data in this function
  * @param stream CUDA stream used for device memory operations and kernel launches

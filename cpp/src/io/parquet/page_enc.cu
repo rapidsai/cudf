@@ -1346,7 +1346,7 @@ __global__ void __launch_bounds__(128, 8)
     s->page.max_data_size = actual_data_size;
     if (not comp_in.empty()) {
       // V2 does not compress rep and def level data
-      size_t offset        = s->page.def_lvl_bytes + s->page.rep_lvl_bytes;
+      size_t const offset  = s->page.def_lvl_bytes + s->page.rep_lvl_bytes;
       comp_in[blockIdx.x]  = {base + offset, actual_data_size - offset};
       comp_out[blockIdx.x] = {s->page.compressed_data + s->page.max_hdr_size + offset,
                               0};  // size is unused
