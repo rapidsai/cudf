@@ -891,6 +891,8 @@ def _make_list_of_strings_of_random_length(
 
 
 def test_jaccard_index_random_strings():
+    # Seed the rng before random string generation.
+    random.seed(42)
     num_strings = 100
     jaccard_width = 5
     common_strings = _make_list_of_strings_of_random_length(
