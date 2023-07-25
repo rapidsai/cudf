@@ -146,6 +146,7 @@ def _make_unary_attr(funcname):
             for retty, inputty in call_cuda_functions[funcname.lower()].keys():
                 if self.this.group_scalar_type == inputty:
                     return nb_signature(retty, recvr=self.this)
+            return None
 
     def _attr(self, mod):
         return types.BoundFunction(
