@@ -598,6 +598,7 @@ add_library(
   src/text/detokenize.cu
   src/text/edit_distance.cu
   src/text/generate_ngrams.cu
+  src/text/jaccard.cu
   src/text/minhash.cu
   src/text/ngrams_tokenize.cu
   src/text/normalize.cu
