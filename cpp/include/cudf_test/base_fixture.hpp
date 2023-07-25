@@ -67,7 +67,7 @@ class BaseFixture : public ::testing::Test {
  * class MyIntTestFixture : public cudf::test::BaseFixtureWithParam<int> {};
  * ```
  */
-template<typename T>
+template <typename T>
 class BaseFixtureWithParam : public ::testing::TestWithParam<T> {
   rmm::mr::device_memory_resource* _mr{rmm::mr::get_current_device_resource()};
 

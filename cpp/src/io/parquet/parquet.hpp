@@ -298,19 +298,18 @@ struct DataPageHeader {
   Encoding repetition_level_encoding = Encoding::PLAIN;  // Encoding used for repetition levels
 };
 
-
 /**
  * @brief Thrift-derived struct describing the header for a V2 data page
  */
 struct DataPageHeaderV2 {
-  int32_t num_values                    = 0;  // Number of values, including NULLs, in this data page.
-  int32_t num_nulls                     = 0;  // Number of NULL values, in this data page.
-  int32_t num_rows                      = 0;  // Number of rows in this data page. which means 
-                                              // pages change on record boundaries (r = 0)
+  int32_t num_values = 0;  // Number of values, including NULLs, in this data page.
+  int32_t num_nulls  = 0;  // Number of NULL values, in this data page.
+  int32_t num_rows   = 0;  // Number of rows in this data page. which means
+                           // pages change on record boundaries (r = 0)
   Encoding encoding                     = Encoding::PLAIN;  // Encoding used for this data page
-  int32_t definition_levels_byte_length = 0;  // length of the definition levels
-  int32_t repetition_levels_byte_length = 0;  // length of the repetition levels
-  bool is_compressed                    = true;  // whether the values are compressed.
+  int32_t definition_levels_byte_length = 0;                // length of the definition levels
+  int32_t repetition_levels_byte_length = 0;                // length of the repetition levels
+  bool is_compressed                    = true;             // whether the values are compressed.
 };
 
 /**
