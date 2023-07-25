@@ -922,14 +922,14 @@ static __device__ void PlainBoolEncode(page_enc_state_s* s,
  * @brief Determines the difference between the Proleptic Gregorian Calendar epoch (1970-01-01
  * 00:00:00 UTC) and the Julian date epoch (-4713-11-24 12:00:00 UTC).
  *
- * @return The difference between two epochs in `cuda::std::chrono::duration` format with a period
- * of hours.
+ * @return The difference between two epochs in `cuda::std::chrono::duration` in the whole number
+ * of days.
  */
-constexpr auto julian_calendar_epoch_diff()
+constexpr auto julian_calendar_epoch_diff_in_days()
 {
   using namespace cuda::std::chrono;
   using namespace cuda::std::chrono_literals;
-  return sys_days{January / 1 / 1970} - (sys_days{November / 24 / -4713} + 12h);
+  return ceil<days>(sys_days{January / 1 / 1970} - (sys_days{November / 24 / -4713} + 12h));
 }
 
 /**
@@ -945,15 +945,16 @@ static __device__ std::pair<duration_ns, duration_D> convert_nanoseconds(timesta
   using namespace cuda::std::chrono;
   auto const nanosecond_ticks = ns.time_since_epoch();
   auto const gregorian_days   = floor<days>(nanosecond_ticks);
-  auto const julian_days      = gregorian_days + ceil<days>(julian_calendar_epoch_diff());
+  auto const julian_days      = gregorian_days + julian_calendar_epoch_diff_in_days();
 
   auto const last_day_ticks = nanosecond_ticks - gregorian_days;
-  printf("\nGERA_DEBUG static convert_nanoseconds sizeof(ns)=%lu last_day_ticks=%lu juli_days=%lu\n",
-    sizeof(ns),
+  printf("\nGERA_DEBUG static convert_nanoseconds sizeof(nanosecond_ticks)=%lu last_day_ticks=%lu juli_days=%lu\n",
+    sizeof(nanosecond_ticks),
     static_cast<uint64_t>(last_day_ticks.count()),
     static_cast<uint64_t>(julian_days.count()));
   return {last_day_ticks, julian_days};
 }
+
 
 // blockDim(128, 1, 1)
 template <int block_size>
