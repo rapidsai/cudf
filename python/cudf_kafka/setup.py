@@ -37,8 +37,19 @@ CUDF_ROOT = os.environ.get(
         )
     ),
 )
+
+CUDF_INCLUDE_DIR = os.environ.get(
+    "CUDF_INCLUDE_DIR",
+    os.path.abspath(os.path.join(CUDF_ROOT, "../include")),
+)
+
 CUDF_KAFKA_ROOT = os.environ.get(
     "CUDF_KAFKA_ROOT", "../../cpp/libcudf_kafka/build"
+)
+
+CUDF_KAFKA_INCLUDE_DIR = os.environ.get(
+    "CUDF_KAFKA_INCLUDE_DIR",
+    os.path.abspath(os.path.join(CUDF_KAFKA_ROOT, "../include")),
 )
 
 try:
@@ -51,11 +62,10 @@ extensions = [
         "*",
         sources=cython_files,
         include_dirs=[
-            os.path.abspath(os.path.join(CUDF_ROOT, "../include/cudf")),
-            os.path.abspath(os.path.join(CUDF_ROOT, "../include")),
-            os.path.abspath(
-                os.path.join(CUDF_ROOT, "../libcudf_kafka/include/cudf_kafka")
-            ),
+            os.path.abspath(os.path.join(CUDF_INCLUDE_DIR, "cudf")),
+            os.path.abspath(CUDF_INCLUDE_DIR),
+            os.path.abspath(os.path.join(CUDF_KAFKA_INCLUDE_DIR, "cudf_kafka")),
+            os.path.abspath(CUDF_KAFKA_INCLUDE_DIR),
             os.path.join(CUDF_ROOT, "include"),
             os.path.join(CUDF_ROOT, "_deps/libcudacxx-src/include"),
             os.path.join(
@@ -71,6 +81,7 @@ extensions = [
             [
                 get_python_lib(),
                 os.path.join(os.sys.prefix, "lib"),
+                CUDF_ROOT,
                 CUDF_KAFKA_ROOT,
             ]
         ),
