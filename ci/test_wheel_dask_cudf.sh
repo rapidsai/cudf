@@ -1,7 +1,7 @@
 #!/bin/bash
 # Copyright (c) 2023, NVIDIA CORPORATION.
 
-set -eoxu pipefail
+set -eou pipefail
 
 mkdir -p ./dist
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"

@@ -12,7 +12,7 @@ version_override="$(rapids-pip-wheel-version ${RAPIDS_DATE_STRING})"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 
-bash ci/release/apply_wheel_modifications.sh ${version_override} "-${RAPIDS_PY_CUDA_SUFFIX}"
+ci/release/apply_wheel_modifications.sh ${version_override} "-${RAPIDS_PY_CUDA_SUFFIX}"
 echo "The package name and/or version was modified in the package source. The git diff is:"
 git diff
 
