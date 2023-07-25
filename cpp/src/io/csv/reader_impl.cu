@@ -251,15 +251,20 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
   rmm::device_uvector<char> d_data{
     (load_whole_file) ? data.size() : std::min(buffer_size * 2, data.size()), stream};
   d_data.resize(0, stream);
+  cudf::detail::pinned_host_vector<char> bounce_buffer(buffer_size);
   rmm::device_uvector<uint64_t> all_row_offsets{0, stream};
   do {
-    size_t target_pos = std::min(pos + max_chunk_bytes, data.size());
-    size_t chunk_size = target_pos - pos;
-
+    auto const target_pos         = std::min(pos + max_chunk_bytes, data.size());
+    auto const chunk_size         = target_pos - pos;
     auto const previous_data_size = d_data.size();
+
+    std::memcpy(bounce_buffer.data(),
+                data.begin() + buffer_pos + previous_data_size,
+                target_pos - buffer_pos - previous_data_size);
+
     d_data.resize(target_pos - buffer_pos, stream);
     CUDF_CUDA_TRY(cudaMemcpyAsync(d_data.begin() + previous_data_size,
-                                  data.begin() + buffer_pos + previous_data_size,
+                                  bounce_buffer.data(),
                                   target_pos - buffer_pos - previous_data_size,
                                   cudaMemcpyDefault,
                                   stream.value()));
