@@ -16,7 +16,6 @@
 
 #include "simple.cuh"
 
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/reduction/detail/reduction_functions.hpp>
 
@@ -24,6 +23,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
+
+#include <cuda/atomic>
 
 namespace cudf {
 namespace reduction {
@@ -43,7 +44,10 @@ struct any_fn {
   struct any_true_fn {
     __device__ void operator()(size_type idx)
     {
-      if (!*d_result && (iter[idx] != *d_result)) atomicOr(d_result, true);
+      if (!*d_result && (iter[idx] != *d_result)) {
+        cuda::atomic_ref<int32_t, cuda::thread_scope_device> ref{*d_result};
+        ref.fetch_or(1, cuda::std::memory_order_relaxed);
+      }
     }
     Iterator iter;
     int32_t* d_result;

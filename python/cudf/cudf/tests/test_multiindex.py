@@ -348,6 +348,24 @@ def test_multiindex_loc(pdf, gdf, pdfIndex, key_tuple):
 
 
 @pytest.mark.parametrize(
+    "indexer",
+    [
+        (([1, 1], [0, 1]), slice(None)),
+        (([1, 1], [1, 0]), slice(None)),
+    ],
+)
+def test_multiindex_compatible_ordering(indexer):
+    df = pd.DataFrame(
+        {"a": [1, 1, 2, 3], "b": [1, 0, 1, 1], "c": [1, 2, 3, 4]}
+    ).set_index(["a", "b"])
+    cdf = cudf.from_pandas(df)
+    expect = df.loc[indexer]
+    with cudf.option_context("mode.pandas_compatible", True):
+        actual = cdf.loc[indexer]
+    assert_eq(actual, expect)
+
+
+@pytest.mark.parametrize(
     "arg",
     [
         slice(("a", "store"), ("b", "house")),

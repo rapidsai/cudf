@@ -21,7 +21,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -119,7 +118,7 @@ std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
 
   merge_pairs_map->insert(iter,
                           iter + input.size(),
-                          cuco::murmurhash3_32<cudf::hash_value_type>{},
+                          thrust::identity<cudf::hash_value_type>{},
                           thrust::equal_to<cudf::hash_value_type>{},
                           stream.value());
 
