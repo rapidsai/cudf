@@ -148,7 +148,7 @@ struct escape_strings_fn {
         }
         continue;
       }
-      auto escaped_chars = cudf::io::json::experimental::detail::get_escaped_char(utf8_char);
+      auto escaped_chars = get_escaped_char(utf8_char);
       if (escaped_chars.first == '\0') {
         write_char(escaped_chars.second, d_buffer, bytes);
       } else {
