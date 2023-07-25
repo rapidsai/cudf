@@ -135,11 +135,6 @@ struct window_bounds {
   {
   }
 
-  // TODO: In the future, add units for bounds.
-  //       E.g. {value=1, unit=DAYS, unbounded=false}
-  //       For the present, assume units from context:
-  //         1. For time-based window functions, assume DAYS as before
-  //         2. For all else, assume ROWS as before.
   bool const _is_unbounded;  ///< Whether the window boundary is unbounded
   size_type const _value;    ///< Finite window boundary value (in days or rows)
 };
