@@ -498,6 +498,8 @@ class parquet_writer_options {
   std::optional<size_type> _max_page_fragment_size;
   // Optional compression statistics
   std::shared_ptr<writer_compression_statistics> _compression_stats;
+  // write V2 page headers?
+  bool _v2_page_headers = false;
 
   /**
    * @brief Constructor from sink and table.
@@ -683,6 +685,13 @@ class parquet_writer_options {
   }
 
   /**
+   * @brief Returns `true` if V2 page headers should be written.
+   *
+   * @return `true` if V2 page headers should be written.
+   */
+  [[nodiscard]] auto is_enabled_write_v2_headers() const { return _v2_page_headers; }
+
+  /**
    * @brief Sets partitions.
    *
    * @param partitions Partitions of input table in {start_row, num_rows} pairs. If specified, must
@@ -799,6 +808,13 @@ class parquet_writer_options {
   {
     _compression_stats = std::move(comp_stats);
   }
+
+  /**
+   * @brief Sets preference for V2 page headers. Write V2 page headers if set to `true`.
+   *
+   * @param val Boolean value to enable/disable writing of V2 page headers.
+   */
+  void enable_write_v2_headers(bool val) { _v2_page_headers = val; }
 };
 
 /**
@@ -1031,6 +1047,18 @@ class parquet_writer_options_builder {
   }
 
   /**
+   * @brief Set to true if V2 page headers are to be written.
+   *
+   * @param enabled Boolean value to enable/disable writing of V2 page headers.
+   * @return this for chaining
+   */
+  parquet_writer_options_builder& write_v2_headers(bool enabled)
+  {
+    options.enable_write_v2_headers(enabled);
+    return *this;
+  }
+
+  /**
    * @brief move parquet_writer_options member once it's built.
    */
   operator parquet_writer_options&&() { return std::move(options); }
@@ -1111,6 +1139,8 @@ class chunked_parquet_writer_options {
   std::optional<size_type> _max_page_fragment_size;
   // Optional compression statistics
   std::shared_ptr<writer_compression_statistics> _compression_stats;
+  // write V2 page headers?
+  bool _v2_page_headers = false;
 
   /**
    * @brief Constructor from sink.
@@ -1252,6 +1282,13 @@ class chunked_parquet_writer_options {
   }
 
   /**
+   * @brief Returns `true` if V2 page headers should be written.
+   *
+   * @return `true` if V2 page headers should be written.
+   */
+  [[nodiscard]] auto is_enabled_write_v2_headers() const { return _v2_page_headers; }
+
+  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata
@@ -1355,6 +1392,13 @@ class chunked_parquet_writer_options {
   }
 
   /**
+   * @brief Sets preference for V2 page headers. Write V2 page headers if set to `true`.
+   *
+   * @param val Boolean value to enable/disable writing of V2 page headers.
+   */
+  void enable_write_v2_headers(bool val) { _v2_page_headers = val; }
+
+  /**
    * @brief creates builder to build chunked_parquet_writer_options.
    *
    * @param sink sink to use for writer output
@@ -1442,6 +1486,18 @@ class chunked_parquet_writer_options_builder {
   chunked_parquet_writer_options_builder& int96_timestamps(bool enabled)
   {
     options._write_timestamps_as_int96 = enabled;
+    return *this;
+  }
+
+  /**
+   * @brief Set to true if V2 page headers are to be written.
+   *
+   * @param enabled Boolean value to enable/disable writing of V2 page headers.
+   * @return this for chaining
+   */
+  chunked_parquet_writer_options_builder& write_v2_headers(bool enabled)
+  {
+    options.enable_write_v2_headers(enabled);
     return *this;
   }
 
