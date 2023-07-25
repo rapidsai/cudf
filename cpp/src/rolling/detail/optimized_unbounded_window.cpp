@@ -62,11 +62,13 @@ struct aggregation_converter {
   {
     if constexpr (std::is_same_v<Base, cudf::groupby_aggregation> and
                   k == aggregation::Kind::COUNT_ALL) {
-      // Note: cudf::reduce() does not support COUNT_ALL.
+      // Note: COUNT_ALL cannot be used as a cudf::reduce_aggregation; cudf::reduce does not support
+      // it.
       return cudf::make_count_aggregation<Base>(null_policy::INCLUDE);
     } else if constexpr (std::is_same_v<Base, cudf::groupby_aggregation> and
                          k == aggregation::Kind::COUNT_VALID) {
-      // Note: cudf::reduce() does not support COUNT_VALID.
+      // Note: COUNT_ALL cannot be used as a cudf::reduce_aggregation; cudf::reduce does not support
+      // it.
       return cudf::make_count_aggregation<Base>(null_policy::EXCLUDE);
     } else if constexpr (k == aggregation::Kind::SUM) {
       return cudf::make_sum_aggregation<Base>();
@@ -86,6 +88,8 @@ std::unique_ptr<Base> convert_to(cudf::rolling_aggregation const& aggr)
   return cudf::detail::aggregation_dispatcher(aggr.kind, aggregation_converter<Base>{});
 }
 
+/// Compute unbounded rolling window via groupby-aggregation.
+/// Used for input that has groupby key columns.
 std::unique_ptr<column> aggregation_based_rolling_window(table_view const& group_keys,
                                                          column_view const& input,
                                                          rolling_aggregation const& aggr,
@@ -118,6 +122,8 @@ std::unique_ptr<column> aggregation_based_rolling_window(table_view const& group
   return std::move(result_columns.front());
 }
 
+/// Compute unbounded rolling window via cudf::reduce.
+/// Used for input that has no groupby keys. i.e. The window spans the column.
 std::unique_ptr<column> reduction_based_rolling_window(column_view const& input,
                                                        rolling_aggregation const& aggr,
                                                        rmm::cuda_stream_view stream,

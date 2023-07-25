@@ -40,8 +40,7 @@ void test_single_agg(cudf::column_view const& keys,
                      cudf::sorted keys_are_sorted,
                      std::vector<cudf::order> const& column_order,
                      std::vector<cudf::null_order> const& null_precedence,
-                     cudf::sorted reference_keys_are_sorted,
-                     rmm::cuda_stream_view test_stream)
+                     cudf::sorted reference_keys_are_sorted)
 {
   auto const [sorted_expect_keys, sorted_expect_vals] = [&]() {
     if (reference_keys_are_sorted == cudf::sorted::NO) {
@@ -78,7 +77,7 @@ void test_single_agg(cudf::column_view const& keys,
   cudf::groupby::groupby gb_obj(
     cudf::table_view({keys}), include_null_keys, keys_are_sorted, column_order, precedence);
 
-  auto result = gb_obj.aggregate(requests, test_stream);
+  auto result = gb_obj.aggregate(requests, cudf::test::get_default_stream());
 
   if (use_sort == force_use_sort_impl::YES && keys_are_sorted == cudf::sorted::NO) {
     CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_expect_keys, result.first->view());

@@ -18,10 +18,8 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/groupby.hpp>
 
 using K = int32_t;  // Key type.
@@ -34,8 +32,7 @@ struct groupby_stream_test : public cudf::test::BaseFixture {
   void test_groupby(std::unique_ptr<cudf::groupby_aggregation>&& agg,
                     force_use_sort_impl use_sort        = force_use_sort_impl::NO,
                     cudf::null_policy include_null_keys = cudf::null_policy::INCLUDE,
-                    cudf::sorted keys_are_sorted        = cudf::sorted::NO,
-                    rmm::cuda_stream_view test_stream   = cudf::test::get_default_stream())
+                    cudf::sorted keys_are_sorted        = cudf::sorted::NO)
   {
     auto requests = [&] {
       auto requests = std::vector<cudf::groupby::aggregation_request>{};
@@ -51,7 +48,7 @@ struct groupby_stream_test : public cudf::test::BaseFixture {
 
     auto gby =
       cudf::groupby::groupby{cudf::table_view{{keys}}, include_null_keys, keys_are_sorted, {}, {}};
-    auto result = gby.aggregate(requests, test_stream);
+    gby.aggregate(requests, cudf::test::get_default_stream());
     // No need to verify results, for stream test.
   }
 };

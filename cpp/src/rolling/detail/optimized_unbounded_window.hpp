@@ -27,7 +27,6 @@ namespace cudf {
 
 class rolling_aggregation;
 class table_view;
-struct window_bounds;
 
 namespace detail {
 /**

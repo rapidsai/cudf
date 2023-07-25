@@ -34,8 +34,7 @@ void test_single_agg(cudf::column_view const& keys,
                      cudf::sorted keys_are_sorted                 = cudf::sorted::NO,
                      std::vector<cudf::order> const& column_order = {},
                      std::vector<cudf::null_order> const& null_precedence = {},
-                     cudf::sorted reference_keys_are_sorted               = cudf::sorted::NO,
-                     rmm::cuda_stream_view test_stream = cudf::get_default_stream());
+                     cudf::sorted reference_keys_are_sorted               = cudf::sorted::NO);
 
 void test_sum_agg(cudf::column_view const& keys,
                   cudf::column_view const& values,
