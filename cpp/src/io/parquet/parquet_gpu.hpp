@@ -74,6 +74,7 @@ namespace gpu {
  */
 enum {
   PAGEINFO_FLAGS_DICTIONARY = (1 << 0),  // Indicates a dictionary page
+  PAGEINFO_FLAGS_V2         = (1 << 1),  // V2 page header
 };
 
 /**
