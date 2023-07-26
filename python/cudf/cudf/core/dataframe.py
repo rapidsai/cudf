@@ -723,6 +723,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if dtype:
             self._data = self.astype(dtype)._data
 
+        self._data.multiindex = self._data.multiindex or isinstance(
+            columns, pd.MultiIndex
+        )
+
     @_cudf_nvtx_annotate
     def _init_from_series_list(self, data, columns, index):
         if index is None:
@@ -5042,6 +5046,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
         df = cls._from_data(data, index)
+        df._data._level_names = list(dataframe.columns.names)
 
         # Set columns only if it is a MultiIndex
         if isinstance(dataframe.columns, pd.MultiIndex):
@@ -5337,6 +5342,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             df._data[names[0]] = column.as_column(
                 data, nan_as_null=nan_as_null
             )
+        if isinstance(columns, pd.Index):
+            df._data._level_names = list(columns.names)
 
         if index is None:
             df._index = RangeIndex(start=0, stop=len(data))
