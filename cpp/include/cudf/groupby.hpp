@@ -187,6 +187,15 @@ class groupby {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
+   * @copydoc aggregate(host_span<aggregation_request const>, rmm::mr::device_memory_resource*)
+   *
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   */
+  std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> aggregate(
+    host_span<aggregation_request const> requests,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  /**
    * @brief Performs grouped scans on the specified values.
    *
    * The values to aggregate and the aggregations to perform are specified in an
