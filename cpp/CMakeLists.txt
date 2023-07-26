@@ -647,11 +647,6 @@ set_source_files_properties(
   PROPERTIES COMPILE_DEFINITIONS "_FILE_OFFSET_BITS=64"
 )
 
-set_source_files_properties(
-  src/io/parquet/writer_impl.cu
-  PROPERTIES COMPILE_FLAGS "-g"
-)
-
 set_target_properties(
   cudf
   PROPERTIES BUILD_RPATH "\$ORIGIN"
