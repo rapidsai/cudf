@@ -251,6 +251,7 @@ outputs:
         - test -f $PREFIX/include/cudf/partitioning.hpp
         - test -f $PREFIX/include/cudf/quantiles.hpp
         - test -f $PREFIX/include/cudf/reduction.hpp
+        - test -f $PREFIX/include/cudf/reduction/detail/reduction.hpp
         - test -f $PREFIX/include/cudf/reduction/detail/reduction_functions.hpp
         - test -f $PREFIX/include/cudf/reduction/detail/segmented_reduction_functions.hpp
         - test -f $PREFIX/include/cudf/replace.hpp
