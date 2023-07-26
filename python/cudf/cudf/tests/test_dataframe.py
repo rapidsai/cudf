@@ -2923,6 +2923,7 @@ def test_tail_for_string():
         ["v0", "v1"],
         ["v0", "index"],
         pd.MultiIndex.from_tuples([("x0", "x1"), ("y0", "y1")]),
+        pd.MultiIndex.from_tuples([(1, 2), (10, 11)], names=["ABC", "DEF"]),
     ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
@@ -10158,3 +10159,25 @@ def test_dataframe_init_length_error(data, index):
             {"data": data, "index": index},
         ),
     )
+
+
+def test_dataframe_init_columns_named_multiindex():
+    np.random.seed(0)
+    data = np.random.randn(2, 2)
+    columns = cudf.MultiIndex.from_tuples(
+        [("A", "one"), ("A", "two")], names=["y", "z"]
+    )
+    gdf = cudf.DataFrame(data, columns=columns)
+    pdf = pd.DataFrame(data, columns=columns.to_pandas())
+
+    assert_eq(gdf, pdf)
+
+
+def test_dataframe_init_columns_named_index():
+    np.random.seed(0)
+    data = np.random.randn(2, 2)
+    columns = pd.Index(["a", "b"], name="custom_name")
+    gdf = cudf.DataFrame(data, columns=columns)
+    pdf = pd.DataFrame(data, columns=columns)
+
+    assert_eq(gdf, pdf)
