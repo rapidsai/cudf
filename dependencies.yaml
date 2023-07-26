@@ -261,13 +261,11 @@ dependencies:
         packages:
           - scikit-build>=0.13.1
           - rmm==23.8.*
-      - output_types: conda
+      - output_types: pyproject
         packages:
           # We pin an exact protobuf minor version here for building but allow
           # any greater minor version at runtime.
           - protobuf==4.21
-      - output_types: pyproject
-        packages:
           - protoc-wheel
   libarrow_run:
     common:
