@@ -686,53 +686,23 @@ extern "C" __device__ int BlockCorr(double* numba_return_value,
   auto block = cooperative_groups::this_thread_block();
 
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
-    // numerator += data[idx];
     double delta_l = lhs_ptr[idx] - lhs_mean;
     double delta_r = rhs_ptr[idx] - rhs_mean;
 
     numerators[idx] = delta_l * delta_r;
     sum_sq_ls[idx]  = (delta_l * delta_l);
     sum_sq_rs[idx]  = (delta_r * delta_r);
-    // printf("cuda THREAD INDEX=%d\n", threadIdx.x);
-    // printf(" GPU d_l=%.6f, d_r =%.6f, num=%.6f, sum_sq_l=%.6f, sum_sq_r=%.6f \n", delta_l,
-    // delta_r, numerator, sum_sq_l, sum_sq_r);
   }
   __syncthreads();
 
-  /*
-  if (threadIdx.x == 0 ){
-    printf("nums:\n");
-
-    for (int i = 0; i < block.size(); i++) {
-      printf("%.6f ", numerators[i]);
-    }
-    printf("\n");
-  }
-  */
   double numerator = BlockSum(numerators, block.size());
   double denominator =
     sqrt(BlockSum(sum_sq_ls, block.size())) * sqrt(BlockSum(sum_sq_rs, block.size()));
-  // printf("GPU Numerator: %.6f, Denominator: %.6f", numerator, denominator);
-  // double denominator = sqrt(sum_sq_l) * sqrt(sum_sq_r);
-
-  // double numsum = BlockSum(nums, block.size());
-  // printf("NUMSUM: %.6f", numsum);
 
   block.sync();
 
-  if (denominator == 0.0) { return 0.0; }
+  if (denominator == 0.0) { *numba_return_value = 0.0; }
   *numba_return_value = numerator / denominator;
   __syncthreads();
   return 0;
-
-  // numerator = sum(
-  //     (xi - mean_x) * (yi - mean_y) for xi, yi in zip(x, y)
-  // )
-  // denominator = sqrt(
-  //     sum(
-  //         (xi - mean_x) ** 2
-  //     )
-  // )
-  //
-  //
 }
