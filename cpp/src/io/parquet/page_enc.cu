@@ -932,37 +932,6 @@ constexpr auto julian_calendar_epoch_diff_in_days()
   return ceil<days>(sys_days{January / 1 / 1970} - (sys_days{November / 24 / -4713} + 12h));
 }
 
-/**
- * @brief Converts a timestamp_ns into a pair with nanoseconds since midnight and number of Julian
- * days. Does not deal with time zones. Used by INT96 code.
- *
- * @param ns number of nanoseconds since epoch
- * @return std::pair<nanoseconds,days> where nanoseconds is the number of nanoseconds
- * elapsed in the day and days is the number of days from Julian epoch.
- */
-static __device__ std::pair<duration_ns, duration_D> convert_nanoseconds(type_id tid, int64_t const v)
-{
-  using namespace cuda::std::chrono;
-  duration_D gregorian_days [[maybe_unused]];
-  duration_ns time_of_day [[maybe_unused]];
-  switch (tid) {
-    case type_id::TIMESTAMP_SECONDS:
-    case type_id::TIMESTAMP_MILLISECONDS: {
-      gregorian_days = floor<days>(duration_ms{v});
-      time_of_day = duration_cast<nanoseconds>(duration_ms(v) - gregorian_days);
-    } break;
-    case type_id::TIMESTAMP_MICROSECONDS:
-    case type_id::TIMESTAMP_NANOSECONDS: {
-      gregorian_days = floor<days>(duration_us{v});
-      time_of_day = duration_cast<nanoseconds>(duration_us(v) - gregorian_days);
-    } break;
-  }
-
-  // auto const last_day_ticks = nanosecond_ticks - gregorian_days;
-  return {time_of_day, gregorian_days + julian_calendar_epoch_diff_in_days()};
-}
-
-
 // blockDim(128, 1, 1)
 template <int block_size>
 __global__ void __launch_bounds__(128, 8)
@@ -1248,10 +1217,31 @@ __global__ void __launch_bounds__(128, 8)
               }
             }
 
-            auto const ret = convert_nanoseconds(s->col.leaf_column->type().id(), v);
+            auto const [gregorian_days, last_day_nanos] = ([&]() {
+              using namespace cuda::std::chrono;
+              switch (s->col.leaf_column->type().id()) {
+                case type_id::TIMESTAMP_SECONDS:
+                case type_id::TIMESTAMP_MILLISECONDS: {
+                  auto const tmp_millis = duration_ms{v};
+                  auto const tmp_days = floor<days>(tmp_millis);
+                  auto const tmp_nanos = duration_cast<duration_ns>(tmp_millis - tmp_days);
+                  return std::pair{tmp_days, tmp_nanos};
+                } break;
+                case type_id::TIMESTAMP_MICROSECONDS:
+                case type_id::TIMESTAMP_NANOSECONDS: {
+                  auto const tmp_micros = duration_us{v};
+                  auto const tmp_days = floor<days>(tmp_micros);
+                  auto const tmp_nanos = duration_cast<duration_ns>(tmp_micros - tmp_days);
+                  return std::pair{tmp_days, tmp_nanos};
+                } break;
+              }
+              return std::pair{duration_D::zero(), duration_ns::zero()};
+            }());
+
+            auto const julian_days = gregorian_days + julian_calendar_epoch_diff_in_days();
 
             // the 12 bytes of fixed length data.
-            v             = ret.first.count();
+            v             = last_day_nanos.count();
             dst[pos + 0]  = v;
             dst[pos + 1]  = v >> 8;
             dst[pos + 2]  = v >> 16;
@@ -1260,7 +1250,7 @@ __global__ void __launch_bounds__(128, 8)
             dst[pos + 5]  = v >> 40;
             dst[pos + 6]  = v >> 48;
             dst[pos + 7]  = v >> 56;
-            uint32_t w    = ret.second.count();
+            uint32_t w    = julian_days.count();
             dst[pos + 8]  = w;
             dst[pos + 9]  = w >> 8;
             dst[pos + 10] = w >> 16;
