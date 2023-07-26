@@ -440,6 +440,7 @@ bool reader::impl::has_next()
   return _current_read_chunk < _chunk_read_info.size();
 }
 
+namespace {
 static parquet_column_schema walk_schema(aggregate_reader_metadata const* mt, int idx)
 {
   SchemaElement const& sch = mt->get_schema(idx);
@@ -450,6 +451,7 @@ static parquet_column_schema walk_schema(aggregate_reader_metadata const* mt, in
   return parquet_column_schema{
     sch.name, static_cast<parquet::TypeKind>(sch.type), std::move(children)};
 }
+}  // namespace
 
 parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> const> sources)
 {
