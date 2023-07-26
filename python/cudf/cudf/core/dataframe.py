@@ -1837,7 +1837,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             rhs = {name: other for name in self._data}
             equal_columns = True
         elif isinstance(other, Series):
-            rhs = dict(zip(other.index.to_pandas(), other.values_host))
+            rhs = dict(zip(other.index.values_host, other.values_host))
             # For keys in right but not left, perform binops between NaN (not
             # NULL!) and the right value (result is NaN).
             left_default = as_column(np.nan, length=len(self))
@@ -7472,13 +7472,13 @@ def _align_indices(lhs, rhs):
         lhs_out = DataFrame(index=df.index)
         rhs_out = DataFrame(index=df.index)
         common = set(lhs._column_names) & set(rhs._column_names)
-        common_x = {f"{x}_x": x for x in common}
-        common_y = {f"{x}_y": x for x in common}
+        common_x = {f"{x}_x" for x in common}
+        common_y = {f"{x}_y" for x in common}
         for col in df._column_names:
             if col in common_x:
-                lhs_out[common_x[col]] = df[col]
+                lhs_out[col[:-2]] = df[col]
             elif col in common_y:
-                rhs_out[common_y[col]] = df[col]
+                rhs_out[col[:-2]] = df[col]
             elif col in lhs:
                 lhs_out[col] = df[col]
             elif col in rhs:
