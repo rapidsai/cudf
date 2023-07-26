@@ -1708,6 +1708,7 @@ def test_nonmatching_index_setitem(nrows):
 )
 def test_from_pandas(dtype):
     df = pd.DataFrame({"x": [1, 2, 3]}, index=[4.0, 5.0, 6.0], dtype=dtype)
+    df.columns.name = "custom_column_name"
     gdf = cudf.DataFrame.from_pandas(df)
     assert isinstance(gdf, cudf.DataFrame)
 
@@ -2483,8 +2484,12 @@ def test_bitwise_binops_series(pdf, gdf, binop):
 
 
 @pytest.mark.parametrize("unaryop", [operator.neg, operator.inv, operator.abs])
-def test_unaryops_df(pdf, gdf, unaryop):
-    d = unaryop(pdf - 5)
+@pytest.mark.parametrize("col_name", [None, "abc"])
+def test_unaryops_df(pdf, unaryop, col_name):
+    pd_df = pdf.copy()
+    pd_df.columns.name = col_name
+    gdf = cudf.from_pandas(pd_df)
+    d = unaryop(pd_df - 5)
     g = unaryop(gdf - 5)
     assert_eq(d, g)
 
@@ -2625,6 +2630,12 @@ def test_arrow_pandas_compat(pdf, gdf, preserve_index):
     gdf2 = cudf.DataFrame.from_arrow(pdf_arrow_table)
     pdf2 = pdf_arrow_table.to_pandas()
 
+    assert_eq(pdf2, gdf2)
+    pdf.columns.name = "abc"
+    pdf_arrow_table = pa.Table.from_pandas(pdf, preserve_index=preserve_index)
+
+    gdf2 = cudf.DataFrame.from_arrow(pdf_arrow_table)
+    pdf2 = pdf_arrow_table.to_pandas()
     assert_eq(pdf2, gdf2)
 
 
