@@ -940,19 +940,28 @@ constexpr auto julian_calendar_epoch_diff_in_days()
  * @return std::pair<nanoseconds,days> where nanoseconds is the number of nanoseconds
  * elapsed in the day and days is the number of days from Julian epoch.
  */
-static __device__ std::pair<duration_ns, duration_D> convert_nanoseconds(timestamp_ns const ns)
+static __device__ std::pair<duration_ns, duration_D> convert_nanoseconds(type_id tid, int64_t const v)
 {
   using namespace cuda::std::chrono;
-  auto const nanosecond_ticks = ns.time_since_epoch();
-  auto const gregorian_days   = floor<days>(nanosecond_ticks);
-  auto const julian_days      = gregorian_days + julian_calendar_epoch_diff_in_days();
+  duration_D gregorian_days [[maybe_unused]];
+  duration_ns time_of_day [[maybe_unused]];
+  switch (tid) {
+    case type_id::TIMESTAMP_SECONDS:
+    case type_id::TIMESTAMP_MILLISECONDS: {
+      printf("\nGERA_DEBUG INT96 gpuEncodePages convert_nanoseconds TIMESTAMP_(MILLI)SECONDS\n");
+      gregorian_days = floor<days>(duration_ms{v});
+      time_of_day = duration_cast<nanoseconds>(duration_ms(v) - gregorian_days);
+    } break;
+    case type_id::TIMESTAMP_MICROSECONDS:
+    case type_id::TIMESTAMP_NANOSECONDS: {
+      printf("\nGERA_DEBUG INT96 gpuEncodePages convert_nanoseconds TIMESTAMP_(MICRO/NANO)SECONDS\n");
+      gregorian_days = floor<days>(duration_us{v});
+      time_of_day = duration_cast<nanoseconds>(duration_us(v) - gregorian_days);
+    } break;
+  }
 
-  auto const last_day_ticks = nanosecond_ticks - gregorian_days;
-  printf("\nGERA_DEBUG static convert_nanoseconds sizeof(nanosecond_ticks)=%lu last_day_ticks=%lu juli_days=%lu\n",
-    sizeof(nanosecond_ticks),
-    static_cast<uint64_t>(last_day_ticks.count()),
-    static_cast<uint64_t>(julian_days.count()));
-  return {last_day_ticks, julian_days};
+  // auto const last_day_ticks = nanosecond_ticks - gregorian_days;
+  return {time_of_day, gregorian_days + julian_calendar_epoch_diff_in_days()};
 }
 
 
@@ -1232,9 +1241,7 @@ __global__ void __launch_bounds__(128, 8)
           } break;
           case INT96: {
             int64_t v        = s->col.leaf_column->element<int64_t>(val_idx);
-            uint64_t gera_uv        = s->col.leaf_column->element<uint64_t>(val_idx);
-            printf("\nGERA_DEBUG INT96 gpuEncodePages v=%ld uv=%lu\n", v, gera_uv);
-
+            uint64_t gera_uv = s->col.leaf_column->element<uint64_t>(val_idx);
             int32_t ts_scale = s->col.ts_scale;
             if (ts_scale != 0) {
               if (ts_scale < 0) {
@@ -1243,23 +1250,10 @@ __global__ void __launch_bounds__(128, 8)
                 v *= ts_scale;
               }
             }
+            printf("\nGERA_DEBUG INT96 gpuEncodePages scale=%d v=%ld orig_uv=%lu\n",
+              ts_scale, v, gera_uv);
 
-            auto const ret = convert_nanoseconds([&]() {
-              switch (s->col.leaf_column->type().id()) {
-                case type_id::TIMESTAMP_SECONDS:
-                case type_id::TIMESTAMP_MILLISECONDS: {
-                  printf("\nGERA_DEBUG INT96 gpuEncodePages convert_nanoseconds TIMESTAMP_(MILLI)SECONDS\n");
-                  return timestamp_ns{duration_ms{v}};
-                } break;
-                case type_id::TIMESTAMP_MICROSECONDS:
-                case type_id::TIMESTAMP_NANOSECONDS: {
-                  printf("\nGERA_DEBUG INT96 gpuEncodePages convert_nanoseconds TIMESTAMP_(MICRO/NANO)SECONDS\n");
-                  return timestamp_ns{duration_us{v}};
-                } break;
-              }
-              printf("\nGERA_DEBUG INT96 gpuEncodePages convert_nanoseconds return\n");
-              return timestamp_ns{duration_ns{0}};
-            }());
+            auto const ret = convert_nanoseconds(s->col.leaf_column->type().id(), v);
 
             // the 12 bytes of fixed length data.
             v             = ret.first.count();
