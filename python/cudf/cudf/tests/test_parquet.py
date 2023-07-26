@@ -2542,7 +2542,7 @@ def test_parquet_reader_rle_boolean(datadir):
     fname = datadir / "rle_boolean_encoding.parquet"
 
     expect = pd.read_parquet(fname)
-    got = cudf.read_parquet(fname).to_pandas()
+    got = cudf.read_parquet(fname)
 
     assert_eq(expect, got)
 
