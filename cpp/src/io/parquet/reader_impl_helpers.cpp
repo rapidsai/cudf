@@ -232,9 +232,9 @@ aggregate_reader_metadata::collect_keyval_metadata() const
 int64_t aggregate_reader_metadata::calc_num_rows() const
 {
   return std::accumulate(
-    per_file_metadata.begin(), per_file_metadata.end(), 0l, [](auto& sum, auto& pfm) {
+    per_file_metadata.cbegin(), per_file_metadata.cend(), 0l, [](auto& sum, auto& pfm) {
       auto const rowgroup_rows = std::accumulate(
-        pfm.row_groups.begin(), pfm.row_groups.end(), 0l, [](auto& rg_sum, auto& rg) {
+        pfm.row_groups.cbegin(), pfm.row_groups.cend(), 0l, [](auto& rg_sum, auto& rg) {
           return rg_sum + rg.num_rows;
         });
       CUDF_EXPECTS(pfm.num_rows == 0 || pfm.num_rows == rowgroup_rows,
@@ -246,7 +246,7 @@ int64_t aggregate_reader_metadata::calc_num_rows() const
 size_type aggregate_reader_metadata::calc_num_row_groups() const
 {
   return std::accumulate(
-    per_file_metadata.begin(), per_file_metadata.end(), 0, [](auto& sum, auto& pfm) {
+    per_file_metadata.cbegin(), per_file_metadata.cend(), 0, [](auto& sum, auto& pfm) {
       return sum + pfm.row_groups.size();
     });
 }
@@ -348,8 +348,19 @@ std::tuple<int64_t, size_type, std::vector<row_group_info>>
 aggregate_reader_metadata::select_row_groups(
   host_span<std::vector<size_type> const> row_group_indices,
   int64_t skip_rows_opt,
-  std::optional<size_type> const& num_rows_opt) const
+  std::optional<size_type> const& num_rows_opt,
+  host_span<data_type const> output_dtypes,
+  std::optional<std::reference_wrapper<ast::expression const>> filter) const
 {
+  std::optional<std::vector<std::vector<size_type>>> filtered_row_group_indices;
+  if (filter.has_value()) {
+    filtered_row_group_indices =
+      filter_row_groups(row_group_indices, output_dtypes, filter.value());
+    if (filtered_row_group_indices.has_value()) {
+      row_group_indices =
+        host_span<std::vector<size_type> const>(filtered_row_group_indices.value());
+    }
+  }
   std::vector<row_group_info> selection;
   auto [rows_to_skip, rows_to_read] = [&]() {
     if (not row_group_indices.empty()) { return std::pair<int64_t, size_type>{}; }
@@ -569,8 +580,8 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
 
     // Now construct paths as vector of strings for further consumption
     std::vector<std::vector<std::string>> use_names3;
-    std::transform(valid_selected_paths.begin(),
-                   valid_selected_paths.end(),
+    std::transform(valid_selected_paths.cbegin(),
+                   valid_selected_paths.cend(),
                    std::back_inserter(use_names3),
                    [&](path_info const& valid_path) {
                      auto schema_idx = valid_path.schema_idx;

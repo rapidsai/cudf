@@ -16,6 +16,8 @@
 
 #include "reader_impl.hpp"
 
+#include <cudf/detail/stream_compaction.hpp>
+#include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <rmm/cuda_stream_pool.hpp>
 
@@ -72,7 +74,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
     col_sizes = calculate_page_string_offsets();
 
     // check for overflow
-    if (std::any_of(col_sizes.begin(), col_sizes.end(), [](size_t sz) {
+    if (std::any_of(col_sizes.cbegin(), col_sizes.cend(), [](size_t sz) {
           return sz > std::numeric_limits<size_type>::max();
         })) {
       CUDF_FAIL("String column exceeds the column size limit", std::overflow_error);
@@ -310,12 +312,21 @@ reader::impl::impl(std::size_t chunk_read_limit,
 void reader::impl::prepare_data(int64_t skip_rows,
                                 std::optional<size_type> const& num_rows,
                                 bool uses_custom_row_bounds,
-                                host_span<std::vector<size_type> const> row_group_indices)
+                                host_span<std::vector<size_type> const> row_group_indices,
+                                std::optional<std::reference_wrapper<ast::expression const>> filter)
 {
   if (_file_preprocessed) { return; }
 
+  // if filter is not empty, then create output types as vector and pass for filtering.
+  std::vector<data_type> output_types;
+  if (filter.has_value()) {
+    std::transform(_output_buffers.cbegin(),
+                   _output_buffers.cend(),
+                   std::back_inserter(output_types),
+                   [](auto const& col) { return col.type; });
+  }
   auto const [skip_rows_corrected, num_rows_corrected, row_groups_info] =
-    _metadata->select_row_groups(row_group_indices, skip_rows, num_rows);
+    _metadata->select_row_groups(row_group_indices, skip_rows, num_rows, output_types, filter);
 
   if (num_rows_corrected > 0 && row_groups_info.size() != 0 && _input_columns.size() != 0) {
     load_and_decompress_data(row_groups_info, num_rows_corrected);
@@ -331,17 +342,34 @@ void reader::impl::prepare_data(int64_t skip_rows,
   _file_preprocessed = true;
 }
 
-table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bounds)
+void reader::impl::populate_metadata(table_metadata& out_metadata)
+{
+  // Return column names
+  out_metadata.schema_info.resize(_output_buffers.size());
+  for (size_t i = 0; i < _output_column_schemas.size(); i++) {
+    auto const& schema               = _metadata->get_schema(_output_column_schemas[i]);
+    out_metadata.schema_info[i].name = schema.name;
+  }
+
+  // Return user metadata
+  out_metadata.per_file_user_data = _metadata->get_key_value_metadata();
+  out_metadata.user_data          = {out_metadata.per_file_user_data[0].begin(),
+                                     out_metadata.per_file_user_data[0].end()};
+}
+
+table_with_metadata reader::impl::read_chunk_internal(
+  bool uses_custom_row_bounds, std::optional<std::reference_wrapper<ast::expression const>> filter)
 {
   // If `_output_metadata` has been constructed, just copy it over.
   auto out_metadata = _output_metadata ? table_metadata{*_output_metadata} : table_metadata{};
+  out_metadata.schema_info.resize(_output_buffers.size());
 
   // output cudf columns as determined by the top level schema
   auto out_columns = std::vector<std::unique_ptr<column>>{};
   out_columns.reserve(_output_buffers.size());
 
   if (!has_next() || _chunk_read_info.size() == 0) {
-    return finalize_output(out_metadata, out_columns);
+    return finalize_output(out_metadata, out_columns, filter);
   }
 
   auto const& read_info = _chunk_read_info[_current_read_chunk++];
@@ -359,24 +387,26 @@ table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bound
                             : std::nullopt;
     // Only construct `out_metadata` if `_output_metadata` has not been cached.
     if (!_output_metadata) {
-      column_name_info& col_name = out_metadata.schema_info.emplace_back("");
+      column_name_info& col_name = out_metadata.schema_info[i];
       out_columns.emplace_back(make_column(_output_buffers[i], &col_name, metadata, _stream));
     } else {
       out_columns.emplace_back(make_column(_output_buffers[i], nullptr, metadata, _stream));
     }
   }
 
-  // Add empty columns if needed.
-  return finalize_output(out_metadata, out_columns);
+  // Add empty columns if needed. Filter output columns based on filter.
+  return finalize_output(out_metadata, out_columns, filter);
 }
 
-table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
-                                                  std::vector<std::unique_ptr<column>>& out_columns)
+table_with_metadata reader::impl::finalize_output(
+  table_metadata& out_metadata,
+  std::vector<std::unique_ptr<column>>& out_columns,
+  std::optional<std::reference_wrapper<ast::expression const>> filter)
 {
   // Create empty columns as needed (this can happen if we've ended up with no actual data to read)
   for (size_t i = out_columns.size(); i < _output_buffers.size(); ++i) {
     if (!_output_metadata) {
-      column_name_info& col_name = out_metadata.schema_info.emplace_back("");
+      column_name_info& col_name = out_metadata.schema_info[i];
       out_columns.emplace_back(io::detail::empty_like(_output_buffers[i], &col_name, _stream, _mr));
     } else {
       out_columns.emplace_back(io::detail::empty_like(_output_buffers[i], nullptr, _stream, _mr));
@@ -384,33 +414,38 @@ table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
   }
 
   if (!_output_metadata) {
-    // Return column names
-    out_metadata.schema_info.resize(_output_buffers.size());
-    for (size_t i = 0; i < _output_column_schemas.size(); i++) {
-      auto const& schema               = _metadata->get_schema(_output_column_schemas[i]);
-      out_metadata.schema_info[i].name = schema.name;
-    }
-
-    // Return user metadata
-    out_metadata.per_file_user_data = _metadata->get_key_value_metadata();
-    out_metadata.user_data          = {out_metadata.per_file_user_data[0].begin(),
-                                       out_metadata.per_file_user_data[0].end()};
-
+    populate_metadata(out_metadata);
     // Finally, save the output table metadata into `_output_metadata` for reuse next time.
     _output_metadata = std::make_unique<table_metadata>(out_metadata);
   }
 
+  if (filter.has_value()) {
+    auto read_table = std::make_unique<table>(std::move(out_columns));
+    auto predicate  = cudf::detail::compute_column(
+      *read_table, filter.value().get(), _stream, rmm::mr::get_current_device_resource());
+    CUDF_EXPECTS(predicate->view().type().id() == type_id::BOOL8,
+                 "Predicate filter should return a boolean");
+    auto output_table = cudf::detail::apply_boolean_mask(*read_table, *predicate, _stream, _mr);
+    return {std::move(output_table), std::move(out_metadata)};
+  }
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
 
-table_with_metadata reader::impl::read(int64_t skip_rows,
-                                       std::optional<size_type> const& num_rows,
-                                       bool uses_custom_row_bounds,
-                                       host_span<std::vector<size_type> const> row_group_indices)
+table_with_metadata reader::impl::read(
+  int64_t skip_rows,
+  std::optional<size_type> const& num_rows,
+  bool uses_custom_row_bounds,
+  host_span<std::vector<size_type> const> row_group_indices,
+  std::optional<std::reference_wrapper<ast::expression const>> filter)
 {
   CUDF_EXPECTS(_chunk_read_limit == 0, "Reading the whole file must not have non-zero byte_limit.");
-  prepare_data(skip_rows, num_rows, uses_custom_row_bounds, row_group_indices);
-  return read_chunk_internal(uses_custom_row_bounds);
+  table_metadata metadata;
+  populate_metadata(metadata);
+  auto expr_conv     = named_to_reference_converter(filter, metadata);
+  auto output_filter = expr_conv.get_converted_expr();
+
+  prepare_data(skip_rows, num_rows, uses_custom_row_bounds, row_group_indices, output_filter);
+  return read_chunk_internal(uses_custom_row_bounds, output_filter);
 }
 
 table_with_metadata reader::impl::read_chunk()
@@ -427,8 +462,9 @@ table_with_metadata reader::impl::read_chunk()
   prepare_data(0 /*skip_rows*/,
                std::nullopt /*num_rows, `nullopt` means unlimited*/,
                true /*uses_custom_row_bounds*/,
-               {} /*row_group_indices, empty means read all row groups*/);
-  return read_chunk_internal(true);
+               {} /*row_group_indices, empty means read all row groups*/,
+               std::nullopt /*filter*/);
+  return read_chunk_internal(true, std::nullopt);
 }
 
 bool reader::impl::has_next()
@@ -436,7 +472,8 @@ bool reader::impl::has_next()
   prepare_data(0 /*skip_rows*/,
                std::nullopt /*num_rows, `nullopt` means unlimited*/,
                true /*uses_custom_row_bounds*/,
-               {} /*row_group_indices, empty means read all row groups*/);
+               {} /*row_group_indices, empty means read all row groups*/,
+               std::nullopt /*filter*/);
   return _current_read_chunk < _chunk_read_info.size();
 }
 
