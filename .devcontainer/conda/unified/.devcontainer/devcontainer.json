@@ -23,7 +23,7 @@
   ],
 
   "initializeCommand": [
-    "/bin/bash", "-c", "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config,conda/pkgs,conda/unified} ${localWorkspaceFolder}/../{rmm,cudf,raft,cumlprims_mg,cuml,cugraph-ops,cugraph,cuspatial}"
+    "/bin/bash", "-c", "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config,conda/pkgs,conda/unified} ${localWorkspaceFolder}/../{rmm,kvikio,cudf,raft,cumlprims_mg,cuml,cugraph-ops,cugraph,cuspatial}"
   ],
 
   "updateContentCommand": [
@@ -40,6 +40,7 @@
   "workspaceMount": "source=${localWorkspaceFolder},target=/home/coder/${localWorkspaceFolderBasename},type=bind,consistency=consistent",
   "mounts": [
     "source=${localWorkspaceFolder}/../rmm,target=/home/coder/rmm,type=bind,consistency=consistent",
+    "source=${localWorkspaceFolder}/../kvikio,target=/home/coder/kvikio,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../raft,target=/home/coder/raft,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../cumlprims_mg,target=/home/coder/cumlprims_mg,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../cuml,target=/home/coder/cuml,type=bind,consistency=consistent",
