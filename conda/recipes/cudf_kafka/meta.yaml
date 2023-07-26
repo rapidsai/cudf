@@ -43,7 +43,7 @@ requirements:
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
     - python
-    - cython >=0.29,<0.30
+    - cython >=3.0.0
     - cuda-version ={{ cuda_version }}
     - cudf ={{ version }}
     - libcudf_kafka ={{ version }}
