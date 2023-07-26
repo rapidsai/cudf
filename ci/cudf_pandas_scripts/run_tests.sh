@@ -46,7 +46,7 @@ else
 
     RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
     RAPIDS_PY_WHEEL_NAME="cudf_${manylinux}_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
-    python -m pip install $(ls ./local-cudf-dep/cudf*.whl)[test,cudf_pandas_tests]
+    python -m pip install $(ls ./local-cudf-dep/cudf*.whl)[test,cudf-pandas-tests]
 fi
 
 python -m pytest -p cudf.pandas ./python/cudf/cudf_pandas_tests/
