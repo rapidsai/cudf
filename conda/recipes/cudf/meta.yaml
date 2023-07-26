@@ -55,7 +55,7 @@ requirements:
     - cuda-version ={{ cuda_version }}
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
-    - protobuf =4.21
+    - protobuf ==4.21.*
     - python
     - cython >=0.29,<0.30
     - scikit-build >=0.13.1

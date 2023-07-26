@@ -263,9 +263,9 @@ dependencies:
           - rmm==23.8.*
       - output_types: pyproject
         packages:
-          # We pin an exact protobuf minor version here for building but allow
-          # any greater minor version at runtime.
-          - protobuf==4.21
+          # We pin the protobuf minor version here for building but allow any
+          # greater minor version at runtime.
+          - protobuf==4.21.*
           - protoc-wheel
   libarrow_run:
     common:
