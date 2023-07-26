@@ -2185,3 +2185,11 @@ def test_series_init_error():
         lfunc_args_and_kwargs=([], {"data": [11], "index": [10, 11]}),
         rfunc_args_and_kwargs=([], {"data": [11], "index": [10, 11]}),
     )
+
+
+def test_series_mixed_dtype_error():
+    ps = pd.concat(
+        [pd.Series([1, 2, 3], dtype="datetime64[ns]"), pd.Series([10, 11])]
+    )
+    with pytest.raises(TypeError):
+        cudf.Series(ps)

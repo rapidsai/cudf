@@ -2027,6 +2027,16 @@ def as_column(
             )
         else:
             pyarrow_array = pa.array(arbitrary, from_pandas=nan_as_null)
+            if (
+                arbitrary.dtype == cudf.dtype("object")
+                and pyarrow_array.type
+                not in {np_to_pa_dtype(arbitrary.dtype), pa.null(), pa.bool_()}
+                and not isinstance(
+                    pyarrow_array.type,
+                    (pa.Decimal128Type, pa.StructType, pa.ListType),
+                )
+            ):
+                raise TypeError("Cannot create column with mixed types")
             if isinstance(pyarrow_array.type, pa.Decimal128Type):
                 pyarrow_type = cudf.Decimal128Dtype.from_arrow(
                     pyarrow_array.type
@@ -2256,6 +2266,7 @@ def as_column(
 
             pa_type = None
             np_type = None
+            retry = True
             try:
                 if dtype is not None:
                     if is_categorical_dtype(dtype) or is_interval_dtype(dtype):
@@ -2334,6 +2345,11 @@ def as_column(
                         pa_type = np_to_pa_dtype(
                             _maybe_convert_to_default_type("float")
                         )
+                    if isinstance(
+                        arbitrary, pd.Index
+                    ) and arbitrary.dtype == cudf.dtype("object"):
+                        pa_type = np_to_pa_dtype(arbitrary.dtype)
+                        retry = False
 
                 data = as_column(
                     pa.array(
@@ -2346,7 +2362,9 @@ def as_column(
                     dtype=dtype,
                     nan_as_null=nan_as_null,
                 )
-            except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
+            except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError) as e:
+                if not retry:
+                    raise e
                 if is_categorical_dtype(dtype):
                     sr = pd.Series(arbitrary, dtype="category")
                     data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
