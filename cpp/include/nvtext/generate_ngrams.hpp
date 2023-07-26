@@ -110,7 +110,7 @@ std::unique_ptr<cudf::column> generate_character_ngrams(
  *
  * The hash algorithm uses MurmurHash32 on each ngram.
  *
- * @throw cudf::logic_error if `ngrams < 5`
+ * @throw cudf::logic_error if `ngrams < 2`
  * @throw cudf::logic_error if there are not enough characters to generate any ngrams
  *
  * @param strings Strings column to produce ngrams from.

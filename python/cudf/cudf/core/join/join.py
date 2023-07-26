@@ -434,6 +434,7 @@ class Merge:
             # modified in the size 0 case.
             and max(lhs._data.nlevels, 1) != max(rhs._data.nlevels, 1)
         ):
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "merging between different levels is deprecated and will be "
                 f"removed in a future version. ({lhs._data.nlevels} levels on "

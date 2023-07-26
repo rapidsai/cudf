@@ -59,6 +59,12 @@ namespace cudf {
 namespace io {
 
 /**
+ * @addtogroup io_datasources
+ * @{
+ * @file
+ */
+
+/**
  * @brief Interface class for providing input data to the readers.
  */
 class datasource {
@@ -508,5 +514,6 @@ class arrow_io_source : public datasource {
   std::shared_ptr<arrow::io::RandomAccessFile> arrow_file;
 };
 
+/** @} */  // end of group
 }  // namespace io
 }  // namespace cudf
