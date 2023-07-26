@@ -1223,15 +1223,15 @@ __global__ void __launch_bounds__(128, 8)
                 case type_id::TIMESTAMP_SECONDS:
                 case type_id::TIMESTAMP_MILLISECONDS: {
                   auto const tmp_millis = duration_ms{v};
-                  auto const tmp_days = floor<days>(tmp_millis);
-                  auto const tmp_nanos = duration_cast<duration_ns>(tmp_millis - tmp_days);
+                  auto const tmp_days   = floor<days>(tmp_millis);
+                  auto const tmp_nanos  = duration_cast<duration_ns>(tmp_millis - tmp_days);
                   return std::pair{tmp_days, tmp_nanos};
                 } break;
                 case type_id::TIMESTAMP_MICROSECONDS:
                 case type_id::TIMESTAMP_NANOSECONDS: {
                   auto const tmp_micros = duration_us{v};
-                  auto const tmp_days = floor<days>(tmp_micros);
-                  auto const tmp_nanos = duration_cast<duration_ns>(tmp_micros - tmp_days);
+                  auto const tmp_days   = floor<days>(tmp_micros);
+                  auto const tmp_nanos  = duration_cast<duration_ns>(tmp_micros - tmp_days);
                   return std::pair{tmp_days, tmp_nanos};
                 } break;
               }
