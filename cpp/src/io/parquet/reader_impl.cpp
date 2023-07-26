@@ -441,7 +441,7 @@ bool reader::impl::has_next()
 }
 
 namespace {
-static parquet_column_schema walk_schema(aggregate_reader_metadata const* mt, int idx)
+parquet_column_schema walk_schema(aggregate_reader_metadata const* mt, int idx)
 {
   SchemaElement const& sch = mt->get_schema(idx);
   std::vector<parquet_column_schema> children;
