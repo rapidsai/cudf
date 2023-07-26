@@ -1159,7 +1159,7 @@ __global__ void __launch_bounds__(128, 8)
       return std::make_tuple(is_valid, val_idx);
     }();
 
-    if (cur_val_idx + t < s->page.num_leaf_values && is_valid) num_valid++;
+    if (is_valid) num_valid++;
 
     cur_val_idx += nvals;
     if (dict_bits >= 0) {
