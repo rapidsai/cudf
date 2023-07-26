@@ -263,7 +263,9 @@ dependencies:
           - rmm==23.8.*
       - output_types: conda
         packages:
-          - &protobuf protobuf>=4.21.6,<4.22
+          # We pin an exact protobuf minor version here for building but allow
+          # any greater minor version at runtime.
+          - protobuf==4.21
       - output_types: pyproject
         packages:
           - protoc-wheel
@@ -424,7 +426,7 @@ dependencies:
           - packaging
           - rmm==23.8.*
           - typing_extensions>=4.0.0
-          - *protobuf
+          - protobuf>=4.21,<5
       - output_types: conda
         packages:
           - cupy>=12.0.0
