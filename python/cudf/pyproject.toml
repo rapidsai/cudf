@@ -7,7 +7,6 @@ requires = [
     "cython>=0.29,<0.30",
     "ninja",
     "numpy>=1.21",
-    "protobuf==4.21.*",
     "protoc-wheel",
     "pyarrow==11.0.0.*",
     "rmm==23.8.*",
