@@ -1451,8 +1451,6 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                                    rmm::cuda_stream_view stream)
 {
   auto vec         = table_to_linked_columns(input);
-  fprintf(stderr, "\nGERA_DEBUG (L%d): %d\n", __LINE__, int(input.column(0).type().id()));
-
   auto schema_tree = construct_schema_tree(vec, table_meta, write_mode, int96_timestamps);
   // Construct parquet_column_views from the schema tree leaf nodes.
   std::vector<parquet_column_view> parquet_columns;
@@ -2047,7 +2045,6 @@ void writer::impl::update_compression_statistics(
 
 void writer::impl::write(table_view const& input, std::vector<partition_info> const& partitions)
 {
-  fprintf(stderr, "\nGERA_DEBUG io::detail:parquet::write\n");
   _last_write_successful = false;
   CUDF_EXPECTS(not _closed, "Data has already been flushed to out and closed");
 
@@ -2306,7 +2303,6 @@ writer::writer(std::vector<std::unique_ptr<data_sink>> sinks,
                rmm::cuda_stream_view stream)
   : _impl(std::make_unique<impl>(std::move(sinks), options, mode, stream))
 {
-  fprintf(stderr, "\nGERA_DEBUG (L%d) writer::writer int96_ts=%d\n", __LINE__, options.is_enabled_int96_timestamps());
 }
 
 // Destructor within this translation unit

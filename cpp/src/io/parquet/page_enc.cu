@@ -948,13 +948,11 @@ static __device__ std::pair<duration_ns, duration_D> convert_nanoseconds(type_id
   switch (tid) {
     case type_id::TIMESTAMP_SECONDS:
     case type_id::TIMESTAMP_MILLISECONDS: {
-      printf("\nGERA_DEBUG INT96 gpuEncodePages convert_nanoseconds TIMESTAMP_(MILLI)SECONDS\n");
       gregorian_days = floor<days>(duration_ms{v});
       time_of_day = duration_cast<nanoseconds>(duration_ms(v) - gregorian_days);
     } break;
     case type_id::TIMESTAMP_MICROSECONDS:
     case type_id::TIMESTAMP_NANOSECONDS: {
-      printf("\nGERA_DEBUG INT96 gpuEncodePages convert_nanoseconds TIMESTAMP_(MICRO/NANO)SECONDS\n");
       gregorian_days = floor<days>(duration_us{v});
       time_of_day = duration_cast<nanoseconds>(duration_us(v) - gregorian_days);
     } break;
@@ -1241,7 +1239,6 @@ __global__ void __launch_bounds__(128, 8)
           } break;
           case INT96: {
             int64_t v        = s->col.leaf_column->element<int64_t>(val_idx);
-            uint64_t gera_uv = s->col.leaf_column->element<uint64_t>(val_idx);
             int32_t ts_scale = s->col.ts_scale;
             if (ts_scale != 0) {
               if (ts_scale < 0) {
@@ -1250,8 +1247,6 @@ __global__ void __launch_bounds__(128, 8)
                 v *= ts_scale;
               }
             }
-            printf("\nGERA_DEBUG INT96 gpuEncodePages scale=%d v=%ld orig_uv=%lu\n",
-              ts_scale, v, gera_uv);
 
             auto const ret = convert_nanoseconds(s->col.leaf_column->type().id(), v);
 
