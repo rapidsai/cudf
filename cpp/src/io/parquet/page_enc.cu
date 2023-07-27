@@ -16,6 +16,7 @@
 
 #include "parquet_gpu.cuh"
 
+#include <chrono>
 #include <io/utilities/block_utils.cuh>
 
 #include <cudf/detail/iterator.cuh>
@@ -23,6 +24,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 
+#include <ratio>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -932,15 +934,20 @@ constexpr auto julian_calendar_epoch_diff_in_days()
   return ceil<days>(sys_days{January / 1 / 1970} - (sys_days{November / 24 / -4713} + 12h));
 }
 
-template <typename Per> __device__
-auto juilian_days_with_time(int64_t v) {
-    using namespace cuda::std::chrono;
-    auto const dur_total = duration<int64_t, Per>{v};
-    auto const dur_days  = floor<duration_D>(dur_total);
-    auto const dur_time_of_day = dur_total - dur_days;
-    auto const dur_time_of_day_nanos = duration_cast<duration_ns>(dur_time_of_day);
-    auto const julian_days = dur_days + julian_calendar_epoch_diff_in_days();
-    return std::pair{dur_days, dur_time_of_day_nanos};
+template <typename Per>
+__device__ std::pair<cuda::std::chrono::days, cuda::std::chrono::nanoseconds> juilian_days_with_time(
+  int64_t v)
+{
+  using namespace cuda::std::chrono;
+  auto const dur_total             = duration<int64_t, Per>{v};
+  auto const dur_days              = floor<days>(dur_total);
+  auto const dur_time_of_day       = dur_total - dur_days;
+  auto const dur_time_of_day_nanos = duration_cast<nanoseconds>(dur_time_of_day);
+  auto const julian_days           = dur_days + julian_calendar_epoch_diff_in_days();
+  printf("\n######\nGERA_DEBUG julian_days=%d last_day_nanos=%lld\n######\n",
+         julian_days.count(),
+         dur_time_of_day_nanos.count());
+  return std::pair{dur_days, dur_time_of_day_nanos};
 }
 
 // blockDim(128, 1, 1)
@@ -1228,7 +1235,7 @@ __global__ void __launch_bounds__(128, 8)
               }
             }
 
-            auto const [julian_days, last_day_nanos] = ([&]() {
+            auto const& [julian_days, last_day_nanos] = ([&]() {
               using namespace cuda::std::chrono;
               switch (s->col.leaf_column->type().id()) {
                 case type_id::TIMESTAMP_SECONDS:
@@ -1240,11 +1247,8 @@ __global__ void __launch_bounds__(128, 8)
                   return juilian_days_with_time<cuda::std::micro>(v);
                 } break;
               }
-              return std::pair{duration_D::zero(), duration_ns::zero()};
+              return juilian_days_with_time<cuda::std::nano>(0);
             }());
-
-            printf("\nGERA_DEBUG julian_days=%d last_day_nanos=%lld\n",
-              julian_days.count(), last_day_nanos.count());
 
             // the 12 bytes of fixed length data.
             v             = last_day_nanos.count();
