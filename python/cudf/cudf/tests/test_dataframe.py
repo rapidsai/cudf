@@ -5381,7 +5381,6 @@ def test_cov_nans():
         cudf.Series([4, 2, 3], index=["a", "b", "d"]),
         cudf.Series([4, 2], index=["a", "b"]),
         cudf.Series([4, 2, 3], index=cudf.core.index.RangeIndex(0, 3)),
-        cudf.Series([4, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"]),
     ],
 )
 @pytest.mark.parametrize("colnames", [["a", "b", "c"], [0, 1, 2]])
@@ -5435,6 +5434,69 @@ def test_df_sr_binop(gsr, colnames, op):
 
         expect = op(psr, pdf)
         got = op(gsr, gdf).to_pandas(nullable=True)
+        assert_eq(expect, got, check_dtype=False)
+
+
+@pytest_unmark_spilling
+@pytest.mark.parametrize(
+    "gsr",
+    [
+        cudf.Series([4, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"]),
+    ],
+)
+@pytest.mark.parametrize("colnames", [["a", "b", "c"], [0, 1, 2]])
+@pytest.mark.parametrize(
+    "op",
+    [
+        operator.add,
+        operator.mul,
+        operator.floordiv,
+        operator.truediv,
+        operator.mod,
+        operator.pow,
+        operator.eq,
+        operator.lt,
+        operator.le,
+        operator.gt,
+        operator.ge,
+        operator.ne,
+    ],
+)
+def test_df_sr_binop_preserve_pandas_order(gsr, colnames, op):
+    # Anywhere that the column names of the DataFrame don't match the index
+    # names of the Series will trigger a deprecated reindexing. Since this
+    # behavior is deprecated in pandas, this test is temporarily silencing
+    # those warnings until cudf updates to pandas 2.0 as its compatibility
+    # target, at which point a large number of the parametrizations can be
+    # removed altogether (along with this warnings filter).
+    with warnings.catch_warnings():
+        assert version.parse(pd.__version__) < version.parse("2.0.0")
+        warnings.filterwarnings(
+            action="ignore",
+            category=FutureWarning,
+            message=(
+                "Automatic reindexing on DataFrame vs Series comparisons is "
+                "deprecated"
+            ),
+        )
+        data = [[3.0, 2.0, 5.0], [3.0, None, 5.0], [6.0, 7.0, np.nan]]
+        data = dict(zip(colnames, data))
+
+        gsr = gsr.astype("float64")
+
+        gdf = cudf.DataFrame(data)
+        pdf = gdf.to_pandas(nullable=True)
+
+        psr = gsr.to_pandas(nullable=True)
+
+        expect = op(pdf, psr)
+        with cudf.option_context("mode.pandas_compatible", True):
+            got = op(gdf, gsr).to_pandas(nullable=True)
+        assert_eq(expect, got, check_dtype=False)
+
+        expect = op(psr, pdf)
+        with cudf.option_context("mode.pandas_compatible", True):
+            got = op(gsr, gdf).to_pandas(nullable=True)
         assert_eq(expect, got, check_dtype=False)
 
 
@@ -10169,7 +10231,8 @@ def test_dataframe_binop_with_mixed_string_types():
     gdf2 = cudf.from_pandas(df2)
 
     expected = df2 + df1
-    got = gdf2 + gdf1
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gdf2 + gdf1
 
     assert_eq(expected, got)
 

@@ -1891,7 +1891,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             for k, v in rhs.items():
                 if k not in lhs:
                     operands[k] = (left_default, v, reflect, None)
-        if not equal_columns:
+
+        if cudf.get_option("mode.pandas_compatible") and not equal_columns:
             if isinstance(other, DataFrame):
                 column_names_list = self._data.to_pandas_index().join(
                     other._data.to_pandas_index(), how="outer"
@@ -1900,8 +1901,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 column_names_list = self._data.to_pandas_index().join(
                     other.index.to_pandas(), how="outer"
                 )
-            else:
-                raise TypeError("Impossible")
+
             sorted_dict = {}
             for key in column_names_list:
                 sorted_dict[key] = operands[key]
