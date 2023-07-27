@@ -2908,5 +2908,16 @@ def test_index_mixed_dtype_error():
             20,
         ]
     )
-    with pytest.raises(pa.ArrowTypeError):
+    with pytest.raises(TypeError):
+        cudf.Index(pi)
+
+    pi = pd.Index(
+        [
+            pd.Timedelta(10),
+            pd.Timedelta(20),
+            12,
+            20,
+        ]
+    )
+    with pytest.raises(TypeError):
         cudf.Index(pi)

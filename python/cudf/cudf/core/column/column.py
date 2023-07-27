@@ -2027,14 +2027,8 @@ def as_column(
             )
         else:
             pyarrow_array = pa.array(arbitrary, from_pandas=nan_as_null)
-            if (
-                arbitrary.dtype == cudf.dtype("object")
-                and pyarrow_array.type
-                not in {np_to_pa_dtype(arbitrary.dtype), pa.null(), pa.bool_()}
-                and not isinstance(
-                    pyarrow_array.type,
-                    (pa.Decimal128Type, pa.StructType, pa.ListType),
-                )
+            if arbitrary.dtype == cudf.dtype("object") and isinstance(
+                pyarrow_array, (pa.DurationArray, pa.TimestampArray)
             ):
                 raise TypeError("Cannot create column with mixed types")
             if isinstance(pyarrow_array.type, pa.Decimal128Type):
@@ -2345,20 +2339,24 @@ def as_column(
                         pa_type = np_to_pa_dtype(
                             _maybe_convert_to_default_type("float")
                         )
-                    if isinstance(
-                        arbitrary, pd.Index
-                    ) and arbitrary.dtype == cudf.dtype("object"):
-                        pa_type = np_to_pa_dtype(arbitrary.dtype)
-                        retry = False
 
+                pyarrow_array = pa.array(
+                    arbitrary,
+                    type=pa_type,
+                    from_pandas=True if nan_as_null is None else nan_as_null,
+                )
+
+                if (
+                    isinstance(arbitrary, pd.Index)
+                    and arbitrary.dtype == cudf.dtype("object")
+                    and isinstance(
+                        pyarrow_array, (pa.DurationArray, pa.TimestampArray)
+                    )
+                ):
+                    retry = False
+                    raise TypeError("Cannot create column with mixed types")
                 data = as_column(
-                    pa.array(
-                        arbitrary,
-                        type=pa_type,
-                        from_pandas=True
-                        if nan_as_null is None
-                        else nan_as_null,
-                    ),
+                    pyarrow_array,
                     dtype=dtype,
                     nan_as_null=nan_as_null,
                 )
