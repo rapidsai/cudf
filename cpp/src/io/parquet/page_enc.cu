@@ -16,7 +16,6 @@
 
 #include "parquet_gpu.cuh"
 
-#include <chrono>
 #include <io/utilities/block_utils.cuh>
 
 #include <cudf/detail/iterator.cuh>
@@ -24,7 +23,6 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 
-#include <ratio>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -924,30 +922,34 @@ static __device__ void PlainBoolEncode(page_enc_state_s* s,
  * @brief Determines the difference between the Proleptic Gregorian Calendar epoch (1970-01-01
  * 00:00:00 UTC) and the Julian date epoch (-4713-11-24 12:00:00 UTC).
  *
- * @return The difference between two epochs in `cuda::std::chrono::duration` in the whole number
- * of days.
+ * @return The difference between two epochs in `cuda::std::chrono::duration` format with a period
+ * of hours.
  */
-constexpr auto julian_calendar_epoch_diff_in_days()
+constexpr auto julian_calendar_epoch_diff()
 {
   using namespace cuda::std::chrono;
   using namespace cuda::std::chrono_literals;
-  return ceil<days>(sys_days{January / 1 / 1970} - (sys_days{November / 24 / -4713} + 12h));
+  return sys_days{January / 1 / 1970} - (sys_days{November / 24 / -4713} + 12h);
 }
 
+/**
+ * @brief Converts number of periods Per into a pair with nanoseconds since midnight
+ * and number of Julian days. Does not deal with time zones. Used by INT96 code.
+ *
+ * @param v int64_t count of ticks since epoch
+ * @return std::pair<nanoseconds,days> where nanoseconds is the number of nanoseconds
+ * elapsed in the day and days is the number of days from Julian epoch.
+ */
 template <typename Per>
-__device__ std::pair<cuda::std::chrono::days, cuda::std::chrono::nanoseconds> juilian_days_with_time(
-  int64_t v)
+__device__ auto juilian_days_with_time(int64_t v)
 {
   using namespace cuda::std::chrono;
   auto const dur_total             = duration<int64_t, Per>{v};
   auto const dur_days              = floor<days>(dur_total);
   auto const dur_time_of_day       = dur_total - dur_days;
   auto const dur_time_of_day_nanos = duration_cast<nanoseconds>(dur_time_of_day);
-  auto const julian_days           = dur_days + julian_calendar_epoch_diff_in_days();
-  printf("\n######\nGERA_DEBUG julian_days=%d last_day_nanos=%lld\n######\n",
-         julian_days.count(),
-         dur_time_of_day_nanos.count());
-  return std::pair{dur_days, dur_time_of_day_nanos};
+  auto const julian_days           = dur_days + ceil<days>(julian_calendar_epoch_diff());
+  return std::make_pair(dur_time_of_day_nanos, julian_days);
 }
 
 // blockDim(128, 1, 1)
@@ -1235,7 +1237,7 @@ __global__ void __launch_bounds__(128, 8)
               }
             }
 
-            auto const& [julian_days, last_day_nanos] = ([&]() {
+            auto const& [last_day_nanos, julian_days] = ([&]() {
               using namespace cuda::std::chrono;
               switch (s->col.leaf_column->type().id()) {
                 case type_id::TIMESTAMP_SECONDS:
