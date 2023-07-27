@@ -10146,7 +10146,7 @@ def test_dataframe_init_length_error(data, index):
     )
 
 
-def test_dataframe_binop_with_column_types():
+def test_dataframe_binop_with_mixed_date_types():
     df = pd.DataFrame(
         np.random.rand(2, 2),
         columns=pd.Index(["2000-01-03", "2000-01-04"], dtype="datetime64[ns]"),
@@ -10159,11 +10159,31 @@ def test_dataframe_binop_with_column_types():
     assert_eq(expected, got)
 
 
-def test_dataframe_binop_with_boolean_names():
+def test_dataframe_binop_with_mixed_string_types():
+    df1 = pd.DataFrame(np.random.rand(3, 3), columns=pd.Index([0, 1, 2]))
+    df2 = pd.DataFrame(
+        np.random.rand(6, 6),
+        columns=pd.Index([0, 1, 2, "VhDoHxRaqt", "X0NNHBIPfA", "5FbhPtS0D1"]),
+    )
+    gdf1 = cudf.from_pandas(df1)
+    gdf2 = cudf.from_pandas(df2)
+
+    expected = df2 + df1
+    got = gdf2 + gdf1
+
+    assert_eq(expected, got)
+
+
+def test_dataframe_binop_and_where():
     df = pd.DataFrame(np.random.rand(2, 2), columns=pd.Index([True, False]))
     gdf = cudf.from_pandas(df)
 
     expected = df > 1
     got = gdf > 1
+
+    assert_eq(expected, got)
+
+    expected = df[df > 1]
+    got = gdf[gdf > 1]
 
     assert_eq(expected, got)
