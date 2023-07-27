@@ -62,7 +62,7 @@ dependencies:
 - pandoc
 - pip
 - pre-commit
-- protobuf>=4.21.6,<4.22
+- protobuf>=4.21,<5
 - pyarrow==11.0.0.*
 - pydata-sphinx-theme
 - pyorc
