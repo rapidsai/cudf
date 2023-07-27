@@ -437,37 +437,49 @@ __device__ double BlockMean(T const* data, int64_t size)
 }
 
 template <typename T>
-__device__ double BlockVar(T const* data, int64_t size)
+__device__ double BlockCoVar(T const* lhs, T const* rhs, int64_t size)
 {
   auto block = cooperative_groups::this_thread_block();
 
-  __shared__ double block_var;
-  __shared__ T block_sum;
+  __shared__ double block_covar;
+
+  __shared__ T block_sum_lhs;
+  __shared__ T block_sum_rhs;
+
   if (block.thread_rank() == 0) {
-    block_var = 0;
-    block_sum = 0;
+    block_covar   = 0;
+    block_sum_lhs = 0;
+    block_sum_rhs = 0;
   }
   block.sync();
 
-  T local_sum      = 0;
-  double local_var = 0;
+  device_sum<T>(block, lhs, size, &block_sum_lhs);
+  device_sum<T>(block, rhs, size, &block_sum_rhs);
+  auto const mu_l = static_cast<double>(block_sum_lhs) / static_cast<double>(size);
+  auto const mu_r = static_cast<double>(block_sum_rhs) / static_cast<double>(size);
 
-  device_sum<T>(block, data, size, &block_sum);
-
-  auto const mean = static_cast<double>(block_sum) / static_cast<double>(size);
+  double local_covar = 0;
 
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
-    auto const delta = static_cast<double>(data[idx]) - mean;
-    local_var += delta * delta;
+    auto const delta =
+      (static_cast<double>(lhs[idx]) - mu_l) * (static_cast<double>(rhs[idx]) - mu_r);
+    local_covar += delta;
   }
 
-  cuda::atomic_ref<double, cuda::thread_scope_block> ref{block_var};
-  ref.fetch_add(local_var, cuda::std::memory_order_relaxed);
+  cuda::atomic_ref<double, cuda::thread_scope_block> ref{block_covar};
+  ref.fetch_add(local_covar, cuda::std::memory_order_relaxed);
   block.sync();
 
-  if (block.thread_rank() == 0) { block_var = block_var / static_cast<double>(size - 1); }
+  if (block.thread_rank() == 0) { block_covar = block_covar / static_cast<double>(size - 1); }
   block.sync();
-  return block_var;
+
+  return block_covar;
+}
+
+template <typename T>
+__device__ double BlockVar(T const* data, int64_t size)
+{
+  return BlockCoVar<T>(data, data, size);
 }
 
 template <typename T>
@@ -687,74 +699,17 @@ make_definition_idx(BlockIdxMax, float64, double);
 
 extern "C" __device__ int BlockCorr(double* numba_return_value,
                                     int64_t* const lhs_ptr,
-                                    int64_t* rhs_ptr,
+                                    int64_t* const rhs_ptr,
                                     int64_t size)
 {
-  double lhs_mean = BlockMean(lhs_ptr, size);
-  double rhs_mean = BlockMean(rhs_ptr, size);
+  auto numerator   = BlockCoVar(lhs_ptr, rhs_ptr, size);
+  auto denominator = BlockStd(lhs_ptr, size) * BlockStd(rhs_ptr, size);
 
-  // cuda::atomic<double, cuda::thread_scope_block> numerator = 0;
-  // cuda::atomic<double, cuda::thread_scope_block> sum_sq_l = 0;
-  // cuda::atomic<double, cuda::thread_scope_block> sum_sq_r = 0;
-
-  __shared__ double numerators[1024];
-  __shared__ double sum_sq_ls[1024];
-  __shared__ double sum_sq_rs[1024];
-
-  numerators[threadIdx.x] = 0.0;
-  sum_sq_ls[threadIdx.x]  = 0.0;
-  sum_sq_rs[threadIdx.x]  = 0.0;
-
-  auto block = cooperative_groups::this_thread_block();
-
-  for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
-    // numerator += data[idx];
-    double delta_l = lhs_ptr[idx] - lhs_mean;
-    double delta_r = rhs_ptr[idx] - rhs_mean;
-
-    numerators[idx] = delta_l * delta_r;
-    sum_sq_ls[idx]  = (delta_l * delta_l);
-    sum_sq_rs[idx]  = (delta_r * delta_r);
-    // printf("cuda THREAD INDEX=%d\n", threadIdx.x);
-    // printf(" GPU d_l=%.6f, d_r =%.6f, num=%.6f, sum_sq_l=%.6f, sum_sq_r=%.6f \n", delta_l,
-    // delta_r, numerator, sum_sq_l, sum_sq_r);
+  if (denominator == 0.0) {
+    *numba_return_value = 0.0;
+  } else {
+    *numba_return_value = numerator / denominator;
   }
-  __syncthreads();
-
-  /*
-  if (threadIdx.x == 0 ){
-    printf("nums:\n");
-
-    for (int i = 0; i < block.size(); i++) {
-      printf("%.6f ", numerators[i]);
-    }
-    printf("\n");
-  }
-  */
-  double numerator = BlockSum(numerators, block.size());
-  double denominator =
-    sqrt(BlockSum(sum_sq_ls, block.size())) * sqrt(BlockSum(sum_sq_rs, block.size()));
-  // printf("GPU Numerator: %.6f, Denominator: %.6f", numerator, denominator);
-  // double denominator = sqrt(sum_sq_l) * sqrt(sum_sq_r);
-
-  // double numsum = BlockSum(nums, block.size());
-  // printf("NUMSUM: %.6f", numsum);
-
-  block.sync();
-
-  if (denominator == 0.0) { return 0.0; }
-  *numba_return_value = numerator / denominator;
   __syncthreads();
   return 0;
-
-  // numerator = sum(
-  //     (xi - mean_x) * (yi - mean_y) for xi, yi in zip(x, y)
-  // )
-  // denominator = sqrt(
-  //     sum(
-  //         (xi - mean_x) ** 2
-  //     )
-  // )
-  //
-  //
 }
