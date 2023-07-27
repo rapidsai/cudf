@@ -10250,3 +10250,25 @@ def test_dataframe_binop_and_where():
     got = gdf[gdf > 1]
 
     assert_eq(expected, got)
+
+
+def test_dataframe_binop_with_datetime_index():
+    df = pd.DataFrame(
+        np.random.rand(2, 2),
+        columns=pd.Index(["2000-01-03", "2000-01-04"], dtype="datetime64[ns]"),
+    )
+    ser = pd.Series(
+        np.random.rand(2),
+        index=pd.Index(
+            [
+                "2000-01-04",
+                "2000-01-03",
+            ],
+            dtype="datetime64[ns]",
+        ),
+    )
+    gdf = cudf.from_pandas(df)
+    gser = cudf.from_pandas(ser)
+    expected = df - ser
+    got = gdf - gser
+    assert_eq(expected, got)
