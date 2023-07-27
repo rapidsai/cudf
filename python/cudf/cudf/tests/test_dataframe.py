@@ -5381,10 +5381,7 @@ def test_cov_nans():
         cudf.Series([4, 2, 3], index=["a", "b", "d"]),
         cudf.Series([4, 2], index=["a", "b"]),
         cudf.Series([4, 2, 3], index=cudf.core.index.RangeIndex(0, 3)),
-        pytest.param(
-            cudf.Series([4, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"]),
-            marks=pytest_xfail,
-        ),
+        cudf.Series([4, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"]),
     ],
 )
 @pytest.mark.parametrize("colnames", [["a", "b", "c"], [0, 1, 2]])
@@ -10147,3 +10144,26 @@ def test_dataframe_init_length_error(data, index):
             {"data": data, "index": index},
         ),
     )
+
+
+def test_dataframe_binop_with_column_types():
+    df = pd.DataFrame(
+        np.random.rand(2, 2),
+        columns=pd.Index(["2000-01-03", "2000-01-04"], dtype="datetime64[ns]"),
+    )
+    ser = pd.Series(np.random.rand(3), index=[0, 1, 2])
+    gdf = cudf.from_pandas(df)
+    gser = cudf.from_pandas(ser)
+    expected = df - ser
+    got = gdf - gser
+    assert_eq(expected, got)
+
+
+def test_dataframe_binop_with_boolean_names():
+    df = pd.DataFrame(np.random.rand(2, 2), columns=pd.Index([True, False]))
+    gdf = cudf.from_pandas(df)
+
+    expected = df > 1
+    got = gdf > 1
+
+    assert_eq(expected, got)

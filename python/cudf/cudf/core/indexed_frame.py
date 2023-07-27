@@ -3465,14 +3465,23 @@ class IndexedFrame(Frame):
         **kwargs,
     ):
         reflect, op = self._check_reflected_op(op)
-        operands, out_index = self._make_operands_and_index_for_binop(
+        (
+            operands,
+            out_index,
+            can_use_self_column_name,
+        ) = self._make_operands_and_index_for_binop(
             other, op, fill_value, reflect, can_reindex
         )
         if operands is NotImplemented:
             return NotImplemented
 
         return self._from_data(
-            ColumnAccessor(type(self)._colwise_binop(operands, op)),
+            ColumnAccessor(
+                type(self)._colwise_binop(operands, op),
+                level_names=None
+                if not can_use_self_column_name
+                else self._data._level_names,
+            ),
             index=out_index,
         )
 
@@ -3491,6 +3500,7 @@ class IndexedFrame(Frame):
             NotImplementedType,
         ],
         Optional[cudf.BaseIndex],
+        bool,
     ]:
         raise NotImplementedError(
             f"Binary operations are not supported for {self.__class__}"
@@ -3516,7 +3526,7 @@ class IndexedFrame(Frame):
         if cupy_func:
             if ufunc.nin == 2:
                 other = inputs[self is inputs[0]]
-                inputs, index = self._make_operands_and_index_for_binop(
+                inputs, index, _ = self._make_operands_and_index_for_binop(
                     other, fname
                 )
             else:
