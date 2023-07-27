@@ -198,11 +198,11 @@ metadata::metadata(datasource* source)
 }
 
 std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
-  std::vector<std::unique_ptr<datasource>> const& sources)
+  host_span<std::unique_ptr<datasource> const> sources)
 {
   std::vector<metadata> metadatas;
   std::transform(
-    sources.cbegin(), sources.cend(), std::back_inserter(metadatas), [](auto const& source) {
+    sources.begin(), sources.end(), std::back_inserter(metadatas), [](auto const& source) {
       return metadata(source.get());
     });
   return metadatas;
@@ -252,7 +252,7 @@ size_type aggregate_reader_metadata::calc_num_row_groups() const
 }
 
 aggregate_reader_metadata::aggregate_reader_metadata(
-  std::vector<std::unique_ptr<datasource>> const& sources)
+  host_span<std::unique_ptr<datasource> const> sources)
   : per_file_metadata(metadatas_from_sources(sources)),
     keyval_maps(collect_keyval_metadata()),
     num_rows(calc_num_rows()),

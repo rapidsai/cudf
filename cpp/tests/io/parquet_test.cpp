@@ -30,6 +30,7 @@
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/parquet_metadata.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
@@ -5601,6 +5602,149 @@ TEST_F(ParquetReaderTest, ReorderedReadMultipleFiles)
   auto sliced = cudf::slice(result.tbl->view(), {0, num_rows, num_rows, 2 * num_rows});
   CUDF_TEST_EXPECT_TABLES_EQUAL(sliced[0], swapped1);
   CUDF_TEST_EXPECT_TABLES_EQUAL(sliced[1], swapped2);
+}
+
+// Test fixture for metadata tests
+struct ParquetMetadataReaderTest : public cudf::test::BaseFixture {
+  std::string print(cudf::io::parquet_column_schema schema, int depth = 0)
+  {
+    std::string child_str;
+    for (auto const& child : schema.children()) {
+      child_str += print(child, depth + 1);
+    }
+    return std::string(depth, ' ') + schema.name() + "\n" + child_str;
+  }
+};
+
+TEST_F(ParquetMetadataReaderTest, TestBasic)
+{
+  auto const num_rows = 1200;
+
+  auto ints   = random_values<int>(num_rows);
+  auto floats = random_values<float>(num_rows);
+  column_wrapper<int> int_col(ints.begin(), ints.end());
+  column_wrapper<float> float_col(floats.begin(), floats.end());
+
+  table_view expected({int_col, float_col});
+
+  cudf::io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].set_name("int_col");
+  expected_metadata.column_metadata[1].set_name("float_col");
+
+  auto filepath = temp_env->get_temp_filepath("MetadataTest.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .metadata(std::move(expected_metadata));
+  cudf::io::write_parquet(out_opts);
+
+  auto meta = read_parquet_metadata(cudf::io::source_info{filepath});
+  EXPECT_EQ(meta.num_rows(), num_rows);
+
+  std::string expected_schema = R"(schema
+ int_col
+ float_col
+)";
+  EXPECT_EQ(expected_schema, print(meta.schema().root()));
+
+  EXPECT_EQ(meta.schema().root().name(), "schema");
+  EXPECT_EQ(meta.schema().root().type_kind(), cudf::io::parquet::TypeKind::UNDEFINED_TYPE);
+  ASSERT_EQ(meta.schema().root().num_children(), 2);
+
+  EXPECT_EQ(meta.schema().root().child(0).name(), "int_col");
+  EXPECT_EQ(meta.schema().root().child(1).name(), "float_col");
+}
+
+TEST_F(ParquetMetadataReaderTest, TestNested)
+{
+  auto const num_rows       = 1200;
+  auto const lists_per_row  = 4;
+  auto const num_child_rows = num_rows * lists_per_row;
+
+  auto keys = random_values<int>(num_child_rows);
+  auto vals = random_values<float>(num_child_rows);
+  column_wrapper<int> keys_col(keys.begin(), keys.end());
+  column_wrapper<float> vals_col(vals.begin(), vals.end());
+  auto s_col = cudf::test::structs_column_wrapper({keys_col, vals_col}).release();
+
+  std::vector<int> row_offsets(num_rows + 1);
+  for (int idx = 0; idx < num_rows + 1; ++idx) {
+    row_offsets[idx] = idx * lists_per_row;
+  }
+  column_wrapper<int> offsets(row_offsets.begin(), row_offsets.end());
+
+  auto list_col =
+    cudf::make_lists_column(num_rows, offsets.release(), std::move(s_col), 0, rmm::device_buffer{});
+
+  table_view expected({*list_col, *list_col});
+
+  cudf::io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].set_name("maps");
+  expected_metadata.column_metadata[0].set_list_column_as_map();
+  expected_metadata.column_metadata[1].set_name("lists");
+  expected_metadata.column_metadata[1].child(1).child(0).set_name("int_field");
+  expected_metadata.column_metadata[1].child(1).child(1).set_name("float_field");
+
+  auto filepath = temp_env->get_temp_filepath("MetadataTest.orc");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .metadata(std::move(expected_metadata));
+  cudf::io::write_parquet(out_opts);
+
+  auto meta = read_parquet_metadata(cudf::io::source_info{filepath});
+  EXPECT_EQ(meta.num_rows(), num_rows);
+
+  std::string expected_schema = R"(schema
+ maps
+  key_value
+   key
+   value
+ lists
+  list
+   element
+    int_field
+    float_field
+)";
+  EXPECT_EQ(expected_schema, print(meta.schema().root()));
+
+  EXPECT_EQ(meta.schema().root().name(), "schema");
+  EXPECT_EQ(meta.schema().root().type_kind(),
+            cudf::io::parquet::TypeKind::UNDEFINED_TYPE);  // struct
+  ASSERT_EQ(meta.schema().root().num_children(), 2);
+
+  auto const& out_map_col = meta.schema().root().child(0);
+  EXPECT_EQ(out_map_col.name(), "maps");
+  EXPECT_EQ(out_map_col.type_kind(), cudf::io::parquet::TypeKind::UNDEFINED_TYPE);  // map
+
+  ASSERT_EQ(out_map_col.num_children(), 1);
+  EXPECT_EQ(out_map_col.child(0).name(), "key_value");       // key_value (named in parquet writer)
+  ASSERT_EQ(out_map_col.child(0).num_children(), 2);
+  EXPECT_EQ(out_map_col.child(0).child(0).name(), "key");    // key (named in parquet writer)
+  EXPECT_EQ(out_map_col.child(0).child(1).name(), "value");  // value (named in parquet writer)
+  EXPECT_EQ(out_map_col.child(0).child(0).type_kind(), cudf::io::parquet::TypeKind::INT32);  // int
+  EXPECT_EQ(out_map_col.child(0).child(1).type_kind(),
+            cudf::io::parquet::TypeKind::FLOAT);  // float
+
+  auto const& out_list_col = meta.schema().root().child(1);
+  EXPECT_EQ(out_list_col.name(), "lists");
+  EXPECT_EQ(out_list_col.type_kind(), cudf::io::parquet::TypeKind::UNDEFINED_TYPE);  // list
+  // TODO repetition type?
+  ASSERT_EQ(out_list_col.num_children(), 1);
+  EXPECT_EQ(out_list_col.child(0).name(), "list");  // list (named in parquet writer)
+  ASSERT_EQ(out_list_col.child(0).num_children(), 1);
+
+  auto const& out_list_struct_col = out_list_col.child(0).child(0);
+  EXPECT_EQ(out_list_struct_col.name(), "element");        // elements (named in parquet writer)
+  EXPECT_EQ(out_list_struct_col.type_kind(),
+            cudf::io::parquet::TypeKind::UNDEFINED_TYPE);  // struct
+  ASSERT_EQ(out_list_struct_col.num_children(), 2);
+
+  auto const& out_int_col = out_list_struct_col.child(0);
+  EXPECT_EQ(out_int_col.name(), "int_field");
+  EXPECT_EQ(out_int_col.type_kind(), cudf::io::parquet::TypeKind::INT32);
+
+  auto const& out_float_col = out_list_struct_col.child(1);
+  EXPECT_EQ(out_float_col.name(), "float_field");
+  EXPECT_EQ(out_float_col.type_kind(), cudf::io::parquet::TypeKind::FLOAT);
 }
 
 TEST_F(ParquetWriterTest, NoNullsAsNonNullable)

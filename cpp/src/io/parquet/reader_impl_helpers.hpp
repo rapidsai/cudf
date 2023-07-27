@@ -83,7 +83,7 @@ class aggregate_reader_metadata {
    * @brief Create a metadata object from each element in the source vector
    */
   static std::vector<metadata> metadatas_from_sources(
-    std::vector<std::unique_ptr<datasource>> const& sources);
+    host_span<std::unique_ptr<datasource> const> sources);
 
   /**
    * @brief Collect the keyvalue maps from each per-file metadata object into a vector of maps.
@@ -102,7 +102,7 @@ class aggregate_reader_metadata {
   [[nodiscard]] size_type calc_num_row_groups() const;
 
  public:
-  aggregate_reader_metadata(std::vector<std::unique_ptr<datasource>> const& sources);
+  aggregate_reader_metadata(host_span<std::unique_ptr<datasource> const> sources);
 
   [[nodiscard]] RowGroup const& get_row_group(size_type row_group_index, size_type src_idx) const;
 
@@ -119,8 +119,9 @@ class aggregate_reader_metadata {
     return per_file_metadata[0].schema[schema_idx];
   }
 
-  [[nodiscard]] auto const& get_key_value_metadata() const { return keyval_maps; }
+  [[nodiscard]] auto const& get_key_value_metadata() const& { return keyval_maps; }
 
+  [[nodiscard]] auto&& get_key_value_metadata() && { return std::move(keyval_maps); }
   /**
    * @brief Gets the concrete nesting depth of output cudf columns
    *
