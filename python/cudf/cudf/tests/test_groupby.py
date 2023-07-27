@@ -389,6 +389,8 @@ def groupby_jit_data():
     df["key2"] = np.random.randint(0, 2, nelem)
     df["val1"] = np.random.random(nelem)
     df["val2"] = np.random.random(nelem)
+    df["val3"] = np.random.randint(0, 10, nelem)
+    df["val4"] = np.random.randint(0, 10, nelem)
     return df
 
 
@@ -431,6 +433,20 @@ def test_groupby_apply_jit_reductions(func, groupby_jit_data, dtype):
     groupby_jit_data["val2"] = groupby_jit_data["val2"].astype(dtype)
 
     run_groupby_apply_jit_test(groupby_jit_data, func, ["key1"])
+
+
+@pytest.mark.parametrize("dtype", SUPPORTED_GROUPBY_NUMPY_TYPES)
+def test_groupby_apply_jit_correlation(groupby_jit_data, dtype):
+
+    groupby_jit_data["val3"] = groupby_jit_data["val3"].astype(dtype)
+    groupby_jit_data["val4"] = groupby_jit_data["val4"].astype(dtype)
+
+    keys = ["key1", "key2"]
+
+    def func(group):
+        return group["val3"].corr(group["val4"])
+
+    run_groupby_apply_jit_test(groupby_jit_data, func, keys)
 
 
 @pytest.mark.parametrize("dtype", ["float64"])
@@ -3306,27 +3322,3 @@ def test_group_by_pandas_sort_order(groups, sort):
             pdf.groupby(groups, sort=sort).sum(),
             df.groupby(groups, sort=sort).sum(),
         )
-
-
-def test_corr_jit():
-    def func(group):
-        return group["b"].corr(group["c"])
-
-    size = int(1000000)
-    gdf = cudf.DataFrame(
-        {
-            "a": np.random.randint(0, 10000, size),
-            "b": np.random.randint(0, 1000, size),
-            "c": np.random.randint(0, 1000, size),
-        }
-    )
-    gdf = gdf.sort_values("a")
-    pdf = gdf.to_pandas()
-
-    gdf_grouped = gdf.groupby("a")
-    pdf_grouped = pdf.groupby("a", as_index=False)
-
-    expect = pdf_grouped.apply(func)
-    got = gdf_grouped.apply(func, engine="jit")
-
-    assert_eq(expect, got)

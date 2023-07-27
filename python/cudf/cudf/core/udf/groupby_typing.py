@@ -104,7 +104,22 @@ class GroupModel(models.StructModel):
 call_cuda_functions: Dict[Any, Any] = {}
 
 
-def _register_cuda_reduction_caller(funcname, inputty, retty):
+def _register_cuda_binary_reduction_caller(funcname, lty, rty, retty):
+    cuda_func = cuda.declare_device(
+        f"Block{funcname}_{lty}_{rty}",
+        retty(types.CPointer(lty), types.CPointer(rty), group_size_type),
+    )
+
+    def caller(lhs, rhs, size):
+        return cuda_func(lhs, rhs, size)
+
+    call_cuda_functions.setdefault(funcname.lower(), {})
+
+    type_key = (retty, lty, rty)
+    call_cuda_functions[funcname.lower()][type_key] = caller
+
+
+def _register_cuda_unary_reduction_caller(funcname, inputty, retty):
     cuda_func = cuda.declare_device(
         f"Block{funcname}_{inputty}",
         retty(types.CPointer(inputty), group_size_type),
@@ -234,31 +249,33 @@ class GroupAttr(AttributeTemplate):
 
 
 for ty in SUPPORTED_GROUPBY_NUMBA_TYPES:
-    _register_cuda_reduction_caller("Max", ty, ty)
-    _register_cuda_reduction_caller("Min", ty, ty)
+    _register_cuda_unary_reduction_caller("Max", ty, ty)
+    _register_cuda_unary_reduction_caller("Min", ty, ty)
     _register_cuda_idx_reduction_caller("IdxMax", ty)
     _register_cuda_idx_reduction_caller("IdxMin", ty)
-
-_register_cuda_reduction_caller("Sum", types.int32, types.int64)
-_register_cuda_reduction_caller("Sum", types.int64, types.int64)
-_register_cuda_reduction_caller("Sum", types.float32, types.float32)
-_register_cuda_reduction_caller("Sum", types.float64, types.float64)
+    _register_cuda_binary_reduction_caller("Corr", ty, ty, types.float64)
 
 
-_register_cuda_reduction_caller("Mean", types.int32, types.float64)
-_register_cuda_reduction_caller("Mean", types.int64, types.float64)
-_register_cuda_reduction_caller("Mean", types.float32, types.float32)
-_register_cuda_reduction_caller("Mean", types.float64, types.float64)
+_register_cuda_unary_reduction_caller("Sum", types.int32, types.int64)
+_register_cuda_unary_reduction_caller("Sum", types.int64, types.int64)
+_register_cuda_unary_reduction_caller("Sum", types.float32, types.float32)
+_register_cuda_unary_reduction_caller("Sum", types.float64, types.float64)
 
-_register_cuda_reduction_caller("Std", types.int32, types.float64)
-_register_cuda_reduction_caller("Std", types.int64, types.float64)
-_register_cuda_reduction_caller("Std", types.float32, types.float32)
-_register_cuda_reduction_caller("Std", types.float64, types.float64)
 
-_register_cuda_reduction_caller("Var", types.int32, types.float64)
-_register_cuda_reduction_caller("Var", types.int64, types.float64)
-_register_cuda_reduction_caller("Var", types.float32, types.float32)
-_register_cuda_reduction_caller("Var", types.float64, types.float64)
+_register_cuda_unary_reduction_caller("Mean", types.int32, types.float64)
+_register_cuda_unary_reduction_caller("Mean", types.int64, types.float64)
+_register_cuda_unary_reduction_caller("Mean", types.float32, types.float32)
+_register_cuda_unary_reduction_caller("Mean", types.float64, types.float64)
+
+_register_cuda_unary_reduction_caller("Std", types.int32, types.float64)
+_register_cuda_unary_reduction_caller("Std", types.int64, types.float64)
+_register_cuda_unary_reduction_caller("Std", types.float32, types.float32)
+_register_cuda_unary_reduction_caller("Std", types.float64, types.float64)
+
+_register_cuda_unary_reduction_caller("Var", types.int32, types.float64)
+_register_cuda_unary_reduction_caller("Var", types.int64, types.float64)
+_register_cuda_unary_reduction_caller("Var", types.float32, types.float32)
+_register_cuda_unary_reduction_caller("Var", types.float64, types.float64)
 
 
 for attr in ("group_data", "index", "size"):

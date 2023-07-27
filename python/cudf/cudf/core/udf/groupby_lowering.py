@@ -2,7 +2,7 @@
 
 from functools import partial
 
-from numba import cuda, types
+from numba import types
 from numba.core import cgutils
 from numba.core.extending import lower_builtin
 from numba.core.typing import signature as nb_signature
@@ -55,25 +55,6 @@ def group_reduction_impl_basic(context, builder, sig, args, function):
     )
 
 
-block_corr = cuda.declare_device(
-    "BlockCorr",
-    types.float64(
-        types.CPointer(types.int64),
-        types.CPointer(types.int64),
-        group_size_type,
-    ),
-)
-
-
-def _block_corr(lhs_ptr, rhs_ptr, size):
-    return block_corr(lhs_ptr, rhs_ptr, size)
-
-
-@cuda_lower(
-    "GroupType.corr",
-    GroupType(types.int64, types.int64),
-    GroupType(types.int64, types.int64),
-)
 def group_corr(context, builder, sig, args):
     """
     Instruction boilerplate used for calling a groupby correlation
@@ -84,7 +65,6 @@ def group_corr(context, builder, sig, args):
     rhs_grp = cgutils.create_struct_proxy(sig.args[1])(
         context, builder, value=args[1]
     )
-
     # logically take the address of the group's data pointer
     lhs_group_data_ptr = builder.alloca(lhs_grp.group_data.type)
     builder.store(lhs_grp.group_data, lhs_group_data_ptr)
@@ -92,14 +72,24 @@ def group_corr(context, builder, sig, args):
     # logically take the address of the group's data pointer
     rhs_group_data_ptr = builder.alloca(rhs_grp.group_data.type)
     builder.store(rhs_grp.group_data, rhs_group_data_ptr)
-
+    device_func = call_cuda_functions["corr"][
+        (
+            sig.return_type,
+            sig.args[0].group_scalar_type,
+            sig.args[1].group_scalar_type,
+        )
+    ]
     result = context.compile_internal(
         builder,
-        _block_corr,
+        device_func,
         nb_signature(
             types.float64,
-            types.CPointer(types.int64),
-            types.CPointer(types.int64),
+            types.CPointer(
+                sig.args[0].group_scalar_type
+            ),  # this group calls corr
+            types.CPointer(
+                sig.args[1].group_scalar_type
+            ),  # this group is passed
             group_size_type,
         ),
         (
@@ -211,3 +201,4 @@ for ty in SUPPORTED_GROUPBY_NUMBA_TYPES:
     cuda_lower("GroupType.idxmin", GroupType(ty, types.int64))(
         cuda_Group_idxmin
     )
+    cuda_lower("GroupType.corr", GroupType(ty), GroupType(ty))(group_corr)

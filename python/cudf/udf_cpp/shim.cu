@@ -632,6 +632,19 @@ __device__ int64_t BlockIdxMin(T const* data, int64_t* index, int64_t size)
   return block_idx_min;
 }
 
+template <typename T>
+__device__ double BlockCorr(T* const lhs_ptr, T* const rhs_ptr, int64_t size)
+{
+  auto numerator   = BlockCoVar(lhs_ptr, rhs_ptr, size);
+  auto denominator = BlockStd(lhs_ptr, size) * BlockStd<T>(rhs_ptr, size);
+
+  if (denominator == 0.0) {
+    return 0.0;
+  } else {
+    return numerator / denominator;
+  }
+}
+
 extern "C" {
 #define make_definition(name, cname, type, return_type)                                          \
   __device__ int name##_##cname(return_type* numba_return_value, type* const data, int64_t size) \
@@ -697,19 +710,21 @@ make_definition_idx(BlockIdxMax, float64, double);
 #undef make_definition_idx
 }
 
-extern "C" __device__ int BlockCorr(double* numba_return_value,
-                                    int64_t* const lhs_ptr,
-                                    int64_t* const rhs_ptr,
-                                    int64_t size)
-{
-  auto numerator   = BlockCoVar(lhs_ptr, rhs_ptr, size);
-  auto denominator = BlockStd(lhs_ptr, size) * BlockStd(rhs_ptr, size);
-
-  if (denominator == 0.0) {
-    *numba_return_value = 0.0;
-  } else {
-    *numba_return_value = numerator / denominator;
+extern "C" {
+#define make_definition_corr(name, cname, type)                                 \
+  __device__ int name##_##cname##_##cname(                                      \
+    double* numba_return_value, type* const lhs, type* const rhs, int64_t size) \
+  {                                                                             \
+    double const res    = name<type>(lhs, rhs, size);                           \
+    *numba_return_value = res;                                                  \
+    __syncthreads();                                                            \
+    return 0;                                                                   \
   }
-  __syncthreads();
-  return 0;
+
+make_definition_corr(BlockCorr, int32, int32_t);
+make_definition_corr(BlockCorr, int64, int64_t);
+make_definition_corr(BlockCorr, float32, float);
+make_definition_corr(BlockCorr, float64, double);
+
+#undef make_definition_corr
 }
