@@ -2187,9 +2187,8 @@ def test_series_init_error():
     )
 
 
-def test_series_mixed_dtype_error():
-    ps = pd.concat(
-        [pd.Series([1, 2, 3], dtype="datetime64[ns]"), pd.Series([10, 11])]
-    )
+@pytest.mark.parametrize("dtype", ["datetime64[ns]", "timedelta64[ns]"])
+def test_series_mixed_dtype_error(dtype):
+    ps = pd.concat([pd.Series([1, 2, 3], dtype=dtype), pd.Series([10, 11])])
     with pytest.raises(TypeError):
         cudf.Series(ps)
