@@ -28,7 +28,7 @@ from typing_extensions import Self
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import Dtype
-from cudf.api.types import is_dtype_equal, is_scalar
+from cudf.api.types import is_dtype_equal, is_scalar, is_bool_dtype
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
@@ -1891,8 +1891,17 @@ class Frame(BinaryOperand, Scannable):
         return self.dot(other, reflect=True)
 
     # Unary logical operators
+    @_cudf_nvtx_annotate
     def __neg__(self):
-        return -1 * self
+        """Negate for integral dtypes, logical NOT for bools."""
+        return self._from_data_like_self(
+            {
+                name: col.unary_operator("not")
+                if is_bool_dtype(col.dtype)
+                else -1 * col
+                for name, col in self._data.items()
+            }
+        )
 
     def __pos__(self):
         return self.copy(deep=True)
@@ -2827,7 +2836,7 @@ def _apply_inverse_column(col: ColumnBase) -> ColumnBase:
     """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
     if np.issubdtype(col.dtype, np.integer):
         return col.unary_operator("invert")
-    elif np.issubdtype(col.dtype, np.bool_):
+    elif is_bool_dtype(col.dtype):
         return col.unary_operator("not")
     else:
         raise TypeError(
