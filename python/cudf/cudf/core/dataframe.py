@@ -1852,7 +1852,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     equal_columns or can_use_self_column_name
                 )
             else:
-
                 if not can_use_self_column_name:
                     can_use_self_column_name = other.index.to_pandas().equals(
                         self._data.to_pandas_index()
