@@ -251,6 +251,7 @@ outputs:
         - test -f $PREFIX/include/cudf/partitioning.hpp
         - test -f $PREFIX/include/cudf/quantiles.hpp
         - test -f $PREFIX/include/cudf/reduction.hpp
+        - test -f $PREFIX/include/cudf/reduction/detail/reduction.hpp
         - test -f $PREFIX/include/cudf/reduction/detail/reduction_functions.hpp
         - test -f $PREFIX/include/cudf/reduction/detail/segmented_reduction_functions.hpp
         - test -f $PREFIX/include/cudf/replace.hpp
@@ -387,7 +388,7 @@ outputs:
     script: install_libcudf_example.sh
     build:
       number: {{ GIT_DESCRIBE_NUMBER }}
-      string: {{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+      string: cuda{{ cuda_major }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       ignore_run_exports_from:
         {% if cuda_major == "11" %}
         - {{ compiler('cuda11') }}
