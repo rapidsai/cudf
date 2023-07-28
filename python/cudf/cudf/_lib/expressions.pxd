@@ -26,3 +26,6 @@ cdef class ColumnReference(Expression):
 
 cdef class Operation(Expression):
     pass
+
+cdef class ColumnNameReference(Expression):
+    pass
