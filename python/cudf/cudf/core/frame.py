@@ -28,7 +28,7 @@ from typing_extensions import Self
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import Dtype
-from cudf.api.types import is_dtype_equal, is_scalar
+from cudf.api.types import is_bool_dtype, is_dtype_equal, is_scalar
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
@@ -97,6 +97,7 @@ class Frame(BinaryOperand, Scannable):
     def _has_nulls(self):
         return any(col.has_nulls() for col in self._data.values())
 
+    @_cudf_nvtx_annotate
     def serialize(self):
         header = {
             "type-serialized": pickle.dumps(type(self)),
@@ -106,6 +107,7 @@ class Frame(BinaryOperand, Scannable):
         return header, frames
 
     @classmethod
+    @_cudf_nvtx_annotate
     def deserialize(cls, header, frames):
         cls_deserialize = pickle.loads(header["type-serialized"])
         column_names = pickle.loads(header["column_names"])
@@ -151,6 +153,7 @@ class Frame(BinaryOperand, Scannable):
         frame = self.__class__._from_columns(columns, column_names)
         return frame._copy_type_metadata(self, override_dtypes=override_dtypes)
 
+    @_cudf_nvtx_annotate
     def _mimic_inplace(
         self, result: Self, inplace: bool = False
     ) -> Optional[Self]:
@@ -166,6 +169,7 @@ class Frame(BinaryOperand, Scannable):
             return result
 
     @property
+    @_cudf_nvtx_annotate
     def size(self):
         """
         Return the number of elements in the underlying data.
@@ -243,11 +247,13 @@ class Frame(BinaryOperand, Scannable):
         return self._num_columns * self._num_rows
 
     @property
+    @_cudf_nvtx_annotate
     def shape(self):
         """Returns a tuple representing the dimensionality of the DataFrame."""
         return self._num_rows, self._num_columns
 
     @property
+    @_cudf_nvtx_annotate
     def empty(self):
         """
         Indicator whether DataFrame or Series is empty.
@@ -308,6 +314,7 @@ class Frame(BinaryOperand, Scannable):
         """
         return self.size == 0
 
+    @_cudf_nvtx_annotate
     def memory_usage(self, deep=False):
         """Return the memory usage of an object.
 
@@ -323,6 +330,7 @@ class Frame(BinaryOperand, Scannable):
         """
         raise NotImplementedError
 
+    @_cudf_nvtx_annotate
     def __len__(self):
         return self._num_rows
 
@@ -425,6 +433,7 @@ class Frame(BinaryOperand, Scannable):
         return self._data.select_by_label(labels)
 
     @property
+    @_cudf_nvtx_annotate
     def values(self):
         """
         Return a CuPy representation of the DataFrame.
@@ -440,6 +449,7 @@ class Frame(BinaryOperand, Scannable):
         return self.to_cupy()
 
     @property
+    @_cudf_nvtx_annotate
     def values_host(self):
         """
         Return a NumPy representation of the data.
@@ -454,6 +464,7 @@ class Frame(BinaryOperand, Scannable):
         """
         return self.to_numpy()
 
+    @_cudf_nvtx_annotate
     def __array__(self, dtype=None):
         raise TypeError(
             "Implicit conversion to a host NumPy array via __array__ is not "
@@ -462,12 +473,14 @@ class Frame(BinaryOperand, Scannable):
             "using .to_numpy()."
         )
 
+    @_cudf_nvtx_annotate
     def __arrow_array__(self, type=None):
         raise TypeError(
             "Implicit conversion to a host PyArrow object via __arrow_array__ "
             "is not allowed. Consider using .to_arrow()"
         )
 
+    @_cudf_nvtx_annotate
     def _to_array(
         self,
         get_column_values: Callable,
@@ -1183,6 +1196,7 @@ class Frame(BinaryOperand, Scannable):
             {str(name): col.to_arrow() for name, col in self._data.items()}
         )
 
+    @_cudf_nvtx_annotate
     def _positions_from_column_names(self, column_names):
         """Map each column name into their positions in the frame.
 
@@ -1195,6 +1209,7 @@ class Frame(BinaryOperand, Scannable):
             if name in set(column_names)
         ]
 
+    @_cudf_nvtx_annotate
     def _copy_type_metadata(
         self,
         other: Self,
@@ -1566,6 +1581,7 @@ class Frame(BinaryOperand, Scannable):
             by=by, ascending=ascending, na_position=na_position
         ).values
 
+    @_cudf_nvtx_annotate
     def _get_sorted_inds(self, by=None, ascending=True, na_position="last"):
         """
         Get the indices required to sort self according to the columns
@@ -1768,9 +1784,11 @@ class Frame(BinaryOperand, Scannable):
 
         return output
 
+    @_cudf_nvtx_annotate
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         return _array_ufunc(self, ufunc, method, inputs, kwargs)
 
+    @_cudf_nvtx_annotate
     @acquire_spill_lock()
     def _apply_cupy_ufunc_to_operands(
         self, ufunc, cupy_func, operands, **kwargs
@@ -1884,30 +1902,45 @@ class Frame(BinaryOperand, Scannable):
             return cudf.DataFrame(result)
         return result.item()
 
+    @_cudf_nvtx_annotate
     def __matmul__(self, other):
         return self.dot(other)
 
+    @_cudf_nvtx_annotate
     def __rmatmul__(self, other):
         return self.dot(other, reflect=True)
 
     # Unary logical operators
+    @_cudf_nvtx_annotate
     def __neg__(self):
-        return -1 * self
+        """Negate for integral dtypes, logical NOT for bools."""
+        return self._from_data_like_self(
+            {
+                name: col.unary_operator("not")
+                if is_bool_dtype(col.dtype)
+                else -1 * col
+                for name, col in self._data.items()
+            }
+        )
 
+    @_cudf_nvtx_annotate
     def __pos__(self):
         return self.copy(deep=True)
 
+    @_cudf_nvtx_annotate
     def __abs__(self):
         return self._unaryop("abs")
 
     # Reductions
     @classmethod
+    @_cudf_nvtx_annotate
     def _get_axis_from_axis_arg(cls, axis):
         try:
             return cls._SUPPORT_AXIS_LOOKUP[axis]
         except KeyError:
             raise ValueError(f"No axis named {axis} for object type {cls}")
 
+    @_cudf_nvtx_annotate
     def _reduce(self, *args, **kwargs):
         raise NotImplementedError(
             f"Reductions are not supported for objects of type {type(self)}."
@@ -2577,6 +2610,7 @@ class Frame(BinaryOperand, Scannable):
         """
         return repr(self)
 
+    @_cudf_nvtx_annotate
     def __str__(self):
         return self.to_string()
 
@@ -2780,6 +2814,7 @@ class Frame(BinaryOperand, Scannable):
             }
         )
 
+    @_cudf_nvtx_annotate
     def nunique(self, dropna: bool = True):
         """
         Returns a per column mapping with counts of unique values for
@@ -2801,6 +2836,7 @@ class Frame(BinaryOperand, Scannable):
         }
 
     @staticmethod
+    @_cudf_nvtx_annotate
     def _repeat(
         columns: List[ColumnBase], repeats, axis=None
     ) -> List[ColumnBase]:
@@ -2814,6 +2850,7 @@ class Frame(BinaryOperand, Scannable):
 
         return libcudf.filling.repeat(columns, repeats)
 
+    @_cudf_nvtx_annotate
     @_warn_no_dask_cudf
     def __dask_tokenize__(self):
         return [
@@ -2827,7 +2864,7 @@ def _apply_inverse_column(col: ColumnBase) -> ColumnBase:
     """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
     if np.issubdtype(col.dtype, np.integer):
         return col.unary_operator("invert")
-    elif np.issubdtype(col.dtype, np.bool_):
+    elif is_bool_dtype(col.dtype):
         return col.unary_operator("not")
     else:
         raise TypeError(
