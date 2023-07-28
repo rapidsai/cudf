@@ -240,7 +240,6 @@ def test_series_from_cupy_scalars():
 @pytest.mark.parametrize("a", [[1, 2, 3], [1, 10, 30]])
 @pytest.mark.parametrize("b", [[4, 5, 6], [-11, -100, 30]])
 def test_append_index(a, b):
-
     df = pd.DataFrame()
     df["a"] = a
     df["b"] = b
@@ -368,7 +367,6 @@ def test_dataframe_truncate_datetimeindex():
 
 
 def test_series_init_none():
-
     # test for creating empty series
     # 1: without initializing
     sr1 = cudf.Series()
@@ -1503,7 +1501,6 @@ def test_dataframe_concat_different_column_types():
     "df_2", [cudf.DataFrame({"a": [], "b": []}), cudf.DataFrame({})]
 )
 def test_concat_empty_dataframe(df_1, df_2):
-
     got = cudf.concat([df_1, df_2])
     expect = pd.concat([df_1.to_pandas(), df_2.to_pandas()], sort=False)
 
@@ -2644,7 +2641,6 @@ def test_arrow_pandas_compat(pdf, gdf, preserve_index):
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["bool"])
 def test_cuda_array_interface(dtype):
-
     np_data = np.arange(10).astype(dtype)
     cupy_data = cupy.array(np_data)
     pd_data = pd.Series(np_data)
@@ -3822,7 +3818,6 @@ def test_diff(dtype, period, data_empty):
 @pytest.mark.parametrize("df", _dataframe_na_data())
 @pytest.mark.parametrize("nan_as_null", [True, False, None])
 def test_dataframe_isnull_isna(df, nan_as_null):
-
     gdf = cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
 
     assert_eq(df.isnull(), gdf.isnull())
@@ -3837,7 +3832,6 @@ def test_dataframe_isnull_isna(df, nan_as_null):
 @pytest.mark.parametrize("df", _dataframe_na_data())
 @pytest.mark.parametrize("nan_as_null", [True, False, None])
 def test_dataframe_notna_notnull(df, nan_as_null):
-
     gdf = cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
 
     assert_eq(df.notnull(), gdf.notnull())
@@ -5217,7 +5211,6 @@ def test_rowwise_ops_nullable_int_dtypes(op, expected):
 @pytest.mark.parametrize("op", ["max", "min"])
 @pytest.mark.parametrize("skipna", [True, False])
 def test_rowwise_ops_datetime_dtypes(data, op, skipna):
-
     gdf = cudf.DataFrame(data)
 
     pdf = gdf.to_pandas()
@@ -5281,7 +5274,6 @@ def test_rowwise_ops_datetime_dtypes(data, op, skipna):
     ],
 )
 def test_rowwise_ops_datetime_dtypes_2(data, op, skipna):
-
     gdf = cudf.DataFrame(data)
 
     pdf = gdf.to_pandas()
@@ -5526,13 +5518,11 @@ def test_memory_usage(deep, index, set_index):
     gdf = cudf.from_pandas(df)
 
     if index and set_index is None:
-
         # Special Case: Assume RangeIndex size == 0
         with expect_warning_if(deep, UserWarning):
             assert gdf.index.memory_usage(deep=deep) == 0
 
     else:
-
         # Check for Series only
         assert df["B"].memory_usage(index=index, deep=deep) == gdf[
             "B"
@@ -6246,7 +6236,6 @@ def test_from_pandas_unsupported_types(data, expected_upcast_type, error):
 @pytest.mark.parametrize("nan_as_null", [True, False])
 @pytest.mark.parametrize("index", [None, "a", ["a", "b"]])
 def test_from_pandas_nan_as_null(nan_as_null, index):
-
     data = [np.nan, 2.0, 3.0]
 
     if index is None:
@@ -6280,7 +6269,6 @@ def test_from_pandas_nan_as_null(nan_as_null, index):
 
 @pytest.mark.parametrize("nan_as_null", [True, False])
 def test_from_pandas_for_series_nan_as_null(nan_as_null):
-
     data = [np.nan, 2.0, 3.0]
     psr = pd.Series(data)
 
@@ -6425,7 +6413,6 @@ def test_dataframe_init_1d_list(data, columns):
     ],
 )
 def test_dataframe_init_from_arrays_cols(data, cols, index):
-
     gd_data = data
     if isinstance(data, cupy.ndarray):
         # pandas can't handle cupy arrays in general
@@ -6561,7 +6548,6 @@ def test_dataframe_assign_scalar_with_scalar_cols(col_data, assign_val):
 
 
 def test_dataframe_info_basic():
-
     buffer = io.StringIO()
     str_cmp = textwrap.dedent(
         """\
@@ -7093,7 +7079,6 @@ def test_dataframe_to_dict(orient, into):
     ],
 )
 def test_dataframe_from_dict(data, orient, dtype, columns):
-
     expected = pd.DataFrame.from_dict(
         data=data, orient=orient, dtype=dtype, columns=columns
     )
@@ -7191,7 +7176,6 @@ def test_dataframe_from_dict_transposed(dtype):
 def test_dataframe_from_dict_cp_np_arrays(
     pd_data, gd_data, orient, dtype, columns
 ):
-
     expected = pd.DataFrame.from_dict(
         data=pd_data, orient=orient, dtype=dtype, columns=columns
     )
@@ -10016,7 +10000,6 @@ def test_non_string_column_name_to_arrow(data):
 
 
 def test_complex_types_from_arrow():
-
     expected = pa.Table.from_arrays(
         [
             pa.array([1, 2, 3]),
@@ -10224,6 +10207,20 @@ def test_dataframe_binop_with_datetime_index():
     expected = df - ser
     got = gdf - gser
     assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "columns", ([], ["c", "a"], ["a", "d", "b", "e", "c"], ["a", "b", "c"])
+)
+@pytest.mark.parametrize("index", (None, [4, 5, 6]))
+def test_dataframe_dict_like_with_columns(columns, index):
+    data = {"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}
+    expect = pd.DataFrame(data, columns=columns, index=index)
+    actual = cudf.DataFrame(data, columns=columns, index=index)
+    if index is None and columns == []:
+        # We make an empty range index, pandas makes an empty index
+        expect = expect.reset_index(drop=True)
+    assert_eq(expect, actual)
 
 
 def test_dataframe_init_columns_named_multiindex():

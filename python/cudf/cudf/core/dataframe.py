@@ -868,31 +868,29 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         self, data, index=None, columns=None, nan_as_null=None
     ):
         if columns is not None:
-            # remove all entries in `data` that are
-            # not in `columns`
-            keys = [key for key in data.keys() if key in columns]
-            extra_cols = [col for col in columns if col not in keys]
-            if keys:
-                # if keys is non-empty,
-                # add null columns for all values
-                # in `columns` that don't exist in `keys`:
-                data = {key: data[key] for key in keys}
-                data.update({key: None for key in extra_cols})
+            # remove all entries in data that are not in columns,
+            # inserting new empty columns for entries in columns that
+            # are not in data
+            if any(c in data for c in columns):
+                # Let the downstream logic determine the length of the
+                # empty columns here
+                empty_column = lambda: None  # noqa: E731
             else:
-                # If keys is empty, none of the data keys match the columns, so
-                # we need to create an empty DataFrame. To match pandas, the
-                # size of the dataframe must match the provided index, so we
-                # need to return a masked array of nulls if an index is given.
-                row_count = 0 if index is None else len(index)
-                masked = index is not None
-                data = {
-                    key: cudf.core.column.column_empty(
-                        row_count=row_count,
-                        dtype=None,
-                        masked=masked,
-                    )
-                    for key in extra_cols
-                }
+                # If keys is empty, none of the data keys match the
+                # columns, so we need to create an empty DataFrame. To
+                # match pandas, the size of the dataframe must match
+                # the provided index, so we need to return a masked
+                # array of nulls if an index is given.
+                empty_column = functools.partial(
+                    cudf.core.column.column_empty,
+                    row_count=(0 if index is None else len(index)),
+                    dtype=None,
+                    masked=index is not None,
+                )
+
+            data = {
+                c: data[c] if c in data else empty_column() for c in columns
+            }
 
         data, index = self._align_input_series_indices(data, index=index)
 
@@ -933,9 +931,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     data[col_name],
                     nan_as_null=nan_as_null,
                 )
-
-        if columns is not None:
-            self.columns = columns
 
     @classmethod
     def _from_data(
