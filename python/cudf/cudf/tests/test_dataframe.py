@@ -1708,6 +1708,7 @@ def test_nonmatching_index_setitem(nrows):
 )
 def test_from_pandas(dtype):
     df = pd.DataFrame({"x": [1, 2, 3]}, index=[4.0, 5.0, 6.0], dtype=dtype)
+    df.columns.name = "custom_column_name"
     gdf = cudf.DataFrame.from_pandas(df)
     assert isinstance(gdf, cudf.DataFrame)
 
@@ -2483,8 +2484,15 @@ def test_bitwise_binops_series(pdf, gdf, binop):
 
 
 @pytest.mark.parametrize("unaryop", [operator.neg, operator.inv, operator.abs])
-def test_unaryops_df(pdf, gdf, unaryop):
-    d = unaryop(pdf - 5)
+@pytest.mark.parametrize(
+    "col_name,assign_col_name", [(None, False), (None, True), ("abc", True)]
+)
+def test_unaryops_df(pdf, unaryop, col_name, assign_col_name):
+    pd_df = pdf.copy()
+    if assign_col_name:
+        pd_df.columns.name = col_name
+    gdf = cudf.from_pandas(pd_df)
+    d = unaryop(pd_df - 5)
     g = unaryop(gdf - 5)
     assert_eq(d, g)
 
@@ -2625,6 +2633,12 @@ def test_arrow_pandas_compat(pdf, gdf, preserve_index):
     gdf2 = cudf.DataFrame.from_arrow(pdf_arrow_table)
     pdf2 = pdf_arrow_table.to_pandas()
 
+    assert_eq(pdf2, gdf2)
+    pdf.columns.name = "abc"
+    pdf_arrow_table = pa.Table.from_pandas(pdf, preserve_index=preserve_index)
+
+    gdf2 = cudf.DataFrame.from_arrow(pdf_arrow_table)
+    pdf2 = pdf_arrow_table.to_pandas()
     assert_eq(pdf2, gdf2)
 
 
@@ -2912,6 +2926,7 @@ def test_tail_for_string():
         ["v0", "v1"],
         ["v0", "index"],
         pd.MultiIndex.from_tuples([("x0", "x1"), ("y0", "y1")]),
+        pd.MultiIndex.from_tuples([(1, 2), (10, 11)], names=["ABC", "DEF"]),
     ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
@@ -10147,3 +10162,25 @@ def test_dataframe_init_length_error(data, index):
             {"data": data, "index": index},
         ),
     )
+
+
+def test_dataframe_init_columns_named_multiindex():
+    np.random.seed(0)
+    data = np.random.randn(2, 2)
+    columns = cudf.MultiIndex.from_tuples(
+        [("A", "one"), ("A", "two")], names=["y", "z"]
+    )
+    gdf = cudf.DataFrame(data, columns=columns)
+    pdf = pd.DataFrame(data, columns=columns.to_pandas())
+
+    assert_eq(gdf, pdf)
+
+
+def test_dataframe_init_columns_named_index():
+    np.random.seed(0)
+    data = np.random.randn(2, 2)
+    columns = pd.Index(["a", "b"], name="custom_name")
+    gdf = cudf.DataFrame(data, columns=columns)
+    pdf = pd.DataFrame(data, columns=columns)
+
+    assert_eq(gdf, pdf)

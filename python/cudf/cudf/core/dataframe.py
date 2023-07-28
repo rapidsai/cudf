@@ -723,6 +723,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if dtype:
             self._data = self.astype(dtype)._data
 
+        self._data.multiindex = self._data.multiindex or isinstance(
+            columns, pd.MultiIndex
+        )
+
     @_cudf_nvtx_annotate
     def _init_from_series_list(self, data, columns, index):
         if index is None:
@@ -1820,19 +1824,29 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             NotImplementedType,
         ],
         Optional[BaseIndex],
+        bool,
     ]:
         lhs, rhs = self._data, other
         index = self._index
         fill_requires_key = False
         left_default: Any = False
+        equal_columns = False
+        can_use_self_column_name = True
 
         if _is_scalar_or_zero_d_array(other):
             rhs = {name: other for name in self._data}
+            equal_columns = True
         elif isinstance(other, Series):
             rhs = dict(zip(other.index.values_host, other.values_host))
             # For keys in right but not left, perform binops between NaN (not
             # NULL!) and the right value (result is NaN).
             left_default = as_column(np.nan, length=len(self))
+            equal_columns = other.index.to_pandas().equals(
+                self._data.to_pandas_index()
+            )
+            can_use_self_column_name = equal_columns or (
+                list(other._index._data.names) == self._data._level_names
+            )
         elif isinstance(other, DataFrame):
             if (
                 not can_reindex
@@ -1854,13 +1868,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # For DataFrame-DataFrame ops, always default to operating against
             # the fill value.
             left_default = fill_value
+            equal_columns = self._column_names == other._column_names
+            can_use_self_column_name = (
+                equal_columns
+                or self._data._level_names == other._data._level_names
+            )
         elif isinstance(other, (dict, abc.Mapping)):
             # Need to fail early on host mapping types because we ultimately
             # convert everything to a dict.
-            return NotImplemented, None
+            return NotImplemented, None, True
 
         if not isinstance(rhs, (dict, abc.Mapping)):
-            return NotImplemented, None
+            return NotImplemented, None, True
 
         operands = {
             k: (
@@ -1876,7 +1895,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             for k, v in rhs.items():
                 if k not in lhs:
                     operands[k] = (left_default, v, reflect, None)
-        return operands, index
+
+        return operands, index, can_use_self_column_name
 
     @classmethod
     @_cudf_nvtx_annotate
@@ -5042,6 +5062,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
         df = cls._from_data(data, index)
+        df._data._level_names = list(dataframe.columns.names)
 
         # Set columns only if it is a MultiIndex
         if isinstance(dataframe.columns, pd.MultiIndex):
@@ -5085,13 +5106,19 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         2  3  6
         """
         index_col = None
+        col_index_names = None
         if isinstance(table, pa.Table) and isinstance(
             table.schema.pandas_metadata, dict
         ):
             index_col = table.schema.pandas_metadata["index_columns"]
+            if "column_indexes" in table.schema.pandas_metadata:
+                col_index_names = []
+                for col_meta in table.schema.pandas_metadata["column_indexes"]:
+                    col_index_names.append(col_meta["name"])
 
         out = super().from_arrow(table)
-
+        if col_index_names is not None:
+            out._data._level_names = col_index_names
         if index_col:
             if isinstance(index_col[0], dict):
                 idx = cudf.RangeIndex(
@@ -5337,6 +5364,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             df._data[names[0]] = column.as_column(
                 data, nan_as_null=nan_as_null
             )
+        if isinstance(columns, pd.Index):
+            df._data._level_names = list(columns.names)
 
         if index is None:
             df._index = RangeIndex(start=0, stop=len(data))
