@@ -28,7 +28,7 @@ from typing_extensions import Self
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import Dtype
-from cudf.api.types import is_dtype_equal, is_scalar, is_bool_dtype
+from cudf.api.types import is_bool_dtype, is_dtype_equal, is_scalar
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
