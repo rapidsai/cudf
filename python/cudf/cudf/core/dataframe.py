@@ -1901,10 +1901,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 column_names_list = self._data.to_pandas_index().join(
                     other.index.to_pandas(), how="outer"
                 )
+            else:
+                raise ValueError("other must be a DataFrame or Series.")
 
-            sorted_dict = {}
-            for key in column_names_list:
-                sorted_dict[key] = operands[key]
+            sorted_dict = {key: operands[key] for key in column_names_list}
             return sorted_dict, index, can_use_self_column_name
         return operands, index, can_use_self_column_name
 
