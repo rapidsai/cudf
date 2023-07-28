@@ -871,45 +871,65 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
                                             level_type lvl)
 {
   int32_t len;
-  int level_bits    = s->col.level_bits[lvl];
-  Encoding encoding = lvl == level_type::DEFINITION ? s->page.definition_level_encoding
-                                                    : s->page.repetition_level_encoding;
+  int const level_bits = s->col.level_bits[lvl];
+  auto const encoding  = lvl == level_type::DEFINITION ? s->page.definition_level_encoding
+                                                       : s->page.repetition_level_encoding;
 
   auto start = cur;
-  if (level_bits == 0) {
-    len                       = 0;
-    s->initial_rle_run[lvl]   = s->page.num_input_values * 2;  // repeated value
-    s->initial_rle_value[lvl] = 0;
-    s->lvl_start[lvl]         = cur;
-    s->abs_lvl_start[lvl]     = cur;
-  } else if (encoding == Encoding::RLE) {
-    // V2 only uses RLE encoding, so only perform check here
-    if (s->page.def_lvl_bytes || s->page.rep_lvl_bytes) {
-      len = lvl == level_type::DEFINITION ? s->page.def_lvl_bytes : s->page.rep_lvl_bytes;
-    } else if (cur + 4 < end) {
-      len = 4 + (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);
-      cur += 4;
-    } else {
-      len      = 0;
-      s->error = 2;
-    }
-    s->abs_lvl_start[lvl] = cur;
-    if (!s->error) {
-      uint32_t run            = get_vlq32(cur, end);
-      s->initial_rle_run[lvl] = run;
-      if (!(run & 1)) {
-        int v = (cur < end) ? cur[0] : 0;
+
+  auto init_rle = [s, lvl, end, level_bits](uint8_t const* cur, uint8_t const* end) {
+    uint32_t const run      = get_vlq32(cur, end);
+    s->initial_rle_run[lvl] = run;
+    if (!(run & 1)) {
+      if (cur < end) {
+        int v = cur[0];
         cur++;
         if (level_bits > 8) {
           v |= ((cur < end) ? cur[0] : 0) << 8;
           cur++;
         }
         s->initial_rle_value[lvl] = v;
+      } else {
+        s->initial_rle_value[lvl] = 0;
       }
-      s->lvl_start[lvl] = cur;
     }
+    s->lvl_start[lvl] = cur;
 
     if (cur > end) { s->error = 2; }
+  };
+
+  // this is a little redundant. if level_bits == 0, then nothing should be encoded
+  // for the level, but some V2 files in the wild violate this and encode the data anyway.
+  // thus we will handle V2 headers separately.
+  if ((s->page.flags & PAGEINFO_FLAGS_V2) != 0) {
+    // V2 only uses RLE encoding so no need to check encoding
+    len = lvl == level_type::DEFINITION ? s->page.def_lvl_bytes : s->page.rep_lvl_bytes;
+    s->abs_lvl_start[lvl] = cur;
+    if (len == 0) {
+      s->initial_rle_run[lvl]   = s->page.num_input_values * 2;  // repeated value
+      s->initial_rle_value[lvl] = 0;
+      s->lvl_start[lvl]         = cur;
+    } else {
+      init_rle(cur, cur + len);
+    }
+  } else if (level_bits == 0) {
+    len                       = 0;
+    s->initial_rle_run[lvl]   = s->page.num_input_values * 2;  // repeated value
+    s->initial_rle_value[lvl] = 0;
+    s->lvl_start[lvl]         = cur;
+    s->abs_lvl_start[lvl]     = cur;
+  } else if (encoding == Encoding::RLE) {  // V1 header with RLE encoding
+    if (cur + 4 < end) {
+      len = (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);
+      cur += 4;
+      s->abs_lvl_start[lvl] = cur;
+      init_rle(cur, cur + len);
+      // add back the 4 bytes for the length
+      len += 4;
+    } else {
+      len      = 0;
+      s->error = 2;
+    }
   } else if (encoding == Encoding::BIT_PACKED) {
     len                       = (s->page.num_input_values * level_bits + 7) >> 3;
     s->initial_rle_run[lvl]   = ((s->page.num_input_values + 7) >> 3) * 2 + 1;  // literal run
@@ -1247,7 +1267,13 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           s->dict_val  = 0;
           if ((s->col.data_type & 7) == BOOLEAN) { s->dict_run = s->dict_size * 2 + 1; }
           break;
-        case Encoding::RLE: s->dict_run = 0; break;
+        case Encoding::RLE: {
+          // first 4 bytes are length of RLE data
+          int const len = (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);
+          cur += 4;
+          if (cur + len > end) { s->error = 2; }
+          s->dict_run = 0;
+        } break;
         default:
           s->error = 1;  // Unsupported encoding
           break;

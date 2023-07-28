@@ -311,6 +311,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
             item, tuple(np.sctypes["int"] + np.sctypes["float"] + [int, float])
         ):
             return False
+        try:
+            item = pd.core.dtypes.common.ensure_python_int(item)
+        except TypeError:
+            return False
         if not item % 1 == 0:
             return False
         return item in range(self._start, self._stop, self._step)
