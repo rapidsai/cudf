@@ -1832,15 +1832,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             rhs = {name: other for name in self._data}
             equal_columns = True
         elif isinstance(other, Series):
-            rhs = dict(zip(other.index.values_host, other.values_host))
+            rhs = dict(zip(other.index.to_pandas(), other.values_host))
             # For keys in right but not left, perform binops between NaN (not
             # NULL!) and the right value (result is NaN).
             left_default = as_column(np.nan, length=len(self))
             equal_columns = other.index.to_pandas().equals(
                 self._data.to_pandas_index()
             )
-            can_use_self_column_name = equal_columns or (
-                list(other._index._data.names) == self._data._level_names
+            can_use_self_column_name = (
+                equal_columns
+                or list(other._index._data.names) == self._data._level_names
             )
         elif isinstance(other, DataFrame):
             if (
@@ -1891,6 +1892,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 if k not in lhs:
                     operands[k] = (left_default, v, reflect, None)
 
+        if not equal_columns:
+            if isinstance(other, DataFrame):
+                column_names_list = self._data.to_pandas_index().join(
+                    other._data.to_pandas_index(), how="outer"
+                )
+            elif isinstance(other, Series):
+                column_names_list = self._data.to_pandas_index().join(
+                    other.index.to_pandas(), how="outer"
+                )
+            else:
+                raise ValueError("other must be a DataFrame or Series.")
+
+            sorted_dict = {key: operands[key] for key in column_names_list}
+            return sorted_dict, index, can_use_self_column_name
         return operands, index, can_use_self_column_name
 
     @classmethod
@@ -7467,13 +7482,13 @@ def _align_indices(lhs, rhs):
         lhs_out = DataFrame(index=df.index)
         rhs_out = DataFrame(index=df.index)
         common = set(lhs._column_names) & set(rhs._column_names)
-        common_x = {f"{x}_x" for x in common}
-        common_y = {f"{x}_y" for x in common}
+        common_x = {f"{x}_x": x for x in common}
+        common_y = {f"{x}_y": x for x in common}
         for col in df._column_names:
             if col in common_x:
-                lhs_out[col[:-2]] = df[col]
+                lhs_out[common_x[col]] = df[col]
             elif col in common_y:
-                rhs_out[col[:-2]] = df[col]
+                rhs_out[common_y[col]] = df[col]
             elif col in lhs:
                 lhs_out[col] = df[col]
             elif col in rhs:
