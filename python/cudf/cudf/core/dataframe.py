@@ -1856,12 +1856,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     can_use_self_column_name = other.index.to_pandas().equals(
                         self._data.to_pandas_index()
                     )
-            equal_columns = other.index.to_pandas().equals(
-                self._data.to_pandas_index()
-            )
-            can_use_self_column_name = equal_columns or (
-                list(other._index._data.names) == self._data._level_names
-            )
         elif isinstance(other, DataFrame):
             if (
                 not can_reindex
