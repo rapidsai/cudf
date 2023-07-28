@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 import confluent_kafka as ck
 from cudf_kafka._lib.kafka import KafkaDatasource
 
@@ -276,15 +276,16 @@ class Consumer(CudfKafkaClient):
         """
         Consumes a single message, calls callbacks and returns events.
 
-        The application must check the returned Message object's Message.error()
-        method to distinguish between proper messages (error() returns None),
-        or an event or error (see error().code() for specifics).
+        The application must check the returned Message object's
+        Message.error() method to distinguish between proper messages
+        (error() returns None), or an event or error
+        (see error().code() for specifics).
 
         Parameters
         ----------
         timeout : float,
             Maximum time to block waiting for message, event or callback
-            (default: infinite (None translated into -1 in the library)). (Seconds)
+            (default: infinite (None translated into -1 in the
+            library)). (Seconds)
         """
         return self.ck.poll(timeout)
-
