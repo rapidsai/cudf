@@ -81,6 +81,7 @@ from cudf.core.dtypes import (
 )
 from cudf.core.missing import NA
 from cudf.core.mixins import BinaryOperand, Reducible
+from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
@@ -2260,7 +2261,6 @@ def as_column(
 
             pa_type = None
             np_type = None
-            retry = True
             try:
                 if dtype is not None:
                     if is_categorical_dtype(dtype) or is_interval_dtype(dtype):
@@ -2353,16 +2353,17 @@ def as_column(
                         pyarrow_array, (pa.DurationArray, pa.TimestampArray)
                     )
                 ):
-                    retry = False
-                    raise TypeError("Cannot create column with mixed types")
+                    raise MixedTypeError(
+                        "Cannot create column with mixed types"
+                    )
                 data = as_column(
                     pyarrow_array,
                     dtype=dtype,
                     nan_as_null=nan_as_null,
                 )
             except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError) as e:
-                if not retry:
-                    raise e
+                if isinstance(e, MixedTypeError):
+                    raise TypeError(str(e))
                 if is_categorical_dtype(dtype):
                     sr = pd.Series(arbitrary, dtype="category")
                     data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
