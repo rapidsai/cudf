@@ -722,15 +722,14 @@ struct list_buffer_data {
 };
 
 // Generates offsets for list buffer from number of elements in a row.
-void generate_offsets_for_list(device_span<list_buffer_data const> buff_data,
-                               rmm::cuda_stream_view stream)
+void generate_offsets_for_list(host_span<list_buffer_data> buff_data, rmm::cuda_stream_view stream)
 {
-  auto const transformer = [] __device__(list_buffer_data const list_data) {
-    thrust::exclusive_scan(
-      thrust::seq, list_data.data, list_data.data + list_data.size, list_data.data);
-  };
-  thrust::for_each(rmm::exec_policy(stream), buff_data.begin(), buff_data.end(), transformer);
-  stream.synchronize();
+  for (auto& list_data : buff_data) {
+    thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+                           list_data.data,
+                           list_data.data + list_data.size,
+                           list_data.data);
+  }
 }
 
 /**
@@ -1327,11 +1326,7 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
           }
         });
 
-      if (buff_data.size()) {
-        auto const dev_buff_data = cudf::detail::make_device_uvector_async(
-          buff_data, _stream, rmm::mr::get_current_device_resource());
-        generate_offsets_for_list(dev_buff_data, _stream);
-      }
+      if (not buff_data.empty()) { generate_offsets_for_list(buff_data, _stream); }
     }
   }
 

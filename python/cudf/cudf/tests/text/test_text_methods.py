@@ -878,27 +878,38 @@ def test_jaccard_index():
         str1.str.jaccard_index(str3, 5)
 
 
-def _make_list_of_strings_of_random_length(num_strings, max_length):
+def _make_list_of_strings_of_random_length(
+    num_strings, min_length, max_length
+):
     return [
         "".join(
             random.choice(string.ascii_lowercase)
-            for _ in range(random.randint(1, max_length))
+            for _ in range(random.randint(min_length, max_length))
         )
         for _ in range(num_strings)
     ]
 
 
 def test_jaccard_index_random_strings():
+    # Seed the rng before random string generation.
+    random.seed(42)
     num_strings = 100
-    common_strings = _make_list_of_strings_of_random_length(num_strings, 50)
-    uncommon_strings1 = _make_list_of_strings_of_random_length(num_strings, 10)
-    uncommon_strings2 = _make_list_of_strings_of_random_length(num_strings, 20)
+    jaccard_width = 5
+    common_strings = _make_list_of_strings_of_random_length(
+        num_strings, jaccard_width, 50
+    )
+    uncommon_strings1 = _make_list_of_strings_of_random_length(
+        num_strings, jaccard_width, 10
+    )
+    uncommon_strings2 = _make_list_of_strings_of_random_length(
+        num_strings, jaccard_width, 20
+    )
     str1 = cudf.Series(uncommon_strings1).str.cat(cudf.Series(common_strings))
     str2 = cudf.Series(uncommon_strings2).str.cat(cudf.Series(common_strings))
 
     # adopted from https://github.com/rapidsai/rapids-deduplication/issues/36
-    da = str1.str.character_ngrams(5, True)
-    db = str2.str.character_ngrams(5, True)
+    da = str1.str.character_ngrams(jaccard_width, True)
+    db = str2.str.character_ngrams(jaccard_width, True)
     da = da.list.unique()
     db = db.list.unique()
     da = da.explode()
@@ -920,5 +931,5 @@ def test_jaccard_index_random_strings():
     res = res.values.astype("float32")
     expected = cudf.Series(res)
 
-    actual = str1.str.jaccard_index(str2, 5)
+    actual = str1.str.jaccard_index(str2, jaccard_width)
     assert_eq(expected, actual)

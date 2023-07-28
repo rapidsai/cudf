@@ -402,7 +402,11 @@ def run_groupby_apply_jit_test(data, func, keys, *args):
     assert_groupby_results_equal(cudf_jit_result, pandas_result)
 
 
-@pytest.mark.parametrize("dtype", SUPPORTED_GROUPBY_NUMPY_TYPES)
+@pytest.mark.parametrize(
+    "dtype",
+    SUPPORTED_GROUPBY_NUMPY_TYPES,
+    ids=[str(t) for t in SUPPORTED_GROUPBY_NUMPY_TYPES],
+)
 @pytest.mark.parametrize(
     "func", ["min", "max", "sum", "mean", "var", "std", "idxmin", "idxmax"]
 )

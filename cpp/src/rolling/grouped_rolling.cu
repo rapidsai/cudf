@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "detail/optimized_unbounded_window.hpp"
 #include "detail/range_comparator_utils.cuh"
 #include "detail/range_window_bounds.hpp"
 #include "detail/rolling.cuh"
@@ -115,8 +116,16 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
   CUDF_EXPECTS((default_outputs.is_empty() || default_outputs.size() == input.size()),
                "Defaults column must be either empty or have as many rows as the input column.");
 
-  auto const preceding_window = preceding_window_bounds.value;
-  auto const following_window = following_window_bounds.value;
+  // Detect and bypass fully UNBOUNDED windows.
+  if (can_optimize_unbounded_window(preceding_window_bounds.is_unbounded(),
+                                    following_window_bounds.is_unbounded(),
+                                    min_periods,
+                                    aggr)) {
+    return optimized_unbounded_window(group_keys, input, aggr, stream, mr);
+  }
+
+  auto const preceding_window = preceding_window_bounds.value();
+  auto const following_window = following_window_bounds.value();
 
   if (group_keys.num_columns() == 0) {
     // No Groupby columns specified. Treat as one big group.
@@ -996,9 +1005,9 @@ range_window_bounds to_range_bounds(cudf::size_type num_days, cudf::data_type ti
 range_window_bounds to_range_bounds(cudf::window_bounds const& days_bounds,
                                     cudf::data_type timestamp_type)
 {
-  return days_bounds.is_unbounded
+  return days_bounds.is_unbounded()
            ? range_window_bounds::unbounded(get_duration_type_for(timestamp_type))
-           : cudf::type_dispatcher(timestamp_type, to_duration_bounds{}, days_bounds.value);
+           : cudf::type_dispatcher(timestamp_type, to_duration_bounds{}, days_bounds.value());
 }
 
 }  // namespace
@@ -1038,6 +1047,12 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                "Size mismatch between group_keys and input vector.");
 
   CUDF_EXPECTS((min_periods > 0), "min_periods must be positive");
+
+  // Detect and bypass fully UNBOUNDED windows.
+  if (can_optimize_unbounded_window(
+        preceding.is_unbounded(), following.is_unbounded(), min_periods, aggr)) {
+    return optimized_unbounded_window(group_keys, input, aggr, stream, mr);
+  }
 
   using sort_groupby_helper = cudf::groupby::detail::sort::sort_groupby_helper;
   using index_vector        = sort_groupby_helper::index_vector;
