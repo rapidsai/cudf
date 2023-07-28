@@ -478,12 +478,12 @@ table_with_metadata reader::impl::read_chunk()
                  true /*uses_custom_row_bounds*/,
                  {} /*row_group_indices, empty means read all row groups*/,
                  std::nullopt /*filter*/);
-    return read_chunk_internal(true);
+    return read_chunk_internal(true, std::nullopt);
   } else {
     auto const& chunk_info = _meta_chunk_read_info[_current_read_chunk];
     _file_preprocessed     = false;
     prepare_data(chunk_info.skip_rows, chunk_info.num_rows, true, {}, std::nullopt);
-    return read_chunk_internal(true);
+    return read_chunk_internal(true, std::nullopt);
   }
 }
 
