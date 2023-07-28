@@ -5,6 +5,7 @@ from enum import Enum
 from cython.operator cimport dereference
 from libc.stdint cimport int64_t
 from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.string cimport string
 
 from cudf._lib.cpp cimport expressions as libcudf_exp
 from cudf._lib.cpp.types cimport size_type
@@ -116,3 +117,8 @@ cdef class Operation(Expression):
             self.c_obj = <expression_ptr> make_unique[libcudf_exp.operation](
                 op_value, dereference(left.c_obj), dereference(right.c_obj)
             )
+
+cdef class ColumnNameReference(Expression):
+    def __cinit__(self, string name):
+        self.c_obj = <expression_ptr> \
+            make_unique[libcudf_exp.column_name_reference](name)
