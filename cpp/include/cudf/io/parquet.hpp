@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/ast/expressions.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
@@ -61,6 +62,9 @@ class parquet_reader_options {
   int64_t _skip_rows = 0;
   // Number of rows to read; `nullopt` is all
   std::optional<size_type> _num_rows;
+
+  // Predicate filter as AST to filter output rows.
+  std::optional<std::reference_wrapper<ast::expression const>> _filter;
 
   // Whether to store string data as categorical type
   bool _convert_strings_to_categories = false;
@@ -161,6 +165,13 @@ class parquet_reader_options {
   [[nodiscard]] auto const& get_row_groups() const { return _row_groups; }
 
   /**
+   * @brief Returns AST based filter for predicate pushdown.
+   *
+   * @return AST expression to use as filter
+   */
+  [[nodiscard]] auto const& get_filter() const { return _filter; }
+
+  /**
    * @brief Returns timestamp type used to cast timestamp columns.
    *
    * @return Timestamp type used to cast timestamp columns
@@ -180,6 +191,13 @@ class parquet_reader_options {
    * @param row_groups Vector of row groups to read
    */
   void set_row_groups(std::vector<std::vector<size_type>> row_groups);
+
+  /**
+   * @brief Sets AST based filter for predicate pushdown.
+   *
+   * @param filter AST expression to use as filter
+   */
+  void set_filter(ast::expression const& filter) { _filter = filter; }
 
   /**
    * @brief Sets to enable/disable conversion of strings to categories.
@@ -270,6 +288,18 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& row_groups(std::vector<std::vector<size_type>> row_groups)
   {
     options.set_row_groups(std::move(row_groups));
+    return *this;
+  }
+
+  /**
+   * @brief Sets vector of individual row groups to read.
+   *
+   * @param filter Vector of row groups to read
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& filter(ast::expression const& filter)
+  {
+    options.set_filter(filter);
     return *this;
   }
 
