@@ -3479,12 +3479,13 @@ class IndexedFrame(Frame):
         if operands is NotImplemented:
             return NotImplemented
 
+        level_names = (
+            None if not can_use_self_column_name else self._data._level_names
+        )
         return self._from_data(
             ColumnAccessor(
                 type(self)._colwise_binop(operands, op),
-                level_names=None
-                if not can_use_self_column_name
-                else self._data._level_names,
+                level_names=level_names,
             ),
             index=out_index,
         )

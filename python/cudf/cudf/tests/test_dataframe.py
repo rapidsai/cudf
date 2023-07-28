@@ -2484,10 +2484,13 @@ def test_bitwise_binops_series(pdf, gdf, binop):
 
 
 @pytest.mark.parametrize("unaryop", [operator.neg, operator.inv, operator.abs])
-@pytest.mark.parametrize("col_name", [None, "abc"])
-def test_unaryops_df(pdf, unaryop, col_name):
+@pytest.mark.parametrize(
+    "col_name,assign_col_name", [(None, False), (None, True), ("abc", True)]
+)
+def test_unaryops_df(pdf, unaryop, col_name, assign_col_name):
     pd_df = pdf.copy()
-    pd_df.columns.name = col_name
+    if assign_col_name:
+        pd_df.columns.name = col_name
     gdf = cudf.from_pandas(pd_df)
     d = unaryop(pd_df - 5)
     g = unaryop(gdf - 5)
