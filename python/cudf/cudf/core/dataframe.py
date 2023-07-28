@@ -1841,6 +1841,22 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # For keys in right but not left, perform binops between NaN (not
             # NULL!) and the right value (result is NaN).
             left_default = as_column(np.nan, length=len(self))
+            can_use_self_column_name = (
+                list(other._index._data.names) == self._data._level_names
+            )
+            if cudf.get_option("mode.pandas_compatible"):
+                equal_columns = other.index.to_pandas().equals(
+                    self._data.to_pandas_index()
+                )
+                can_use_self_column_name = (
+                    equal_columns or can_use_self_column_name
+                )
+            else:
+
+                if not can_use_self_column_name:
+                    can_use_self_column_name = other.index.to_pandas().equals(
+                        self._data.to_pandas_index()
+                    )
             equal_columns = other.index.to_pandas().equals(
                 self._data.to_pandas_index()
             )
