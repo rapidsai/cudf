@@ -15,7 +15,64 @@
  */
 package ai.rapids.cudf;
 
+import java.io.PrintStream;
+import java.util.Locale;
+
 public class TableDebug {
+
+
+  private static final String OUTPUT_STREAM = "ai.rapids.cudf.debug.output";
+  enum Output {
+    STDOUT,
+    STDERR;
+  }
+
+  public static class Builder {
+    private PrintStream print = System.err;
+    public Builder() {
+      Output outputMode = Output.STDERR;
+      try {
+        outputMode = Output.valueOf(
+          System.getProperty(OUTPUT_STREAM, Output.STDERR.name().toUpperCase(Locale.US))
+        );
+      } catch (Throwable ignored) {
+      }
+      switch (outputMode) {
+        case STDOUT:
+          print = System.out;
+          break;
+        case STDERR:
+        default:
+          print = System.err;
+      }
+    }
+
+    public Builder withPrintStream(PrintStream ps) {
+      print = ps;
+      return this;
+    }
+
+    public final TableDebug build() {
+      return new TableDebug(
+        print
+      );
+    }
+  }
+
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  private static final TableDebug DEFAULT_DEBUG = builder().build();
+
+  public static TableDebug get() {
+    return DEFAULT_DEBUG;
+  }
+
+  private final PrintStream out;
+  private TableDebug(PrintStream printStream) {
+    out = printStream;
+  }
   /**
    * Print to standard error the contents of a table. Note that this should never be
    * called from production code, as it is very slow.  Also note that this is not production
@@ -24,8 +81,8 @@ public class TableDebug {
    * @param name the name of the table to print out.
    * @param table the table to print out.
    */
-  public static synchronized void debug(String name, Table table) {
-    System.err.println("DEBUG " + name + " " + table);
+  public synchronized void debug(String name, Table table) {
+    out.println("DEBUG " + name + " " + table);
     for (int col = 0; col < table.getNumberOfColumns(); col++) {
       debug(String.valueOf(col), table.getColumn(col));
     }
@@ -39,17 +96,17 @@ public class TableDebug {
    * @param name the name of the column to print out.
    * @param col the column to print out.
    */
-  public static synchronized void debug(String name, ColumnView col) {
+  public synchronized void debug(String name, ColumnView col) {
     debugGPUAddrs(name, col);
     try (HostColumnVector hostCol = col.copyToHost()) {
       debug(name, hostCol);
     }
   }
 
-  private static synchronized void debugGPUAddrs(String name, ColumnView col) {
+  private synchronized void debugGPUAddrs(String name, ColumnView col) {
     try (BaseDeviceMemoryBuffer data = col.getData();
          BaseDeviceMemoryBuffer validity = col.getValid()) {
-      System.err.println("GPU COLUMN " + name + " - NC: " + col.getNullCount()
+      out.println("GPU COLUMN " + name + " - NC: " + col.getNullCount()
           + " DATA: " + data + " VAL: " + validity);
     }
     if (col.getType() == DType.STRUCT) {
@@ -74,23 +131,23 @@ public class TableDebug {
    * @param name the name of the column to print out.
    * @param hostCol the column to print out.
    */
-  public static synchronized void debug(String name, HostColumnVectorCore hostCol) {
+  public synchronized void debug(String name, HostColumnVectorCore hostCol) {
     DType type = hostCol.getType();
-    System.err.println("COLUMN " + name + " - " + type);
+    out.println("COLUMN " + name + " - " + type);
     if (type.isDecimalType()) {
       for (int i = 0; i < hostCol.getRowCount(); i++) {
         if (hostCol.isNull(i)) {
-          System.err.println(i + " NULL");
+          out.println(i + " NULL");
         } else {
-          System.err.println(i + " " + hostCol.getBigDecimal(i));
+          out.println(i + " " + hostCol.getBigDecimal(i));
         }
       }
     } else if (DType.STRING.equals(type)) {
       for (int i = 0; i < hostCol.getRowCount(); i++) {
         if (hostCol.isNull(i)) {
-          System.err.println(i + " NULL");
+          out.println(i + " NULL");
         } else {
-          System.err.println(i + " \"" + hostCol.getJavaString(i) + "\" " +
+          out.println(i + " \"" + hostCol.getJavaString(i) + "\" " +
               hexString(hostCol.getUTF8(i)));
         }
       }
@@ -111,56 +168,57 @@ public class TableDebug {
    } else if (DType.BOOL8.equals(type)) {
       for (int i = 0; i < hostCol.getRowCount(); i++) {
         if (hostCol.isNull(i)) {
-          System.err.println(i + " NULL");
+          out.println(i + " NULL");
         } else {
-          System.err.println(i + " " + hostCol.getBoolean(i));
+          out.println(i + " " + hostCol.getBoolean(i));
         }
       }
     } else if (DType.FLOAT64.equals(type)) {
       for (int i = 0; i < hostCol.getRowCount(); i++) {
         if (hostCol.isNull(i)) {
-          System.err.println(i + " NULL");
+          out.println(i + " NULL");
         } else {
-          System.err.println(i + " " + hostCol.getDouble(i));
+          out.println(i + " " + hostCol.getDouble(i));
         }
       }
     } else if (DType.FLOAT32.equals(type)) {
       for (int i = 0; i < hostCol.getRowCount(); i++) {
         if (hostCol.isNull(i)) {
-          System.err.println(i + " NULL");
+          out.println(i + " NULL");
         } else {
-          System.err.println(i + " " + hostCol.getFloat(i));
+          out.println(i + " " + hostCol.getFloat(i));
         }
       }
     } else if (DType.STRUCT.equals(type)) {
       for (int i = 0; i < hostCol.getRowCount(); i++) {
         if (hostCol.isNull(i)) {
-          System.err.println(i + " NULL");
+          out.println(i + " NULL");
         } // The struct child columns are printed out later on.
       }
       for (int i = 0; i < hostCol.getNumChildren(); i++) {
         debug(name + ":CHILD_" + i, hostCol.getChildColumnView(i));
       }
     } else if (DType.LIST.equals(type)) {
-      System.err.println("OFFSETS");
+      out.println("OFFSETS");
       for (int i = 0; i < hostCol.getRowCount(); i++) {
         if (hostCol.isNull(i)) {
-          System.err.println(i + " NULL");
+          out.println(i + " NULL");
         } else {
-          System.err.println(i + " [" + hostCol.getStartListOffset(i) + " - " +
+          out.println(i + " [" + hostCol.getStartListOffset(i) + " - " +
               hostCol.getEndListOffset(i) + ")");
         }
       }
       debug(name + ":DATA", hostCol.getChildColumnView(0));
     } else {
-      System.err.println("TYPE " + type + " NOT SUPPORTED FOR DEBUG PRINT");
+      out.println("TYPE " + type + " NOT SUPPORTED FOR DEBUG PRINT");
     }
   }
 
-  private static void debugInteger(HostColumnVectorCore hostCol, DType intType) {
+
+  private void debugInteger(HostColumnVectorCore hostCol, DType intType) {
     for (int i = 0; i < hostCol.getRowCount(); i++) {
       if (hostCol.isNull(i)) {
-        System.err.println(i + " NULL");
+        out.println(i + " NULL");
       } else {
         final int sizeInBytes = intType.getSizeInBytes();
         final Object value;
@@ -180,7 +238,7 @@ public class TableDebug {
           default:
             throw new IllegalArgumentException("INFEASIBLE: Unsupported integer-like type " + intType);
         }
-        System.err.println(i + " " + value);
+        out.println(i + " " + value);
       }
     }
   }

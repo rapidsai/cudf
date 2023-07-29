@@ -8033,6 +8033,12 @@ public class TableTest extends CudfTestBase {
           .withDecimalColumn("_c8", 5)
           .build();
 
+      TableDebug.get().debug("testParquetWriteToBufferChunkedInt96 table0", table0);
+      final TableDebug td = TableDebug.builder()
+        .withPrintStream(System.out)
+        .build();
+      td.debug("testParquetWriteToBufferChunkedInt96 table0", table0);
+
       try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
         writer.write(table0);
         writer.write(table0);
