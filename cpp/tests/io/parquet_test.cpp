@@ -5621,24 +5621,24 @@ TEST_F(ParquetWriterTest, NoNullsAsNonNullable)
 
 TEST_F(ParquetWriterTest, TimestampMicrosINT96NoOverflow)
 {
-    using namespace cudf::io;
+  using namespace cudf::io;
 
-    // used to be corrupted by round-tripping via INT96
-    // 3023-07-14T07:38:45.418688Z
-    column_wrapper<cudf::timestamp_us> big_ts_col{33246229125418688};
-    table_view expected({big_ts_col});
-    auto filepath = temp_env->get_temp_filepath("BigINT96Timestamp.parquet");
+  // used to be corrupted by round-tripping via INT96
+  // 3023-07-14T07:38:45.418688Z
+  column_wrapper<cudf::timestamp_us> big_ts_col{33246229125418688};
+  table_view expected({big_ts_col});
+  auto filepath = temp_env->get_temp_filepath("BigINT96Timestamp.parquet");
 
-    auto const out_opts = parquet_writer_options::builder(sink_info{filepath}, expected)
-      .int96_timestamps(true).build();
-    write_parquet(out_opts);
+  auto const out_opts =
+    parquet_writer_options::builder(sink_info{filepath}, expected).int96_timestamps(true).build();
+  write_parquet(out_opts);
 
-    auto const in_opts = parquet_reader_options::builder(source_info(filepath))
-      .timestamp_type(cudf::data_type(cudf::type_id::TIMESTAMP_MICROSECONDS))
-      .build();
-    auto const result = read_parquet(in_opts);
+  auto const in_opts = parquet_reader_options::builder(source_info(filepath))
+                         .timestamp_type(cudf::data_type(cudf::type_id::TIMESTAMP_MICROSECONDS))
+                         .build();
+  auto const result = read_parquet(in_opts);
 
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
