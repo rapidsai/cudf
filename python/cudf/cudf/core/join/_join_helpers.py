@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -92,10 +92,24 @@ def _match_join_keys(
             else np.find_common_type([], (ltype, rtype))
         )
 
-    elif np.issubdtype(ltype, np.datetime64) and np.issubdtype(
-        rtype, np.datetime64
+    elif (
+        np.issubdtype(ltype, np.datetime64)
+        and np.issubdtype(rtype, np.datetime64)
+    ) or (
+        np.issubdtype(ltype, np.timedelta64)
+        and np.issubdtype(rtype, np.timedelta64)
     ):
         common_type = max(ltype, rtype)
+    elif (
+        np.issubdtype(ltype, np.datetime64)
+        or np.issubdtype(ltype, np.timedelta64)
+    ) and not rcol.fillna(0).can_cast_safely(ltype):
+        raise TypeError(f"Cannot join between {ltype} and {rtype}")
+    elif (
+        np.issubdtype(rtype, np.datetime64)
+        or np.issubdtype(rtype, np.timedelta64)
+    ) and not lcol.fillna(0).can_cast_safely(rtype):
+        raise TypeError(f"Cannot join between {rtype} and {ltype}")
 
     if how == "left" and rcol.fillna(0).can_cast_safely(ltype):
         return lcol, rcol.astype(ltype)
