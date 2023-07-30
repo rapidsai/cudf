@@ -27,7 +27,6 @@ from uuid import uuid4
 import cupy as cp
 import numpy as np
 import pandas as pd
-import typing_extensions
 from typing_extensions import Self
 
 import cudf
@@ -511,7 +510,7 @@ class IndexedFrame(Frame):
         """
         return self.size == 0
 
-    def copy(self, deep: bool = True) -> typing_extensions.Self:
+    def copy(self, deep: bool = True) -> Self:
         """Make a copy of this object's indices and data.
 
         When ``deep=True`` (default), a new object will be created with a

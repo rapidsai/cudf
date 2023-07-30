@@ -19,6 +19,8 @@ from typing import (
     Union,
 )
 
+# TODO: The `numpy` import is needed for typing purposes during doc builds
+# only, need to figure out why the `np` alias is insufficient then remove.
 import cupy
 import numpy
 import numpy as np
