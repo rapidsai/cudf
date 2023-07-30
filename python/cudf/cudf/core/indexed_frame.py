@@ -3480,7 +3480,7 @@ class IndexedFrame(Frame):
             return NotImplemented
 
         level_names = (
-            None if not can_use_self_column_name else self._data._level_names
+            self._data._level_names if can_use_self_column_name else None
         )
         return self._from_data(
             ColumnAccessor(
