@@ -1553,6 +1553,7 @@ class IndexedFrame(Frame):
         Examples
         --------
         **Series**
+
         >>> import cudf
         >>> series = cudf.Series(['a', 'b', 'c', 'd'], index=[3, 2, 1, 4])
         >>> series
@@ -1578,6 +1579,7 @@ class IndexedFrame(Frame):
         dtype: object
 
         **DataFrame**
+
         >>> df = cudf.DataFrame(
         ... {"b":[3, 2, 1], "a":[2, 1, 3]}, index=[1, 3, 2])
         >>> df.sort_index(axis=0)
@@ -2304,6 +2306,7 @@ class IndexedFrame(Frame):
         Examples
         --------
         **Series**
+
         >>> s = cudf.Series([1, 2, 3, 4])
         >>> s
         0    1
@@ -2319,6 +2322,7 @@ class IndexedFrame(Frame):
         dtype: int64
 
         **DataFrame**
+
         >>> df = cudf.DataFrame({'A': [1, 2, 3, 4], 'B': [3, 4, 5, 6]})
         >>> df
            A  B
@@ -2333,10 +2337,7 @@ class IndexedFrame(Frame):
         2       3       5
         3       4       6
         """
-        raise NotImplementedError(
-            "`IndexedFrame.add_suffix` not currently implemented. \
-                Use `Series.add_suffix` or `DataFrame.add_suffix`"
-        )
+        raise NotImplementedError
 
     @acquire_spill_lock()
     @_cudf_nvtx_annotate
