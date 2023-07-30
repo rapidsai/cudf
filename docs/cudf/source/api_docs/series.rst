@@ -264,6 +264,12 @@ Datetimelike properties
 datetimelike and return several properties.
 These can be accessed like ``Series.dt.<property>``.
 
+.. currentmodule:: cudf
+.. autosummary::
+   :toctree: api/
+
+   Series.dt
+
 Datetime properties
 ^^^^^^^^^^^^^^^^^^^
 .. currentmodule:: cudf.core.series.DatetimeProperties
@@ -331,6 +337,12 @@ Categorical accessor
 
 Categorical-dtype specific methods and attributes are available under
 the ``Series.cat`` accessor.
+
+.. currentmodule:: cudf
+.. autosummary::
+   :toctree: api/
+
+   Series.cat
 
 .. currentmodule:: cudf.core.column.categorical.CategoricalAccessor
 .. autosummary::
