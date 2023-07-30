@@ -16,11 +16,11 @@ All data types in cuDF are [nullable](missing-data).
 | Floating-point       | `'float32'`, `'float64'`                                                                          |
 | Datetime             | `'datetime64[s]'`, `'datetime64[ms]'`, `'datetime64['us']`, `'datetime64[ns]'`                    |
 | Timedelta (duration) | `'timedelta[s]'`, `'timedelta[ms]'`, `'timedelta['us']`, `'timedelta[ns]'`                        |
-| Category             | {py:func}`cudf.CategoricalDtype`                                                                  |
+| Category             | `cudf.CategoricalDtype`                                                                           |
 | String               | `'object'` or `'string'`                                                                          |
-| Decimal              | {py:func}`cudf.Decimal32Dtype`, {py:func}`cudf.Decimal64Dtype`, {py:func}`cudf.Decimal128Dtype`   |
-| List                 | {py:func}`cudf.ListDtype`                                                                         |
-| Struct               | {py:func}`cudf.StructDtype`                                                                       |
+| Decimal              | `cudf.Decimal32Dtype`, `cudf.Decimal64Dtype`, `cudf.Decimal128Dtype`                              |
+| List                 | `cudf.ListDtype`                                                                                  |
+| Struct               | `cudf.StructDtype`                                                                                |
 
 </div>
 
