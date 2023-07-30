@@ -207,7 +207,14 @@ intersphinx_mapping = {
 }
 
 # Config numpydoc
-numpydoc_show_inherited_class_members = True
+numpydoc_show_inherited_class_members = {
+    "cudf.core.dtypes.CategoricalDtype": False,
+    "cudf.core.dtypes.Decimal32Dtype": False,
+    "cudf.core.dtypes.Decimal64Dtype": False,
+    "cudf.core.dtypes.Decimal128Dtype": False,
+    "cudf.core.dtypes.ListDtype": False,
+    "cudf.core.dtypes.StructDtype": False,
+}
 numpydoc_class_members_toctree = False
 numpydoc_attributes_as_param_list = False
 
