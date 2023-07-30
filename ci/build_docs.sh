@@ -38,8 +38,8 @@ popd
 
 rapids-logger "Build Python docs"
 pushd docs/cudf
-sphinx-build -b dirhtml source _html
-sphinx-build -b text source _text
+make dirhtml BUILDDIR=_html
+make text BUILDDIR=_text
 mkdir -p "${RAPIDS_DOCS_DIR}/cudf/"{html,txt}
 mv _html/* "${RAPIDS_DOCS_DIR}/cudf/html"
 mv _text/* "${RAPIDS_DOCS_DIR}/cudf/txt"
@@ -47,8 +47,8 @@ popd
 
 rapids-logger "Build dask-cuDF Sphinx docs"
 pushd docs/dask_cudf
-sphinx-build -b dirhtml source _html
-sphinx-build -b text source _text
+make dirhtml BUILDDIR=_html
+make text BUILDDIR=_text
 mkdir -p "${RAPIDS_DOCS_DIR}/dask-cudf/"{html,txt}
 mv _html/* "${RAPIDS_DOCS_DIR}/dask-cudf/html"
 mv _text/* "${RAPIDS_DOCS_DIR}/dask-cudf/txt"
