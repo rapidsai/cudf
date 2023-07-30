@@ -151,7 +151,6 @@ Computations / descriptive stats
    DataFrame.round
    DataFrame.skew
    DataFrame.sum
-   DataFrame.sum_of_squares
    DataFrame.std
    DataFrame.var
    DataFrame.nunique

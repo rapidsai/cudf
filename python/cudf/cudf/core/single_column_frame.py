@@ -137,15 +137,6 @@ class SingleColumnFrame(Frame, NotIterable):
     ) -> np.ndarray:  # noqa: D102
         return super().to_numpy(dtype, copy, na_value).flatten()
 
-    def tolist(self):  # noqa: D102
-        raise TypeError(
-            "cuDF does not support conversion to host memory "
-            "via the `tolist()` method. Consider using "
-            "`.to_arrow().to_pylist()` to construct a Python list."
-        )
-
-    to_list = tolist
-
     @classmethod
     @_cudf_nvtx_annotate
     def from_arrow(cls, array):
@@ -208,17 +199,6 @@ class SingleColumnFrame(Frame, NotIterable):
         ]
         """
         return self._column.to_arrow()
-
-    @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def is_unique(self):
-        """Return boolean if values in the object are unique.
-
-        Returns
-        -------
-        bool
-        """
-        return self._column.is_unique
 
     @property  # type: ignore
     @_cudf_nvtx_annotate

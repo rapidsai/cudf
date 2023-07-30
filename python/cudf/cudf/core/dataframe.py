@@ -1014,6 +1014,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return obj
 
     @property
+    @_cudf_nvtx_annotate
+    def shape(self):
+        """Returns a tuple representing the dimensionality of the DataFrame."""
+        return self._num_rows, self._num_columns
+
+    @property
     def dtypes(self):
         """
         Return the dtypes in this object.
