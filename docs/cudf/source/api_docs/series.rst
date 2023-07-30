@@ -46,7 +46,14 @@ Conversion
    Series.astype
    Series.convert_dtypes
    Series.copy
+   Series.deserialize
+   Series.device_deserialize
+   Series.device_serialize
+   Series.host_deserialize
+   Series.host_serialize
+   Series.serialize
    Series.to_list
+   Series.tolist
    Series.__array__
    Series.scale
 
@@ -193,6 +200,7 @@ Missing data handling
    Series.dropna
    Series.ffill
    Series.fillna
+   Series.interpolate
    Series.isna
    Series.isnull
    Series.nans_to_nulls
