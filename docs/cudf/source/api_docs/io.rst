@@ -39,6 +39,8 @@ Parquet
    :template: autosummary/class_with_autosummary.rst
 
    cudf.io.parquet.ParquetDatasetWriter
+   cudf.io.parquet.ParquetDatasetWriter.close
+   cudf.io.parquet.ParquetDatasetWriter.write_table
 
 
 ORC
