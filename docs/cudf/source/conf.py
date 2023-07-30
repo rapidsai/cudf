@@ -47,7 +47,7 @@ extensions = [
 
 nb_execution_excludepatterns = ['performance-comparisons.ipynb']
 
-nb_execution_mode = "force"
+nb_execution_mode = "off"
 nb_execution_timeout = 300
 
 copybutton_prompt_text = ">>> "
@@ -204,6 +204,7 @@ intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable", None),
     "pyarrow": ("https://arrow.apache.org/docs/", None),
     "pandas": ("https://pandas.pydata.org/docs/", None),
+    "typing_extensions": ("https://typing-extensions.readthedocs.io/en/stable/", None),
 }
 
 # Config numpydoc
@@ -214,6 +215,7 @@ numpydoc_show_inherited_class_members = {
     "cudf.core.dtypes.Decimal128Dtype": False,
     "cudf.core.dtypes.ListDtype": False,
     "cudf.core.dtypes.StructDtype": False,
+    "cudf.option_context": False,
 }
 numpydoc_class_members_toctree = False
 numpydoc_attributes_as_param_list = False
@@ -274,7 +276,13 @@ def process_class_docstrings(app, what, name, obj, options, lines):
             lines[:] = lines[:cut_index]
 
 
-nitpick_ignore = [("py:class", "SeriesOrIndex"),]
+nitpick_ignore = [
+    ("py:class", "SeriesOrIndex"),
+    ("py:class", "Dtype"),
+    # TODO: Remove this when we figure out why typing_extensions doesn't seem
+    # to map types correctly for intersphinx
+    ("py:class", "typing_extensions.Self"),
+]
 
 def setup(app):
     app.add_css_file("https://docs.rapids.ai/assets/css/custom.css")

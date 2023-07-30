@@ -7,7 +7,7 @@ import warnings
 from typing import Any, Dict, Optional, Tuple, Union
 
 import cupy
-import numpy as np
+import numpy
 
 import cudf
 from cudf._typing import Dtype, NotImplementedType, ScalarLike
@@ -134,7 +134,7 @@ class SingleColumnFrame(Frame, NotIterable):
         dtype: Union[Dtype, None] = None,
         copy: bool = True,
         na_value=None,
-    ) -> np.ndarray:  # noqa: D102
+    ) -> numpy.ndarray:  # noqa: D102
         return super().to_numpy(dtype, copy, na_value).flatten()
 
     @classmethod

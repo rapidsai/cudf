@@ -20,6 +20,7 @@ from typing import (
 )
 
 import cupy
+import numpy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -509,7 +510,7 @@ class Frame(BinaryOperand, Scannable):
         dtype: Union[Dtype, None] = None,
         copy: bool = True,
         na_value=None,
-    ) -> np.ndarray:
+    ) -> numpy.ndarray:
         """Convert the Frame to a NumPy array.
 
         Parameters
@@ -2574,10 +2575,6 @@ class Frame(BinaryOperand, Scannable):
         -------
         DataFrame or Series
             The first `n` rows of the caller object.
-
-        See Also
-        --------
-        Frame.tail: Returns the last `n` rows.
 
         Examples
         --------

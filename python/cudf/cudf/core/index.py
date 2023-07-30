@@ -3255,9 +3255,9 @@ class Index(BaseIndex, metaclass=IndexMeta):
     Warnings
     --------
     This class should not be subclassed. It is designed as a factory for
-    different subclasses of :class:`BaseIndex` depending on the provided input.
+    different subclasses of `BaseIndex` depending on the provided input.
     If you absolutely must, and if you're intimately familiar with the
-    internals of cuDF, subclass :class:`BaseIndex` instead.
+    internals of cuDF, subclass `BaseIndex` instead.
 
     Examples
     --------

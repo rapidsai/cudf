@@ -21,6 +21,7 @@ Properties and Methods
    :toctree: api/
 
     CategoricalDtype.categories
+    CategoricalDtype.construct_from_string
     CategoricalDtype.deserialize
     CategoricalDtype.device_deserialize
     CategoricalDtype.device_serialize
@@ -28,10 +29,12 @@ Properties and Methods
     CategoricalDtype.host_deserialize
     CategoricalDtype.host_serialize
     CategoricalDtype.is_dtype
+    CategoricalDtype.name
     CategoricalDtype.ordered
     CategoricalDtype.serialize
     CategoricalDtype.str
     CategoricalDtype.to_pandas
+    CategoricalDtype.type
 
 
 cudf.Decimal32Dtype
@@ -145,6 +148,7 @@ Properties and Methods
    ListDtype.leaf_type
    ListDtype.serialize
    ListDtype.to_arrow
+   ListDtype.type
 
 cudf.StructDtype
 ================
@@ -169,3 +173,4 @@ Properties and Methods
    StructDtype.is_dtype
    StructDtype.serialize
    StructDtype.to_arrow
+   StructDtype.type

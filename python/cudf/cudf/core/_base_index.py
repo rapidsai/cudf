@@ -47,7 +47,7 @@ class BaseIndex(Serializable):
     def _values(self) -> ColumnBase:
         raise NotImplementedError
 
-    def copy(self, deep: bool = True) -> BaseIndex:
+    def copy(self, deep: bool = True) -> Self:
         raise NotImplementedError
 
     def __len__(self):
@@ -734,7 +734,7 @@ class BaseIndex(Serializable):
         Detect missing values.
 
         Return a boolean same-sized object indicating if the values are NA.
-        NA values, such as ``None``, :attr:`numpy.NaN` or :attr:`cudf.NaN`, get
+        NA values, such as ``None``, `numpy.NAN` or `cudf.NA`, get
         mapped to ``True`` values.
         Everything else get mapped to ``False`` values.
 
@@ -752,7 +752,7 @@ class BaseIndex(Serializable):
 
         Return a boolean same-sized object indicating if the values are not NA.
         Non-missing values get mapped to ``True``.
-        NA values, such as None or :attr:`numpy.NaN`, get mapped to ``False``
+        NA values, such as None or `numpy.NAN`, get mapped to ``False``
         values.
 
         Returns
