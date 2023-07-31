@@ -62,6 +62,9 @@ sed_runner "s/^version = .*/version = \"${NEXT_FULL_TAG}\"/g" python/dask_cudf/p
 sed_runner "s/^version = .*/version = \"${NEXT_FULL_TAG}\"/g" python/cudf_kafka/pyproject.toml
 sed_runner "s/^version = .*/version = \"${NEXT_FULL_TAG}\"/g" python/custreamz/pyproject.toml
 
+# Wheel testing script
+sed_runner "s/branch-.*/branch-${NEXT_SHORT_TAG}/g" ci/test_wheel_dask_cudf.sh
+
 # rapids-cmake version
 sed_runner 's/'"branch-.*\/RAPIDS.cmake"'/'"branch-${NEXT_SHORT_TAG}\/RAPIDS.cmake"'/g' fetch_rapids.cmake
 

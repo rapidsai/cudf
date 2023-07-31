@@ -87,6 +87,7 @@ TEST_F(ArrowIOTest, S3FileSystem)
     ASSERT_EQ(1, tbl.tbl->num_columns());  // Only single column specified in reader_options
     ASSERT_EQ(244, tbl.tbl->num_rows());   // known number of rows from the S3 file
   }
+  CUDF_EXPECTS(arrow::fs::EnsureS3Finalized().ok(), "Failed to finalize s3 filesystem");
 }
 
 CUDF_TEST_PROGRAM_MAIN()
