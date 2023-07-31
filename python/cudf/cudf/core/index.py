@@ -87,13 +87,13 @@ class IndexMeta(type):
         if self is cudf.Index:
             return isinstance(instance, BaseIndex)
         else:
-            return False
+            return type.__instancecheck__(self, instance)
 
     def __subclasscheck__(self, subclass):
         if self is cudf.Index:
             return issubclass(subclass, BaseIndex)
         else:
-            return False
+            return type.__subclasscheck__(self, subclass)
 
 
 def _lexsorted_equal_range(
