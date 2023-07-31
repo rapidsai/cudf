@@ -104,6 +104,24 @@ class file_source : public datasource {
   static constexpr size_t _gds_read_preferred_threshold = 128 << 10;  // 128KB
 };
 
+void register_mmaped_buffer(void const* ptr, size_t size)
+{
+  if (ptr == nullptr or size != 0) { return; }
+
+  int deviceId{};
+  cudaGetDevice(&deviceId);
+  cudaDeviceProp deviceProp{};
+  cudaGetDeviceProperties(&deviceProp, deviceId);
+  // Only register the memory mapped buffer if the device accesses pageable memory via the host's
+  // page tables - `cudaHostRegister` is very cheap in this case
+  if (deviceProp.pageableMemoryAccessUsesHostPageTables == 0) { return; }
+
+  auto const result = cudaHostRegister(const_cast<void*>(ptr), size, cudaHostRegisterDefault);
+  if (result != cudaSuccess) {
+    CUDF_LOG_INFO("Failed to register the memory mapped buffer (possible performance impact).");
+  }
+}
+
 /**
  * @brief Implementation class for reading from a file using memory mapped access.
  *
@@ -162,6 +180,8 @@ class memory_mapped_source : public file_source {
     // Check if accessing a region within already mapped area
     _map_addr = mmap(nullptr, _map_size, PROT_READ, MAP_PRIVATE, fd, _map_offset);
     CUDF_EXPECTS(_map_addr != MAP_FAILED, "Cannot create memory mapping");
+
+    register_mmaped_buffer(_map_addr, _map_size);
   }
 
  private:
