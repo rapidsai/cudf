@@ -28,7 +28,7 @@ public class TableDebug {
   }
 
   public static class Builder {
-    private PrintStream print = System.err;
+    private PrintStream print;
 
     public Builder() {
       Output outputMode = Output.STDERR;
