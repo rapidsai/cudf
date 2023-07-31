@@ -200,7 +200,7 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
   CUDF_FUNC_RANGE();
 
   if (reader_opts.is_enabled_legacy()) {
-    return cudf::io::json::detail::legacy::read_json(sources, reader_opts, stream, mr);
+    return legacy::read_json(sources, reader_opts, stream, mr);
   }
 
   if (not should_load_whole_source(reader_opts)) {
