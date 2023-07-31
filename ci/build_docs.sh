@@ -25,7 +25,7 @@ rapids-mamba-retry install \
   --channel "${PYTHON_CHANNEL}" \
   libcudf cudf dask-cudf
 
-export RAPIDS_VERSION_NUMBER="23.08"
+export RAPIDS_VERSION_NUMBER="23.10"
 export RAPIDS_DOCS_DIR="$(mktemp -d)"
 
 rapids-logger "Build CPP docs"

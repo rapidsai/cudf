@@ -3096,3 +3096,26 @@ class TestIndexScalarGetItem:
         assert not isinstance(index[i], cudf.Index)
         assert index[i] == index_values[i]
         assert_eq(index, index.to_pandas())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            pd.Timestamp("1970-01-01 00:00:00.000000001"),
+            pd.Timestamp("1970-01-01 00:00:00.000000002"),
+            12,
+            20,
+        ],
+        [
+            pd.Timedelta(10),
+            pd.Timedelta(20),
+            12,
+            20,
+        ],
+    ],
+)
+def test_index_mixed_dtype_error(data):
+    pi = pd.Index(data)
+    with pytest.raises(TypeError):
+        cudf.Index(pi)

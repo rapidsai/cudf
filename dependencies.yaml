@@ -213,8 +213,8 @@ dependencies:
     common:
       - output_types: [conda, requirements]
         packages:
-          - librmm==23.8.*
-          - libkvikio==23.8.*
+          - librmm==23.10.*
+          - libkvikio==23.10.*
       - output_types: conda
         packages:
           - fmt>=9.1.0,<10
@@ -223,7 +223,7 @@ dependencies:
           - &gmock gmock>=1.13.0
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - libarrow==11.0.0.*
+          - libarrow==12.0.1.*
           - librdkafka>=1.9.0,<1.10.0a0
           - spdlog>=1.11.0,<1.12
     specific:
@@ -253,17 +253,17 @@ dependencies:
           - cython>=0.29,<0.30
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - pyarrow==11.0.0.*
+          - pyarrow==12.0.1.*
           - numpy>=1.21
   build_python:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           - scikit-build>=0.13.1
-          - rmm==23.8.*
+          - rmm==23.10.*
       - output_types: conda
         packages:
-          - &protobuf protobuf>=4.21.6,<4.22
+          - &protobuf protobuf>=4.21,<5
       - output_types: pyproject
         packages:
           - protoc-wheel
@@ -272,13 +272,13 @@ dependencies:
       - output_types: [conda, requirements]
         packages:
           # Allow runtime version to float up to minor version
-          - libarrow==11.*
+          - libarrow==12.*
   pyarrow_run:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           # Allow runtime version to float up to minor version
-          - pyarrow==11.*
+          - pyarrow==12.*
   cudatoolkit:
     specific:
       - output_types: conda
@@ -364,6 +364,9 @@ dependencies:
       - output_types: [conda, requirements]
         packages:
           - pre-commit
+          # pre-commit requires identify minimum version 1.0, but clang-format requires textproto support and that was
+          # added in 2.5.20, so we need to call out the minimum version needed for our plugins
+          - identify>=2.5.20
       - output_types: conda
         packages:
           - doxygen=1.8.20 # pre-commit hook needs a specific version.
@@ -419,7 +422,7 @@ dependencies:
           - &numba numba>=0.57
           - nvtx>=0.2.1
           - packaging
-          - rmm==23.8.*
+          - rmm==23.10.*
           - typing_extensions>=4.0.0
           - *protobuf
       - output_types: conda
@@ -480,7 +483,7 @@ dependencies:
           - dask-core>=2023.5.1  # dask-core in conda is the actual package & dask is the meta package
       - output_types: pyproject
         packages:
-          - &cudf cudf==23.8.*
+          - &cudf cudf==23.10.*
           - *cupy_pip
   run_cudf_kafka:
     common:
@@ -499,7 +502,7 @@ dependencies:
         packages:
           - confluent-kafka>=1.9.0,<1.10.0a0
           - *cudf
-          - cudf_kafka==23.8.*
+          - cudf_kafka==23.10.*
   test_cpp:
     common:
       - output_types: conda
@@ -597,5 +600,5 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - dask-cuda==23.8.*
+          - dask-cuda==23.10.*
           - *numba

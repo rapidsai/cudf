@@ -39,12 +39,15 @@ __global__ void rowgroup_char_counts_kernel(device_2dspan<size_type> char_counts
   auto const row_group_idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (row_group_idx >= rowgroup_bounds.size().first) { return; }
 
-  auto const start_row = rowgroup_bounds[row_group_idx][col_idx].begin;
+  auto const& str_col  = orc_columns[col_idx];
+  auto const start_row = rowgroup_bounds[row_group_idx][col_idx].begin + str_col.offset();
   auto const num_rows  = rowgroup_bounds[row_group_idx][col_idx].size();
 
-  auto const& offsets = orc_columns[col_idx].child(strings_column_view::offsets_column_index);
+  auto const& offsets = str_col.child(strings_column_view::offsets_column_index);
   char_counts[str_col_idx][row_group_idx] =
-    offsets.element<size_type>(start_row + num_rows) - offsets.element<size_type>(start_row);
+    (num_rows == 0)
+      ? 0
+      : offsets.element<size_type>(start_row + num_rows) - offsets.element<size_type>(start_row);
 }
 
 void rowgroup_char_counts(device_2dspan<size_type> counts,
