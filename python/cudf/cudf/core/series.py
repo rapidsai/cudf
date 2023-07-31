@@ -1397,6 +1397,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             NotImplementedType,
         ],
         Optional[BaseIndex],
+        bool,
     ]:
         # Specialize binops to align indices.
         if isinstance(other, Series):
@@ -1409,11 +1410,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                     "Can only compare identically-labeled Series objects"
                 )
             lhs, other = _align_indices([self, other], allow_non_unique=True)
+            can_use_self_column_name = self.name == other.name
         else:
             lhs = self
+            can_use_self_column_name = False
 
         operands = lhs._make_operands_for_binop(other, fill_value, reflect)
-        return operands, lhs._index
+        return operands, lhs._index, can_use_self_column_name
 
     @copy_docstring(CategoricalAccessor)  # type: ignore
     @property

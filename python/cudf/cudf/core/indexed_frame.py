@@ -293,7 +293,9 @@ class IndexedFrame(Frame):
 
     @_cudf_nvtx_annotate
     def _from_data_like_self(self, data: MutableMapping):
-        return self._from_data(data, self._index)
+        out = self._from_data(data, self._index)
+        out._data._level_names = self._data._level_names
+        return out
 
     @classmethod
     @_cudf_nvtx_annotate
@@ -3128,7 +3130,9 @@ class IndexedFrame(Frame):
         # inserted to the left of existing data columns.
         return (
             ColumnAccessor(
-                {**new_column_data, **self._data}, self._data.multiindex
+                {**new_column_data, **self._data},
+                self._data.multiindex,
+                self._data._level_names,
             ),
             index,
         )
@@ -3465,14 +3469,24 @@ class IndexedFrame(Frame):
         **kwargs,
     ):
         reflect, op = self._check_reflected_op(op)
-        operands, out_index = self._make_operands_and_index_for_binop(
+        (
+            operands,
+            out_index,
+            can_use_self_column_name,
+        ) = self._make_operands_and_index_for_binop(
             other, op, fill_value, reflect, can_reindex
         )
         if operands is NotImplemented:
             return NotImplemented
 
+        level_names = (
+            self._data._level_names if can_use_self_column_name else None
+        )
         return self._from_data(
-            ColumnAccessor(type(self)._colwise_binop(operands, op)),
+            ColumnAccessor(
+                type(self)._colwise_binop(operands, op),
+                level_names=level_names,
+            ),
             index=out_index,
         )
 
@@ -3491,6 +3505,7 @@ class IndexedFrame(Frame):
             NotImplementedType,
         ],
         Optional[cudf.BaseIndex],
+        bool,
     ]:
         raise NotImplementedError(
             f"Binary operations are not supported for {self.__class__}"
@@ -3508,7 +3523,7 @@ class IndexedFrame(Frame):
         if cupy_func:
             if ufunc.nin == 2:
                 other = inputs[self is inputs[0]]
-                inputs, index = self._make_operands_and_index_for_binop(
+                inputs, index, _ = self._make_operands_and_index_for_binop(
                     other, fname
                 )
             else:

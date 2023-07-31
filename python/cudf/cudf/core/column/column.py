@@ -81,6 +81,7 @@ from cudf.core.dtypes import (
 )
 from cudf.core.missing import NA
 from cudf.core.mixins import BinaryOperand, Reducible
+from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
@@ -2027,6 +2028,10 @@ def as_column(
             )
         else:
             pyarrow_array = pa.array(arbitrary, from_pandas=nan_as_null)
+            if arbitrary.dtype == cudf.dtype("object") and isinstance(
+                pyarrow_array, (pa.DurationArray, pa.TimestampArray)
+            ):
+                raise TypeError("Cannot create column with mixed types")
             if isinstance(pyarrow_array.type, pa.Decimal128Type):
                 pyarrow_type = cudf.Decimal128Dtype.from_arrow(
                     pyarrow_array.type
@@ -2334,6 +2339,7 @@ def as_column(
                         pa_type = np_to_pa_dtype(
                             _maybe_convert_to_default_type("float")
                         )
+
                     if (
                         pa_type is None
                         and isinstance(arbitrary, pd.Index)
@@ -2344,18 +2350,32 @@ def as_column(
                         # we need this workaround to preserve the dtype of
                         # column being created.
                         pa_type = np_to_pa_dtype(arbitrary.dtype)
+
+                pyarrow_array = pa.array(
+                    arbitrary,
+                    type=pa_type,
+                    from_pandas=True if nan_as_null is None else nan_as_null,
+                )
+
+                if (
+                    isinstance(arbitrary, pd.Index)
+                    and arbitrary.dtype == cudf.dtype("object")
+                    and isinstance(
+                        pyarrow_array, (pa.DurationArray, pa.TimestampArray)
+                    )
+                ):
+                    raise MixedTypeError(
+                        "Cannot create column with mixed types"
+                    )
+
                 data = as_column(
-                    pa.array(
-                        arbitrary,
-                        type=pa_type,
-                        from_pandas=True
-                        if nan_as_null is None
-                        else nan_as_null,
-                    ),
+                    pyarrow_array,
                     dtype=dtype,
                     nan_as_null=nan_as_null,
                 )
-            except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
+            except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError) as e:
+                if isinstance(e, MixedTypeError):
+                    raise TypeError(str(e))
                 if is_categorical_dtype(dtype):
                     sr = pd.Series(arbitrary, dtype="category")
                     data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)

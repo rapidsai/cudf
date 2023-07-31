@@ -9,6 +9,8 @@ from libcpp.vector cimport vector
 
 cimport cudf._lib.cpp.io.types as cudf_io_types
 cimport cudf._lib.cpp.table.table_view as cudf_table_view
+from cudf._lib.cpp.expressions cimport expression
+from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
 from cudf._lib.cpp.libcpp.optional cimport optional
 from cudf._lib.cpp.types cimport data_type, size_type
 
@@ -18,15 +20,14 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         parquet_reader_options() except +
         cudf_io_types.source_info get_source_info() except +
         vector[vector[size_type]] get_row_groups() except +
+        const optional[reference_wrapper[expression]]& get_filter() except +
         data_type get_timestamp_type() except +
-        bool is_enabled_convert_strings_to_categories() except +
         bool is_enabled_use_pandas_metadata() except +
 
         # setter
 
         void set_columns(vector[string] col_names) except +
         void set_row_groups(vector[vector[size_type]] row_grp) except +
-        void enable_convert_strings_to_categories(bool val) except +
         void enable_use_pandas_metadata(bool val) except +
         void set_timestamp_type(data_type type) except +
 
@@ -45,9 +46,6 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +
         parquet_reader_options_builder& row_groups(
             vector[vector[size_type]] row_grp
-        ) except +
-        parquet_reader_options_builder& convert_strings_to_categories(
-            bool val
         ) except +
         parquet_reader_options_builder& use_pandas_metadata(
             bool val

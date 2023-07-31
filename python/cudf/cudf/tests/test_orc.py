@@ -1932,3 +1932,15 @@ def test_orc_reader_empty_decomp_data(datadir):
     got = cudf.read_orc(path)
 
     assert_eq(expect, got)
+
+
+def test_orc_reader_empty_deeply_nested_level(datadir):
+    # Test the case where top level struct has nulls, but the nested struct is
+    # not nullable. In this case there is no data in the second level, but we
+    # still need to pass the parent null mask to the third level.
+    path = datadir / "TestOrcFile.Spark.NestedNotNullableStruct.orc"
+
+    expect = pd.read_orc(path)
+    got = cudf.read_orc(path)
+
+    assert_eq(expect, got)

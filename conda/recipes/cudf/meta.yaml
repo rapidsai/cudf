@@ -55,13 +55,13 @@ requirements:
     - cuda-version ={{ cuda_version }}
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
-    - protobuf >=4.21.6,<4.22
+    - protobuf ==4.21.*
     - python
     - cython >=0.29,<0.30
     - scikit-build >=0.13.1
     - setuptools
     - dlpack >=0.5,<0.6.0a0
-    - pyarrow =11
+    - pyarrow =12
     - libcudf ={{ version }}
     - rmm ={{ minor_version }}
     {% if cuda_major == "11" %}
@@ -73,7 +73,7 @@ requirements:
     {% endif %}
     - cuda-version ={{ cuda_version }}
   run:
-    - protobuf >=4.21.6,<4.22
+    - {{ pin_compatible('protobuf', min_pin='x.x', max_pin='x') }}
     - python
     - typing_extensions >=4.0.0
     - pandas >=1.3,<1.6.0dev0
