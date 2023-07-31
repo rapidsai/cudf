@@ -27,7 +27,7 @@
   ],
 
   "updateContentCommand": [
-    "/bin/bash", "-c", "mkdir -m 0755 -p ~/.config/clangd && cp -n /etc/skel/.config/clangd/config.yaml ~/.config/clangd/config.yaml && cp -ar /workspaces/${localWorkspaceFolderBasename} /home/coder/${localWorkspaceFolderBasename} && rapids-make-vscode-workspace --update"
+    "/bin/bash", "-c", "sudo chown -R $(id -u):$(id -g) /home/coder/${localWorkspaceFolderBasename} && mkdir -m 0755 -p ~/.config/clangd && cp -n /etc/skel/.config/clangd/config.yaml ~/.config/clangd/config.yaml && cp -ar /workspaces/${localWorkspaceFolderBasename} /home/coder/ && rapids-make-vscode-workspace --update"
   ],
 
   "containerEnv": {
@@ -40,7 +40,8 @@
     "source=${localWorkspaceFolder}/../.aws,target=/home/coder/.aws,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.cache,target=/home/coder/.cache,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.config,target=/home/coder/.config,type=bind,consistency=consistent",
-    "source=${localWorkspaceFolder}/../.conda/pkgs,target=/home/coder/.conda/pkgs,type=bind,consistency=consistent"
+    "source=${localWorkspaceFolder}/../.conda/pkgs,target=/home/coder/.conda/pkgs,type=bind,consistency=consistent",
+    "source=${localWorkspaceFolderBasename}-conda-isolated-${devcontainerId},target=/home/coder/${localWorkspaceFolderBasename},type=volume"
   ],
 
   "customizations": {
