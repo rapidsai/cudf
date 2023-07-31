@@ -87,11 +87,18 @@ $ .devcontainer/launch.sh unified pip
 
 #### Isolated mode
 
-`.devcontainer/launch.sh isolated` launches the devcontainer without the deps/repo bind mounts, and instead contains a unique copy of the `cudf` source in the container's file system.
+`.devcontainer/launch.sh isolated` launches the devcontainer without the deps/repo bind mounts, and instead contains a unique copy of the `cudf` source in a Docker [volume](https://docs.docker.com/storage/volumes/).
 
 Use this mode to launch multiple isolated development containers that can be checked out to separate branches of `cudf`.
 
-**Be sure to push any commits you want to persist. Once this container is removed, any unpushed changes will be lost!**
+The Docker volume persists after the devcontainer is removed, ensuring you don't pending lose work by accidentally removing the devcontainer.
+
+However, you will need to manually remove the volume once you've committed and pushed your changes:
+
+* Use the [`docker volume ls`](https://docs.docker.com/engine/reference/commandline/volume_ls/) command to list all volumes
+* Use [`docker volume rm`](https://docs.docker.com/engine/reference/commandline/volume_rm/) or [`docker volume prune`](https://docs.docker.com/engine/reference/commandline/volume_prune/) to clean up unused volumes
+
+Alternatively, use the "Dev Volumes" tab of the VSCode Dev Containers extension to view and remove unused volumes.
 
 Examples:
 ```bash
