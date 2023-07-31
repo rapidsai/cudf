@@ -115,7 +115,7 @@ def _register_cuda_binary_reduction_caller(funcname, lty, rty, retty):
 
     call_cuda_functions.setdefault(funcname.lower(), {})
 
-    type_key = (retty, lty, rty)
+    type_key = retty, lty, rty
     call_cuda_functions[funcname.lower()][type_key] = caller
 
 

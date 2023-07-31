@@ -454,9 +454,15 @@ __device__ double BlockCoVar(T const* lhs, T const* rhs, int64_t size)
   block.sync();
 
   device_sum<T>(block, lhs, size, &block_sum_lhs);
-  device_sum<T>(block, rhs, size, &block_sum_rhs);
   auto const mu_l = static_cast<double>(block_sum_lhs) / static_cast<double>(size);
-  auto const mu_r = static_cast<double>(block_sum_rhs) / static_cast<double>(size);
+  auto const mu_r = [=](){
+    if (lhs == rhs) {
+      return mu_l;
+    } else {
+      device_sum<T>(block, rhs, size, &block_sum_rhs);
+      return static_cast<double>(block_sum_rhs) / static_cast<double>(size);
+    }
+  }();
 
   double local_covar = 0;
 
@@ -470,7 +476,7 @@ __device__ double BlockCoVar(T const* lhs, T const* rhs, int64_t size)
   ref.fetch_add(local_covar, cuda::std::memory_order_relaxed);
   block.sync();
 
-  if (block.thread_rank() == 0) { block_covar = block_covar / static_cast<double>(size - 1); }
+  if (block.thread_rank() == 0) { block_covar /= static_cast<double>(size - 1); }
   block.sync();
 
   return block_covar;
