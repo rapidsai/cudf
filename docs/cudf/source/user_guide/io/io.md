@@ -123,9 +123,11 @@ tuning parameters in KvikIO see: <https://github.com/rapidsai/kvikio>
 Operations that support the use of GPUDirect Storage:
 
 - {py:func}`cudf.read_avro`
+- {py:func}`cudf.read_json`
 - {py:func}`cudf.read_parquet`
 - {py:func}`cudf.read_orc`
 - {py:meth}`cudf.DataFrame.to_csv`
+- {py:func}`cudf.DataFrame.to_json`
 - {py:meth}`cudf.DataFrame.to_parquet`
 - {py:meth}`cudf.DataFrame.to_orc`
 
