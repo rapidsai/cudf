@@ -106,7 +106,10 @@ class file_source : public datasource {
 
 void register_mmaped_buffer(void const* ptr, size_t size)
 {
-  if (ptr == nullptr or size != 0) { return; }
+  if (ptr == nullptr or size == 0) {
+    CUDF_LOG_WARN("Register mmap buffer: empty input");
+    return;
+  }
 
   int deviceId{};
   cudaGetDevice(&deviceId);
@@ -114,12 +117,13 @@ void register_mmaped_buffer(void const* ptr, size_t size)
   cudaGetDeviceProperties(&deviceProp, deviceId);
   // Only register the memory mapped buffer if the device accesses pageable memory via the host's
   // page tables - `cudaHostRegister` is very cheap in this case
-  if (deviceProp.pageableMemoryAccessUsesHostPageTables == 0) { return; }
+  if (deviceProp.pageableMemoryAccessUsesHostPageTables == 0) {
+    CUDF_LOG_WARN("Register mmap buffer: pageableMemoryAccessUsesHostPageTables == 0");
+    return;
+  }
 
   auto const result = cudaHostRegister(const_cast<void*>(ptr), size, cudaHostRegisterDefault);
-  if (result != cudaSuccess) {
-    CUDF_LOG_INFO("Failed to register the memory mapped buffer (possible performance impact).");
-  }
+  if (result != cudaSuccess) { CUDF_LOG_WARN("Register mmap buffer: cudaHostRegister failed"); }
 }
 
 /**
