@@ -370,12 +370,12 @@ add_library(
   src/io/csv/reader_impl.cu
   src/io/csv/writer_impl.cu
   src/io/functions.cpp
+  src/io/json/byte_range_info.cu
   src/io/json/json_column.cu
-  src/io/json/legacy/json_gpu.cu
   src/io/json/json_tree.cu
   src/io/json/nested_json_gpu.cu
   src/io/json/read_json.cu
-  src/io/json/byte_range_info.cu
+  src/io/json/legacy/json_gpu.cu
   src/io/json/legacy/reader_impl.cu
   src/io/json/write_json.cu
   src/io/orc/aggregate_orc_metadata.cpp
