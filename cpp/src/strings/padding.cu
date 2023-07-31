@@ -46,7 +46,7 @@ struct base_fn {
   column_device_view const d_column;
   size_type const width;
   size_type const fill_char_size;
-  offset_type* d_offsets{};
+  size_type* d_offsets{};
   char* d_chars{};
 
   base_fn(column_device_view const& d_column, size_type width, size_type fill_char_size)

@@ -67,8 +67,8 @@ class strings_column_view : private column_view {
   using column_view::offset;
   using column_view::size;
 
-  using offset_iterator = offset_type const*;  ///< offsets iterator type
-  using chars_iterator  = char const*;         ///< character iterator type
+  using offset_iterator = size_type const*;  ///< offsets iterator type
+  using chars_iterator  = char const*;       ///< character iterator type
 
   /**
    * @brief Returns the parent column.

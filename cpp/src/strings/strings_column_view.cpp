@@ -34,7 +34,7 @@ column_view strings_column_view::offsets() const
 
 strings_column_view::offset_iterator strings_column_view::offsets_begin() const
 {
-  return offsets().begin<offset_type>() + offset();
+  return offsets().begin<size_type>() + offset();
 }
 
 strings_column_view::offset_iterator strings_column_view::offsets_end() const

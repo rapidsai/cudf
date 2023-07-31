@@ -48,7 +48,7 @@ struct concat_strings_base {
   table_device_view const d_table;
   string_scalar_device_view const d_narep;
   separator_on_nulls separate_nulls;
-  offset_type* d_offsets{};
+  size_type* d_offsets{};
   char* d_chars{};
 
   /**
@@ -72,7 +72,7 @@ struct concat_strings_base {
     }
 
     char* d_buffer       = d_chars ? d_chars + d_offsets[idx] : nullptr;
-    offset_type bytes    = 0;
+    size_type bytes      = 0;
     bool write_separator = false;
 
     for (auto itr = d_table.begin(); itr < d_table.end(); ++itr) {
