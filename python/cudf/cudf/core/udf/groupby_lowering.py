@@ -65,13 +65,7 @@ def group_corr(context, builder, sig, args):
     rhs_grp = cgutils.create_struct_proxy(sig.args[1])(
         context, builder, value=args[1]
     )
-    # logically take the address of the group's data pointer
-    lhs_group_data_ptr = builder.alloca(lhs_grp.group_data.type)
-    builder.store(lhs_grp.group_data, lhs_group_data_ptr)
 
-    # logically take the address of the group's data pointer
-    rhs_group_data_ptr = builder.alloca(rhs_grp.group_data.type)
-    builder.store(rhs_grp.group_data, rhs_group_data_ptr)
     device_func = call_cuda_functions["corr"][
         (
             sig.return_type,
@@ -93,8 +87,8 @@ def group_corr(context, builder, sig, args):
             group_size_type,
         ),
         (
-            builder.load(lhs_group_data_ptr),
-            builder.load(rhs_group_data_ptr),
+            lhs_grp.group_data,
+            rhs_grp.group_data,
             lhs_grp.size,
         ),
     )
