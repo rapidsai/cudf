@@ -86,8 +86,8 @@ def _match_join_keys(
         )
 
     if (
-        (np.issubdtype(ltype, np.number))
-        and (np.issubdtype(rtype, np.number))
+        np.issubdtype(ltype, np.number)
+        and np.issubdtype(rtype, np.number)
         and not (
             np.issubdtype(ltype, np.timedelta64)
             or np.issubdtype(rtype, np.timedelta64)
@@ -98,7 +98,6 @@ def _match_join_keys(
             if ltype.kind == rtype.kind
             else np.find_common_type([], (ltype, rtype))
         )
-
     elif (
         np.issubdtype(ltype, np.datetime64)
         and np.issubdtype(rtype, np.datetime64)
