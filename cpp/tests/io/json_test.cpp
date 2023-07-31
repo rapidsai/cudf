@@ -199,6 +199,12 @@ struct JsonReaderDualTest : public cudf::test::BaseFixture,
                             public testing::WithParamInterface<json_test_t> {};
 
 /**
+ * @brief Test fixture for parametrized JSON reader tests that only tests the new nested JSON reader
+ */
+struct JsonReaderNoLegacy : public cudf::test::BaseFixture,
+                            public testing::WithParamInterface<json_test_t> {};
+
+/**
  * @brief Generates a JSON lines string that uses the record orient
  *
  * @param records An array of a map of key-value pairs
@@ -285,6 +291,12 @@ INSTANTIATE_TEST_CASE_P(JsonReaderParamTest,
 INSTANTIATE_TEST_CASE_P(JsonReaderDualTest,
                         JsonReaderDualTest,
                         ::testing::Values(json_test_t::legacy_lines_record_orient,
+                                          json_test_t::json_experimental_record_orient));
+
+// Parametrize qualifying JSON tests for executing nested reader only
+INSTANTIATE_TEST_CASE_P(JsonReaderNoLegacy,
+                        JsonReaderNoLegacy,
+                        ::testing::Values(json_test_t::json_experimental_row_orient,
                                           json_test_t::json_experimental_record_orient));
 
 TEST_P(JsonReaderParamTest, BasicJsonLines)
@@ -1199,6 +1211,51 @@ TEST_P(JsonReaderParamTest, JsonLinesMultipleFileInputs)
   std::vector<std::string> record_orient{
     to_records_orient({{{"0", "11"}, {"1", "1.1"}}, {{"0", "22"}, {"1", "2.2"}}}, "\n") + "\n",
     to_records_orient({{{"0", "33"}, {"1", "3.3"}}, {{"0", "44"}, {"1", "4.4"}}}, "\n") + "\n"};
+  auto const& data = is_row_orient_test(test_opt) ? row_orient : record_orient;
+
+  const std::string file1 = temp_env->get_temp_dir() + "JsonLinesFileTest1.json";
+  std::ofstream outfile(file1, std::ofstream::out);
+  outfile << data[0];
+  outfile.close();
+
+  const std::string file2 = temp_env->get_temp_dir() + "JsonLinesFileTest2.json";
+  std::ofstream outfile2(file2, std::ofstream::out);
+  outfile2 << data[1];
+  outfile2.close();
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{{file1, file2}})
+      .lines(true)
+      .legacy(is_legacy_test(test_opt));
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 2);
+  EXPECT_EQ(result.tbl->num_rows(), 4);
+
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
+
+  EXPECT_EQ(result.metadata.schema_info[0].name, "0");
+  EXPECT_EQ(result.metadata.schema_info[1].name, "1");
+
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 int64_wrapper{{11, 22, 33, 44}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
+                                 float64_wrapper{{1.1, 2.2, 3.3, 4.4}, validity});
+}
+
+TEST_P(JsonReaderNoLegacy, JsonLinesMultipleFileInputsNoNL)
+{
+  auto const test_opt = GetParam();
+  // Strings for the two separate input files in row-orient that do not end with a newline
+  std::vector<std::string> row_orient{"[11, 1.1]\n[22, 2.2]", "[33, 3.3]\n[44, 4.4]"};
+  // Strings for the two separate input files in record-orient that do not end with a newline
+  std::vector<std::string> record_orient{
+    to_records_orient({{{"0", "11"}, {"1", "1.1"}}, {{"0", "22"}, {"1", "2.2"}}}, "\n"),
+    to_records_orient({{{"0", "33"}, {"1", "3.3"}}, {{"0", "44"}, {"1", "4.4"}}}, "\n")};
   auto const& data = is_row_orient_test(test_opt) ? row_orient : record_orient;
 
   const std::string file1 = temp_env->get_temp_dir() + "JsonLinesFileTest1.json";
