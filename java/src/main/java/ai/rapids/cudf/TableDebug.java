@@ -20,20 +20,21 @@ import java.util.Locale;
 
 public class TableDebug {
 
-
   private static final String OUTPUT_STREAM = "ai.rapids.cudf.debug.output";
+
   enum Output {
     STDOUT,
-    STDERR;
+    STDERR
   }
 
   public static class Builder {
     private PrintStream print = System.err;
+
     public Builder() {
       Output outputMode = Output.STDERR;
       try {
         outputMode = Output.valueOf(
-          System.getProperty(OUTPUT_STREAM, Output.STDERR.name().toUpperCase(Locale.US))
+            System.getProperty(OUTPUT_STREAM, Output.STDERR.name().toUpperCase(Locale.US))
         );
       } catch (Throwable ignored) {
       }
@@ -54,7 +55,7 @@ public class TableDebug {
 
     public final TableDebug build() {
       return new TableDebug(
-        print
+          print
       );
     }
   }
@@ -70,15 +71,17 @@ public class TableDebug {
   }
 
   private final PrintStream out;
+
   private TableDebug(PrintStream printStream) {
     out = printStream;
   }
+
   /**
-   * Print to standard error the contents of a table. Note that this should never be
+   * Print the contents of a table. Note that this should never be
    * called from production code, as it is very slow.  Also note that this is not production
    * code.  You might need/want to update how the data shows up or add in support for more
    * types as this really is just for debugging.
-   * @param name the name of the table to print out.
+   * @param name  the name of the table to print out.
    * @param table the table to print out.
    */
   public synchronized void debug(String name, Table table) {
@@ -89,12 +92,12 @@ public class TableDebug {
   }
 
   /**
-   * Print to standard error the contents of a column. Note that this should never be
+   * Print the contents of a column. Note that this should never be
    * called from production code, as it is very slow.  Also note that this is not production
    * code.  You might need/want to update how the data shows up or add in support for more
    * types as this really is just for debugging.
    * @param name the name of the column to print out.
-   * @param col the column to print out.
+   * @param col  the column to print out.
    */
   public synchronized void debug(String name, ColumnView col) {
     debugGPUAddrs(name, col);
@@ -124,11 +127,11 @@ public class TableDebug {
 
 
   /**
-   * Print to standard error the contents of a column. Note that this should never be
+   * Print the contents of a column. Note that this should never be
    * called from production code, as it is very slow.  Also note that this is not production
    * code.  You might need/want to update how the data shows up or add in support for more
    * types as this really is just for debugging.
-   * @param name the name of the column to print out.
+   * @param name    the name of the column to print out.
    * @param hostCol the column to print out.
    */
   public synchronized void debug(String name, HostColumnVectorCore hostCol) {
@@ -152,20 +155,20 @@ public class TableDebug {
         }
       }
     } else if (DType.INT32.equals(type)
-            || DType.INT8.equals(type)
-            || DType.INT16.equals(type)
-            || DType.INT64.equals(type)
-            || DType.TIMESTAMP_DAYS.equals(type)
-            || DType.TIMESTAMP_SECONDS.equals(type)
-            || DType.TIMESTAMP_MICROSECONDS.equals(type)
-            || DType.TIMESTAMP_MILLISECONDS.equals(type)
-            || DType.TIMESTAMP_NANOSECONDS.equals(type)
-            || DType.UINT8.equals(type)
-            || DType.UINT16.equals(type)
-            || DType.UINT32.equals(type)
-            || DType.UINT64.equals(type)) {
+        || DType.INT8.equals(type)
+        || DType.INT16.equals(type)
+        || DType.INT64.equals(type)
+        || DType.TIMESTAMP_DAYS.equals(type)
+        || DType.TIMESTAMP_SECONDS.equals(type)
+        || DType.TIMESTAMP_MICROSECONDS.equals(type)
+        || DType.TIMESTAMP_MILLISECONDS.equals(type)
+        || DType.TIMESTAMP_NANOSECONDS.equals(type)
+        || DType.UINT8.equals(type)
+        || DType.UINT16.equals(type)
+        || DType.UINT32.equals(type)
+        || DType.UINT64.equals(type)) {
       debugInteger(hostCol, type);
-   } else if (DType.BOOL8.equals(type)) {
+    } else if (DType.BOOL8.equals(type)) {
       for (int i = 0; i < hostCol.getRowCount(); i++) {
         if (hostCol.isNull(i)) {
           out.println(i + " NULL");
@@ -247,7 +250,7 @@ public class TableDebug {
   private static String hexString(byte[] bytes) {
     StringBuilder str = new StringBuilder();
     for (byte b : bytes) {
-      str.append(String.format("%02x", b&0xff));
+      str.append(String.format("%02x", b & 0xff));
     }
     return str.toString();
   }
