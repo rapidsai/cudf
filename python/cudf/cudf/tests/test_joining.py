@@ -2229,3 +2229,12 @@ def test_index_join_names(how):
     expected = idx1.to_pandas().join(idx2.to_pandas(), how=how)
     actual = idx1.join(idx2, how=how)
     assert_join_results_equal(actual, expected, how=how)
+
+
+@pytest.mark.parametrize("dtype", ["datetime64[ns]", "timedelta64[ns]"])
+def test_join_datetime_timedelta_error(dtype):
+    df1 = cudf.DataFrame({"a": cudf.Series([10, 20, 30], dtype=dtype)})
+    df2 = df1.astype("int")
+
+    with pytest.raises(TypeError):
+        df1.merge(df2)
