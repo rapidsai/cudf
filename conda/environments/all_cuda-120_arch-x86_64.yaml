@@ -39,7 +39,7 @@ dependencies:
 - hypothesis
 - identify>=2.5.20
 - ipython
-- libarrow==11.0.0.*
+- libarrow==12.0.1.*
 - libcufile-dev
 - libcurand-dev
 - libkvikio==23.10.*
@@ -63,7 +63,7 @@ dependencies:
 - pip
 - pre-commit
 - protobuf>=4.21,<5
-- pyarrow==11.0.0.*
+- pyarrow==12.0.1.*
 - pydata-sphinx-theme
 - pyorc
 - pytest
