@@ -98,37 +98,30 @@ jobs:
   wheel-build-cudf:
     needs: checks
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-build.yml@branch-23.10
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-build.yaml@branch-23.10
     with:
       build_type: pull-request
-      package-name: cudf
-      package-dir: python/cudf
-      skbuild-configure-options: "-DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF"
+      script: "ci/build_wheel_cudf.sh"
   wheel-tests-cudf:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-test.yml@branch-23.10
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-test.yaml@branch-23.10
     with:
       build_type: pull-request
-      package-name: cudf
-      test-unittest: "python -m pytest -n 8 ./python/cudf/cudf/tests"
-      test-smoketest: "python ./ci/wheel_smoke_test_cudf.py"
+      script: ci/test_wheel_cudf.sh
   wheel-build-dask-cudf:
     needs: wheel-tests-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-build.yml@branch-23.10
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-build.yaml@branch-23.10
     with:
+      matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
-      package-name: dask_cudf
-      package-dir: python/dask_cudf
-      before-wheel: "RAPIDS_PY_WHEEL_NAME=cudf_${{ '${PIP_CU_VERSION}' }} rapids-download-wheels-from-s3 ./local-cudf && python -m pip install --no-deps ./local-cudf/cudf*.whl"
+      script: "ci/build_wheel_dask_cudf.sh"
   wheel-tests-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-test.yml@branch-23.10
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-test.yaml@branch-23.10
     with:
+      matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
-      package-name: dask_cudf
-      # Install the cudf we just built, and also test against latest dask/distributed/dask-cuda.
-      test-before: "RAPIDS_PY_WHEEL_NAME=cudf_${{ '${PIP_CU_VERSION}' }} rapids-download-wheels-from-s3 ./local-cudf-dep && python -m pip install --no-deps ./local-cudf-dep/cudf*.whl && python -m pip install git+https://github.com/dask/dask.git@main git+https://github.com/dask/distributed.git@main git+https://github.com/rapidsai/dask-cuda.git@branch-23.10"
-      test-unittest: "python -m pytest -n 8 ./python/dask_cudf/dask_cudf/tests"
+      script: ci/test_wheel_dask_cudf.sh

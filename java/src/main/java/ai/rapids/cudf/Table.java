@@ -545,6 +545,8 @@ public final class Table implements AutoCloseable {
       int[] minPeriods,
       int[] preceding,
       int[] following,
+      boolean[] unboundedPreceding,
+      boolean[] unboundedFollowing,
       boolean ignoreNullKeys) throws CudfException;
 
   private static native long[] rangeRollingWindowAggregate(long inputTable, int[] keyIndices, int[] orderByIndices, boolean[] isOrderByAscending,
@@ -3910,6 +3912,8 @@ public final class Table implements AutoCloseable {
       try {
         int[] aggPrecedingWindows = new int[totalOps];
         int[] aggFollowingWindows = new int[totalOps];
+        boolean[] unboundedPreceding = new boolean[totalOps];
+        boolean[] unboundedFollowing = new boolean[totalOps];
         int[] aggMinPeriods = new int[totalOps];
         long[] defaultOutputs = new long[totalOps];
         int opIndex = 0;
@@ -3922,6 +3926,8 @@ public final class Table implements AutoCloseable {
             aggPrecedingWindows[opIndex] = p == null || !p.isValid() ? 0 : p.getInt();
             Scalar f = operation.getWindowOptions().getFollowingScalar();
             aggFollowingWindows[opIndex] = f == null || ! f.isValid() ? 1 : f.getInt();
+            unboundedPreceding[opIndex] = operation.getWindowOptions().isUnboundedPreceding();
+            unboundedFollowing[opIndex] = operation.getWindowOptions().isUnboundedFollowing();
             aggMinPeriods[opIndex] = operation.getWindowOptions().getMinPeriods();
             defaultOutputs[opIndex] = operation.getDefaultOutput();
             opIndex++;
@@ -3935,6 +3941,7 @@ public final class Table implements AutoCloseable {
             defaultOutputs,
             aggColumnIndexes,
             aggInstances, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
+            unboundedPreceding, unboundedFollowing,
             groupByOptions.getIgnoreNullKeys()))) {
           // prepare the final table
           ColumnVector[] finalCols = new ColumnVector[windowAggregates.length];
