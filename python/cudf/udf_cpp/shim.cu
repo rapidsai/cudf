@@ -455,7 +455,7 @@ __device__ double BlockCoVar(T const* lhs, T const* rhs, int64_t size)
 
   device_sum<T>(block, lhs, size, &block_sum_lhs);
   auto const mu_l = static_cast<double>(block_sum_lhs) / static_cast<double>(size);
-  auto const mu_r = [=](){
+  auto const mu_r = [=]() {
     if (lhs == rhs) {
       return mu_l;
     } else {
