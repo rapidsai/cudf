@@ -37,10 +37,6 @@ def group_reduction_impl_basic(context, builder, sig, args, function):
     grp_type = sig.args[0]
     group_dataty = grp_type.group_data_type
 
-    # logically take the address of the group's data pointer
-    group_data_ptr = builder.alloca(grp.group_data.type)
-    builder.store(grp.group_data, group_data_ptr)
-
     # obtain the correct forward declaration from registry
     type_key = (sig.return_type, grp_type.group_scalar_type)
     func = call_cuda_functions[function][type_key]
@@ -51,7 +47,7 @@ def group_reduction_impl_basic(context, builder, sig, args, function):
         builder,
         func,
         nb_signature(retty, group_dataty, grp_type.group_size_type),
-        (builder.load(group_data_ptr), grp.size),
+        (grp.group_data, grp.size),
     )
 
 
@@ -95,13 +91,6 @@ def group_reduction_impl_idx_max_or_min(context, builder, sig, args, function):
             "are supported."
         )
 
-    group_dataty = grp_type.group_data_type
-    group_data_ptr = builder.alloca(grp.group_data.type)
-    builder.store(grp.group_data, group_data_ptr)
-
-    index_dataty = grp_type.group_index_type
-    index_ptr = builder.alloca(grp.index.type)
-    builder.store(grp.index, index_ptr)
     type_key = (index_default_type, grp_type.group_scalar_type)
     func = call_cuda_functions[function][type_key]
 
@@ -109,9 +98,12 @@ def group_reduction_impl_idx_max_or_min(context, builder, sig, args, function):
         builder,
         func,
         nb_signature(
-            retty, group_dataty, index_dataty, grp_type.group_size_type
+            retty,
+            grp_type.group_data_type,
+            grp_type.group_index_type,
+            grp_type.group_size_type,
         ),
-        (builder.load(group_data_ptr), builder.load(index_ptr), grp.size),
+        (grp.group_data, grp.index, grp.size),
     )
 
 
