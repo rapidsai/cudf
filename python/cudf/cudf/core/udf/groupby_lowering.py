@@ -99,8 +99,8 @@ def group_reduction_impl_idx_max_or_min(context, builder, sig, args, function):
         func,
         nb_signature(
             retty,
-            sig.args[0].group_scalar_type,
-            index_default_type,
+            grp_type.group_data_type,
+            grp_type.group_index_type,
             grp_type.group_size_type,
         ),
         (grp.group_data, grp.index, grp.size),
