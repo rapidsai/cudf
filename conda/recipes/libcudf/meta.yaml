@@ -114,6 +114,7 @@ outputs:
         - test -f $PREFIX/lib/libcudf_identify_stream_usage_mode_testing.so
         - test -f $PREFIX/include/cudf/aggregation.hpp
         - test -f $PREFIX/include/cudf/ast/detail/expression_parser.hpp
+        - test -f $PREFIX/include/cudf/ast/detail/expression_transformer.hpp
         - test -f $PREFIX/include/cudf/ast/detail/operators.hpp
         - test -f $PREFIX/include/cudf/ast/expressions.hpp
         - test -f $PREFIX/include/cudf/binaryop.hpp
@@ -209,6 +210,7 @@ outputs:
         - test -f $PREFIX/include/cudf/io/orc_metadata.hpp
         - test -f $PREFIX/include/cudf/io/orc_types.hpp
         - test -f $PREFIX/include/cudf/io/parquet.hpp
+        - test -f $PREFIX/include/cudf/io/parquet_metadata.hpp
         - test -f $PREFIX/include/cudf/io/text/byte_range_info.hpp
         - test -f $PREFIX/include/cudf/io/text/data_chunk_source.hpp
         - test -f $PREFIX/include/cudf/io/text/data_chunk_source_factories.hpp
@@ -251,6 +253,7 @@ outputs:
         - test -f $PREFIX/include/cudf/partitioning.hpp
         - test -f $PREFIX/include/cudf/quantiles.hpp
         - test -f $PREFIX/include/cudf/reduction.hpp
+        - test -f $PREFIX/include/cudf/reduction/detail/reduction.hpp
         - test -f $PREFIX/include/cudf/reduction/detail/reduction_functions.hpp
         - test -f $PREFIX/include/cudf/reduction/detail/segmented_reduction_functions.hpp
         - test -f $PREFIX/include/cudf/replace.hpp
@@ -387,7 +390,7 @@ outputs:
     script: install_libcudf_example.sh
     build:
       number: {{ GIT_DESCRIBE_NUMBER }}
-      string: {{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+      string: cuda{{ cuda_major }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       ignore_run_exports_from:
         {% if cuda_major == "11" %}
         - {{ compiler('cuda11') }}
