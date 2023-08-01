@@ -90,8 +90,8 @@ TEST_F(ArrowIOTest, S3FileSystem)
   if (!s3_unsupported) {
     // Verify that we are using Arrow with S3, and call finalize
     // https://github.com/apache/arrow/issues/36974
-    // needs to be in a separate conditional to ensure we call
-    // finalize after all arrow_io_source's has been deleted
+    // This needs to be in a separate conditional to ensure we call
+    // finalize after all arrow_io_source instances have been deleted.
     void* whole_app                                       = dlopen(NULL, RTLD_LAZY);
     decltype(arrow::fs::EnsureS3Finalized)* close_s3_func = nullptr;
 
