@@ -19,6 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Locale;
+import java.util.function.Consumer;
 
 public class TableDebug {
 
@@ -39,41 +40,22 @@ public class TableDebug {
   private static final Logger log = LoggerFactory.getLogger(TableDebug.class);
 
   public enum Output {
-    STDOUT,
-    STDERR,
+    STDOUT(System.out::println),
+    STDERR(System.err::println),
+    LOG(log::debug),
+    LOG_DEBUG(log::debug),
+    LOG_INFO(log::info),
+    LOG_WARN(log::warn),
+    LOG_ERROR(log::error);
 
-    LOG,
-    LOG_DEBUG,
+    private final Consumer<String> printFunc;
 
-    LOG_INFO,
-
-    LOG_WARN,
-
-    LOG_ERROR;
+    Output(Consumer<String> pf) {
+      this.printFunc = pf;
+    }
 
     final void println(String s) {
-      switch (this) {
-        case STDERR:
-          System.err.println(s);
-          break;
-        case STDOUT:
-          System.out.println(s);
-          break;
-        case LOG:
-        case LOG_DEBUG:
-          log.debug(s);
-          break;
-        case LOG_INFO:
-          log.warn(s);
-          break;
-        case LOG_WARN:
-          log.warn(s);
-          break;
-        case LOG_ERROR:
-          log.error(s);
-          break;
-        default:
-      }
+      printFunc.accept(s);
     }
   }
 
