@@ -933,7 +933,7 @@ constexpr auto julian_calendar_epoch_diff()
 }
 
 /**
- * @brief Converts number of periods Per into a pair with nanoseconds since midnight
+ * @brief Converts number `v` of periods of type `PeriodT` into a pair with nanoseconds since midnight
  * and number of Julian days. Does not deal with time zones. Used by INT96 code.
  *
  * @tparam PeriodT a ratio representing the tick period in duration
