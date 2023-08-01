@@ -162,13 +162,14 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
 
   rapids_cpm_find(
     Arrow ${VERSION}
-    GLOBAL_TARGETS arrow_shared parquet_shared arrow_dataset_shared arrow_static parquet_static
-                   arrow_dataset_static
+    GLOBAL_TARGETS arrow_shared parquet_shared arrow_acero_shared arrow_dataset_shared arrow_static
+                   parquet_static arrow_acero_static arrow_dataset_static
     CPM_ARGS
     GIT_REPOSITORY https://github.com/apache/arrow.git
     GIT_TAG apache-arrow-${VERSION}
     GIT_SHALLOW TRUE SOURCE_SUBDIR cpp
     OPTIONS "CMAKE_VERBOSE_MAKEFILE ON"
+            "ARROW_ACERO ON"
             "ARROW_IPC ON"
             "ARROW_DATASET ON"
             "ARROW_WITH_BACKTRACE ON"
@@ -221,7 +222,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
         # Set this to enable `find_package(Parquet)`
         set(Parquet_DIR "${Arrow_DIR}")
       endif()
-      # Set this to enable `find_package(ArrowDataset)`
+      # Set this to enable `find_package(ArrowDataset)` Will call find_package(ArrowAcero) for us
       set(ArrowDataset_DIR "${Arrow_DIR}")
       find_package(ArrowDataset REQUIRED QUIET)
     endif()
@@ -316,6 +317,12 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
 
       set(arrow_dataset_code_string
           [=[
+              if (TARGET cudf::arrow_acero_shared AND (NOT TARGET arrow_acero_shared))
+                  add_library(arrow_acero_shared ALIAS cudf::arrow_acero_shared)
+              endif()
+              if (TARGET cudf::arrow_acero_static AND (NOT TARGET arrow_acero_static))
+                  add_library(arrow_acero_static ALIAS cudf::arrow_acero_static)
+              endif()
               if (TARGET cudf::arrow_dataset_shared AND (NOT TARGET arrow_dataset_shared))
                   add_library(arrow_dataset_shared ALIAS cudf::arrow_dataset_shared)
               endif()
