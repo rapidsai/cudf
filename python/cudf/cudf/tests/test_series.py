@@ -2204,3 +2204,9 @@ def test_series_contains(data, index):
     assert_eq(10 in ps, 10 in gs)
     assert_eq(True in ps, True in gs)
     assert_eq(False in ps, False in gs)
+
+
+def test_series_from_pandas_sparse():
+    pser = pd.Series(range(2), dtype=pd.SparseDtype(np.int64, 0))
+    with pytest.raises(NotImplementedError):
+        cudf.Series(pser)

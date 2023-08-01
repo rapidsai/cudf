@@ -2009,6 +2009,11 @@ def as_column(
                 return as_column(arbitrary.array)
             elif PANDAS_GE_150 and isinstance(arbitrary.dtype, pd.ArrowDtype):
                 return as_column(pa.array(arbitrary.array, from_pandas=True))
+            elif isinstance(arbitrary.dtype, pd.SparseDtype):
+                raise NotImplementedError(
+                    f"{arbitrary.dtype} is not supported. Convert first to "
+                    f"{arbitrary.dtype.subtype}."
+                )
         if is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif is_interval_dtype(arbitrary.dtype):

@@ -10243,3 +10243,9 @@ def test_dataframe_init_columns_named_index():
     pdf = pd.DataFrame(data, columns=columns)
 
     assert_eq(gdf, pdf)
+
+
+def test_dataframe_from_pandas_sparse():
+    pdf = pd.DataFrame(range(2), dtype=pd.SparseDtype(np.int64, 0))
+    with pytest.raises(NotImplementedError):
+        cudf.DataFrame(pdf)
