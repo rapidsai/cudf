@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <chrono>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -6414,11 +6415,14 @@ TEST_F(ParquetReaderTest, FilterFloatNAN)
 
 TEST_F(ParquetWriterTest, TimestampMicrosINT96NoOverflow)
 {
+  using namespace cuda::std::chrono;
   using namespace cudf::io;
 
-  // used to be corrupted by round-tripping via INT96
-  // 3023-07-14T07:38:45.418688Z
-  column_wrapper<cudf::timestamp_us> big_ts_col{33246229125418688};
+  column_wrapper<cudf::timestamp_us> big_ts_col{
+    sys_days{year{3023} / month{7} / day{14}} + 7h + 38min + 45s + 418688us,
+    sys_days{year{723} / month{3} / day{21}} + 14h + 20min + 13s + microseconds{781ms}
+  };
+
   table_view expected({big_ts_col});
   auto filepath = temp_env->get_temp_filepath("BigINT96Timestamp.parquet");
 
