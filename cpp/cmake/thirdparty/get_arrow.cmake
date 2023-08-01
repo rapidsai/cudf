@@ -222,7 +222,8 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
         # Set this to enable `find_package(Parquet)`
         set(Parquet_DIR "${Arrow_DIR}")
       endif()
-      # Set this to enable `find_package(ArrowDataset)`. This will call find_package(ArrowAcero) for us
+      # Set this to enable `find_package(ArrowDataset)`. This will call find_package(ArrowAcero) for
+      # us
       set(ArrowDataset_DIR "${Arrow_DIR}")
       find_package(ArrowDataset REQUIRED QUIET)
     endif()
@@ -315,7 +316,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
 
     if(ENABLE_PARQUET)
 
-      set(arrow_dataset_code_string
+      set(arrow_acero_code_string
           [=[
               if (TARGET cudf::arrow_acero_shared AND (NOT TARGET arrow_acero_shared))
                   add_library(arrow_acero_shared ALIAS cudf::arrow_acero_shared)
@@ -323,6 +324,20 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
               if (TARGET cudf::arrow_acero_static AND (NOT TARGET arrow_acero_static))
                   add_library(arrow_acero_static ALIAS cudf::arrow_acero_static)
               endif()
+            ]=]
+      )
+
+      rapids_export(
+        BUILD ArrowAcero
+        VERSION ${VERSION}
+        EXPORT_SET arrow_acero_targets
+        GLOBAL_TARGETS arrow_acero_shared arrow_acero_static
+        NAMESPACE cudf::
+        FINAL_CODE_BLOCK arrow_acero_code_string
+      )
+
+      set(arrow_dataset_code_string
+          [=[
               if (TARGET cudf::arrow_dataset_shared AND (NOT TARGET arrow_dataset_shared))
                   add_library(arrow_dataset_shared ALIAS cudf::arrow_dataset_shared)
               endif()
