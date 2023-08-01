@@ -457,6 +457,8 @@ __device__ double BlockCoVar(T const* lhs, T const* rhs, int64_t size)
   auto const mu_l = static_cast<double>(block_sum_lhs) / static_cast<double>(size);
   auto const mu_r = [=]() {
     if (lhs == rhs) {
+      // If the lhs and rhs are the same, this is calculating variance.
+      // Thus we can assume mu_r = mu_l.
       return mu_l;
     } else {
       device_sum<T>(block, rhs, size, &block_sum_rhs);
@@ -467,9 +469,8 @@ __device__ double BlockCoVar(T const* lhs, T const* rhs, int64_t size)
   double local_covar = 0;
 
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
-    auto const delta =
+    local_covar +=
       (static_cast<double>(lhs[idx]) - mu_l) * (static_cast<double>(rhs[idx]) - mu_r);
-    local_covar += delta;
   }
 
   cuda::atomic_ref<double, cuda::thread_scope_block> ref{block_covar};
