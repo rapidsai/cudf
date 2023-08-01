@@ -419,15 +419,15 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
                         cuco::empty_value{empty_node_index_sentinel},
                         hash_table_allocator_type{default_allocator<char>{}, stream},
                         stream.value()};
-  auto const d_hasher =
-    cuda::proclaim_return_type<typename cudf::hashing::detail::default_hash<cudf::string_view>::result_type>(
-      [d_input          = d_input.data(),
-       node_range_begin = d_tree.node_range_begin.data(),
-       node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id) {
-        auto const field_name = cudf::string_view(
-          d_input + node_range_begin[node_id], node_range_end[node_id] - node_range_begin[node_id]);
-        return cudf::hashing::detail::default_hash<cudf::string_view>{}(field_name);
-      });
+  auto const d_hasher = cuda::proclaim_return_type<
+    typename cudf::hashing::detail::default_hash<cudf::string_view>::result_type>(
+    [d_input          = d_input.data(),
+     node_range_begin = d_tree.node_range_begin.data(),
+     node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id) {
+      auto const field_name = cudf::string_view(
+        d_input + node_range_begin[node_id], node_range_end[node_id] - node_range_begin[node_id]);
+      return cudf::hashing::detail::default_hash<cudf::string_view>{}(field_name);
+    });
   auto const d_equal = cuda::proclaim_return_type<bool>(
     [d_input          = d_input.data(),
      node_range_begin = d_tree.node_range_begin.data(),
