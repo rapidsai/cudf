@@ -933,8 +933,8 @@ constexpr auto julian_calendar_epoch_diff()
 }
 
 /**
- * @brief Converts number `v` of periods of type `PeriodT` into a pair with nanoseconds since midnight
- * and number of Julian days. Does not deal with time zones. Used by INT96 code.
+ * @brief Converts number `v` of periods of type `PeriodT` into a pair with nanoseconds since
+ * midnight and number of Julian days. Does not deal with time zones. Used by INT96 code.
  *
  * @tparam PeriodT a ratio representing the tick period in duration
  * @param v count of ticks since epoch
@@ -1238,7 +1238,7 @@ __global__ void __launch_bounds__(128, 8)
               }
             }
 
-            auto const& [last_day_nanos, julian_days] = ([&]() {
+            auto const [last_day_nanos, julian_days] = [&] {
               using namespace cuda::std::chrono;
               switch (s->col.leaf_column->type().id()) {
                 case type_id::TIMESTAMP_SECONDS:
@@ -1251,7 +1251,7 @@ __global__ void __launch_bounds__(128, 8)
                 } break;
               }
               return julian_days_with_time<cuda::std::nano>(0);
-            }());
+            }();
 
             // the 12 bytes of fixed length data.
             v             = last_day_nanos.count();
