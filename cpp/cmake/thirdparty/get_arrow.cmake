@@ -222,7 +222,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
         # Set this to enable `find_package(Parquet)`
         set(Parquet_DIR "${Arrow_DIR}")
       endif()
-      # Set this to enable `find_package(ArrowDataset)` Will call find_package(ArrowAcero) for us
+      # Set this to enable `find_package(ArrowDataset)`. This will call find_package(ArrowAcero) for us
       set(ArrowDataset_DIR "${Arrow_DIR}")
       find_package(ArrowDataset REQUIRED QUIET)
     endif()
