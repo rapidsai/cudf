@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <chrono>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -6420,8 +6419,7 @@ TEST_F(ParquetWriterTest, TimestampMicrosINT96NoOverflow)
 
   column_wrapper<cudf::timestamp_us> big_ts_col{
     sys_days{year{3023} / month{7} / day{14}} + 7h + 38min + 45s + 418688us,
-    sys_days{year{723} / month{3} / day{21}} + 14h + 20min + 13s + microseconds{781ms}
-  };
+    sys_days{year{723} / month{3} / day{21}} + 14h + 20min + 13s + microseconds{781ms}};
 
   table_view expected({big_ts_col});
   auto filepath = temp_env->get_temp_filepath("BigINT96Timestamp.parquet");
