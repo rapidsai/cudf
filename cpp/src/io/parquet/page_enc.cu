@@ -936,16 +936,16 @@ constexpr auto julian_calendar_epoch_diff()
  * @brief Converts number of periods Per into a pair with nanoseconds since midnight
  * and number of Julian days. Does not deal with time zones. Used by INT96 code.
  *
- * @tparam Period_t a ratio representing the tick period in duration
+ * @tparam PeriodT a ratio representing the tick period in duration
  * @param v count of ticks since epoch
  * @return A pair of (nanoseconds, days) where nanoseconds is the number of nanoseconds
  * elapsed in the day and days is the number of days from Julian epoch.
  */
-template <typename Period_t>
+template <typename PeriodT>
 __device__ auto julian_days_with_time(int64_t v)
 {
   using namespace cuda::std::chrono;
-  auto const dur_total             = duration<int64_t, Period_t>{v};
+  auto const dur_total             = duration<int64_t, PeriodT>{v};
   auto const dur_days              = floor<days>(dur_total);
   auto const dur_time_of_day       = dur_total - dur_days;
   auto const dur_time_of_day_nanos = duration_cast<nanoseconds>(dur_time_of_day);
