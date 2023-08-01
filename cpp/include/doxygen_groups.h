@@ -141,9 +141,10 @@
  * @}
  * @defgroup io_apis IO
  * @{
- *   @defgroup io_datasources Datasources
  *   @defgroup io_readers Readers
  *   @defgroup io_writers Writers
+ *   @defgroup io_datasources Data Sources
+ *   @defgroup io_datasinks Data Sinks
  * @}
  * @defgroup lists_apis Lists
  * @{
@@ -167,6 +168,7 @@
  *   @defgroup nvtext_tokenize Tokenizing
  *   @defgroup nvtext_replace Replacing
  *   @defgroup nvtext_minhash MinHashing
+ *   @defgroup nvtext_jaccard Jaccard Index
  * @}
  * @defgroup utility_apis Utilities
  * @{

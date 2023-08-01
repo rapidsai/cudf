@@ -404,6 +404,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         # TODO: Update message when set_levels is implemented.
         # https://github.com/rapidsai/cudf/issues/12307
         if levels is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "parameter levels is deprecated and will be removed in a "
                 "future version.",
@@ -413,6 +414,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         # TODO: Update message when set_codes is implemented.
         # https://github.com/rapidsai/cudf/issues/12308
         if codes is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "parameter codes is deprecated and will be removed in a "
                 "future version.",
@@ -420,6 +422,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             )
 
         if dtype is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "parameter dtype is deprecated and will be removed in a "
                 "future version. Use the astype method instead.",

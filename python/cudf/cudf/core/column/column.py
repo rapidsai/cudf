@@ -81,6 +81,7 @@ from cudf.core.dtypes import (
 )
 from cudf.core.missing import NA
 from cudf.core.mixins import BinaryOperand, Reducible
+from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
@@ -1149,17 +1150,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             values, side, ascending=ascending, na_position=na_position
         )
 
-    def unique(self, preserve_order=True) -> ColumnBase:
+    def unique(self) -> ColumnBase:
         """
         Get unique values in the data
         """
-        if preserve_order is not True:
-            warnings.warn(
-                "The preserve_order argument is deprecated. It will be "
-                "removed in a future version. As of now, unique always "
-                "preserves order regardless of the argument's value.",
-                FutureWarning,
-            )
         return drop_duplicates([self], keep="first")[0]
 
     def serialize(self) -> Tuple[dict, list]:
@@ -2034,6 +2028,10 @@ def as_column(
             )
         else:
             pyarrow_array = pa.array(arbitrary, from_pandas=nan_as_null)
+            if arbitrary.dtype == cudf.dtype("object") and isinstance(
+                pyarrow_array, (pa.DurationArray, pa.TimestampArray)
+            ):
+                raise TypeError("Cannot create column with mixed types")
             if isinstance(pyarrow_array.type, pa.Decimal128Type):
                 pyarrow_type = cudf.Decimal128Dtype.from_arrow(
                     pyarrow_array.type
@@ -2342,18 +2340,30 @@ def as_column(
                             _maybe_convert_to_default_type("float")
                         )
 
+                pyarrow_array = pa.array(
+                    arbitrary,
+                    type=pa_type,
+                    from_pandas=True if nan_as_null is None else nan_as_null,
+                )
+
+                if (
+                    isinstance(arbitrary, pd.Index)
+                    and arbitrary.dtype == cudf.dtype("object")
+                    and isinstance(
+                        pyarrow_array, (pa.DurationArray, pa.TimestampArray)
+                    )
+                ):
+                    raise MixedTypeError(
+                        "Cannot create column with mixed types"
+                    )
                 data = as_column(
-                    pa.array(
-                        arbitrary,
-                        type=pa_type,
-                        from_pandas=True
-                        if nan_as_null is None
-                        else nan_as_null,
-                    ),
+                    pyarrow_array,
                     dtype=dtype,
                     nan_as_null=nan_as_null,
                 )
-            except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
+            except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError) as e:
+                if isinstance(e, MixedTypeError):
+                    raise TypeError(str(e))
                 if is_categorical_dtype(dtype):
                     sr = pd.Series(arbitrary, dtype="category")
                     data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
