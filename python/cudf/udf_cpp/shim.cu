@@ -729,8 +729,6 @@ extern "C" {
 
 make_definition_corr(BlockCorr, int32, int32_t);
 make_definition_corr(BlockCorr, int64, int64_t);
-make_definition_corr(BlockCorr, float32, float);
-make_definition_corr(BlockCorr, float64, double);
 
 #undef make_definition_corr
 }

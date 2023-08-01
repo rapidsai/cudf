@@ -253,7 +253,9 @@ for ty in SUPPORTED_GROUPBY_NUMBA_TYPES:
     _register_cuda_unary_reduction_caller("Min", ty, ty)
     _register_cuda_idx_reduction_caller("IdxMax", ty)
     _register_cuda_idx_reduction_caller("IdxMin", ty)
-    _register_cuda_binary_reduction_caller("Corr", ty, ty, types.float64)
+
+    if ty in types.integer_domain:
+        _register_cuda_binary_reduction_caller("Corr", ty, ty, types.float64)
 
 
 _register_cuda_unary_reduction_caller("Sum", types.int32, types.int64)
