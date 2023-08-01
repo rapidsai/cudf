@@ -469,8 +469,7 @@ __device__ double BlockCoVar(T const* lhs, T const* rhs, int64_t size)
   double local_covar = 0;
 
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
-    local_covar +=
-      (static_cast<double>(lhs[idx]) - mu_l) * (static_cast<double>(rhs[idx]) - mu_r);
+    local_covar += (static_cast<double>(lhs[idx]) - mu_l) * (static_cast<double>(rhs[idx]) - mu_r);
   }
 
   cuda::atomic_ref<double, cuda::thread_scope_block> ref{block_covar};
