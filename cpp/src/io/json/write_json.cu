@@ -27,9 +27,9 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/data_sink.hpp>
-#include <cudf/io/detail/data_casting.cuh>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -61,6 +61,21 @@
 #include <vector>
 
 namespace cudf::io::json::detail {
+__device__ __forceinline__ thrust::pair<char, char> get_escaped_char(char escaped_char)
+{
+  switch (escaped_char) {
+    case '"': return {'\\', '"'};
+    case '\\': return {'\\', '\\'};
+    case '/': return {'\\', '/'};
+    case '\b': return {'\\', 'b'};
+    case '\f': return {'\\', 'f'};
+    case '\n': return {'\\', 'n'};
+    case '\r': return {'\\', 'r'};
+    case '\t': return {'\\', 't'};
+    // case 'u': return UNICODE_SEQ;
+    default: return {'\0', escaped_char};
+  }
+}
 
 std::unique_ptr<column> make_column_names_column(host_span<column_name_info const> column_names,
                                                  size_type num_columns,
@@ -148,7 +163,7 @@ struct escape_strings_fn {
         }
         continue;
       }
-      auto escaped_chars = cudf::io::json::experimental::detail::get_escaped_char(utf8_char);
+      auto escaped_chars = get_escaped_char(utf8_char);
       if (escaped_chars.first == '\0') {
         write_char(escaped_chars.second, d_buffer, bytes);
       } else {
