@@ -843,8 +843,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             data = DataFrame.from_pandas(pd.DataFrame(data))
             self._data = data._data
         else:
-            data = list(itertools.zip_longest(*data))
-
+            if all(
+                isinstance(a, abc.Iterable) or isinstance(a, abc.Sequence)
+                for a in data
+            ):
+                data = list(itertools.zip_longest(*data))
+            else:
+                raise TypeError("Inputs should be a bounded-sequence.")
             if columns is not None and len(data) == 0:
                 data = [
                     cudf.core.column.column_empty(row_count=0, dtype=None)
