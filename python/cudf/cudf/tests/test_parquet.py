@@ -31,7 +31,6 @@ from cudf.testing._utils import (
     TIMEDELTA_TYPES,
     assert_eq,
     assert_exceptions_equal,
-    expect_warning_if,
     set_random_null_mask_inplace,
 )
 
@@ -298,8 +297,7 @@ def test_parquet_reader_empty_pandas_dataframe(tmpdir, engine):
 
 
 @pytest.mark.parametrize("has_null", [False, True])
-@pytest.mark.parametrize("strings_to_categorical", [False, True, None])
-def test_parquet_reader_strings(tmpdir, strings_to_categorical, has_null):
+def test_parquet_reader_strings(tmpdir, has_null):
     df = pd.DataFrame(
         [(1, "aaa", 9.0), (2, "bbb", 8.0), (3, "ccc", 7.0)],
         columns=pd.Index(list("abc")),
@@ -310,28 +308,10 @@ def test_parquet_reader_strings(tmpdir, strings_to_categorical, has_null):
     df.to_parquet(fname)
     assert os.path.exists(fname)
 
-    if strings_to_categorical is not None:
-        with expect_warning_if(strings_to_categorical is not False):
-            gdf = cudf.read_parquet(
-                fname,
-                engine="cudf",
-                strings_to_categorical=strings_to_categorical,
-            )
-    else:
-        gdf = cudf.read_parquet(fname, engine="cudf")
+    gdf = cudf.read_parquet(fname, engine="cudf")
 
-    if strings_to_categorical:
-        if has_null:
-            hash_ref = [989983842, None, 1169108191]
-        else:
-            hash_ref = [989983842, 429364346, 1169108191]
-        assert gdf["b"].dtype == np.dtype("int32")
-        assert_eq(
-            gdf["b"], cudf.Series(hash_ref, dtype=np.dtype("int32"), name="b")
-        )
-    else:
-        assert gdf["b"].dtype == np.dtype("object")
-        assert_eq(gdf["b"], df["b"])
+    assert gdf["b"].dtype == np.dtype("object")
+    assert_eq(gdf["b"], df["b"])
 
 
 @pytest.mark.parametrize("columns", [None, ["b"]])

@@ -389,6 +389,8 @@ def groupby_jit_data():
     df["key2"] = np.random.randint(0, 2, nelem)
     df["val1"] = np.random.random(nelem)
     df["val2"] = np.random.random(nelem)
+    df["val3"] = np.random.randint(0, 10, nelem)
+    df["val4"] = np.random.randint(0, 10, nelem)
     return df
 
 
@@ -402,7 +404,11 @@ def run_groupby_apply_jit_test(data, func, keys, *args):
     assert_groupby_results_equal(cudf_jit_result, pandas_result)
 
 
-@pytest.mark.parametrize("dtype", SUPPORTED_GROUPBY_NUMPY_TYPES)
+@pytest.mark.parametrize(
+    "dtype",
+    SUPPORTED_GROUPBY_NUMPY_TYPES,
+    ids=[str(t) for t in SUPPORTED_GROUPBY_NUMPY_TYPES],
+)
 @pytest.mark.parametrize(
     "func", ["min", "max", "sum", "mean", "var", "std", "idxmin", "idxmax"]
 )
@@ -427,6 +433,20 @@ def test_groupby_apply_jit_reductions(func, groupby_jit_data, dtype):
     groupby_jit_data["val2"] = groupby_jit_data["val2"].astype(dtype)
 
     run_groupby_apply_jit_test(groupby_jit_data, func, ["key1"])
+
+
+@pytest.mark.parametrize("dtype", ["int32", "int64"])
+def test_groupby_apply_jit_correlation(groupby_jit_data, dtype):
+
+    groupby_jit_data["val3"] = groupby_jit_data["val3"].astype(dtype)
+    groupby_jit_data["val4"] = groupby_jit_data["val4"].astype(dtype)
+
+    keys = ["key1", "key2"]
+
+    def func(group):
+        return group["val3"].corr(group["val4"])
+
+    run_groupby_apply_jit_test(groupby_jit_data, func, keys)
 
 
 @pytest.mark.parametrize("dtype", ["float64"])

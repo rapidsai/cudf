@@ -38,6 +38,7 @@
 #include <cudf/transform.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/span.hpp>
+#include <cudf/wrappers/timestamps.hpp>
 
 #include <src/io/parquet/compact_protocol_reader.hpp>
 #include <src/io/parquet/parquet.hpp>
@@ -6409,6 +6410,30 @@ TEST_F(ParquetReaderTest, FilterFloatNAN)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected0->view(), result0);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected1->view(), result1);
+}
+
+TEST_F(ParquetWriterTest, TimestampMicrosINT96NoOverflow)
+{
+  using namespace cuda::std::chrono;
+  using namespace cudf::io;
+
+  column_wrapper<cudf::timestamp_us> big_ts_col{
+    sys_days{year{3023} / month{7} / day{14}} + 7h + 38min + 45s + 418688us,
+    sys_days{year{723} / month{3} / day{21}} + 14h + 20min + 13s + microseconds{781ms}};
+
+  table_view expected({big_ts_col});
+  auto filepath = temp_env->get_temp_filepath("BigINT96Timestamp.parquet");
+
+  auto const out_opts =
+    parquet_writer_options::builder(sink_info{filepath}, expected).int96_timestamps(true).build();
+  write_parquet(out_opts);
+
+  auto const in_opts = parquet_reader_options::builder(source_info(filepath))
+                         .timestamp_type(cudf::data_type(cudf::type_id::TIMESTAMP_MICROSECONDS))
+                         .build();
+  auto const result = read_parquet(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
