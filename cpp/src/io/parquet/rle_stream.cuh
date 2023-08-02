@@ -141,7 +141,6 @@ struct rle_run {
 // a stream of rle_runs
 template <typename level_t, int decode_threads>
 struct rle_stream {
-  // TODO: consider if these should be template parameters to rle_stream
   static constexpr int num_rle_stream_decode_threads = decode_threads;
   // the -1 here is for the look-ahead warp that fills in the list of runs to be decoded
   // in an overlapped manner. so if we had 16 total warps:
