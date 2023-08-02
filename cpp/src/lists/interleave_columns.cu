@@ -58,9 +58,8 @@ generate_list_offsets_and_validities(table_view const& input,
   auto const table_dv_ptr     = table_device_view::create(input, stream);
 
   // The output offsets column.
-  static_assert(sizeof(size_type) == sizeof(int32_t));
   auto list_offsets = make_numeric_column(
-    data_type{type_id::INT32}, num_output_lists + 1, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, num_output_lists + 1, mask_state::UNALLOCATED, stream, mr);
   auto const d_offsets = list_offsets->mutable_view().template begin<size_type>();
 
   // The array of int8_t to store validities for list elements.
