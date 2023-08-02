@@ -844,12 +844,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             self._data = data._data
         else:
             if all(
-                isinstance(a, abc.Iterable) or isinstance(a, abc.Sequence)
+                isinstance(a, (abc.Iterable, abc.Sequence))
                 for a in data
             ):
                 data = list(itertools.zip_longest(*data))
             else:
-                raise TypeError("Inputs should be a bounded-sequence.")
+                raise TypeError("Inputs should be an iterable or sequence.")
             if columns is not None and len(data) == 0:
                 data = [
                     cudf.core.column.column_empty(row_count=0, dtype=None)
