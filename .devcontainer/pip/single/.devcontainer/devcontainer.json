@@ -15,7 +15,7 @@
   },
 
   "features": {
-    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:23.8": {}
+    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:23.10": {}
   },
 
   "overrideFeatureInstallOrder": [
