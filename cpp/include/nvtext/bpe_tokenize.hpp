@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,12 +68,6 @@ struct bpe_merge_pairs {
    * @return The number of merge pairs in the table
    */
   cudf::size_type get_size();
-  /**
-   * @brief  Returns the number of unique merge pairs in the table.
-   *
-   * @return The number of unique merge pairs in the table
-   */
-  std::size_t get_map_size();
 };
 
 /**

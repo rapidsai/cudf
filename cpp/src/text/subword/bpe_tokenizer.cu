@@ -80,10 +80,11 @@ __device__ cudf::string_view get_first_token(cudf::string_view const& d_str)
  *
  * @see The byte_pair_encoding_fn::operator() function below for details.
  */
+template <typename MapRefType>
 struct byte_pair_encoding_fn {
   cudf::column_device_view const d_merges;
   cudf::column_device_view const d_strings;
-  merge_pairs_map_type::device_view const d_map;
+  MapRefType const d_map;
   cudf::size_type* d_sizes;  // output size of encoded string
   string_hasher_type const hasher;
   cudf::size_type* d_byte_indices;
@@ -135,18 +136,7 @@ struct byte_pair_encoding_fn {
     return cudf::string_view(d_str.data() + *begin, size);
   }
 
-  /**
-   * @brief Compute the hash over the input strings.
-   *
-   * The input strings are combined with a space to produce hash for matching
-   * a merge pair within the `d_map`.
-   *
-   * @param lhs First string.
-   * @param rhs Second string.
-   * @return The hash value to match with `d_map`.
-   */
-  __device__ cudf::hash_value_type compute_hash(cudf::string_view const& lhs,
-                                                cudf::string_view const& rhs)
+  __device__ auto get_merge_pair(cudf::string_view const& lhs, cudf::string_view const& rhs)
   {
     __shared__ char shmem[48 * 1024];  // max for Pascal
     auto const total_size         = lhs.size_bytes() + rhs.size_bytes() + 1;
@@ -155,7 +145,7 @@ struct byte_pair_encoding_fn {
     // Edge case check.
     // Empirically found only two merge pair strings that were greater than 70 bytes
     // and they both looked like ignorable errors. Double check this analysis with Vibhu.
-    if (thread_memory_size < total_size) { return 0; }
+    if (thread_memory_size < total_size) { return d_map.end(); }
 
     // build the target string in shared memory
     char* ptr = &shmem[threadIdx.x * thread_memory_size];
@@ -165,8 +155,8 @@ struct byte_pair_encoding_fn {
     memcpy(ptr + lhs.size_bytes(), " ", 1);
     memcpy(ptr + lhs.size_bytes() + 1, rhs.data(), rhs.size_bytes());
 
-    auto const d_hash_str = cudf::string_view(ptr, total_size);
-    return hasher(d_hash_str);  // return the hash for the temp string
+    auto const d_str = cudf::string_view(ptr, total_size);
+    return d_map.find(d_str);
   }
 
   /**
@@ -233,11 +223,10 @@ struct byte_pair_encoding_fn {
         auto const rhs = next_substr(itr, end, d_str);
         if (rhs.empty()) break;  // no more adjacent pairs
 
-        auto const hash    = compute_hash(lhs, rhs);
-        auto const map_itr = d_map.find(hash, thrust::identity<cudf::hash_value_type>{});
-        if (map_itr != d_map.end()) {
+        auto const map_itr = get_merge_pair(lhs, rhs);
+        if (!(map_itr == d_map.end())) {
           // found a match; record the rank (and other min_ vars)
-          auto const rank = static_cast<cudf::size_type>(map_itr->second);
+          auto const rank = static_cast<cudf::size_type>((*map_itr).second);
           if (rank < min_rank) {
             min_rank = rank;
             min_itr  = itr;
@@ -369,12 +358,9 @@ std::unique_ptr<cudf::column> byte_pair_encoding(
                                            rmm::mr::get_current_device_resource());
   auto d_offsets = offsets->mutable_view().data<cudf::offset_type>();
 
-  byte_pair_encoding_fn fn{*d_merges,
-                           *d_strings,
-                           merge_pairs.get_merge_pairs_map(),
-                           d_offsets,
-                           string_hasher_type{},
-                           d_byte_indices.data()};
+  auto map_ref = merge_pairs.get_merge_pairs_map();
+  byte_pair_encoding_fn<decltype(map_ref)> fn{
+    *d_merges, *d_strings, map_ref, d_offsets, string_hasher_type{}, d_byte_indices.data()};
   thrust::for_each_n(
     rmm::exec_policy(stream), thrust::make_counting_iterator<cudf::size_type>(0), input.size(), fn);
 

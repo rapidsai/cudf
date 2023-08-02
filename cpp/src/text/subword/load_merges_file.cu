@@ -36,20 +36,13 @@
 
 namespace nvtext {
 namespace detail {
-
 namespace {
 
 struct make_pair_function {
-  /**
-   * @brief Hash the merge pair entry
-   */
-  __device__ cuco::pair<cudf::hash_value_type, cudf::size_type> operator()(cudf::size_type idx)
+  __device__ cuco::pair<cudf::size_type, cudf::size_type> operator()(cudf::size_type idx)
   {
-    auto const result = _hasher(d_strings.element<cudf::string_view>(idx));
-    return cuco::make_pair(result, idx);
+    return cuco::make_pair(idx, idx);
   }
-
-  string_hasher_type const _hasher;
   cudf::column_device_view const d_strings;
 };
 
@@ -103,24 +96,22 @@ std::unique_ptr<cudf::column> load_file_to_column(std::string const& filename_me
 std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
   cudf::strings_column_view const& input, rmm::cuda_stream_view stream)
 {
+  auto d_strings = cudf::column_device_view::create(input.parent(), stream);
   // Ensure capacity is at least (size/0.7) as documented here:
   // https://github.com/NVIDIA/cuCollections/blob/6ec8b6dcdeceea07ab4456d32461a05c18864411/include/cuco/static_map.cuh#L179-L182
   auto merge_pairs_map = std::make_unique<merge_pairs_map_type>(
     static_cast<size_t>(input.size() * 2),  // capacity is 2x;
     cuco::empty_key{std::numeric_limits<cudf::hash_value_type>::max()},
     cuco::empty_value{-1},                  // empty value is not used
+    bpe_equal{*d_strings},
+    probe_scheme{bpe_hasher{*d_strings}},
     hash_table_allocator_type{default_allocator<char>{}, stream},
     stream.value());
 
-  auto d_strings = cudf::column_device_view::create(input.parent(), stream);
-  make_pair_function pair_func{string_hasher_type{}, *d_strings};
+  make_pair_function pair_func{*d_strings};
   auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
 
-  merge_pairs_map->insert(iter,
-                          iter + input.size(),
-                          thrust::identity<cudf::hash_value_type>{},
-                          thrust::equal_to<cudf::hash_value_type>{},
-                          stream.value());
+  merge_pairs_map->insert(iter, iter + input.size(), stream.value());
 
   return merge_pairs_map;
 }
@@ -185,6 +176,5 @@ bpe_merge_pairs::bpe_merge_pairs(cudf::strings_column_view const& input,
 bpe_merge_pairs::~bpe_merge_pairs() = default;
 
 cudf::size_type bpe_merge_pairs::get_size() { return impl->merge_pairs->size(); }
-std::size_t bpe_merge_pairs::get_map_size() { return impl->merge_pairs_map->get_size(); }
 
 }  // namespace nvtext

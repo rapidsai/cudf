@@ -21,12 +21,15 @@
 #include <hash/hash_allocator.cuh>
 
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
+#include <cudf/strings/string_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/device/polymorphic_allocator.hpp>
 
+#include <cuco/operator.hpp>
 #include <cuco/static_map.cuh>
 
 #include <cstdint>
@@ -34,14 +37,51 @@
 namespace nvtext {
 namespace detail {
 
+using hash_value_type    = uint32_t;
+using string_hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>;
+
+struct bpe_hasher {
+  cudf::column_device_view const d_strings;
+  string_hasher_type hasher{};
+  // used by insert
+  __device__ hash_value_type operator()(cudf::size_type index) const
+  {
+    return hasher(d_strings.element<cudf::string_view>(index));
+  }
+  // used by find
+  __device__ hash_value_type operator()(cudf::string_view const& s) const { return hasher(s); }
+};
+
+struct bpe_equal {
+  cudf::column_device_view const d_strings;
+  // used by insert
+  __device__ bool operator()(cudf::size_type lhs, cudf::size_type rhs) const noexcept
+  {
+    return d_strings.element<cudf::string_view>(lhs) == d_strings.element<cudf::string_view>(rhs);
+  }
+  // used by find
+  __device__ bool operator()(cudf::size_type lhs, cudf::string_view const& rhs) const noexcept
+  {
+    return d_strings.element<cudf::string_view>(lhs) == rhs;
+  }
+};
+
 using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
 
-using merge_pairs_map_type = cuco::static_map<cudf::hash_value_type,
-                                              cudf::size_type,
-                                              cuda::thread_scope_device,
-                                              hash_table_allocator_type>;
+using probe_scheme = cuco::experimental::double_hashing<1, bpe_hasher>;
 
-using string_hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>;
+using merge_pairs_map_type = cuco::experimental::static_map<cudf::size_type,
+                                                            cudf::size_type,
+                                                            cuco::experimental::extent<std::size_t>,
+                                                            cuda::thread_scope_device,
+                                                            bpe_equal,
+                                                            probe_scheme,
+                                                            hash_table_allocator_type>;
+
+// using merge_pairs_map_type = cuco::static_map<cudf::hash_value_type,
+//                                               cudf::size_type,
+//                                               cuda::thread_scope_device,
+//                                               hash_table_allocator_type>;
 
 }  // namespace detail
 
@@ -53,7 +93,7 @@ struct bpe_merge_pairs::bpe_merge_pairs_impl {
                        std::unique_ptr<detail::merge_pairs_map_type>&& merge_pairs_map);
 
   auto get_merge_pairs() const { return merge_pairs->view(); }
-  auto get_merge_pairs_map() const { return merge_pairs_map->get_device_view(); }
+  auto get_merge_pairs_map() const { return merge_pairs_map->ref(cuco::experimental::op::find); }
 };
 
 }  // namespace nvtext
