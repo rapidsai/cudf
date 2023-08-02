@@ -475,9 +475,13 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
 
 /**
  * @brief Get OR'd sum of page kernel masks.
+ * 
+ * @param[in] pages List of pages to aggregate
+ * @param[in] stream CUDA stream to use
+ * @return Bitwise OR of all page `kernel_mask` values
  */
-uint32_t GetKernelMasks(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                        rmm::cuda_stream_view stream);
+uint32_t SumPageKernelMasks(cudf::detail::hostdevice_vector<PageInfo>& pages,
+                            rmm::cuda_stream_view stream);
 
 /**
  * @brief Compute page output size information.

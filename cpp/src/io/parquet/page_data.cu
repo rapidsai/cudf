@@ -596,8 +596,8 @@ struct mask_tform {
 
 }  // anonymous namespace
 
-uint32_t GetKernelMasks(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                        rmm::cuda_stream_view stream)
+uint32_t SumPageKernelMasks(cudf::detail::hostdevice_vector<PageInfo>& pages,
+                            rmm::cuda_stream_view stream)
 {
   // determine which kernels to invoke
   auto mask_iter = thrust::make_transform_iterator(pages.d_begin(), mask_tform{});
