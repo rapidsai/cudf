@@ -80,8 +80,8 @@ struct row_lexicographic_tagged_comparator {
   {
   }
 
-  __attribute__((noinline)) __device__ bool operator()(index_type lhs_tagged_index,
-                                                       index_type rhs_tagged_index) const noexcept
+  __device__ bool operator()(index_type lhs_tagged_index,
+                             index_type rhs_tagged_index) const noexcept
   {
     using cudf::experimental::row::lhs_index_type;
     using cudf::experimental::row::rhs_index_type;
