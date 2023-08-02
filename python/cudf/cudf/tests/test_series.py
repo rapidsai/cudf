@@ -2204,3 +2204,12 @@ def test_series_contains(data, index):
     assert_eq(10 in ps, 10 in gs)
     assert_eq(True in ps, True in gs)
     assert_eq(False in ps, False in gs)
+
+
+def test_series_constructor_unbounded_sequence():
+    class A:
+        def __getitem__(self, key):
+            return 1
+
+    with pytest.raises(TypeError):
+        cudf.Series(A())

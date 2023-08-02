@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -85,17 +85,43 @@ def _match_join_keys(
             "of the same precision and scale"
         )
 
-    if (np.issubdtype(ltype, np.number)) and (np.issubdtype(rtype, np.number)):
+    if (
+        np.issubdtype(ltype, np.number)
+        and np.issubdtype(rtype, np.number)
+        and not (
+            np.issubdtype(ltype, np.timedelta64)
+            or np.issubdtype(rtype, np.timedelta64)
+        )
+    ):
         common_type = (
             max(ltype, rtype)
             if ltype.kind == rtype.kind
             else np.find_common_type([], (ltype, rtype))
         )
-
-    elif np.issubdtype(ltype, np.datetime64) and np.issubdtype(
-        rtype, np.datetime64
+    elif (
+        np.issubdtype(ltype, np.datetime64)
+        and np.issubdtype(rtype, np.datetime64)
+    ) or (
+        np.issubdtype(ltype, np.timedelta64)
+        and np.issubdtype(rtype, np.timedelta64)
     ):
         common_type = max(ltype, rtype)
+    elif (
+        np.issubdtype(ltype, np.datetime64)
+        or np.issubdtype(ltype, np.timedelta64)
+    ) and not rcol.fillna(0).can_cast_safely(ltype):
+        raise TypeError(
+            f"Cannot join between {ltype} and {rtype}, please type-cast both "
+            "columns to the same type."
+        )
+    elif (
+        np.issubdtype(rtype, np.datetime64)
+        or np.issubdtype(rtype, np.timedelta64)
+    ) and not lcol.fillna(0).can_cast_safely(rtype):
+        raise TypeError(
+            f"Cannot join between {rtype} and {ltype}, please type-cast both "
+            "columns to the same type."
+        )
 
     if how == "left" and rcol.fillna(0).can_cast_safely(ltype):
         return lcol, rcol.astype(ltype)
