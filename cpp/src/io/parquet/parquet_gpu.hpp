@@ -93,14 +93,15 @@ enum level_type {
   NUM_LEVEL_TYPES
 };
 
+/**
+ * @brief Enum of mask bits for the PageInfo kernel_mask
+ *
+ * Used to control which decode kernels to run.
+*/
 enum kernel_mask_bits {
-  KERNEL_MASK_GENERAL      = (1 << 0),
-  KERNEL_MASK_STRING       = (1 << 1),
-  KERNEL_MASK_DELTA_BINARY = (1 << 2)
-  // KERNEL_MASK_FIXED_WIDTH_DICT,
-  // KERNEL_MASK_STRINGS,
-  // KERNEL_NESTED_
-  // etc
+  KERNEL_MASK_GENERAL      = (1 << 0),  // Run catch-all decode kernel
+  KERNEL_MASK_STRING       = (1 << 1),  // Run decode kernel for string data
+  KERNEL_MASK_DELTA_BINARY = (1 << 2)   // Run decode kernel for DELTA_BINARY_PACKED data
 };
 
 /**
