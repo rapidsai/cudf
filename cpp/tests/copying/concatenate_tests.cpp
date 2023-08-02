@@ -842,7 +842,7 @@ TEST_F(StructsColumnTest, ConcatenateEmptyStructs)
 
   // concatenate
   auto result = cudf::concatenate(std::vector<column_view>({*first, *second, *third, *fourth}));
-  CUDF_EXPECTS(result->size() == expected->size(), "column size changed after concat");
+  ASSERT_EQ(result->size(), expected->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
 }
 
