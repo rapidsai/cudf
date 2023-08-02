@@ -34,7 +34,7 @@ from cudf.core.buffer.spill_manager import (
 )
 from cudf.core.buffer.spillable_buffer import (
     SpillableBuffer,
-    SpillableBufferSlice,
+    SpillableBufferOwner,
     SpillLock,
 )
 from cudf.testing._utils import assert_eq
@@ -71,17 +71,17 @@ def single_column_df(target="gpu") -> cudf.DataFrame:
     return ret
 
 
-def single_column_df_data(df: cudf.DataFrame) -> SpillableBufferSlice:
+def single_column_df_data(df: cudf.DataFrame) -> SpillableBuffer:
     """Access `.data` of the column of a standard dataframe"""
     ret = df._data._data["a"].data
-    assert isinstance(ret, SpillableBufferSlice)
+    assert isinstance(ret, SpillableBuffer)
     return ret
 
 
-def single_column_df_base_data(df: cudf.DataFrame) -> SpillableBufferSlice:
+def single_column_df_base_data(df: cudf.DataFrame) -> SpillableBuffer:
     """Access `.base_data` of the column of a standard dataframe"""
     ret = df._data._data["a"].base_data
-    assert isinstance(ret, SpillableBufferSlice)
+    assert isinstance(ret, SpillableBuffer)
     return ret
 
 
@@ -117,7 +117,7 @@ def manager(request):
 
 def test_spillable_buffer(manager: SpillManager):
     buf = as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
-    assert isinstance(buf, SpillableBufferSlice)
+    assert isinstance(buf, SpillableBuffer)
     assert buf.spillable
     buf.mark_exposed()
     assert buf.exposed
@@ -496,7 +496,7 @@ def test_serialize_cuda_dataframe(manager: SpillManager):
     header, frames = protocol.serialize(
         df1, serializers=("cuda",), on_error="raise"
     )
-    buf: SpillableBufferSlice = single_column_df_data(df1)
+    buf: SpillableBuffer = single_column_df_data(df1)
     assert len(buf.owner._spill_locks) == 1
     assert len(frames) == 1
     assert isinstance(frames[0], BufferOwner)
@@ -542,8 +542,8 @@ def test_df_transpose(manager: SpillManager):
 def test_as_buffer_of_spillable_buffer(manager: SpillManager):
     data = cupy.arange(10, dtype="u1")
     b1 = as_buffer(data, exposed=False)
-    assert isinstance(b1, SpillableBufferSlice)
-    assert isinstance(b1.owner, SpillableBuffer)
+    assert isinstance(b1, SpillableBuffer)
+    assert isinstance(b1.owner, SpillableBufferOwner)
     assert b1.owner.owner is data
     b2 = as_buffer(b1)
     assert b1 is b2
@@ -558,7 +558,7 @@ def test_as_buffer_of_spillable_buffer(manager: SpillManager):
 
     with acquire_spill_lock():
         b3 = as_buffer(b1.get_ptr(mode="read"), size=b1.size, owner=b1)
-    assert isinstance(b3, SpillableBufferSlice)
+    assert isinstance(b3, SpillableBuffer)
     assert b3.owner is b1.owner
 
     b4 = as_buffer(
@@ -566,12 +566,12 @@ def test_as_buffer_of_spillable_buffer(manager: SpillManager):
         size=b1.size - data.itemsize,
         owner=b3,
     )
-    assert isinstance(b4, SpillableBufferSlice)
+    assert isinstance(b4, SpillableBuffer)
     assert b4.owner is b1.owner
     assert all(cupy.array(b4.memoryview()) == data[1:])
 
     b5 = as_buffer(b4.get_ptr(mode="write"), size=b4.size - 1, owner=b4)
-    assert isinstance(b5, SpillableBufferSlice)
+    assert isinstance(b5, SpillableBuffer)
     assert b5.owner is b1.owner
     assert all(cupy.array(b5.memoryview()) == data[1:-1])
 
@@ -594,7 +594,7 @@ def test_memoryview_slice(manager: SpillManager, dtype):
 def test_statistics(manager: SpillManager):
     assert len(manager.statistics.spill_totals) == 0
 
-    buf: SpillableBufferSlice = as_buffer(
+    buf: SpillableBuffer = as_buffer(
         data=rmm.DeviceBuffer(size=10), exposed=False
     )
     buf.spill(target="cpu")
@@ -619,7 +619,7 @@ def test_statistics(manager: SpillManager):
 def test_statistics_expose(manager: SpillManager):
     assert len(manager.statistics.spill_totals) == 0
 
-    buffers: List[SpillableBufferSlice] = [
+    buffers: List[SpillableBuffer] = [
         as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
         for _ in range(10)
     ]
@@ -645,7 +645,7 @@ def test_statistics_expose(manager: SpillManager):
     assert stat.spilled_nbytes == 0
 
     # Create and spill 10 new buffers
-    buffers: List[SpillableBufferSlice] = [
+    buffers: List[SpillableBuffer] = [
         as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
         for _ in range(10)
     ]

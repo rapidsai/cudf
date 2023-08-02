@@ -28,8 +28,8 @@ if TYPE_CHECKING:
     from cudf.core.buffer.spill_manager import SpillManager
 
 
-def as_spillable_buffer(data, exposed: bool) -> SpillableBufferSlice:
-    """Factory function to wrap `data` in a SpillableBufferSlice object.
+def as_spillable_buffer(data, exposed: bool) -> SpillableBuffer:
+    """Factory function to wrap `data` in a SpillableBuffer object.
 
     If `data` isn't a buffer already, a new buffer that points to the memory of
     `data` is created. If `data` represents host memory, it is copied to a new
@@ -54,7 +54,7 @@ def as_spillable_buffer(data, exposed: bool) -> SpillableBufferSlice:
 
     Return
     ------
-    SpillableBufferSlice
+    SpillableBuffer
         A spillabe buffer instance that represents the device memory of `data`.
     """
 
@@ -63,20 +63,20 @@ def as_spillable_buffer(data, exposed: bool) -> SpillableBufferSlice:
     if not hasattr(data, "__cuda_array_interface__"):
         if exposed:
             raise ValueError("cannot created exposed host memory")
-        tracked_buf = SpillableBuffer._from_host_memory(data)
-        return SpillableBufferSlice(
+        tracked_buf = SpillableBufferOwner._from_host_memory(data)
+        return SpillableBuffer(
             owner=tracked_buf, offset=0, size=tracked_buf.size
         )
 
     if not hasattr(data, "__cuda_array_interface__"):
         if exposed:
             raise ValueError("cannot created exposed host memory")
-        spillabe_buf = SpillableBuffer._from_host_memory(data)
-        return SpillableBufferSlice(
+        spillabe_buf = SpillableBufferOwner._from_host_memory(data)
+        return SpillableBuffer(
             owner=spillabe_buf, offset=0, size=spillabe_buf.size
         )
 
-    owner = get_owner(data, SpillableBuffer)
+    owner = get_owner(data, SpillableBufferOwner)
     if owner is not None:
         if not owner.exposed and get_spill_lock() is None:
             raise ValueError(
@@ -91,13 +91,11 @@ def as_spillable_buffer(data, exposed: bool) -> SpillableBufferSlice:
             raise ValueError(
                 "Cannot create a non-empty slice of a null buffer"
             )
-        return SpillableBufferSlice(
-            owner=owner, offset=ptr - base_ptr, size=size
-        )
+        return SpillableBuffer(owner=owner, offset=ptr - base_ptr, size=size)
 
     # `data` is new device memory
-    owner = SpillableBuffer._from_device_memory(data, exposed=exposed)
-    return SpillableBufferSlice(owner=owner, offset=0, size=owner.size)
+    owner = SpillableBufferOwner._from_device_memory(data, exposed=exposed)
+    return SpillableBuffer(owner=owner, offset=0, size=owner.size)
 
 
 class SpillLock:
@@ -134,7 +132,7 @@ class DelayedPointerTuple(collections.abc.Sequence):
         raise IndexError("tuple index out of range")
 
 
-class SpillableBuffer(BufferOwner):
+class SpillableBufferOwner(BufferOwner):
     """A Buffer that supports spilling memory off the GPU to avoid OOMs.
 
     This buffer supports spilling the represented data to host memory.
@@ -143,9 +141,9 @@ class SpillableBuffer(BufferOwner):
     device memory usage see `cudf.core.buffer.spill_manager.SpillManager`.
     Unspill is triggered automatically when accessing the data of the buffer.
 
-    The buffer might not be spillable, which is based on the "expose" status
-    of the buffer. We say that the buffer has been exposed if the device
-    pointer (integer or void*) has been accessed outside of SpillableBuffer.
+    The buffer might not be spillable, which is based on the "expose" status of
+    the buffer. We say that the buffer has been exposed if the device pointer
+    (integer or void*) has been accessed outside of SpillableBufferOwner.
     In this case, we cannot invalidate the device pointer by moving the data
     to host.
 
@@ -153,7 +151,8 @@ class SpillableBuffer(BufferOwner):
     property. To avoid this, one can use `.get_ptr()` instead, which support
     exposing the buffer temporarily.
 
-    Use the factory function `as_buffer` to create a SpillableBuffer instance.
+    Use the factory function `as_buffer` to create a SpillableBufferOwner
+    instance.
     """
 
     lock: RLock
@@ -209,7 +208,7 @@ class SpillableBuffer(BufferOwner):
 
         Returns
         -------
-        SpillableBuffer
+        SpillableBufferOwner
             Buffer representing the same device memory as `data`
         """
         ret = super()._from_device_memory(data)
@@ -234,7 +233,7 @@ class SpillableBuffer(BufferOwner):
 
         Returns
         -------
-        SpillableBuffer
+        SpillableBufferOwner
             Buffer representing a copy of `data`.
         """
 
@@ -446,14 +445,14 @@ class SpillableBuffer(BufferOwner):
         else:
             ptr_info = str(hex(self._ptr))
         return (
-            f"<SpillableBuffer size={format_bytes(self._size)} "
+            f"<SpillableBufferOwner size={format_bytes(self._size)} "
             f"spillable={self.spillable} exposed={self.exposed} "
             f"num-spill-locks={len(self._spill_locks)} "
             f"ptr={ptr_info} owner={repr(self._owner)}>"
         )
 
 
-class SpillableBufferSlice(Buffer):
+class SpillableBuffer(Buffer):
     """A slice of a spillable buffer
 
     This buffer applies the slicing and then delegates all
@@ -461,7 +460,7 @@ class SpillableBufferSlice(Buffer):
 
     Parameters
     ----------
-    owner : SpillableBuffer
+    owner : SpillableBufferOwner
         The owner of the view
     offset : int
         Memory offset into the owning buffer
@@ -469,9 +468,11 @@ class SpillableBufferSlice(Buffer):
         Size of the view (in bytes)
     """
 
-    _owner: SpillableBuffer
+    _owner: SpillableBufferOwner
 
-    def __init__(self, owner: SpillableBuffer, offset: int, size: int) -> None:
+    def __init__(
+        self, owner: SpillableBufferOwner, offset: int, size: int
+    ) -> None:
         if size < 0:
             raise ValueError("size cannot be negative")
         if offset < 0:
@@ -527,7 +528,7 @@ class SpillableBufferSlice(Buffer):
 
         Warning, this hack means that the returned frame must be copied before
         given to `.deserialize()`, otherwise we would have a `Buffer` pointing
-        to memory already owned by an existing `SpillableBuffer`.
+        to memory already owned by an existing `SpillableBufferOwner`.
         """
         header: Dict[str, Any] = {}
         frames: List[BufferOwner | memoryview]
