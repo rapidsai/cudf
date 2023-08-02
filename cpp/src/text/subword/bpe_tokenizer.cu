@@ -224,7 +224,7 @@ struct byte_pair_encoding_fn {
         if (rhs.empty()) break;  // no more adjacent pairs
 
         auto const map_itr = get_merge_pair(lhs, rhs);
-        if (!(map_itr == d_map.end())) {
+        if (map_itr != d_map.end()) {
           // found a match; record the rank (and other min_ vars)
           auto const rank = static_cast<cudf::size_type>((*map_itr).second);
           if (rank < min_rank) {
