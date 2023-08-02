@@ -226,7 +226,7 @@ struct byte_pair_encoding_fn {
         auto const map_itr = get_merge_pair(lhs, rhs);
         if (map_itr != d_map.end()) {
           // found a match; record the rank (and other min_ vars)
-          auto const rank = static_cast<cudf::size_type>((*map_itr).second);
+          auto const rank = map_itr->second;
           if (rank < min_rank) {
             min_rank = rank;
             min_itr  = itr;
