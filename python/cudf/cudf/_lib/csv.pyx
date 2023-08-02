@@ -35,9 +35,9 @@ from cudf._lib.cpp.io.csv cimport (
     read_csv as cpp_read_csv,
     write_csv as cpp_write_csv,
 )
+from cudf._lib.cpp.io.data_sink cimport data_sink
 from cudf._lib.cpp.io.types cimport (
     compression_type,
-    data_sink,
     quote_style,
     sink_info,
     source_info,
