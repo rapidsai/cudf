@@ -163,7 +163,7 @@ void index_of(InputIterator input_it,
               rmm::cuda_stream_view stream)
 {
   auto const keys_tview  = cudf::table_view{{search_keys}};
-  auto const child_tview = table_view{{child}};
+  auto const child_tview = cudf::table_view{{child}};
   auto const has_nulls   = has_nested_nulls(child_tview) || has_nested_nulls(keys_tview);
 
   auto do_search = [&](auto const d_comp) {
@@ -176,15 +176,13 @@ void index_of(InputIterator input_it,
                       search_list{find_option, key_validity_iter, d_comp});
   };
 
+  auto const comparator =
+    cudf::experimental::row::equality::two_table_comparator(child_tview, keys_tview, stream);
   if (cudf::detail::has_nested_columns(child_tview) or
       cudf::detail::has_nested_columns(keys_tview)) {
-    auto const comparator =
-      cudf::experimental::row::equality::two_table_comparator(child_tview, keys_tview, stream);
     auto const d_comp = comparator.equal_to<true>(nullate::DYNAMIC{has_nulls});
     do_search(d_comp);
   } else {
-    auto const comparator =
-      cudf::experimental::row::equality::two_table_comparator(child_tview, keys_tview, stream);
     auto const d_comp = comparator.equal_to<false>(nullate::DYNAMIC{has_nulls});
     do_search(d_comp);
   }
