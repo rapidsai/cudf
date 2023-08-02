@@ -2219,6 +2219,11 @@ def as_column(
             )
         if dtype is not None:
             data = data.astype(dtype)
+    elif isinstance(arbitrary, pd.arrays.SparseArray):
+        raise NotImplementedError(
+            f"{arbitrary.dtype} is not supported. Convert first to "
+            f"{arbitrary.dtype.subtype}."
+        )
     elif isinstance(arbitrary, memoryview):
         data = as_column(
             np.asarray(arbitrary), dtype=dtype, nan_as_null=nan_as_null
