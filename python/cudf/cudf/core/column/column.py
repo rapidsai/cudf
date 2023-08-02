@@ -5,6 +5,7 @@ from __future__ import annotations
 import builtins
 import pickle
 import warnings
+from collections import abc
 from functools import cached_property
 from itertools import chain
 from types import SimpleNamespace
@@ -19,7 +20,6 @@ from typing import (
     Union,
     cast,
 )
-from collections import abc
 
 import cupy
 import numpy as np
