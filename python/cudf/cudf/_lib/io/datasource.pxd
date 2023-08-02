@@ -2,13 +2,14 @@
 
 from libcpp.memory cimport shared_ptr
 
-from cudf._lib.cpp.io.types cimport arrow_io_source, datasource
+from cudf._lib.cpp.io.arrow_io_source cimport arrow_io_source
+from cudf._lib.cpp.io.datasource cimport datasource
 
 
 cdef class Datasource:
     cdef datasource* get_datasource(self) nogil except *
 
-# TODO move to new pxd file
+
 cdef class NativeFileDatasource(Datasource):
     cdef shared_ptr[arrow_io_source] c_datasource
     cdef datasource* get_datasource(self) nogil
