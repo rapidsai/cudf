@@ -64,7 +64,7 @@ def test_buffer_creation_from_any():
     assert isinstance(b, Buffer)
     assert ary.data.ptr == b.get_ptr(mode="read")
     assert ary.nbytes == b.size
-    assert b.owner.owner is ary
+    assert b.owner.owner.owner is ary
 
 
 @pytest.mark.parametrize(
