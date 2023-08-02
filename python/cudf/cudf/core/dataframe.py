@@ -844,8 +844,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             self._data = data._data
         else:
             if all(
-                isinstance(a, (abc.Iterable, abc.Sequence))
-                for a in data
+                isinstance(col, (abc.Iterable, abc.Sequence))
+                for col in data
             ):
                 data = list(itertools.zip_longest(*data))
             else:
