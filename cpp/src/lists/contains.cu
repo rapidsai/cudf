@@ -227,8 +227,7 @@ void index_of_nested_types(InputIterator input_it,
                            duplicate_find_option find_option,
                            rmm::cuda_stream_view stream)
 {
-  auto const keys_tview = cudf::table_view{{search_keys}};
-
+  auto const keys_tview  = cudf::table_view{{search_keys}};
   auto const child_tview = table_view{{child}};
   auto const has_nulls   = has_nested_nulls(child_tview) || has_nested_nulls(keys_tview);
   auto const comparator =
