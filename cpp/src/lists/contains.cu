@@ -203,19 +203,15 @@ void index_of_non_nested_types(InputIterator input_it,
                                duplicate_find_option find_option,
                                rmm::cuda_stream_view stream)
 {
-  auto const do_search = [=](auto const keys_iter) {
-    thrust::transform(rmm::exec_policy(stream),
-                      input_it,
-                      input_it + num_rows,
-                      keys_iter,
-                      output_it,
-                      search_list_non_nested_types_fn{find_option});
-  };
-
   auto const keys_cdv_ptr = column_device_view::create(search_keys, stream);
   auto const keys_iter    = cudf::detail::make_optional_iterator<Element>(
     *keys_cdv_ptr, nullate::DYNAMIC{search_keys_have_nulls});
-  do_search(keys_iter);
+  thrust::transform(rmm::exec_policy(stream),
+                    input_it,
+                    input_it + num_rows,
+                    keys_iter,
+                    output_it,
+                    search_list_non_nested_types_fn{find_option});
 }
 
 /**
@@ -239,17 +235,13 @@ void index_of_nested_types(InputIterator input_it,
     cudf::experimental::row::equality::two_table_comparator(child_tview, keys_tview, stream);
   auto const d_comp = comparator.equal_to<true>(nullate::DYNAMIC{has_nulls});
 
-  auto const do_search = [=](auto const key_validity_iter) {
-    thrust::transform(rmm::exec_policy(stream),
-                      input_it,
-                      input_it + num_rows,
-                      output_it,
-                      search_list_nested_types_fn{find_option, key_validity_iter, d_comp});
-  };
-
   auto const keys_dv_ptr       = column_device_view::create(search_keys, stream);
   auto const key_validity_iter = cudf::detail::make_validity_iterator<true>(*keys_dv_ptr);
-  do_search(key_validity_iter);
+  thrust::transform(rmm::exec_policy(stream),
+                    input_it,
+                    input_it + num_rows,
+                    output_it,
+                    search_list_nested_types_fn{find_option, key_validity_iter, d_comp});
 }
 
 /**
