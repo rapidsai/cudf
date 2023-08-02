@@ -2045,7 +2045,7 @@ def test_series_ordered_dedup():
     sr = cudf.Series(np.random.randint(0, 100, 1000))
     # pandas unique() preserves order
     expect = pd.Series(sr.to_pandas().unique())
-    got = cudf.Series(sr._column.unique(preserve_order=True))
+    got = cudf.Series(sr._column.unique())
     assert_eq(expect.values, got.values)
 
 
@@ -2185,3 +2185,22 @@ def test_series_init_error():
         lfunc_args_and_kwargs=([], {"data": [11], "index": [10, 11]}),
         rfunc_args_and_kwargs=([], {"data": [11], "index": [10, 11]}),
     )
+
+
+@pytest.mark.parametrize("dtype", ["datetime64[ns]", "timedelta64[ns]"])
+def test_series_mixed_dtype_error(dtype):
+    ps = pd.concat([pd.Series([1, 2, 3], dtype=dtype), pd.Series([10, 11])])
+    with pytest.raises(TypeError):
+        cudf.Series(ps)
+
+
+@pytest.mark.parametrize("data", [[True, False, None], [10, 200, 300]])
+@pytest.mark.parametrize("index", [None, [10, 20, 30]])
+def test_series_contains(data, index):
+    ps = pd.Series(data, index=index)
+    gs = cudf.from_pandas(ps)
+
+    assert_eq(1 in ps, 1 in gs)
+    assert_eq(10 in ps, 10 in gs)
+    assert_eq(True in ps, True in gs)
+    assert_eq(False in ps, False in gs)

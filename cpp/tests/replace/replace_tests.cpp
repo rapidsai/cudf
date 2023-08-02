@@ -352,8 +352,8 @@ void test_replace(cudf::host_span<T const> input_column,
     expected_valid.assign(input_column.size(), true);
   }
 
-  const bool input_has_nulls       = (input_column_valid.size() > 0);
-  const bool replacement_has_nulls = (replacement_values_valid.size() > 0);
+  bool const input_has_nulls       = (input_column_valid.size() > 0);
+  bool const replacement_has_nulls = (replacement_values_valid.size() > 0);
 
   for (size_t i = 0; i < values_to_replace_column.size(); i++) {
     size_t k  = 0;

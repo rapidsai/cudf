@@ -17,7 +17,11 @@
 
 #include <cudf_test/default_stream.hpp>
 
+#include <cudf/detail/utilities/stacktrace.hpp>
+
 #include <rmm/mr/device/device_memory_resource.hpp>
+
+#include <iostream>
 
 /**
  * @brief Resource that verifies that the default stream is not used in any allocation.
@@ -162,6 +166,10 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
                             : (cstream != cudf::test::get_default_stream().value());
 
     if (invalid_stream) {
+      // Exclude the current function from stacktrace.
+      std::cout << cudf::detail::get_stacktrace(cudf::detail::capture_last_stackframe::NO)
+                << std::endl;
+
       if (error_on_invalid_stream_) {
         throw std::runtime_error("Attempted to perform an operation on an unexpected stream!");
       } else {

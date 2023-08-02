@@ -26,13 +26,23 @@ Top-level conversions
    :toctree: api/
 
     cudf.to_numeric
+    cudf.from_dataframe
     cudf.from_dlpack
     cudf.from_pandas
 
-Top-level dealing with datetimelike
------------------------------------
+Top-level dealing with datetimelike data
+----------------------------------------
 
 .. autosummary::
    :toctree: api/
 
     cudf.to_datetime
+    cudf.date_range
+
+Top-level dealing with Interval data
+------------------------------------
+
+.. autosummary::
+   :toctree: api/
+
+    cudf.interval_range

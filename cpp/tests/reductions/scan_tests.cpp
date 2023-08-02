@@ -57,6 +57,7 @@ struct ScanTest : public BaseScanTest<T> {
       auto expected_col_out = this->make_expected(v, b, agg, inclusive, null_handling, scale);
       auto col_out          = scan(*col_in, agg, inclusive, null_handling);
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_col_out, *col_out);
+      EXPECT_FALSE(cudf::has_nonempty_nulls(col_out->view()));
     }
   }
 

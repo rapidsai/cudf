@@ -5,6 +5,7 @@ from typing import List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pyarrow as pa
+from typing_extensions import Self
 
 import cudf
 from cudf._lib.copying import segmented_gather
@@ -261,7 +262,7 @@ class ListColumn(ColumnBase):
         # Call libcudf to format the list column
         return format_list_column(lc, separators)
 
-    def _transform_leaves(self, func, *args, **kwargs):
+    def _transform_leaves(self, func, *args, **kwargs) -> Self:
         # return a new list column with the same nested structure
         # as ``self``, but with the leaf column transformed
         # by applying ``func`` to it

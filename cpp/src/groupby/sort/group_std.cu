@@ -26,6 +26,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -131,18 +132,31 @@ struct var_functor {
     }
 
     // set nulls
-    auto result_view = mutable_column_device_view::create(*result, stream);
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator(0),
-                       group_sizes.size(),
-                       [d_result = *result_view, d_group_sizes, ddof] __device__(size_type i) {
-                         size_type group_size = d_group_sizes[i];
-                         if (group_size == 0 or group_size - ddof <= 0)
-                           d_result.set_null(i);
-                         else
-                           d_result.set_valid(i);
-                       });
+    auto result_view  = mutable_column_device_view::create(*result, stream);
+    auto null_count   = rmm::device_scalar<cudf::size_type>(0, stream, mr);
+    auto d_null_count = null_count.data();
+    thrust::for_each_n(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator(0),
+      group_sizes.size(),
+      [d_result = *result_view, d_group_sizes, ddof, d_null_count] __device__(size_type i) {
+        size_type group_size = d_group_sizes[i];
+        if (group_size == 0 or group_size - ddof <= 0) {
+          d_result.set_null(i);
+          // Assuming that typical data does not have too many nulls this
+          // atomic shouldn't serialize the code too much. The alternatives
+          // would be 1) writing a more complex kernel using cub/shmem to
+          // increase parallelism, or 2) calling `cudf::count_nulls` after the
+          // fact. (1) is more work than it's worth without benchmarking, and
+          // this approach should outperform (2) unless large amounts of the
+          // data is null.
+          atomicAdd(d_null_count, 1);
+        } else {
+          d_result.set_valid(i);
+        }
+      });
 
+    result->set_null_count(null_count.value(stream));
     return result;
   }
 

@@ -163,7 +163,7 @@ def one_hot_encode(Column input_column, Column categories):
         move(c_result.second),
         owner=owner,
         column_names=[
-            x if x is not None else 'null' for x in pylist_categories
+            x if x is not None else '<NA>' for x in pylist_categories
         ]
     )
     return encodings

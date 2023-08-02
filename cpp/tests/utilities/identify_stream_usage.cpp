@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/utilities/stacktrace.hpp>
+
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
@@ -73,13 +75,10 @@ bool stream_is_invalid(cudaStream_t stream)
   return (stream != cudf::test::get_default_stream().value());
 #else
   // We explicitly list the possibilities rather than using
-  // `cudf::get_default_stream().value()` for two reasons:
-  // 1. There is no guarantee that `thrust::device` and the default value of
-  //    `cudf::get_default_stream().value()` are actually the same. At present,
-  //    the former is `cudaStreamLegacy` while the latter is 0.
-  // 2. Using the cudf default stream would require linking against cudf, which
-  //    adds unnecessary complexity to the build process (especially in CI)
-  //    when this simple approach is sufficient.
+  // `cudf::get_default_stream().value()` because there is no guarantee that
+  // `thrust::device` and the default value of
+  // `cudf::get_default_stream().value()` are actually the same. At present, the
+  // former is `cudaStreamLegacy` while the latter is 0.
   return (stream == cudaStreamDefault) || (stream == cudaStreamLegacy) ||
          (stream == cudaStreamPerThread);
 #endif
@@ -91,79 +90,15 @@ bool stream_is_invalid(cudaStream_t stream)
 void check_stream_and_error(cudaStream_t stream)
 {
   if (stream_is_invalid(stream)) {
-#ifdef __GNUC__
-    // If we're on the wrong stream, print the stack trace from the current frame.
-    // Adapted from from https://panthema.net/2008/0901-stacktrace-demangled/
-    constexpr int kMaxStackDepth = 64;
-    void* stack[kMaxStackDepth];
-    auto depth   = backtrace(stack, kMaxStackDepth);
-    auto strings = backtrace_symbols(stack, depth);
+    // Exclude the current function from stacktrace.
+    std::cout << cudf::detail::get_stacktrace(cudf::detail::capture_last_stackframe::NO)
+              << std::endl;
 
-    if (strings == nullptr) {
-      std::cout << "No stack trace could be found!" << std::endl;
-    } else {
-      // If we were able to extract a trace, parse it, demangle symbols, and
-      // print a readable output.
-
-      // allocate string which will be filled with the demangled function name
-      size_t funcnamesize = 256;
-      char* funcname      = (char*)malloc(funcnamesize);
-
-      // Start at frame 1 to skip print_trace itself.
-      for (int i = 1; i < depth; ++i) {
-        char* begin_name   = nullptr;
-        char* begin_offset = nullptr;
-        char* end_offset   = nullptr;
-
-        // find parentheses and +address offset surrounding the mangled name:
-        // ./module(function+0x15c) [0x8048a6d]
-        for (char* p = strings[i]; *p; ++p) {
-          if (*p == '(') {
-            begin_name = p;
-          } else if (*p == '+') {
-            begin_offset = p;
-          } else if (*p == ')' && begin_offset) {
-            end_offset = p;
-            break;
-          }
-        }
-
-        if (begin_name && begin_offset && end_offset && begin_name < begin_offset) {
-          *begin_name++   = '\0';
-          *begin_offset++ = '\0';
-          *end_offset     = '\0';
-
-          // mangled name is now in [begin_name, begin_offset) and caller offset
-          // in [begin_offset, end_offset). now apply __cxa_demangle():
-
-          int status;
-          char* ret = abi::__cxa_demangle(begin_name, funcname, &funcnamesize, &status);
-          if (status == 0) {
-            funcname =
-              ret;  // use possibly realloc()-ed string (__cxa_demangle may realloc funcname)
-            std::cout << "#" << i << " in " << strings[i] << " : " << funcname << "+"
-                      << begin_offset << std::endl;
-          } else {
-            // demangling failed. Output function name as a C function with no arguments.
-            std::cout << "#" << i << " in " << strings[i] << " : " << begin_name << "()+"
-                      << begin_offset << std::endl;
-          }
-        } else {
-          std::cout << "#" << i << " in " << strings[i] << std::endl;
-        }
-      }
-
-      free(funcname);
-    }
-    free(strings);
-#else
-    std::cout << "Backtraces are only when built with a GNU compiler." << std::endl;
-#endif  // __GNUC__
     char const* env_stream_error_mode{std::getenv("GTEST_CUDF_STREAM_ERROR_MODE")};
     if (env_stream_error_mode && !strcmp(env_stream_error_mode, "print")) {
-      std::cout << "Found unexpected stream!" << std::endl;
+      std::cout << "cudf_identify_stream_usage found unexpected stream!" << std::endl;
     } else {
-      throw std::runtime_error("Found unexpected stream!");
+      throw std::runtime_error("cudf_identify_stream_usage found unexpected stream!");
     }
   }
 }
@@ -240,7 +175,7 @@ DEFINE_OVERLOAD(cudaEventRecordWithFlags,
 // Execution APIS:
 // https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EXECUTION.html#group__CUDART__EXECUTION
 DEFINE_OVERLOAD(cudaLaunchKernel,
-                ARG(const void* func,
+                ARG(void const* func,
                     dim3 gridDim,
                     dim3 blockDim,
                     void** args,
@@ -248,7 +183,7 @@ DEFINE_OVERLOAD(cudaLaunchKernel,
                     cudaStream_t stream),
                 ARG(func, gridDim, blockDim, args, sharedMem, stream));
 DEFINE_OVERLOAD(cudaLaunchCooperativeKernel,
-                ARG(const void* func,
+                ARG(void const* func,
                     dim3 gridDim,
                     dim3 blockDim,
                     void** args,
@@ -262,12 +197,12 @@ DEFINE_OVERLOAD(cudaLaunchHostFunc,
 // Memory transfer APIS:
 // https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__MEMORY.html#group__CUDART__MEMORY
 DEFINE_OVERLOAD(cudaMemPrefetchAsync,
-                ARG(const void* devPtr, size_t count, int dstDevice, cudaStream_t stream),
+                ARG(void const* devPtr, size_t count, int dstDevice, cudaStream_t stream),
                 ARG(devPtr, count, dstDevice, stream));
 DEFINE_OVERLOAD(cudaMemcpy2DAsync,
                 ARG(void* dst,
                     size_t dpitch,
-                    const void* src,
+                    void const* src,
                     size_t spitch,
                     size_t width,
                     size_t height,
@@ -289,7 +224,7 @@ DEFINE_OVERLOAD(cudaMemcpy2DToArrayAsync,
                 ARG(cudaArray_t dst,
                     size_t wOffset,
                     size_t hOffset,
-                    const void* src,
+                    void const* src,
                     size_t spitch,
                     size_t width,
                     size_t height,
@@ -297,26 +232,26 @@ DEFINE_OVERLOAD(cudaMemcpy2DToArrayAsync,
                     cudaStream_t stream),
                 ARG(dst, wOffset, hOffset, src, spitch, width, height, kind, stream));
 DEFINE_OVERLOAD(cudaMemcpy3DAsync,
-                ARG(const cudaMemcpy3DParms* p, cudaStream_t stream),
+                ARG(cudaMemcpy3DParms const* p, cudaStream_t stream),
                 ARG(p, stream));
 DEFINE_OVERLOAD(cudaMemcpy3DPeerAsync,
-                ARG(const cudaMemcpy3DPeerParms* p, cudaStream_t stream),
+                ARG(cudaMemcpy3DPeerParms const* p, cudaStream_t stream),
                 ARG(p, stream));
 DEFINE_OVERLOAD(
   cudaMemcpyAsync,
-  ARG(void* dst, const void* src, size_t count, cudaMemcpyKind kind, cudaStream_t stream),
+  ARG(void* dst, void const* src, size_t count, cudaMemcpyKind kind, cudaStream_t stream),
   ARG(dst, src, count, kind, stream));
 DEFINE_OVERLOAD(cudaMemcpyFromSymbolAsync,
                 ARG(void* dst,
-                    const void* symbol,
+                    void const* symbol,
                     size_t count,
                     size_t offset,
                     cudaMemcpyKind kind,
                     cudaStream_t stream),
                 ARG(dst, symbol, count, offset, kind, stream));
 DEFINE_OVERLOAD(cudaMemcpyToSymbolAsync,
-                ARG(const void* symbol,
-                    const void* src,
+                ARG(void const* symbol,
+                    void const* src,
                     size_t count,
                     size_t offset,
                     cudaMemcpyKind kind,

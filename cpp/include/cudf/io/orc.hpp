@@ -445,9 +445,11 @@ class orc_writer_options {
   // Set of columns to output
   table_view _table;
   // Optional associated metadata
-  const table_input_metadata* _metadata = nullptr;
+  std::optional<table_input_metadata> _metadata;
   // Optional footer key_value_metadata
   std::map<std::string, std::string> _user_data;
+  // Optional compression statistics
+  std::shared_ptr<writer_compression_statistics> _compression_stats;
 
   friend orc_writer_options_builder;
 
@@ -548,7 +550,7 @@ class orc_writer_options {
    *
    * @return Associated metadata
    */
-  [[nodiscard]] table_input_metadata const* get_metadata() const { return _metadata; }
+  [[nodiscard]] auto const& get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns Key-Value footer metadata information.
@@ -558,6 +560,16 @@ class orc_writer_options {
   [[nodiscard]] std::map<std::string, std::string> const& get_key_value_metadata() const
   {
     return _user_data;
+  }
+
+  /**
+   * @brief Returns a shared pointer to the user-provided compression statistics.
+   *
+   * @return Compression statistics
+   */
+  [[nodiscard]] std::shared_ptr<writer_compression_statistics> get_compression_statistics() const
+  {
+    return _compression_stats;
   }
 
   // Setters
@@ -637,7 +649,7 @@ class orc_writer_options {
    *
    * @param meta Associated metadata
    */
-  void set_metadata(table_input_metadata const* meta) { _metadata = meta; }
+  void set_metadata(table_input_metadata meta) { _metadata = std::move(meta); }
 
   /**
    * @brief Sets metadata.
@@ -647,6 +659,16 @@ class orc_writer_options {
   void set_key_value_metadata(std::map<std::string, std::string> metadata)
   {
     _user_data = std::move(metadata);
+  }
+
+  /**
+   * @brief Sets the pointer to the output compression statistics.
+   *
+   * @param comp_stats Pointer to compression statistics to be updated after writing
+   */
+  void set_compression_statistics(std::shared_ptr<writer_compression_statistics> comp_stats)
+  {
+    _compression_stats = std::move(comp_stats);
   }
 };
 
@@ -757,9 +779,9 @@ class orc_writer_options_builder {
    * @param meta Associated metadata
    * @return this for chaining
    */
-  orc_writer_options_builder& metadata(table_input_metadata const* meta)
+  orc_writer_options_builder& metadata(table_input_metadata meta)
   {
-    options._metadata = meta;
+    options._metadata = std::move(meta);
     return *this;
   }
 
@@ -772,6 +794,19 @@ class orc_writer_options_builder {
   orc_writer_options_builder& key_value_metadata(std::map<std::string, std::string> metadata)
   {
     options._user_data = std::move(metadata);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the pointer to the output compression statistics.
+   *
+   * @param comp_stats Pointer to compression statistics to be filled once writer is done
+   * @return this for chaining
+   */
+  orc_writer_options_builder& compression_statistics(
+    std::shared_ptr<writer_compression_statistics> const& comp_stats)
+  {
+    options._compression_stats = comp_stats;
     return *this;
   }
 
@@ -826,9 +861,11 @@ class chunked_orc_writer_options {
   // Row index stride (maximum number of rows in each row group)
   size_type _row_index_stride = default_row_index_stride;
   // Optional associated metadata
-  const table_input_metadata* _metadata = nullptr;
+  std::optional<table_input_metadata> _metadata;
   // Optional footer key_value_metadata
   std::map<std::string, std::string> _user_data;
+  // Optional compression statistics
+  std::shared_ptr<writer_compression_statistics> _compression_stats;
 
   friend chunked_orc_writer_options_builder;
 
@@ -907,7 +944,7 @@ class chunked_orc_writer_options {
    *
    * @return Associated metadata
    */
-  [[nodiscard]] table_input_metadata const* get_metadata() const { return _metadata; }
+  [[nodiscard]] auto const& get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns Key-Value footer metadata information.
@@ -917,6 +954,16 @@ class chunked_orc_writer_options {
   [[nodiscard]] std::map<std::string, std::string> const& get_key_value_metadata() const
   {
     return _user_data;
+  }
+
+  /**
+   * @brief Returns a shared pointer to the user-provided compression statistics.
+   *
+   * @return Compression statistics
+   */
+  [[nodiscard]] std::shared_ptr<writer_compression_statistics> get_compression_statistics() const
+  {
+    return _compression_stats;
   }
 
   // Setters
@@ -989,7 +1036,7 @@ class chunked_orc_writer_options {
    *
    * @param meta Associated metadata
    */
-  void metadata(table_input_metadata const* meta) { _metadata = meta; }
+  void metadata(table_input_metadata meta) { _metadata = std::move(meta); }
 
   /**
    * @brief Sets Key-Value footer metadata.
@@ -999,6 +1046,16 @@ class chunked_orc_writer_options {
   void set_key_value_metadata(std::map<std::string, std::string> metadata)
   {
     _user_data = std::move(metadata);
+  }
+
+  /**
+   * @brief Sets the pointer to the output compression statistics.
+   *
+   * @param comp_stats Pointer to compression statistics to be updated after writing
+   */
+  void set_compression_statistics(std::shared_ptr<writer_compression_statistics> comp_stats)
+  {
+    _compression_stats = std::move(comp_stats);
   }
 };
 
@@ -1094,9 +1151,9 @@ class chunked_orc_writer_options_builder {
    * @param meta Associated metadata
    * @return this for chaining
    */
-  chunked_orc_writer_options_builder& metadata(table_input_metadata const* meta)
+  chunked_orc_writer_options_builder& metadata(table_input_metadata meta)
   {
-    options._metadata = meta;
+    options._metadata = std::move(meta);
     return *this;
   }
 
@@ -1110,6 +1167,19 @@ class chunked_orc_writer_options_builder {
     std::map<std::string, std::string> metadata)
   {
     options._user_data = std::move(metadata);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the pointer to the output compression statistics.
+   *
+   * @param comp_stats Pointer to compression statistics to be filled once writer is done
+   * @return this for chaining
+   */
+  chunked_orc_writer_options_builder& compression_statistics(
+    std::shared_ptr<writer_compression_statistics> const& comp_stats)
+  {
+    options._compression_stats = comp_stats;
     return *this;
   }
 

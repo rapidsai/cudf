@@ -398,7 +398,7 @@ thrust::host_vector<typename Container::value_type> make_host_vector_async(
 }
 
 /**
- * @brief Synchronously construct a `std::vector` containing a copy of data from a
+ * @brief Synchronously construct a `thrust::host_vector` containing a copy of data from a
  * `device_span`
  *
  * @note This function does a synchronize on `stream`.
@@ -417,7 +417,7 @@ thrust::host_vector<T> make_host_vector_sync(device_span<T const> v, rmm::cuda_s
 }
 
 /**
- * @brief Synchronously construct a `std::vector` containing a copy of data from a device
+ * @brief Synchronously construct a `thrust::host_vector` containing a copy of data from a device
  * container
  *
  * @note This function synchronizes `stream`.

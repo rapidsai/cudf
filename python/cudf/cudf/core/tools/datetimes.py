@@ -1,15 +1,16 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import math
 import re
 import warnings
-from typing import Sequence, Type, TypeVar, Union
+from typing import Sequence, Union
 
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pandas.tseries.offsets as pd_offset
 from pandas.core.tools.datetimes import _unit_map
+from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
@@ -142,6 +143,9 @@ def to_datetime(
 
     if yearfirst:
         raise NotImplementedError("yearfirst support is not yet implemented")
+
+    if utc:
+        raise NotImplementedError("utc is not yet implemented")
 
     if format is not None and "%f" in format:
         format = format.replace("%f", "%9f")
@@ -371,9 +375,6 @@ def get_units(value):
         return _unit_map[value.lower()]
 
     return value
-
-
-_T = TypeVar("_T", bound="DateOffset")
 
 
 class DateOffset:
@@ -647,7 +648,7 @@ class DateOffset:
         return repr_str
 
     @classmethod
-    def _from_freqstr(cls: Type[_T], freqstr: str) -> _T:
+    def _from_freqstr(cls, freqstr: str) -> Self:
         """
         Parse a string and return a DateOffset object
         expects strings of the form 3D, 25W, 10ms, 42ns, etc.
@@ -669,9 +670,9 @@ class DateOffset:
 
     @classmethod
     def _from_pandas_ticks_or_weeks(
-        cls: Type[_T],
+        cls,
         tick: Union[pd.tseries.offsets.Tick, pd.tseries.offsets.Week],
-    ) -> _T:
+    ) -> Self:
         return cls(**{cls._TICK_OR_WEEK_TO_UNITS[type(tick)]: tick.n})
 
     def _maybe_as_fast_pandas_offset(self):

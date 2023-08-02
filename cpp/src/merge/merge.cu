@@ -172,10 +172,9 @@ index_vector generate_merged_indices(table_view const& left_table,
                                      std::vector<null_order> const& null_precedence,
                                      rmm::cuda_stream_view stream)
 {
-  const size_type left_size  = left_table.num_rows();
-  const size_type right_size = right_table.num_rows();
-
-  const size_type total_size = left_size + right_size;
+  size_type const left_size  = left_table.num_rows();
+  size_type const right_size = right_table.num_rows();
+  size_type const total_size = left_size + right_size;
 
   auto left_gen    = side_index_generator{side::LEFT};
   auto right_gen   = side_index_generator{side::RIGHT};

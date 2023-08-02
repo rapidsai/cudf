@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,7 +60,7 @@ std::unique_ptr<column> format_list_column(
   lists_column_view const& input,
   string_scalar const& na_rep           = string_scalar("NULL"),
   strings_column_view const& separators = strings_column_view(column_view{
-    data_type{type_id::STRING}, 0, nullptr}),
+    data_type{type_id::STRING}, 0, nullptr, nullptr, 0}),
   rmm::mr::device_memory_resource* mr   = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group

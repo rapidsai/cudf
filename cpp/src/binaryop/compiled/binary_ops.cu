@@ -50,8 +50,11 @@ struct scalar_as_column_view {
   return_type operator()(scalar const& s, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
   {
     auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
-    auto col_v =
-      column_view(s.type(), 1, h_scalar_type_view.data(), (bitmask_type const*)s.validity_data());
+    auto col_v               = column_view(s.type(),
+                             1,
+                             h_scalar_type_view.data(),
+                             reinterpret_cast<bitmask_type const*>(s.validity_data()),
+                             !s.is_valid());
     return std::pair{col_v, std::unique_ptr<column>(nullptr)};
   }
   template <typename T, CUDF_ENABLE_IF(!is_fixed_width<T>())>
@@ -74,8 +77,8 @@ scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::strin
   auto offsets_column = std::get<0>(cudf::detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + 1, stream, mr));
 
-  auto chars_column_v =
-    column_view(data_type{type_id::INT8}, h_scalar_type_view.size(), h_scalar_type_view.data());
+  auto chars_column_v = column_view(
+    data_type{type_id::INT8}, h_scalar_type_view.size(), h_scalar_type_view.data(), nullptr, 0);
   // Construct string column_view
   auto col_v = column_view(s.type(),
                            1,

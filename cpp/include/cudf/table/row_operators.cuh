@@ -17,9 +17,9 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/hashing.hpp>
 #include <cudf/detail/utilities/assert.cuh>
-#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/hashing/detail/hash_functions.cuh>
+#include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.hpp>
@@ -227,7 +227,7 @@ class element_equality_comparator {
 };
 
 /**
- * @brief Performs a relational comparison between two elements in two columns.
+ * @brief Performs a relational comparison between two elements in two tables.
  *
  * @tparam Nullate A cudf::nullate type describing how to check for nulls
  */
@@ -600,7 +600,7 @@ class row_hasher {
   __device__ auto operator()(size_type row_index) const
   {
     // Hash the first column w/ the seed
-    auto const initial_hash = cudf::detail::hash_combine(
+    auto const initial_hash = cudf::hashing::detail::hash_combine(
       hash_value_type{0},
       type_dispatcher<dispatch_storage_type>(
         _table.column(0).type(),
@@ -626,7 +626,7 @@ class row_hasher {
       hasher,
       initial_hash,
       [](hash_value_type lhs, hash_value_type rhs) {
-        return cudf::detail::hash_combine(lhs, rhs);
+        return cudf::hashing::detail::hash_combine(lhs, rhs);
       });
   }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -195,7 +195,7 @@ JNIEXPORT void JNI_OnUnload(JavaVM *vm, void *) {
   cudf::jni::release_host_memory_buffer_jni(env);
 }
 
-JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Cuda_isPtdsEnabled(JNIEnv *env, jclass, jlong size) {
+JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Cuda_isPtdsEnabled(JNIEnv *env, jclass) {
   return cudf::jni::is_ptds_enabled;
 }
 

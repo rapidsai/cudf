@@ -50,10 +50,11 @@ public final class ColumnVector extends ColumnView {
      *
      * @note the callback is invoked with this `ColumnVector`'s lock held.
      *
+     * @param cv - a reference to the ColumnVector we are closing
      * @param refCount - the updated ref count for this ColumnVector at the time
      *                 of invocation
      */
-    void onClosed(int refCount);
+    void onClosed(ColumnVector cv, int refCount);
   }
 
   private static final Logger log = LoggerFactory.getLogger(ColumnVector.class);
@@ -119,7 +120,10 @@ public final class ColumnVector extends ColumnView {
     incRefCountInternal(true);
   }
 
-  private static OffHeapState makeOffHeap(DType type, long rows, Optional<Long> nullCount,
+  /**
+   * This method is internal and exposed purely for testing purposes
+   */
+  static OffHeapState makeOffHeap(DType type, long rows, Optional<Long> nullCount,
       DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
       DeviceMemoryBuffer offsetBuffer, List<DeviceMemoryBuffer> toClose, long[] childHandles) {
     long viewHandle = initViewHandle(type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
@@ -141,7 +145,7 @@ public final class ColumnVector extends ColumnView {
    * @param offsetBuffer a host buffer required for strings and string categories. The column
    *                    vector takes ownership of the buffer. Do not use the buffer after calling
    *                    this.
-   * @param toClose  List of buffers to track adn close once done, usually in case of children
+   * @param toClose  List of buffers to track and close once done, usually in case of children
    * @param childHandles array of longs for child column view handles.
    */
   public ColumnVector(DType type, long rows, Optional<Long> nullCount,
@@ -202,16 +206,16 @@ public final class ColumnVector extends ColumnView {
     }
   }
 
-  static long initViewHandle(DType type, int rows, int nc,
-                                       BaseDeviceMemoryBuffer dataBuffer,
-                                       BaseDeviceMemoryBuffer validityBuffer,
-                                       BaseDeviceMemoryBuffer offsetBuffer, long[] childHandles) {
+  static long initViewHandle(DType type, int numRows, int nullCount,
+                             BaseDeviceMemoryBuffer dataBuffer,
+                             BaseDeviceMemoryBuffer validityBuffer,
+                             BaseDeviceMemoryBuffer offsetBuffer, long[] childHandles) {
     long cd = dataBuffer == null ? 0 : dataBuffer.address;
     long cdSize = dataBuffer == null ? 0 : dataBuffer.length;
     long od = offsetBuffer == null ? 0 : offsetBuffer.address;
     long vd = validityBuffer == null ? 0 : validityBuffer.address;
     return makeCudfColumnView(type.typeId.getNativeId(), type.getScale(), cd, cdSize,
-        od, vd, nc, rows, childHandles);
+        od, vd, nullCount, numRows, childHandles);
   }
 
   static ColumnVector fromViewWithContiguousAllocation(long columnViewAddress, DeviceMemoryBuffer buffer) {
@@ -257,7 +261,7 @@ public final class ColumnVector extends ColumnView {
     refCount--;
     offHeap.delRef();
     if (eventHandler != null) {
-      eventHandler.onClosed(refCount);
+      eventHandler.onClosed(this, refCount);
     }
     if (refCount == 0) {
       offHeap.clean(false);
@@ -1722,6 +1726,41 @@ public final class ColumnVector extends ColumnView {
       }
     } else {
       throw new IllegalArgumentException("Unsupported data type: " + colType);
+    }
+  }
+
+  static ColumnVector[] getColumnVectorsFromPointers(long[] nativeHandles) {
+    ColumnVector[] columns = new ColumnVector[nativeHandles.length];
+    try {
+      for (int i = 0; i < nativeHandles.length; i++) {
+        long nativeHandle = nativeHandles[i];
+        // setting address to zero, so we don't clean it in case of an exception as it
+        // will be cleaned up by the constructor
+        nativeHandles[i] = 0;
+        columns[i] = new ColumnVector(nativeHandle);
+      }
+      return columns;
+    } catch (Throwable t) {
+      for (ColumnVector columnVector : columns) {
+        if (columnVector != null) {
+          try {
+            columnVector.close();
+          } catch (Throwable s) {
+            t.addSuppressed(s);
+          }
+        }
+      }
+      for (long nativeHandle : nativeHandles) {
+        if (nativeHandle != 0) {
+          try {
+            deleteCudfColumn(nativeHandle);
+          } catch (Throwable s) {
+            t.addSuppressed(s);
+          }
+        }
+      }
+
+      throw t;
     }
   }
 }

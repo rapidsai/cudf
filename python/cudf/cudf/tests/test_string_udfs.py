@@ -22,6 +22,7 @@ from cudf.core.udf.strings_typing import (
 )
 from cudf.core.udf.utils import _PTX_FILE, _get_extensionty_size
 from cudf.testing._utils import assert_eq, sv_to_udf_str
+from cudf.utils._numba import _CUDFNumbaConfig
 
 
 def get_kernels(func, dtype, size):
@@ -85,8 +86,8 @@ def run_udf_test(data, func, dtype):
     sv_kernel, udf_str_kernel = get_kernels(func, dtype, len(data))
 
     expect = pd.Series(data).apply(func)
-
-    sv_kernel.forall(len(data))(str_views, output)
+    with _CUDFNumbaConfig():
+        sv_kernel.forall(len(data))(str_views, output)
     if dtype == "str":
         result = column_from_udf_string_array(output)
     else:
@@ -94,7 +95,8 @@ def run_udf_test(data, func, dtype):
 
     got = cudf.Series(result, dtype=dtype)
     assert_eq(expect, got, check_dtype=False)
-    udf_str_kernel.forall(len(data))(str_views, output)
+    with _CUDFNumbaConfig():
+        udf_str_kernel.forall(len(data))(str_views, output)
     if dtype == "str":
         result = column_from_udf_string_array(output)
     else:

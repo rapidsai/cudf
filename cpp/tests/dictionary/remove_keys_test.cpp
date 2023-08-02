@@ -39,7 +39,7 @@ TEST_F(DictionaryRemoveKeysTest, StringsColumn)
   {
     auto const result =
       cudf::dictionary::remove_keys(cudf::dictionary_column_view(dictionary->view()), del_keys);
-    std::vector<const char*> h_expected{
+    std::vector<char const*> h_expected{
       "eee", "aaa", nullptr, nullptr, "ccc", "ccc", "ccc", "eee", "aaa"};
     cudf::test::strings_column_wrapper expected(
       h_expected.begin(),

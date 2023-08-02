@@ -50,7 +50,7 @@ class pinned_allocator<void> {
  public:
   using value_type      = void;            ///< The type of the elements in the allocator
   using pointer         = void*;           ///< The type returned by address() / allocate()
-  using const_pointer   = const void*;     ///< The type returned by address()
+  using const_pointer   = void const*;     ///< The type returned by address()
   using size_type       = std::size_t;     ///< The type used for the size of the allocation
   using difference_type = std::ptrdiff_t;  ///< The type of the distance between two pointers
 
@@ -76,9 +76,9 @@ class pinned_allocator {
  public:
   using value_type      = T;               ///< The type of the elements in the allocator
   using pointer         = T*;              ///< The type returned by address() / allocate()
-  using const_pointer   = const T*;        ///< The type returned by address()
+  using const_pointer   = T const*;        ///< The type returned by address()
   using reference       = T&;              ///< The parameter type for address()
-  using const_reference = const T&;        ///< The parameter type for address()
+  using const_reference = T const&;        ///< The parameter type for address()
   using size_type       = std::size_t;     ///< The type used for the size of the allocation
   using difference_type = std::ptrdiff_t;  ///< The type of the distance between two pointers
 

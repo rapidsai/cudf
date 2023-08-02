@@ -52,8 +52,8 @@ struct ipv4_to_integers_fn {
     uint32_t ipvals[4] = {0};  // IPV4 format: xxx.xxx.xxx.xxx
     int32_t ipv_idx    = 0;
     int32_t factor     = 1;
-    const char* in_ptr = d_str.data();
-    const char* end    = in_ptr + d_str.size_bytes();
+    char const* in_ptr = d_str.data();
+    char const* end    = in_ptr + d_str.size_bytes();
     while ((in_ptr < end) && (ipv_idx < 4)) {
       char ch = *in_ptr++;
       if (ch < '0' || ch > '9') {

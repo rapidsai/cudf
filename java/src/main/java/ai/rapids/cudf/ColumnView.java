@@ -43,32 +43,50 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   protected final ColumnVector.OffHeapState offHeap;
 
   /**
-   * Constructs a Column View given a native view address
+   * Constructs a Column View given a native view address. This asserts that if the ColumnView is
+   * of nested-type it doesn't contain non-empty nulls
    * @param address the view handle
+   * @throws AssertionError if the address points to a nested-type view with non-empty nulls
    */
   ColumnView(long address) {
     this.viewHandle = address;
-    this.type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
-    this.rows = ColumnView.getNativeRowCount(viewHandle);
-    this.nullCount = ColumnView.getNativeNullCount(viewHandle);
-    this.offHeap = null;
-    AssertEmptyNulls.assertNullsAreEmpty(this);
+    try {
+      this.type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
+      this.rows = ColumnView.getNativeRowCount(viewHandle);
+      this.nullCount = ColumnView.getNativeNullCount(viewHandle);
+      this.offHeap = null;
+      AssertEmptyNulls.assertNullsAreEmpty(this);
+    } catch (Throwable t) {
+      // offHeap state is null, so there is nothing to clean in offHeap
+      // delete ColumnView to avoid memory leak
+      deleteColumnView(viewHandle);
+      viewHandle = 0;
+      throw t;
+    }
   }
 
 
   /**
    * Intended to be called from ColumnVector when it is being constructed. Because state creates a
    * cudf::column_view instance and will close it in all cases, we don't want to have to double
-   * close it.
+   * close it. This asserts that if the offHeapState is of nested-type it doesn't contain non-empty nulls
    * @param state the state this view is based off of.
+   * @throws AssertionError if offHeapState points to a nested-type view with non-empty nulls
    */
   protected ColumnView(ColumnVector.OffHeapState state) {
     offHeap = state;
-    viewHandle = state.getViewHandle();
-    type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
-    rows = ColumnView.getNativeRowCount(viewHandle);
-    nullCount = ColumnView.getNativeNullCount(viewHandle);
-    AssertEmptyNulls.assertNullsAreEmpty(this);
+    try {
+      viewHandle = state.getViewHandle();
+      type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
+      rows = ColumnView.getNativeRowCount(viewHandle);
+      nullCount = ColumnView.getNativeNullCount(viewHandle);
+      AssertEmptyNulls.assertNullsAreEmpty(this);
+    } catch (Throwable t) {
+      // cleanup offHeap
+      offHeap.clean(false);
+      viewHandle = 0;
+      throw t;
+    }
   }
 
   /**
@@ -649,8 +667,22 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector[] slice(int... indices) {
     long[] nativeHandles = slice(this.getNativeView(), indices);
     ColumnVector[] columnVectors = new ColumnVector[nativeHandles.length];
-    for (int i = 0; i < nativeHandles.length; i++) {
-      columnVectors[i] = new ColumnVector(nativeHandles[i]);
+    try {
+      for (int i = 0; i < nativeHandles.length; i++) {
+        long nativeHandle = nativeHandles[i];
+        // setting address to zero, so we don't clean it in case of an exception as it
+        // will be cleaned up by the constructor
+        nativeHandles[i] = 0;
+        columnVectors[i] = new ColumnVector(nativeHandle);
+      }
+    } catch (Throwable t) {
+      try {
+        cleanupColumnViews(nativeHandles, columnVectors, t);
+      } catch (Throwable s) {
+        t.addSuppressed(s);
+      } finally {
+        throw t;
+      }
     }
     return columnVectors;
   }
@@ -788,10 +820,45 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public ColumnView[] splitAsViews(int... indices) {
     long[] nativeHandles = split(this.getNativeView(), indices);
     ColumnView[] columnViews = new ColumnView[nativeHandles.length];
-    for (int i = 0; i < nativeHandles.length; i++) {
-      columnViews[i] = new ColumnView(nativeHandles[i]);
+    try {
+      for (int i = 0; i < nativeHandles.length; i++) {
+        long nativeHandle = nativeHandles[i];
+        // setting address to zero, so we don't clean it in case of an exception as it
+        // will be cleaned up by the constructor
+        nativeHandles[i] = 0;
+        columnViews[i] = new ColumnView(nativeHandle);
+      }
+    } catch (Throwable t) {
+      try {
+        cleanupColumnViews(nativeHandles, columnViews, t);
+      } catch (Throwable s) {
+        t.addSuppressed(s);
+      } finally {
+        throw t;
+      }
     }
     return columnViews;
+  }
+
+  static void cleanupColumnViews(long[] nativeHandles, ColumnView[] columnViews, Throwable throwable) {
+    for (ColumnView columnView : columnViews) {
+      if (columnView != null) {
+        try {
+          columnView.close();
+        } catch (Throwable s) {
+          throwable.addSuppressed(s);
+        }
+      }
+    }
+    for (long nativeHandle : nativeHandles) {
+      if (nativeHandle != 0) {
+        try {
+          deleteColumnView(nativeHandle);
+        } catch (Throwable s) {
+          throwable.addSuppressed(s);
+        }
+      }
+    }
   }
 
   /**
@@ -816,8 +883,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Create a deep copy of the column while replacing the null mask. The resultant null mask is the
    * bitwise merge of null masks in the columns given as arguments.
+   * The result will be sanitized to not contain any non-empty nulls in case of nested types
    *
-   * @param mergeOp binary operator, currently only BITWISE_AND is supported.
+   * @param mergeOp binary operator (BITWISE_AND and BITWISE_OR only)
    * @param columns array of columns whose null masks are merged, must have identical number of rows.
    * @return the new ColumnVector with merged null mask.
    */
@@ -2447,6 +2515,31 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(dropListDuplicatesWithKeysValues(getNativeView()));
   }
 
+  /**
+   * Flatten each list of lists into a single list.
+   *
+   * The column must have rows that are lists of lists.
+   * Any row containing null list elements will result in a null output row.
+   *
+   * @return A new column vector containing the flattened result
+   */
+  public ColumnVector flattenLists() {
+    return flattenLists(false);
+  }
+
+  /**
+   * Flatten each list of lists into a single list.
+   *
+   * The column must have rows that are lists of lists.
+   *
+   * @param ignoreNull Whether to ignore null list elements in the input column from the operation,
+   *                   or any row containing null list elements will result in a null output row
+   * @return A new column vector containing the flattened result
+   */
+  public ColumnVector flattenLists(boolean ignoreNull) {
+    return new ColumnVector(flattenLists(getNativeView(), ignoreNull));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // STRINGS
   /////////////////////////////////////////////////////////////////////////////
@@ -3923,6 +4016,22 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return ((actualBytes + 63) >> 6) << 6;
   }
 
+  /**
+   * Count how many rows in the column are distinct from one another.
+   * @param nullPolicy if nulls should be included or not.
+   */
+  public int distinctCount(NullPolicy nullPolicy) {
+    return distinctCount(getNativeView(), nullPolicy.includeNulls);
+  }
+
+  /**
+   * Count how many rows in the column are distinct from one another.
+   * Nulls are included.
+   */
+  public int distinctCount() {
+    return distinctCount(getNativeView(), true);
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -3955,6 +4064,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   // Native Methods
+  private static native int distinctCount(long handle, boolean nullsIncluded);
+
   /**
    * Native method to parse and convert a string column vector to unix timestamp. A unix
    * timestamp is a long value representing how many units since 1970-01-01 00:00:00.000 in either
@@ -4404,6 +4515,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long dropListDuplicates(long nativeView);
 
   private static native long dropListDuplicatesWithKeysValues(long nativeHandle);
+
+  private static native long flattenLists(long inputHandle, boolean ignoreNull);
 
   /**
    * Native method for list lookup
@@ -5078,5 +5191,27 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector purgeNonEmptyNulls() {
     return new ColumnVector(purgeNonEmptyNulls(viewHandle));
+  }
+
+  static ColumnView[] getColumnViewsFromPointers(long[] nativeHandles) {
+    ColumnView[] columns = new ColumnView[nativeHandles.length];
+    try {
+      for (int i = 0; i < nativeHandles.length; i++) {
+        long nativeHandle = nativeHandles[i];
+        // setting address to zero, so we don't clean it in case of an exception as it
+        // will be cleaned up by the constructor
+        nativeHandles[i] = 0;
+        columns[i] = new ColumnView(nativeHandle);
+      }
+      return columns;
+    } catch (Throwable t) {
+      try {
+        cleanupColumnViews(nativeHandles, columns, t);
+      } catch (Throwable s) {
+        t.addSuppressed(s);
+      } finally {
+        throw t;
+      }
+    }
   }
 }

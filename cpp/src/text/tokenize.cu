@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+#include <text/utilities/tokenize_ops.cuh>
+
+#include <nvtext/detail/tokenize.hpp>
+#include <nvtext/tokenize.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -24,9 +29,6 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
-#include <nvtext/detail/tokenize.hpp>
-#include <nvtext/tokenize.hpp>
-#include <text/utilities/tokenize_ops.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -215,7 +217,8 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
     });
 
   // create the output chars column -- just a copy of the input's chars column
-  cudf::column_view chars_view(cudf::data_type{cudf::type_id::INT8}, chars_bytes, d_chars);
+  cudf::column_view chars_view(
+    cudf::data_type{cudf::type_id::INT8}, chars_bytes, d_chars, nullptr, 0);
   auto chars_column = std::make_unique<cudf::column>(chars_view, stream, mr);
 
   // return new strings column

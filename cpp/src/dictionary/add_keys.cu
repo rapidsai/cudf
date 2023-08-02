@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/concatenate.cuh>
+#include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>

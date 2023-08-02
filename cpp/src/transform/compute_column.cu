@@ -19,6 +19,7 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -128,6 +129,8 @@ std::unique_ptr<column> compute_column(table_view const& table,
         *table_device, device_expression_data, *mutable_output_device);
   }
   CUDF_CHECK_CUDA(stream.value());
+  output_column->set_null_count(
+    cudf::detail::null_count(mutable_output_device->null_mask(), 0, output_column->size(), stream));
   return output_column;
 }
 

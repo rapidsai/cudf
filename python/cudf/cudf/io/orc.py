@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import datetime
 import warnings
@@ -296,12 +296,14 @@ def read_orc(
     from cudf import DataFrame
 
     if skiprows is not None:
+        # Do not remove until cuIO team approves its removal.
         warnings.warn(
             "skiprows is deprecated and will be removed.",
             FutureWarning,
         )
 
     if num_rows is not None:
+        # Do not remove until cuIO team approves its removal.
         warnings.warn(
             "num_rows is deprecated and will be removed.",
             FutureWarning,

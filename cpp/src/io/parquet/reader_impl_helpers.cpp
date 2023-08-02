@@ -180,29 +180,29 @@ metadata::metadata(datasource* source)
   constexpr auto header_len = sizeof(file_header_s);
   constexpr auto ender_len  = sizeof(file_ender_s);
 
-  const auto len           = source->size();
-  const auto header_buffer = source->host_read(0, header_len);
-  const auto header        = reinterpret_cast<const file_header_s*>(header_buffer->data());
-  const auto ender_buffer  = source->host_read(len - ender_len, ender_len);
-  const auto ender         = reinterpret_cast<const file_ender_s*>(ender_buffer->data());
+  auto const len           = source->size();
+  auto const header_buffer = source->host_read(0, header_len);
+  auto const header        = reinterpret_cast<file_header_s const*>(header_buffer->data());
+  auto const ender_buffer  = source->host_read(len - ender_len, ender_len);
+  auto const ender         = reinterpret_cast<file_ender_s const*>(ender_buffer->data());
   CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
   CUDF_EXPECTS(header->magic == parquet_magic && ender->magic == parquet_magic,
                "Corrupted header or footer");
   CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
                "Incorrect footer length");
 
-  const auto buffer = source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
+  auto const buffer = source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
   CompactProtocolReader cp(buffer->data(), ender->footer_len);
   CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
   CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
 }
 
 std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
-  std::vector<std::unique_ptr<datasource>> const& sources)
+  host_span<std::unique_ptr<datasource> const> sources)
 {
   std::vector<metadata> metadatas;
   std::transform(
-    sources.cbegin(), sources.cend(), std::back_inserter(metadatas), [](auto const& source) {
+    sources.begin(), sources.end(), std::back_inserter(metadatas), [](auto const& source) {
       return metadata(source.get());
     });
   return metadatas;
@@ -232,21 +232,27 @@ aggregate_reader_metadata::collect_keyval_metadata() const
 int64_t aggregate_reader_metadata::calc_num_rows() const
 {
   return std::accumulate(
-    per_file_metadata.begin(), per_file_metadata.end(), 0l, [](auto& sum, auto& pfm) {
-      return sum + pfm.num_rows;
+    per_file_metadata.cbegin(), per_file_metadata.cend(), 0l, [](auto& sum, auto& pfm) {
+      auto const rowgroup_rows = std::accumulate(
+        pfm.row_groups.cbegin(), pfm.row_groups.cend(), 0l, [](auto& rg_sum, auto& rg) {
+          return rg_sum + rg.num_rows;
+        });
+      CUDF_EXPECTS(pfm.num_rows == 0 || pfm.num_rows == rowgroup_rows,
+                   "Header and row groups disagree about number of rows in file!");
+      return sum + (pfm.num_rows == 0 && rowgroup_rows > 0 ? rowgroup_rows : pfm.num_rows);
     });
 }
 
 size_type aggregate_reader_metadata::calc_num_row_groups() const
 {
   return std::accumulate(
-    per_file_metadata.begin(), per_file_metadata.end(), 0, [](auto& sum, auto& pfm) {
+    per_file_metadata.cbegin(), per_file_metadata.cend(), 0, [](auto& sum, auto& pfm) {
       return sum + pfm.row_groups.size();
     });
 }
 
 aggregate_reader_metadata::aggregate_reader_metadata(
-  std::vector<std::unique_ptr<datasource>> const& sources)
+  host_span<std::unique_ptr<datasource> const> sources)
   : per_file_metadata(metadatas_from_sources(sources)),
     keyval_maps(collect_keyval_metadata()),
     num_rows(calc_num_rows()),
@@ -342,8 +348,19 @@ std::tuple<int64_t, size_type, std::vector<row_group_info>>
 aggregate_reader_metadata::select_row_groups(
   host_span<std::vector<size_type> const> row_group_indices,
   int64_t skip_rows_opt,
-  std::optional<size_type> const& num_rows_opt) const
+  std::optional<size_type> const& num_rows_opt,
+  host_span<data_type const> output_dtypes,
+  std::optional<std::reference_wrapper<ast::expression const>> filter) const
 {
+  std::optional<std::vector<std::vector<size_type>>> filtered_row_group_indices;
+  if (filter.has_value()) {
+    filtered_row_group_indices =
+      filter_row_groups(row_group_indices, output_dtypes, filter.value());
+    if (filtered_row_group_indices.has_value()) {
+      row_group_indices =
+        host_span<std::vector<size_type> const>(filtered_row_group_indices.value());
+    }
+  }
   std::vector<row_group_info> selection;
   auto [rows_to_skip, rows_to_read] = [&]() {
     if (not row_group_indices.empty()) { return std::pair<int64_t, size_type>{}; }
@@ -383,7 +400,9 @@ aggregate_reader_metadata::select_row_groups(
   return {rows_to_skip, rows_to_read, std::move(selection)};
 }
 
-std::tuple<std::vector<input_column_info>, std::vector<column_buffer>, std::vector<size_type>>
+std::tuple<std::vector<input_column_info>,
+           std::vector<inline_column_buffer>,
+           std::vector<size_type>>
 aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>> const& use_names,
                                           bool include_index,
                                           bool strings_to_categorical,
@@ -400,17 +419,17 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
              : -1;
   };
 
-  std::vector<column_buffer> output_columns;
+  std::vector<inline_column_buffer> output_columns;
   std::vector<input_column_info> input_columns;
   std::vector<int> nesting;
 
   // Return true if column path is valid. e.g. if the path is {"struct1", "child1"}, then it is
   // valid if "struct1.child1" exists in this file's schema. If "struct1" exists but "child1" is
   // not a child of "struct1" then the function will return false for "struct1"
-  std::function<bool(column_name_info const*, int, std::vector<column_buffer>&, bool)>
+  std::function<bool(column_name_info const*, int, std::vector<inline_column_buffer>&, bool)>
     build_column = [&](column_name_info const* col_name_info,
                        int schema_idx,
-                       std::vector<column_buffer>& out_col_array,
+                       std::vector<inline_column_buffer>& out_col_array,
                        bool has_list_parent) {
       if (schema_idx < 0) { return false; }
       auto const& schema_elem = get_schema(schema_idx);
@@ -431,7 +450,7 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
                               : to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
       auto const dtype    = to_data_type(col_type, schema_elem);
 
-      column_buffer output_col(dtype, schema_elem.repetition_type == OPTIONAL);
+      inline_column_buffer output_col(dtype, schema_elem.repetition_type == OPTIONAL);
       if (has_list_parent) { output_col.user_data |= PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT; }
       // store the index of this element if inserted in out_col_array
       nesting.push_back(static_cast<int>(out_col_array.size()));
@@ -471,7 +490,7 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
             to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
           auto const element_dtype = to_data_type(element_type, schema_elem);
 
-          column_buffer element_col(element_dtype, schema_elem.repetition_type == OPTIONAL);
+          inline_column_buffer element_col(element_dtype, schema_elem.repetition_type == OPTIONAL);
           if (has_list_parent || col_type == type_id::LIST) {
             element_col.user_data |= PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT;
           }
@@ -561,8 +580,8 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
 
     // Now construct paths as vector of strings for further consumption
     std::vector<std::vector<std::string>> use_names3;
-    std::transform(valid_selected_paths.begin(),
-                   valid_selected_paths.end(),
+    std::transform(valid_selected_paths.cbegin(),
+                   valid_selected_paths.cend(),
                    std::back_inserter(use_names3),
                    [&](path_info const& valid_path) {
                      auto schema_idx = valid_path.schema_idx;

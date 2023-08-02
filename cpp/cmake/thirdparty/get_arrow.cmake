@@ -295,9 +295,9 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
         APPEND
         arrow_code_string
         "
-          if(NOT TARGET xsimd)
-            add_library(xsimd INTERFACE IMPORTED)
-            target_include_directories(xsimd INTERFACE \"${Arrow_BINARY_DIR}/xsimd_ep/src/xsimd_ep-install/include\")
+          if(NOT TARGET arrow::xsimd)
+            add_library(arrow::xsimd INTERFACE IMPORTED)
+            target_include_directories(arrow::xsimd INTERFACE \"${Arrow_BINARY_DIR}/xsimd_ep/src/xsimd_ep-install/include\")
           endif()
         "
       )
@@ -381,7 +381,7 @@ if(NOT DEFINED CUDF_VERSION_Arrow)
   set(CUDF_VERSION_Arrow
       # This version must be kept in sync with the libarrow version pinned for builds in
       # dependencies.yaml.
-      11.0.0
+      12.0.1
       CACHE STRING "The version of Arrow to find (or build)"
   )
 endif()

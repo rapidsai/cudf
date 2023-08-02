@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -6529,7 +6529,7 @@ static const brotli_dictionary_s g_dictionary = {
    136, 224, 164, 184, 224, 164, 149, 224, 165, 141, 224, 164, 176, 224, 164, 191, 224, 164, 175,
    224, 164, 164, 224, 164, 190}};
 
-const brotli_dictionary_s* get_brotli_dictionary() { return &g_dictionary; }
+brotli_dictionary_s const* get_brotli_dictionary() { return &g_dictionary; }
 
 }  // namespace io
 }  // namespace cudf

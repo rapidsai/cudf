@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -254,25 +254,52 @@ std::unique_ptr<table> unique(
  * @brief Create a new table without duplicate rows.
  *
  * Given an `input` table_view, each row is copied to the output table to create a set of distinct
- * rows. If there are duplicate rows, which row to be copied depends on the specified value of
- * the `keep` parameter.
+ * rows. If there are duplicate rows, which row is copied depends on the `keep` parameter.
  *
  * The order of rows in the output table is not specified.
  *
  * Performance hint: if the input is pre-sorted, `cudf::unique` can produce an equivalent result
  * (i.e., same set of output rows) but with less running time than `cudf::distinct`.
  *
- * @param[in] input           input table_view to copy only distinct rows
- * @param[in] keys            vector of indices representing key columns from `input`
- * @param[in] keep            keep any, first, last, or none of the found duplicates
- * @param[in] nulls_equal     flag to control if nulls are compared equal or not
- * @param[in] nans_equal      flag to control if floating-point NaN values are compared equal or not
- * @param[in] mr              Device memory resource used to allocate the returned table's device
- *                            memory
- *
+ * @param input The input table
+ * @param keys Vector of indices indicating key columns in the `input` table
+ * @param keep Copy any, first, last, or none of the found duplicates
+ * @param nulls_equal Flag to specify whether null elements should be considered as equal
+ * @param nans_equal Flag to specify whether NaN elements should be considered as equal
+ * @param mr Device memory resource used to allocate the returned table
  * @return Table with distinct rows in an unspecified order
  */
 std::unique_ptr<table> distinct(
+  table_view const& input,
+  std::vector<size_type> const& keys,
+  duplicate_keep_option keep          = duplicate_keep_option::KEEP_ANY,
+  null_equality nulls_equal           = null_equality::EQUAL,
+  nan_equality nans_equal             = nan_equality::ALL_EQUAL,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Create a new table without duplicate rows, preserving input order.
+ *
+ * Given an `input` table_view, each row is copied to the output table to create a set of distinct
+ * rows. The input row order is preserved. If there are duplicate rows, which row is copied depends
+ * on the `keep` parameter.
+ *
+ * This API produces the same output rows as `cudf::distinct`, but with input order preserved.
+ *
+ * Note that when `keep` is `KEEP_ANY`, the choice of which duplicate row to keep is arbitrary, but
+ * the returned table will retain the input order. That is, if the key column contained `1, 2, 1`
+ * with another values column `3, 4, 5`, the result could contain values `3, 4` or `4, 5` but not
+ * `4, 3` or `5, 4`.
+ *
+ * @param input The input table
+ * @param keys Vector of indices indicating key columns in the `input` table
+ * @param keep Copy any, first, last, or none of the found duplicates
+ * @param nulls_equal Flag to specify whether null elements should be considered as equal
+ * @param nans_equal Flag to specify whether NaN elements should be considered as equal
+ * @param mr Device memory resource used to allocate the returned table
+ * @return Table with distinct rows, preserving input order
+ */
+std::unique_ptr<table> stable_distinct(
   table_view const& input,
   std::vector<size_type> const& keys,
   duplicate_keep_option keep          = duplicate_keep_option::KEEP_ANY,

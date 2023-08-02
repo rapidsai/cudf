@@ -21,8 +21,8 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/partitioning.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
@@ -123,9 +123,9 @@ class bitwise_partitioner {
  */
 template <class row_hasher_t, typename partitioner_type>
 __global__ void compute_row_partition_numbers(row_hasher_t the_hasher,
-                                              const size_type num_rows,
-                                              const size_type num_partitions,
-                                              const partitioner_type the_partitioner,
+                                              size_type const num_rows,
+                                              size_type const num_partitions,
+                                              partitioner_type const the_partitioner,
                                               size_type* __restrict__ row_partition_numbers,
                                               size_type* __restrict__ row_partition_offset,
                                               size_type* __restrict__ block_partition_sizes,
@@ -149,9 +149,9 @@ __global__ void compute_row_partition_numbers(row_hasher_t the_hasher,
   // and compute the partition to which the hash value belongs and increment
   // the shared memory counter for that partition
   while (row_number < num_rows) {
-    const hash_value_type row_hash_value = the_hasher(row_number);
+    hash_value_type const row_hash_value = the_hasher(row_number);
 
-    const size_type partition_number = the_partitioner(row_hash_value);
+    size_type const partition_number = the_partitioner(row_hash_value);
 
     row_partition_numbers[row_number] = partition_number;
 
@@ -166,13 +166,13 @@ __global__ void compute_row_partition_numbers(row_hasher_t the_hasher,
   // Flush shared memory histogram to global memory
   partition_number = threadIdx.x;
   while (partition_number < num_partitions) {
-    const size_type block_partition_size = shared_partition_sizes[partition_number];
+    size_type const block_partition_size = shared_partition_sizes[partition_number];
 
     // Update global size of each partition
     atomicAdd(&global_partition_sizes[partition_number], block_partition_size);
 
     // Record the size of this partition in this block
-    const size_type write_location        = partition_number * gridDim.x + blockIdx.x;
+    size_type const write_location        = partition_number * gridDim.x + blockIdx.x;
     block_partition_sizes[write_location] = block_partition_size;
     partition_number += blockDim.x;
   }
@@ -196,8 +196,8 @@ __global__ void compute_row_partition_numbers(row_hasher_t the_hasher,
  partition(num_partitions -1) offset, ...} }
  */
 __global__ void compute_row_output_locations(size_type* __restrict__ row_partition_numbers,
-                                             const size_type num_rows,
-                                             const size_type num_partitions,
+                                             size_type const num_rows,
+                                             size_type const num_partitions,
                                              size_type* __restrict__ block_partition_offsets)
 {
   // Shared array that holds the offset of this blocks partitions in
@@ -220,11 +220,11 @@ __global__ void compute_row_output_locations(size_type* __restrict__ row_partiti
   // and store the row's output location in-place
   while (row_number < num_rows) {
     // Get partition number of this row
-    const size_type partition_number = row_partition_numbers[row_number];
+    size_type const partition_number = row_partition_numbers[row_number];
 
     // Get output location based on partition number by incrementing the
     // corresponding partition offset for this block
-    const size_type row_output_location =
+    size_type const row_output_location =
       atomicAdd(&(shared_partition_offsets[partition_number]), size_type(1));
 
     // Store the row's output location in-place
@@ -253,8 +253,8 @@ __global__ void compute_row_output_locations(size_type* __restrict__ row_partiti
 template <typename InputIter, typename DataType>
 __global__ void copy_block_partitions(InputIter input_iter,
                                       DataType* __restrict__ output_buf,
-                                      const size_type num_rows,
-                                      const size_type num_partitions,
+                                      size_type const num_rows,
+                                      size_type const num_partitions,
                                       size_type const* __restrict__ row_partition_numbers,
                                       size_type const* __restrict__ row_partition_offset,
                                       size_type const* __restrict__ block_partition_sizes,
@@ -402,7 +402,7 @@ struct copy_block_partitions_dispatcher {
 
   template <typename DataType, CUDF_ENABLE_IF(is_copy_block_supported<DataType>())>
   std::unique_ptr<column> operator()(column_view const& input,
-                                     const size_type num_partitions,
+                                     size_type const num_partitions,
                                      size_type const* row_partition_numbers,
                                      size_type const* row_partition_offset,
                                      size_type const* block_partition_sizes,
@@ -424,12 +424,13 @@ struct copy_block_partitions_dispatcher {
                                grid_size,
                                stream);
 
-    return std::make_unique<column>(input.type(), input.size(), std::move(output));
+    return std::make_unique<column>(
+      input.type(), input.size(), std::move(output), rmm::device_buffer{}, 0);
   }
 
   template <typename DataType, CUDF_ENABLE_IF(not is_copy_block_supported<DataType>())>
   std::unique_ptr<column> operator()(column_view const& input,
-                                     const size_type num_partitions,
+                                     size_type const num_partitions,
                                      size_type const* row_partition_numbers,
                                      size_type const* row_partition_offset,
                                      size_type const* block_partition_sizes,
@@ -723,6 +724,32 @@ struct dispatch_map_type {
 
 namespace detail {
 namespace {
+
+/**
+ * @brief This hash function simply returns the input value cast to the
+ * result_type of the functor.
+ */
+template <typename Key>
+struct IdentityHash {
+  using result_type        = uint32_t;
+  constexpr IdentityHash() = default;
+  constexpr IdentityHash(uint32_t) {}
+
+  template <typename return_type = result_type>
+  constexpr std::enable_if_t<!std::is_arithmetic_v<Key>, return_type> operator()(
+    Key const& key) const
+  {
+    CUDF_UNREACHABLE("IdentityHash does not support this data type");
+  }
+
+  template <typename return_type = result_type>
+  constexpr std::enable_if_t<std::is_arithmetic_v<Key>, return_type> operator()(
+    Key const& key) const
+  {
+    return static_cast<result_type>(key);
+  }
+};
+
 template <template <typename> class hash_function>
 std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
@@ -784,14 +811,14 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 
   switch (hash_function) {
     case (hash_id::HASH_IDENTITY):
-      for (const size_type& column_id : columns_to_hash) {
+      for (size_type const& column_id : columns_to_hash) {
         if (!is_numeric(input.column(column_id).type()))
           CUDF_FAIL("IdentityHash does not support this data type");
       }
-      return detail::hash_partition<detail::IdentityHash>(
+      return detail::hash_partition<cudf::detail::IdentityHash>(
         input, columns_to_hash, num_partitions, seed, stream, mr);
     case (hash_id::HASH_MURMUR3):
-      return detail::hash_partition<detail::MurmurHash3_32>(
+      return detail::hash_partition<cudf::hashing::detail::MurmurHash3_x86_32>(
         input, columns_to_hash, num_partitions, seed, stream, mr);
     default: CUDF_FAIL("Unsupported hash function in hash_partition");
   }

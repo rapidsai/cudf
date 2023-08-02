@@ -54,17 +54,17 @@ __global__ void copy_range_kernel(SourceValueIterator source_value_begin,
                 "copy_range_kernel assumes bitmask element size in bits == warp size");
 
   constexpr cudf::size_type leader_lane{0};
-  const int lane_id = threadIdx.x % warp_size;
+  int const lane_id = threadIdx.x % warp_size;
 
-  const cudf::size_type tid = threadIdx.x + blockIdx.x * blockDim.x;
-  const int warp_id         = tid / warp_size;
+  cudf::size_type const tid = threadIdx.x + blockIdx.x * blockDim.x;
+  int const warp_id         = tid / warp_size;
 
-  const cudf::size_type offset         = target.offset();
-  const cudf::size_type begin_mask_idx = cudf::word_index(offset + target_begin);
-  const cudf::size_type end_mask_idx   = cudf::word_index(offset + target_end);
+  cudf::size_type const offset         = target.offset();
+  cudf::size_type const begin_mask_idx = cudf::word_index(offset + target_begin);
+  cudf::size_type const end_mask_idx   = cudf::word_index(offset + target_end);
 
   cudf::size_type mask_idx             = begin_mask_idx + warp_id;
-  const cudf::size_type masks_per_grid = gridDim.x * blockDim.x / warp_size;
+  cudf::size_type const masks_per_grid = gridDim.x * blockDim.x / warp_size;
 
   cudf::size_type target_offset = begin_mask_idx * warp_size - (offset + target_begin);
   cudf::size_type source_idx    = tid + target_offset;
@@ -79,10 +79,10 @@ __global__ void copy_range_kernel(SourceValueIterator source_value_begin,
     if (in_range) target.element<T>(index) = *(source_value_begin + source_idx);
 
     if (has_validity) {  // update bitmask
-      const bool valid      = in_range && *(source_validity_begin + source_idx);
-      const int active_mask = __ballot_sync(0xFFFF'FFFFu, in_range);
-      const int valid_mask  = __ballot_sync(0xFFFF'FFFFu, valid);
-      const int warp_mask   = active_mask & valid_mask;
+      bool const valid      = in_range && *(source_validity_begin + source_idx);
+      int const active_mask = __ballot_sync(0xFFFF'FFFFu, in_range);
+      int const valid_mask  = __ballot_sync(0xFFFF'FFFFu, valid);
+      int const warp_mask   = active_mask & valid_mask;
 
       cudf::bitmask_type old_mask = target.get_mask_word(mask_idx);
       if (lane_id == leader_lane) {
@@ -154,11 +154,6 @@ void copy_range(SourceValueIterator source_value_begin,
   auto grid = cudf::detail::grid_1d{num_items, block_size, 1};
 
   if (target.nullable()) {
-    // TODO: if null_count is UNKNOWN_NULL_COUNT, no need to update null
-    // count (if null_count is UNKNOWN_NULL_COUNT, invoking null_count()
-    // will scan the entire bitmask array, and this can be surprising
-    // in performance if the copy range is small and the column size is
-    // large).
     rmm::device_scalar<size_type> null_count(target.null_count(), stream);
 
     auto kernel =

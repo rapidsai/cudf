@@ -24,7 +24,7 @@ rapids_test_init()
 # properties and linking to build the test
 function(ConfigureTest CMAKE_TEST_NAME)
   set(options)
-  set(one_value GPUS PERCENT)
+  set(one_value GPUS PERCENT STREAM_MODE)
   set(multi_value)
   cmake_parse_arguments(_CUDF_TEST "${options}" "${one_value}" "${multi_value}" ${ARGN})
   if(NOT DEFINED _CUDF_TEST_GPUS AND NOT DEFINED _CUDF_TEST_PERCENT)
@@ -36,6 +36,9 @@ function(ConfigureTest CMAKE_TEST_NAME)
   endif()
   if(NOT DEFINED _CUDF_TEST_PERCENT)
     set(_CUDF_TEST_PERCENT 100)
+  endif()
+  if(NOT DEFINED _CUDF_TEST_STREAM_MODE)
+    set(_CUDF_TEST_STREAM_MODE cudf)
   endif()
 
   add_executable(${CMAKE_TEST_NAME} ${_CUDF_TEST_UNPARSED_ARGUMENTS})
@@ -61,6 +64,13 @@ function(ConfigureTest CMAKE_TEST_NAME)
     GPUS ${_CUDF_TEST_GPUS}
     PERCENT ${_CUDF_TEST_PERCENT}
     INSTALL_COMPONENT_SET testing
+  )
+
+  set_tests_properties(
+    ${CMAKE_TEST_NAME}
+    PROPERTIES
+      ENVIRONMENT
+      "GTEST_CUDF_STREAM_MODE=new_${_CUDF_TEST_STREAM_MODE}_default;LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_${_CUDF_TEST_STREAM_MODE}>"
   )
 endfunction()
 
@@ -153,7 +163,14 @@ ConfigureTest(DATETIME_OPS_TEST datetime/datetime_ops_test.cpp)
 
 # ##################################################################################################
 # * hashing tests ---------------------------------------------------------------------------------
-ConfigureTest(HASHING_TEST hashing/hash_test.cpp)
+ConfigureTest(
+  HASHING_TEST
+  hashing/md5_test.cpp
+  hashing/murmurhash3_x86_32_test.cpp
+  hashing/murmurhash3_x64_128_test.cpp
+  hashing/spark_murmurhash3_x86_32_test.cpp
+  hashing/xxhash_64_test.cpp
+)
 
 # ##################################################################################################
 # * partitioning tests ----------------------------------------------------------------------------
@@ -349,7 +366,25 @@ ConfigureTest(
 
 # ##################################################################################################
 # * span tests -------------------------------------------------------------------------------
+
+# This test must be split into two executables so that one can use the preload library and one does
+# not. The one that doesn't includes a thrust::device_vector copy, which is always synchronous on
+# the default stream and is out of libcudf's control (but must be tested).
+set(_allowlist_filter SpanTest.CanConstructFromDeviceContainers)
+
 ConfigureTest(SPAN_TEST utilities_tests/span_tests.cu)
+ConfigureTest(SPAN_TEST_DEVICE_VECTOR utilities_tests/span_tests.cu)
+
+# Overwrite the environments set by ConfigureTest
+set_tests_properties(
+  SPAN_TEST
+  PROPERTIES
+    ENVIRONMENT
+    "GTEST_FILTER=-${_allowlist_filter};GTEST_CUDF_STREAM_MODE=new_cudf_default;LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_cudf>"
+)
+set_tests_properties(
+  SPAN_TEST_DEVICE_VECTOR PROPERTIES ENVIRONMENT "GTEST_FILTER=${_allowlist_filter}"
+)
 
 # ##################################################################################################
 # * iterator tests --------------------------------------------------------------------------------
@@ -385,7 +420,7 @@ ConfigureTest(
 # * table tests -----------------------------------------------------------------------------------
 ConfigureTest(
   TABLE_TEST table/table_tests.cpp table/table_view_tests.cu table/row_operators_tests.cpp
-  table/experimental_row_operator_tests.cu
+  table/experimental_row_operator_tests.cu table/row_operator_tests_utilities.cu
 )
 
 # ##################################################################################################
@@ -401,8 +436,9 @@ ConfigureTest(
   stream_compaction/apply_boolean_mask_tests.cpp
   stream_compaction/distinct_count_tests.cpp
   stream_compaction/distinct_tests.cpp
-  stream_compaction/drop_nulls_tests.cpp
   stream_compaction/drop_nans_tests.cpp
+  stream_compaction/drop_nulls_tests.cpp
+  stream_compaction/stable_distinct_tests.cpp
   stream_compaction/unique_count_tests.cpp
   stream_compaction/unique_tests.cpp
 )
@@ -417,6 +453,7 @@ ConfigureTest(
   rolling/grouped_rolling_test.cpp
   rolling/lead_lag_test.cpp
   rolling/nth_element_test.cpp
+  rolling/range_comparator_test.cu
   rolling/range_rolling_window_test.cpp
   rolling/range_window_bounds_test.cpp
   rolling/rolling_test.cpp
@@ -507,6 +544,7 @@ ConfigureTest(
   TEXT_TEST
   text/bpe_tests.cpp
   text/edit_distance_tests.cpp
+  text/jaccard_tests.cpp
   text/minhash_tests.cpp
   text/ngrams_tests.cpp
   text/ngrams_tokenize_tests.cpp
@@ -577,17 +615,14 @@ ConfigureTest(
 ConfigureTest(LABEL_BINS_TEST labeling/label_bins_tests.cpp)
 
 # ##################################################################################################
-# * stream identification tests -------------------------------------------------------------------
+# * stream testing ---------------------------------------------------------------------------------
 ConfigureTest(
   STREAM_IDENTIFICATION_TEST identify_stream_usage/test_default_stream_identification.cu
 )
-# Note that this only works when the test is invoked via ctest. At the moment CI is running all
-# tests by manually invoking the executable, so we'll have to manually pass this environment
-# variable in that setup.
-set_tests_properties(
-  STREAM_IDENTIFICATION_TEST
-  PROPERTIES ENVIRONMENT LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_cudf>
-)
+
+ConfigureTest(STREAM_HASHING_TEST streams/hash_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_COPYING_TEST streams/copying_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_GROUPBY_TEST streams/groupby_test.cpp STREAM_MODE testing)
 
 # ##################################################################################################
 # Install tests ####################################################################################

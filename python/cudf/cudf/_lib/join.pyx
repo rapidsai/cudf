@@ -1,14 +1,17 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from cudf.core.buffer import acquire_spill_lock
 
-from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
+
+from rmm._lib.device_buffer cimport device_buffer
 
 cimport cudf._lib.cpp.join as cpp_join
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.libcpp.memory cimport make_unique
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type, size_type, type_id
 from cudf._lib.utils cimport table_view_from_columns
@@ -61,10 +64,11 @@ def semi_join(list lhs, list rhs, how=None):
 
 
 cdef Column _gather_map_as_column(cpp_join.gather_map_type gather_map):
-    # helple to convert a gather map to a Column
+    # help to convert a gather map to a Column
+    cdef device_buffer c_empty
     cdef size_type size = gather_map.get()[0].size()
-    cdef unique_ptr[column] c_col = make_unique[column](
+    cdef unique_ptr[column] c_col = move(make_unique[column](
         data_type(type_id.INT32),
         size,
-        gather_map.get()[0].release())
+        gather_map.get()[0].release(), move(c_empty), 0))
     return Column.from_unique_ptr(move(c_col))

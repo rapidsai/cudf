@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import itertools
 import operator
@@ -77,9 +77,10 @@ def generate_valid_scalar_unaop_combos():
     return results
 
 
+@pytest.mark.filterwarnings("ignore:overflow encountered in scalar negative")
 @pytest.mark.parametrize("slr,dtype,op", generate_valid_scalar_unaop_combos())
 def test_scalar_unary_operations(slr, dtype, op):
-    slr_host = cudf.dtype(dtype).type(slr)
+    slr_host = np.array([slr])[0].astype(cudf.dtype(dtype))
     slr_device = cudf.Scalar(slr, dtype=dtype)
 
     expect = op(slr_host)
@@ -122,3 +123,9 @@ def test_scalar_no_negative_bools():
         ),
     ):
         -x
+
+
+def test_series_bool_neg():
+    sr = Series([True, False, True, None, False, None, True, True])
+    psr = sr.to_pandas(nullable=True)
+    utils.assert_eq((-sr).to_pandas(nullable=True), -psr, check_dtype=True)
