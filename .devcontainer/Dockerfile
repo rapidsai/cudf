@@ -2,7 +2,7 @@
 
 ARG CUDA=12.0
 ARG LLVM=16
-ARG RAPIDS=23.08
+ARG RAPIDS=23.10
 ARG DISTRO=ubuntu22.04
 ARG REPO=rapidsai/devcontainers
 
