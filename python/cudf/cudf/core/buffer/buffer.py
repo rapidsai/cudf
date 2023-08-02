@@ -350,7 +350,7 @@ class Buffer(Serializable):
 
         Returns
         -------
-        BufferSlice
+        ExposureTrackedBuffer
             A slice pointing to either a new or the existing owner
             depending on the expose status of the owner and the
             copy-on-write option (see above).

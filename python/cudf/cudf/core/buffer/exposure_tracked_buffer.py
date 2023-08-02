@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import weakref
-from typing import Any, Literal, Mapping, Optional, Type
+from typing import Any, Literal, Mapping
 
 from typing_extensions import Self
 
@@ -17,16 +17,10 @@ from cudf.core.buffer.buffer import (
 
 
 def as_exposure_tracked_buffer(
-    data, exposed: bool, subclass: Optional[Type[ExposureTrackedBuffer]] = None
-) -> BufferSlice:
+    data,
+    exposed: bool,
+) -> ExposureTrackedBuffer:
     """Factory function to wrap `data` in a slice of an exposure tracked buffer
-
-    If `subclass` is None, a new ExposureTrackedBuffer that points to the
-    memory of `data` is created and a BufferSlice that points to all of the
-    new ExposureTrackedBuffer is returned.
-
-    If `subclass` is not None, a new `subclass` is created instead. Still,
-    a BufferSlice that points to all of the new `subclass` is returned
 
     It is illegal for an exposure tracked buffer to own another exposure
     tracked buffer. When representing the same memory, we should have a single
@@ -35,7 +29,7 @@ def as_exposure_tracked_buffer(
     Developer Notes
     ---------------
     This function always returns slices thus all buffers in cudf will use
-    `BufferSlice` when copy-on-write is enabled. The slices implement
+    `ExposureTrackedBuffer` when copy-on-write is enabled. The slices implement
     copy-on-write by trigging deep copies when write access is detected
     and multiple slices points to the same exposure tracked buffer.
 
@@ -45,23 +39,23 @@ def as_exposure_tracked_buffer(
         A buffer-like or array-like object that represents C-contiguous memory.
     exposed
         Mark the buffer as permanently exposed.
-    subclass
-        If not None, a subclass of ExposureTrackedBuffer to wrap `data`.
 
     Return
     ------
-    BufferSlice
-        A buffer slice that points to a ExposureTrackedBuffer (or `subclass`),
+    ExposureTrackedBuffer
+        A buffer slice that points to a ExposureTrackedBufferOwner,
         which in turn wraps `data`.
     """
 
     if not hasattr(data, "__cuda_array_interface__"):
         if exposed:
             raise ValueError("cannot created exposed host memory")
-        tracked_buf = ExposureTrackedBuffer._from_host_memory(data)
-        return BufferSlice(owner=tracked_buf, offset=0, size=tracked_buf.size)
+        tracked_buf = ExposureTrackedBufferOwner._from_host_memory(data)
+        return ExposureTrackedBuffer(
+            owner=tracked_buf, offset=0, size=tracked_buf.size
+        )
 
-    owner = get_owner(data, subclass or ExposureTrackedBuffer)
+    owner = get_owner(data, ExposureTrackedBufferOwner)
     if owner is not None:
         # `data` is owned by an exposure tracked buffer
         ptr, size = get_ptr_and_size(data.__cuda_array_interface__)
@@ -70,21 +64,25 @@ def as_exposure_tracked_buffer(
             raise ValueError(
                 "Cannot create a non-empty slice of a null buffer"
             )
-        return BufferSlice(owner=owner, offset=ptr - base_ptr, size=size)
+        return ExposureTrackedBuffer(
+            owner=owner, offset=ptr - base_ptr, size=size
+        )
 
     # `data` is new device memory
-    owner = ExposureTrackedBuffer._from_device_memory(data, exposed=exposed)
-    return BufferSlice(owner=owner, offset=0, size=owner.size)
+    owner = ExposureTrackedBufferOwner._from_device_memory(
+        data, exposed=exposed
+    )
+    return ExposureTrackedBuffer(owner=owner, offset=0, size=owner.size)
 
 
-class ExposureTrackedBuffer(BufferOwner):
+class ExposureTrackedBufferOwner(BufferOwner):
     """A Buffer that tracks its "expose" status.
 
     In order to implement copy-on-write and spillable buffers, we need the
     ability to detect external access to the underlying memory. We say that
     the buffer has been exposed if the device pointer (integer or void*) has
-    been accessed outside of ExposureTrackedBuffer. In this case, we have no
-    control over knowing if the data is being modified by a third-party.
+    been accessed outside of ExposureTrackedBufferOwner. In this case, we have
+    no control over knowing if the data is being modified by a third-party.
 
     Attributes
     ----------
@@ -92,11 +90,11 @@ class ExposureTrackedBuffer(BufferOwner):
         The current exposure status of the buffer. Notice, once the exposure
         status becomes True, it should never change back.
     _slices
-        The set of BufferSlice instances that point to this buffer.
+        The set of ExposureTrackedBuffer instances that point to this buffer.
     """
 
     _exposed: bool
-    _slices: weakref.WeakSet[BufferSlice]
+    _slices: weakref.WeakSet[ExposureTrackedBuffer]
 
     @property
     def exposed(self) -> bool:
@@ -119,24 +117,24 @@ class ExposureTrackedBuffer(BufferOwner):
         return super().__cuda_array_interface__
 
 
-class BufferSlice(Buffer):
-    """A slice (aka. a view) of a exposure tracked buffer.
+class ExposureTrackedBuffer(Buffer):
+    """An exposure tracked buffer.
 
     Parameters
     ----------
     owner
-        The exposure tracked buffer this slice refers to.
+        The owning exposure tracked buffer this refers to.
     offset
         The offset relative to the start memory of owner (in bytes).
     size
         The size of the slice (in bytes)
     """
 
-    _owner: ExposureTrackedBuffer
+    _owner: ExposureTrackedBufferOwner
 
     def __init__(
         self,
-        owner: ExposureTrackedBuffer,
+        owner: ExposureTrackedBufferOwner,
         offset: int,
         size: int,
     ) -> None:
@@ -175,7 +173,7 @@ class BufferSlice(Buffer):
 
         Returns
         -------
-        BufferSlice
+        ExposureTrackedBuffer
             A slice pointing to either a new or the existing owner
             depending on the expose status of the owner and the
             copy-on-write option (see above).
