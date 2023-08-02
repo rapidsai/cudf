@@ -63,6 +63,19 @@ TEST_F(StringsFindTest, Find)
     auto results = cudf::strings::rfind(strings_view, cudf::string_scalar(""));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
+  {
+    auto const targets = cudf::test::strings_column_wrapper({"l", "t", "", "x", "é", "o"});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> expected({2, 0, 0, -1, 1, -1},
+                                                                     {1, 1, 0, 1, 1, 1});
+    auto results = cudf::strings::find(strings_view, cudf::strings_column_view(targets));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> expected({0, 0, 0, 0, 0, 0},
+                                                                     {1, 1, 0, 1, 1, 1});
+    auto results = cudf::strings::find(strings_view, strings_view);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
 }
 
 TEST_F(StringsFindTest, FindLongStrings)
@@ -81,8 +94,18 @@ TEST_F(StringsFindTest, FindLongStrings)
     cudf::test::fixed_width_column_wrapper<cudf::size_type>({7, 28, 0, 11, -1, -1, -1});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 
+  auto targets =
+    cudf::test::strings_column_wrapper({"the", "the", "the", "the", "the", "the", "the"});
+  results = cudf::strings::find(view, cudf::strings_column_view(targets));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+
   results  = cudf::strings::rfind(view, cudf::string_scalar("the"));
   expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>({7, 48, 0, 77, -1, -1, -1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+
+  targets  = cudf::test::strings_column_wrapper({"there", "cat", "the", "", "the", "are", "dog"});
+  results  = cudf::strings::find(view, cudf::strings_column_view(targets));
+  expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>({7, 56, 0, 0, -1, 73, -1});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
@@ -331,6 +354,8 @@ TEST_F(StringsFindTest, ErrorCheck)
   EXPECT_THROW(cudf::strings::find(strings_view, cudf::string_scalar(""), 2, 1), cudf::logic_error);
   EXPECT_THROW(cudf::strings::rfind(strings_view, cudf::string_scalar(""), 2, 1),
                cudf::logic_error);
+  EXPECT_THROW(cudf::strings::find(strings_view, targets_view), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::find(strings_view, strings_view, -1), cudf::logic_error);
 }
 
 class FindParmsTest : public StringsFindTest,
@@ -371,6 +396,17 @@ TEST_P(FindParmsTest, Find)
     results  = cudf::strings::rfind(strings_view, cudf::string_scalar(""), 0, end);
     cudf::test::fixed_width_column_wrapper<cudf::size_type> rexpected({end, 0, end, end, end});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, rexpected);
+  }
+  {
+    std::vector<std::string> h_targets({"l", "", "", "l", "s"});
+    std::vector<cudf::size_type> h_expected;
+    for (std::size_t i = 0; i < h_strings.size(); ++i)
+      h_expected.push_back(static_cast<cudf::size_type>(h_strings[i].find(h_targets[i], position)));
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> expected(h_expected.begin(),
+                                                                     h_expected.end());
+    cudf::test::strings_column_wrapper targets(h_targets.begin(), h_targets.end());
+    auto results = cudf::strings::find(strings_view, cudf::strings_column_view(targets), position);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 
