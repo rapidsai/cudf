@@ -123,11 +123,7 @@ void register_mmaped_buffer(void const* ptr, size_t size)
   }
 
   auto const result = cudaHostRegister(const_cast<void*>(ptr), size, cudaHostRegisterDefault);
-  if (result != cudaSuccess) {
-    CUDF_LOG_WARN("Register mmap buffer: success");
-  } else {
-    CUDF_LOG_WARN("Register mmap buffer: cudaHostRegister failed with error {}", result);
-  }
+  CUDF_LOG_WARN("Register mmap buffer: cudaHostRegister returned {}", result);
 }
 
 /**
