@@ -124,7 +124,6 @@ def _get_groupby_apply_kernel(frame, func, args):
         "types": types,
     }
     kernel_string = _groupby_apply_kernel_string_from_template(frame, args)
-
     kernel = _get_kernel(kernel_string, global_exec_context, None, func)
 
     return kernel, return_type

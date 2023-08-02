@@ -51,6 +51,46 @@ def group_reduction_impl_basic(context, builder, sig, args, function):
     )
 
 
+def group_corr(context, builder, sig, args):
+    """
+    Instruction boilerplate used for calling a groupby correlation
+    """
+    lhs_grp = cgutils.create_struct_proxy(sig.args[0])(
+        context, builder, value=args[0]
+    )
+    rhs_grp = cgutils.create_struct_proxy(sig.args[1])(
+        context, builder, value=args[1]
+    )
+
+    device_func = call_cuda_functions["corr"][
+        (
+            sig.return_type,
+            sig.args[0].group_scalar_type,
+            sig.args[1].group_scalar_type,
+        )
+    ]
+    result = context.compile_internal(
+        builder,
+        device_func,
+        nb_signature(
+            types.float64,
+            types.CPointer(
+                sig.args[0].group_scalar_type
+            ),  # this group calls corr
+            types.CPointer(
+                sig.args[1].group_scalar_type
+            ),  # this group is passed
+            group_size_type,
+        ),
+        (
+            lhs_grp.group_data,
+            rhs_grp.group_data,
+            lhs_grp.size,
+        ),
+    )
+    return result
+
+
 @lower_builtin(Group, types.Array, group_size_type, types.Array)
 def group_constructor(context, builder, sig, args):
     """
@@ -147,3 +187,4 @@ for ty in SUPPORTED_GROUPBY_NUMBA_TYPES:
     cuda_lower("GroupType.idxmin", GroupType(ty, types.int64))(
         cuda_Group_idxmin
     )
+    cuda_lower("GroupType.corr", GroupType(ty), GroupType(ty))(group_corr)
