@@ -68,7 +68,7 @@ struct bpe_equal {
 
 using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
 
-using probe_scheme = cuco::experimental::double_hashing<1, bpe_hasher>;
+using probe_scheme = cuco::experimental::linear_probing<1, bpe_hasher>;
 
 using merge_pairs_map_type = cuco::experimental::static_map<cudf::size_type,
                                                             cudf::size_type,
