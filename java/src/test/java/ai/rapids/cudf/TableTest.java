@@ -8033,6 +8033,17 @@ public class TableTest extends CudfTestBase {
           .withDecimalColumn("_c8", 5)
           .build();
 
+      TableDebug.get().debug("default stderr table0", table0);
+      TableDebug.builder()
+        .withOutput(TableDebug.Output.STDOUT)
+        .build().debug("stdout table0", table0);
+      TableDebug.builder()
+          .withOutput(TableDebug.Output.LOG)
+          .build().debug("slf4j default debug table0", table0);
+      TableDebug.builder()
+          .withOutput(TableDebug.Output.LOG_ERROR)
+          .build().debug("slf4j error table0", table0);
+
       try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
         writer.write(table0);
         writer.write(table0);
