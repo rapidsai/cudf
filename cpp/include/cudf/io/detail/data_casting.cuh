@@ -299,6 +299,39 @@ process_string(in_iterator_t in_begin,
 }
 
 // 1 warp per string.
+// algorithm
+
+// \uXXXX         6->2/3/4
+// \uXXXX\uXXXX  12->2/3/4
+// \"             2->1
+// _              1->1
+//
+// error conditions. (propagate)
+// c=='\' & curr_idx == end_idx-1; ERROR
+// [c-1]=='\' &  get_escape[c]==NEC
+// [c-1]=='\' &  [c]=='u' & end_idx-curr_idx < UNICODE_HEX_DIGIT_COUNT
+// [c-1]=='\' &  [c]=='u' & end_idx-curr_idx >= UNICODE_HEX_DIGIT_COUNT && non-hex
+
+// skip conditions. (scan for size)
+// c=='\' skip.
+// [c-2]=='\' && [c-1]=='u' for [2,1], [3,2] [4,5], [5, 6], skip.
+
+// write conditions. (write to d_buffer)
+// [c-1]!='\' &  [c]!='\' write [c]
+// [c-1]!='\' &  [c]=='\' skip (unnecessary? already covered? in skip conditions)
+// [c-1]=='\' &  [c]!=NEC && [c]!=UNICODE_SEQ, write [c]
+// [c-1]=='\' &  [c]=='u' & end_idx-curr_idx >= UNICODE_HEX_DIGIT_COUNT && hex, DECODE
+// [c+1:4]=curr_hex_val
+//        // if [c+5]=='\' & [c+6]=='u' & end_idx-curr_idx >= UNICODE_HEX_DIGIT_COUNT &&
+//        hex,DECODE [c+7:4]=next_hex_val
+//        // if [c-7]=='\' & [c-6]=='u' & end_idx-curr_idx >= UNICODE_HEX_DIGIT_COUNT &&
+//        hex,DECODE [c-5:4]=prev_hex_val prev_hex_val, curr_hex_val, next_hex_val
+//        // if prev_hex_val in high, curr_hex_val in low, skip.
+//        // if curr_hex_val in high, next_hex_val in low, write u16.
+// if curr_hex_val not in high, write u8.
+// before writing, find size, then intra-warp scan for out_idx
+// propagate offset from 32nd thread to others in warp to carry forward.
+// 1 warp per string.
 template <typename str_tuple_it>
 __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
                                          size_type total_out_strings,
@@ -364,36 +397,6 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
     }
     // auto str_process_info = process_string(in_begin, in_end, d_buffer, options);
 
-    // \uXXXX         6->2/3/4
-    // \uXXXX\uXXXX  12->2/3/4
-    // \"             2->1
-    // _              1->1
-    //
-    // error conditions. (propagate)
-    // c=='\' & curr_idx == end_idx-1; ERROR
-    // [c-1]=='\' &  get_escape[c]==NEC
-    // [c-1]=='\' &  [c]=='u' & end_idx-curr_idx < UNICODE_HEX_DIGIT_COUNT
-    // [c-1]=='\' &  [c]=='u' & end_idx-curr_idx >= UNICODE_HEX_DIGIT_COUNT && non-hex
-
-    // skip conditions. (scan for size)
-    // c=='\' skip.
-    // [c-2]=='\' && [c-1]=='u' for [2,1], [3,2] [4,5], [5, 6], skip.
-
-    // write conditions. (write to d_buffer)
-    // [c-1]!='\' &  [c]!='\' write [c]
-    // [c-1]!='\' &  [c]=='\' skip (unnecessary? already covered? in skip conditions)
-    // [c-1]=='\' &  [c]!=NEC && [c]!=UNICODE_SEQ, write [c]
-    // [c-1]=='\' &  [c]=='u' & end_idx-curr_idx >= UNICODE_HEX_DIGIT_COUNT && hex, DECODE
-    // [c+1:4]=curr_hex_val
-    //        // if [c+5]=='\' & [c+6]=='u' & end_idx-curr_idx >= UNICODE_HEX_DIGIT_COUNT &&
-    //        hex,DECODE [c+7:4]=next_hex_val
-    //        // if [c-7]=='\' & [c-6]=='u' & end_idx-curr_idx >= UNICODE_HEX_DIGIT_COUNT &&
-    //        hex,DECODE [c-5:4]=prev_hex_val prev_hex_val, curr_hex_val, next_hex_val
-    //        // if prev_hex_val in high, curr_hex_val in low, skip.
-    //        // if curr_hex_val in high, next_hex_val in low, write u16.
-    // if curr_hex_val not in high, write u8.
-    // before writing, find size, then intra-warp scan for out_idx
-    // propagate offset from 32nd thread to others in warp to carry forward.
     auto is_hex = [](auto ch) {
       return (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F') || (ch >= 'a' && ch <= 'f');
     };
@@ -622,6 +625,16 @@ struct string_parse {
     }
   }
 };
+
+template <typename T>
+void print_raw(T const* ptr, size_type size, rmm::cuda_stream_view stream)
+{
+  auto h_offsets2 = cudf::detail::make_std_vector_sync(device_span<T const>(ptr, size), stream);
+  for (auto i : h_offsets2)
+    std::cout << i << ",";
+  std::cout << std::endl;
+}
+
 /**
  * @brief Parses the data from an iterator of string views, casting it to the given target data type
  *
@@ -655,14 +668,20 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
   if (col_type == cudf::data_type{cudf::type_id::STRING}) {
     // this utility calls the functor to build the offsets and chars columns;
     // the bitmask and null count may be updated by parse failures
+
+#define WARP_PARALLEL
+#ifndef WARP_PARALLEL
     nvtxRangePush("make_strings_children");
-    // auto [offsets, chars] = cudf::strings::detail::make_strings_children(
-    //   string_parse<decltype(str_tuples)>{
-    //     str_tuples, static_cast<bitmask_type*>(null_mask.data()), null_count_data, options},
-    //   col_size,
-    //   stream,
-    //   mr);
+    auto [offsets, chars] = cudf::strings::detail::make_strings_children(
+      string_parse<decltype(str_tuples)>{
+        str_tuples, static_cast<bitmask_type*>(null_mask.data()), null_count_data, options},
+      col_size,
+      stream,
+      mr);
+    auto& offsets2 = offsets;
+    auto& chars2   = chars;
     nvtxRangePop();
+#else
 
     // {
     nvtxRangePush("string_parallel");
@@ -677,10 +696,7 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
       options,
       d_offsets,
       nullptr);
-    // if (0) {
-    // auto h_offsets2 = cudf::detail::make_std_vector_sync(device_span<size_type const>(d_offsets,
-    // offsets2->size()), stream); for(auto i: h_offsets2) std::cout<<i<<","; std::cout<<std::endl;
-    // }
+    // print_raw(d_offsets, offsets2->size(), stream);
     auto const bytes =
       cudf::detail::sizes_to_offsets(d_offsets, d_offsets + col_size + 1, d_offsets, stream);
 
@@ -700,25 +716,18 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
       d_chars2);
 
     // if(bytes!=chars->size()) {
-    // std::cout<<"new bytes="<<bytes<<std::endl;
-    // auto h_offsets2 = cudf::detail::make_std_vector_sync(device_span<size_type const>(d_offsets,
-    // offsets2->size()), stream); for(auto i: h_offsets2) std::cout<<i<<","; std::cout<<std::endl;
-
-    // auto h_chars2 = cudf::detail::make_std_vector_sync(device_span<char const>(d_chars2, bytes),
-    // stream); for(auto i: h_chars2) std::cout<<i; std::cout<<std::endl;
+    //   std::cout<<"new bytes="<<bytes<<std::endl;
+    //   print_raw(d_offsets, offsets2->size(), stream);
+    //   print_raw(d_chars2, chars2->size(), stream);
     // }
     // if(bytes!=chars->size()) {
-    // std::cout<<"old bytes="<<chars->size()<<std::endl;
-    // auto d_offsetsa = (offsets->mutable_view())
-    // .template data<size_type>();
-    // auto h_offsets = cudf::detail::make_std_vector_sync(device_span<size_type const>(d_offsetsa,
-    // offsets->size()), stream); for(auto i: h_offsets) std::cout<<i<<","; std::cout<<std::endl;
-    // auto d_chars = chars->mutable_view().template data<char>();
-    // auto h_chars = cudf::detail::make_std_vector_sync(device_span<char const>(d_chars,
-    // chars->size()), stream); for(auto i: h_chars) std::cout<<i; std::cout<<std::endl;
+    //   std::cout<<"old bytes="<<chars->size()<<std::endl;
+    //   print_raw(offsets->view().data<size_type>(), offsets->size(), stream);
+    //   print_raw(chars->view().data<size_type>(), chars->size(), stream);
     // }
     nvtxRangePop();
-    // }
+// }
+#endif
 
     return make_strings_column(col_size,
                                std::move(offsets2),
