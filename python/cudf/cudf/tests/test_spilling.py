@@ -21,7 +21,7 @@ import cudf.core.buffer.spill_manager
 import cudf.options
 from cudf.core.abc import Serializable
 from cudf.core.buffer import (
-    Buffer,
+    BufferOwner,
     acquire_spill_lock,
     as_buffer,
     get_spill_lock,
@@ -71,17 +71,17 @@ def single_column_df(target="gpu") -> cudf.DataFrame:
     return ret
 
 
-def single_column_df_data(df: cudf.DataFrame) -> SpillableBuffer:
+def single_column_df_data(df: cudf.DataFrame) -> SpillableBufferSlice:
     """Access `.data` of the column of a standard dataframe"""
     ret = df._data._data["a"].data
-    assert isinstance(ret, SpillableBuffer)
+    assert isinstance(ret, SpillableBufferSlice)
     return ret
 
 
-def single_column_df_base_data(df: cudf.DataFrame) -> SpillableBuffer:
+def single_column_df_base_data(df: cudf.DataFrame) -> SpillableBufferSlice:
     """Access `.base_data` of the column of a standard dataframe"""
     ret = df._data._data["a"].base_data
-    assert isinstance(ret, SpillableBuffer)
+    assert isinstance(ret, SpillableBufferSlice)
     return ret
 
 
@@ -117,7 +117,7 @@ def manager(request):
 
 def test_spillable_buffer(manager: SpillManager):
     buf = as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
-    assert isinstance(buf, SpillableBuffer)
+    assert isinstance(buf, SpillableBufferSlice)
     assert buf.spillable
     buf.mark_exposed()
     assert buf.exposed
@@ -196,10 +196,10 @@ def test_creations(manager: SpillManager):
 def test_spillable_df_groupby(manager: SpillManager):
     df = cudf.DataFrame({"a": [1, 1, 1]})
     gb = df.groupby("a")
-    assert len(single_column_df_base_data(df)._spill_locks) == 0
+    assert len(single_column_df_base_data(df).owner._spill_locks) == 0
     gb._groupby
     # `gb._groupby`, which is cached on `gb`, holds a spill lock
-    assert len(single_column_df_base_data(df)._spill_locks) == 1
+    assert len(single_column_df_base_data(df).owner._spill_locks) == 1
     assert not single_column_df_data(df).spillable
     del gb
     assert single_column_df_data(df).spillable
@@ -375,7 +375,7 @@ def test_get_ptr(manager: SpillManager, target):
         mem = np.empty(10, dtype="u1")
     buf = as_buffer(data=mem, exposed=False)
     assert buf.spillable
-    assert len(buf._spill_locks) == 0
+    assert len(buf.owner._spill_locks) == 0
     with acquire_spill_lock():
         buf.get_ptr(mode="read")
         assert not buf.spillable
@@ -439,7 +439,7 @@ def test_serialize_device(manager, target, view):
     header, frames = df1.device_serialize()
     assert len(frames) == 1
     if target == "gpu":
-        assert isinstance(frames[0], Buffer)
+        assert isinstance(frames[0], BufferOwner)
         assert not single_column_df_data(df1).is_spilled
         assert not single_column_df_data(df1).spillable
         frames[0] = cupy.array(frames[0], copy=True)
@@ -497,9 +497,9 @@ def test_serialize_cuda_dataframe(manager: SpillManager):
         df1, serializers=("cuda",), on_error="raise"
     )
     buf: SpillableBufferSlice = single_column_df_data(df1)
-    assert len(buf._base._spill_locks) == 1
+    assert len(buf.owner._spill_locks) == 1
     assert len(frames) == 1
-    assert isinstance(frames[0], Buffer)
+    assert isinstance(frames[0], BufferOwner)
     assert frames[0].get_ptr(mode="read") == buf.get_ptr(mode="read")
 
     frames[0] = cupy.array(frames[0], copy=True)
@@ -542,8 +542,9 @@ def test_df_transpose(manager: SpillManager):
 def test_as_buffer_of_spillable_buffer(manager: SpillManager):
     data = cupy.arange(10, dtype="u1")
     b1 = as_buffer(data, exposed=False)
-    assert isinstance(b1, SpillableBuffer)
-    assert b1.owner is data
+    assert isinstance(b1, SpillableBufferSlice)
+    assert isinstance(b1.owner, SpillableBuffer)
+    assert b1.owner.owner is data
     b2 = as_buffer(b1)
     assert b1 is b2
 
@@ -558,7 +559,7 @@ def test_as_buffer_of_spillable_buffer(manager: SpillManager):
     with acquire_spill_lock():
         b3 = as_buffer(b1.get_ptr(mode="read"), size=b1.size, owner=b1)
     assert isinstance(b3, SpillableBufferSlice)
-    assert b3.owner is b1
+    assert b3.owner is b1.owner
 
     b4 = as_buffer(
         b1.get_ptr(mode="write") + data.itemsize,
@@ -566,12 +567,12 @@ def test_as_buffer_of_spillable_buffer(manager: SpillManager):
         owner=b3,
     )
     assert isinstance(b4, SpillableBufferSlice)
-    assert b4.owner is b1
+    assert b4.owner is b1.owner
     assert all(cupy.array(b4.memoryview()) == data[1:])
 
     b5 = as_buffer(b4.get_ptr(mode="write"), size=b4.size - 1, owner=b4)
     assert isinstance(b5, SpillableBufferSlice)
-    assert b5.owner is b1
+    assert b5.owner is b1.owner
     assert all(cupy.array(b5.memoryview()) == data[1:-1])
 
 
@@ -593,7 +594,7 @@ def test_memoryview_slice(manager: SpillManager, dtype):
 def test_statistics(manager: SpillManager):
     assert len(manager.statistics.spill_totals) == 0
 
-    buf: SpillableBuffer = as_buffer(
+    buf: SpillableBufferSlice = as_buffer(
         data=rmm.DeviceBuffer(size=10), exposed=False
     )
     buf.spill(target="cpu")
@@ -618,7 +619,7 @@ def test_statistics(manager: SpillManager):
 def test_statistics_expose(manager: SpillManager):
     assert len(manager.statistics.spill_totals) == 0
 
-    buffers: List[SpillableBuffer] = [
+    buffers: List[SpillableBufferSlice] = [
         as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
         for _ in range(10)
     ]
@@ -644,7 +645,7 @@ def test_statistics_expose(manager: SpillManager):
     assert stat.spilled_nbytes == 0
 
     # Create and spill 10 new buffers
-    buffers: List[SpillableBuffer] = [
+    buffers: List[SpillableBufferSlice] = [
         as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
         for _ in range(10)
     ]

@@ -5,7 +5,17 @@ from __future__ import annotations
 import math
 import pickle
 from types import SimpleNamespace
-from typing import Any, Dict, Literal, Mapping, Optional, Sequence, Tuple
+from typing import (
+    Any,
+    Dict,
+    Literal,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    TypeVar,
+)
 
 import numpy
 from typing_extensions import Self
@@ -15,6 +25,32 @@ import rmm
 import cudf
 from cudf.core.abc import Serializable
 from cudf.utils.string import format_bytes
+
+T = TypeVar("T")
+
+
+def get_owner(data, klass: Type[T]) -> Optional[T]:
+    """Get the owner of `data`, if any exist
+
+    Search through the stack of data owners in order to find an
+    owner of type `klass` (not subclasses).
+
+    Parameters
+    ----------
+    data
+        The data object
+
+    Return
+    ------
+    klass or None
+        The owner of `data` if `klass` or None.
+    """
+
+    if type(data) is klass:
+        return data
+    if hasattr(data, "owner"):
+        return get_owner(data.owner, klass)
+    return None
 
 
 def host_memory_allocation(nbytes: int) -> memoryview:
@@ -90,21 +126,12 @@ def cuda_array_interface_wrapper(
     )
 
 
-class Buffer(Serializable):
-    """A Buffer represents device memory.
-
-    Use the factory function `as_buffer` to create a Buffer instance.
-    """
+class BufferOwner(Serializable):
+    """A owning buffer represents device memory."""
 
     _ptr: int
     _size: int
     _owner: object
-
-    def __init__(self):
-        raise ValueError(
-            f"do not create a {self.__class__} directly, please "
-            "use the factory function `cudf.core.buffer.as_buffer`"
-        )
 
     @classmethod
     def _from_device_memory(cls, data: Any) -> Self:
@@ -168,53 +195,6 @@ class Buffer(Serializable):
         # Create from device memory
         return cls._from_device_memory(buf)
 
-    def _getitem(self, offset: int, size: int) -> Self:
-        """
-        Sub-classes can overwrite this to implement __getitem__
-        without having to handle non-slice inputs.
-        """
-        return self._from_device_memory(
-            cuda_array_interface_wrapper(
-                ptr=self.get_ptr(mode="read") + offset,
-                size=size,
-                owner=self.owner,
-            )
-        )
-
-    def __getitem__(self, key: slice) -> Self:
-        """Create a new slice of the buffer."""
-        if not isinstance(key, slice):
-            raise TypeError(
-                "Argument 'key' has incorrect type "
-                f"(expected slice, got {key.__class__.__name__})"
-            )
-        start, stop, step = key.indices(self.size)
-        if step != 1:
-            raise ValueError("slice must be C-contiguous")
-        return self._getitem(offset=start, size=stop - start)
-
-    def copy(self, deep: bool = True) -> Self:
-        """
-        Return a copy of Buffer.
-
-        Parameters
-        ----------
-        deep : bool, default True
-            If True, returns a deep copy of the underlying Buffer data.
-            If False, returns a shallow copy of the Buffer pointing to
-            the same underlying data.
-
-        Returns
-        -------
-        Buffer
-        """
-        if deep:
-            return self._from_device_memory(
-                rmm.DeviceBuffer(ptr=self.get_ptr(mode="read"), size=self.size)
-            )
-        else:
-            return self[:]
-
     @property
     def size(self) -> int:
         """Size of the buffer in bytes."""
@@ -277,6 +257,131 @@ class Buffer(Serializable):
         )
         return memoryview(host_buf).toreadonly()
 
+    def __repr__(self) -> str:
+        return (
+            f"<{self.__class__.__name__} size={format_bytes(self._size)} "
+            f"ptr={hex(self._ptr)} owner={repr(self._owner)}>"
+        )
+
+
+class Buffer(Serializable):
+    """A Buffer represents memory.
+
+    Use the factory function `as_buffer` to create a Buffer instance.
+    """
+
+    def __init__(
+        self,
+        *,
+        owner: BufferOwner,
+        offset: int,
+        size: int,
+    ) -> None:
+        if size < 0:
+            raise ValueError("size cannot be negative")
+        if offset < 0:
+            raise ValueError("offset cannot be negative")
+        if offset + size > owner.size:
+            raise ValueError(
+                "offset+size cannot be greater than the size of owner"
+            )
+        self._owner = owner
+        self._offset = offset
+        self._size = size
+
+    @property
+    def size(self) -> int:
+        """Size of the buffer in bytes."""
+        return self._size
+
+    @property
+    def nbytes(self) -> int:
+        """Size of the buffer in bytes."""
+        return self._size
+
+    @property
+    def owner(self) -> Any:
+        """Object owning the memory of the buffer."""
+        return self._owner
+
+    def __getitem__(self, key: slice) -> Self:
+        """Create a new slice of the buffer."""
+        if not isinstance(key, slice):
+            raise TypeError(
+                "Argument 'key' has incorrect type "
+                f"(expected slice, got {key.__class__.__name__})"
+            )
+        start, stop, step = key.indices(self.size)
+        if step != 1:
+            raise ValueError("slice must be C-contiguous")
+        return self.__class__(
+            owner=self._owner, offset=self._offset + start, size=stop - start
+        )
+
+    def get_ptr(self, *, mode: Literal["read", "write"]) -> int:
+        return self._owner.get_ptr(mode=mode) + self._offset
+
+    def memoryview(
+        self, *, offset: int = 0, size: Optional[int] = None
+    ) -> memoryview:
+        size = self._size if size is None else size
+        return self._owner.memoryview(offset=self._offset + offset, size=size)
+
+    def copy(self, deep: bool = True) -> Self:
+        """Return a copy of Buffer.
+
+        What actually happens when `deep == False` depends on the
+        "copy_on_write" option. When copy-on-write is enabled, a shallow copy
+        becomes a deep copy if the buffer has been exposed. This is because we
+        have no control over knowing if the data is being modified when the
+        buffer has been exposed to third-party.
+
+        Parameters
+        ----------
+        deep : bool, default True
+            The semantics when copy-on-write is disabled:
+                - If deep=True, returns a deep copy of the underlying data.
+                - If deep=False, returns a shallow copy of the Buffer pointing
+                  to the same underlying data.
+            The semantics when copy-on-write is enabled:
+                - From the users perspective, always a deep copy of the
+                  underlying data. However, the data isn't actually copied
+                  until someone writers to the returned buffer.
+
+        Returns
+        -------
+        BufferSlice
+            A slice pointing to either a new or the existing owner
+            depending on the expose status of the owner and the
+            copy-on-write option (see above).
+        """
+
+        # When doing a shallow copy, we just return a new slice
+        if not deep:
+            return self.__class__(
+                owner=self._owner, offset=self._offset, size=self._size
+            )
+
+        # Otherwise, we create a new copy of the memory this slice represents
+        owner = self._owner._from_device_memory(
+            rmm.DeviceBuffer(
+                ptr=self._owner.get_ptr(mode="read") + self._offset,
+                size=self.size,
+            )
+        )
+        return self.__class__(owner=owner, offset=0, size=owner.size)
+
+    @property
+    def __cuda_array_interface__(self) -> Mapping:
+        """Implementation of the CUDA Array Interface."""
+        return {
+            "data": (self.get_ptr(mode="write"), False),
+            "shape": (self.size,),
+            "strides": None,
+            "typestr": "|u1",
+            "version": 0,
+        }
+
     def serialize(self) -> Tuple[dict, list]:
         """Serialize the buffer into header and frames.
 
@@ -291,6 +396,7 @@ class Buffer(Serializable):
         """
         header: Dict[str, Any] = {}
         header["type-serialized"] = pickle.dumps(type(self))
+        header["owner-type-serialized"] = pickle.dumps(type(self._owner))
         header["frame_count"] = 1
         frames = [self]
         return header, frames
@@ -317,16 +423,21 @@ class Buffer(Serializable):
         if isinstance(frame, cls):
             return frame  # The frame is already deserialized
 
+        owner_type: BufferOwner = pickle.loads(header["owner-type-serialized"])
         if hasattr(frame, "__cuda_array_interface__"):
-            return cls._from_device_memory(frame)
-        return cls._from_host_memory(frame)
+            owner = owner_type._from_device_memory(frame)
+        else:
+            owner = owner_type._from_host_memory(frame)
+        return cls(
+            owner=owner,
+            offset=0,
+            size=owner.size,
+        )
 
     def __repr__(self) -> str:
-        klass = self.__class__
-        name = f"{klass.__module__}.{klass.__qualname__}"
         return (
-            f"<{name} size={format_bytes(self._size)} "
-            f"ptr={hex(self._ptr)} owner={repr(self._owner)}>"
+            f"<{self.__class__.__name__} size={format_bytes(self._size)} "
+            f"offset={format_bytes(self._offset)} of {self._owner}>"
         )
 
 

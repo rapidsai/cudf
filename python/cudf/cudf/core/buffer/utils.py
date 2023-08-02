@@ -6,7 +6,11 @@ import threading
 from contextlib import ContextDecorator
 from typing import Any, Dict, Optional, Tuple, Union
 
-from cudf.core.buffer.buffer import Buffer, cuda_array_interface_wrapper
+from cudf.core.buffer.buffer import (
+    Buffer,
+    BufferOwner,
+    cuda_array_interface_wrapper,
+)
 from cudf.core.buffer.exposure_tracked_buffer import as_exposure_tracked_buffer
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.buffer.spillable_buffer import SpillLock, as_spillable_buffer
@@ -78,8 +82,14 @@ def as_buffer(
     if get_global_manager() is not None:
         return as_spillable_buffer(data, exposed=exposed)
     if hasattr(data, "__cuda_array_interface__"):
-        return Buffer._from_device_memory(data)
-    return Buffer._from_host_memory(data)
+        owner = BufferOwner._from_device_memory(data)
+    else:
+        owner = BufferOwner._from_host_memory(data)
+    return Buffer(
+        owner=owner,
+        offset=0,
+        size=owner.size,
+    )
 
 
 _thread_spill_locks: Dict[int, Tuple[Optional[SpillLock], int]] = {}
