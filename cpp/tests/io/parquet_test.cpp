@@ -3733,10 +3733,10 @@ TEST_F(ParquetWriterTest, CheckPageRowsTooSmall)
   cudf::io::parquet::FileMetaData fmd;
 
   read_footer(source, &fmd);
-  CUDF_EXPECTS(fmd.row_groups.size() > 0, "No row groups found");
-  CUDF_EXPECTS(fmd.row_groups[0].columns.size() == 1, "Invalid number of columns");
+  ASSERT_TRUE(fmd.row_groups.size() > 0);
+  ASSERT_TRUE(fmd.row_groups[0].columns.size() == 1);
   auto const& first_chunk = fmd.row_groups[0].columns[0].meta_data;
-  CUDF_EXPECTS(first_chunk.data_page_offset > 0, "Invalid location for first data page");
+  ASSERT_TRUE(first_chunk.data_page_offset > 0);
 
   // read first data page header.  sizeof(PageHeader) is not exact, but the thrift encoded
   // version should be smaller than size of the struct.
