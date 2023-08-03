@@ -22,7 +22,6 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/table/table.hpp>
@@ -43,6 +42,8 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <cub/cub.cuh>
+
+#include <cuda/atomic>
 
 #include <algorithm>
 
@@ -126,7 +127,7 @@ __launch_bounds__(block_size) __global__
 
     cudf::size_type tmp_block_sum = 0;
     // get output location using a scan of the mask result
-    const cudf::size_type local_index = block_scan_mask<block_size>(mask_true, tmp_block_sum);
+    cudf::size_type const local_index = block_scan_mask<block_size>(mask_true, tmp_block_sum);
     block_sum += tmp_block_sum;
 
     if (has_validity) {
@@ -141,7 +142,7 @@ __launch_bounds__(block_size) __global__
       // scatter validity mask to shared memory
       if (has_validity and input_view.is_valid(tid)) {
         // determine aligned offset for this warp's output
-        const cudf::size_type aligned_offset      = block_offset % cudf::detail::warp_size;
+        cudf::size_type const aligned_offset      = block_offset % cudf::detail::warp_size;
         temp_valids[local_index + aligned_offset] = true;
       }
     }
@@ -161,10 +162,10 @@ __launch_bounds__(block_size) __global__
 
       constexpr int num_warps = block_size / cudf::detail::warp_size;
       // account for partial blocks with non-warp-aligned offsets
-      const int last_index = tmp_block_sum + (block_offset % cudf::detail::warp_size) - 1;
-      const int last_warp  = min(num_warps, last_index / cudf::detail::warp_size);
-      const int wid        = threadIdx.x / cudf::detail::warp_size;
-      const int lane       = threadIdx.x % cudf::detail::warp_size;
+      int const last_index = tmp_block_sum + (block_offset % cudf::detail::warp_size) - 1;
+      int const last_warp  = min(num_warps, last_index / cudf::detail::warp_size);
+      int const wid        = threadIdx.x / cudf::detail::warp_size;
+      int const lane       = threadIdx.x % cudf::detail::warp_size;
 
       cudf::size_type tmp_warp_valid_counts{0};
 
@@ -181,7 +182,9 @@ __launch_bounds__(block_size) __global__
           if (wid > 0 && wid < last_warp)
             output_valid[valid_index] = valid_warp;
           else {
-            atomicOr(&output_valid[valid_index], valid_warp);
+            cuda::atomic_ref<cudf::bitmask_type, cuda::thread_scope_device> ref{
+              output_valid[valid_index]};
+            ref.fetch_or(valid_warp, cuda::std::memory_order_relaxed);
           }
         }
 
@@ -190,7 +193,9 @@ __launch_bounds__(block_size) __global__
           uint32_t valid_warp = __ballot_sync(0xffff'ffffu, temp_valids[block_size + threadIdx.x]);
           if (lane == 0 && valid_warp != 0) {
             tmp_warp_valid_counts += __popc(valid_warp);
-            atomicOr(&output_valid[valid_index + num_warps], valid_warp);
+            cuda::atomic_ref<cudf::bitmask_type, cuda::thread_scope_device> ref{
+              output_valid[valid_index + num_warps]};
+            ref.fetch_or(valid_warp, cuda::std::memory_order_relaxed);
           }
         }
       }
@@ -206,7 +211,8 @@ __launch_bounds__(block_size) __global__
     cudf::detail::single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_counts);
 
   if (threadIdx.x == 0) {  // one thread computes and adds to null count
-    atomicAdd(output_null_count, block_sum - block_valid_count);
+    cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*output_null_count};
+    ref.fetch_add(block_sum - block_valid_count, cuda::std::memory_order_relaxed);
   }
 }
 

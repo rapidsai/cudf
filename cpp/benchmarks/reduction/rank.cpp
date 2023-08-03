@@ -15,7 +15,6 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
 
 #include <cudf/detail/scan.hpp>
 #include <cudf/filling.hpp>

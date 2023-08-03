@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ std::unique_ptr<data_chunk_source> make_source(datasource& data);
  * @return the data chunk source for the provided host data. It copies data from the host to the
  *         device.
  */
-std::unique_ptr<data_chunk_source> make_source(host_span<const char> data);
+std::unique_ptr<data_chunk_source> make_source(host_span<char const> data);
 
 /**
  * @brief Creates a data source capable of producing device-buffered views of the file

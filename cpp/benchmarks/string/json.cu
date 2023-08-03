@@ -32,7 +32,7 @@
 
 class JsonPath : public cudf::benchmark {};
 
-const std::vector<std::string> Books{
+std::vector<std::string> const Books{
   R"json({
 "category": "reference",
 "author": "Nigel Rees",
@@ -60,7 +60,7 @@ const std::vector<std::string> Books{
 "price": 22.99
 })json"};
 constexpr int Approx_book_size = 110;
-const std::vector<std::string> Bicycles{
+std::vector<std::string> const Bicycles{
   R"json({"color": "red", "price": 9.95})json",
   R"json({"color": "green", "price": 29.95})json",
   R"json({"color": "blue", "price": 399.95})json",

@@ -21,6 +21,7 @@
 #pragma once
 
 #include <cudf/io/detail/utils.hpp>
+#include <cudf/io/parquet_metadata.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 
@@ -208,8 +209,17 @@ class writer {
    * @return A parquet-compatible blob that contains the data for all rowgroups in the list
    */
   static std::unique_ptr<std::vector<uint8_t>> merge_row_group_metadata(
-    const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
+    std::vector<std::unique_ptr<std::vector<uint8_t>>> const& metadata_list);
 };
 
+/**
+ * @brief Reads metadata of parquet dataset.
+ *
+ * @param sources Dataset sources to read from
+ *
+ * @return parquet_metadata with parquet schema, number of rows, number of row groups and key-value
+ * metadata.
+ */
+parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> const> sources);
 }  // namespace detail::parquet
 }  // namespace cudf::io

@@ -83,12 +83,8 @@ public final class Table implements AutoCloseable {
    */
   public Table(long[] cudfColumns) {
     assert cudfColumns != null && cudfColumns.length > 0 : "CudfColumns can't be null or empty";
-    this.columns = new ColumnVector[cudfColumns.length];
+    this.columns = ColumnVector.getColumnVectorsFromPointers(cudfColumns);
     try {
-      for (int i = 0; i < cudfColumns.length; i++) {
-        this.columns[i] = new ColumnVector(cudfColumns[i]);
-        cudfColumns[i] = 0;
-      }
       long[] views = new long[columns.length];
       for (int i = 0; i < columns.length; i++) {
         views[i] = columns[i].getNativeView();
@@ -96,7 +92,13 @@ public final class Table implements AutoCloseable {
       nativeHandle = createCudfTableView(views);
       this.rows = columns[0].getRowCount();
     } catch (Throwable t) {
-      ColumnView.cleanupColumnViews(cudfColumns, this.columns);
+      for (ColumnVector column : columns) {
+        try {
+          column.close();
+        } catch (Throwable s) {
+          t.addSuppressed(s);
+        }
+      }
       throw t;
     }
   }
@@ -543,6 +545,8 @@ public final class Table implements AutoCloseable {
       int[] minPeriods,
       int[] preceding,
       int[] following,
+      boolean[] unboundedPreceding,
+      boolean[] unboundedFollowing,
       boolean ignoreNullKeys) throws CudfException;
 
   private static native long[] rangeRollingWindowAggregate(long inputTable, int[] keyIndices, int[] orderByIndices, boolean[] isOrderByAscending,
@@ -750,6 +754,8 @@ public final class Table implements AutoCloseable {
                                                                 boolean genUniqKeys);
 
   private static native long[] sample(long tableHandle, long n, boolean replacement, long seed);
+
+  private static native int distinctCount(long handle, boolean nullsEqual);
 
   /////////////////////////////////////////////////////////////////////////////
   // TABLE CREATION APIs
@@ -2161,6 +2167,22 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Count how many rows in the table are distinct from one another.
+   * @param nullEqual if nulls should be considered equal to each other or not.
+   */
+  public int distinctCount(NullEquality nullsEqual) {
+    return distinctCount(nativeHandle, nullsEqual.nullsEqual);
+  }
+
+  /**
+   * Count how many rows in the table are distinct from one another.
+   * Nulls are considered to be equal to one another.
+   */
+  public int distinctCount() {
+    return distinctCount(nativeHandle, true);
+  }
+
+  /**
    * Split a table at given boundaries, but the result of each split has memory that is laid out
    * in a contiguous range of memory.  This allows for us to optimize copying the data in a single
    * operation.
@@ -3444,17 +3466,7 @@ public final class Table implements AutoCloseable {
    */
   public ColumnVector[] convertToRows() {
     long[] ptrs = convertToRows(nativeHandle);
-    ColumnVector[] ret = new ColumnVector[ptrs.length];
-    try {
-      for (int i = 0; i < ptrs.length; i++) {
-        ret[i] = new ColumnVector(ptrs[i]);
-        ptrs[i] = 0;
-      }
-    } catch (Throwable t) {
-      ColumnView.cleanupColumnViews(ptrs, ret);
-      throw t;
-    }
-    return ret;
+    return ColumnVector.getColumnVectorsFromPointers(ptrs);
   }
 
   /**
@@ -3533,17 +3545,7 @@ public final class Table implements AutoCloseable {
    */
   public ColumnVector[] convertToRowsFixedWidthOptimized() {
     long[] ptrs = convertToRowsFixedWidthOptimized(nativeHandle);
-    ColumnVector[] ret = new ColumnVector[ptrs.length];
-    try {
-      for (int i = 0; i < ptrs.length; i++) {
-        ret[i] = new ColumnVector(ptrs[i]);
-        ptrs[i] = 0;
-      }
-    } catch (Throwable t) {
-      ColumnView.cleanupColumnViews(ptrs, ret);
-      throw t;
-    }
-    return ret;
+    return ColumnVector.getColumnVectorsFromPointers(ptrs);
   }
 
   /**
@@ -3608,13 +3610,21 @@ public final class Table implements AutoCloseable {
     Table result = null;
     try {
       for (int i = 0; i < columns.length; i++) {
-        columns[i] = ColumnVector.fromViewWithContiguousAllocation(columnViewAddresses[i], data);
+        long columnViewAddress = columnViewAddresses[i];
+        // setting address to zero, so we don't clean it in case of an exception as it
+        // will be cleaned up by the ColumnView  constructor
         columnViewAddresses[i] = 0;
+        columns[i] = ColumnVector.fromViewWithContiguousAllocation(columnViewAddress, data);
       }
       result = new Table(columns);
     } catch (Throwable t) {
-      ColumnView.cleanupColumnViews(columnViewAddresses, columns);
-      throw t;
+      try {
+        ColumnView.cleanupColumnViews(columnViewAddresses, columns, t);
+      } catch (Throwable s){
+        t.addSuppressed(s);
+      } finally {
+        throw t;
+      }
     }
 
     // close columns to leave the resulting table responsible for freeing underlying columns
@@ -3902,6 +3912,8 @@ public final class Table implements AutoCloseable {
       try {
         int[] aggPrecedingWindows = new int[totalOps];
         int[] aggFollowingWindows = new int[totalOps];
+        boolean[] unboundedPreceding = new boolean[totalOps];
+        boolean[] unboundedFollowing = new boolean[totalOps];
         int[] aggMinPeriods = new int[totalOps];
         long[] defaultOutputs = new long[totalOps];
         int opIndex = 0;
@@ -3914,6 +3926,8 @@ public final class Table implements AutoCloseable {
             aggPrecedingWindows[opIndex] = p == null || !p.isValid() ? 0 : p.getInt();
             Scalar f = operation.getWindowOptions().getFollowingScalar();
             aggFollowingWindows[opIndex] = f == null || ! f.isValid() ? 1 : f.getInt();
+            unboundedPreceding[opIndex] = operation.getWindowOptions().isUnboundedPreceding();
+            unboundedFollowing[opIndex] = operation.getWindowOptions().isUnboundedFollowing();
             aggMinPeriods[opIndex] = operation.getWindowOptions().getMinPeriods();
             defaultOutputs[opIndex] = operation.getDefaultOutput();
             opIndex++;
@@ -3927,6 +3941,7 @@ public final class Table implements AutoCloseable {
             defaultOutputs,
             aggColumnIndexes,
             aggInstances, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
+            unboundedPreceding, unboundedFollowing,
             groupByOptions.getIgnoreNullKeys()))) {
           // prepare the final table
           ColumnVector[] finalCols = new ColumnVector[windowAggregates.length];
@@ -4027,6 +4042,8 @@ public final class Table implements AutoCloseable {
           case UINT16:
           case UINT32:
           case UINT64:
+          case FLOAT32:
+          case FLOAT64:
           case TIMESTAMP_MILLISECONDS:
           case TIMESTAMP_SECONDS:
           case TIMESTAMP_DAYS:

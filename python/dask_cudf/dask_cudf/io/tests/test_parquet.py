@@ -159,12 +159,6 @@ def test_strings(tmpdir):
     read_df = dask_cudf.read_parquet(fn, index=["a"])
     dd.assert_eq(ddf2, read_df.compute().to_pandas())
 
-    read_df_cats = dask_cudf.read_parquet(
-        fn, index=["a"], strings_to_categorical=True
-    )
-    dd.assert_eq(read_df_cats.dtypes, read_df_cats.compute().dtypes)
-    dd.assert_eq(read_df_cats.dtypes[0], "int32")
-
 
 def test_dask_timeseries_from_pandas(tmpdir):
 
@@ -574,3 +568,30 @@ def test_nullable_schema_mismatch(tmpdir):
         )
         expect = pd.read_parquet([path0, path1])
     dd.assert_eq(ddf, expect, check_index=False)
+
+
+def test_parquet_read_filter_and_project(tmpdir):
+    # Filter on columns that are not included
+    # in the current column projection
+
+    # Write parquet data
+    path = str(tmpdir.join("test.parquet"))
+    df = cudf.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5] * 10,
+            "b": [0, 1, 2, 3, 4] * 10,
+            "c": range(50),
+            "d": [6, 7] * 25,
+            "e": [8, 9] * 25,
+        }
+    )
+    df.to_parquet(path)
+
+    # Read back with filter and projection
+    columns = ["b"]
+    filters = [[("a", "==", 5), ("c", ">", 20)]]
+    got = dask_cudf.read_parquet(path, columns=columns, filters=filters)
+
+    # Check result
+    expected = df[(df.a == 5) & (df.c > 20)][columns].reset_index(drop=True)
+    dd.assert_eq(got, expected)

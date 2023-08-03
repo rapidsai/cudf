@@ -108,7 +108,7 @@ struct dst_buf_info {
   int num_rows;  // # of rows to be copied(which may be different from num_elements in the case of
                  // validity or offset buffers)
 
-  int src_element_index;   // element index to start reading from from my associated source buffer
+  int src_element_index;   // element index to start reading from my associated source buffer
   std::size_t dst_offset;  // my offset into the per-partition allocation
   int value_shift;         // amount to shift values down by (for offset buffers)
   int bit_shift;           // # of bits to shift right by (for validity buffers)
