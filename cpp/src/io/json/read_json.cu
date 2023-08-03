@@ -17,6 +17,7 @@
 #include "read_json.hpp"
 
 #include <io/comp/io_uncomp.hpp>
+#include <io/json/legacy/read_json.hpp>
 #include <io/json/nested_json.hpp>
 
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -30,7 +31,7 @@
 
 #include <numeric>
 
-namespace cudf::io::detail::json::experimental {
+namespace cudf::io::json::detail {
 
 size_t sources_size(host_span<std::unique_ptr<datasource>> const sources,
                     size_t range_offset,
@@ -44,7 +45,7 @@ size_t sources_size(host_span<std::unique_ptr<datasource>> const sources,
   });
 }
 
-rmm::device_uvector<char> ingest_raw_input(host_span<std::unique_ptr<datasource>> const& sources,
+rmm::device_uvector<char> ingest_raw_input(host_span<std::unique_ptr<datasource>> sources,
                                            compression_type compression,
                                            size_t range_offset,
                                            size_t range_size,
@@ -197,6 +198,11 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
+
+  if (reader_opts.is_enabled_legacy()) {
+    return legacy::read_json(sources, reader_opts, stream, mr);
+  }
+
   if (not should_load_whole_source(reader_opts)) {
     CUDF_EXPECTS(reader_opts.is_enabled_lines(),
                  "Specifying a byte range is supported only for JSON Lines");
@@ -213,8 +219,8 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
 
   auto const buffer = get_record_range_raw_input(sources, reader_opts, stream);
 
-  return cudf::io::json::detail::device_parse_nested_json(buffer, reader_opts, stream, mr);
+  return device_parse_nested_json(buffer, reader_opts, stream, mr);
   // For debug purposes, use host_parse_nested_json()
 }
 
-}  // namespace cudf::io::detail::json::experimental
+}  // namespace cudf::io::json::detail

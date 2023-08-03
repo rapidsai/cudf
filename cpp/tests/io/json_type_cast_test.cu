@@ -79,14 +79,14 @@ TEST_F(JSONTypeCastTest, String)
   auto null_mask =
     std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size()));
 
-  auto str_col = cudf::io::json::experimental::detail::parse_data(svs.data(),
-                                                                  svs.size(),
-                                                                  type,
-                                                                  std::move(null_mask),
-                                                                  0,
-                                                                  default_json_options().view(),
-                                                                  stream,
-                                                                  mr);
+  auto str_col = cudf::io::json::detail::parse_data(svs.data(),
+                                                    svs.size(),
+                                                    type,
+                                                    std::move(null_mask),
+                                                    0,
+                                                    default_json_options().view(),
+                                                    stream,
+                                                    mr);
 
   auto out_valids =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 2 and i != 4; });
@@ -115,14 +115,14 @@ TEST_F(JSONTypeCastTest, Int)
   auto null_mask =
     std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size()));
 
-  auto col = cudf::io::json::experimental::detail::parse_data(svs.data(),
-                                                              svs.size(),
-                                                              type,
-                                                              std::move(null_mask),
-                                                              0,
-                                                              default_json_options().view(),
-                                                              stream,
-                                                              mr);
+  auto col = cudf::io::json::detail::parse_data(svs.data(),
+                                                svs.size(),
+                                                type,
+                                                std::move(null_mask),
+                                                0,
+                                                default_json_options().view(),
+                                                stream,
+                                                mr);
 
   auto expected =
     cudf::test::fixed_width_column_wrapper<int64_t>{{1, 2, 3, 1, 5, 0}, {1, 0, 1, 1, 1, 1}};
@@ -158,14 +158,14 @@ TEST_F(JSONTypeCastTest, StringEscapes)
   auto null_mask =
     std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size()));
 
-  auto col = cudf::io::json::experimental::detail::parse_data(svs.data(),
-                                                              svs.size(),
-                                                              type,
-                                                              std::move(null_mask),
-                                                              0,
-                                                              default_json_options().view(),
-                                                              stream,
-                                                              mr);
+  auto col = cudf::io::json::detail::parse_data(svs.data(),
+                                                svs.size(),
+                                                type,
+                                                std::move(null_mask),
+                                                0,
+                                                default_json_options().view(),
+                                                stream,
+                                                mr);
 
   auto expected = cudf::test::strings_column_wrapper{
     {"🚀", "Ａ🚀ＡＡ", "", "", "", "\\", "➩", "", "\"\\/\b\f\n\r\t"},
