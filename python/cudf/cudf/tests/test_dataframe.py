@@ -10250,7 +10250,7 @@ def test_dataframe_from_pandas_sparse():
     with pytest.raises(NotImplementedError):
         cudf.DataFrame(pdf)
 
-        
+
 def test_dataframe_constructor_unbounded_sequence():
     class A:
         def __getitem__(self, key):
