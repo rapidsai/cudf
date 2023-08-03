@@ -37,7 +37,7 @@
 #include <memory>
 
 using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
-using gather_map_t      = std::vector<cudf::offset_type>;
+using gather_map_t      = std::vector<cudf::size_type>;
 using offsets           = cudf::test::fixed_width_column_wrapper<int32_t>;
 using structs           = cudf::test::structs_column_wrapper;
 using strings           = cudf::test::strings_column_wrapper;
@@ -54,7 +54,7 @@ using numerics = cudf::test::fixed_width_column_wrapper<T, int32_t>;
 template <typename T>
 using lists = cudf::test::lists_column_wrapper<T, int32_t>;
 
-auto constexpr null_index = std::numeric_limits<cudf::offset_type>::max();
+auto constexpr null_index = std::numeric_limits<cudf::size_type>::max();
 
 struct StructGatherTest : public cudf::test::BaseFixture {};
 

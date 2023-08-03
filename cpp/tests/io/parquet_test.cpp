@@ -2687,8 +2687,8 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsMixedTypes)
   constexpr int floats_per_row = 4;
   auto c1_offset_iter          = cudf::detail::make_counting_transform_iterator(
     0, [floats_per_row](cudf::size_type idx) { return idx * floats_per_row; });
-  cudf::test::fixed_width_column_wrapper<cudf::offset_type> c1_offsets(
-    c1_offset_iter, c1_offset_iter + num_rows + 1);
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> c1_offsets(c1_offset_iter,
+                                                                     c1_offset_iter + num_rows + 1);
   cudf::test::fixed_width_column_wrapper<float> c1_floats(
     values, values + (num_rows * floats_per_row), valids);
   auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
@@ -2711,8 +2711,8 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsMixedTypes)
   cudf::test::strings_column_wrapper string_col{string_iter, string_iter + num_string_rows};
   auto offset_iter = cudf::detail::make_counting_transform_iterator(
     0, [string_per_row](cudf::size_type idx) { return idx * string_per_row; });
-  cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets(offset_iter,
-                                                                    offset_iter + num_rows + 1);
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets(offset_iter,
+                                                                  offset_iter + num_rows + 1);
 
   auto _c3_valids =
     cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 200; });
@@ -3707,6 +3707,44 @@ TEST_F(ParquetWriterTest, CheckPageRowsAdjusted)
     source, {first_chunk.data_page_offset, sizeof(cudf::io::parquet::PageHeader), 0});
 
   EXPECT_LE(ph.data_page_header.num_values, rows_per_page);
+}
+
+TEST_F(ParquetWriterTest, CheckPageRowsTooSmall)
+{
+  constexpr auto rows_per_page = 1'000;
+  constexpr auto fragment_size = 5'000;
+  constexpr auto num_rows      = 3 * rows_per_page;
+  const std::string s1(32, 'a');
+  auto col0_elements =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return s1; });
+  auto col0 = cudf::test::strings_column_wrapper(col0_elements, col0_elements + num_rows);
+
+  auto const expected = table_view{{col0}};
+
+  auto const filepath = temp_env->get_temp_filepath("CheckPageRowsTooSmall.parquet");
+  const cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .max_page_fragment_size(fragment_size)
+      .max_page_size_rows(rows_per_page);
+  cudf::io::write_parquet(out_opts);
+
+  // check that file is written correctly when rows/page < fragment size
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+
+  read_footer(source, &fmd);
+  ASSERT_TRUE(fmd.row_groups.size() > 0);
+  ASSERT_TRUE(fmd.row_groups[0].columns.size() == 1);
+  auto const& first_chunk = fmd.row_groups[0].columns[0].meta_data;
+  ASSERT_TRUE(first_chunk.data_page_offset > 0);
+
+  // read first data page header.  sizeof(PageHeader) is not exact, but the thrift encoded
+  // version should be smaller than size of the struct.
+  auto const ph = read_page_header(
+    source, {first_chunk.data_page_offset, sizeof(cudf::io::parquet::PageHeader), 0});
+
+  // there should be only one page since the fragment size is larger than rows_per_page
+  EXPECT_EQ(ph.data_page_header.num_values, num_rows);
 }
 
 TEST_F(ParquetWriterTest, Decimal128Stats)
@@ -4996,8 +5034,8 @@ TEST_F(ParquetReaderTest, NestingOptimizationTest)
       0, [depth, rows_per_level](cudf::size_type i) { return i * rows_per_level; });
     total_values_produced += (num_rows + 1);
 
-    cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets(offsets_iter,
-                                                                      offsets_iter + num_rows + 1);
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets(offsets_iter,
+                                                                    offsets_iter + num_rows + 1);
     auto c   = cudf::make_lists_column(num_rows, offsets.release(), std::move(prev_col), 0, {});
     prev_col = std::move(c);
   }

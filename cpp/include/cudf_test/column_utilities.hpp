@@ -261,8 +261,8 @@ inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to
       cudf::device_span<char const>(scv.chars().data<char>(), scv.chars().size()),
       cudf::get_default_stream());
     auto const h_offsets = cudf::detail::make_std_vector_sync(
-      cudf::device_span<cudf::offset_type const>(
-        scv.offsets().data<cudf::offset_type>() + scv.offset(), scv.size() + 1),
+      cudf::device_span<cudf::size_type const>(scv.offsets().data<cudf::size_type>() + scv.offset(),
+                                               scv.size() + 1),
       cudf::get_default_stream());
 
     // build std::string vector from chars and offsets

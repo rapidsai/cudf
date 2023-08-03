@@ -191,7 +191,7 @@ struct from_durations_fn {
   column_device_view d_durations;
   format_item const* d_format_items;
   size_type items_count;
-  offset_type* d_offsets{};
+  size_type* d_offsets{};
   char* d_chars{};
 
   __device__ int8_t format_length(char format_char, duration_component const* const timeparts) const
