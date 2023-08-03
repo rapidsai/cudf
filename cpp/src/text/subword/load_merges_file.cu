@@ -101,7 +101,7 @@ std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
   // https://github.com/NVIDIA/cuCollections/blob/6ec8b6dcdeceea07ab4456d32461a05c18864411/include/cuco/static_map.cuh#L179-L182
   auto merge_pairs_map = std::make_unique<merge_pairs_map_type>(
     static_cast<size_t>(input.size() * 2),  // capacity is 2x;
-    cuco::empty_key{std::numeric_limits<cudf::hash_value_type>::max()},
+    cuco::empty_key{-1},
     cuco::empty_value{-1},                  // empty value is not used
     bpe_equal{*d_strings},
     probe_scheme{bpe_hasher{*d_strings}},
