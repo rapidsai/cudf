@@ -15,7 +15,6 @@ DartConfiguration.tcl
 *.manifest
 *.spec
 .nfs*
-.clangd
 
 ## Python build directories & artifacts
 dask-worker-space/
@@ -175,3 +174,4 @@ jupyter_execute
 
 # clang tooling
 compile_commands.json
+.clangd/
