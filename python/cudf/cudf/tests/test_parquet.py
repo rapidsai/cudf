@@ -1289,21 +1289,28 @@ def test_parquet_reader_v2(tmpdir, simple_pdf):
 @pytest.mark.parametrize("add_nulls", [True, False])
 def test_delta_binary(add_nulls, tmpdir):
     nrows = 100000
+    null_frequency = 0.25 if add_nulls else 0
+
     # Create a pandas dataframe with random data of mixed types
-    test_pdf = pd.DataFrame(
-        {
-            "col_int32": pd.Series(
-                np.random.randint(0, 0x7FFFFFFF, nrows), dtype="Int32"
-            ),
-            "col_int64": pd.Series(
-                np.random.randint(0, 0x7FFFFFFFFFFFFFFF, nrows), dtype="Int64"
-            ),
-        },
+    arrow_table = dg.rand_dataframe(
+        dtypes_meta=[
+            {
+                "dtype": "int32",
+                "null_frequency": null_frequency,
+                "cardinality": nrows,
+            },
+            {
+                "dtype": "int64",
+                "null_frequency": null_frequency,
+                "cardinality": nrows,
+            },
+        ],
+        rows=nrows,
+        use_threads=False,
     )
-    if add_nulls:
-        for i in range(0, int(nrows / 4)):
-            test_pdf.iloc[np.random.randint(0, nrows), 0] = pd.NA
-            test_pdf.iloc[np.random.randint(0, nrows), 1] = pd.NA
+    # Roundabout conversion to pandas to preserve nulls/data types
+    cudf_table = cudf.DataFrame.from_arrow(arrow_table)
+    test_pdf = cudf_table.to_pandas(nullable=True)
     pdf_fname = tmpdir.join("pdfv2.parquet")
     test_pdf.to_parquet(
         pdf_fname,
