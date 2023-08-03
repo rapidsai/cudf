@@ -62,26 +62,26 @@ void BM_lists_scatter(::benchmark::State& state)
                    target_base_col->mutable_view().end<TypeParam>());
 
   auto source_offsets =
-    make_fixed_width_column(cudf::data_type{cudf::type_to_id<cudf::offset_type>()},
+    make_fixed_width_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
                             num_rows + 1,
                             cudf::mask_state::UNALLOCATED,
                             stream,
                             mr);
   auto target_offsets =
-    make_fixed_width_column(cudf::data_type{cudf::type_to_id<cudf::offset_type>()},
+    make_fixed_width_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
                             num_rows + 1,
                             cudf::mask_state::UNALLOCATED,
                             stream,
                             mr);
 
   thrust::sequence(rmm::exec_policy(stream),
-                   source_offsets->mutable_view().begin<cudf::offset_type>(),
-                   source_offsets->mutable_view().end<cudf::offset_type>(),
+                   source_offsets->mutable_view().begin<cudf::size_type>(),
+                   source_offsets->mutable_view().end<cudf::size_type>(),
                    0,
                    num_elements_per_row);
   thrust::sequence(rmm::exec_policy(stream),
-                   target_offsets->mutable_view().begin<cudf::offset_type>(),
-                   target_offsets->mutable_view().end<cudf::offset_type>(),
+                   target_offsets->mutable_view().begin<cudf::size_type>(),
+                   target_offsets->mutable_view().end<cudf::size_type>(),
                    0,
                    num_elements_per_row);
 

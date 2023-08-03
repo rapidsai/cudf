@@ -67,9 +67,7 @@ class tdigest_column_view : private column_view {
   tdigest_column_view& operator=(tdigest_column_view&&) = default;
 
   using column_view::size;
-  static_assert(std::is_same_v<offset_type, size_type>,
-                "offset_type is expected to be the same as size_type.");
-  using offset_iterator = offset_type const*;  ///< Iterator over offsets
+  using offset_iterator = size_type const*;  ///< Iterator over offsets
 
   // mean and weight column indices within tdigest inner struct columns
   static constexpr size_type mean_column_index{0};    ///< Mean column index
