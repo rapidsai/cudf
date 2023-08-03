@@ -10249,3 +10249,16 @@ def test_dataframe_from_pandas_sparse():
     pdf = pd.DataFrame(range(2), dtype=pd.SparseDtype(np.int64, 0))
     with pytest.raises(NotImplementedError):
         cudf.DataFrame(pdf)
+
+        
+def test_dataframe_constructor_unbounded_sequence():
+    class A:
+        def __getitem__(self, key):
+            return 1
+
+    with pytest.raises(TypeError):
+        cudf.DataFrame([A()])
+
+    with pytest.raises(TypeError):
+        cudf.DataFrame({"a": A()})
+
