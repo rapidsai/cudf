@@ -443,8 +443,8 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
   // key-value pairs: uses node_id itself as node_type. (unique node_id for a field name due to
   // hashing)
   auto const iter = cudf::detail::make_counting_transform_iterator(
-    0, cuda::proclaim_return_type<cuco::pair<size_type&, size_type&>>([] __device__(size_type i) {
-      return cuco::make_pair(i, i);
+    0, cuda::proclaim_return_type<cuco::pair<size_type, size_type>>([] __device__(size_type i) {
+      return cuco::pair(i, i);
     }));
 
   auto const is_field_name_node = cuda::proclaim_return_type<bool>(
