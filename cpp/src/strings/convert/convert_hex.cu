@@ -129,7 +129,7 @@ void dispatch_hex_to_integers_fn::operator()<bool>(column_device_view const&,
 template <typename IntegerType>
 struct integer_to_hex_fn {
   column_device_view const d_column;
-  offset_type* d_offsets{};
+  size_type* d_offsets{};
   char* d_chars{};
 
   __device__ void byte_to_hex(uint8_t byte, char* hex)
@@ -173,7 +173,7 @@ struct integer_to_hex_fn {
         --byte_index;
       }
     } else {
-      d_offsets[idx] = static_cast<offset_type>(bytes) * 2;  // 2 hex characters per byte
+      d_offsets[idx] = static_cast<size_type>(bytes) * 2;  // 2 hex characters per byte
     }
   }
 };

@@ -432,9 +432,15 @@ __global__ void __launch_bounds__(128)
                                 max_RLE_page_size(col_g.num_def_level_bits(), num_vals) +
                                   max_RLE_page_size(col_g.num_rep_level_bits(), num_vals));
 
-      if (num_rows >= ck_g.num_rows ||
-          (values_in_page > 0 && (page_size + fragment_data_size > this_max_page_size)) ||
-          rows_in_page + frag_g.num_rows > max_page_size_rows) {
+      // checks to see when we need to close the current page and start a new one
+      auto const is_last_chunk          = num_rows >= ck_g.num_rows;
+      auto const is_page_bytes_exceeded = page_size + fragment_data_size > this_max_page_size;
+      auto const is_page_rows_exceeded  = rows_in_page + frag_g.num_rows > max_page_size_rows;
+      // only check for limit overflow if there's already at least one fragment for this page
+      auto const is_page_too_big =
+        values_in_page > 0 && (is_page_bytes_exceeded || is_page_rows_exceeded);
+
+      if (is_last_chunk || is_page_too_big) {
         if (ck_g.use_dictionary) {
           // Additional byte to store entry bit width
           page_size = 1 + max_RLE_page_size(ck_g.dict_rle_bits, values_in_page);

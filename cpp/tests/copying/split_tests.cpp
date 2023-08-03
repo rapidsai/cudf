@@ -2071,8 +2071,7 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitList)
 
   // list<struct<float>>
   {
-    cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets{
-      0, 2, 5, 7, 10, 12, 14, 17, 20};
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets{0, 2, 5, 7, 10, 12, 14, 17, 20};
     cudf::test::fixed_width_column_wrapper<float> floats{1,  2,  3,  4,  5,  6,  7,  8,  9,  10,
                                                          11, 12, 13, 14, 15, 16, 17, 18, 19, 20};
     cudf::test::structs_column_wrapper data({floats});
@@ -2130,8 +2129,7 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitStructs)
 
   // struct<list<struct>>
   {
-    cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets{
-      0, 2, 5, 7, 10, 12, 14, 17, 20};
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets{0, 2, 5, 7, 10, 12, 14, 17, 20};
     cudf::test::fixed_width_column_wrapper<float> floats{1,  2,  3,  4,  5,  6,  7,  8,  9,  10,
                                                          11, 12, 13, 14, 15, 16, 17, 18, 19, 20};
     cudf::test::structs_column_wrapper data({floats});
