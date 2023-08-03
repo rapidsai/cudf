@@ -39,7 +39,7 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
 {
   if (size == 0) {
     return make_lists_column(0,
-                             make_empty_column(type_to_id<offset_type>()),
+                             make_empty_column(type_to_id<size_type>()),
                              empty_like(value.view()),
                              0,
                              cudf::detail::create_null_mask(0, mask_state::UNALLOCATED, stream, mr),
@@ -50,7 +50,7 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
 
   // Handcraft a 1-row column
   auto offsets = make_numeric_column(
-    data_type{type_to_id<offset_type>()}, 2, mask_state::UNALLOCATED, stream, mr_final);
+    data_type{type_to_id<size_type>()}, 2, mask_state::UNALLOCATED, stream, mr_final);
   auto m_offsets = offsets->mutable_view();
   thrust::sequence(rmm::exec_policy(stream),
                    m_offsets.begin<size_type>(),
@@ -90,7 +90,7 @@ std::unique_ptr<column> make_empty_lists_column(data_type child_type,
                                                 rmm::cuda_stream_view stream,
                                                 rmm::mr::device_memory_resource* mr)
 {
-  auto offsets = make_empty_column(data_type(type_to_id<offset_type>()));
+  auto offsets = make_empty_column(data_type(type_to_id<size_type>()));
   auto child   = make_empty_column(child_type);
   return make_lists_column(
     0, std::move(offsets), std::move(child), 0, rmm::device_buffer{}, stream, mr);
@@ -103,7 +103,7 @@ std::unique_ptr<column> make_all_nulls_lists_column(size_type size,
 {
   auto offsets = [&] {
     auto offsets_buff =
-      cudf::detail::make_zeroed_device_uvector_async<offset_type>(size + 1, stream, mr);
+      cudf::detail::make_zeroed_device_uvector_async<size_type>(size + 1, stream, mr);
     return std::make_unique<column>(std::move(offsets_buff), rmm::device_buffer{}, 0);
   }();
   auto child     = make_empty_column(child_type);
