@@ -48,6 +48,20 @@ struct compression_result {
 enum class gzip_header_included { NO, YES };
 
 /**
+ * @brief The value used for padding a data buffer such that its size will be multiple of it.
+ *
+ * Padding is necessary for input/output buffers of several compression/decompression kernels
+ * (inflate_kernel and nvcomp snappy). Such kernels operate on aligned data pointers, which require
+ * padding to the buffers so that the pointers can shift along the address space to satisfy their
+ * alignment requirement.
+ *
+ * In the meantime, it is not entirely clear why such padding is needed. We need to further
+ * investigate and implement a better fix rather than just padding the buffer.
+ * See https://github.com/rapidsai/cudf/issues/13605.
+ */
+constexpr std::size_t BUFFER_PADDING_MULTIPLE{8};
+
+/**
  * @brief Interface for decompressing GZIP-compressed data
  *
  * Multiple, independent chunks of compressed data can be decompressed by using

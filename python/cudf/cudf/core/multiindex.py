@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import numbers
+import operator
 import pickle
 import warnings
 from collections import abc
@@ -285,8 +286,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             level = [self._level_index_from_level(lev) for lev in level]
 
         existing_names = list(self.names)
-        for i, l in enumerate(level):
-            existing_names[l] = names[i]
+        for i, lev in enumerate(level):
+            existing_names[lev] = names[i]
         names = existing_names
 
         return self._set_names(names=names, inplace=inplace)
@@ -403,6 +404,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         # TODO: Update message when set_levels is implemented.
         # https://github.com/rapidsai/cudf/issues/12307
         if levels is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "parameter levels is deprecated and will be removed in a "
                 "future version.",
@@ -412,6 +414,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         # TODO: Update message when set_codes is implemented.
         # https://github.com/rapidsai/cudf/issues/12308
         if codes is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "parameter codes is deprecated and will be removed in a "
                 "future version.",
@@ -419,6 +422,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             )
 
         if dtype is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "parameter dtype is deprecated and will be removed in a "
                 "future version. Use the astype method instead.",
@@ -426,7 +430,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             )
 
         dtype = object if dtype is None else dtype
-        if not pd.core.dtypes.common.is_object_dtype(dtype):
+        if not pd.api.types.is_object_dtype(dtype):
             raise TypeError("Dtype for MultiIndex only supports object type.")
 
         # ._data needs to be rebuilt
@@ -559,6 +563,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         if self._codes is None:
             self._compute_levels_and_codes()
         return self._codes
+
+    def get_slice_bound(self, label, side, kind=None):
+        raise NotImplementedError()
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -769,7 +776,20 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             ],
             axis=1,
         )
-        result = lookup.merge(data_table)["idx"]
+        # Sort indices in pandas compatible mode
+        # because we want the indices to be fetched
+        # in a deterministic order.
+        # TODO: Remove this after merge/join
+        # obtain deterministic ordering.
+        if cudf.get_option("mode.pandas_compatible"):
+            lookup_order = "_" + "_".join(map(str, lookup._data.names))
+            lookup[lookup_order] = column.arange(len(lookup))
+            postprocess = operator.methodcaller(
+                "sort_values", by=[lookup_order, "idx"]
+            )
+        else:
+            postprocess = lambda r: r  # noqa: E731
+        result = postprocess(lookup.merge(data_table))["idx"]
         # Avoid computing levels unless the result of the merge is empty,
         # which suggests that a KeyError should be raised.
         if len(result) == 0:
@@ -1510,7 +1530,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def is_unique(self):
         return len(self) == len(self.unique())
 
-    @property  # type: ignore
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def is_monotonic_increasing(self):
         """
@@ -1519,7 +1539,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         """
         return self._is_sorted(ascending=None, null_position=None)
 
-    @property  # type: ignore
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def is_monotonic_decreasing(self):
         """

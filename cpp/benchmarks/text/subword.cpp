@@ -30,7 +30,7 @@
 static std::string create_hash_vocab_file()
 {
   std::string dir_template{std::filesystem::temp_directory_path().string()};
-  if (const char* env_p = std::getenv("WORKSPACE")) dir_template = env_p;
+  if (char const* env_p = std::getenv("WORKSPACE")) dir_template = env_p;
   std::string hash_file = dir_template + "/hash_vocab.txt";
   // create a fake hashed vocab text file for this test
   // this only works with words in the strings in the benchmark code below
@@ -55,7 +55,7 @@ static std::string create_hash_vocab_file()
 static void BM_subword_tokenizer(benchmark::State& state)
 {
   auto const nrows = static_cast<cudf::size_type>(state.range(0));
-  std::vector<const char*> h_strings(nrows, "This is a test ");
+  std::vector<char const*> h_strings(nrows, "This is a test ");
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   std::string hash_file = create_hash_vocab_file();
   std::vector<uint32_t> offsets{14};

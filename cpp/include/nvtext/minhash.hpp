@@ -40,7 +40,7 @@ namespace nvtext {
  * @throw std::invalid_argument if hash_function is not HASH_MURMUR3
  *
  * @param input Strings column to compute minhash
- * @param seed  Seed value used for the MurmurHash3_32 algorithm
+ * @param seed  Seed value used for the MurmurHash3_x86_32 algorithm
  * @param width The character width used for apply substrings;
  *              Default is 4 characters.
  * @param hash_function Hash algorithm to use;
@@ -72,7 +72,7 @@ std::unique_ptr<cudf::column> minhash(
  * @throw std::overflow_error if `seeds * input.size()` exceeds the column size limit
  *
  * @param input Strings column to compute minhash
- * @param seeds Seed values used for the MurmurHash3_32 algorithm
+ * @param seeds Seed values used for the MurmurHash3_x86_32 algorithm
  * @param width The character width used for apply substrings;
  *              Default is 4 characters.
  * @param hash_function Hash algorithm to use;

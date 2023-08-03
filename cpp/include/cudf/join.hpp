@@ -34,10 +34,11 @@
 namespace cudf {
 
 // forward declaration
-namespace detail {
+namespace hashing::detail {
 template <typename T>
-class MurmurHash3_32;
-
+class MurmurHash3_x86_32;
+}  // namespace hashing::detail
+namespace detail {
 template <typename T>
 class hash_join;
 }  // namespace detail
@@ -272,7 +273,7 @@ enum class nullable_join : bool { YES, NO };
 class hash_join {
  public:
   using impl_type = typename cudf::detail::hash_join<
-    cudf::detail::MurmurHash3_32<cudf::hash_value_type>>;  ///< Implementation type
+    cudf::hashing::detail::MurmurHash3_x86_32<cudf::hash_value_type>>;  ///< Implementation type
 
   hash_join() = delete;
   ~hash_join();
@@ -298,7 +299,7 @@ class hash_join {
   /**
    * @copydoc hash_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view)
    *
-   * @param has_nulls Flag to indicate if the there exists any nulls in the `build` table or
+   * @param has_nulls Flag to indicate if there exists any nulls in the `build` table or
    *        any `probe` table that will be used later for join
    */
   hash_join(cudf::table_view const& build,
@@ -322,7 +323,7 @@ class hash_join {
    *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
    * the result of performing an inner join between two tables with `build` and `probe`
-   * as the the join keys .
+   * as the join keys .
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
@@ -347,7 +348,7 @@ class hash_join {
    *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
    * the result of performing a left join between two tables with `build` and `probe`
-   * as the the join keys .
+   * as the join keys .
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
@@ -372,7 +373,7 @@ class hash_join {
    *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
    * the result of performing a full join between two tables with `build` and `probe`
-   * as the the join keys .
+   * as the join keys .
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
@@ -392,7 +393,7 @@ class hash_join {
    * constructed with null check.
    *
    * @return The exact number of output when performing an inner join between two tables with
-   * `build` and `probe` as the the join keys .
+   * `build` and `probe` as the join keys .
    */
   [[nodiscard]] std::size_t inner_join_size(
     cudf::table_view const& probe, rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
@@ -408,7 +409,7 @@ class hash_join {
    * constructed with null check.
    *
    * @return The exact number of output when performing a left join between two tables with `build`
-   * and `probe` as the the join keys .
+   * and `probe` as the join keys .
    */
   [[nodiscard]] std::size_t left_join_size(
     cudf::table_view const& probe, rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
@@ -426,7 +427,7 @@ class hash_join {
    * constructed with null check.
    *
    * @return The exact number of output when performing a full join between two tables with `build`
-   * and `probe` as the the join keys .
+   * and `probe` as the join keys .
    */
   std::size_t full_join_size(
     cudf::table_view const& probe,
@@ -434,7 +435,7 @@ class hash_join {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
  private:
-  const std::unique_ptr<const impl_type> _impl;
+  const std::unique_ptr<impl_type const> _impl;
 };
 
 /**

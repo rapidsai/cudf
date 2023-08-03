@@ -22,7 +22,7 @@
 #include "rolling_collect_list.cuh"
 #include "rolling_jit.hpp"
 
-#include <reductions/struct_minmax_util.cuh>
+#include <reductions/nested_type_minmax_util.cuh>
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -745,7 +745,7 @@ class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggre
   // MIN aggregations with strings are processed in 2 passes. The first pass performs
   // the rolling operation on a ARGMIN aggregation to generate indices instead of values.
   // Then a second pass uses those indices to gather the final strings.  This step
-  // translates the the MIN -> ARGMIN aggregation
+  // translates the MIN -> ARGMIN aggregation
   std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                   cudf::detail::min_aggregation const&) override
   {
@@ -759,7 +759,7 @@ class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggre
   // MAX aggregations with strings are processed in 2 passes. The first pass performs
   // the rolling operation on a ARGMAX aggregation to generate indices instead of values.
   // Then a second pass uses those indices to gather the final strings.  This step
-  // translates the the MAX -> ARGMAX aggregation
+  // translates the MAX -> ARGMAX aggregation
   std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                   cudf::detail::max_aggregation const&) override
   {

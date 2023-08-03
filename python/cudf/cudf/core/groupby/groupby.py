@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 import cudf
+from cudf import _lib as libcudf
 from cudf._lib import groupby as libgroupby
 from cudf._lib.null_mask import bitmask_or
 from cudf._lib.reshape import interleave_columns
@@ -23,6 +24,7 @@ from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
 from cudf.core.column.column import ColumnBase, arange, as_column
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
@@ -273,6 +275,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     def __iter__(self):
         if isinstance(self._by, list) and len(self._by) == 1:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "In a future version of cudf, a length 1 tuple will be "
                 "returned when iterating over a groupby with a grouper equal "
@@ -568,6 +571,28 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if self._sort:
             result = result.sort_index()
+        else:
+            if cudf.get_option(
+                "mode.pandas_compatible"
+            ) and not libgroupby._is_all_scan_aggregate(normalized_aggs):
+                # Even with `sort=False`, pandas guarantees that
+                # groupby preserves the order of rows within each group.
+                left_cols = list(
+                    self.grouping.keys.drop_duplicates()._data.columns
+                )
+                right_cols = list(result_index._data.columns)
+                join_keys = [
+                    _match_join_keys(lcol, rcol, "left")
+                    for lcol, rcol in zip(left_cols, right_cols)
+                ]
+                # TODO: In future, see if we can centralize
+                # logic else where that has similar patterns.
+                join_keys = map(list, zip(*join_keys))
+                _, indices = libcudf.join.join(
+                    *join_keys,
+                    how="left",
+                )
+                result = result.take(indices)
 
         if not self._as_index:
             result = result.reset_index()
@@ -1006,6 +1031,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     as_column(group_offsets),
                     [],
                     [],
+                    stable=True,
                 )
                 indices = cp.asarray(indices.data_array_view(mode="read"))
             # Which indices are we going to want?
@@ -1740,7 +1766,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             val3  0.714575  1.000000  1.000000
         """
 
-        if not method.lower() in ("pearson",):
+        if method.lower() not in ("pearson",):
             raise NotImplementedError(
                 "Only pearson correlation is currently supported"
             )
@@ -2037,6 +2063,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         if limit is not None:
             raise NotImplementedError("Does not support limit param yet.")
 
+        # Do not remove until pandas 2.0 support is added.
         warnings.warn(
             "pad is deprecated and will be removed in a future version. "
             "Use ffill instead.",
@@ -2073,6 +2100,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         if limit is not None:
             raise NotImplementedError("Does not support limit param yet.")
 
+        # Do not remove until pandas 2.0 support is added.
         warnings.warn(
             "backfill is deprecated and will be removed in a future version. "
             "Use bfill instead.",
@@ -2253,6 +2281,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if fill_method in ("pad", "backfill"):
             alternative = "ffill" if fill_method == "pad" else "bfill"
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 f"{fill_method} is deprecated and will be removed in a future "
                 f"version. Use f{alternative} instead.",
@@ -2310,6 +2339,7 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
             dropna=self._dropna,
             sort=self._sort,
             group_keys=self._group_keys,
+            as_index=self._as_index,
         )
 
 

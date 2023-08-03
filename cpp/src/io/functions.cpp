@@ -31,6 +31,7 @@
 #include <cudf/io/orc.hpp>
 #include <cudf/io/orc_metadata.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/parquet_metadata.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -412,7 +413,7 @@ table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_
   auto reader      = std::make_unique<detail_orc::reader>(
     std::move(datasources), options, cudf::get_default_stream(), mr);
 
-  return reader->read(options, cudf::get_default_stream());
+  return reader->read(options);
 }
 
 /**
@@ -482,6 +483,14 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
     std::move(datasources), options, cudf::get_default_stream(), mr);
 
   return reader->read(options);
+}
+
+parquet_metadata read_parquet_metadata(source_info const& src_info)
+{
+  CUDF_FUNC_RANGE();
+
+  auto datasources = make_datasources(src_info);
+  return detail_parquet::read_parquet_metadata(datasources);
 }
 
 /**

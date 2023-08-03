@@ -387,7 +387,7 @@ TEST_F(OrcWriterTest, MultiColumn)
   auto filepath = temp_env->get_temp_filepath("OrcMultiColumn.orc");
   cudf::io::orc_writer_options out_opts =
     cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&expected_metadata);
+      .metadata(expected_metadata);
   cudf::io::write_orc(out_opts);
 
   cudf::io::orc_reader_options in_opts =
@@ -454,7 +454,7 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls)
   auto filepath = temp_env->get_temp_filepath("OrcMultiColumnWithNulls.orc");
   cudf::io::orc_writer_options out_opts =
     cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&expected_metadata);
+      .metadata(expected_metadata);
   cudf::io::write_orc(out_opts);
 
   cudf::io::orc_reader_options in_opts =
@@ -512,7 +512,7 @@ TEST_F(OrcWriterTest, Strings)
   auto filepath = temp_env->get_temp_filepath("OrcStrings.orc");
   cudf::io::orc_writer_options out_opts =
     cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&expected_metadata);
+      .metadata(expected_metadata);
   cudf::io::write_orc(out_opts);
 
   cudf::io::orc_reader_options in_opts =
@@ -564,7 +564,7 @@ TEST_F(OrcWriterTest, SlicedTable)
   auto filepath = temp_env->get_temp_filepath("SlicedTable.orc");
   cudf::io::orc_writer_options out_opts =
     cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected_slice)
-      .metadata(&expected_metadata);
+      .metadata(expected_metadata);
   cudf::io::write_orc(out_opts);
 
   cudf::io::orc_reader_options in_opts =
@@ -589,7 +589,7 @@ TEST_F(OrcWriterTest, HostBuffer)
   std::vector<char> out_buffer;
   cudf::io::orc_writer_options out_opts =
     cudf::io::orc_writer_options::builder(cudf::io::sink_info(&out_buffer), expected)
-      .metadata(&expected_metadata);
+      .metadata(expected_metadata);
   cudf::io::write_orc(out_opts);
 
   cudf::io::orc_reader_options in_opts =
@@ -760,7 +760,7 @@ TEST_F(OrcChunkedWriterTest, Metadata)
   auto filepath = temp_env->get_temp_filepath("ChunkedMetadata.orc");
   cudf::io::chunked_orc_writer_options opts =
     cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{filepath})
-      .metadata(&expected_metadata);
+      .metadata(expected_metadata);
   cudf::io::orc_chunked_writer(opts).write(expected).write(expected);
 
   cudf::io::orc_reader_options read_opts =
@@ -1068,7 +1068,7 @@ TEST_F(OrcWriterTest, SlicedValidMask)
   auto filepath = temp_env->get_temp_filepath("OrcStrings.orc");
   cudf::io::orc_writer_options out_opts =
     cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, tbl)
-      .metadata(&expected_metadata);
+      .metadata(expected_metadata);
   cudf::io::write_orc(out_opts);
 
   cudf::io::orc_reader_options in_opts =
@@ -1432,7 +1432,7 @@ TEST_F(OrcWriterTest, TestMap)
   auto filepath = temp_env->get_temp_filepath("MapColumn.orc");
   cudf::io::orc_writer_options out_opts =
     cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&expected_metadata);
+      .metadata(expected_metadata);
   cudf::io::write_orc(out_opts);
 
   cudf::io::orc_reader_options in_opts =
@@ -1462,7 +1462,7 @@ TEST_F(OrcReaderTest, NestedColumnSelection)
   auto filepath = temp_env->get_temp_filepath("OrcNestedSelection.orc");
   cudf::io::orc_writer_options out_opts =
     cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&expected_metadata);
+      .metadata(std::move(expected_metadata));
   cudf::io::write_orc(out_opts);
 
   cudf::io::orc_reader_options in_opts =
@@ -1497,7 +1497,7 @@ TEST_F(OrcReaderTest, DecimalOptions)
   auto filepath = temp_env->get_temp_filepath("OrcDecimalOptions.orc");
   cudf::io::orc_writer_options out_opts =
     cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&expected_metadata);
+      .metadata(std::move(expected_metadata));
   cudf::io::write_orc(out_opts);
 
   cudf::io::orc_reader_options valid_opts =
@@ -1544,7 +1544,7 @@ TEST_F(OrcWriterTest, DecimalOptionsNested)
   auto filepath = temp_env->get_temp_filepath("OrcMultiColumn.orc");
   cudf::io::orc_writer_options out_opts =
     cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&expected_metadata);
+      .metadata(std::move(expected_metadata));
   cudf::io::write_orc(out_opts);
 
   cudf::io::orc_reader_options in_opts =
@@ -1597,7 +1597,7 @@ TEST_F(OrcMetadataReaderTest, TestBasic)
   auto filepath = temp_env->get_temp_filepath("MetadataTest.orc");
   cudf::io::orc_writer_options out_opts =
     cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&expected_metadata);
+      .metadata(std::move(expected_metadata));
   cudf::io::write_orc(out_opts);
 
   auto meta = read_orc_metadata(cudf::io::source_info{filepath});
@@ -1644,7 +1644,7 @@ TEST_F(OrcMetadataReaderTest, TestNested)
   auto filepath = temp_env->get_temp_filepath("MetadataTest.orc");
   cudf::io::orc_writer_options out_opts =
     cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&expected_metadata);
+      .metadata(std::move(expected_metadata));
   cudf::io::write_orc(out_opts);
 
   auto meta = read_orc_metadata(cudf::io::source_info{filepath});
@@ -1803,6 +1803,61 @@ TEST_F(OrcWriterTest, EmptyRowGroup)
   cudf::io::orc_reader_options in_opts =
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
   auto result = cudf::io::read_orc(in_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+TEST_F(OrcWriterTest, NoNullsAsNonNullable)
+{
+  auto valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  column_wrapper<int32_t> col{{1, 2, 3}, valids};
+  table_view expected({col});
+
+  cudf::io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].set_nullability(false);
+
+  auto filepath = temp_env->get_temp_filepath("NonNullable.orc");
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .metadata(std::move(expected_metadata));
+  // Writer should be able to write a column without nulls as non-nullable
+  EXPECT_NO_THROW(cudf::io::write_orc(out_opts));
+}
+
+TEST_F(OrcWriterTest, SlicedStringColumn)
+{
+  std::vector<char const*> strings{"a", "bc", "def", "longer", "strings", "at the end"};
+  str_col col(strings.begin(), strings.end());
+  table_view expected({col});
+
+  // Slice the table to include the longer strings
+  auto expected_slice = cudf::slice(expected, {2, 6});
+
+  auto filepath = temp_env->get_temp_filepath("SlicedTable.orc");
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected_slice);
+  cudf::io::write_orc(out_opts);
+
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_orc(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_slice, result.tbl->view());
+}
+
+TEST_F(OrcWriterTest, EmptyChildStringColumn)
+{
+  list_col<cudf::string_view> col{{}, {}};
+  table_view expected({col});
+
+  auto filepath = temp_env->get_temp_filepath("OrcEmptyChildStringColumn.orc");
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_orc(out_opts);
+
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false);
+  auto result = cudf::io::read_orc(in_opts);
+
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
