@@ -113,6 +113,16 @@ def test_delocalize(unit, tz):
     assert_eq(expect, got)
 
 
+def test_delocalize_naive():
+    # delocalizing naive datetimes should be a no-op
+    psr = pd.Series(["2001-01-01"], dtype="datetime64[ns]")
+    sr = cudf.from_pandas(psr)
+
+    expect = psr.dt.tz_localize(None)
+    got = sr.dt.tz_localize(None)
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "from_tz", ["Europe/London", "America/Chicago", "UTC"]
 )

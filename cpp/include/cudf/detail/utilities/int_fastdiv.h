@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Copyright 2014 Maxim Milakov
  *
@@ -58,7 +58,7 @@ class int_fastdiv {
 
     int p;
     unsigned int ad, anc, delta, q1, r1, q2, r2, t;
-    const unsigned two31 = 0x8000'0000u;
+    unsigned const two31 = 0x8000'0000u;
     ad                   = (d == 0) ? 1 : abs(d);
     t                    = two31 + ((unsigned int)d >> 31);
     anc                  = t - 1 - t % ad;
@@ -95,11 +95,11 @@ class int_fastdiv {
       n_add_sign = 0;
   }
 
-  __host__ __device__ __forceinline__ friend int operator/(const int divident,
-                                                           const int_fastdiv& divisor);
+  __host__ __device__ __forceinline__ friend int operator/(int const divident,
+                                                           int_fastdiv const& divisor);
 };
 
-__host__ __device__ __forceinline__ int operator/(const int n, const int_fastdiv& divisor)
+__host__ __device__ __forceinline__ int operator/(int const n, int_fastdiv const& divisor)
 {
   int q;
 #ifdef __CUDA_ARCH__
@@ -115,61 +115,61 @@ __host__ __device__ __forceinline__ int operator/(const int n, const int_fastdiv
   return q;
 }
 
-__host__ __device__ __forceinline__ int operator%(const int n, const int_fastdiv& divisor)
+__host__ __device__ __forceinline__ int operator%(int const n, int_fastdiv const& divisor)
 {
   int quotient  = n / divisor;
   int remainder = n - quotient * divisor;
   return remainder;
 }
 
-__host__ __device__ __forceinline__ int operator/(const unsigned int n, const int_fastdiv& divisor)
+__host__ __device__ __forceinline__ int operator/(unsigned int const n, int_fastdiv const& divisor)
 {
   return ((int)n) / divisor;
 }
 
-__host__ __device__ __forceinline__ int operator%(const unsigned int n, const int_fastdiv& divisor)
+__host__ __device__ __forceinline__ int operator%(unsigned int const n, int_fastdiv const& divisor)
 {
   return ((int)n) % divisor;
 }
 
-__host__ __device__ __forceinline__ int operator/(const short n, const int_fastdiv& divisor)
+__host__ __device__ __forceinline__ int operator/(short const n, int_fastdiv const& divisor)
 {
   return ((int)n) / divisor;
 }
 
-__host__ __device__ __forceinline__ int operator%(const short n, const int_fastdiv& divisor)
+__host__ __device__ __forceinline__ int operator%(short const n, int_fastdiv const& divisor)
 {
   return ((int)n) % divisor;
 }
 
-__host__ __device__ __forceinline__ int operator/(const unsigned short n,
-                                                  const int_fastdiv& divisor)
+__host__ __device__ __forceinline__ int operator/(unsigned short const n,
+                                                  int_fastdiv const& divisor)
 {
   return ((int)n) / divisor;
 }
 
-__host__ __device__ __forceinline__ int operator%(const unsigned short n,
-                                                  const int_fastdiv& divisor)
+__host__ __device__ __forceinline__ int operator%(unsigned short const n,
+                                                  int_fastdiv const& divisor)
 {
   return ((int)n) % divisor;
 }
 
-__host__ __device__ __forceinline__ int operator/(const char n, const int_fastdiv& divisor)
+__host__ __device__ __forceinline__ int operator/(char const n, int_fastdiv const& divisor)
 {
   return ((int)n) / divisor;
 }
 
-__host__ __device__ __forceinline__ int operator%(const char n, const int_fastdiv& divisor)
+__host__ __device__ __forceinline__ int operator%(char const n, int_fastdiv const& divisor)
 {
   return ((int)n) % divisor;
 }
 
-__host__ __device__ __forceinline__ int operator/(const unsigned char n, const int_fastdiv& divisor)
+__host__ __device__ __forceinline__ int operator/(unsigned char const n, int_fastdiv const& divisor)
 {
   return ((int)n) / divisor;
 }
 
-__host__ __device__ __forceinline__ int operator%(const unsigned char n, const int_fastdiv& divisor)
+__host__ __device__ __forceinline__ int operator%(unsigned char const n, int_fastdiv const& divisor)
 {
   return ((int)n) % divisor;
 }

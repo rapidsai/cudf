@@ -40,7 +40,7 @@ namespace strings {
 namespace detail {
 
 // Helper function for loading 16B from a potentially unaligned memory location to registers.
-__forceinline__ __device__ uint4 load_uint4(const char* ptr)
+__forceinline__ __device__ uint4 load_uint4(char const* ptr)
 {
   auto const offset       = reinterpret_cast<std::uintptr_t>(ptr) % 4;
   auto const* aligned_ptr = reinterpret_cast<unsigned int const*>(ptr - offset);
@@ -99,7 +99,7 @@ __global__ void gather_chars_fn_string_parallel(StringIterator strings_begin,
     // This check is necessary because string_indices[istring] may be out of bound.
     if (out_start == out_end) continue;
 
-    const char* in_start = strings_begin[string_indices[istring]].data();
+    char const* in_start = strings_begin[string_indices[istring]].data();
 
     // Both `out_start_aligned` and `out_end_aligned` are indices into `out_chars`.
     // `out_start_aligned` is the first 16B aligned memory location after `out_start + 4`.

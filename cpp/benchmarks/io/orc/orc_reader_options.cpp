@@ -16,7 +16,6 @@
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
 
@@ -26,7 +25,7 @@
 
 #include <nvbench/nvbench.cuh>
 
-// Size of the data in the the benchmark dataframe; chosen to be low enough to allow benchmarks to
+// Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
 // run on most GPUs, but large enough to allow highest throughput
 constexpr int64_t data_size = 512 << 20;
 // The number of separate read calls to use when reading files in multiple chunks

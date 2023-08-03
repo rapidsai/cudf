@@ -91,7 +91,7 @@ from cudf.options import (
     set_option,
 )
 from cudf.utils.dtypes import _NA_REP
-from cudf.utils.utils import clear_cache, set_allocator
+from cudf.utils.utils import clear_cache
 
 cuda.set_memory_manager(RMMNumbaManager)
 cupy.cuda.set_allocator(rmm_cupy_allocator)
@@ -100,7 +100,7 @@ cupy.cuda.set_allocator(rmm_cupy_allocator)
 rmm.register_reinitialize_hook(clear_cache)
 
 
-__version__ = "23.08.00"
+__version__ = "23.10.00"
 
 __all__ = [
     "BaseIndex",
@@ -161,7 +161,6 @@ __all__ = [
     "read_orc",
     "read_parquet",
     "read_text",
-    "set_allocator",
     "set_option",
     "testing",
     "to_datetime",

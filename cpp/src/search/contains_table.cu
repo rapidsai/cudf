@@ -16,7 +16,6 @@
 
 #include <join/join_common_utils.cuh>
 
-#include <cudf/detail/join.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
@@ -106,7 +105,7 @@ struct strong_index_comparator_adapter {
 /**
  * @brief Build a row bitmask for the input table.
  *
- * The output bitmask will have invalid bits corresponding to the the input rows having nulls (at
+ * The output bitmask will have invalid bits corresponding to the input rows having nulls (at
  * any nested level) and vice versa.
  *
  * @param input The input table

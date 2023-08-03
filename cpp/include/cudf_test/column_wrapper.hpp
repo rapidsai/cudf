@@ -18,8 +18,8 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/encode.hpp>
@@ -37,6 +37,7 @@
 #include <cudf_test/default_stream.hpp>
 
 #include <rmm/device_buffer.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/functional.h>
@@ -449,7 +450,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
 
   /**
    * @brief Construct a nullable column from a list of fixed-width elements and
-   * the the range `[v, v + element_list.size())` interpreted as booleans to
+   * the range `[v, v + element_list.size())` interpreted as booleans to
    * indicate the validity of each element.
    *
    * Example:
@@ -662,7 +663,7 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
   }
 
   /**
-   * @brief Construct a nullable column from an initializer list of decimal elements and the the
+   * @brief Construct a nullable column from an initializer list of decimal elements and the
    * range `[v, v + element_list.size())` interpreted as booleans to indicate the validity of each
    * element.
    *
@@ -1026,7 +1027,7 @@ class dictionary_column_wrapper : public detail::column_wrapper {
 
   /**
    * @brief Construct a nullable dictionary column from a list of fixed-width elements and
-   * the the range `[v, v + element_list.size())` interpreted as booleans to
+   * the range `[v, v + element_list.size())` interpreted as booleans to
    * indicate the validity of each element.
    *
    * Example:
@@ -1595,7 +1596,12 @@ class lists_column_wrapper : public detail::column_wrapper {
     thrust::copy_if(
       std::cbegin(cols), std::cend(cols), valids, std::back_inserter(children), thrust::identity{});
 
-    auto data = children.empty() ? cudf::empty_like(expected_hierarchy) : concatenate(children);
+    // TODO: Once the public concatenate API exposes streams, use that instead.
+    auto data =
+      children.empty()
+        ? cudf::empty_like(expected_hierarchy)
+        : cudf::detail::concatenate(
+            children, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
 
     // increment depth
     depth = expected_depth + 1;
@@ -1722,7 +1728,7 @@ class lists_column_wrapper : public detail::column_wrapper {
                          // "a List<List<List<int>>> that's empty at the top level"
                          //
                          // { {{{1, 2, 3}}}, {4, 5, 6} }
-                         // In this case, row 1 is a a concrete List<int> with actual values.
+                         // In this case, row 1 is a concrete List<int> with actual values.
                          // There is no way to rectify the differences so we will treat it as a
                          // true column mismatch.
                          CUDF_EXPECTS(l.wrapped->size() == 0, "Mismatch in column types!");

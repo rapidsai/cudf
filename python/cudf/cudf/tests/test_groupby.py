@@ -219,20 +219,22 @@ def test_groupby_getitem_getattr(as_index):
     pdf = pd.DataFrame({"x": [1, 3, 1], "y": [1, 2, 3], "z": [1, 4, 5]})
     gdf = cudf.from_pandas(pdf)
     assert_groupby_results_equal(
-        pdf.groupby("x")["y"].sum(),
-        gdf.groupby("x")["y"].sum(),
+        pdf.groupby("x", as_index=as_index)["y"].sum(),
+        gdf.groupby("x", as_index=as_index)["y"].sum(),
         as_index=as_index,
         by="x",
     )
     assert_groupby_results_equal(
-        pdf.groupby("x").y.sum(),
-        gdf.groupby("x").y.sum(),
+        pdf.groupby("x", as_index=as_index).y.sum(),
+        gdf.groupby("x", as_index=as_index).y.sum(),
         as_index=as_index,
         by="x",
     )
     assert_groupby_results_equal(
-        pdf.groupby("x")[["y"]].sum(),
-        gdf.groupby("x")[["y"]].sum(),
+        pdf.groupby("x", as_index=as_index)[["y"]].sum(),
+        gdf.groupby("x", as_index=as_index)[["y"]].sum(),
+        as_index=as_index,
+        by="x",
     )
     assert_groupby_results_equal(
         pdf.groupby(["x", "y"], as_index=as_index).sum(),
@@ -387,6 +389,8 @@ def groupby_jit_data():
     df["key2"] = np.random.randint(0, 2, nelem)
     df["val1"] = np.random.random(nelem)
     df["val2"] = np.random.random(nelem)
+    df["val3"] = np.random.randint(0, 10, nelem)
+    df["val4"] = np.random.randint(0, 10, nelem)
     return df
 
 
@@ -400,7 +404,11 @@ def run_groupby_apply_jit_test(data, func, keys, *args):
     assert_groupby_results_equal(cudf_jit_result, pandas_result)
 
 
-@pytest.mark.parametrize("dtype", SUPPORTED_GROUPBY_NUMPY_TYPES)
+@pytest.mark.parametrize(
+    "dtype",
+    SUPPORTED_GROUPBY_NUMPY_TYPES,
+    ids=[str(t) for t in SUPPORTED_GROUPBY_NUMPY_TYPES],
+)
 @pytest.mark.parametrize(
     "func", ["min", "max", "sum", "mean", "var", "std", "idxmin", "idxmax"]
 )
@@ -425,6 +433,20 @@ def test_groupby_apply_jit_reductions(func, groupby_jit_data, dtype):
     groupby_jit_data["val2"] = groupby_jit_data["val2"].astype(dtype)
 
     run_groupby_apply_jit_test(groupby_jit_data, func, ["key1"])
+
+
+@pytest.mark.parametrize("dtype", ["int32", "int64"])
+def test_groupby_apply_jit_correlation(groupby_jit_data, dtype):
+
+    groupby_jit_data["val3"] = groupby_jit_data["val3"].astype(dtype)
+    groupby_jit_data["val4"] = groupby_jit_data["val4"].astype(dtype)
+
+    keys = ["key1", "key2"]
+
+    def func(group):
+        return group["val3"].corr(group["val4"])
+
+    run_groupby_apply_jit_test(groupby_jit_data, func, keys)
 
 
 @pytest.mark.parametrize("dtype", ["float64"])
@@ -1326,11 +1348,6 @@ def test_groupby_quantile(request, interpolation, q):
 
     pdresult = pdg.quantile(q, interpolation=interpolation)
     gdresult = gdg.quantile(q, interpolation=interpolation)
-
-    # There's a lot left to add to python bindings like index name
-    # so this is a temporary workaround
-    pdresult = pdresult["y"].reset_index(drop=True)
-    gdresult = gdresult["y"].reset_index(drop=True)
 
     assert_groupby_results_equal(pdresult, gdresult)
 
@@ -3284,3 +3301,24 @@ def test_head_tail_empty():
     expected = pdf.groupby(pd.Series(values)).tail()
     got = df.groupby(cudf.Series(values)).tail()
     assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "groups", ["a", "b", "c", ["a", "c"], ["a", "b", "c"]]
+)
+@pytest.mark.parametrize("sort", [True, False])
+def test_group_by_pandas_sort_order(groups, sort):
+    with cudf.option_context("mode.pandas_compatible", True):
+        df = cudf.DataFrame(
+            {
+                "a": [10, 1, 10, 3, 2, 1, 3, 3],
+                "b": [5, 6, 7, 1, 2, 3, 4, 9],
+                "c": [20, 20, 10, 11, 13, 11, 12, 12],
+            }
+        )
+        pdf = df.to_pandas()
+
+        assert_eq(
+            pdf.groupby(groups, sort=sort).sum(),
+            df.groupby(groups, sort=sort).sum(),
+        )
