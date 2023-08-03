@@ -54,6 +54,10 @@ function(jit_preprocess_files)
   )
 endfunction()
 
+if(NOT (EXISTS "${CUDF_GENERATED_INCLUDE_DIR}/include"))
+  make_directory("${CUDF_GENERATED_INCLUDE_DIR}/include")
+endif()
+
 jit_preprocess_files(
   SOURCE_DIRECTORY ${CUDF_SOURCE_DIR}/src FILES binaryop/jit/kernel.cu transform/jit/kernel.cu
   rolling/jit/kernel.cu
