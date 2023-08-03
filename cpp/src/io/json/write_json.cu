@@ -301,9 +301,9 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
     // if previous column was null, then we skip the value separator
     rmm::device_uvector<bool> d_str_separator(total_rows, stream);
     auto row_num = cudf::detail::make_counting_transform_iterator(
-      0, [tbl = *tbl_device_view] __device__(auto idx) -> size_type {
-        return idx / tbl.num_columns();
-      });
+      0,
+      cuda::proclaim_return_type<size_type>([tbl = *tbl_device_view] __device__(auto idx)
+                                              -> size_type { return idx / tbl.num_columns(); }));
     auto validity_iterator =
       cudf::detail::make_counting_transform_iterator(0, validity_fn{*tbl_device_view});
     thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
@@ -317,12 +317,12 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
     thrust::for_each(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      thrust::make_counting_iterator<size_type>(total_rows),
-                     [write_separator = d_str_separator.begin(),
-                      d_strviews      = d_strviews.begin(),
-                      value_separator,
-                      tbl = *tbl_device_view,
-                      strviews_per_column,
-                      num_strviews_per_row] __device__(auto idx) {
+                     cuda::proclaim_return_type<void>([write_separator = d_str_separator.begin(),
+                                                       d_strviews      = d_strviews.begin(),
+                                                       value_separator,
+                                                       tbl = *tbl_device_view,
+                                                       strviews_per_column,
+                                                       num_strviews_per_row] __device__(auto idx) {
                        auto const row = idx / tbl.num_columns();
                        auto const col = idx % tbl.num_columns();
                        auto const this_index =
@@ -330,7 +330,7 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                        if (write_separator[idx] && tbl.column(col).is_valid(row)) {
                          d_strviews[this_index - 1] = value_separator;
                        }
-                     });
+                     }));
   }
   auto joined_col = make_strings_column(d_strviews, string_view{nullptr, 0}, stream, mr);
 
@@ -414,23 +414,24 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
   rmm::device_uvector<string_view> d_strviews(total_strings, stream);
   // scatter null_list and list_prefix, list_suffix
   auto col_device_view = cudf::column_device_view::create(lists_strings.parent(), stream);
-  thrust::for_each(rmm::exec_policy(stream),
-                   thrust::make_counting_iterator<size_type>(0),
-                   thrust::make_counting_iterator<size_type>(num_lists),
-                   [col = *col_device_view,
-                    list_prefix,
-                    list_suffix,
-                    d_strview_offsets = d_strview_offsets.begin(),
-                    d_strviews        = d_strviews.begin()] __device__(auto idx) {
-                     if (col.is_null(idx)) {
-                       d_strviews[d_strview_offsets[idx]]     = string_view{};
-                       d_strviews[d_strview_offsets[idx] + 1] = string_view{};
-                     } else {
-                       // [ ]
-                       d_strviews[d_strview_offsets[idx]]         = list_prefix;
-                       d_strviews[d_strview_offsets[idx + 1] - 1] = list_suffix;
-                     }
-                   });
+  thrust::for_each(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator<size_type>(0),
+    thrust::make_counting_iterator<size_type>(num_lists),
+    cuda::proclaim_return_type<void>([col = *col_device_view,
+                                      list_prefix,
+                                      list_suffix,
+                                      d_strview_offsets = d_strview_offsets.begin(),
+                                      d_strviews        = d_strviews.begin()] __device__(auto idx) {
+      if (col.is_null(idx)) {
+        d_strviews[d_strview_offsets[idx]]     = string_view{};
+        d_strviews[d_strview_offsets[idx] + 1] = string_view{};
+      } else {
+        // [ ]
+        d_strviews[d_strview_offsets[idx]]         = list_prefix;
+        d_strviews[d_strview_offsets[idx + 1] - 1] = list_suffix;
+      }
+    }));
 
   // scatter string and separator
   auto labels = cudf::lists::detail::generate_labels(
@@ -439,14 +440,14 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
   thrust::for_each(rmm::exec_policy(stream),
                    thrust::make_counting_iterator<size_type>(0),
                    thrust::make_counting_iterator<size_type>(num_strings),
-                   [col                = *col_device_view,
-                    d_strview_offsets  = d_strview_offsets.begin(),
-                    d_strviews         = d_strviews.begin(),
-                    labels             = labels->view().begin<size_type>(),
-                    list_offsets       = offsets.begin<size_type>(),
-                    d_strings_children = *d_strings_children,
-                    element_separator,
-                    element_narep] __device__(auto idx) {
+                   cuda::proclaim_return_type<void>([col               = *col_device_view,
+                                                     d_strview_offsets = d_strview_offsets.begin(),
+                                                     d_strviews        = d_strviews.begin(),
+                                                     labels = labels->view().begin<size_type>(),
+                                                     list_offsets = offsets.begin<size_type>(),
+                                                     d_strings_children = *d_strings_children,
+                                                     element_separator,
+                                                     element_narep] __device__(auto idx) {
                      auto const label         = labels[idx];
                      auto const sublist_index = idx - list_offsets[label];
                      auto const strview_index = d_strview_offsets[label] + sublist_index * 2 + 1;
@@ -456,7 +457,7 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
                        d_strings_children.is_null(idx) ? element_narep : strview;
                      // separator
                      if (sublist_index != 0) { d_strviews[strview_index - 1] = element_separator; }
-                   });
+                   }));
 
   auto joined_col = make_strings_column(d_strviews, string_view{nullptr, 0}, stream, mr);
 
