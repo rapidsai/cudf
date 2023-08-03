@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import weakref
-from typing import Any, Literal, Mapping
+from typing import Any, Literal, Mapping, Optional
 
 from typing_extensions import Self
 
@@ -50,9 +50,8 @@ def as_exposure_tracked_buffer(
     if not hasattr(data, "__cuda_array_interface__"):
         if exposed:
             raise ValueError("cannot created exposed host memory")
-        tracked_buf = ExposureTrackedBufferOwner._from_host_memory(data)
         return ExposureTrackedBuffer(
-            owner=tracked_buf, offset=0, size=tracked_buf.size
+            owner=ExposureTrackedBufferOwner._from_host_memory(data)
         )
 
     owner = get_owner(data, ExposureTrackedBufferOwner)
@@ -69,10 +68,11 @@ def as_exposure_tracked_buffer(
         )
 
     # `data` is new device memory
-    owner = ExposureTrackedBufferOwner._from_device_memory(
-        data, exposed=exposed
+    return ExposureTrackedBuffer(
+        owner=ExposureTrackedBufferOwner._from_device_memory(
+            data, exposed=exposed
+        )
     )
-    return ExposureTrackedBuffer(owner=owner, offset=0, size=owner.size)
 
 
 class ExposureTrackedBufferOwner(BufferOwner):
@@ -135,8 +135,8 @@ class ExposureTrackedBuffer(Buffer):
     def __init__(
         self,
         owner: ExposureTrackedBufferOwner,
-        offset: int,
-        size: int,
+        offset: int = 0,
+        size: Optional[int] = None,
     ) -> None:
         super().__init__(owner=owner, offset=offset, size=size)
         self._owner._slices.add(self)

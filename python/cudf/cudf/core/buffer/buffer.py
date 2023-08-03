@@ -278,15 +278,25 @@ class Buffer(Serializable):
     """A buffer that represents a slice or view of a `BufferOwner`.
 
     Use the factory function `as_buffer` to create a Buffer instance.
+
+    Parameters
+    ----------
+    owner
+        The owning exposure buffer this refers to.
+    offset
+        The offset relative to the start memory of owner (in bytes).
+    size
+        The size of the buffer (in bytes). If None, use the size of owner.
     """
 
     def __init__(
         self,
         *,
         owner: BufferOwner,
-        offset: int,
-        size: int,
+        offset: int = 0,
+        size: Optional[int] = None,
     ) -> None:
+        size = owner.size if size is None else size
         if size < 0:
             raise ValueError("size cannot be negative")
         if offset < 0:

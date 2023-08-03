@@ -82,14 +82,9 @@ def as_buffer(
     if get_global_manager() is not None:
         return as_spillable_buffer(data, exposed=exposed)
     if hasattr(data, "__cuda_array_interface__"):
-        owner = BufferOwner._from_device_memory(data)
+        return Buffer(owner=BufferOwner._from_device_memory(data))
     else:
-        owner = BufferOwner._from_host_memory(data)
-    return Buffer(
-        owner=owner,
-        offset=0,
-        size=owner.size,
-    )
+        return Buffer(owner=BufferOwner._from_host_memory(data))
 
 
 _thread_spill_locks: Dict[int, Tuple[Optional[SpillLock], int]] = {}

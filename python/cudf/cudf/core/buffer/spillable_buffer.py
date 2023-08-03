@@ -63,17 +63,8 @@ def as_spillable_buffer(data, exposed: bool) -> SpillableBuffer:
     if not hasattr(data, "__cuda_array_interface__"):
         if exposed:
             raise ValueError("cannot created exposed host memory")
-        tracked_buf = SpillableBufferOwner._from_host_memory(data)
         return SpillableBuffer(
-            owner=tracked_buf, offset=0, size=tracked_buf.size
-        )
-
-    if not hasattr(data, "__cuda_array_interface__"):
-        if exposed:
-            raise ValueError("cannot created exposed host memory")
-        spillabe_buf = SpillableBufferOwner._from_host_memory(data)
-        return SpillableBuffer(
-            owner=spillabe_buf, offset=0, size=spillabe_buf.size
+            owner=SpillableBufferOwner._from_host_memory(data)
         )
 
     owner = get_owner(data, SpillableBufferOwner)
@@ -94,8 +85,9 @@ def as_spillable_buffer(data, exposed: bool) -> SpillableBuffer:
         return SpillableBuffer(owner=owner, offset=ptr - base_ptr, size=size)
 
     # `data` is new device memory
-    owner = SpillableBufferOwner._from_device_memory(data, exposed=exposed)
-    return SpillableBuffer(owner=owner, offset=0, size=owner.size)
+    return SpillableBuffer(
+        owner=SpillableBufferOwner._from_device_memory(data, exposed=exposed)
+    )
 
 
 class SpillLock:
@@ -470,22 +462,6 @@ class SpillableBuffer(Buffer):
 
     _owner: SpillableBufferOwner
 
-    def __init__(
-        self, owner: SpillableBufferOwner, offset: int, size: int
-    ) -> None:
-        if size < 0:
-            raise ValueError("size cannot be negative")
-        if offset < 0:
-            raise ValueError("offset cannot be negative")
-        if offset + size > owner.size:
-            raise ValueError(
-                "offset+size cannot be greater than the size of the owner"
-            )
-        self._owner = owner
-        self._offset = offset
-        self._size = size
-        self.lock = owner.lock
-
     def spill(self, target: str = "cpu") -> None:
         return self._owner.spill(target=target)
 
@@ -532,7 +508,7 @@ class SpillableBuffer(Buffer):
         """
         header: Dict[str, Any] = {}
         frames: List[BufferOwner | memoryview]
-        with self.lock:
+        with self._owner.lock:
             header["type-serialized"] = pickle.dumps(self.__class__)
             header["owner-type-serialized"] = pickle.dumps(type(self._owner))
             header["frame_count"] = 1
