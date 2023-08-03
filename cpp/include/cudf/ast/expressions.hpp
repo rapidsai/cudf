@@ -29,7 +29,8 @@ namespace ast {
 // Forward declaration.
 namespace detail {
 class expression_parser;
-}
+class expression_transformer;
+}  // namespace detail
 
 /**
  * @brief A generic expression that can be evaluated to return a value.
@@ -45,6 +46,15 @@ struct expression {
    * @return Index of device data reference for this instance
    */
   virtual cudf::size_type accept(detail::expression_parser& visitor) const = 0;
+
+  /**
+   * @brief Accepts a visitor class.
+   *
+   * @param visitor The `expression_transformer` transforming this expression tree
+   * @return Reference wrapper of transformed expression
+   */
+  virtual std::reference_wrapper<expression const> accept(
+    detail::expression_transformer& visitor) const = 0;
 
   /**
    * @brief Returns true if the expression may evaluate to null.
@@ -305,6 +315,12 @@ class literal : public expression {
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
 
+  /**
+   * @copydoc expression::accept
+   */
+  std::reference_wrapper<expression const> accept(
+    detail::expression_transformer& visitor) const override;
+
   [[nodiscard]] bool may_evaluate_null(table_view const& left,
                                        table_view const& right,
                                        rmm::cuda_stream_view stream) const override
@@ -398,6 +414,12 @@ class column_reference : public expression {
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
 
+  /**
+   * @copydoc expression::accept
+   */
+  std::reference_wrapper<expression const> accept(
+    detail::expression_transformer& visitor) const override;
+
   [[nodiscard]] bool may_evaluate_null(table_view const& left,
                                        table_view const& right,
                                        rmm::cuda_stream_view stream) const override
@@ -458,6 +480,12 @@ class operation : public expression {
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
 
+  /**
+   * @copydoc expression::accept
+   */
+  std::reference_wrapper<expression const> accept(
+    detail::expression_transformer& visitor) const override;
+
   [[nodiscard]] bool may_evaluate_null(table_view const& left,
                                        table_view const& right,
                                        rmm::cuda_stream_view stream) const override
@@ -472,6 +500,48 @@ class operation : public expression {
  private:
   ast_operator const op;
   std::vector<std::reference_wrapper<expression const>> const operands;
+};
+
+/**
+ * @brief A expression referring to data from a column in a table.
+ */
+class column_name_reference : public expression {
+ public:
+  /**
+   * @brief Construct a new column name reference object
+   *
+   * @param column_name Name of this column in the table metadata (provided when the expression is
+   * evaluated).
+   */
+  column_name_reference(std::string column_name) : column_name(std::move(column_name)) {}
+
+  /**
+   * @brief Get the column name.
+   *
+   * @return The name of this column reference
+   */
+  [[nodiscard]] std::string get_column_name() const { return column_name; }
+
+  /**
+   * @copydoc expression::accept
+   */
+  cudf::size_type accept(detail::expression_parser& visitor) const override;
+
+  /**
+   * @copydoc expression::accept
+   */
+  std::reference_wrapper<expression const> accept(
+    detail::expression_transformer& visitor) const override;
+
+  [[nodiscard]] bool may_evaluate_null(table_view const& left,
+                                       table_view const& right,
+                                       rmm::cuda_stream_view stream) const override
+  {
+    return true;
+  }
+
+ private:
+  std::string column_name;
 };
 
 }  // namespace ast

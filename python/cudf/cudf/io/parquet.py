@@ -437,7 +437,6 @@ def read_parquet(
     storage_options=None,
     filters=None,
     row_groups=None,
-    strings_to_categorical=False,
     use_pandas_metadata=True,
     use_python_file_object=True,
     categorical_partitions=True,
@@ -449,12 +448,6 @@ def read_parquet(
 ):
     """{docstring}"""
 
-    if strings_to_categorical is not False:
-        warnings.warn(
-            "`strings_to_categorical` is deprecated and will be removed in "
-            "a future version of cudf.",
-            FutureWarning,
-        )
     # Do not allow the user to set file-opening options
     # when `use_python_file_object=False` is specified
     if use_python_file_object is False:
@@ -578,7 +571,6 @@ def read_parquet(
         *args,
         columns=columns,
         row_groups=row_groups,
-        strings_to_categorical=strings_to_categorical,
         use_pandas_metadata=use_pandas_metadata,
         partition_keys=partition_keys,
         partition_categories=partition_categories,
@@ -809,7 +801,6 @@ def _read_parquet(
     engine,
     columns=None,
     row_groups=None,
-    strings_to_categorical=None,
     use_pandas_metadata=None,
     *args,
     **kwargs,
@@ -831,7 +822,6 @@ def _read_parquet(
             filepaths_or_buffers,
             columns=columns,
             row_groups=row_groups,
-            strings_to_categorical=strings_to_categorical,
             use_pandas_metadata=use_pandas_metadata,
         )
     else:
