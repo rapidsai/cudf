@@ -45,6 +45,8 @@
 #include <cub/block/block_load.cuh>
 #include <cub/block/block_scan.cuh>
 
+#include <cuda/functional>
+
 #include <cstdint>
 #include <limits>
 #include <memory>
@@ -495,14 +497,14 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
         return new_offsets_unclamped;
       }
       // if we are in the last chunk, we need to find the first out-of-bounds offset
-      auto const it = thrust::make_counting_iterator(output_offset{});
-      auto const end_loc =
-        *thrust::find_if(rmm::exec_policy_nosync(scan_stream),
-                         it,
-                         it + new_offsets_unclamped,
-                         [row_offsets, byte_range_end] __device__(output_offset i) {
-                           return row_offsets[i] >= byte_range_end;
-                         });
+      auto const it      = thrust::make_counting_iterator(output_offset{});
+      auto const end_loc = *thrust::find_if(
+        rmm::exec_policy_nosync(scan_stream),
+        it,
+        it + new_offsets_unclamped,
+        cuda::proclaim_return_type<bool>([row_offsets, byte_range_end] __device__(output_offset i) {
+          return row_offsets[i] >= byte_range_end;
+        }));
       // if we had no out-of-bounds offset, we copy all offsets
       if (end_loc == new_offsets_unclamped) { return end_loc; }
       // otherwise we copy only up to (including) the first out-of-bounds delimiter
@@ -565,26 +567,28 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                     global_offsets.begin(),
                     global_offsets.end(),
                     offsets.begin() + insert_begin,
-                    [baseline = *first_row_offset] __device__(byte_offset global_offset) {
-                      return static_cast<int32_t>(global_offset - baseline);
-                    });
+                    cuda::proclaim_return_type<int32_t>(
+                      [baseline = *first_row_offset] __device__(byte_offset global_offset) {
+                        return static_cast<int32_t>(global_offset - baseline);
+                      }));
   auto string_count = offsets.size() - 1;
   if (strip_delimiters) {
     auto it = cudf::detail::make_counting_transform_iterator(
       0,
-      [ofs        = offsets.data(),
-       chars      = chars.data(),
-       delim_size = static_cast<size_type>(delimiter.size()),
-       last_row   = static_cast<size_type>(string_count) - 1,
-       insert_end] __device__(size_type row) {
-        auto const begin = ofs[row];
-        auto const len   = ofs[row + 1] - begin;
-        if (row == last_row && insert_end) {
-          return thrust::make_pair(chars + begin, len);
-        } else {
-          return thrust::make_pair(chars + begin, std::max<size_type>(0, len - delim_size));
-        };
-      });
+      cuda::proclaim_return_type<thrust::pair<char*, int32_t>>(
+        [ofs        = offsets.data(),
+         chars      = chars.data(),
+         delim_size = static_cast<size_type>(delimiter.size()),
+         last_row   = static_cast<size_type>(string_count) - 1,
+         insert_end] __device__(size_type row) {
+          auto const begin = ofs[row];
+          auto const len   = ofs[row + 1] - begin;
+          if (row == last_row && insert_end) {
+            return thrust::make_pair(chars + begin, len);
+          } else {
+            return thrust::make_pair(chars + begin, std::max<size_type>(0, len - delim_size));
+          };
+        }));
     return cudf::strings::detail::make_strings_column(it, it + string_count, stream, mr);
   } else {
     return cudf::make_strings_column(string_count, std::move(offsets), std::move(chars), {}, 0);
