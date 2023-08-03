@@ -381,15 +381,73 @@ def test_groupby_apply_grouped():
 
 
 @pytest.fixture(scope="module")
-def groupby_jit_data():
+def groupby_jit_data_small():
+    """
+    Small dataset for testing groupby apply with jit
+    returns a dataframe whose keys columns define
+    4 groups of size 1, 2, 3, 4 as well as an additional
+    key column that can be used to test subgroups
+
+    useful for very basic testing of result values
+
+    """
     np.random.seed(0)
     df = DataFrame()
-    nelem = 20
-    df["key1"] = np.random.randint(0, 3, nelem)
-    df["key2"] = np.random.randint(0, 2, nelem)
-    df["val1"] = np.random.random(nelem)
-    df["val2"] = np.random.random(nelem)
+    key1 = (
+        [1]  # group of size 1
+        + [2, 2]  # group of size 2
+        + [3, 3, 3]  # group of size 3
+        + [4, 4, 4, 4]  # group of size 4
+    )
+    key2 = [1, 2] * 5
+    df["key1"] = key1
+    df["key2"] = key2
+
+    df["val1"] = np.random.random(len(key1))
+    df["val2"] = np.random.random(len(key1))
+
+    # randomly permute data
+    df = df.sample(frac=1).reset_index(drop=True)
     return df
+
+
+@pytest.fixture(scope="module")
+def groupby_jit_data_large(groupby_jit_data_small):
+    """
+    Large dataset for testing groupby apply with jit
+    useful for validating that block level algorithms
+    return the correct result for groups larger than
+    the maximum thread per block size
+    """
+    max_tpb = 1024
+    factor = (
+        max_tpb + 1
+    )  # bigger than a block but not always an exact multiple
+    df = cudf.concat([groupby_jit_data_small] * factor)
+    return df
+
+
+@pytest.fixture(scope="module")
+def groupby_jit_data_nans(groupby_jit_data_small):
+    """
+    Small dataset containing nans
+    """
+
+    df = groupby_jit_data_small.sort_values(["key1", "key2"])
+    df["val1"][::2] = np.nan
+    df = df.sample(frac=1).reset_index(drop=True)
+    return df
+
+
+@pytest.fixture(scope="module")
+def groupby_jit_datasets(
+    groupby_jit_data_small, groupby_jit_data_large, groupby_jit_data_nans
+):
+    return {
+        "small": groupby_jit_data_small,
+        "large": groupby_jit_data_large,
+        "nans": groupby_jit_data_nans,
+    }
 
 
 def run_groupby_apply_jit_test(data, func, keys, *args):
@@ -402,15 +460,7 @@ def run_groupby_apply_jit_test(data, func, keys, *args):
     assert_groupby_results_equal(cudf_jit_result, pandas_result)
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    SUPPORTED_GROUPBY_NUMPY_TYPES,
-    ids=[str(t) for t in SUPPORTED_GROUPBY_NUMPY_TYPES],
-)
-@pytest.mark.parametrize(
-    "func", ["min", "max", "sum", "mean", "var", "std", "idxmin", "idxmax"]
-)
-def test_groupby_apply_jit_reductions(func, groupby_jit_data, dtype):
+def groupby_apply_jit_reductions_test_inner(func, data, dtype):
     # ideally we'd just have:
     # lambda group: getattr(group, func)()
     # but the current kernel caching mechanism relies on pickle which
@@ -427,41 +477,67 @@ def test_groupby_apply_jit_reductions(func, groupby_jit_data, dtype):
     exec(funcstr, lcl)
     func = lcl["func"]
 
-    groupby_jit_data["val1"] = groupby_jit_data["val1"].astype(dtype)
-    groupby_jit_data["val2"] = groupby_jit_data["val2"].astype(dtype)
+    data["val1"] = data["val1"].astype(dtype)
+    data["val2"] = data["val2"].astype(dtype)
 
-    run_groupby_apply_jit_test(groupby_jit_data, func, ["key1"])
+    run_groupby_apply_jit_test(data, func, ["key1"])
 
 
-@pytest.mark.parametrize("dtype", ["float64"])
-@pytest.mark.parametrize("func", ["min", "max", "sum", "mean", "var", "std"])
-@pytest.mark.parametrize("special_val", [np.nan, np.inf, -np.inf])
-def test_groupby_apply_jit_reductions_special_vals(
-    func, groupby_jit_data, dtype, special_val
+# test unary reductions
+@pytest.mark.parametrize(
+    "dtype",
+    SUPPORTED_GROUPBY_NUMPY_TYPES,
+    ids=[str(t) for t in SUPPORTED_GROUPBY_NUMPY_TYPES],
+)
+@pytest.mark.parametrize(
+    "func", ["min", "max", "sum", "mean", "var", "std", "idxmin", "idxmax"]
+)
+@pytest.mark.parametrize("dataset", ["small", "large", "nans"])
+def test_groupby_apply_jit_unary_reductions(
+    func, dtype, dataset, groupby_jit_datasets
 ):
-    # dynamically generate to avoid pickling error.
-    # see test_groupby_apply_jit_reductions for details.
+    dataset = groupby_jit_datasets[dataset]
+    groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
+
+
+# test unary reductions for special values
+def groupby_apply_jit_reductions_special_vals_inner(
+    func, data, dtype, special_val
+):
     funcstr = textwrap.dedent(
         f"""
-            def func(df):
-                return df['val1'].{func}()
+        def func(df):
+            return df['val1'].{func}()
         """
     )
     lcl = {}
     exec(funcstr, lcl)
     func = lcl["func"]
 
-    groupby_jit_data["val1"] = special_val
-    groupby_jit_data["val1"] = groupby_jit_data["val1"].astype(dtype)
+    data["val1"] = data["val1"].astype(dtype)
+    data["val2"] = data["val2"].astype(dtype)
+    data["val1"] = special_val
+    data["val2"] = special_val
 
-    run_groupby_apply_jit_test(groupby_jit_data, func, ["key1"])
+    run_groupby_apply_jit_test(data, func, ["key1"])
+
+
+@pytest.mark.parametrize("dtype", ["float64"])
+@pytest.mark.parametrize("func", ["min", "max", "sum", "mean", "var", "std"])
+@pytest.mark.parametrize("special_val", [np.nan, np.inf, -np.inf])
+@pytest.mark.parametrize("dataset", ["small", "large", "nans"])
+def test_groupby_apply_jit_reductions_special_vals(
+    func, dataset, dtype, special_val
+):
+    dataset = groupby_jit_datasets[dataset]
+    groupby_apply_jit_reductions_test_inner(func, dataset, dtype, special_val)
 
 
 @pytest.mark.parametrize("dtype", ["float64"])
 @pytest.mark.parametrize("func", ["idxmax", "idxmin"])
 @pytest.mark.parametrize("special_val", [np.nan, np.inf, -np.inf])
 def test_groupby_apply_jit_idx_reductions_special_vals(
-    func, groupby_jit_data, dtype, special_val
+    func, groupby_jit_data_small, dtype, special_val
 ):
     # dynamically generate to avoid pickling error.
     # see test_groupby_apply_jit_reductions for details.
@@ -475,16 +551,18 @@ def test_groupby_apply_jit_idx_reductions_special_vals(
     exec(funcstr, lcl)
     func = lcl["func"]
 
-    groupby_jit_data["val1"] = special_val
-    groupby_jit_data["val1"] = groupby_jit_data["val1"].astype(dtype)
+    groupby_jit_data_small["val1"] = special_val
+    groupby_jit_data_small["val1"] = groupby_jit_data_small["val1"].astype(
+        dtype
+    )
 
     expect = (
-        groupby_jit_data.to_pandas()
+        groupby_jit_data_small.to_pandas()
         .groupby("key1", as_index=False)
         .apply(func)
     )
 
-    grouped = groupby_jit_data.groupby("key1")
+    grouped = groupby_jit_data_small.groupby("key1")
     sorted = grouped._grouped()[3].to_pandas()
     expect_vals = sorted["key1"].drop_duplicates().index
     expect[None] = expect_vals
@@ -501,8 +579,8 @@ def test_groupby_apply_jit_idx_reductions_special_vals(
         lambda df: df["val1"].mean() + df["val2"].std(),
     ],
 )
-def test_groupby_apply_jit_basic(func, groupby_jit_data):
-    run_groupby_apply_jit_test(groupby_jit_data, func, ["key1", "key2"])
+def test_groupby_apply_jit_basic(func, groupby_jit_data_small):
+    run_groupby_apply_jit_test(groupby_jit_data_small, func, ["key1", "key2"])
 
 
 def create_test_groupby_apply_jit_args_params():
@@ -521,8 +599,10 @@ def create_test_groupby_apply_jit_args_params():
 @pytest.mark.parametrize(
     "func,args", create_test_groupby_apply_jit_args_params()
 )
-def test_groupby_apply_jit_args(func, args, groupby_jit_data):
-    run_groupby_apply_jit_test(groupby_jit_data, func, ["key1", "key2"], *args)
+def test_groupby_apply_jit_args(func, args, groupby_jit_data_small):
+    run_groupby_apply_jit_test(
+        groupby_jit_data_small, func, ["key1", "key2"], *args
+    )
 
 
 def test_groupby_apply_jit_block_divergence():
