@@ -197,7 +197,7 @@ __forceinline__ __device__ char escaped_sequence_to_byte(char const* const ptr)
  */
 template <int num_warps_per_threadblock, int char_block_size>
 __global__ void url_decode_char_counter(column_device_view const in_strings,
-                                        offset_type* const out_counts)
+                                        size_type* const out_counts)
 {
   constexpr int halo_size = 2;
   __shared__ char temporary_buffer[num_warps_per_threadblock][char_block_size + halo_size];
@@ -221,7 +221,7 @@ __global__ void url_decode_char_counter(column_device_view const in_strings,
     auto const in_chars      = in_string.data();
     auto const string_length = in_string.size_bytes();
     int const nblocks        = cudf::util::div_rounding_up_unsafe(string_length, char_block_size);
-    offset_type escape_char_count = 0;
+    size_type escape_char_count = 0;
 
     for (int block_idx = 0; block_idx < nblocks; block_idx++) {
       int const string_length_block =
@@ -280,7 +280,7 @@ __global__ void url_decode_char_counter(column_device_view const in_strings,
 template <int num_warps_per_threadblock, int char_block_size>
 __global__ void url_decode_char_replacer(column_device_view const in_strings,
                                          char* const out_chars,
-                                         offset_type const* const out_offsets)
+                                         size_type const* const out_offsets)
 {
   constexpr int halo_size = 2;
   __shared__ char temporary_buffer[num_warps_per_threadblock][char_block_size + halo_size * 2];
@@ -393,18 +393,17 @@ std::unique_ptr<column> url_decode(strings_column_view const& strings,
   auto offsets_mutable_view = offsets_column->mutable_view();
   url_decode_char_counter<num_warps_per_threadblock, char_block_size>
     <<<num_threadblocks, threadblock_size, 0, stream.value()>>>(
-      *d_strings, offsets_mutable_view.begin<offset_type>());
+      *d_strings, offsets_mutable_view.begin<size_type>());
 
   // use scan to transform number of bytes into offsets
   thrust::exclusive_scan(rmm::exec_policy(stream),
-                         offsets_view.begin<offset_type>(),
-                         offsets_view.end<offset_type>(),
-                         offsets_mutable_view.begin<offset_type>());
+                         offsets_view.begin<size_type>(),
+                         offsets_view.end<size_type>(),
+                         offsets_mutable_view.begin<size_type>());
 
   // copy the total number of characters of all strings combined (last element of the offset column)
   // to the host memory
-  auto out_chars_bytes =
-    cudf::detail::get_value<offset_type>(offsets_view, offset_count - 1, stream);
+  auto out_chars_bytes = cudf::detail::get_value<size_type>(offsets_view, offset_count - 1, stream);
 
   // create the chars column
   auto chars_column = create_chars_child_column(out_chars_bytes, stream, mr);
@@ -413,7 +412,7 @@ std::unique_ptr<column> url_decode(strings_column_view const& strings,
   // decode and copy the characters from the input column to the output column
   url_decode_char_replacer<num_warps_per_threadblock, char_block_size>
     <<<num_threadblocks, threadblock_size, 0, stream.value()>>>(
-      *d_strings, d_out_chars, offsets_column->view().begin<offset_type>());
+      *d_strings, d_out_chars, offsets_column->view().begin<size_type>());
 
   // copy null mask
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);

@@ -53,11 +53,10 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
 {
   auto const num_rows = input.size();
 
-  static_assert(std::is_same_v<offset_type, int32_t> && std::is_same_v<size_type, int32_t>);
   auto out_offsets = make_numeric_column(
-    data_type{type_id::INT32}, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
 
-  auto const d_out_offsets  = out_offsets->mutable_view().template begin<offset_type>();
+  auto const d_out_offsets  = out_offsets->mutable_view().template begin<size_type>();
   auto const d_row_offsets  = lists_column_view(input).offsets_begin();
   auto const d_list_offsets = lists_column_view(lists_column_view(input).child()).offsets_begin();
 
@@ -121,13 +120,12 @@ generate_list_offsets_and_validities(column_view const& input,
 {
   auto const num_rows = input.size();
 
-  static_assert(std::is_same_v<offset_type, int32_t> && std::is_same_v<size_type, int32_t>);
   auto out_offsets = make_numeric_column(
-    data_type{type_id::INT32}, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
 
   auto const lists_of_lists_dv_ptr = column_device_view::create(input, stream);
   auto const lists_dv_ptr   = column_device_view::create(lists_column_view(input).child(), stream);
-  auto const d_out_offsets  = out_offsets->mutable_view().template begin<offset_type>();
+  auto const d_out_offsets  = out_offsets->mutable_view().template begin<size_type>();
   auto const d_row_offsets  = lists_column_view(input).offsets_begin();
   auto const d_list_offsets = lists_column_view(lists_column_view(input).child()).offsets_begin();
 
@@ -198,7 +196,7 @@ std::unique_ptr<column> gather_list_entries(column_view const& input,
      d_list_offsets,
      d_indices = gather_map.begin(),
      d_out_list_offsets =
-       output_list_offsets.template begin<offset_type>()] __device__(size_type const idx) {
+       output_list_offsets.template begin<size_type>()] __device__(size_type const idx) {
       // The output row has been identified as a null/empty list during list size computation.
       if (d_out_list_offsets[idx + 1] == d_out_list_offsets[idx]) { return; }
 
