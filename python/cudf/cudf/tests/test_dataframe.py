@@ -10261,4 +10261,3 @@ def test_dataframe_constructor_unbounded_sequence():
 
     with pytest.raises(TypeError):
         cudf.DataFrame({"a": A()})
-
