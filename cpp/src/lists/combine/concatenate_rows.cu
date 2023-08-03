@@ -77,11 +77,8 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
                                          rmm::mr::device_memory_resource* mr)
 {
   // outgoing offsets.
-  auto offsets = cudf::make_fixed_width_column(data_type{type_to_id<offset_type>()},
-                                               input.num_rows() + 1,
-                                               mask_state::UNALLOCATED,
-                                               stream,
-                                               mr);
+  auto offsets = cudf::make_fixed_width_column(
+    data_type{type_to_id<size_type>()}, input.num_rows() + 1, mask_state::UNALLOCATED, stream, mr);
 
   auto keys = thrust::make_transform_iterator(thrust::make_counting_iterator(size_t{0}),
                                               [num_columns = input.num_columns()] __device__(
@@ -91,7 +88,7 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
   auto values = thrust::make_transform_iterator(
     thrust::make_counting_iterator(size_t{0}),
     [input, row_null_counts = row_null_counts.data(), null_policy] __device__(
-      size_t i) -> offset_type {
+      size_t i) -> size_type {
       auto const col_index = i % input.num_columns();
       auto const row_index = i / input.num_columns();
 
@@ -105,7 +102,7 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
         }
       }
       auto offsets =
-        input.column(col_index).child(lists_column_view::offsets_column_index).data<offset_type>() +
+        input.column(col_index).child(lists_column_view::offsets_column_index).data<size_type>() +
         input.column(col_index).offset();
       return offsets[row_index + 1] - offsets[row_index];
     });
@@ -115,13 +112,13 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
                         keys + (input.num_rows() * input.num_columns()),
                         values,
                         thrust::make_discard_iterator(),
-                        offsets->mutable_view().begin<offset_type>());
+                        offsets->mutable_view().begin<size_type>());
 
   // convert to offsets
   thrust::exclusive_scan(rmm::exec_policy(stream),
-                         offsets->view().begin<offset_type>(),
-                         offsets->view().begin<offset_type>() + input.num_rows() + 1,
-                         offsets->mutable_view().begin<offset_type>(),
+                         offsets->view().begin<size_type>(),
+                         offsets->view().begin<size_type>() + input.num_rows() + 1,
+                         offsets->mutable_view().begin<size_type>(),
                          0);
 
   // generate appropriate null mask

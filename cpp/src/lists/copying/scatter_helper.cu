@@ -189,7 +189,7 @@ struct list_child_constructor {
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(child_column->size()),
       child_column->mutable_view().begin<T>(),
-      [offset_begin  = list_offsets.begin<offset_type>(),
+      [offset_begin  = list_offsets.begin<size_type>(),
        offset_size   = list_offsets.size(),
        d_list_vector = list_vector.begin(),
        source_lists,
@@ -241,7 +241,7 @@ struct list_child_constructor {
       thrust::make_counting_iterator<size_type>(0),
       thrust::make_counting_iterator<size_type>(string_views.size()),
       string_views.begin(),
-      [offset_begin  = list_offsets.begin<offset_type>(),
+      [offset_begin  = list_offsets.begin<size_type>(),
        offset_size   = list_offsets.size(),
        d_list_vector = list_vector.begin(),
        source_lists,
@@ -255,7 +255,7 @@ struct list_child_constructor {
         auto row_index         = d_list_vector[list_index].row_index();
         auto actual_list_row = d_list_vector[list_index].bind_to_column(source_lists, target_lists);
         auto lists_column    = actual_list_row.get_column();
-        auto lists_offsets_ptr    = lists_column.offsets().template data<offset_type>();
+        auto lists_offsets_ptr    = lists_column.offsets().template data<size_type>();
         auto child_strings_column = lists_column.child();
         auto strings_offset       = lists_offsets_ptr[row_index] + intra_index;
 
@@ -308,7 +308,7 @@ struct list_child_constructor {
       thrust::make_counting_iterator<size_type>(0),
       thrust::make_counting_iterator<size_type>(child_list_views.size()),
       child_list_views.begin(),
-      [offset_begin  = list_offsets.begin<offset_type>(),
+      [offset_begin  = list_offsets.begin<size_type>(),
        offset_size   = list_offsets.size(),
        d_list_vector = list_vector.begin(),
        source_lists,
@@ -323,10 +323,10 @@ struct list_child_constructor {
         auto actual_list_row = d_list_vector[list_index].bind_to_column(source_lists, target_lists);
         auto lists_column    = actual_list_row.get_column();
         auto child_lists_column = lists_column.child();
-        auto lists_offsets_ptr  = lists_column.offsets().template data<offset_type>();
+        auto lists_offsets_ptr  = lists_column.offsets().template data<size_type>();
         auto child_lists_offsets_ptr =
           child_lists_column.child(lists_column_view::offsets_column_index)
-            .template data<offset_type>();
+            .template data<size_type>();
         auto child_row_index = lists_offsets_ptr[row_index] + intra_index;
         auto size =
           child_lists_offsets_ptr[child_row_index + 1] - child_lists_offsets_ptr[child_row_index];

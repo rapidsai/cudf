@@ -303,9 +303,9 @@ std::pair<std::unique_ptr<column>, size_type> make_offsets_child_column(
 {
   auto count          = static_cast<size_type>(std::distance(begin, end));
   auto offsets_column = make_numeric_column(
-    data_type{type_to_id<offset_type>()}, count + 1, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, count + 1, mask_state::UNALLOCATED, stream, mr);
   auto offsets_view = offsets_column->mutable_view();
-  auto d_offsets    = offsets_view.template data<offset_type>();
+  auto d_offsets    = offsets_view.template data<size_type>();
 
   // The number of offsets is count+1 so to build the offsets from the sizes
   // using exclusive-scan technically requires count+1 input values even though

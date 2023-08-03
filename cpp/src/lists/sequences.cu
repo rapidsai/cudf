@@ -47,7 +47,7 @@ struct tabulator {
 
   T const* const starts;
   T const* const steps;
-  offset_type const* const offsets;
+  size_type const* const offsets;
 
   template <typename U>
   static std::enable_if_t<!cudf::is_duration<U>(), T> __device__ multiply(U x, size_type times)
@@ -86,7 +86,7 @@ struct sequences_dispatcher {
                                      size_type n_elements,
                                      column_view const& starts,
                                      std::optional<column_view> const& steps,
-                                     offset_type const* offsets,
+                                     size_type const* offsets,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -106,7 +106,7 @@ struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
                                         size_type n_elements,
                                         column_view const& starts,
                                         std::optional<column_view> const& steps,
-                                        offset_type const* offsets,
+                                        size_type const* offsets,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
   {
@@ -154,8 +154,8 @@ std::unique_ptr<column> sequences(column_view const& starts,
 
   // Generate list offsets for the output.
   auto list_offsets = make_numeric_column(
-    data_type(type_to_id<offset_type>()), n_lists + 1, mask_state::UNALLOCATED, stream, mr);
-  auto const offsets_begin  = list_offsets->mutable_view().template begin<offset_type>();
+    data_type(type_to_id<size_type>()), n_lists + 1, mask_state::UNALLOCATED, stream, mr);
+  auto const offsets_begin  = list_offsets->mutable_view().template begin<size_type>();
   auto const sizes_input_it = cudf::detail::indexalator_factory::make_input_iterator(sizes);
   // First copy the sizes since the exclusive_scan tries to read (n_lists+1) values
   thrust::copy_n(rmm::exec_policy(stream), sizes_input_it, sizes.size(), offsets_begin);

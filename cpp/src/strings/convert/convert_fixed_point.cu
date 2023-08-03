@@ -197,7 +197,7 @@ namespace {
 template <typename DecimalType>
 struct from_fixed_point_fn {
   column_device_view d_decimals;
-  offset_type* d_offsets{};
+  size_type* d_offsets{};
   char* d_chars{};
 
   /**
