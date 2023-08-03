@@ -123,3 +123,7 @@ NEXT_FULL_JAVA_TAG="${NEXT_SHORT_TAG}.${PATCH_PEP440}-SNAPSHOT"
 sed_runner "s|<version>.*-SNAPSHOT</version>|<version>${NEXT_FULL_JAVA_TAG}</version>|g" java/pom.xml
 sed_runner "s/branch-.*/branch-${NEXT_SHORT_TAG}/g" java/ci/README.md
 sed_runner "s/cudf-.*-SNAPSHOT/cudf-${NEXT_FULL_JAVA_TAG}/g" java/ci/README.md
+
+# .devcontainer files
+sed_runner "s/ARG RAPIDS=${CURRENT_SHORT_TAG}/ARG RAPIDS=${NEXT_SHORT_TAG}/g" .devcontainer/Dockerfile
+find .devcontainer/ -type f -name devcontainer.json -exec sed -i "s/${CURRENT_SHORT_TAG}/${NEXT_SHORT_TAG}/g" {} \;
