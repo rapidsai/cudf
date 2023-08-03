@@ -405,6 +405,8 @@ def groupby_jit_data_small():
 
     df["val1"] = np.random.random(len(key1))
     df["val2"] = np.random.random(len(key1))
+    df["val3"] = np.random.randint(0, 10, len(key1))
+    df["val4"] = np.random.randint(0, 10, len(key1))
 
     # randomly permute data
     df = df.sample(frac=1).reset_index(drop=True)
@@ -424,6 +426,7 @@ def groupby_jit_data_large(groupby_jit_data_small):
         max_tpb + 1
     )  # bigger than a block but not always an exact multiple
     df = cudf.concat([groupby_jit_data_small] * factor)
+
     return df
 
 
@@ -527,10 +530,12 @@ def groupby_apply_jit_reductions_special_vals_inner(
 @pytest.mark.parametrize("special_val", [np.nan, np.inf, -np.inf])
 @pytest.mark.parametrize("dataset", ["small", "large", "nans"])
 def test_groupby_apply_jit_reductions_special_vals(
-    func, dataset, dtype, special_val
+    func, dtype, dataset, groupby_jit_datasets, special_val
 ):
     dataset = groupby_jit_datasets[dataset]
-    groupby_apply_jit_reductions_test_inner(func, dataset, dtype, special_val)
+    groupby_apply_jit_reductions_special_vals_inner(
+        func, dataset, dtype, special_val
+    )
 
 
 @pytest.mark.parametrize("dtype", ["float64"])

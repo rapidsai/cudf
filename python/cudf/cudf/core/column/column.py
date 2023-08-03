@@ -5,6 +5,7 @@ from __future__ import annotations
 import builtins
 import pickle
 import warnings
+from collections import abc
 from functools import cached_property
 from itertools import chain
 from types import SimpleNamespace
@@ -2384,12 +2385,16 @@ def as_column(
                     return cudf.core.column.ListColumn.from_sequences(
                         arbitrary
                     )
-                else:
+                elif isinstance(arbitrary, abc.Iterable) or isinstance(
+                    arbitrary, abc.Sequence
+                ):
                     data = as_column(
                         _construct_array(arbitrary, dtype),
                         dtype=dtype,
                         nan_as_null=nan_as_null,
                     )
+                else:
+                    raise e
     return data
 
 
