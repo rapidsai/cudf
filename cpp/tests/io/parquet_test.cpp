@@ -3709,6 +3709,44 @@ TEST_F(ParquetWriterTest, CheckPageRowsAdjusted)
   EXPECT_LE(ph.data_page_header.num_values, rows_per_page);
 }
 
+TEST_F(ParquetWriterTest, CheckPageRowsTooSmall)
+{
+  constexpr auto rows_per_page = 1'000;
+  constexpr auto fragment_size = 5'000;
+  constexpr auto num_rows      = 3 * rows_per_page;
+  const std::string s1(32, 'a');
+  auto col0_elements =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return s1; });
+  auto col0 = cudf::test::strings_column_wrapper(col0_elements, col0_elements + num_rows);
+
+  auto const expected = table_view{{col0}};
+
+  auto const filepath = temp_env->get_temp_filepath("CheckPageRowsTooSmall.parquet");
+  const cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .max_page_fragment_size(fragment_size)
+      .max_page_size_rows(rows_per_page);
+  cudf::io::write_parquet(out_opts);
+
+  // check that file is written correctly when rows/page < fragment size
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+
+  read_footer(source, &fmd);
+  ASSERT_TRUE(fmd.row_groups.size() > 0);
+  ASSERT_TRUE(fmd.row_groups[0].columns.size() == 1);
+  auto const& first_chunk = fmd.row_groups[0].columns[0].meta_data;
+  ASSERT_TRUE(first_chunk.data_page_offset > 0);
+
+  // read first data page header.  sizeof(PageHeader) is not exact, but the thrift encoded
+  // version should be smaller than size of the struct.
+  auto const ph = read_page_header(
+    source, {first_chunk.data_page_offset, sizeof(cudf::io::parquet::PageHeader), 0});
+
+  // there should be only one page since the fragment size is larger than rows_per_page
+  EXPECT_EQ(ph.data_page_header.num_values, num_rows);
+}
+
 TEST_F(ParquetWriterTest, Decimal128Stats)
 {
   // check that decimal128 min and max statistics are written in network byte order
