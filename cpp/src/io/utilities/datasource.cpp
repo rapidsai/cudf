@@ -29,6 +29,8 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#include <unordered_map>
+
 namespace cudf {
 namespace io {
 namespace {
@@ -104,6 +106,24 @@ class file_source : public datasource {
   static constexpr size_t _gds_read_preferred_threshold = 128 << 10;  // 128KB
 };
 
+[[nodiscard]] bool pageableMemoryAccessUsesHostPageTables()
+{
+  static std::unordered_map<int, bool> result_cache{};
+
+  int deviceId{};
+  cudaGetDevice(&deviceId);
+
+  if (result_cache.find(deviceId) == result_cache.end()) {
+    cudaDeviceProp props{};
+    cudaGetDeviceProperties(&props, deviceId);
+    result_cache[deviceId] = (props.pageableMemoryAccessUsesHostPageTables == 1);
+    CUDF_LOG_INFO(
+      "Device {} pageableMemoryAccessUsesHostPageTables: {}", deviceId, result_cache[deviceId]);
+  }
+
+  return result_cache[deviceId];
+}
+
 /**
  * @brief Implementation class for reading from a file using memory mapped access.
  *
@@ -155,37 +175,26 @@ class memory_mapped_source : public file_source {
  private:
   void register_mmaped_buffer()
   {
-    if (_map_addr == nullptr or _map_size == 0) {
-      CUDF_LOG_WARN("Register mmap buffer: empty input");
+    if (_map_addr == nullptr or _map_size == 0 or not pageableMemoryAccessUsesHostPageTables()) {
       return;
     }
 
-    int deviceId{};
-    cudaGetDevice(&deviceId);
-    cudaDeviceProp deviceProp{};
-    cudaGetDeviceProperties(&deviceProp, deviceId);
-    // Only register the memory mapped buffer if the device accesses pageable memory via the host's
-    // page tables - `cudaHostRegister` is very cheap in this case
-    if (deviceProp.pageableMemoryAccessUsesHostPageTables == 0) {
-      CUDF_LOG_WARN("Register mmap buffer: pageableMemoryAccessUsesHostPageTables == 0");
-      return;
+    auto const result = cudaHostRegister(_map_addr, _map_size, cudaHostRegisterDefault);
+    if (result == cudaSuccess) {
+      _is_map_registered = true;
+    } else {
+      CUDF_LOG_WARN("cudaHostRegister failed with {} ({})", result, cudaGetErrorString(result));
     }
-
-    auto const result =
-      cudaHostRegister(const_cast<void*>(_map_addr), _map_size, cudaHostRegisterDefault);
-    CUDF_LOG_WARN("Register mmap buffer: cudaHostRegister returned {}", result);
-    _is_registered = (result == cudaSuccess);
   }
 
   void unregister_mmaped_buffer()
   {
-    if (not _is_registered) {
-      CUDF_LOG_WARN("Unregister mmap buffer: not registered");
-      return;
-    }
+    if (not _is_map_registered) { return; }
 
-    auto const result = cudaHostUnregister(const_cast<void*>(_map_addr));
-    CUDF_LOG_WARN("Unregister mmap buffer: cudaHostUnregister returned {}", result);
+    auto const result = cudaHostUnregister(_map_addr);
+    if (result != cudaSuccess) {
+      CUDF_LOG_WARN("cudaHostUnregister failed with {} ({})", result, cudaGetErrorString(result));
+    }
   }
 
   void map(int fd, size_t offset, size_t size)
@@ -206,10 +215,10 @@ class memory_mapped_source : public file_source {
   }
 
  private:
-  size_t _map_size    = 0;
-  size_t _map_offset  = 0;
-  void* _map_addr     = nullptr;
-  bool _is_registered = false;
+  size_t _map_size        = 0;
+  size_t _map_offset      = 0;
+  void* _map_addr         = nullptr;
+  bool _is_map_registered = false;
 };
 
 /**
