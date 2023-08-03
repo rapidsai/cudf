@@ -294,9 +294,9 @@ TEST_F(StringsContainsTests, HexTest)
   std::vector<char> ascii_chars(  // all possible matchable chars
     {thrust::make_counting_iterator<char>(0), thrust::make_counting_iterator<char>(127)});
   auto const count = static_cast<cudf::size_type>(ascii_chars.size());
-  std::vector<cudf::offset_type> offsets(
-    {thrust::make_counting_iterator<cudf::offset_type>(0),
-     thrust::make_counting_iterator<cudf::offset_type>(0) + count + 1});
+  std::vector<cudf::size_type> offsets(
+    {thrust::make_counting_iterator<cudf::size_type>(0),
+     thrust::make_counting_iterator<cudf::size_type>(0) + count + 1});
   auto d_chars = cudf::detail::make_device_uvector_sync(
     ascii_chars, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   auto d_offsets = cudf::detail::make_device_uvector_sync(

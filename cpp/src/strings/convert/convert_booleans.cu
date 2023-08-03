@@ -95,7 +95,7 @@ struct from_booleans_fn {
   column_device_view const d_column;
   string_view d_true;
   string_view d_false;
-  offset_type* d_offsets{};
+  size_type* d_offsets{};
   char* d_chars{};
 
   __device__ void operator()(size_type idx) const
