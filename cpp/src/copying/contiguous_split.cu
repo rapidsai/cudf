@@ -1190,11 +1190,11 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
     thrust::make_counting_iterator<std::size_t>(0),
     thrust::make_counting_iterator<std::size_t>(num_bufs),
     d_dst_buf_info,
-    [d_src_buf_info,
-     offset_stack_partition_size,
-     d_offset_stack,
-     d_indices,
-     num_src_bufs] __device__(std::size_t t) {
+    cuda::proclaim_return_type<dst_buf_info>([d_src_buf_info,
+                                              offset_stack_partition_size,
+                                              d_offset_stack,
+                                              d_indices,
+                                              num_src_bufs] __device__(std::size_t t) {
       int const split_index   = t / num_src_bufs;
       int const src_buf_index = t % num_src_bufs;
       auto const& src_info    = d_src_buf_info[src_buf_index];
@@ -1261,7 +1261,7 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
                           src_info.is_validity ? 1 : 0,
                           src_buf_index,
                           split_index};
-    });
+    }));
 
   // compute total size of each partition
   // key is the split index
@@ -1430,11 +1430,11 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
     rmm::exec_policy(stream, temp_mr),
     iter,
     iter + num_batches,
-    [d_orig_dst_buf_info,
-     d_batched_dst_buf_info = d_batched_dst_buf_info.begin(),
-     batches                = batches.begin(),
-     d_batch_offsets        = d_batch_offsets.begin(),
-     out_to_in_index] __device__(size_type i) {
+    cuda::proclaim_return_type<void>([d_orig_dst_buf_info,
+                                      d_batched_dst_buf_info = d_batched_dst_buf_info.begin(),
+                                      batches                = batches.begin(),
+                                      d_batch_offsets        = d_batch_offsets.begin(),
+                                      out_to_in_index] __device__(size_type i) {
       size_type const in_buf_index = out_to_in_index(i);
       size_type const batch_index  = i - d_batch_offsets[in_buf_index];
       auto const batch_size        = thrust::get<1>(batches[in_buf_index]);
@@ -1473,7 +1473,7 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
       // calculate real output buffer sizes. the data we are generating here is
       // purely intermediate for the purposes of doing more uniform copying of data
       // underneath the final structure of the output
-    });
+    }));
 
   /**
    * In the chunked case, this is the code that fixes up the offsets of each batch
@@ -1556,21 +1556,22 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
       auto num_batches_in_first_iteration = num_batches_per_iteration[0];
       auto const iter     = thrust::make_counting_iterator(num_batches_in_first_iteration);
       auto num_iterations = accum_size_per_iteration.size();
-      thrust::for_each(
-        rmm::exec_policy(stream, temp_mr),
-        iter,
-        iter + num_batches - num_batches_in_first_iteration,
-        [num_iterations,
-         d_batched_dst_buf_info     = d_batched_dst_buf_info.begin(),
-         d_accum_size_per_iteration = d_accum_size_per_iteration.begin()] __device__(size_type i) {
-          auto prior_iteration_size =
-            thrust::upper_bound(thrust::seq,
-                                d_accum_size_per_iteration,
-                                d_accum_size_per_iteration + num_iterations,
-                                d_batched_dst_buf_info[i].dst_offset) -
-            1;
-          d_batched_dst_buf_info[i].dst_offset -= *prior_iteration_size;
-        });
+      thrust::for_each(rmm::exec_policy(stream, temp_mr),
+                       iter,
+                       iter + num_batches - num_batches_in_first_iteration,
+                       cuda::proclaim_return_type<void>(
+                         [num_iterations,
+                          d_batched_dst_buf_info = d_batched_dst_buf_info.begin(),
+                          d_accum_size_per_iteration =
+                            d_accum_size_per_iteration.begin()] __device__(size_type i) {
+                           auto prior_iteration_size =
+                             thrust::upper_bound(thrust::seq,
+                                                 d_accum_size_per_iteration,
+                                                 d_accum_size_per_iteration + num_iterations,
+                                                 d_batched_dst_buf_info[i].dst_offset) -
+                             1;
+                           d_batched_dst_buf_info[i].dst_offset -= *prior_iteration_size;
+                         }));
     }
     return std::make_unique<chunk_iteration_state>(std::move(d_batched_dst_buf_info),
                                                    std::move(d_batch_offsets),
@@ -1630,25 +1631,26 @@ std::unique_ptr<chunk_iteration_state> compute_batches(int num_bufs,
     d_dst_buf_info,
     d_dst_buf_info + num_bufs,
     batches.begin(),
-    [desired_batch_size = desired_batch_size] __device__(
-      dst_buf_info const& buf) -> thrust::pair<std::size_t, std::size_t> {
-      // Total bytes for this incoming partition
-      std::size_t const bytes =
-        static_cast<std::size_t>(buf.num_elements) * static_cast<std::size_t>(buf.element_size);
+    cuda::proclaim_return_type<thrust::pair<std::size_t, std::size_t>>(
+      [desired_batch_size = desired_batch_size] __device__(
+        dst_buf_info const& buf) -> thrust::pair<std::size_t, std::size_t> {
+        // Total bytes for this incoming partition
+        std::size_t const bytes =
+          static_cast<std::size_t>(buf.num_elements) * static_cast<std::size_t>(buf.element_size);
 
-      // This clause handles nested data types (e.g. list or string) that store no data in the row
-      // columns, only in their children.
-      if (bytes == 0) { return {1, 0}; }
+        // This clause handles nested data types (e.g. list or string) that store no data in the row
+        // columns, only in their children.
+        if (bytes == 0) { return {1, 0}; }
 
-      // The number of batches we want to subdivide this buffer into
-      std::size_t const num_batches = std::max(
-        std::size_t{1}, util::round_up_unsafe(bytes, desired_batch_size) / desired_batch_size);
+        // The number of batches we want to subdivide this buffer into
+        std::size_t const num_batches = std::max(
+          std::size_t{1}, util::round_up_unsafe(bytes, desired_batch_size) / desired_batch_size);
 
-      // NOTE: leaving batch size as a separate parameter for future tuning
-      // possibilities, even though in the current implementation it will be a
-      // constant.
-      return {num_batches, desired_batch_size};
-    });
+        // NOTE: leaving batch size as a separate parameter for future tuning
+        // possibilities, even though in the current implementation it will be a
+        // constant.
+        return {num_batches, desired_batch_size};
+      }));
 
   return chunk_iteration_state::create(batches,
                                        num_bufs,
@@ -1788,7 +1790,8 @@ struct contiguous_split_state {
 
     auto values = thrust::make_transform_iterator(
       chunk_iter_state->d_batched_dst_buf_info.begin(),
-      [] __device__(dst_buf_info const& info) { return info.valid_count; });
+      cuda::proclaim_return_type<size_type>(
+        [] __device__(dst_buf_info const& info) { return info.valid_count; }));
 
     thrust::reduce_by_key(rmm::exec_policy(stream, temp_mr),
                           keys,
