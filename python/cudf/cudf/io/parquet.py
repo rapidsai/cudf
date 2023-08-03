@@ -1,6 +1,7 @@
 # Copyright (c) 2019-2023, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import itertools
 import math
 import operator
 import shutil
@@ -436,7 +437,6 @@ def read_parquet(
     storage_options=None,
     filters=None,
     row_groups=None,
-    strings_to_categorical=False,
     use_pandas_metadata=True,
     use_python_file_object=True,
     categorical_partitions=True,
@@ -448,12 +448,6 @@ def read_parquet(
 ):
     """{docstring}"""
 
-    if strings_to_categorical is not False:
-        warnings.warn(
-            "`strings_to_categorical` is deprecated and will be removed in "
-            "a future version of cudf.",
-            FutureWarning,
-        )
     # Do not allow the user to set file-opening options
     # when `use_python_file_object=False` is specified
     if use_python_file_object is False:
@@ -558,6 +552,18 @@ def read_parquet(
                 "for full CPU-based filtering functionality."
             )
 
+    # Make sure we read in the columns needed for row-wise
+    # filtering after IO. This means that one or more columns
+    # will be dropped almost immediately after IO. However,
+    # we do NEED these columns for accurate filtering.
+    projected_columns = None
+    if columns and filters:
+        projected_columns = columns
+        columns = sorted(
+            set(v[0] for v in itertools.chain.from_iterable(filters))
+            | set(columns)
+        )
+
     # Convert parquet data to a cudf.DataFrame
     df = _parquet_to_frame(
         filepaths_or_buffers,
@@ -565,7 +571,6 @@ def read_parquet(
         *args,
         columns=columns,
         row_groups=row_groups,
-        strings_to_categorical=strings_to_categorical,
         use_pandas_metadata=use_pandas_metadata,
         partition_keys=partition_keys,
         partition_categories=partition_categories,
@@ -574,7 +579,15 @@ def read_parquet(
     )
 
     # Apply filters row-wise (if any are defined), and return
-    return _apply_post_filters(df, filters)
+    df = _apply_post_filters(df, filters)
+    if projected_columns:
+        # Elements of `projected_columns` may now be in the index.
+        # We must filter these names from our projection
+        projected_columns = [
+            col for col in projected_columns if col in df._column_names
+        ]
+        return df[projected_columns]
+    return df
 
 
 def _normalize_filters(filters: list | None) -> List[List[tuple]] | None:
@@ -788,7 +801,6 @@ def _read_parquet(
     engine,
     columns=None,
     row_groups=None,
-    strings_to_categorical=None,
     use_pandas_metadata=None,
     *args,
     **kwargs,
@@ -810,7 +822,6 @@ def _read_parquet(
             filepaths_or_buffers,
             columns=columns,
             row_groups=row_groups,
-            strings_to_categorical=strings_to_categorical,
             use_pandas_metadata=use_pandas_metadata,
         )
     else:

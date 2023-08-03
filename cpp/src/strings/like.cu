@@ -55,11 +55,11 @@ struct like_fn {
     auto const d_str     = d_strings.element<string_view>(idx);
     auto const d_pattern = patterns_itr[idx];
 
-    // using only iterators to better handle UTF-8 characters
-    auto target_itr  = d_str.begin();
+    // incrementing by bytes instead of character improves performance 10-20%
+    auto target_itr  = d_str.data();
     auto pattern_itr = d_pattern.begin();
 
-    auto const target_end  = d_str.end();
+    auto const target_end  = target_itr + d_str.size_bytes();
     auto const pattern_end = d_pattern.end();
     auto const esc_char    = d_escape.empty() ? 0 : d_escape[0];
 
@@ -75,12 +75,20 @@ struct like_fn {
           escaped && (pattern_itr + 1 < pattern_end) ? *(++pattern_itr) : *pattern_itr;
 
         if (escaped || (pattern_char != multi_wildcard)) {
+          size_type char_width = 0;
           // check match with the current character
-          result = ((target_itr != target_end) && ((!escaped && pattern_char == single_wildcard) ||
-                                                   (pattern_char == *target_itr)));
+          result = (target_itr != target_end);
+          if (result) {
+            if (escaped || pattern_char != single_wildcard) {
+              char_utf8 target_char = 0;
+              // retrieve the target character to compare with the current pattern_char
+              char_width = to_char_utf8(target_itr, target_char);
+              result     = (pattern_char == target_char);
+            }
+          }
           if (!result) { break; }
-          ++target_itr;
           ++pattern_itr;
+          target_itr += char_width ? char_width : bytes_in_utf8_byte(*target_itr);
         } else {
           // process wildcard '%'
           result = true;
@@ -92,8 +100,8 @@ struct like_fn {
           // save positions
           last_pattern_itr = pattern_itr;
           last_target_itr  = target_itr;
-        }
-      }                                                     // next pattern character
+        }  // next pattern character
+      }
 
       if (result && (target_itr == target_end)) { break; }  // success
 
@@ -103,7 +111,8 @@ struct like_fn {
 
       // restore saved positions
       pattern_itr = last_pattern_itr;
-      target_itr  = ++last_target_itr;
+      last_target_itr += bytes_in_utf8_byte(*last_target_itr);
+      target_itr = last_target_itr;
     }
     return result;
   }

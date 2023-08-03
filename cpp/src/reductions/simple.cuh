@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "struct_minmax_util.cuh"
+#include "nested_type_minmax_util.cuh"
 
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -275,7 +275,7 @@ struct same_element_type_dispatcher {
   template <typename ElementType>
   static constexpr bool is_supported()
   {
-    return !(cudf::is_dictionary<ElementType>() || std::is_same_v<ElementType, cudf::list_view>);
+    return !cudf::is_dictionary<ElementType>();
   }
 
   template <typename IndexType, std::enable_if_t<cudf::is_index_type<IndexType>()>* = nullptr>
@@ -299,7 +299,7 @@ struct same_element_type_dispatcher {
 
  public:
   template <typename ElementType,
-            std::enable_if_t<std::is_same_v<ElementType, cudf::struct_view> &&
+            std::enable_if_t<cudf::is_nested<ElementType>() &&
                              (std::is_same_v<Op, cudf::reduction::detail::op::min> ||
                               std::is_same_v<Op, cudf::reduction::detail::op::max>)>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& input,
@@ -307,7 +307,7 @@ struct same_element_type_dispatcher {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    if (init.has_value()) { CUDF_FAIL("Initial value not supported for struct reductions"); }
+    if (init.has_value()) { CUDF_FAIL("Initial value not supported for nested type reductions"); }
 
     if (input.is_empty()) { return cudf::make_empty_scalar_like(input, stream, mr); }
 
@@ -324,8 +324,8 @@ struct same_element_type_dispatcher {
   }
 
   template <typename ElementType,
-            std::enable_if_t<is_supported<ElementType>() && !cudf::is_fixed_point<ElementType>() &&
-                             !std::is_same_v<ElementType, cudf::struct_view>>* = nullptr>
+            std::enable_if_t<is_supported<ElementType>() && !cudf::is_nested<ElementType>() &&
+                             !cudf::is_fixed_point<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,

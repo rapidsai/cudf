@@ -107,7 +107,7 @@ constexpr S round_up_unsafe(S number_to_round, S modulus) noexcept
  * the result will be incorrect
  */
 template <typename S, typename T>
-constexpr S div_rounding_up_unsafe(const S& dividend, const T& divisor) noexcept
+constexpr S div_rounding_up_unsafe(S const& dividend, T const& divisor) noexcept
 {
   return (dividend + divisor - 1) / divisor;
 }

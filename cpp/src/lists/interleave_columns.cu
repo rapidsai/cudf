@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -258,11 +258,11 @@ struct interleave_list_entries_impl<T, std::enable_if_t<cudf::is_fixed_width<T>(
     auto const table_dv_ptr = table_device_view::create(input, stream);
 
     // The output child column.
-    auto output        = allocate_like(lists_column_view(*input.begin()).child(),
-                                num_output_entries,
-                                mask_allocation_policy::NEVER,
-                                stream,
-                                mr);
+    auto output        = cudf::detail::allocate_like(lists_column_view(*input.begin()).child(),
+                                              num_output_entries,
+                                              mask_allocation_policy::NEVER,
+                                              stream,
+                                              mr);
     auto output_dv_ptr = mutable_column_device_view::create(*output, stream);
 
     // The array of int8_t to store entry validities.

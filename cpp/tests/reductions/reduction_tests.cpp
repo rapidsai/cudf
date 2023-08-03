@@ -2077,88 +2077,43 @@ TYPED_TEST(DictionaryAnyAllTest, AnyAll)
   std::vector<T> v_some = convert_values<T>(some_values);
   cudf::data_type output_dtype(cudf::type_id::BOOL8);
 
+  auto any_agg = cudf::make_any_aggregation<reduce_aggregation>();
+  auto all_agg = cudf::make_all_aggregation<reduce_aggregation>();
+
   // without nulls
   {
     cudf::test::dictionary_column_wrapper<T> all_col(v_all.begin(), v_all.end());
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    all_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    all_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
+    EXPECT_TRUE(this->template reduction_test<bool>(all_col, *any_agg, output_dtype).first);
+    EXPECT_TRUE(this->template reduction_test<bool>(all_col, *all_agg, output_dtype).first);
     cudf::test::dictionary_column_wrapper<T> none_col(v_none.begin(), v_none.end());
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     none_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     none_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
+    EXPECT_FALSE(this->template reduction_test<bool>(none_col, *any_agg, output_dtype).first);
+    EXPECT_FALSE(this->template reduction_test<bool>(none_col, *all_agg, output_dtype).first);
     cudf::test::dictionary_column_wrapper<T> some_col(v_some.begin(), v_some.end());
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    some_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     some_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
+    EXPECT_TRUE(this->template reduction_test<bool>(some_col, *any_agg, output_dtype).first);
+    EXPECT_FALSE(this->template reduction_test<bool>(some_col, *all_agg, output_dtype).first);
     // sliced test
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(cudf::slice(some_col, {1, 3}).front(),
-                                                  *cudf::make_any_aggregation<reduce_aggregation>(),
-                                                  output_dtype)
-                  .first);
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(cudf::slice(some_col, {1, 2}).front(),
-                                                  *cudf::make_all_aggregation<reduce_aggregation>(),
-                                                  output_dtype)
-                  .first);
+    auto slice1 = cudf::slice(some_col, {1, 3}).front();
+    auto slice2 = cudf::slice(some_col, {1, 2}).front();
+    EXPECT_TRUE(this->template reduction_test<bool>(slice1, *any_agg, output_dtype).first);
+    EXPECT_TRUE(this->template reduction_test<bool>(slice2, *all_agg, output_dtype).first);
   }
   // with nulls
   {
     std::vector<bool> valid({1, 1, 0, 1});
     cudf::test::dictionary_column_wrapper<T> all_col(v_all.begin(), v_all.end(), valid.begin());
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    all_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    all_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
+    EXPECT_TRUE(this->template reduction_test<bool>(all_col, *any_agg, output_dtype).first);
+    EXPECT_TRUE(this->template reduction_test<bool>(all_col, *all_agg, output_dtype).first);
     cudf::test::dictionary_column_wrapper<T> none_col(v_none.begin(), v_none.end(), valid.begin());
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     none_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     none_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
+    EXPECT_FALSE(this->template reduction_test<bool>(none_col, *any_agg, output_dtype).first);
+    EXPECT_FALSE(this->template reduction_test<bool>(none_col, *all_agg, output_dtype).first);
     cudf::test::dictionary_column_wrapper<T> some_col(v_some.begin(), v_some.end(), valid.begin());
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    some_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     some_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
+    EXPECT_TRUE(this->template reduction_test<bool>(some_col, *any_agg, output_dtype).first);
+    EXPECT_FALSE(this->template reduction_test<bool>(some_col, *all_agg, output_dtype).first);
     // sliced test
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(cudf::slice(some_col, {0, 3}).front(),
-                                                  *cudf::make_any_aggregation<reduce_aggregation>(),
-                                                  output_dtype)
-                  .first);
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(cudf::slice(some_col, {1, 4}).front(),
-                                                  *cudf::make_all_aggregation<reduce_aggregation>(),
-                                                  output_dtype)
-                  .first);
+    auto slice1 = cudf::slice(some_col, {0, 3}).front();
+    auto slice2 = cudf::slice(some_col, {1, 4}).front();
+    EXPECT_TRUE(this->template reduction_test<bool>(slice1, *any_agg, output_dtype).first);
+    EXPECT_TRUE(this->template reduction_test<bool>(slice2, *all_agg, output_dtype).first);
   }
 }
 
@@ -2591,6 +2546,105 @@ TEST_F(ListReductionTest, NonValidListReductionNthElement)
     true,
     false,
     *cudf::make_nth_element_aggregation<reduce_aggregation>(0, cudf::null_policy::INCLUDE));
+}
+
+TEST_F(ListReductionTest, ReductionMinMaxNoNull)
+{
+  using INTS_CW          = cudf::test::fixed_width_column_wrapper<int>;
+  using LISTS_CW         = cudf::test::lists_column_wrapper<int>;
+  using STRINGS_CW       = cudf::test::strings_column_wrapper;
+  using LISTS_STRINGS_CW = cudf::test::lists_column_wrapper<cudf::string_view>;
+
+  {
+    auto const input = LISTS_CW{{3, 4}, {1, 2}, {5, 6, 7}, {0, 8}, {9, 10}, {1, 0}};
+    this->reduction_test(
+      input, INTS_CW{0, 8}, true, true, *cudf::make_min_aggregation<reduce_aggregation>());
+    this->reduction_test(
+      input, INTS_CW{9, 10}, true, true, *cudf::make_max_aggregation<reduce_aggregation>());
+  }
+  {
+    auto const input = LISTS_STRINGS_CW{
+      {"34", "43"}, {"12", "21"}, {"567", "6", "765"}, {"08", "8"}, {"109", "10"}, {"10", "00"}};
+    this->reduction_test(
+      input, STRINGS_CW{"08", "8"}, true, true, *cudf::make_min_aggregation<reduce_aggregation>());
+    this->reduction_test(input,
+                         STRINGS_CW{"567", "6", "765"},
+                         true,
+                         true,
+                         *cudf::make_max_aggregation<reduce_aggregation>());
+  }
+}
+
+TEST_F(ListReductionTest, ReductionMinMaxSlicedInput)
+{
+  using INTS_CW          = cudf::test::fixed_width_column_wrapper<int>;
+  using LISTS_CW         = cudf::test::lists_column_wrapper<int>;
+  using STRINGS_CW       = cudf::test::strings_column_wrapper;
+  using LISTS_STRINGS_CW = cudf::test::lists_column_wrapper<cudf::string_view>;
+
+  {
+    auto const input_original = LISTS_CW{{9, 9} /*don't care*/,
+                                         {0, 0} /*don't care*/,
+                                         {3, 4},
+                                         {1, 2},
+                                         {5, 6, 7},
+                                         {0, 8},
+                                         {9, 10},
+                                         {1, 0},
+                                         {0, 7} /*don't care*/};
+    auto const input          = cudf::slice(input_original, {2, 8})[0];
+    this->reduction_test(
+      input, INTS_CW{0, 8}, true, true, *cudf::make_min_aggregation<reduce_aggregation>());
+    this->reduction_test(
+      input, INTS_CW{9, 10}, true, true, *cudf::make_max_aggregation<reduce_aggregation>());
+  }
+  {
+    auto const input_original = LISTS_STRINGS_CW{{"08", "8"} /*don't care*/,
+                                                 {"999", "8"} /*don't care*/,
+                                                 {"34", "43"},
+                                                 {"12", "21"},
+                                                 {"567", "6", "765"},
+                                                 {"08", "8"},
+                                                 {"109", "10"},
+                                                 {"10", "00"}};
+    auto const input          = cudf::slice(input_original, {2, 8})[0];
+    this->reduction_test(
+      input, STRINGS_CW{"08", "8"}, true, true, *cudf::make_min_aggregation<reduce_aggregation>());
+    this->reduction_test(input,
+                         STRINGS_CW{"567", "6", "765"},
+                         true,
+                         true,
+                         *cudf::make_max_aggregation<reduce_aggregation>());
+  }
+}
+
+TEST_F(ListReductionTest, ReductionMinMaxWithNulls)
+{
+  using INTS_CW  = cudf::test::fixed_width_column_wrapper<int>;
+  using LISTS_CW = cudf::test::lists_column_wrapper<int>;
+  using cudf::test::iterators::null_at;
+  using cudf::test::iterators::nulls_at;
+  constexpr int null{0};
+
+  auto const input = LISTS_CW{{LISTS_CW{3, 4},
+                               LISTS_CW{1, 2},
+                               LISTS_CW{{1, null}, null_at(1)},
+                               LISTS_CW{} /*null*/,
+                               LISTS_CW{5, 6, 7},
+                               LISTS_CW{1, 8},
+                               LISTS_CW{{9, null}, null_at(1)},
+                               LISTS_CW{} /*null*/},
+                              nulls_at({3, 7})};
+  this->reduction_test(input,
+                       INTS_CW{{1, null}, null_at(1)},
+                       true,
+                       true,
+                       *cudf::make_min_aggregation<reduce_aggregation>());
+  this->reduction_test(input,
+                       INTS_CW{{9, null}, null_at(1)},
+                       true,
+                       true,
+                       *cudf::make_max_aggregation<reduce_aggregation>());
 }
 
 struct StructReductionTest : public cudf::test::BaseFixture {

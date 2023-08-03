@@ -41,12 +41,14 @@ struct count_fn {
     auto const nchars = d_str.length();
     int32_t count     = 0;
 
-    size_type begin = 0;
-    size_type end   = -1;
-    while ((begin <= nchars) && (prog.find(thread_idx, d_str, begin, end) > 0)) {
+    auto itr = d_str.begin();
+    while (itr.position() <= nchars) {
+      auto result = prog.find(thread_idx, d_str, itr);
+      if (!result) { break; }
       ++count;
-      begin = end + (begin == end);
-      end   = -1;
+      // increment the iterator is faster than creating a new one
+      // +1 if the match was on a virtual position (e.g. word boundary)
+      itr += (result->second - itr.position()) + (result->first == result->second);
     }
     return count;
   }

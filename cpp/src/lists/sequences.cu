@@ -157,9 +157,11 @@ std::unique_ptr<column> sequences(column_view const& starts,
     data_type(type_to_id<offset_type>()), n_lists + 1, mask_state::UNALLOCATED, stream, mr);
   auto const offsets_begin  = list_offsets->mutable_view().template begin<offset_type>();
   auto const sizes_input_it = cudf::detail::indexalator_factory::make_input_iterator(sizes);
+  // First copy the sizes since the exclusive_scan tries to read (n_lists+1) values
+  thrust::copy_n(rmm::exec_policy(stream), sizes_input_it, sizes.size(), offsets_begin);
 
   auto const n_elements = cudf::detail::sizes_to_offsets(
-    sizes_input_it, sizes_input_it + n_lists + 1, offsets_begin, stream);
+    offsets_begin, offsets_begin + list_offsets->size(), offsets_begin, stream);
   CUDF_EXPECTS(n_elements <= std::numeric_limits<size_type>::max(),
                "Size of output exceeds the column size limit",
                std::overflow_error);
