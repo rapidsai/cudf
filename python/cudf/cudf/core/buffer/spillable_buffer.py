@@ -18,76 +18,12 @@ from cudf.core.buffer.buffer import (
     Buffer,
     BufferOwner,
     cuda_array_interface_wrapper,
-    get_owner,
-    get_ptr_and_size,
     host_memory_allocation,
 )
 from cudf.utils.string import format_bytes
 
 if TYPE_CHECKING:
     from cudf.core.buffer.spill_manager import SpillManager
-
-
-def as_spillable_buffer(data, exposed: bool) -> SpillableBuffer:
-    """Factory function to wrap `data` in a SpillableBuffer object.
-
-    If `data` isn't a buffer already, a new buffer that points to the memory of
-    `data` is created. If `data` represents host memory, it is copied to a new
-    `rmm.DeviceBuffer` device allocation. Otherwise, the memory of `data` is
-    **not** copied, instead the new buffer keeps a reference to `data` in order
-    to retain its lifetime.
-
-    If `data` is owned by a spillable buffer, a "slice" of the buffer is
-    returned. In this case, the spillable buffer must either be "exposed" or
-    spilled locked (called within an acquire_spill_lock context). This is to
-    guarantee that the memory of `data` isn't spilled before this function gets
-    to calculate the offset of the new slice.
-
-    It is illegal for a spillable buffer to own another spillable buffer.
-
-    Parameters
-    ----------
-    data : buffer-like or array-like
-        A buffer-like or array-like object that represent C-contiguous memory.
-    exposed : bool, optional
-        Mark the buffer as permanently exposed (unspillable).
-
-    Return
-    ------
-    SpillableBuffer
-        A spillabe buffer instance that represents the device memory of `data`.
-    """
-
-    from cudf.core.buffer.utils import get_spill_lock
-
-    if not hasattr(data, "__cuda_array_interface__"):
-        if exposed:
-            raise ValueError("cannot created exposed host memory")
-        return SpillableBuffer(
-            owner=SpillableBufferOwner._from_host_memory(data)
-        )
-
-    owner = get_owner(data, SpillableBufferOwner)
-    if owner is not None:
-        if not owner.exposed and get_spill_lock() is None:
-            raise ValueError(
-                "A owning spillable buffer must "
-                "either be exposed or spilled locked."
-            )
-        # `data` is owned by an spillable buffer, which is exposed or
-        # spilled locked.
-        ptr, size = get_ptr_and_size(data.__cuda_array_interface__)
-        base_ptr = owner.get_ptr(mode="read")
-        if size > 0 and owner._ptr == 0:
-            raise ValueError(
-                "Cannot create a non-empty slice of a null buffer"
-            )
-        return SpillableBuffer(owner=owner, offset=ptr - base_ptr, size=size)
-
-    # `data` is new device memory
-    return SpillableBuffer(
-        owner=SpillableBufferOwner._from_device_memory(data, exposed=exposed)
-    )
 
 
 class SpillLock:
@@ -186,7 +122,7 @@ class SpillableBufferOwner(BufferOwner):
         self._manager.add(self)
 
     @classmethod
-    def _from_device_memory(cls, data: Any, *, exposed: bool = False) -> Self:
+    def _from_device_memory(cls, data: Any, exposed: bool) -> Self:
         """Create a spillabe buffer from device memory.
 
         No data is being copied.
@@ -195,7 +131,7 @@ class SpillableBufferOwner(BufferOwner):
         ----------
         data : device-buffer-like
             An object implementing the CUDA Array Interface.
-        exposed : bool, optional
+        exposed : bool
             Mark the buffer as permanently exposed (unspillable).
 
         Returns
@@ -203,7 +139,7 @@ class SpillableBufferOwner(BufferOwner):
         SpillableBufferOwner
             Buffer representing the same device memory as `data`
         """
-        ret = super()._from_device_memory(data)
+        ret = super()._from_device_memory(data, exposed=exposed)
         ret._finalize_init(ptr_desc={"type": "gpu"}, exposed=exposed)
         return ret
 
@@ -525,7 +461,8 @@ class SpillableBuffer(Buffer):
                             ptr=ptr,
                             size=size,
                             owner=(self._owner, spill_lock),
-                        )
+                        ),
+                        exposed=False,
                     )
                 ]
             return header, frames

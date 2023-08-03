@@ -5,17 +5,7 @@ from __future__ import annotations
 import math
 import pickle
 from types import SimpleNamespace
-from typing import (
-    Any,
-    Dict,
-    Literal,
-    Mapping,
-    Optional,
-    Sequence,
-    Tuple,
-    Type,
-    TypeVar,
-)
+from typing import Any, Dict, Literal, Mapping, Optional, Sequence, Tuple
 
 import numpy
 from typing_extensions import Self
@@ -26,14 +16,12 @@ import cudf
 from cudf.core.abc import Serializable
 from cudf.utils.string import format_bytes
 
-T = TypeVar("T")
 
-
-def get_owner(data, klass: Type[T]) -> Optional[T]:
+def get_buffer_owner(data) -> Optional[BufferOwner]:
     """Get the owner of `data`, if any exist
 
     Search through the stack of data owners in order to find an
-    owner of type `klass` (not subclasses).
+    owner BufferOwner (incl. subclasses).
 
     Parameters
     ----------
@@ -42,14 +30,14 @@ def get_owner(data, klass: Type[T]) -> Optional[T]:
 
     Return
     ------
-    klass or None
-        The owner of `data` if `klass` or None.
+    BufferOwner or None
+        The owner of `data` if found otherwise None.
     """
 
-    if type(data) is klass:
+    if isinstance(data, BufferOwner):
         return data
     if hasattr(data, "owner"):
-        return get_owner(data.owner, klass)
+        return get_buffer_owner(data.owner)
     return None
 
 
@@ -144,7 +132,7 @@ class BufferOwner(Serializable):
     _owner: object
 
     @classmethod
-    def _from_device_memory(cls, data: Any) -> Self:
+    def _from_device_memory(cls, data: Any, exposed: bool) -> Self:
         """Create from an object exposing `__cuda_array_interface__`.
 
         No data is being copied.
@@ -153,6 +141,10 @@ class BufferOwner(Serializable):
         ----------
         data : device-buffer-like
             An object implementing the CUDA Array Interface.
+        exposed : bool
+            Mark the buffer as permanently exposed. This is used by
+            ExposureTrackedBuffer to determine when a deep copy is required
+            and by SpillableBuffer to mark the buffer unspillable.
 
         Returns
         -------
@@ -203,7 +195,7 @@ class BufferOwner(Serializable):
         # Copy to device memory
         buf = rmm.DeviceBuffer(ptr=ptr, size=size)
         # Create from device memory
-        return cls._from_device_memory(buf)
+        return cls._from_device_memory(buf, exposed=False)
 
     @property
     def size(self) -> int:
@@ -376,7 +368,8 @@ class Buffer(Serializable):
             rmm.DeviceBuffer(
                 ptr=self._owner.get_ptr(mode="read") + self._offset,
                 size=self.size,
-            )
+            ),
+            exposed=False,
         )
         return self.__class__(owner=owner, offset=0, size=owner.size)
 
@@ -435,7 +428,7 @@ class Buffer(Serializable):
 
         owner_type: BufferOwner = pickle.loads(header["owner-type-serialized"])
         if hasattr(frame, "__cuda_array_interface__"):
-            owner = owner_type._from_device_memory(frame)
+            owner = owner_type._from_device_memory(frame, exposed=False)
         else:
             owner = owner_type._from_host_memory(frame)
         return cls(

@@ -8,71 +8,7 @@ from typing import Any, Literal, Mapping, Optional
 from typing_extensions import Self
 
 import cudf
-from cudf.core.buffer.buffer import (
-    Buffer,
-    BufferOwner,
-    get_owner,
-    get_ptr_and_size,
-)
-
-
-def as_exposure_tracked_buffer(
-    data,
-    exposed: bool,
-) -> ExposureTrackedBuffer:
-    """Factory function to wrap `data` in a slice of an exposure tracked buffer
-
-    It is illegal for an exposure tracked buffer to own another exposure
-    tracked buffer. When representing the same memory, we should have a single
-    exposure tracked buffer and multiple buffer slices.
-
-    Developer Notes
-    ---------------
-    This function always returns slices thus all buffers in cudf will use
-    `ExposureTrackedBuffer` when copy-on-write is enabled. The slices implement
-    copy-on-write by trigging deep copies when write access is detected
-    and multiple slices points to the same exposure tracked buffer.
-
-    Parameters
-    ----------
-    data : buffer-like or array-like
-        A buffer-like or array-like object that represents C-contiguous memory.
-    exposed
-        Mark the buffer as permanently exposed.
-
-    Return
-    ------
-    ExposureTrackedBuffer
-        A buffer slice that points to a ExposureTrackedBufferOwner,
-        which in turn wraps `data`.
-    """
-
-    if not hasattr(data, "__cuda_array_interface__"):
-        if exposed:
-            raise ValueError("cannot created exposed host memory")
-        return ExposureTrackedBuffer(
-            owner=ExposureTrackedBufferOwner._from_host_memory(data)
-        )
-
-    owner = get_owner(data, ExposureTrackedBufferOwner)
-    if owner is not None:
-        # `data` is owned by an exposure tracked buffer
-        ptr, size = get_ptr_and_size(data.__cuda_array_interface__)
-        base_ptr = owner.get_ptr(mode="read")
-        if size > 0 and base_ptr == 0:
-            raise ValueError(
-                "Cannot create a non-empty slice of a null buffer"
-            )
-        return ExposureTrackedBuffer(
-            owner=owner, offset=ptr - base_ptr, size=size
-        )
-
-    # `data` is new device memory
-    return ExposureTrackedBuffer(
-        owner=ExposureTrackedBufferOwner._from_device_memory(
-            data, exposed=exposed
-        )
-    )
+from cudf.core.buffer.buffer import Buffer, BufferOwner
 
 
 class ExposureTrackedBufferOwner(BufferOwner):
@@ -105,8 +41,8 @@ class ExposureTrackedBufferOwner(BufferOwner):
         self._exposed = True
 
     @classmethod
-    def _from_device_memory(cls, data: Any, *, exposed: bool = False) -> Self:
-        ret = super()._from_device_memory(data)
+    def _from_device_memory(cls, data: Any, exposed: bool) -> Self:
+        ret = super()._from_device_memory(data, exposed=exposed)
         ret._exposed = exposed
         ret._slices = weakref.WeakSet()
         return ret
