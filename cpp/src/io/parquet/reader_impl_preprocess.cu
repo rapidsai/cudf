@@ -41,6 +41,8 @@
 #include <thrust/transform.h>
 #include <thrust/unique.h>
 
+#include <cuda/functional>
+
 #include <numeric>
 
 namespace cudf::io::detail::parquet {
@@ -352,12 +354,12 @@ int decode_page_headers(cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc>& c
   gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), stream);
 
   // compute max bytes needed for level data
-  auto level_bit_size =
-    cudf::detail::make_counting_transform_iterator(0, [chunks = chunks.begin()] __device__(int i) {
+  auto level_bit_size = cudf::detail::make_counting_transform_iterator(
+    0, cuda::proclaim_return_type<int>([chunks = chunks.begin()] __device__(int i) {
       auto c = chunks[i];
       return static_cast<int>(
         max(c.level_bits[gpu::level_type::REPETITION], c.level_bits[gpu::level_type::DEFINITION]));
-    });
+    }));
   // max level data bit size.
   int const max_level_bits   = thrust::reduce(rmm::exec_policy(stream),
                                             level_bit_size,
@@ -548,9 +550,9 @@ int decode_page_headers(cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc>& c
   CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
                               comp_res.begin(),
                               comp_res.end(),
-                              [] __device__(auto const& res) {
+                              cuda::proclaim_return_type<bool>([] __device__(auto const& res) {
                                 return res.status == compression_status::SUCCESS;
-                              }),
+                              })),
                "Error during decompression");
 
   // now copy the uncompressed V2 def and rep level data
@@ -1058,12 +1060,12 @@ struct get_cumulative_row_info {
     }
 
     // total nested size, not counting string data
-    auto iter =
-      cudf::detail::make_counting_transform_iterator(0, [page, index] __device__(size_type i) {
+    auto iter = cudf::detail::make_counting_transform_iterator(
+      0, cuda::proclaim_return_type<size_t>([page, index] __device__(size_type i) {
         auto const& pni = page.nesting[i];
         return cudf::type_dispatcher(
           data_type{pni.type}, row_size_functor{}, pni.size, pni.nullable);
-      });
+      }));
 
     size_t const row_count = static_cast<size_t>(page.nesting[0].size);
     return {
@@ -1101,7 +1103,9 @@ struct row_total_size {
       auto const start = key_offsets[idx];
       auto const end   = key_offsets[idx + 1];
       auto iter        = cudf::detail::make_counting_transform_iterator(
-        0, [&] __device__(size_type i) { return c_info[i].row_count; });
+        0, cuda::proclaim_return_type<size_t>([&] __device__(size_type i) {
+          return c_info[i].row_count;
+        }));
       auto const page_index =
         thrust::lower_bound(thrust::seq, iter + start, iter + end, i.row_count) - iter;
       sum += c_info[page_index].size_bytes;
@@ -1208,9 +1212,10 @@ std::vector<gpu::chunk_read_info> compute_splits(
   thrust::sort(rmm::exec_policy(stream),
                c_info_sorted.begin(),
                c_info_sorted.end(),
-               [] __device__(cumulative_row_info const& a, cumulative_row_info const& b) {
-                 return a.row_count < b.row_count;
-               });
+               cuda::proclaim_return_type<bool>(
+                 [] __device__(cumulative_row_info const& a, cumulative_row_info const& b) {
+                   return a.row_count < b.row_count;
+                 }));
 
   // std::vector<cumulative_row_info> h_c_info_sorted(c_info_sorted.size());
   // CUDF_CUDA_TRY(cudaMemcpy(h_c_info_sorted.data(),
