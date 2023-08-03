@@ -75,10 +75,10 @@ namespace {
 struct escape_strings_fn {
   column_device_view const d_column;
   string_view const d_delimiter;  // check for column delimiter
-  offset_type* d_offsets{};
+  size_type* d_offsets{};
   char* d_chars{};
 
-  __device__ void write_char(char_utf8 chr, char*& d_buffer, offset_type& bytes)
+  __device__ void write_char(char_utf8 chr, char*& d_buffer, size_type& bytes)
   {
     if (d_buffer)
       d_buffer += cudf::strings::detail::from_char_utf8(chr, d_buffer);
@@ -105,8 +105,8 @@ struct escape_strings_fn {
         return chr == quote || chr == new_line || chr == d_delimiter[0];
       });
 
-    char* d_buffer    = d_chars ? d_chars + d_offsets[idx] : nullptr;
-    offset_type bytes = 0;
+    char* d_buffer  = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    size_type bytes = 0;
 
     if (quote_row) write_char(quote, d_buffer, bytes);
     for (auto chr : d_str) {
