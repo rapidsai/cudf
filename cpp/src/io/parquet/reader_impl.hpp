@@ -24,8 +24,6 @@
 #include "parquet_gpu.hpp"
 #include "reader_impl_helpers.hpp"
 
-#include <io/utilities/column_buffer.hpp>
-
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>
@@ -38,6 +36,7 @@
 #include <vector>
 
 namespace cudf::io::detail::parquet {
+
 /**
  * @brief Implementation for Parquet reader
  */
@@ -67,13 +66,15 @@ class reader::impl {
    * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
    *        bounds
    * @param row_group_indices Lists of row groups to read, one per source
+   * @param filter Optional AST expression to filter output rows
    *
    * @return The set of columns along with metadata
    */
   table_with_metadata read(int64_t skip_rows,
                            std::optional<size_type> const& num_rows,
                            bool uses_custom_row_bounds,
-                           host_span<std::vector<size_type> const> row_group_indices);
+                           host_span<std::vector<size_type> const> row_group_indices,
+                           std::optional<std::reference_wrapper<ast::expression const>> filter);
 
   /**
    * @brief Constructor from a chunk read limit and an array of dataset sources with reader options.
@@ -124,11 +125,13 @@ class reader::impl {
    * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
    *        bounds
    * @param row_group_indices Lists of row groups to read (one per source), or empty if read all
+   * @param filter Optional AST expression to filter row groups based on column chunk statistics
    */
   void prepare_data(int64_t skip_rows,
                     std::optional<size_type> const& num_rows,
                     bool uses_custom_row_bounds,
-                    host_span<std::vector<size_type> const> row_group_indices);
+                    host_span<std::vector<size_type> const> row_group_indices,
+                    std::optional<std::reference_wrapper<ast::expression const>> filter);
 
   /**
    * @brief Create chunk information and start file reads
@@ -190,15 +193,25 @@ class reader::impl {
   void allocate_level_decode_space();
 
   /**
+   * @brief Populate the output table metadata from the parquet file metadata.
+   *
+   * @param out_metadata The output table metadata to add to
+   */
+  void populate_metadata(table_metadata& out_metadata);
+
+  /**
    * @brief Read a chunk of data and return an output table.
    *
    * This function is called internally and expects all preprocessing steps have already been done.
    *
    * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
    *        bounds
+   * @param filter Optional AST expression to filter output rows
    * @return The output table along with columns' metadata
    */
-  table_with_metadata read_chunk_internal(bool uses_custom_row_bounds);
+  table_with_metadata read_chunk_internal(
+    bool uses_custom_row_bounds,
+    std::optional<std::reference_wrapper<ast::expression const>> filter);
 
   /**
    * @brief Finalize the output table by adding empty columns for the non-selected columns in
@@ -206,10 +219,13 @@ class reader::impl {
    *
    * @param out_metadata The output table metadata
    * @param out_columns The columns for building the output table
+   * @param filter Optional AST expression to filter output rows
    * @return The output table along with columns' metadata
    */
-  table_with_metadata finalize_output(table_metadata& out_metadata,
-                                      std::vector<std::unique_ptr<column>>& out_columns);
+  table_with_metadata finalize_output(
+    table_metadata& out_metadata,
+    std::vector<std::unique_ptr<column>>& out_columns,
+    std::optional<std::reference_wrapper<ast::expression const>> filter);
 
   /**
    * @brief Allocate data buffers for the output columns.
@@ -220,6 +236,13 @@ class reader::impl {
    *        bounds
    */
   void allocate_columns(size_t skip_rows, size_t num_rows, bool uses_custom_row_bounds);
+
+  /**
+   * @brief Calculate per-page offsets for string data
+   *
+   * @return Vector of total string data sizes for each column
+   */
+  std::vector<size_t> calculate_page_string_offsets();
 
   /**
    * @brief Converts the page data and outputs to columns.
@@ -240,10 +263,10 @@ class reader::impl {
   std::vector<input_column_info> _input_columns;
 
   // Buffers for generating output columns
-  std::vector<column_buffer> _output_buffers;
+  std::vector<inline_column_buffer> _output_buffers;
 
   // Buffers copied from `_output_buffers` after construction for reuse
-  std::vector<column_buffer> _output_buffers_template;
+  std::vector<inline_column_buffer> _output_buffers_template;
 
   // _output_buffers associated schema indices
   std::vector<int> _output_column_schemas;

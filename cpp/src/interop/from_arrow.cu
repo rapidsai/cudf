@@ -238,7 +238,9 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<bool>(
   rmm::mr::device_memory_resource* mr)
 {
   auto data_buffer = array.data()->buffers[1];
-  auto data        = rmm::device_buffer(data_buffer->size(), stream, mr);
+  // mask-to-bools expects the mask to be bitmask_type aligned/padded
+  auto data = rmm::device_buffer(
+    cudf::bitmask_allocation_size_bytes(data_buffer->size() * CHAR_BIT), stream, mr);
   CUDF_CUDA_TRY(cudaMemcpyAsync(data.data(),
                                 reinterpret_cast<uint8_t const*>(data_buffer->address()),
                                 data_buffer->size(),

@@ -106,7 +106,7 @@ std::unique_ptr<table> scatter(table_view const& source,
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Result of scattering values from source to target
  */
-std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<const scalar>> const& source,
+std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<scalar const>> const& source,
                                column_view const& indices,
                                table_view const& target,
                                rmm::cuda_stream_view stream,
@@ -136,7 +136,7 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& source,
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<table> boolean_mask_scatter(
-  std::vector<std::reference_wrapper<const scalar>> const& source,
+  std::vector<std::reference_wrapper<scalar const>> const& source,
   table_view const& target,
   column_view const& boolean_mask,
   rmm::cuda_stream_view stream,

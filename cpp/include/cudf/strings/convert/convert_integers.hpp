@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,7 +81,7 @@ std::unique_ptr<column> from_integers(
  *
  * The output row entry will be set to `true` if the corresponding string element
  * have all characters in [-+0-9]. The optional sign character must only be in the first
- * position. Notice that the the integer value is not checked to be within its storage limits.
+ * position. Notice that the integer value is not checked to be within its storage limits.
  * For strict integer type check, use the other `is_integer()` API which accepts `data_type`
  * argument.
  *

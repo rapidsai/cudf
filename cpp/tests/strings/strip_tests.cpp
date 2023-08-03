@@ -100,6 +100,14 @@ TEST_F(StringsStripTest, EmptyStringsColumn)
   cudf::test::expect_column_empty(results->view());
 }
 
+TEST_F(StringsStripTest, AllEmptyStrings)
+{
+  auto input = cudf::test::strings_column_wrapper({"", "", "", "", "", ""}, {1, 1, 0, 1, 1});
+  auto results =
+    cudf::strings::strip(cudf::strings_column_view(input), cudf::strings::side_type::BOTH);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, input);
+}
+
 TEST_F(StringsStripTest, InvalidParameter)
 {
   std::vector<char const*> h_strings{"string left intentionally blank"};

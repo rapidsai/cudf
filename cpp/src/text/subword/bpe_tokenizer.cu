@@ -22,7 +22,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/strings/detail/combine.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/utilities/default_stream.hpp>
@@ -38,6 +37,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/for_each.h>
+#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/merge.h>
@@ -234,7 +234,7 @@ struct byte_pair_encoding_fn {
         if (rhs.empty()) break;  // no more adjacent pairs
 
         auto const hash    = compute_hash(lhs, rhs);
-        auto const map_itr = d_map.find(hash);
+        auto const map_itr = d_map.find(hash, thrust::identity<cudf::hash_value_type>{});
         if (map_itr != d_map.end()) {
           // found a match; record the rank (and other min_ vars)
           auto const rank = static_cast<cudf::size_type>(map_itr->second);

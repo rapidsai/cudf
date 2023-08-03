@@ -24,3 +24,9 @@ def test_tz_convert():
     assert_eq(
         pidx.tz_convert("America/New_York"), idx.tz_convert("America/New_York")
     )
+
+
+def test_delocalize_naive():
+    pidx = pd.date_range("2023-01-01", periods=3, freq="H")
+    idx = cudf.from_pandas(pidx)
+    assert_eq(pidx.tz_localize(None), idx.tz_localize(None))

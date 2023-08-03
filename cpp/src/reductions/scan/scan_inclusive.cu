@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
+#include <reductions/nested_type_minmax_util.cuh>
 #include <reductions/scan/scan.cuh>
-#include <reductions/struct_minmax_util.cuh>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -23,6 +23,7 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/reduction.hpp>
 
 #include <rmm/cuda_stream_view.hpp>

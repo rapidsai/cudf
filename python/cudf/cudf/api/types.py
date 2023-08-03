@@ -86,7 +86,7 @@ def is_integer(obj):
     bool
     """
     if isinstance(obj, cudf.Scalar):
-        return pd.api.types.is_integer(obj.dtype)
+        return pd.api.types.is_integer_dtype(obj.dtype)
     return pd.api.types.is_integer(obj)
 
 
@@ -154,10 +154,8 @@ def _is_scalar_or_zero_d_array(val):
         Return True if given object is scalar.
     """
     return (
-        (isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0)
-        or (isinstance(val, pd.Categorical) and len(val) == 1)
-        or is_scalar(val)
-    )
+        isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0
+    ) or is_scalar(val)
 
 
 # TODO: We should be able to reuse the pandas function for this, need to figure
@@ -222,9 +220,7 @@ def _union_categoricals(
         [obj._column for obj in to_union]
     )
     if sort_categories:
-        sorted_categories = result_col.categories.sort_by_values(
-            ascending=True
-        )[0]
+        sorted_categories = result_col.categories.sort_values(ascending=True)
         result_col = result_col.reorder_categories(
             new_categories=sorted_categories
         )

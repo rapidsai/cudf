@@ -1,4 +1,5 @@
 # Copyright (c) 2019-2023, NVIDIA CORPORATION.
+import itertools
 import warnings
 from contextlib import ExitStack
 from functools import partial
@@ -49,15 +50,6 @@ class CudfEngine(ArrowDatasetEngine):
             kwargs.get("schema", None),
         )
 
-        # If `strings_to_categorical==True`, convert objects to int32
-        strings_to_cats = kwargs.get("strings_to_categorical", False)
-        for col in meta_cudf._data.names:
-            if (
-                isinstance(meta_cudf._data[col], cudf.core.column.StringColumn)
-                and strings_to_cats
-            ):
-                meta_cudf._data[col] = meta_cudf._data[col].astype("int32")
-
         return meta_cudf
 
     @classmethod
@@ -74,7 +66,6 @@ class CudfEngine(ArrowDatasetEngine):
         columns=None,
         row_groups=None,
         filters=None,
-        strings_to_categorical=None,
         partitions=None,
         partitioning=None,
         partition_keys=None,
@@ -86,6 +77,19 @@ class CudfEngine(ArrowDatasetEngine):
         # Simplify row_groups if all None
         if row_groups == [None for path in paths]:
             row_groups = None
+
+        # Make sure we read in the columns needed for row-wise
+        # filtering after IO. This means that one or more columns
+        # will be dropped almost immediately after IO. However,
+        # we do NEED these columns for accurate filtering.
+        filters = _normalize_filters(filters)
+        projected_columns = None
+        if columns and filters:
+            projected_columns = [c for c in columns if c is not None]
+            columns = sorted(
+                set(v[0] for v in itertools.chain.from_iterable(filters))
+                | set(projected_columns)
+            )
 
         dataset_kwargs = dataset_kwargs or {}
         dataset_kwargs["partitioning"] = partitioning or "hive"
@@ -110,7 +114,6 @@ class CudfEngine(ArrowDatasetEngine):
                     engine="cudf",
                     columns=columns,
                     row_groups=row_groups if row_groups else None,
-                    strings_to_categorical=strings_to_categorical,
                     dataset_kwargs=dataset_kwargs,
                     categorical_partitions=False,
                     **kwargs,
@@ -128,7 +131,6 @@ class CudfEngine(ArrowDatasetEngine):
                                 row_groups=row_groups[i]
                                 if row_groups
                                 else None,
-                                strings_to_categorical=strings_to_categorical,
                                 dataset_kwargs=dataset_kwargs,
                                 categorical_partitions=False,
                                 **kwargs,
@@ -140,8 +142,15 @@ class CudfEngine(ArrowDatasetEngine):
                     raise err
 
         # Apply filters (if any are defined)
-        filters = _normalize_filters(filters)
         df = _apply_post_filters(df, filters)
+
+        if projected_columns:
+            # Elements of `projected_columns` may now be in the index.
+            # We must filter these names from our projection
+            projected_columns = [
+                col for col in projected_columns if col in df._column_names
+            ]
+            df = df[projected_columns]
 
         if partitions and partition_keys is None:
 
@@ -167,19 +176,23 @@ class CudfEngine(ArrowDatasetEngine):
 
             for i, (name, index2) in enumerate(partition_keys):
 
-                # Build the column from `codes` directly
-                # (since the category is often a larger dtype)
-                codes = as_column(
-                    partitions[i].keys.get_loc(index2),
-                    length=len(df),
-                )
-                df[name] = build_categorical_column(
-                    categories=partitions[i].keys,
-                    codes=codes,
-                    size=codes.size,
-                    offset=codes.offset,
-                    ordered=False,
-                )
+                if len(partitions[i].keys):
+                    # Build a categorical column from `codes` directly
+                    # (since the category is often a larger dtype)
+                    codes = as_column(
+                        partitions[i].keys.get_loc(index2),
+                        length=len(df),
+                    )
+                    df[name] = build_categorical_column(
+                        categories=partitions[i].keys,
+                        codes=codes,
+                        size=codes.size,
+                        offset=codes.offset,
+                        ordered=False,
+                    )
+                elif name not in df.columns:
+                    # Add non-categorical partition column
+                    df[name] = as_column(index2, length=len(df))
 
         return df
 
@@ -220,7 +233,6 @@ class CudfEngine(ArrowDatasetEngine):
             pieces = [pieces]
 
         # Extract supported kwargs from `kwargs`
-        strings_to_cats = kwargs.get("strings_to_categorical", False)
         read_kwargs = kwargs.get("read", {})
         read_kwargs.update(open_file_options or {})
         check_file_size = read_kwargs.pop("check_file_size", None)
@@ -266,7 +278,6 @@ class CudfEngine(ArrowDatasetEngine):
                             columns=read_columns,
                             row_groups=rgs if rgs else None,
                             filters=filters,
-                            strings_to_categorical=strings_to_cats,
                             partitions=partitions,
                             partitioning=partitioning,
                             partition_keys=last_partition_keys,
@@ -293,7 +304,6 @@ class CudfEngine(ArrowDatasetEngine):
                     columns=read_columns,
                     row_groups=rgs if rgs else None,
                     filters=filters,
-                    strings_to_categorical=strings_to_cats,
                     partitions=partitions,
                     partitioning=partitioning,
                     partition_keys=last_partition_keys,
