@@ -174,12 +174,12 @@ class memory_mapped_source : public file_source {
     auto const result =
       cudaHostRegister(const_cast<void*>(_map_addr), _map_size, cudaHostRegisterDefault);
     CUDF_LOG_WARN("Register mmap buffer: cudaHostRegister returned {}", result);
-    is_registered = (result == cudaSuccess);
+    _is_registered = (result == cudaSuccess);
   }
 
   void unregister_mmaped_buffer()
   {
-    if (not is_registered) {
+    if (not _is_registered) {
       CUDF_LOG_WARN("Unregister mmap buffer: not registered");
       return;
     }
