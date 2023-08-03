@@ -127,7 +127,17 @@ def cuda_array_interface_wrapper(
 
 
 class BufferOwner(Serializable):
-    """A owning buffer represents device memory."""
+    """A owning buffer that represents device memory.
+
+    This class isn't meant to be used throughout cuDF. Instead, it
+    standardizes data owning by wrapping any data object that
+    represents device memory. Multiple `Buffer` instances, which are
+    the ones used throughout cuDF, can then refer to the same
+    `BufferOwner` instance.
+
+    Use `_from_device_memory` and `_from_host_memory` to create
+    a new instance from either device or host memory respectively.
+    """
 
     _ptr: int
     _size: int
@@ -135,7 +145,7 @@ class BufferOwner(Serializable):
 
     @classmethod
     def _from_device_memory(cls, data: Any) -> Self:
-        """Create a Buffer from an object exposing `__cuda_array_interface__`.
+        """Create from an object exposing `__cuda_array_interface__`.
 
         No data is being copied.
 
@@ -146,8 +156,8 @@ class BufferOwner(Serializable):
 
         Returns
         -------
-        Buffer
-            Buffer representing the same device memory as `data`
+        BufferOwner
+            BufferOwner wrapping `data`
         """
 
         # Bypass `__init__` and initialize attributes manually
@@ -166,7 +176,7 @@ class BufferOwner(Serializable):
 
     @classmethod
     def _from_host_memory(cls, data: Any) -> Self:
-        """Create a Buffer from a buffer or array like object
+        """Create an owner from a buffer or array like object
 
         Data must implement `__array_interface__`, the buffer protocol, and/or
         be convertible to a buffer object using `numpy.array()`
@@ -182,8 +192,8 @@ class BufferOwner(Serializable):
 
         Returns
         -------
-        Buffer
-            Buffer representing a copy of `data`.
+        BufferOwner
+            BufferOwner wrapping a device copy of `data`.
         """
 
         # Convert to numpy array, this will not copy data in most cases.
@@ -265,7 +275,7 @@ class BufferOwner(Serializable):
 
 
 class Buffer(Serializable):
-    """A Buffer represents memory.
+    """A buffer that represents a slice or view of a `BufferOwner`.
 
     Use the factory function `as_buffer` to create a Buffer instance.
     """
@@ -330,30 +340,19 @@ class Buffer(Serializable):
     def copy(self, deep: bool = True) -> Self:
         """Return a copy of Buffer.
 
-        What actually happens when `deep == False` depends on the
-        "copy_on_write" option. When copy-on-write is enabled, a shallow copy
-        becomes a deep copy if the buffer has been exposed. This is because we
-        have no control over knowing if the data is being modified when the
-        buffer has been exposed to third-party.
-
         Parameters
         ----------
         deep : bool, default True
-            The semantics when copy-on-write is disabled:
-                - If deep=True, returns a deep copy of the underlying data.
-                - If deep=False, returns a shallow copy of the Buffer pointing
-                  to the same underlying data.
-            The semantics when copy-on-write is enabled:
-                - From the users perspective, always a deep copy of the
-                  underlying data. However, the data isn't actually copied
-                  until someone writers to the returned buffer.
+            - If deep=True, returns a deep copy of the underlying data.
+            - If deep=False, returns a new `Buffer` instance that refers
+              to the same `BufferOwner` as this one. Thus, no device
+              data are being copied.
 
         Returns
         -------
-        ExposureTrackedBuffer
-            A slice pointing to either a new or the existing owner
-            depending on the expose status of the owner and the
-            copy-on-write option (see above).
+        Buffer
+            A new buffer that either refers to either a new or an existing
+            `BufferOwner` depending on the `deep` argument (see above).
         """
 
         # When doing a shallow copy, we just return a new slice
@@ -362,7 +361,7 @@ class Buffer(Serializable):
                 owner=self._owner, offset=self._offset, size=self._size
             )
 
-        # Otherwise, we create a new copy of the memory this slice represents
+        # Otherwise, we create a new copy of the memory
         owner = self._owner._from_device_memory(
             rmm.DeviceBuffer(
                 ptr=self._owner.get_ptr(mode="read") + self._offset,
@@ -385,14 +384,15 @@ class Buffer(Serializable):
     def serialize(self) -> Tuple[dict, list]:
         """Serialize the buffer into header and frames.
 
-        The frames can be a mixture of memoryview and Buffer objects.
+        The frames can be a mixture of memoryview, Buffer, and BufferOwner
+        objects.
 
         Returns
         -------
         Tuple[dict, List]
             The first element of the returned tuple is a dict containing any
             serializable metadata required to reconstruct the object. The
-            second element is a list containing Buffers and memoryviews.
+            second element is a list containing single frame.
         """
         header: Dict[str, Any] = {}
         header["type-serialized"] = pickle.dumps(type(self))
