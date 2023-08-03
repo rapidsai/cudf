@@ -153,7 +153,7 @@ struct search_list {
  * @brief Function to search for index of key element(s) in the corresponding rows of a lists
  * column, specialized for nested types.
  */
-template <typename InputIterator, typename OutputIterator>
+template <typename Element, typename InputIterator, typename OutputIterator>
 void index_of(InputIterator input_it,
               size_type num_rows,
               OutputIterator output_it,
@@ -178,8 +178,7 @@ void index_of(InputIterator input_it,
 
   auto const comparator =
     cudf::experimental::row::equality::two_table_comparator(child_tview, keys_tview, stream);
-  if (cudf::detail::has_nested_columns(child_tview) or
-      cudf::detail::has_nested_columns(keys_tview)) {
+  if constexpr (cudf::is_nested<Element>()) {
     auto const d_comp = comparator.equal_to<true>(nullate::DYNAMIC{has_nulls});
     do_search(d_comp);
   } else {
@@ -228,7 +227,7 @@ struct dispatch_index_of {
       data_type{type_to_id<size_type>()}, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
     auto const output_it = out_positions->mutable_view().template begin<size_type>();
 
-    index_of(input_it, num_rows, output_it, child, search_keys, find_option, stream);
+    index_of<Element>(input_it, num_rows, output_it, child, search_keys, find_option, stream);
 
     if (search_keys_have_nulls || lists.has_nulls()) {
       auto [null_mask, null_count] = cudf::detail::valid_if(
