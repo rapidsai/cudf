@@ -16,4 +16,6 @@ if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake)
        ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake
   )
 endif()
+set(rapids-cmake-repo vuule/rapids-cmake)
+set(rapids-cmake-branch upgrade-nvcomp-3.0.0)
 include(${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake)
