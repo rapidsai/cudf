@@ -5,7 +5,7 @@ from libcpp.vector cimport vector
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.types cimport bitmask_type, offset_type, size_type
+from cudf._lib.cpp.types cimport bitmask_type, size_type
 
 from .gpumemoryview cimport gpumemoryview
 from .types cimport DataType
@@ -20,7 +20,7 @@ cdef class Column:
         gpumemoryview data
         gpumemoryview mask
         size_type null_count
-        offset_type offset
+        size_type offset
         # children: List[Column]
         list children
 

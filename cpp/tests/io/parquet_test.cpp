@@ -2687,8 +2687,8 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsMixedTypes)
   constexpr int floats_per_row = 4;
   auto c1_offset_iter          = cudf::detail::make_counting_transform_iterator(
     0, [floats_per_row](cudf::size_type idx) { return idx * floats_per_row; });
-  cudf::test::fixed_width_column_wrapper<cudf::offset_type> c1_offsets(
-    c1_offset_iter, c1_offset_iter + num_rows + 1);
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> c1_offsets(c1_offset_iter,
+                                                                     c1_offset_iter + num_rows + 1);
   cudf::test::fixed_width_column_wrapper<float> c1_floats(
     values, values + (num_rows * floats_per_row), valids);
   auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
@@ -2711,8 +2711,8 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsMixedTypes)
   cudf::test::strings_column_wrapper string_col{string_iter, string_iter + num_string_rows};
   auto offset_iter = cudf::detail::make_counting_transform_iterator(
     0, [string_per_row](cudf::size_type idx) { return idx * string_per_row; });
-  cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets(offset_iter,
-                                                                    offset_iter + num_rows + 1);
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets(offset_iter,
+                                                                  offset_iter + num_rows + 1);
 
   auto _c3_valids =
     cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 200; });
@@ -5034,8 +5034,8 @@ TEST_F(ParquetReaderTest, NestingOptimizationTest)
       0, [depth, rows_per_level](cudf::size_type i) { return i * rows_per_level; });
     total_values_produced += (num_rows + 1);
 
-    cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets(offsets_iter,
-                                                                      offsets_iter + num_rows + 1);
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets(offsets_iter,
+                                                                    offsets_iter + num_rows + 1);
     auto c   = cudf::make_lists_column(num_rows, offsets.release(), std::move(prev_col), 0, {});
     prev_col = std::move(c);
   }
