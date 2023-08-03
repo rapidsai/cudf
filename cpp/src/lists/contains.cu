@@ -216,8 +216,7 @@ std::unique_ptr<column> dispatch_index_of(lists_column_view const& lists,
   auto const has_nulls   = has_nested_nulls(child_tview) || has_nested_nulls(keys_tview);
   auto const comparator =
     cudf::experimental::row::equality::two_table_comparator(child_tview, keys_tview, stream);
-  if (search_keys.type().id() == cudf::type_id::STRUCT or
-      search_keys.type().id() == cudf::type_id::LIST) {
+  if (cudf::is_nested(search_keys.type())) {
     auto const d_comp = comparator.equal_to<true>(nullate::DYNAMIC{has_nulls});
     index_of(input_it, num_rows, output_it, child, search_keys, find_option, d_comp, stream);
   } else {
