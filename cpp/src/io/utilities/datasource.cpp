@@ -104,28 +104,6 @@ class file_source : public datasource {
   static constexpr size_t _gds_read_preferred_threshold = 128 << 10;  // 128KB
 };
 
-void register_mmaped_buffer(void const* ptr, size_t size)
-{
-  if (ptr == nullptr or size == 0) {
-    CUDF_LOG_WARN("Register mmap buffer: empty input");
-    return;
-  }
-
-  int deviceId{};
-  cudaGetDevice(&deviceId);
-  cudaDeviceProp deviceProp{};
-  cudaGetDeviceProperties(&deviceProp, deviceId);
-  // Only register the memory mapped buffer if the device accesses pageable memory via the host's
-  // page tables - `cudaHostRegister` is very cheap in this case
-  if (deviceProp.pageableMemoryAccessUsesHostPageTables == 0) {
-    CUDF_LOG_WARN("Register mmap buffer: pageableMemoryAccessUsesHostPageTables == 0");
-    return;
-  }
-
-  auto const result = cudaHostRegister(const_cast<void*>(ptr), size, cudaHostRegisterDefault);
-  CUDF_LOG_WARN("Register mmap buffer: cudaHostRegister returned {}", result);
-}
-
 /**
  * @brief Implementation class for reading from a file using memory mapped access.
  *
@@ -137,12 +115,18 @@ class memory_mapped_source : public file_source {
   explicit memory_mapped_source(char const* filepath, size_t offset, size_t size)
     : file_source(filepath)
   {
-    if (_file.size() != 0) map(_file.desc(), offset, size);
+    if (_file.size() != 0) {
+      map(_file.desc(), offset, size);
+      register_mmaped_buffer();
+    }
   }
 
   ~memory_mapped_source() override
   {
-    if (_map_addr != nullptr) { munmap(_map_addr, _map_size); }
+    if (_map_addr != nullptr) {
+      munmap(_map_addr, _map_size);
+      unregister_mmaped_buffer();
+    }
   }
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
@@ -169,6 +153,41 @@ class memory_mapped_source : public file_source {
   }
 
  private:
+  void register_mmaped_buffer()
+  {
+    if (_map_addr == nullptr or _map_size == 0) {
+      CUDF_LOG_WARN("Register mmap buffer: empty input");
+      return;
+    }
+
+    int deviceId{};
+    cudaGetDevice(&deviceId);
+    cudaDeviceProp deviceProp{};
+    cudaGetDeviceProperties(&deviceProp, deviceId);
+    // Only register the memory mapped buffer if the device accesses pageable memory via the host's
+    // page tables - `cudaHostRegister` is very cheap in this case
+    if (deviceProp.pageableMemoryAccessUsesHostPageTables == 0) {
+      CUDF_LOG_WARN("Register mmap buffer: pageableMemoryAccessUsesHostPageTables == 0");
+      return;
+    }
+
+    auto const result =
+      cudaHostRegister(const_cast<void*>(_map_addr), _map_size, cudaHostRegisterDefault);
+    CUDF_LOG_WARN("Register mmap buffer: cudaHostRegister returned {}", result);
+    is_registered = (result == cudaSuccess);
+  }
+
+  void unregister_mmaped_buffer()
+  {
+    if (not is_registered) {
+      CUDF_LOG_WARN("Unregister mmap buffer: not registered");
+      return;
+    }
+
+    auto const result = cudaHostUnregister(const_cast<void*>(_map_addr));
+    CUDF_LOG_WARN("Unregister mmap buffer: cudaHostUnregister returned {}", result);
+  }
+
   void map(int fd, size_t offset, size_t size)
   {
     CUDF_EXPECTS(offset < _file.size(), "Offset is past end of file");
@@ -184,14 +203,13 @@ class memory_mapped_source : public file_source {
     // Check if accessing a region within already mapped area
     _map_addr = mmap(nullptr, _map_size, PROT_READ, MAP_PRIVATE, fd, _map_offset);
     CUDF_EXPECTS(_map_addr != MAP_FAILED, "Cannot create memory mapping");
-
-    register_mmaped_buffer(_map_addr, _map_size);
   }
 
  private:
-  size_t _map_size   = 0;
-  size_t _map_offset = 0;
-  void* _map_addr    = nullptr;
+  size_t _map_size    = 0;
+  size_t _map_offset  = 0;
+  void* _map_addr     = nullptr;
+  bool _is_registered = false;
 };
 
 /**
