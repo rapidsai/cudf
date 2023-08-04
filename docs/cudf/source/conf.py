@@ -22,6 +22,7 @@ import sys
 from docutils.nodes import Text
 from sphinx.addnodes import pending_xref
 
+# -- Custom Extensions ----------------------------------------------------
 sys.path.append(os.path.abspath("./_ext"))
 
 # -- General configuration ------------------------------------------------
@@ -209,14 +210,12 @@ intersphinx_mapping = {
 
 # Config numpydoc
 numpydoc_show_inherited_class_members = {
-    "cudf.core.dtypes.CategoricalDtype": False,
-    "cudf.core.dtypes.Decimal32Dtype": False,
-    "cudf.core.dtypes.Decimal64Dtype": False,
-    "cudf.core.dtypes.Decimal128Dtype": False,
-    "cudf.core.dtypes.ListDtype": False,
-    "cudf.core.dtypes.StructDtype": False,
+    # option_context inherits undocumented members from the parent class
     "cudf.option_context": False,
 }
+
+# Rely on toctrees generated from autosummary on of the pages we define rather
+# than the autosummaries on the auto-generated class pages.
 numpydoc_class_members_toctree = False
 numpydoc_attributes_as_param_list = False
 
