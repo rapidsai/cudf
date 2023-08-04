@@ -78,7 +78,7 @@ std::unique_ptr<cudf::column> load_file_to_column(std::string const& filename_me
   CUDF_EXPECTS(merges_file.good(), "Could not open " + filename_merges);
 
   std::vector<char> chars{};
-  std::vector<cudf::offset_type> offsets(1, 0);
+  std::vector<cudf::size_type> offsets(1, 0);
 
   std::string line;
   std::getline(merges_file, line);

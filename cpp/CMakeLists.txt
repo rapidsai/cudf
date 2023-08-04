@@ -370,13 +370,13 @@ add_library(
   src/io/csv/reader_impl.cu
   src/io/csv/writer_impl.cu
   src/io/functions.cpp
+  src/io/json/byte_range_info.cu
   src/io/json/json_column.cu
-  src/io/json/json_gpu.cu
   src/io/json/json_tree.cu
   src/io/json/nested_json_gpu.cu
-  src/io/json/reader_impl.cu
-  src/io/json/experimental/byte_range_info.cu
-  src/io/json/experimental/read_json.cu
+  src/io/json/read_json.cu
+  src/io/json/legacy/json_gpu.cu
+  src/io/json/legacy/reader_impl.cu
   src/io/json/write_json.cu
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
@@ -395,6 +395,7 @@ add_library(
   src/io/parquet/page_enc.cu
   src/io/parquet/page_hdr.cu
   src/io/parquet/page_string_decode.cu
+  src/io/parquet/predicate_pushdown.cpp
   src/io/parquet/reader.cpp
   src/io/parquet/reader_impl.cpp
   src/io/parquet/reader_impl_helpers.cpp
