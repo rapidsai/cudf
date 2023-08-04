@@ -38,20 +38,20 @@ popd
 
 rapids-logger "Build Python docs"
 pushd docs/cudf
-make dirhtml BUILDDIR=_html
-make text BUILDDIR=_text
+make dirhtml
+make text
 mkdir -p "${RAPIDS_DOCS_DIR}/cudf/"{html,txt}
-mv _html/* "${RAPIDS_DOCS_DIR}/cudf/html"
-mv _text/* "${RAPIDS_DOCS_DIR}/cudf/txt"
+mv dirhtml/* "${RAPIDS_DOCS_DIR}/cudf/html"
+mv txt/* "${RAPIDS_DOCS_DIR}/cudf/txt"
 popd
 
 rapids-logger "Build dask-cuDF Sphinx docs"
 pushd docs/dask_cudf
-make dirhtml BUILDDIR=_html
-make text BUILDDIR=_text
+make dirhtml
+make text
 mkdir -p "${RAPIDS_DOCS_DIR}/dask-cudf/"{html,txt}
-mv _html/* "${RAPIDS_DOCS_DIR}/dask-cudf/html"
-mv _text/* "${RAPIDS_DOCS_DIR}/dask-cudf/txt"
+mv dirhtml/* "${RAPIDS_DOCS_DIR}/dask-cudf/html"
+mv txt/* "${RAPIDS_DOCS_DIR}/dask-cudf/txt"
 popd
 
 rapids-upload-docs
