@@ -2161,9 +2161,7 @@ def as_column(
             if dtype is not None:
                 data = data.astype(dtype)
         elif arb_dtype.kind in ("O", "U"):
-            data = as_column(
-                pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
-            )
+            data = as_column(pa.array(arbitrary), dtype=arbitrary.dtype)
             # There is no cast operation available for pa.Array from int to
             # str, Hence instead of handling in pa.Array block, we
             # will have to type-cast here.
@@ -2422,7 +2420,7 @@ def _construct_array(
         if (
             dtype is None
             and not cudf._lib.scalar._is_null_host_scalar(arbitrary)
-            and infer_dtype(arbitrary)
+            and infer_dtype(arbitrary, skipna=False)
             in (
                 "mixed",
                 "mixed-integer",
