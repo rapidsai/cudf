@@ -97,7 +97,7 @@ enum level_type {
  * @brief Enum of mask bits for the PageInfo kernel_mask
  *
  * Used to control which decode kernels to run.
-*/
+ */
 enum kernel_mask_bits {
   KERNEL_MASK_GENERAL      = (1 << 0),  // Run catch-all decode kernel
   KERNEL_MASK_STRING       = (1 << 1),  // Run decode kernel for string data
@@ -476,7 +476,7 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
 
 /**
  * @brief Get OR'd sum of page kernel masks.
- * 
+ *
  * @param[in] pages List of pages to aggregate
  * @param[in] stream CUDA stream to use
  * @return Bitwise OR of all page `kernel_mask` values
