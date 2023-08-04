@@ -843,6 +843,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             data = DataFrame.from_pandas(pd.DataFrame(data))
             self._data = data._data
         else:
+            if any(
+                not isinstance(col, (abc.Iterable, abc.Sequence))
+                for col in data
+            ):
+                raise TypeError("Inputs should be an iterable or sequence.")
+
             data = list(itertools.zip_longest(*data))
 
             if columns is not None and len(data) == 0:

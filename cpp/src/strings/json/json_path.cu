@@ -901,7 +901,7 @@ template <int block_size>
 __launch_bounds__(block_size) __global__
   void get_json_object_kernel(column_device_view col,
                               path_operator const* const commands,
-                              offset_type* output_offsets,
+                              size_type* output_offsets,
                               thrust::optional<char*> out_buf,
                               thrust::optional<bitmask_type*> out_validity,
                               thrust::optional<size_type*> out_valid_count,
@@ -932,7 +932,7 @@ __launch_bounds__(block_size) __global__
 
     // filled in only during the precompute step. during the compute step, the offsets
     // are fed back in so we do -not- want to write them out
-    if (!out_buf.has_value()) { output_offsets[tid] = static_cast<offset_type>(output_size); }
+    if (!out_buf.has_value()) { output_offsets[tid] = static_cast<size_type>(output_size); }
 
     // validity filled in only during the output step
     if (out_validity.has_value()) {
@@ -995,7 +995,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       *cdv,
       std::get<0>(preprocess).value().data(),
-      offsets_view.head<offset_type>(),
+      offsets_view.head<size_type>(),
       thrust::nullopt,
       thrust::nullopt,
       thrust::nullopt,
@@ -1003,12 +1003,12 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
 
   // convert sizes to offsets
   thrust::exclusive_scan(rmm::exec_policy(stream),
-                         offsets_view.head<offset_type>(),
-                         offsets_view.head<offset_type>() + col.size() + 1,
-                         offsets_view.head<offset_type>(),
+                         offsets_view.head<size_type>(),
+                         offsets_view.head<size_type>() + col.size() + 1,
+                         offsets_view.head<size_type>(),
                          0);
   size_type const output_size =
-    cudf::detail::get_value<offset_type>(offsets_view, col.size(), stream);
+    cudf::detail::get_value<size_type>(offsets_view, col.size(), stream);
 
   // allocate output string column
   auto chars = create_chars_child_column(output_size, stream, mr);
@@ -1026,7 +1026,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       *cdv,
       std::get<0>(preprocess).value().data(),
-      offsets_view.head<offset_type>(),
+      offsets_view.head<size_type>(),
       chars_view.head<char>(),
       static_cast<bitmask_type*>(validity.data()),
       d_valid_count.data(),
