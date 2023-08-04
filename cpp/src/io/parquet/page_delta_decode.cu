@@ -35,6 +35,7 @@ template <typename level_t>
 __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
+  using cudf::detail::warp_size;
   __shared__ __align__(16) delta_binary_decoder db_state;
   __shared__ __align__(16) page_state_s state_g;
   __shared__ __align__(16) page_state_buffers_s<delta_rolling_buf_size, 0, 0> state_buffers;
@@ -43,7 +44,7 @@ __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
   auto* const sb        = &state_buffers;
   int const page_idx    = blockIdx.x;
   int const t           = threadIdx.x;
-  int const lane_id     = t & 0x1f;
+  int const lane_id     = t % warp_size;
   auto* const db        = &db_state;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
@@ -82,9 +83,9 @@ __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
     uint32_t target_pos;
     uint32_t const src_pos = s->src_pos;
 
-    if (t < 64) {  // warp0..1
+    if (t < 2 * warp_size) {  // warp0..1
       target_pos = min(src_pos + 2 * batch_size, s->nz_count + batch_size);
-    } else {       // warp2...
+    } else {                  // warp2
       target_pos = min(s->nz_count, src_pos + batch_size);
     }
     __syncthreads();
@@ -92,18 +93,18 @@ __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
     // warp0 will decode the rep/def levels, warp1 will unpack a mini-batch of deltas.
     // warp2 waits one cycle for warps 0/1 to produce a batch, and then stuffs values
     // into the proper location in the output.
-    if (t < 32) {
+    if (t < warp_size) {
       // warp 0
       // decode repetition and definition levels.
       // - update validity vectors
       // - updates offsets (for nested columns)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
       gpuDecodeLevels<delta_rolling_buf_size, level_t>(s, sb, target_pos, rep, def, t);
-    } else if (t < 64) {
+    } else if (t < 2 * warp_size) {
       // warp 1
       db->decode_batch();
 
-    } else if (t < 96 && src_pos < target_pos) {
+    } else if (src_pos < target_pos) {
       // warp 2
       // nesting level that is storing actual leaf values
       int const leaf_level_index = s->col.max_nesting_depth - 1;

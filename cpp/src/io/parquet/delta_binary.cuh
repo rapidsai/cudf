@@ -108,12 +108,12 @@ struct delta_binary_decoder {
 
   uleb128_t value[delta_rolling_buf_size];  // circular buffer of delta values
 
-  // returns the number of values encoded in the block data. when is_decode is true,
+  // returns the number of values encoded in the block data. when all_values is true,
   // account for the first value in the header. otherwise just count the values encoded
   // in the mini-block data.
-  constexpr uint32_t num_encoded_values(bool is_decode)
+  constexpr uint32_t num_encoded_values(bool all_values)
   {
-    return value_count == 0 ? 0 : is_decode ? value_count : value_count - 1;
+    return value_count == 0 ? 0 : all_values ? value_count : value_count - 1;
   }
 
   // read mini-block header into state object. should only be called from init_binary_block or
@@ -123,6 +123,8 @@ struct delta_binary_decoder {
   //
   // on exit db->cur_mb is 0 and db->cur_mb_start points to the first mini-block of data, or
   // nullptr if out of data.
+  // is_decode indicates whether this is being called from initialization code (false) or
+  // the actual decoding (true)
   inline __device__ void init_mini_block(bool is_decode)
   {
     cur_mb       = 0;
@@ -161,6 +163,8 @@ struct delta_binary_decoder {
 
   // skip to the start of the next mini-block. should only be called on thread 0.
   // calls init_binary_block if currently on the last mini-block in a block.
+  // is_decode indicates whether this is being called from initialization code (false) or
+  // the actual decoding (true)
   inline __device__ void setup_next_mini_block(bool is_decode)
   {
     if (current_value_idx >= num_encoded_values(is_decode)) { return; }
@@ -242,7 +246,7 @@ struct delta_binary_decoder {
 
       // save value from last lane in warp. this will become the 'first value' added to the
       // deltas calculated in the next iteration (or invocation).
-      if (lane_id == 31) { last_value = delta; }
+      if (lane_id == warp_size - 1) { last_value = delta; }
       __syncwarp();
     }
   }
@@ -251,11 +255,12 @@ struct delta_binary_decoder {
   // called by all threads in a thread block.
   inline __device__ void skip_values(int skip)
   {
+    using cudf::detail::warp_size;
     int const t       = threadIdx.x;
-    int const lane_id = t & 0x1f;
+    int const lane_id = t % warp_size;
 
     while (current_value_idx < skip && current_value_idx < num_encoded_values(true)) {
-      if (t < 32) {
+      if (t < warp_size) {
         calc_mini_block_values(lane_id);
         if (lane_id == 0) { setup_next_mini_block(true); }
       }
@@ -267,8 +272,9 @@ struct delta_binary_decoder {
   // a single warp.
   inline __device__ void decode_batch()
   {
+    using cudf::detail::warp_size;
     int const t       = threadIdx.x;
-    int const lane_id = t & 0x1f;
+    int const lane_id = t % warp_size;
 
     // unpack deltas and save in db->value
     calc_mini_block_values(lane_id);
