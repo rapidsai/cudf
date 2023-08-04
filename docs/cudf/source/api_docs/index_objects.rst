@@ -163,6 +163,11 @@ Numeric Index
    :toctree: api/
 
    RangeIndex
+   RangeIndex.start
+   RangeIndex.stop
+   RangeIndex.step
+   RangeIndex.to_numpy
+   RangeIndex.to_arrow
    Int64Index
    UInt64Index
    Float64Index
@@ -245,6 +250,7 @@ MultiIndex components
 
    MultiIndex.to_frame
    MultiIndex.droplevel
+   MultiIndex.swaplevel
 
 MultiIndex selecting
 ~~~~~~~~~~~~~~~~~~~~
@@ -293,6 +299,7 @@ Time-specific operations
    DatetimeIndex.round
    DatetimeIndex.ceil
    DatetimeIndex.floor
+   DatetimeIndex.tz_convert
    DatetimeIndex.tz_localize
 
 Conversion

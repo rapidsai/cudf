@@ -259,23 +259,6 @@ def ignore_internal_references(app, env, node, contnode):
         return contnode
 
 
-def process_class_docstrings(app, what, name, obj, options, lines):
-    """
-    For those classes for which we use ::
-    :template: autosummary/class_without_autosummary.rst
-    the documented attributes/methods have to be listed in the class
-    docstring. However, if one of those lists is empty, we use 'None',
-    which then generates warnings in sphinx / ugly html output.
-    This "autodoc-process-docstring" event connector removes that part
-    from the processed docstring.
-    """
-    if what == "class":
-        if name in {"cudf.RangeIndex", "cudf.Int64Index", "cudf.UInt64Index", "cudf.Float64Index", "cudf.CategoricalIndex", "cudf.IntervalIndex", "cudf.MultiIndex", "cudf.DatetimeIndex", "cudf.TimedeltaIndex", "cudf.TimedeltaIndex"}:
-
-            cut_index = lines.index('.. rubric:: Attributes')
-            lines[:] = lines[:cut_index]
-
-
 nitpick_ignore = [
     ("py:class", "SeriesOrIndex"),
     ("py:class", "Dtype"),
@@ -289,4 +272,3 @@ def setup(app):
     app.add_js_file("https://docs.rapids.ai/assets/js/custom.js", loading_method="defer")
     app.connect("doctree-read", resolve_aliases)
     app.connect("missing-reference", ignore_internal_references)
-    app.connect("autodoc-process-docstring", process_class_docstrings)
