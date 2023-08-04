@@ -169,8 +169,7 @@ void check_float_column(cudf::column_view const& col_lhs,
 
   CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(col_lhs,
                                                 (wrapper<T>{data.begin(), data.end(), validity}));
-  CUDF_EXPECTS(col_lhs.null_count() == 0 and col_rhs.null_count() == 0,
-               "All elements should be valid");
+  EXPECT_TRUE(col_lhs.null_count() == 0 and col_rhs.null_count() == 0);
   EXPECT_THAT(cudf::test::to_host<T>(col_lhs).first,
               ::testing::Pointwise(FloatNearPointwise(tol), data));
 }
