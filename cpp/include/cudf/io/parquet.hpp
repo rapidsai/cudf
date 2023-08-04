@@ -1082,11 +1082,7 @@ class parquet_writer_options_builder {
    * @param enabled Boolean value to enable/disable writing of V2 page headers.
    * @return this for chaining
    */
-  parquet_writer_options_builder& write_v2_headers(bool enabled)
-  {
-    options.enable_write_v2_headers(enabled);
-    return *this;
-  }
+  parquet_writer_options_builder& write_v2_headers(bool enabled);
 
   /**
    * @brief move parquet_writer_options member once it's built.
@@ -1525,11 +1521,7 @@ class chunked_parquet_writer_options_builder {
    * @param enabled Boolean value to enable/disable writing of V2 page headers.
    * @return this for chaining
    */
-  chunked_parquet_writer_options_builder& write_v2_headers(bool enabled)
-  {
-    options.enable_write_v2_headers(enabled);
-    return *this;
-  }
+  chunked_parquet_writer_options_builder& write_v2_headers(bool enabled);
 
   /**
    * @brief Sets the maximum row group size, in bytes.
