@@ -38,16 +38,16 @@ requirements:
   host:
     - python
     - cudf ={{ version }}
-    - dask >=2023.5.1
-    - dask-core >=2023.5.1
-    - distributed >=2023.5.1
+    - dask ==2023.7.1
+    - dask-core ==2023.7.1
+    - distributed ==2023.7.1
     - cuda-version ={{ cuda_version }}
   run:
     - python
     - cudf ={{ version }}
-    - dask >=2023.5.1
-    - dask-core >=2023.5.1
-    - distributed >=2023.5.1
+    - dask ==2023.7.1
+    - dask-core ==2023.7.1
+    - distributed ==2023.7.1
     - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
 
 test:
