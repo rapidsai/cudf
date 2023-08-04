@@ -45,8 +45,8 @@ constexpr int preproc_buf_size      = LEVEL_DECODE_BUF_SIZE;
  * @param has_repetition True if the schema is nested
  * @param decoders Definition and repetition level decoders
  * @return pair containing start and end value indexes
- * @tparam rle_buf_size Size of the buffer used when decoding repetition and definition levels
  * @tparam level_t Type used to store decoded repetition and definition levels
+ * @tparam rle_buf_size Size of the buffer used when decoding repetition and definition levels
  */
 template <typename level_t, int rle_buf_size>
 __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
