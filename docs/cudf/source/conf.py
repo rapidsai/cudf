@@ -229,8 +229,6 @@ _reftarget_aliases = {
     "cupy.core.core.ndarray": ("cupy.ndarray", "cupy.ndarray"),
 }
 
-_internal_names_to_ignore = {"cudf.core.column.string.StringColumn"}
-
 
 def resolve_aliases(app, doctree):
     pending_xrefs = doctree.traverse(condition=pending_xref)
@@ -254,9 +252,7 @@ def ignore_internal_references(app, env, node, contnode):
         # use `cudf.Index`
         node["reftarget"] = "cudf.Index"
         return contnode
-    elif name is not None and name in _internal_names_to_ignore:
-        node["reftarget"] = ""
-        return contnode
+    return None
 
 
 nitpick_ignore = [
