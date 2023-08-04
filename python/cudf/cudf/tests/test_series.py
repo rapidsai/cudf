@@ -2206,6 +2206,12 @@ def test_series_contains(data, index):
     assert_eq(False in ps, False in gs)
 
 
+def test_series_from_pandas_sparse():
+    pser = pd.Series(range(2), dtype=pd.SparseDtype(np.int64, 0))
+    with pytest.raises(NotImplementedError):
+        cudf.Series(pser)
+
+
 def test_series_constructor_unbounded_sequence():
     class A:
         def __getitem__(self, key):
