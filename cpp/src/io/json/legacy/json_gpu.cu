@@ -45,11 +45,7 @@
 
 using cudf::device_span;
 
-namespace cudf {
-namespace io {
-namespace json {
-namespace gpu {
-using namespace ::cudf;
+namespace cudf::io::json::detail::legacy {
 
 namespace {
 /**
@@ -515,7 +511,7 @@ __global__ void collect_keys_info_kernel(parse_options_view const options,
 }  // namespace
 
 /**
- * @copydoc cudf::io::json::gpu::convert_json_to_columns
+ * @copydoc cudf::io::json::detail::legacy::convert_json_to_columns
  */
 void convert_json_to_columns(parse_options_view const& opts,
                              device_span<char const> const data,
@@ -547,7 +543,7 @@ void convert_json_to_columns(parse_options_view const& opts,
 }
 
 /**
- * @copydoc cudf::io::gpu::detect_data_types
+ * @copydoc cudf::io::json::detail::legacy::detect_data_types
  */
 
 std::vector<cudf::io::column_type_histogram> detect_data_types(
@@ -592,7 +588,7 @@ std::vector<cudf::io::column_type_histogram> detect_data_types(
 }
 
 /**
- * @copydoc cudf::io::json::gpu::gpu_collect_keys_info
+ * @copydoc cudf::io::json::detail::legacy::collect_keys_info
  */
 void collect_keys_info(parse_options_view const& options,
                        device_span<char const> const data,
@@ -615,7 +611,4 @@ void collect_keys_info(parse_options_view const& options,
   CUDF_CHECK_CUDA(stream.value());
 }
 
-}  // namespace gpu
-}  // namespace json
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::json::detail::legacy

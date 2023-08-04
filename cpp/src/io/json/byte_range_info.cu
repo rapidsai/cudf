@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 #include <rmm/exec_policy.hpp>
 #include <thrust/find.h>
 
-namespace cudf::io::detail::json::experimental {
+namespace cudf::io::json::detail {
 
 // Extract the first character position in the string.
 size_type find_first_delimiter(device_span<char const> d_data,
@@ -33,4 +33,4 @@ size_type find_first_delimiter(device_span<char const> d_data,
   return first_delimiter_position != d_data.end() ? first_delimiter_position - d_data.begin() : -1;
 }
 
-}  // namespace cudf::io::detail::json::experimental
+}  // namespace cudf::io::json::detail

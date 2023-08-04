@@ -32,7 +32,7 @@
 
 #include <memory>
 
-namespace cudf::io::json::experimental::detail {
+namespace cudf::io::json::detail {
 
 // Unicode code point escape sequence
 static constexpr char UNICODE_SEQ = 0x7F;
@@ -428,4 +428,4 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
   return out_col;
 }
 
-}  // namespace cudf::io::json::experimental::detail
+}  // namespace cudf::io::json::detail
