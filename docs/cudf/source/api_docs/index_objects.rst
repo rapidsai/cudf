@@ -12,7 +12,6 @@ used before calling these methods directly.**
 
 .. autosummary::
    :toctree: api/
-   :template: autosummary/class_with_autosummary.rst
 
    Index
 
@@ -162,7 +161,6 @@ Numeric Index
 -------------
 .. autosummary::
    :toctree: api/
-   :template: autosummary/class_without_autosummary.rst
 
    RangeIndex
    Int64Index
@@ -175,7 +173,6 @@ CategoricalIndex
 ----------------
 .. autosummary::
    :toctree: api/
-   :template: autosummary/class_without_autosummary.rst
 
    CategoricalIndex
 
@@ -200,7 +197,6 @@ IntervalIndex
 -------------
 .. autosummary::
    :toctree: api/
-   :template: autosummary/class_without_autosummary.rst
 
    IntervalIndex
 
@@ -219,7 +215,6 @@ MultiIndex
 ----------
 .. autosummary::
    :toctree: api/
-   :template: autosummary/class_without_autosummary.rst
 
    MultiIndex
 
@@ -265,7 +260,6 @@ DatetimeIndex
 -------------
 .. autosummary::
    :toctree: api/
-   :template: autosummary/class_without_autosummary.rst
 
    DatetimeIndex
 
@@ -313,7 +307,6 @@ TimedeltaIndex
 --------------
 .. autosummary::
    :toctree: api/
-   :template: autosummary/class_without_autosummary.rst
 
    TimedeltaIndex
 
