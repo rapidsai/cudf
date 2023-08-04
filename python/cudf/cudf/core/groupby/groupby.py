@@ -1204,8 +1204,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             {None: chunk_results}, index=group_names
         )
         result.index.names = self.grouping.names
-        result = result.reset_index()
-        result[None] = result.pop(0)
+
         return result
 
     @_cudf_nvtx_annotate

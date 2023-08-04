@@ -395,7 +395,7 @@ def groupby_jit_data():
 
 
 def run_groupby_apply_jit_test(data, func, keys, *args):
-    expect_groupby_obj = data.to_pandas().groupby(keys, as_index=False)
+    expect_groupby_obj = data.to_pandas().groupby(keys)
     got_groupby_obj = data.groupby(keys)
 
     # compare cuDF jit to pandas
@@ -450,7 +450,9 @@ def test_groupby_apply_jit_correlation(groupby_jit_data, dtype):
 
 
 @pytest.mark.parametrize("dtype", ["float64"])
-@pytest.mark.parametrize("func", ["min", "max", "sum", "mean", "var", "std"])
+@pytest.mark.parametrize(
+    "func", ["idxmax", "min", "max", "sum", "mean", "var", "std"]
+)
 @pytest.mark.parametrize("special_val", [np.nan, np.inf, -np.inf])
 def test_groupby_apply_jit_reductions_special_vals(
     func, groupby_jit_data, dtype, special_val
@@ -494,11 +496,7 @@ def test_groupby_apply_jit_idx_reductions_special_vals(
     groupby_jit_data["val1"] = special_val
     groupby_jit_data["val1"] = groupby_jit_data["val1"].astype(dtype)
 
-    expect = (
-        groupby_jit_data.to_pandas()
-        .groupby("key1", as_index=False)
-        .apply(func)
-    )
+    expect = groupby_jit_data.to_pandas().groupby("key1").apply(func)
 
     grouped = groupby_jit_data.groupby("key1")
     sorted = grouped._grouped()[3].to_pandas()
@@ -506,7 +504,7 @@ def test_groupby_apply_jit_idx_reductions_special_vals(
     expect[None] = expect_vals
 
     got = grouped.apply(func, engine="jit")
-    assert_eq(expect, got)
+    assert_eq(expect, got, check_dtype=False)
 
 
 @pytest.mark.parametrize(
