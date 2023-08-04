@@ -450,9 +450,7 @@ def test_groupby_apply_jit_correlation(groupby_jit_data, dtype):
 
 
 @pytest.mark.parametrize("dtype", ["float64"])
-@pytest.mark.parametrize(
-    "func", ["idxmax", "min", "max", "sum", "mean", "var", "std"]
-)
+@pytest.mark.parametrize("func", ["min", "max", "sum", "mean", "var", "std"])
 @pytest.mark.parametrize("special_val", [np.nan, np.inf, -np.inf])
 def test_groupby_apply_jit_reductions_special_vals(
     func, groupby_jit_data, dtype, special_val
@@ -497,13 +495,18 @@ def test_groupby_apply_jit_idx_reductions_special_vals(
     groupby_jit_data["val1"] = groupby_jit_data["val1"].astype(dtype)
 
     expect = groupby_jit_data.to_pandas().groupby("key1").apply(func)
+    got = groupby_jit_data.groupby("key1").apply(func, engine="jit")
 
-    grouped = groupby_jit_data.groupby("key1")
-    sorted = grouped._grouped()[3].to_pandas()
-    expect_vals = sorted["key1"].drop_duplicates().index
-    expect[None] = expect_vals
-
-    got = grouped.apply(func, engine="jit")
+    if special_val is np.nan:
+        # we return the first occurence of nan whereas
+        # pandas returns nan itself when the group is all nans
+        expect[:] = (
+            groupby_jit_data.groupby("key1")
+            ._grouped()[3]
+            .to_pandas()["key1"]
+            .drop_duplicates()
+            .index
+        )
     assert_eq(expect, got, check_dtype=False)
 
 
