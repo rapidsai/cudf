@@ -40,6 +40,8 @@
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
+#include <cuda/functional>
+
 #include <queue>
 #include <vector>
 
@@ -286,10 +288,11 @@ struct column_merger {
                       row_order_.begin(),
                       row_order_.end(),
                       merged_view.begin<Element>(),
-                      [d_lcol, d_rcol] __device__(index_type const& index_pair) {
-                        auto const [side, index] = index_pair;
-                        return side == side::LEFT ? d_lcol[index] : d_rcol[index];
-                      });
+                      cuda::proclaim_return_type<Element>(
+                        [d_lcol, d_rcol] __device__(index_type const& index_pair) {
+                          auto const [side, index] = index_pair;
+                          return side == side::LEFT ? d_lcol[index] : d_rcol[index];
+                        }));
 
     // CAVEAT: conditional call below is erroneous without
     // set_null_mask() call (see TODO above):
