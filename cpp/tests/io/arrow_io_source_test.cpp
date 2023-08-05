@@ -95,7 +95,7 @@ TEST_F(ArrowIOTest, S3FileSystem)
     // https://github.com/apache/arrow/issues/36974
     // This needs to be in a separate conditional to ensure we call
     // finalize after all arrow_io_source instances have been deleted.
-    [[maybe_unused]] arrow::fs::EnsureS3Finalized();
+    [[maybe_unused]] auto _ = arrow::fs::EnsureS3Finalized();
   }
 #endif
 }
