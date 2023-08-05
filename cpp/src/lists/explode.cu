@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,8 @@
 #include <thrust/optional.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
+
+#include <cuda/functional>
 
 #include <memory>
 #include <type_traits>
@@ -88,14 +90,15 @@ std::unique_ptr<table> build_table(
   if (position_array) {
     size_type position_size = position_array->size();
     // build the null mask for position based on invalid entries in gather map
-    auto nullmask = explode_col_gather_map ? valid_if(
-                                               explode_col_gather_map->begin(),
-                                               explode_col_gather_map->end(),
-                                               [] __device__(auto i) { return i != InvalidIndex; },
-                                               stream,
-                                               mr)
-                                           : std::pair<rmm::device_buffer, size_type>{
-                                               rmm::device_buffer(0, stream), size_type{0}};
+    auto nullmask =
+      explode_col_gather_map
+        ? valid_if(
+            explode_col_gather_map->begin(),
+            explode_col_gather_map->end(),
+            cuda::proclaim_return_type<bool>([] __device__(auto i) { return i != InvalidIndex; }),
+            stream,
+            mr)
+        : std::pair<rmm::device_buffer, size_type>{rmm::device_buffer(0, stream), size_type{0}};
 
     columns.insert(columns.begin() + explode_column_idx,
                    std::make_unique<column>(data_type(type_to_id<size_type>()),
@@ -122,7 +125,9 @@ std::unique_ptr<table> explode(table_view const& input_table,
   auto offsets = explode_col.offsets_begin();
   // offsets + 1 here to skip the 0th offset, which removes a - 1 operation later.
   auto offsets_minus_one = thrust::make_transform_iterator(
-    thrust::next(offsets), [offsets] __device__(auto i) { return (i - offsets[0]) - 1; });
+    thrust::next(offsets), cuda::proclaim_return_type<size_type>([offsets] __device__(auto i) {
+      return (i - offsets[0]) - 1;
+    }));
   auto counting_iter = thrust::make_counting_iterator(0);
 
   // This looks like an off-by-one bug, but what is going on here is that we need to reduce each
@@ -158,7 +163,9 @@ std::unique_ptr<table> explode_position(table_view const& input_table,
   auto offsets = explode_col.offsets_begin();
   // offsets + 1 here to skip the 0th offset, which removes a - 1 operation later.
   auto offsets_minus_one = thrust::make_transform_iterator(
-    offsets + 1, [offsets] __device__(auto i) { return (i - offsets[0]) - 1; });
+    offsets + 1, cuda::proclaim_return_type<size_type>([offsets] __device__(auto i) {
+      return (i - offsets[0]) - 1;
+    }));
   auto counting_iter = thrust::make_counting_iterator(0);
 
   rmm::device_uvector<size_type> pos(sliced_child.size(), stream, mr);
@@ -171,16 +178,17 @@ std::unique_ptr<table> explode_position(table_view const& input_table,
     counting_iter,
     counting_iter + gather_map.size(),
     gather_map.begin(),
-    [position_array = pos.data(),
-     offsets_minus_one,
-     offsets,
-     offset_size = explode_col.size()] __device__(auto idx) -> size_type {
+    cuda::proclaim_return_type<size_type>([position_array = pos.data(),
+                                           offsets_minus_one,
+                                           offsets,
+                                           offset_size =
+                                             explode_col.size()] __device__(auto idx) -> size_type {
       auto lb_idx = thrust::distance(
         offsets_minus_one,
         thrust::lower_bound(thrust::seq, offsets_minus_one, offsets_minus_one + offset_size, idx));
       position_array[idx] = idx - (offsets[lb_idx] - offsets[0]);
       return lb_idx;
-    });
+    }));
 
   return build_table(input_table,
                      explode_column_idx,
@@ -208,9 +216,10 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
 
   auto null_or_empty = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0),
-    [offsets, offsets_size = explode_col.size() - 1] __device__(int idx) {
-      return (idx > offsets_size || (offsets[idx + 1] != offsets[idx])) ? 0 : 1;
-    });
+    cuda::proclaim_return_type<size_type>(
+      [offsets, offsets_size = explode_col.size() - 1] __device__(int idx) {
+        return (idx > offsets_size || (offsets[idx + 1] != offsets[idx])) ? 0 : 1;
+      }));
   thrust::inclusive_scan(rmm::exec_policy(stream),
                          null_or_empty,
                          null_or_empty + explode_col.size(),
@@ -233,40 +242,43 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
 
   // offsets + 1 here to skip the 0th offset, which removes a - 1 operation later.
   auto offsets_minus_one = thrust::make_transform_iterator(
-    thrust::next(offsets), [offsets] __device__(auto i) { return (i - offsets[0]) - 1; });
+    thrust::next(offsets), cuda::proclaim_return_type<size_type>([offsets] __device__(auto i) {
+      return (i - offsets[0]) - 1;
+    }));
 
-  auto fill_gather_maps = [offsets_minus_one,
-                           gather_map_p             = gather_map.begin(),
-                           explode_col_gather_map_p = explode_col_gather_map.begin(),
-                           position_array           = pos.begin(),
-                           sliced_child_size        = sliced_child.size(),
-                           null_or_empty_offset_p   = null_or_empty_offset.begin(),
-                           include_position,
-                           offsets,
-                           null_or_empty,
-                           offset_size = explode_col.offsets().size() - 1] __device__(auto idx) {
-    if (idx < sliced_child_size) {
-      auto lb_idx =
-        thrust::distance(offsets_minus_one,
-                         thrust::lower_bound(
-                           thrust::seq, offsets_minus_one, offsets_minus_one + (offset_size), idx));
-      auto index_to_write                      = null_or_empty_offset_p[lb_idx] + idx;
-      gather_map_p[index_to_write]             = lb_idx;
-      explode_col_gather_map_p[index_to_write] = idx;
-      if (include_position) {
-        position_array[index_to_write] = idx - (offsets[lb_idx] - offsets[0]);
+  auto fill_gather_maps = cuda::proclaim_return_type<void>(
+    [offsets_minus_one,
+     gather_map_p             = gather_map.begin(),
+     explode_col_gather_map_p = explode_col_gather_map.begin(),
+     position_array           = pos.begin(),
+     sliced_child_size        = sliced_child.size(),
+     null_or_empty_offset_p   = null_or_empty_offset.begin(),
+     include_position,
+     offsets,
+     null_or_empty,
+     offset_size = explode_col.offsets().size() - 1] __device__(auto idx) {
+      if (idx < sliced_child_size) {
+        auto lb_idx = thrust::distance(
+          offsets_minus_one,
+          thrust::lower_bound(
+            thrust::seq, offsets_minus_one, offsets_minus_one + (offset_size), idx));
+        auto index_to_write                      = null_or_empty_offset_p[lb_idx] + idx;
+        gather_map_p[index_to_write]             = lb_idx;
+        explode_col_gather_map_p[index_to_write] = idx;
+        if (include_position) {
+          position_array[index_to_write] = idx - (offsets[lb_idx] - offsets[0]);
+        }
       }
-    }
-    if (null_or_empty[idx]) {
-      auto invalid_index          = null_or_empty_offset_p[idx] == 0
-                                      ? offsets[idx]
-                                      : offsets[idx] + null_or_empty_offset_p[idx] - 1;
-      gather_map_p[invalid_index] = idx;
+      if (null_or_empty[idx]) {
+        auto invalid_index          = null_or_empty_offset_p[idx] == 0
+                                        ? offsets[idx]
+                                        : offsets[idx] + null_or_empty_offset_p[idx] - 1;
+        gather_map_p[invalid_index] = idx;
 
-      explode_col_gather_map_p[invalid_index] = InvalidIndex;
-      if (include_position) { position_array[invalid_index] = 0; }
-    }
-  };
+        explode_col_gather_map_p[invalid_index] = InvalidIndex;
+        if (include_position) { position_array[invalid_index] = 0; }
+      }
+    });
 
   // we need to do this loop at least explode_col times or we may not properly fill in null and
   // empty entries.

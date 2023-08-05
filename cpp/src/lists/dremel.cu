@@ -34,6 +34,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 
+#include <cuda/functional>
+
 namespace cudf::detail {
 namespace {
 /**
@@ -97,7 +99,8 @@ dremel_data get_encoding(column_view h_col,
                       thrust::make_counting_iterator(start),
                       thrust::make_counting_iterator(end),
                       empties_idx.begin(),
-                      [d_off] __device__(auto i) { return d_off[i] == d_off[i + 1]; });
+                      cuda::proclaim_return_type<bool>(
+                        [d_off] __device__(auto i) { return d_off[i] == d_off[i + 1]; }));
     auto empties_end = thrust::gather(rmm::exec_policy(stream),
                                       empties_idx.begin(),
                                       empties_idx_end,
@@ -225,10 +228,10 @@ dremel_data get_encoding(column_view h_col,
 
   auto d_col = column_device_view::create(h_col, stream);
   cudf::detail::device_single_thread(
-    [offset_at_level  = d_column_offsets.data(),
-     end_idx_at_level = d_column_ends.data(),
-     level_max        = d_column_offsets.size(),
-     col              = *d_col] __device__() {
+    cuda::proclaim_return_type<void>([offset_at_level  = d_column_offsets.data(),
+                                      end_idx_at_level = d_column_ends.data(),
+                                      level_max        = d_column_offsets.size(),
+                                      col              = *d_col] __device__() {
       auto curr_col           = col;
       size_type off           = curr_col.offset();
       size_type end           = off + curr_col.size();
@@ -252,7 +255,7 @@ dremel_data get_encoding(column_view h_col,
           curr_col = curr_col.child(0);
         }
       }
-    },
+    }),
     stream);
 
   thrust::host_vector<size_type> column_offsets =
@@ -338,8 +341,10 @@ dremel_data get_encoding(column_view h_col,
     // Scan to get distance by which each offset value is shifted due to the insertion of empties
     auto scan_it = cudf::detail::make_counting_transform_iterator(
       column_offsets[level],
-      [off = lcv.offsets().data<size_type>(), size = lcv.offsets().size()] __device__(
-        auto i) -> int { return (i + 1 < size) && (off[i] == off[i + 1]); });
+      cuda::proclaim_return_type<int>([off  = lcv.offsets().data<size_type>(),
+                                       size = lcv.offsets().size()] __device__(auto i) -> int {
+        return (i + 1 < size) && (off[i] == off[i + 1]);
+      }));
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
     thrust::exclusive_scan(
       rmm::exec_policy(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());
@@ -349,11 +354,12 @@ dremel_data get_encoding(column_view h_col,
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator(0),
                        offset_size_at_level,
-                       [off      = lcv.offsets().data<size_type>() + column_offsets[level],
-                        scan_out = scan_out.data(),
-                        new_off  = new_offsets.data()] __device__(auto i) {
-                         new_off[i] = off[i] - off[0] + scan_out[i];
-                       });
+                       cuda::proclaim_return_type<void>(
+                         [off      = lcv.offsets().data<size_type>() + column_offsets[level],
+                          scan_out = scan_out.data(),
+                          new_off  = new_offsets.data()] __device__(auto i) {
+                           new_off[i] = off[i] - off[0] + scan_out[i];
+                         }));
 
     // Set rep level values at level starts to appropriate rep level
     auto scatter_it = thrust::make_constant_iterator(level);
@@ -375,10 +381,11 @@ dremel_data get_encoding(column_view h_col,
     auto [empties, empties_idx, empties_size] =
       get_empties(nesting_levels[level], column_offsets[level], column_ends[level]);
 
-    auto offset_transformer = [new_child_offsets = new_offsets.data(),
-                               child_start       = column_offsets[level + 1]] __device__(auto x) {
-      return new_child_offsets[x - child_start];  // (x - child's offset)
-    };
+    auto offset_transformer = cuda::proclaim_return_type<size_type>(
+      [new_child_offsets = new_offsets.data(),
+       child_start       = column_offsets[level + 1]] __device__(auto x) {
+        return new_child_offsets[x - child_start];  // (x - child's offset)
+      });
 
     // We will be reading from old rep_levels and writing again to rep_levels. Swap the current
     // rep values into temp_rep_vals so it can become the input and rep_levels can again be output.
@@ -423,8 +430,10 @@ dremel_data get_encoding(column_view h_col,
     // level value fof an empty list
     auto scan_it = cudf::detail::make_counting_transform_iterator(
       column_offsets[level],
-      [off = lcv.offsets().data<size_type>(), size = lcv.offsets().size()] __device__(
-        auto i) -> int { return (i + 1 < size) && (off[i] == off[i + 1]); });
+      cuda::proclaim_return_type<int>([off  = lcv.offsets().data<size_type>(),
+                                       size = lcv.offsets().size()] __device__(auto i) -> int {
+        return (i + 1 < size) && (off[i] == off[i + 1]);
+      }));
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
     thrust::exclusive_scan(
       rmm::exec_policy(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());
@@ -434,12 +443,13 @@ dremel_data get_encoding(column_view h_col,
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator(0),
                        offset_size_at_level,
-                       [off      = lcv.offsets().data<size_type>() + column_offsets[level],
-                        scan_out = scan_out.data(),
-                        new_off  = temp_new_offsets.data(),
-                        offset_transformer] __device__(auto i) {
-                         new_off[i] = offset_transformer(off[i]) + scan_out[i];
-                       });
+                       cuda::proclaim_return_type<void>(
+                         [off      = lcv.offsets().data<size_type>() + column_offsets[level],
+                          scan_out = scan_out.data(),
+                          new_off  = temp_new_offsets.data(),
+                          offset_transformer] __device__(auto i) {
+                           new_off[i] = offset_transformer(off[i]) + scan_out[i];
+                         }));
     new_offsets = std::move(temp_new_offsets);
 
     // Set rep level values at level starts to appropriate rep level
