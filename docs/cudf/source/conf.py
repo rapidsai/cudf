@@ -212,8 +212,8 @@ numpydoc_show_inherited_class_members = {
     "cudf.option_context": False,
 }
 
-# Rely on toctrees generated from autosummary on of the pages we define rather
-# than the autosummaries on the auto-generated class pages.
+# Rely on toctrees generated from autosummary on each of the pages we define
+# rather than the autosummaries on the numpydoc auto-generated class pages.
 numpydoc_class_members_toctree = False
 numpydoc_attributes_as_param_list = False
 
