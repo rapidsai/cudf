@@ -53,7 +53,6 @@ nb_execution_timeout = 300
 
 copybutton_prompt_text = ">>> "
 autosummary_generate = True
-ipython_mplbackend = "str"
 
 # Enable automatic generation of systematic, namespaced labels for sections
 myst_heading_anchors = 2
