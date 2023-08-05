@@ -223,10 +223,45 @@ struct delta_binary_decoder {
           uint32_t c = 8 - ofs;  // 0 - 7 bits
           delta      = (*p++) >> ofs;
 
+#if 1
           while (c < mb_bits && p < block_end) {
             delta |= static_cast<zigzag128_t>(*p++) << c;
             c += 8;
           }
+#else
+          // bring back unrolled unpacker for perf testing
+          if (c < mb_bits && p < block_end) {  // up to 8 bits
+            delta |= (*p++) << c;
+            c += 8;
+            if (c < mb_bits && p < block_end) {  // up to 16 bits
+              delta |= (*p++) << c;
+              c += 8;
+              if (c < mb_bits && p < block_end) {  // 24 bits
+                delta |= (*p++) << c;
+                c += 8;
+                if (c < mb_bits && p < block_end) {  // 32 bits
+                  delta |= static_cast<zigzag128_t>(*p++) << c;
+                  c += 8;
+                  if (c < mb_bits && p < block_end) {  // 40 bits
+                    delta |= static_cast<zigzag128_t>(*p++) << c;
+                    c += 8;
+                    if (c < mb_bits && p < block_end) {  // 48 bits
+                      delta |= static_cast<zigzag128_t>(*p++) << c;
+                      c += 8;
+                      if (c < mb_bits && p < block_end) {  // 56 bits
+                        delta |= static_cast<zigzag128_t>(*p++) << c;
+                        c += 8;
+                        if (c < mb_bits && p < block_end) {  // 64 bits
+                          delta |= static_cast<zigzag128_t>(*p++) << c;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+#endif
           delta &= (static_cast<zigzag128_t>(1) << mb_bits) - 1;
         }
       }
