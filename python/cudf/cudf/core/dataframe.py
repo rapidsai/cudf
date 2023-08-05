@@ -708,7 +708,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     )
                 else:
                     self._init_from_list_like(
-                        data, index=index, columns=columns
+                        data,
+                        index=index,
+                        columns=columns,
+                        nan_as_null=nan_as_null,
                     )
                 self._check_data_index_length_match()
             else:
@@ -827,7 +830,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             self._data = self._data.select_by_label(columns)
 
     @_cudf_nvtx_annotate
-    def _init_from_list_like(self, data, index=None, columns=None):
+    def _init_from_list_like(
+        self, data, index=None, columns=None, nan_as_null=None
+    ):
         if index is None:
             index = RangeIndex(start=0, stop=len(data))
         else:
@@ -842,6 +847,21 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         elif len(data) > 0 and isinstance(data[0], pd._libs.interval.Interval):
             data = DataFrame.from_pandas(pd.DataFrame(data))
             self._data = data._data
+        # namedtuple in a list
+        elif (
+            len(data) > 0
+            and columns is None
+            and isinstance(data[0], tuple)
+            and hasattr(data[0], "_fields")
+        ):
+            # pandas behavior is to use the fields from the first tuple
+            # as the column names
+            columns = data[0]._fields
+            values = itertools.zip_longest(*data)
+            data = dict(zip(columns, values))
+            self._init_from_dict_like(
+                data, index=index, nan_as_null=nan_as_null
+            )
         else:
             if any(
                 not isinstance(col, (abc.Iterable, abc.Sequence))
