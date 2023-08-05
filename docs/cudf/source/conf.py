@@ -99,9 +99,6 @@ exclude_patterns = ['venv', "**/includes/**",]
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = "sphinx"
 
-# If true, `todo` and `todoList` produce output, else they produce nothing.
-todo_include_todos = False
-
 html_theme_options = {
     "external_links": [],
     # https://github.com/pydata/pydata-sphinx-theme/issues/1220
