@@ -38,6 +38,8 @@
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace lists {
 namespace detail {
@@ -71,10 +73,10 @@ generate_list_offsets_and_validities(table_view const& input,
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(num_output_lists),
     d_offsets,
-    [num_cols,
-     table_dv     = *table_dv_ptr,
-     d_validities = validities.begin(),
-     has_null_mask] __device__(size_type const idx) {
+    cuda::proclaim_return_type<size_type>([num_cols,
+                                           table_dv     = *table_dv_ptr,
+                                           d_validities = validities.begin(),
+                                           has_null_mask] __device__(size_type const idx) {
       auto const col_id     = idx % num_cols;
       auto const list_id    = idx / num_cols;
       auto const& lists_col = table_dv.column(col_id);
@@ -83,7 +85,7 @@ generate_list_offsets_and_validities(table_view const& input,
         lists_col.child(lists_column_view::offsets_column_index).template data<size_type>() +
         lists_col.offset();
       return list_offsets[list_id + 1] - list_offsets[list_id];
-    });
+    }));
 
   // Compute offsets from sizes.
   thrust::exclusive_scan(
@@ -110,11 +112,11 @@ std::unique_ptr<column> concatenate_and_gather_lists(host_span<column_view const
 
   // Generate the gather map that interleaves the input columns.
   auto const iter_gather = cudf::detail::make_counting_transform_iterator(
-    0, [num_cols, num_input_rows] __device__(auto const idx) {
+    0, cuda::proclaim_return_type<size_t>([num_cols, num_input_rows] __device__(auto const idx) {
       auto const source_col_idx = idx % num_cols;
       auto const source_row_idx = idx / num_cols;
       return source_col_idx * num_input_rows + source_row_idx;
-    });
+    }));
 
   // The gather API should be able to handle any data type for the input columns.
   auto result = cudf::detail::gather(table_view{{concatenated_col->view()}},
@@ -271,12 +273,12 @@ struct interleave_list_entries_impl<T, std::enable_if_t<cudf::is_fixed_width<T>(
       rmm::exec_policy(stream),
       thrust::make_counting_iterator<size_type>(0),
       num_output_lists,
-      [num_cols,
-       table_dv     = *table_dv_ptr,
-       d_validities = validities.begin(),
-       d_offsets    = output_list_offsets.template begin<size_type>(),
-       d_output     = output_dv_ptr->template begin<T>(),
-       data_has_null_mask] __device__(size_type const idx) {
+      cuda::proclaim_return_type<void>([num_cols,
+                                        table_dv     = *table_dv_ptr,
+                                        d_validities = validities.begin(),
+                                        d_offsets = output_list_offsets.template begin<size_type>(),
+                                        d_output  = output_dv_ptr->template begin<T>(),
+                                        data_has_null_mask] __device__(size_type const idx) {
         auto const col_id     = idx % num_cols;
         auto const list_id    = idx / num_cols;
         auto const& lists_col = table_dv.column(col_id);
@@ -305,7 +307,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<cudf::is_fixed_width<T>(
         auto const output_ptr = reinterpret_cast<char*>(&d_output[write_start]);
         thrust::copy(
           thrust::seq, input_ptr, input_ptr + sizeof(T) * (end_idx - start_idx), output_ptr);
-      });
+      }));
 
     if (data_has_null_mask) {
       auto [null_mask, null_count] = cudf::detail::valid_if(
