@@ -1844,4 +1844,21 @@ TEST_F(OrcWriterTest, SlicedStringColumn)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_slice, result.tbl->view());
 }
 
+TEST_F(OrcWriterTest, EmptyChildStringColumn)
+{
+  list_col<cudf::string_view> col{{}, {}};
+  table_view expected({col});
+
+  auto filepath = temp_env->get_temp_filepath("OrcEmptyChildStringColumn.orc");
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_orc(out_opts);
+
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false);
+  auto result = cudf::io::read_orc(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
 CUDF_TEST_PROGRAM_MAIN()
