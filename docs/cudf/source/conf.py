@@ -55,8 +55,6 @@ copybutton_prompt_text = ">>> "
 autosummary_generate = True
 ipython_mplbackend = "str"
 
-html_use_modindex = True
-
 # Enable automatic generation of systematic, namespaced labels for sections
 myst_heading_anchors = 2
 
