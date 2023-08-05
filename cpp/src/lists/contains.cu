@@ -205,9 +205,10 @@ std::unique_ptr<column> dispatch_index_of(lists_column_view const& lists,
   auto const lists_cdv_ptr = column_device_view::create(lists.parent(), stream);
   auto const input_it      = cudf::detail::make_counting_transform_iterator(
     size_type{0},
-    [lists = cudf::detail::lists_column_device_view{*lists_cdv_ptr}] __device__(auto const idx) {
-      return list_device_view{lists, idx};
-    });
+    cuda::proclaim_return_type<list_device_view>(
+      [lists = cudf::detail::lists_column_device_view{*lists_cdv_ptr}] __device__(auto const idx) {
+        return list_device_view{lists, idx};
+      }));
 
   auto out_positions = make_numeric_column(
     data_type{type_to_id<size_type>()}, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
@@ -227,12 +228,13 @@ std::unique_ptr<column> dispatch_index_of(lists_column_view const& lists,
   }
 
   if (search_keys_have_nulls || lists.has_nulls()) {
-    auto [null_mask, null_count] = cudf::detail::valid_if(
-      output_it,
-      output_it + num_rows,
-      [] __device__(auto const idx) { return idx != NULL_SENTINEL; },
-      stream,
-      mr);
+    auto [null_mask, null_count] =
+      cudf::detail::valid_if(output_it,
+                             output_it + num_rows,
+                             cuda::proclaim_return_type<bool>(
+                               [] __device__(auto const idx) { return idx != NULL_SENTINEL; }),
+                             stream,
+                             mr);
     out_positions->set_null_mask(std::move(null_mask), null_count);
   }
   return out_positions;
