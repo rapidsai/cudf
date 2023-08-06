@@ -38,13 +38,12 @@ namespace nvtext {
 namespace detail {
 namespace {
 
-struct make_pair_function {
-  __device__ cuco::pair<cudf::size_type, cudf::size_type> operator()(cudf::size_type idx)
-  {
-    return cuco::make_pair(idx, idx);
-  }
-  cudf::column_device_view const d_strings;
-};
+// struct make_pair_function {
+//   __device__ cuco::pair<cudf::size_type, cudf::size_type> operator()(cudf::size_type idx)
+//   {
+//     return cuco::make_pair(idx, idx);
+//   }
+// };
 
 /**
  * @brief Loads a text file of merge-pairs into a strings column.
@@ -107,8 +106,8 @@ std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
     hash_table_allocator_type{default_allocator<char>{}, stream},
     stream.value());
 
-  make_pair_function pair_func{input};
-  auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
+  auto iter = cudf::detail::make_counting_transform_iterator(
+    0, [] __device__(cudf::size_type idx) { return cuco::make_pair(idx, idx); });
 
   merge_pairs_map->insert(iter, iter + input.size(), stream.value());
 
@@ -118,10 +117,10 @@ std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
 std::unique_ptr<bpe_merge_pairs::bpe_merge_pairs_impl> create_bpe_merge_pairs_impl(
   std::unique_ptr<cudf::column>&& input, rmm::cuda_stream_view stream)
 {
-  auto d_strings   = cudf::column_device_view::create(input->view(), stream);
-  auto merge_pairs = initialize_merge_pairs_map(*d_strings, stream);
+  auto d_input     = cudf::column_device_view::create(input->view(), stream);
+  auto merge_pairs = initialize_merge_pairs_map(*d_input, stream);
   return std::make_unique<nvtext::bpe_merge_pairs::bpe_merge_pairs_impl>(
-    std::move(input), std::move(d_strings), std::move(merge_pairs));
+    std::move(input), std::move(d_input), std::move(merge_pairs));
 }
 
 std::unique_ptr<bpe_merge_pairs::bpe_merge_pairs_impl> create_bpe_merge_pairs_impl(
