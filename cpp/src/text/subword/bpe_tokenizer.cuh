@@ -87,10 +87,15 @@ using merge_pairs_map_type = cuco::experimental::static_map<cudf::size_type,
 
 struct bpe_merge_pairs::bpe_merge_pairs_impl {
   std::unique_ptr<cudf::column> const merge_pairs;
+  std::unique_ptr<cudf::column_device_view, std::function<void(cudf::column_device_view*)>> const
+    d_merge_pairs;
   std::unique_ptr<detail::merge_pairs_map_type> merge_pairs_map;
 
-  bpe_merge_pairs_impl(std::unique_ptr<cudf::column>&& merge_pairs,
-                       std::unique_ptr<detail::merge_pairs_map_type>&& merge_pairs_map);
+  bpe_merge_pairs_impl(
+    std::unique_ptr<cudf::column>&& merge_pairs,
+    std::unique_ptr<cudf::column_device_view, std::function<void(cudf::column_device_view*)>>&&
+      d_merge_pairs,
+    std::unique_ptr<detail::merge_pairs_map_type>&& merge_pairs_map);
 
   auto get_merge_pairs() const { return merge_pairs->view(); }
   auto get_merge_pairs_map() const { return merge_pairs_map->ref(cuco::experimental::op::find); }
