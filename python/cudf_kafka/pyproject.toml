@@ -3,7 +3,7 @@
 [build-system]
 
 requires = [
-    "cython>=0.29,<0.30",
+    "cython>=3.0.0",
     "numpy>=1.21",
     "pyarrow==12.0.1.*",
     "setuptools",

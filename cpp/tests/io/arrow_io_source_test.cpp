@@ -97,7 +97,7 @@ TEST_F(ArrowIOTest, S3FileSystem)
 
     close_s3_func = reinterpret_cast<decltype(close_s3_func)>(
       dlsym(whole_app, "_ZN5arrow2fs17EnsureS3FinalizedEv"));
-    if (close_s3_func) { CUDF_EXPECTS(close_s3_func().ok(), "Failed to finalize s3 filesystem"); }
+    if (close_s3_func) { EXPECT_TRUE(close_s3_func().ok()); }
     dlclose(whole_app);
   }
 }
