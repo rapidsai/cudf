@@ -246,8 +246,7 @@ class DatetimeColumn(column.ColumnBase):
             if other.tz is not None:
                 raise TypeError(
                     "Cannot perform binary operation on timezone-naive columns"
-                    " and timezone-aware timestamps. For that, "
-                    "use `tz_localize`."
+                    " and timezone-aware timestamps. "
                 )
             other = other.to_datetime64()
         elif isinstance(other, pd.Timedelta):
