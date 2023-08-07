@@ -19,20 +19,14 @@
 #include "datasource.hpp"
 
 #include <arrow/buffer.h>
-
 #include <arrow/filesystem/filesystem.h>
-#include <arrow/filesystem/s3fs.h>
 #include <arrow/io/file.h>
-#include <arrow/io/interfaces.h>
 #include <arrow/io/memory.h>
-#include <arrow/result.h>
-#include <arrow/status.h>
 
 #include <memory>
 #include <string>
 
 namespace cudf::io {
-
 /**
  * @addtogroup io_datasources
  * @{
@@ -65,13 +59,12 @@ class arrow_io_source : public datasource {
    *
    * @param arrow_uri Apache Arrow Filesystem URI
    */
-  explicit arrow_io_source(std::string_view arrow_uri)
+  explicit arrow_io_source(std::string const& arrow_uri)
   {
     std::string const uri_start_delimiter = "//";
     std::string const uri_end_delimiter   = "?";
 
-    arrow::Result<std::shared_ptr<arrow::fs::FileSystem>> result =
-      arrow::fs::FileSystemFromUri(static_cast<std::string>(arrow_uri));
+    auto const result = arrow::fs::FileSystemFromUri(arrow_uri);
     CUDF_EXPECTS(result.ok(), "Failed to generate Arrow Filesystem instance from URI.");
     filesystem = result.ValueOrDie();
 
@@ -82,8 +75,7 @@ class arrow_io_source : public datasource {
     size_t end            = arrow_uri.find(uri_end_delimiter) - start;
     std::string_view path = arrow_uri.substr(start, end);
 
-    arrow::Result<std::shared_ptr<arrow::io::RandomAccessFile>> in_stream =
-      filesystem->OpenInputFile(static_cast<std::string>(path).c_str());
+    auto const in_stream = filesystem->OpenInputFile(static_cast<std::string>(path).c_str());
     CUDF_EXPECTS(in_stream.ok(), "Failed to open Arrow RandomAccessFile");
     arrow_file = in_stream.ValueOrDie();
   }
@@ -104,7 +96,7 @@ class arrow_io_source : public datasource {
    */
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
-    auto result = arrow_file->ReadAt(offset, size);
+    auto const result = arrow_file->ReadAt(offset, size);
     CUDF_EXPECTS(result.ok(), "Cannot read file data");
     return std::make_unique<arrow_io_buffer>(result.ValueOrDie());
   }
@@ -119,7 +111,7 @@ class arrow_io_source : public datasource {
    */
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
-    auto result = arrow_file->ReadAt(offset, size, dst);
+    auto const result = arrow_file->ReadAt(offset, size, dst);
     CUDF_EXPECTS(result.ok(), "Cannot read file data");
     return result.ValueOrDie();
   }
@@ -131,7 +123,7 @@ class arrow_io_source : public datasource {
    */
   [[nodiscard]] size_t size() const override
   {
-    auto result = arrow_file->GetSize();
+    auto const result = arrow_file->GetSize();
     CUDF_EXPECTS(result.ok(), "Cannot get file size");
     return result.ValueOrDie();
   }
