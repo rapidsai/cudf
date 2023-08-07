@@ -2219,3 +2219,8 @@ def test_series_constructor_unbounded_sequence():
 
     with pytest.raises(TypeError):
         cudf.Series(A())
+
+
+def test_series_constructor_error_mixed_type():
+    with pytest.raises(pa.ArrowTypeError):
+        cudf.Series(["abc", np.nan, "123"], nan_as_null=False)

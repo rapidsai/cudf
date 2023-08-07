@@ -33,7 +33,7 @@ namespace cudf::io::json::detail {
  *
  * @return cudf::table object that contains the array of cudf::column.
  */
-table_with_metadata read_json(std::vector<std::unique_ptr<cudf::io::datasource>>& sources,
+table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               json_reader_options const& options,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr);

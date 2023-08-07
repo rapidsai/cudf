@@ -6824,4 +6824,11 @@ public class ColumnVectorTest extends CudfTestBase {
       assertEquals(vector.getNullCount(), view.getNullCount());
     }
   }
+
+  @Test
+  public void testUseAfterFree() {
+    ColumnVector vector = ColumnVector.fromBoxedInts(1, 2, 3);
+    vector.close();
+    assertThrows(NullPointerException.class, vector::getDeviceMemorySize);
+  }
 }
