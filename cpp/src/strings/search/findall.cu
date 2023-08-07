@@ -50,7 +50,7 @@ namespace {
  */
 struct findall_fn {
   column_device_view const d_strings;
-  offset_type const* d_offsets;
+  size_type const* d_offsets;
   string_index_pair* d_indices;
 
   __device__ void operator()(size_type const idx, reprog_device const prog, int32_t const prog_idx)
@@ -78,7 +78,7 @@ struct findall_fn {
 std::unique_ptr<column> findall_util(column_device_view const& d_strings,
                                      reprog_device& d_prog,
                                      size_type total_matches,
-                                     offset_type const* d_offsets,
+                                     size_type const* d_offsets,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
@@ -106,7 +106,7 @@ std::unique_ptr<column> findall(strings_column_view const& input,
 
   // Create lists offsets column
   auto offsets   = count_matches(*d_strings, *d_prog, strings_count + 1, stream, mr);
-  auto d_offsets = offsets->mutable_view().data<offset_type>();
+  auto d_offsets = offsets->mutable_view().data<size_type>();
 
   // Convert counts into offsets
   thrust::exclusive_scan(

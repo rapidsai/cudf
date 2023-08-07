@@ -332,7 +332,7 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ListsWithStructs)
   using strings = cudf::test::strings_column_wrapper;
   using structs = cudf::test::structs_column_wrapper;
   using bools   = cudf::test::fixed_width_column_wrapper<bool, int32_t>;
-  using offsets = cudf::test::fixed_width_column_wrapper<cudf::offset_type, int32_t>;
+  using offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type, int32_t>;
 
   auto const null_at_0 = null_at(0);
   auto const null_at_3 = null_at(3);

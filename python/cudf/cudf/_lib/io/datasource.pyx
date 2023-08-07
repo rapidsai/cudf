@@ -9,7 +9,7 @@ from cudf._lib.cpp.io.datasource cimport datasource
 
 
 cdef class Datasource:
-    cdef datasource* get_datasource(self) nogil except *:
+    cdef datasource* get_datasource(self) except * nogil:
         with gil:
             raise NotImplementedError("get_datasource() should not "
                                       + "be directly invoked here")

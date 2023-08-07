@@ -21,9 +21,10 @@ Properties
 .. autosummary::
    :toctree: api/
 
+   Index.dtype
+   Index.duplicated
    Index.empty
    Index.has_duplicates
-   Index.duplicated
    Index.hasnans
    Index.is_monotonic
    Index.is_monotonic_increasing
@@ -52,7 +53,6 @@ Modifying and computations
    Index.is_floating
    Index.is_integer
    Index.is_interval
-   Index.is_mixed
    Index.is_numeric
    Index.is_object
    Index.min
@@ -93,6 +93,13 @@ Conversion
    :toctree: api/
 
    Index.astype
+   Index.deserialize
+   Index.device_deserialize
+   Index.device_serialize
+   Index.host_deserialize
+   Index.host_serialize
+   Index.serialize
+   Index.tolist
    Index.to_arrow
    Index.to_cupy
    Index.to_list
@@ -110,6 +117,7 @@ Sorting
    :toctree: api/
 
    Index.argsort
+   Index.find_label_range
    Index.searchsorted
    Index.sort_values
 
@@ -140,6 +148,13 @@ Selecting
    Index.get_loc
    Index.get_slice_bound
    Index.isin
+
+String Operations
+~~~~~~~~~~~~~~~~~
+.. autosummary::
+   :toctree: api/
+
+   Index.str
 
 .. _api.numericindex:
 
@@ -185,6 +200,7 @@ IntervalIndex
 -------------
 .. autosummary::
    :toctree: api/
+   :template: autosummary/class_without_autosummary.rst
 
    IntervalIndex
 

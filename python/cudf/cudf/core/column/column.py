@@ -2010,6 +2010,11 @@ def as_column(
                 return as_column(arbitrary.array)
             elif PANDAS_GE_150 and isinstance(arbitrary.dtype, pd.ArrowDtype):
                 return as_column(pa.array(arbitrary.array, from_pandas=True))
+            elif isinstance(arbitrary.dtype, pd.SparseDtype):
+                raise NotImplementedError(
+                    f"{arbitrary.dtype} is not supported. Convert first to "
+                    f"{arbitrary.dtype.subtype}."
+                )
         if is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif is_interval_dtype(arbitrary.dtype):
@@ -2156,9 +2161,7 @@ def as_column(
             if dtype is not None:
                 data = data.astype(dtype)
         elif arb_dtype.kind in ("O", "U"):
-            data = as_column(
-                pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
-            )
+            data = as_column(pa.array(arbitrary), dtype=arbitrary.dtype)
             # There is no cast operation available for pa.Array from int to
             # str, Hence instead of handling in pa.Array block, we
             # will have to type-cast here.
@@ -2214,6 +2217,11 @@ def as_column(
             )
         if dtype is not None:
             data = data.astype(dtype)
+    elif isinstance(arbitrary, pd.arrays.SparseArray):
+        raise NotImplementedError(
+            f"{arbitrary.dtype} is not supported. Convert first to "
+            f"{arbitrary.dtype.subtype}."
+        )
     elif isinstance(arbitrary, memoryview):
         data = as_column(
             np.asarray(arbitrary), dtype=dtype, nan_as_null=nan_as_null
@@ -2412,7 +2420,7 @@ def _construct_array(
         if (
             dtype is None
             and not cudf._lib.scalar._is_null_host_scalar(arbitrary)
-            and infer_dtype(arbitrary)
+            and infer_dtype(arbitrary, skipna=False)
             in (
                 "mixed",
                 "mixed-integer",

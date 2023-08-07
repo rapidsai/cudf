@@ -7,7 +7,7 @@ from cudf._lib.cpp.io.datasource cimport datasource
 
 
 cdef class Datasource:
-    cdef datasource* get_datasource(self) nogil except *
+    cdef datasource* get_datasource(self) except * nogil
 
 
 cdef class NativeFileDatasource(Datasource):
