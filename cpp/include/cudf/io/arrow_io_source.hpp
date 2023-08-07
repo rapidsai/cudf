@@ -27,7 +27,6 @@
 #include <string>
 
 namespace cudf::io {
-
 /**
  * @addtogroup io_datasources
  * @{
@@ -98,7 +97,7 @@ class arrow_io_source : public datasource {
    */
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
-    auto result = arrow_file->ReadAt(offset, size);
+    auto const result = arrow_file->ReadAt(offset, size);
     CUDF_EXPECTS(result.ok(), "Cannot read file data");
     return std::make_unique<arrow_io_buffer>(result.ValueOrDie());
   }
@@ -113,7 +112,7 @@ class arrow_io_source : public datasource {
    */
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
-    auto result = arrow_file->ReadAt(offset, size, dst);
+    auto const result = arrow_file->ReadAt(offset, size, dst);
     CUDF_EXPECTS(result.ok(), "Cannot read file data");
     return result.ValueOrDie();
   }
@@ -125,7 +124,7 @@ class arrow_io_source : public datasource {
    */
   [[nodiscard]] size_t size() const override
   {
-    auto result = arrow_file->GetSize();
+    auto const result = arrow_file->GetSize();
     CUDF_EXPECTS(result.ok(), "Cannot get file size");
     return result.ValueOrDie();
   }
