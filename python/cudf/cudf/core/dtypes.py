@@ -651,17 +651,19 @@ decimal_dtype_template = textwrap.dedent(
 
         Notes
         -----
-            When the scale is positive:
-                - numbers with fractional parts (e.g., 0.0042) can be represented
-                - the scale is the total number of digits to the right of the
-                decimal point
-            When the scale is negative:
-                - only multiples of powers of 10 (including 10**0) can be
-                represented (e.g., 1729, 4200, 1000000)
-                - the scale represents the number of trailing zeros in the value.
-            For example, 42 is representable with precision=2 and scale=0.
-            13.0051 is representable with precision=6 and scale=4,
-            and *not* representable with precision<6 or scale<4.
+        When the scale is positive:
+            - numbers with fractional parts (e.g., 0.0042) can be represented
+            - the scale is the total number of digits to the right of the
+              decimal point
+
+        When the scale is negative:
+            - only multiples of powers of 10 (including 10**0) can be
+              represented (e.g., 1729, 4200, 1000000)
+            - the scale represents the number of trailing zeros in the value.
+
+        For example, 42 is representable with precision=2 and scale=0.
+        13.0051 is representable with precision=6 and scale=4,
+        and *not* representable with precision<6 or scale<4.
 
         Examples
         --------

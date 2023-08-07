@@ -1993,14 +1993,14 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       auto [result_bitmask, null_count] = make_validity(json_col);
 
       // Convert strings to the inferred data type
-      auto col = experimental::detail::parse_data(string_spans_it,
-                                                  col_size,
-                                                  target_type,
-                                                  std::move(result_bitmask),
-                                                  null_count,
-                                                  parsing_options(options).view(),
-                                                  stream,
-                                                  mr);
+      auto col = parse_data(string_spans_it,
+                            col_size,
+                            target_type,
+                            std::move(result_bitmask),
+                            null_count,
+                            parsing_options(options).view(),
+                            stream,
+                            mr);
 
       // Reset nullable if we do not have nulls
       // This is to match the existing JSON reader's behaviour:

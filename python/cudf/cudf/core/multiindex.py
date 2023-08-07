@@ -24,13 +24,7 @@ from cudf.api.types import is_integer, is_list_like, is_object_dtype
 from cudf.core import column
 from cudf.core._compat import PANDAS_GE_150
 from cudf.core.frame import Frame
-from cudf.core.index import (
-    BaseIndex,
-    _index_astype_docstring,
-    _lexsorted_equal_range,
-    as_index,
-)
-from cudf.utils.docutils import doc_apply
+from cudf.core.index import BaseIndex, _lexsorted_equal_range, as_index
 from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
 
 
@@ -199,7 +193,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         self._names = pd.core.indexes.frozen.FrozenList(value)
 
     @_cudf_nvtx_annotate
-    @doc_apply(_index_astype_docstring)
     def astype(self, dtype, copy: bool = True):
         if not is_object_dtype(dtype):
             raise TypeError(
@@ -1529,6 +1522,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     @_cudf_nvtx_annotate
     def is_unique(self):
         return len(self) == len(self.unique())
+
+    @property
+    def dtype(self):
+        return np.dtype("O")
 
     @cached_property  # type: ignore
     @_cudf_nvtx_annotate

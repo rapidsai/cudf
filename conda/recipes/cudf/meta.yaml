@@ -57,7 +57,7 @@ requirements:
   host:
     - protobuf ==4.21.*
     - python
-    - cython >=0.29,<0.30
+    - cython >=3.0.0
     - scikit-build >=0.13.1
     - setuptools
     - dlpack >=0.5,<0.6.0a0
