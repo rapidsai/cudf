@@ -1434,3 +1434,6 @@ def test_timdelta_binop_tz_timestamp(op):
     pd_tz_timestamp = pd.Timestamp("1970-01-01 00:00:00.000000001", tz="utc")
     with pytest.raises(NotImplementedError):
         op(s, pd_tz_timestamp)
+    date_tz_scalar = datetime.datetime.now(datetime.timezone.utc)
+    with pytest.raises(NotImplementedError):
+        op(s, date_tz_scalar)
