@@ -898,7 +898,7 @@ class Dfa {
 };
 
 /**
- * @brief Creates a determninistic finite automaton (DFA) as specified by the triple of (symbol
+ * @brief Creates a deterministic finite automaton (DFA) as specified by the triple of (symbol
  * group, transition, translation)-lookup tables to be used with the finite-state transducer
  * algorithm.
  *
