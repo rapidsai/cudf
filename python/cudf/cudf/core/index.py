@@ -37,7 +37,7 @@ from cudf.api.types import (
     is_scalar,
     is_string_dtype,
 )
-from cudf.core._base_index import BaseIndex, _index_astype_docstring
+from cudf.core._base_index import BaseIndex
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -56,7 +56,7 @@ from cudf.core.dtypes import IntervalDtype
 from cudf.core.frame import Frame
 from cudf.core.mixins import BinaryOperand
 from cudf.core.single_column_frame import SingleColumnFrame
-from cudf.utils.docutils import copy_docstring, doc_apply
+from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     find_common_type,
@@ -220,9 +220,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def name(self):
-        """
-        Returns the name of the Index.
-        """
         return self._name
 
     @name.setter  # type: ignore
@@ -377,7 +374,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     @_cudf_nvtx_annotate
-    @doc_apply(_index_astype_docstring)
     def astype(self, dtype, copy: bool = True):
         if is_dtype_equal(dtype, self.dtype):
             return self
@@ -492,9 +488,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @property
     def is_unique(self):
-        """
-        Return if the index has unique values.
-        """
         return True
 
     @cached_property
@@ -1074,17 +1067,13 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     def memory_usage(self, deep=False):
         return self._column.memory_usage
 
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
-    def equals(self, other, **kwargs):
-        """
-        Determine if two Index objects contain the same elements.
+    def is_unique(self):
+        return self._column.is_unique
 
-        Returns
-        -------
-        out: bool
-            True if "other" is an Index and it has the same elements
-            as calling index; False otherwise.
-        """
+    @_cudf_nvtx_annotate
+    def equals(self, other):
         if (
             other is None
             or not isinstance(other, BaseIndex)
@@ -1165,7 +1154,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return _index_from_data({name: col.copy(True) if deep else col})
 
     @_cudf_nvtx_annotate
-    @doc_apply(_index_astype_docstring)
     def astype(self, dtype, copy: bool = True):
         return _index_from_data(super().astype({self.name: dtype}, copy))
 
@@ -1437,7 +1425,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         ascending=True,
         na_position="last",
     ):
-        """Return the integer indices that would sort the Series values.
+        """Return the integer indices that would sort the index.
 
         Parameters
         ----------
@@ -3267,9 +3255,9 @@ class Index(BaseIndex, metaclass=IndexMeta):
     Warnings
     --------
     This class should not be subclassed. It is designed as a factory for
-    different subclasses of :class:`BaseIndex` depending on the provided input.
+    different subclasses of `BaseIndex` depending on the provided input.
     If you absolutely must, and if you're intimately familiar with the
-    internals of cuDF, subclass :class:`BaseIndex` instead.
+    internals of cuDF, subclass `BaseIndex` instead.
 
     Examples
     --------
