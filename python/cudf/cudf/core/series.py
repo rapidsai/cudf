@@ -660,6 +660,17 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
+    def is_unique(self):
+        """Return boolean if values in the object are unique.
+
+        Returns
+        -------
+        bool
+        """
+        return self._column.is_unique
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
     def dt(self):
         """
         Accessor object for datetime-like properties of the Series values.
@@ -819,6 +830,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return super().drop(
             labels, axis, index, columns, level, inplace, errors
         )
+
+    def tolist(self):  # noqa: D102
+        raise TypeError(
+            "cuDF does not support conversion to host memory "
+            "via the `tolist()` method. Consider using "
+            "`.to_arrow().to_pylist()` to construct a Python list."
+        )
+
+    to_list = tolist
 
     @_cudf_nvtx_annotate
     def to_dict(self, into: type[dict] = dict) -> dict:

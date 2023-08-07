@@ -374,12 +374,15 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
+          - dask-cuda==23.10.*
           - doxygen=1.8.20
+          - make
           - myst-nb
           - nbsphinx
           - numpydoc
           - pandoc
           - pydata-sphinx-theme
+          - scipy
           - sphinx
           - sphinx-autobuild
           - sphinx-copybutton
