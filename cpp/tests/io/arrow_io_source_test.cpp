@@ -26,6 +26,7 @@
 #include <cudf/io/parquet.hpp>
 
 #include <arrow/filesystem/filesystem.h>
+#include <arrow/filesystem/s3fs.h>
 #include <arrow/io/api.h>
 #include <arrow/util/config.h>
 
