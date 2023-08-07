@@ -213,7 +213,11 @@ struct delta_binary_decoder {
 
       // unpack deltas. modified from version in gpuDecodeDictionaryIndices(), but
       // that one only unpacks up to bitwidths of 24. simplified some since this
-      // will always do batches of 32. also replaced branching with a loop.
+      // will always do batches of 32.
+      // NOTE: because this needs to handle up to 64 bits, the branching used in the other
+      // implementation has been replaced with a loop. While this uses more registers, the
+      // looping version is just as fast and easier to read. Might need to revisit this when
+      // DELTA_BYTE_ARRAY is implemented.
       zigzag128_t delta = 0;
       if (lane_id + current_value_idx < value_count) {
         int32_t ofs      = (lane_id - warp_size) * mb_bits;
@@ -223,45 +227,10 @@ struct delta_binary_decoder {
           uint32_t c = 8 - ofs;  // 0 - 7 bits
           delta      = (*p++) >> ofs;
 
-#if 1
           while (c < mb_bits && p < block_end) {
             delta |= static_cast<zigzag128_t>(*p++) << c;
             c += 8;
           }
-#else
-          // bring back unrolled unpacker for perf testing
-          if (c < mb_bits && p < block_end) {  // up to 8 bits
-            delta |= (*p++) << c;
-            c += 8;
-            if (c < mb_bits && p < block_end) {  // up to 16 bits
-              delta |= (*p++) << c;
-              c += 8;
-              if (c < mb_bits && p < block_end) {  // 24 bits
-                delta |= (*p++) << c;
-                c += 8;
-                if (c < mb_bits && p < block_end) {  // 32 bits
-                  delta |= static_cast<zigzag128_t>(*p++) << c;
-                  c += 8;
-                  if (c < mb_bits && p < block_end) {  // 40 bits
-                    delta |= static_cast<zigzag128_t>(*p++) << c;
-                    c += 8;
-                    if (c < mb_bits && p < block_end) {  // 48 bits
-                      delta |= static_cast<zigzag128_t>(*p++) << c;
-                      c += 8;
-                      if (c < mb_bits && p < block_end) {  // 56 bits
-                        delta |= static_cast<zigzag128_t>(*p++) << c;
-                        c += 8;
-                        if (c < mb_bits && p < block_end) {  // 64 bits
-                          delta |= static_cast<zigzag128_t>(*p++) << c;
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-#endif
           delta &= (static_cast<zigzag128_t>(1) << mb_bits) - 1;
         }
       }
