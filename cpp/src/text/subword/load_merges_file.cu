@@ -38,13 +38,6 @@ namespace nvtext {
 namespace detail {
 namespace {
 
-// struct make_pair_function {
-//   __device__ cuco::pair<cudf::size_type, cudf::size_type> operator()(cudf::size_type idx)
-//   {
-//     return cuco::make_pair(idx, idx);
-//   }
-// };
-
 /**
  * @brief Loads a text file of merge-pairs into a strings column.
  *
@@ -109,7 +102,7 @@ std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
   auto iter = cudf::detail::make_counting_transform_iterator(
     0, [] __device__(cudf::size_type idx) { return cuco::make_pair(idx, idx); });
 
-  merge_pairs_map->insert(iter, iter + input.size(), stream.value());
+  merge_pairs_map->insert_async(iter, iter + input.size(), stream.value());
 
   return merge_pairs_map;
 }
@@ -177,7 +170,5 @@ bpe_merge_pairs::bpe_merge_pairs(cudf::strings_column_view const& input,
 }
 
 bpe_merge_pairs::~bpe_merge_pairs() = default;
-
-cudf::size_type bpe_merge_pairs::get_size() { return impl->merge_pairs->size(); }
 
 }  // namespace nvtext

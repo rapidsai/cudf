@@ -61,13 +61,6 @@ struct bpe_merge_pairs {
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   ~bpe_merge_pairs();
-
-  /**
-   * @brief Returns the number of merge pairs in the table.
-   *
-   * @return The number of merge pairs in the table
-   */
-  cudf::size_type get_size();
 };
 
 /**
