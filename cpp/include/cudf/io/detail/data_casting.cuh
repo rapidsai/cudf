@@ -369,6 +369,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
     auto in_begin           = str_tuples[istring].first;
     auto in_end             = in_begin + str_tuples[istring].second;
     auto const num_in_chars = str_tuples[istring].second;
+    // if(!(num_in_chars >= 1024)) continue;
 
     // Check if the value corresponds to the null literal
     auto const is_null_literal =
@@ -588,13 +589,8 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
         offset += last_offset;
         // TODO add last active lane this_num_out for correct last_offset.
         if (d_chars && !skip) { strings::detail::from_char_utf8(write_char, d_buffer + offset); }
-        __shared__ cub::WarpReduce<size_type>::TempStorage temp_storage2[4];
-        last_offset += cub::WarpReduce<size_type>(temp_storage2[warp_id]).Sum(this_num_out);
-        last_offset = __shfl_sync(0xffffffff, last_offset, 0);
-        // offset += this_num_out;
-        // auto last_active_lane = __ffs(__brev(__activemask())); // TODO simplify 0xFF case?
-        // last_offset = __shfl_sync(0xffffffff, offset, 31-last_active_lane);  // TODO is mask
-        // right?
+        offset += this_num_out;
+        last_offset = __shfl_sync(0xffffffff, offset, 31);
       }
     }  // char for-loop
     if (!d_chars && warp_lane == 0) { d_offsets[istring] = last_offset; }
