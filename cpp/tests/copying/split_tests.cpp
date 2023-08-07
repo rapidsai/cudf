@@ -1229,7 +1229,7 @@ void split_nested_list_of_structs(SplitFunc Split, CompareFunc Compare, bool spl
     // these outputs correctly, this should be safe.
     auto result   = Split(*outer_list, splits);
     auto expected = cudf::split(static_cast<cudf::column_view>(*outer_list), splits);
-    CUDF_EXPECTS(result.size() == expected.size(), "Split result size mismatch");
+    ASSERT_EQ(result.size(), expected.size());
 
     for (std::size_t index = 0; index < result.size(); index++) {
       Compare(expected[index], result[index]);
@@ -1591,8 +1591,7 @@ TEST_F(ContiguousSplitUntypedTest, ValidityRepartition)
   cudf::table_view t({*col});
   auto result   = cudf::contiguous_split(t, {num_rows / 2});
   auto expected = cudf::split(t, {num_rows / 2});
-  CUDF_EXPECTS(result.size() == expected.size(),
-               "Mismatch in split results in ValidityRepartition test");
+  ASSERT_EQ(result.size(), expected.size());
 
   for (size_t idx = 0; idx < result.size(); idx++) {
     CUDF_TEST_EXPECT_TABLES_EQUAL(result[idx].table, expected[idx]);
@@ -1696,14 +1695,14 @@ TEST_F(ContiguousSplitStringTableTest, EmptyInputColumn)
   {
     std::vector<cudf::size_type> splits;
     auto result = cudf::contiguous_split(src_table, splits);
-    CUDF_EXPECTS(result.size() == 1, "Incorrect returned contiguous_split result size!");
+    ASSERT_EQ(result.size(), 1);
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(src_table, result[0].table);
   }
 
   {
     auto result = do_chunked_pack(src_table);
-    CUDF_EXPECTS(result.size() == 1, "Incorrect returned contiguous_split result size!");
+    ASSERT_EQ(result.size(), 1);
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(src_table, result[0].table);
   }
@@ -1711,7 +1710,7 @@ TEST_F(ContiguousSplitStringTableTest, EmptyInputColumn)
   {
     std::vector<cudf::size_type> splits{0, 0, 0, 0};
     auto result = cudf::contiguous_split(src_table, splits);
-    CUDF_EXPECTS(result.size() == 5, "Incorrect returned contiguous_split result size!");
+    ASSERT_EQ(result.size(), 5);
 
     for (size_t idx = 0; idx < result.size(); idx++) {
       CUDF_TEST_EXPECT_TABLES_EQUIVALENT(src_table, result[idx].table);
