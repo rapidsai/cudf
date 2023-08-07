@@ -106,6 +106,9 @@ class file_source : public datasource {
   static constexpr size_t _gds_read_preferred_threshold = 128 << 10;  // 128KB
 };
 
+/**
+ * @brief Memoized pageableMemoryAccessUsesHostPageTables device property.
+ */
 [[nodiscard]] bool pageableMemoryAccessUsesHostPageTables()
 {
   static std::unordered_map<int, bool> result_cache{};
@@ -173,6 +176,11 @@ class memory_mapped_source : public file_source {
   }
 
  private:
+  /**
+   * @brief Page-locks (registers) the memory range of the mapped file.
+   *
+   * Fixes nvbugs/4215160
+   */
   void register_mmaped_buffer()
   {
     if (_map_addr == nullptr or _map_size == 0 or not pageableMemoryAccessUsesHostPageTables()) {
@@ -187,6 +195,9 @@ class memory_mapped_source : public file_source {
     }
   }
 
+  /**
+   * @brief Unregisters the memory range of the mapped file.
+   */
   void unregister_mmaped_buffer()
   {
     if (not _is_map_registered) { return; }
