@@ -41,6 +41,12 @@ namespace detail {
 using hash_value_type    = uint32_t;
 using string_hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>;
 
+/**
+ * @brief Hasher function used for building and using the cuco static-map
+ *
+ * This takes advantage of hetergenouse lookup feature in cuco static-map which
+ * allows inserting with one type (index)  and looking up with a different type (string).
+ */
 struct bpe_hasher {
   cudf::column_device_view const d_strings;
   string_hasher_type hasher{};
@@ -53,6 +59,12 @@ struct bpe_hasher {
   __device__ hash_value_type operator()(cudf::string_view const& s) const { return hasher(s); }
 };
 
+/**
+ * @brief Equal function used for building and using the cuco static-map
+ *
+ * This takes advantage of hetergenouse lookup feature in cuco static-map which
+ * allows inserting with one type (index)  and looking up with a different type (string).
+ */
 struct bpe_equal {
   cudf::column_device_view const d_strings;
   // used by insert
