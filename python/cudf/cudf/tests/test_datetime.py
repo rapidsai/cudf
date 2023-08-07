@@ -2099,5 +2099,5 @@ def test_construction_from_tz_timestamps(data):
 def test_datetime_binop_tz_timestamp(op):
     s = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
     pd_tz_timestamp = pd.Timestamp("1970-01-01 00:00:00.000000001", tz="utc")
-    with pytest.raises(TypeError):
+    with pytest.raises(NotImplementedError):
         op(s, pd_tz_timestamp)

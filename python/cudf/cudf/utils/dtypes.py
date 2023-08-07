@@ -272,7 +272,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
 
     if isinstance(val, pd.Timestamp):
         if val.tz is not None:
-            raise TypeError(
+            raise NotImplementedError(
                 "Cannot covert a timezone-aware timestamp to"
                 " timezone-naive scalar. For that, "
                 "use `tz_localize`."

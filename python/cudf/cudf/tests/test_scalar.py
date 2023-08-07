@@ -454,5 +454,5 @@ def test_scalar_numpy_casting():
 
 def test_construct_timezone_scalar_error():
     pd_scalar = pd.Timestamp("1970-01-01 00:00:00.000000001", tz="utc")
-    with pytest.raises(TypeError):
+    with pytest.raises(NotImplementedError):
         cudf.utils.dtypes.to_cudf_compatible_scalar(pd_scalar)

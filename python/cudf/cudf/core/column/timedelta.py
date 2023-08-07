@@ -216,7 +216,7 @@ class TimeDeltaColumn(ColumnBase):
 
         if isinstance(other, pd.Timestamp):
             if other.tz is not None:
-                raise TypeError(
+                raise NotImplementedError(
                     "Cannot perform binary operation on timezone-naive columns"
                     " and timezone-aware timestamps. For that, "
                     "use `tz_localize`."
