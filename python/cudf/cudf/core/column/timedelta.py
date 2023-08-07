@@ -213,12 +213,20 @@ class TimeDeltaColumn(ColumnBase):
     def normalize_binop_value(self, other) -> ColumnBinaryOperand:
         if isinstance(other, (ColumnBase, cudf.Scalar)):
             return other
-        if isinstance(other, datetime.timedelta):
-            other = np.timedelta64(other)
-        elif isinstance(other, pd.Timestamp):
+
+        if isinstance(other, pd.Timestamp):
+            if other.tz is not None:
+                raise TypeError(
+                    "Cannot perform binary operation on timezone-naive columns"
+                    " and timezone-aware timestamps. For that, "
+                    "use `tz_localize`."
+                )
             other = other.to_datetime64()
         elif isinstance(other, pd.Timedelta):
             other = other.to_timedelta64()
+        elif isinstance(other, datetime.timedelta):
+            other = np.timedelta64(other)
+
         if isinstance(other, np.timedelta64):
             other_time_unit = cudf.utils.dtypes.get_time_unit(other)
             if np.isnat(other):
