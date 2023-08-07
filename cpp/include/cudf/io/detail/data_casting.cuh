@@ -348,7 +348,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
   // int nwarps           = gridDim.x * blockDim.x / cudf::detail::warp_size;
   // TODO alignment - aligned access possible?
 
-  // grid-stride loop.
+  // get 1-string index per warp
   auto warp_inc_count = [&]() {
     size_type istring=0;
     if(warp_lane==0) {
@@ -357,6 +357,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
     __syncwarp();
     return __shfl_sync(0xffffffff, istring, 0);
   };
+  // grid-stride loop.
   // for (size_type istring = global_warp_id; istring < total_out_strings; istring += nwarps) {
   for (size_type istring = warp_inc_count(); istring < total_out_strings; istring = warp_inc_count()) {
     // if (!d_chars)
@@ -416,13 +417,11 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
     bool init_state{false};  // for backslash scan calculation
     auto last_offset = 0;
     // 0-31, 32-63, ... i*32-n.
-    // condition as __ballot_sync(0xffffffff, char_index < (in_end - in_begin)) != 0
-    // to allow entire warp execute but with mask.
+    // entire warp executes but with mask.
     auto MASK = 0xffffffff;
     for (size_type char_index = warp_lane; (MASK = __ballot_sync(0xffffffff, char_index < (in_end - in_begin))) != 0;
-    // char_index<(in_end - in_begin);
          char_index += cudf::detail::warp_size) {
-      bool is_within_bounds = char_index < (in_end - in_begin);
+      bool is_within_bounds = char_index < (in_end - in_begin); //TODO more conditions below to avoid out-of-bound memory access.
       auto c            = in_begin[char_index];
       auto prev_c       = char_index > 0 ? in_begin[char_index - 1] : 'a';
       auto escaped_char = get_escape_char(c);
@@ -472,31 +471,16 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
       int this_num_out = 0;
       cudf::char_utf8 write_char{'a'};
 
-      // auto prev = 0; // carry for is_escape_slash
-      // if prev == escape_slash, then this is escaped_char, so copy.
-      // then this is not escaped_slash regardless of c.
-      // if prev != escape_slash, then curr == '\' is escaped_slash,.
-      // curr_escape_slash = prev==true then 0, if prev=false & c=='\'
-      // curr = !prev && c=='\'
-      //        0  & *
-      //        1  '\'?
-      //                 c=='\'
-      // inclusivesum of custom operator.
-      // check if any c=='\' in warp, if no, then prev=false for all.
-      // else do the scan.
-
+      // To check current is backslash by checking if previous is backslash.
       // curr = !prev & c=='\\'
-      // !curr = !(!prev & c=='\\')
-      // !curr = prev | c!='\\' is it associative? NO
-
-      // not associative!
-      // curr[0] curr[1] curr[2]. op = !prev & c;
-      // op = !a & b;
-      // op( op(x, y), z) = op(!x&y, z) = (!(!x&y))&z = (x | !y)&z = xz | (!y)z
-      // op(x, op(y, z))  =op(x, !y&z)  = !x&(!y &z) = (!x)&(!y)&z
-
-      // problem is when there is continuous \\\\\\\\\\\\\ we don't know which one is escaping
-      // backslash.
+      // So, scan is required from beginning of string.
+      // State table approach (intra-warp FST)
+      // 2 states: Not-Slash(NS), Slash(S).
+      // prev  /   *
+      // NS    S  NS
+      //  S   NS  NS
+      // After inclusive scan, all current S states translate to escaping backslash.
+      // All escaping backslash should be skipped.
 
       struct state_table {
         bool state[2];
@@ -512,8 +496,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
       // inclusive scan. TODO both inclusive and exclusive available in cub.
       cub::WarpScan<state_table>(temp_slash[warp_id]).InclusiveScan(curr, scanned, composite_op);
       auto is_escaping_backslash = scanned.state[init_state];
-      // init_state                 = __shfl_sync(0xffffffff, is_escaping_backslash, 31);
-      auto last_active_lane = 31 - __clz(MASK);  // TODO simplify 0xFF case?
+      auto last_active_lane = 31 - __clz(MASK);  // TODO simplify 0xffffffff case?
       init_state            = __shfl_sync(MASK, is_escaping_backslash, last_active_lane);
       // TODO replace/add prev_c with proper scan of escapes
       skip |= is_escaping_backslash;
@@ -524,7 +507,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
           // if (true) {
           this_num_out = 1;
           if (d_chars) write_char = c;
-          // d_buffer[last_offset+ this_num_out_scaned] = c;
+          //FIXME: can you skip write like this for string_size count at other places?
         } else {
           // already taken care early.
           // if (escaped_char == NON_ESCAPE_CHAR) {
@@ -533,9 +516,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
           // } else
           if (escaped_char != UNICODE_SEQ) {
             this_num_out = 1;
-            // if(d_chars)
             write_char = escaped_char;
-            // d_buffer[last_offset+ this_num_out_scaned] = escaped_char;
           } else {
             // \uXXXX- u
             // Unicode
@@ -544,7 +525,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
             // if next is \uXXXX
             // in_begin + char_index
             // 01234567890
-            //\uXXXX\uXXXX
+            //\uXXXX\uXXXX TODO cleanup these conditions.
             // if ((in_end - (in_begin + char_index + 1 + 4)) > 6 &&
             if ((in_begin + char_index + 4 + 6) < in_end && in_begin[char_index + 1 + 4] == '\\' &&
                 in_begin[char_index + 1 + 5] == 'u') {
@@ -558,7 +539,6 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
                                             (hex_low_val - UTF16_LOW_SURROGATE_BEGIN);
               write_char   = strings::detail::codepoint_to_utf8(unicode_code_point);
               this_num_out = strings::detail::bytes_in_char_utf8(write_char);
-              // this_num_out = 0; skip=true;
             } else {
               // auto hex_high_val = parse_unicode_hex(in_begin + char_index + 1 - 6);
               if (
