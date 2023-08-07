@@ -335,6 +335,7 @@ process_string(in_iterator_t in_begin,
 template <typename str_tuple_it>
 __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
                                          size_type total_out_strings,
+                                         size_type* str_counter,
                                          bitmask_type* null_mask,
                                          size_type* null_count_data,
                                          cudf::io::parse_options_view const options,
@@ -342,13 +343,24 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
                                          char* d_chars)
 {
   int global_thread_id = blockIdx.x * blockDim.x + threadIdx.x;
-  int global_warp_id   = global_thread_id / cudf::detail::warp_size;
   int warp_lane        = global_thread_id % cudf::detail::warp_size;
-  int nwarps           = gridDim.x * blockDim.x / cudf::detail::warp_size;
+  // int global_warp_id   = global_thread_id / cudf::detail::warp_size;
+  // int nwarps           = gridDim.x * blockDim.x / cudf::detail::warp_size;
   // TODO alignment - aligned access possible?
 
   // grid-stride loop.
-  for (size_type istring = global_warp_id; istring < total_out_strings; istring += nwarps) {
+  auto warp_inc_count = [&]() {
+    size_type istring=0;
+    if(warp_lane==0) {
+      istring = atomicAdd(str_counter, 1);
+    }
+    __syncwarp();
+    return __shfl_sync(0xffffffff, istring, 0);
+  };
+  // for (size_type istring = global_warp_id; istring < total_out_strings; istring += nwarps) {
+  for (size_type istring = warp_inc_count(); istring < total_out_strings; istring = warp_inc_count()) {
+    // if (!d_chars)
+    // printf("%d:%d<%d\n", global_thread_id, istring, total_out_strings);
     if (null_mask != nullptr && not bit_is_set(null_mask, istring)) {
       if (!d_chars) d_offsets[istring] = 0;
       continue;  // gride-stride return;
@@ -688,9 +700,23 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
     auto offsets2 = cudf::make_numeric_column(
       data_type{cudf::type_id::INT32}, col_size + 1, cudf::mask_state::UNALLOCATED, stream, mr);
     auto d_offsets = offsets2->mutable_view().data<size_type>();
-    parse_fn_string_parallel<<<min(65536, col_size / 4 + 1), 32 * 4, 0, stream.value()>>>(
+
+    int max_blocks = 0;
+    constexpr auto warps_per_block = 8;
+    int threads_per_block = cudf::detail::warp_size * warps_per_block;
+    CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_blocks, parse_fn_string_parallel<str_tuple_it>, threads_per_block, 0));
+
+    int device = 0;
+    CUDF_CUDA_TRY(cudaGetDevice(&device));
+    int num_sms = 0;
+    CUDF_CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, device));
+    auto num_blocks = min(num_sms * max_blocks, min(65535, col_size / warps_per_block + 1));
+    auto str_counter = cudf::numeric_scalar(size_type{0}, true, stream);
+
+    parse_fn_string_parallel<<<num_blocks, threads_per_block, 0, stream.value()>>>(
       str_tuples,
       col_size,
+      str_counter.data(),
       static_cast<bitmask_type*>(null_mask.data()),
       null_count_data2,
       options,
@@ -699,6 +725,7 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
     // print_raw(d_offsets, offsets2->size(), stream);
     auto const bytes =
       cudf::detail::sizes_to_offsets(d_offsets, d_offsets + col_size + 1, d_offsets, stream);
+    str_counter.set_value(0, stream);
 
     // CHARS column
     std::unique_ptr<column> chars2 =
@@ -706,9 +733,10 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
     auto d_chars2 = chars2->mutable_view().data<char>();
     cudaMemsetAsync(d_chars2, 'c', bytes, stream.value());
 
-    parse_fn_string_parallel<<<min(65536, col_size / 4 + 1), 32 * 4, 0, stream.value()>>>(
+    parse_fn_string_parallel<<<num_blocks, threads_per_block, 0, stream.value()>>>(
       str_tuples,
       col_size,
+      str_counter.data(),
       static_cast<bitmask_type*>(null_mask.data()),
       null_count_data2,
       options,
