@@ -140,7 +140,7 @@ class memory_mapped_source : public file_source {
   {
     if (_file.size() != 0) {
       map(_file.desc(), offset, size);
-      register_mmaped_buffer();
+      register_mmap_buffer();
     }
   }
 
@@ -148,7 +148,7 @@ class memory_mapped_source : public file_source {
   {
     if (_map_addr != nullptr) {
       munmap(_map_addr, _map_size);
-      unregister_mmaped_buffer();
+      unregister_mmap_buffer();
     }
   }
 
@@ -181,7 +181,7 @@ class memory_mapped_source : public file_source {
    *
    * Fixes nvbugs/4215160
    */
-  void register_mmaped_buffer()
+  void register_mmap_buffer()
   {
     if (_map_addr == nullptr or _map_size == 0 or not pageableMemoryAccessUsesHostPageTables()) {
       return;
@@ -198,7 +198,7 @@ class memory_mapped_source : public file_source {
   /**
    * @brief Unregisters the memory range of the mapped file.
    */
-  void unregister_mmaped_buffer()
+  void unregister_mmap_buffer()
   {
     if (not _is_map_registered) { return; }
 
