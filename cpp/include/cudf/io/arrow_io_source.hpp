@@ -19,14 +19,9 @@
 #include "datasource.hpp"
 
 #include <arrow/buffer.h>
-
 #include <arrow/filesystem/filesystem.h>
-#include <arrow/filesystem/s3fs.h>
 #include <arrow/io/file.h>
-#include <arrow/io/interfaces.h>
 #include <arrow/io/memory.h>
-#include <arrow/result.h>
-#include <arrow/status.h>
 
 #include <memory>
 #include <string>
@@ -65,25 +60,24 @@ class arrow_io_source : public datasource {
    *
    * @param arrow_uri Apache Arrow Filesystem URI
    */
-  explicit arrow_io_source(std::string_view arrow_uri)
+  explicit arrow_io_source(std::string const& arrow_uri)
   {
     std::string const uri_start_delimiter = "//";
     std::string const uri_end_delimiter   = "?";
 
-    arrow::Result<std::shared_ptr<arrow::fs::FileSystem>> result =
-      arrow::fs::FileSystemFromUri(static_cast<std::string>(arrow_uri));
+    auto const result = arrow::fs::FileSystemFromUri(arrow_uri);
     CUDF_EXPECTS(result.ok(), "Failed to generate Arrow Filesystem instance from URI.");
     filesystem = result.ValueOrDie();
 
     // Parse the path from the URI
-    size_t start          = arrow_uri.find(uri_start_delimiter) == std::string::npos
-                              ? 0
-                              : arrow_uri.find(uri_start_delimiter) + uri_start_delimiter.size();
-    size_t end            = arrow_uri.find(uri_end_delimiter) - start;
-    std::string_view path = arrow_uri.substr(start, end);
+    auto const start = [&]() {
+      auto const delim_start = arrow_uri.find(uri_start_delimiter);
+      return delim_start == std::string::npos ? 0 : delim_start + uri_start_delimiter.size();
+    }();
+    auto const end  = arrow_uri.find(uri_end_delimiter) - start;
+    auto const path = arrow_uri.substr(start, end);
 
-    arrow::Result<std::shared_ptr<arrow::io::RandomAccessFile>> in_stream =
-      filesystem->OpenInputFile(static_cast<std::string>(path).c_str());
+    auto const in_stream = filesystem->OpenInputFile(path);
     CUDF_EXPECTS(in_stream.ok(), "Failed to open Arrow RandomAccessFile");
     arrow_file = in_stream.ValueOrDie();
   }
