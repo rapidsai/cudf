@@ -159,12 +159,6 @@ def test_strings(tmpdir):
     read_df = dask_cudf.read_parquet(fn, index=["a"])
     dd.assert_eq(ddf2, read_df.compute().to_pandas())
 
-    read_df_cats = dask_cudf.read_parquet(
-        fn, index=["a"], strings_to_categorical=True
-    )
-    dd.assert_eq(read_df_cats.dtypes, read_df_cats.compute().dtypes)
-    dd.assert_eq(read_df_cats.dtypes[0], "int32")
-
 
 def test_dask_timeseries_from_pandas(tmpdir):
 

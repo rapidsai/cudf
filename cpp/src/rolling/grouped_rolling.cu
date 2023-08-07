@@ -327,12 +327,12 @@ std::unique_ptr<column> expand_to_column(Calculator const& calc,
                                          rmm::cuda_stream_view stream)
 {
   auto window_column = cudf::make_numeric_column(
-    cudf::data_type{type_to_id<offset_type>()}, num_rows, cudf::mask_state::UNALLOCATED, stream);
+    cudf::data_type{type_to_id<size_type>()}, num_rows, cudf::mask_state::UNALLOCATED, stream);
 
   auto begin = cudf::detail::make_counting_transform_iterator(0, calc);
 
   thrust::copy_n(
-    rmm::exec_policy(stream), begin, num_rows, window_column->mutable_view().data<offset_type>());
+    rmm::exec_policy(stream), begin, num_rows, window_column->mutable_view().data<size_type>());
 
   return window_column;
 }

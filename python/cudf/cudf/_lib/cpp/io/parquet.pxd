@@ -22,15 +22,12 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         vector[vector[size_type]] get_row_groups() except +
         const optional[reference_wrapper[expression]]& get_filter() except +
         data_type get_timestamp_type() except +
-        bool is_enabled_convert_strings_to_categories() except +
         bool is_enabled_use_pandas_metadata() except +
 
         # setter
 
         void set_columns(vector[string] col_names) except +
         void set_row_groups(vector[vector[size_type]] row_grp) except +
-        void set_filter(expression filter) except +
-        void enable_convert_strings_to_categories(bool val) except +
         void enable_use_pandas_metadata(bool val) except +
         void set_timestamp_type(data_type type) except +
 
@@ -49,12 +46,6 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +
         parquet_reader_options_builder& row_groups(
             vector[vector[size_type]] row_grp
-        ) except +
-        parquet_reader_options_builder& filter(
-            expression filter
-        ) except +
-        parquet_reader_options_builder& convert_strings_to_categories(
-            bool val
         ) except +
         parquet_reader_options_builder& use_pandas_metadata(
             bool val
