@@ -2093,3 +2093,15 @@ def test_construction_from_tz_timestamps(data):
         _ = cudf.Series(data)
     with pytest.raises(NotImplementedError):
         _ = cudf.Index(data)
+
+
+@pytest.mark.parametrize("op", _cmpops)
+def test_datetime_binop_tz_timestamp(op):
+    s = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
+    pd_tz_timestamp = pd.Timestamp("1970-01-01 00:00:00.000000001", tz="utc")
+    with pytest.raises(NotImplementedError):
+        op(s, pd_tz_timestamp)
+
+    date_scalar = datetime.datetime.now(datetime.timezone.utc)
+    with pytest.raises(NotImplementedError):
+        op(s, date_scalar)
