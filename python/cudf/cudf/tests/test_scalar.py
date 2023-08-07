@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 import datetime
 import re
@@ -450,3 +450,13 @@ def test_scalar_numpy_casting():
     s1 = cudf.Scalar(1, dtype=np.int32)
     s2 = np.int64(2)
     assert s1 < s2
+
+
+def test_construct_timezone_scalar_error():
+    pd_scalar = pd.Timestamp("1970-01-01 00:00:00.000000001", tz="utc")
+    with pytest.raises(NotImplementedError):
+        cudf.utils.dtypes.to_cudf_compatible_scalar(pd_scalar)
+
+    date_scalar = datetime.datetime.now(datetime.timezone.utc)
+    with pytest.raises(NotImplementedError):
+        cudf.utils.dtypes.to_cudf_compatible_scalar(date_scalar)
