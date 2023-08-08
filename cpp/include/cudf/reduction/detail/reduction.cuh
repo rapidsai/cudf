@@ -226,7 +226,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   thrust::for_each_n(rmm::exec_policy(stream),
                      intermediate_result.data(),
                      1,
-                     cuda::proclaim_return_type<OutputType>(
+                     cuda::proclaim_return_type<void>(
                        [dres = result->data(), op, valid_count, ddof] __device__(auto i) {
                          *dres = op.template compute_result<OutputType>(i, valid_count, ddof);
                        }));
