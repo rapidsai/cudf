@@ -1333,6 +1333,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             return NotImplemented
 
         try:
+            if func.__name__ in {"any", "all"}:
+                # Numpy default for `axis` if
+                # different from `cudf`/`pandas`
+                # hence need this special handling.
+                kwargs.setdefault("axis", None)
             if cudf_func := getattr(self.__class__, func.__name__, None):
                 out = cudf_func(*args, **kwargs)
                 # The dot product of two DataFrames returns an array in pandas.
