@@ -1286,9 +1286,9 @@ def test_parquet_reader_v2(tmpdir, simple_pdf):
     assert_eq(cudf.read_parquet(pdf_fname), simple_pdf)
 
 
+@pytest.mark.parametrize("nrows", [1, 100000])
 @pytest.mark.parametrize("add_nulls", [True, False])
-def test_delta_binary(add_nulls, tmpdir):
-    nrows = 100000
+def test_delta_binary(nrows, add_nulls, tmpdir):
     null_frequency = 0.25 if add_nulls else 0
 
     # Create a pandas dataframe with random data of mixed types

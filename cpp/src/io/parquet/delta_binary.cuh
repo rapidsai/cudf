@@ -158,7 +158,9 @@ struct delta_binary_decoder {
 
     // init the first mini-block
     block_start = d_start;
-    init_mini_block(false);
+
+    // only call init if there are actually encoded values
+    if (value_count > 1) { init_mini_block(false); }
   }
 
   // skip to the start of the next mini-block. should only be called on thread 0.
@@ -197,6 +199,7 @@ struct delta_binary_decoder {
         value[0] = last_value;
       }
       __syncwarp();
+      if (current_value_idx >= value_count) { return; }
     }
 
     uint32_t const mb_bits = cur_bitwidths[cur_mb];
