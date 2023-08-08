@@ -5830,6 +5830,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if op in {"any", "all"}:
                 axis = 2
             else:
+                # Do not remove until pandas 2.0 support is added.
                 warnings.warn(
                     f"In a future version, {type(self).__name__}"
                     f".{op}(axis=None) will return a scalar {op} over "

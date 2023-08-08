@@ -2092,6 +2092,7 @@ class Frame(BinaryOperand, Scannable):
         """
         if axis in {no_default, None}:
             if axis is None:
+                # Do not remove until pandas 3.0 support is added.
                 warnings.warn(
                     f"In a future version, {type(self).__name__}"
                     f".product(axis=None) will return a scalar product over "
