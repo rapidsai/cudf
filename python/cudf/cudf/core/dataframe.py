@@ -1334,7 +1334,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         try:
             if func.__name__ in {"any", "all"}:
-                # Numpy default for `axis` is
+                # NumPy default for `axis` is
                 # different from `cudf`/`pandas`
                 # hence need this special handling.
                 kwargs.setdefault("axis", None)
