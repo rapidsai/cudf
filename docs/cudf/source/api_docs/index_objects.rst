@@ -12,7 +12,6 @@ used before calling these methods directly.**
 
 .. autosummary::
    :toctree: api/
-   :template: autosummary/class_with_autosummary.rst
 
    Index
 
@@ -162,9 +161,13 @@ Numeric Index
 -------------
 .. autosummary::
    :toctree: api/
-   :template: autosummary/class_without_autosummary.rst
 
    RangeIndex
+   RangeIndex.start
+   RangeIndex.stop
+   RangeIndex.step
+   RangeIndex.to_numpy
+   RangeIndex.to_arrow
    Int64Index
    UInt64Index
    Float64Index
@@ -175,7 +178,6 @@ CategoricalIndex
 ----------------
 .. autosummary::
    :toctree: api/
-   :template: autosummary/class_without_autosummary.rst
 
    CategoricalIndex
 
@@ -200,7 +202,6 @@ IntervalIndex
 -------------
 .. autosummary::
    :toctree: api/
-   :template: autosummary/class_without_autosummary.rst
 
    IntervalIndex
 
@@ -219,7 +220,6 @@ MultiIndex
 ----------
 .. autosummary::
    :toctree: api/
-   :template: autosummary/class_without_autosummary.rst
 
    MultiIndex
 
@@ -250,6 +250,7 @@ MultiIndex components
 
    MultiIndex.to_frame
    MultiIndex.droplevel
+   MultiIndex.swaplevel
 
 MultiIndex selecting
 ~~~~~~~~~~~~~~~~~~~~
@@ -265,7 +266,6 @@ DatetimeIndex
 -------------
 .. autosummary::
    :toctree: api/
-   :template: autosummary/class_without_autosummary.rst
 
    DatetimeIndex
 
@@ -299,6 +299,7 @@ Time-specific operations
    DatetimeIndex.round
    DatetimeIndex.ceil
    DatetimeIndex.floor
+   DatetimeIndex.tz_convert
    DatetimeIndex.tz_localize
 
 Conversion
@@ -313,7 +314,6 @@ TimedeltaIndex
 --------------
 .. autosummary::
    :toctree: api/
-   :template: autosummary/class_without_autosummary.rst
 
    TimedeltaIndex
 

@@ -121,6 +121,35 @@ while still matching the pandas layout as closely as possible.
 When adding a new API, developers simply have to add the API to the appropriate page.
 Adding the name of the function to the appropriate autosummary list is sufficient for it to be documented.
 
+### Documenting classes
+
+Python classes and the Sphinx plugins used in RAPIDS interact in nontrivial ways.
+`autosummary`'s default page generated for a class uses [`autodoc`](https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html) to automatically detect and document all methods of a class.
+That means that in addition to the manually created `autosummary` pages where class methods are grouped into sections of related features, there is another page for each class where all the methods of that class are automatically summarized in a table for quick access.
+However, we also use the [`numpydoc`](https://numpydoc.readthedocs.io/) extension, which offers the same feature.
+We use both in order to match the contents and style of the pandas documentation as closely as possible.
+
+pandas is also particular about what information is included in a class's documentation.
+While the documentation pages for the major user-facing classes like `DataFrame`, `Series`, and `Index` contain all APIs, less visible classes or subclasses (such as subclasses of `Index`) only include the methods that are specific to those subclasses.
+For example, {py:class}`cudf.CategoricalIndex` only includes `codes` and `categories` on its page, not the entire set of `Index` functionality.
+
+To accommodate these requirements, we take the following approach:
+1. The default `autosummary` template for classes is overridden with a [simpler template that does not generate method or attribute documentation](https://github.com/rapidsai/cudf/blob/main/docs/cudf/source/_templates/autosummary/class.rst). In other words, we disable `autosummary`'s generation of Methods and Attributes lists.
+2. We rely on `numpydoc` entirely for the classes that need their entire APIs listed (`DataFrame`/`Series`/etc). `numpydoc` will automatically populate Methods and Attributes section if (and only if) they are not already defined in the class's docstring.
+3. For classes that should only include a subset of APIs, we include those explicitly in the class's documentation. When those lists exist, `numpydoc` will not override them. If either the Methods or Attributes section should be empty, that section must still be included but should simply contain "None". For example, the class documentation for `CategoricalIndex` could include something like the following:
+
+```
+    Attributes
+    ----------
+    codes
+    categories
+
+    Methods
+    -------
+    None
+
+```
+
 ## Comparing to pandas
 
 cuDF aims to provide a pandas-like experience.
