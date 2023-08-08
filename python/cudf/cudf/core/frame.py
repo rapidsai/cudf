@@ -19,7 +19,10 @@ from typing import (
     Union,
 )
 
+# TODO: The `numpy` import is needed for typing purposes during doc builds
+# only, need to figure out why the `np` alias is insufficient then remove.
 import cupy
+import numpy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -246,74 +249,6 @@ class Frame(BinaryOperand, Scannable):
         """
         return self._num_columns * self._num_rows
 
-    @property
-    @_cudf_nvtx_annotate
-    def shape(self):
-        """Returns a tuple representing the dimensionality of the DataFrame."""
-        return self._num_rows, self._num_columns
-
-    @property
-    @_cudf_nvtx_annotate
-    def empty(self):
-        """
-        Indicator whether DataFrame or Series is empty.
-
-        True if DataFrame/Series is entirely empty (no items),
-        meaning any of the axes are of length 0.
-
-        Returns
-        -------
-        out : bool
-            If DataFrame/Series is empty, return True, if not return False.
-
-        Notes
-        -----
-        If DataFrame/Series contains only `null` values, it is still not
-        considered empty. See the example below.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'A' : []})
-        >>> df
-        Empty DataFrame
-        Columns: [A]
-        Index: []
-        >>> df.empty
-        True
-
-        If we only have `null` values in our DataFrame, it is
-        not considered empty! We will need to drop
-        the `null`'s to make the DataFrame empty:
-
-        >>> df = cudf.DataFrame({'A' : [None, None]})
-        >>> df
-              A
-        0  <NA>
-        1  <NA>
-        >>> df.empty
-        False
-        >>> df.dropna().empty
-        True
-
-        Non-empty and empty Series example:
-
-        >>> s = cudf.Series([1, 2, None])
-        >>> s
-        0       1
-        1       2
-        2    <NA>
-        dtype: int64
-        >>> s.empty
-        False
-        >>> s = cudf.Series([])
-        >>> s
-        Series([], dtype: float64)
-        >>> s.empty
-        True
-        """
-        return self.size == 0
-
     @_cudf_nvtx_annotate
     def memory_usage(self, deep=False):
         """Return the memory usage of an object.
@@ -354,15 +289,16 @@ class Frame(BinaryOperand, Scannable):
     def equals(self, other):
         """
         Test whether two objects contain the same elements.
-        This function allows two Series or DataFrames to be compared against
+
+        This function allows two objects to be compared against
         each other to see if they have the same shape and elements. NaNs in
         the same location are considered equal. The column headers do not
         need to have the same type.
 
         Parameters
         ----------
-        other : Series or DataFrame
-            The other Series or DataFrame to be compared with the first.
+        other : Index, Series, DataFrame
+            The other object to be compared with.
 
         Returns
         -------
@@ -576,7 +512,7 @@ class Frame(BinaryOperand, Scannable):
         dtype: Union[Dtype, None] = None,
         copy: bool = True,
         na_value=None,
-    ) -> np.ndarray:
+    ) -> numpy.ndarray:
         """Convert the Frame to a NumPy array.
 
         Parameters
@@ -2641,10 +2577,6 @@ class Frame(BinaryOperand, Scannable):
         -------
         DataFrame or Series
             The first `n` rows of the caller object.
-
-        See Also
-        --------
-        Frame.tail: Returns the last `n` rows.
 
         Examples
         --------

@@ -454,7 +454,7 @@ struct agg_specific_empty_output {
 
     if constexpr (op == aggregation::COLLECT_LIST) {
       return cudf::make_lists_column(
-        0, make_empty_column(type_to_id<offset_type>()), empty_like(input), 0, {});
+        0, make_empty_column(type_to_id<size_type>()), empty_like(input), 0, {});
     }
 
     return empty_like(input);

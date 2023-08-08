@@ -107,7 +107,7 @@ struct empty_column_constructor {
 
     if constexpr (k == aggregation::Kind::COLLECT_LIST || k == aggregation::Kind::COLLECT_SET) {
       return make_lists_column(
-        0, make_empty_column(type_to_id<offset_type>()), empty_like(values), 0, {});
+        0, make_empty_column(type_to_id<size_type>()), empty_like(values), 0, {});
     }
 
     if constexpr (k == aggregation::Kind::RANK) {

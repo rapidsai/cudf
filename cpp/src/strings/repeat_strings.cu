@@ -84,10 +84,10 @@ auto generate_empty_output(strings_column_view const& input,
   auto chars_column = create_chars_child_column(0, stream, mr);
 
   auto offsets_column = make_numeric_column(
-    data_type{type_to_id<offset_type>()}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
-  CUDF_CUDA_TRY(cudaMemsetAsync(offsets_column->mutable_view().template data<offset_type>(),
+    data_type{type_to_id<size_type>()}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
+  CUDF_CUDA_TRY(cudaMemsetAsync(offsets_column->mutable_view().template data<size_type>(),
                                 0,
-                                offsets_column->size() * sizeof(offset_type),
+                                offsets_column->size() * sizeof(size_type),
                                 stream.value()));
 
   return make_strings_column(strings_count,
@@ -109,7 +109,7 @@ struct compute_size_and_repeat_fn {
   size_type const repeat_times;
   bool const has_nulls;
 
-  offset_type* d_offsets{nullptr};
+  size_type* d_offsets{nullptr};
 
   // If d_chars == nullptr: only compute sizes of the output strings.
   // If d_chars != nullptr: only repeat strings.
@@ -184,7 +184,7 @@ struct compute_sizes_and_repeat_fn {
   bool const strings_has_nulls;
   bool const rtimes_has_nulls;
 
-  offset_type* d_offsets{nullptr};
+  size_type* d_offsets{nullptr};
 
   // If d_chars == nullptr: only compute sizes of the output strings.
   // If d_chars != nullptr: only repeat strings.
