@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,13 +53,13 @@ template <class Functor>
 struct compute_size_and_concatenate_fn {
   Functor const func;
   column_device_view const lists_dv;
-  offset_type const* const list_offsets;
+  size_type const* const list_offsets;
   column_device_view const strings_dv;
   string_scalar_device_view const string_narep_dv;
   separator_on_nulls const separate_nulls;
   output_if_empty_list const empty_list_policy;
 
-  offset_type* d_offsets{nullptr};
+  size_type* d_offsets{nullptr};
 
   // If d_chars == nullptr: only compute sizes and validities of the output strings.
   // If d_chars != nullptr: only concatenate strings.

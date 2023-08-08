@@ -1020,6 +1020,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return obj
 
     @property
+    @_cudf_nvtx_annotate
+    def shape(self):
+        """Returns a tuple representing the dimensionality of the DataFrame."""
+        return self._num_rows, self._num_columns
+
+    @property
     def dtypes(self):
         """
         Return the dtypes in this object.
@@ -2074,6 +2080,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             - 'records' : list like
               [{column -> value}, ... , {column -> value}]
             - 'index' : dict like {index -> {column -> value}}
+
             Abbreviations are allowed. `s` indicates `series` and `sp`
             indicates `split`.
 
@@ -2478,6 +2485,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         We _highly_ recommend using keyword arguments to clarify your intent.
 
         Create a dataframe with some fictional data.
+
         >>> index = ['Firefox', 'Chrome', 'Safari', 'IE10', 'Konqueror']
         >>> df = cudf.DataFrame({'http_status': [200, 200, 404, 404, 301],
         ...                    'response_time': [0.04, 0.02, 0.07, 0.08, 1.0]},
@@ -2519,6 +2527,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Chrome                 200           0.02
 
         We can also reindex the columns.
+
         >>> df.reindex(columns=['http_status', 'user_agent'])
                 http_status user_agent
         Firefox            200       <NA>
@@ -2528,6 +2537,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Konqueror          301       <NA>
 
         Or we can use "axis-style" keyword arguments
+
         >>> df.reindex(columns=['http_status', 'user_agent'])
                 http_status user_agent
         Firefox            200       <NA>
@@ -4146,10 +4156,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         func : function
             Function to apply to each row.
         axis : {0 or 'index', 1 or 'columns'}, default 0
-            Axis along which the function is applied:
-            * 0 or 'index': apply function to each column.
-              Note: axis=0 is not yet supported.
-            * 1 or 'columns': apply function to each row.
+            Axis along which the function is applied.
+            - 0 or 'index': apply function to each column (not yet supported).
+            - 1 or 'columns': apply function to each row.
         raw: bool, default False
             Not yet supported
         result_type: {'expand', 'reduce', 'broadcast', None}, default None

@@ -287,12 +287,12 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
         column_view chars_child   = column->child(strings_column_view::chars_column_index);
 
         auto bytes_offset =
-          cudf::detail::get_value<offset_type>(offsets_child, column_offset, stream);
+          cudf::detail::get_value<size_type>(offsets_child, column_offset, stream);
 
         // copy the chars column data
         auto d_chars = chars_child.data<char>() + bytes_offset;
         auto const bytes =
-          cudf::detail::get_value<offset_type>(offsets_child, column_size + column_offset, stream) -
+          cudf::detail::get_value<size_type>(offsets_child, column_size + column_offset, stream) -
           bytes_offset;
 
         CUDF_CUDA_TRY(

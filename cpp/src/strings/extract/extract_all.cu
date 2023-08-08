@@ -50,7 +50,7 @@ namespace {
  */
 struct extract_fn {
   column_device_view const d_strings;
-  offset_type const* d_offsets;
+  size_type const* d_offsets;
   string_index_pair* d_indices;
 
   __device__ void operator()(size_type const idx,
@@ -119,7 +119,7 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& input,
   // Get the match counts for each string.
   // This column will become the output lists child offsets column.
   auto offsets   = count_matches(*d_strings, *d_prog, strings_count + 1, stream, mr);
-  auto d_offsets = offsets->mutable_view().data<offset_type>();
+  auto d_offsets = offsets->mutable_view().data<size_type>();
 
   // Compute null output rows
   auto [null_mask, null_count] = cudf::detail::valid_if(
@@ -138,10 +138,10 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& input,
     d_offsets + strings_count + 1,
     d_offsets,
     [groups] __device__(auto v) { return v * groups; },
-    offset_type{0},
+    size_type{0},
     thrust::plus{});
   auto const total_groups =
-    cudf::detail::get_value<offset_type>(offsets->view(), strings_count, stream);
+    cudf::detail::get_value<size_type>(offsets->view(), strings_count, stream);
 
   rmm::device_uvector<string_index_pair> indices(total_groups, stream);
 

@@ -6,7 +6,7 @@ from libcpp.utility cimport move
 from rmm._lib.device_buffer cimport DeviceBuffer
 
 from cudf._lib.cpp.column.column cimport column, column_contents
-from cudf._lib.cpp.types cimport offset_type, size_type
+from cudf._lib.cpp.types cimport size_type
 
 from .gpumemoryview cimport gpumemoryview
 from .types cimport DataType
@@ -42,7 +42,7 @@ cdef class Column:
     """
     def __init__(
         self, DataType data_type not None, size_type size, gpumemoryview data,
-        gpumemoryview mask, size_type null_count, offset_type offset,
+        gpumemoryview mask, size_type null_count, size_type offset,
         list children
     ):
         self.data_type = data_type

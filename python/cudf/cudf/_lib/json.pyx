@@ -211,7 +211,7 @@ def write_json(
         )
 
 
-cdef schema_element _get_cudf_schema_element_from_dtype(object dtype) except +:
+cdef schema_element _get_cudf_schema_element_from_dtype(object dtype) except *:
     cdef schema_element s_element
     cdef data_type lib_type
     if cudf.api.types.is_categorical_dtype(dtype):
@@ -236,7 +236,7 @@ cdef schema_element _get_cudf_schema_element_from_dtype(object dtype) except +:
     return s_element
 
 
-cdef data_type _get_cudf_data_type_from_dtype(object dtype) except +:
+cdef data_type _get_cudf_data_type_from_dtype(object dtype) except *:
     if cudf.api.types.is_categorical_dtype(dtype):
         raise NotImplementedError(
             "CategoricalDtype as dtype is not yet "
