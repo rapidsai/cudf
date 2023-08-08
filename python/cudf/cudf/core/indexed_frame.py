@@ -3421,7 +3421,7 @@ class IndexedFrame(Frame):
         0  1  3
         1  2  4
         """
-        axis = self._get_axis_from_axis_arg(axis)
+        axis = 0 if axis is None else self._get_axis_from_axis_arg(axis)
         size = self.shape[axis]
 
         # Compute `n` from parameter `frac`.

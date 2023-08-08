@@ -2557,7 +2557,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "Cannot specify both 'axis' and any of 'index' or 'columns'."
             )
 
-        axis = self._get_axis_from_axis_arg(axis)
+        axis = 0 if axis is None else self._get_axis_from_axis_arg(axis)
         if axis == 0:
             if index is None:
                 index = labels
@@ -5798,7 +5798,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     _SUPPORT_AXIS_LOOKUP = {
         0: 0,
         1: 1,
-        None: 0,
+        # None: 0,
         "index": 0,
         "columns": 1,
     }
@@ -5826,7 +5826,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if source.empty:
                 return Series(index=cudf.Index([], dtype="str"))
 
-        axis = source._get_axis_from_axis_arg(axis)
+        if axis is None:
+            warnings.warn(
+                f"In a future version, {type(self).__name__}"
+                f".{op}(axis=None) will return a scalar {op} over "
+                "the entire DataFrame. To retain the old behavior, "
+                f"use '{type(self).__name__}.{op}(axis=0)' or "
+                f"just '{type(self)}.{op}()'",
+                FutureWarning,
+            )
+            axis = 0
+        if axis is no_default:
+            axis = 0
+        else:
+            axis = source._get_axis_from_axis_arg(axis)
 
         if axis == 0:
             try:

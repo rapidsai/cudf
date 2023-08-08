@@ -31,6 +31,7 @@ from typing_extensions import Self
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import Dtype
+from cudf.api.extensions import no_default
 from cudf.api.types import is_bool_dtype, is_dtype_equal, is_scalar
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
@@ -1885,7 +1886,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def min(
         self,
-        axis=None,
+        axis=no_default,
         skipna=True,
         level=None,
         numeric_only=None,
@@ -1936,7 +1937,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def max(
         self,
-        axis=None,
+        axis=no_default,
         skipna=True,
         level=None,
         numeric_only=None,
@@ -1987,7 +1988,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def sum(
         self,
-        axis=None,
+        axis=no_default,
         skipna=True,
         dtype=None,
         level=None,
@@ -2045,7 +2046,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def product(
         self,
-        axis=None,
+        axis=no_default,
         skipna=True,
         dtype=None,
         level=None,
@@ -2089,7 +2090,19 @@ class Frame(BinaryOperand, Scannable):
         b    5040
         dtype: int64
         """
-        axis = self._get_axis_from_axis_arg(axis)
+        if axis in {no_default, None}:
+            if axis is None:
+                warnings.warn(
+                    f"In a future version, {type(self).__name__}"
+                    f".product(axis=None) will return a scalar product over "
+                    "the entire DataFrame. To retain the old behavior, "
+                    f"use '{type(self).__name__}.product(axis=0)' or "
+                    f"just '{type(self)}.product()'",
+                    FutureWarning,
+                )
+            axis = 0
+        else:
+            axis = self._get_axis_from_axis_arg(axis)
         return self._reduce(
             # cuDF columns use "product" as the op name, but cupy uses "prod"
             # and we need cupy if axis == 1.
@@ -2108,7 +2121,12 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def mean(
-        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
+        self,
+        axis=no_default,
+        skipna=True,
+        level=None,
+        numeric_only=None,
+        **kwargs,
     ):
         """
         Return the mean of the values for the requested axis.
@@ -2154,7 +2172,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def std(
         self,
-        axis=None,
+        axis=no_default,
         skipna=True,
         level=None,
         ddof=1,
@@ -2210,7 +2228,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def var(
         self,
-        axis=None,
+        axis=no_default,
         skipna=True,
         level=None,
         ddof=1,
@@ -2264,7 +2282,12 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def kurtosis(
-        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
+        self,
+        axis=no_default,
+        skipna=True,
+        level=None,
+        numeric_only=None,
+        **kwargs,
     ):
         """
         Return Fisher's unbiased kurtosis of a sample.
@@ -2305,7 +2328,7 @@ class Frame(BinaryOperand, Scannable):
         b   -1.2
         dtype: float64
         """
-        if axis not in (0, "index", None):
+        if axis not in (0, "index", None, no_default):
             raise NotImplementedError("Only axis=0 is currently supported.")
 
         return self._reduce(
@@ -2322,7 +2345,12 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def skew(
-        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
+        self,
+        axis=no_default,
+        skipna=True,
+        level=None,
+        numeric_only=None,
+        **kwargs,
     ):
         """
         Return unbiased Fisher-Pearson skew of a sample.
@@ -2366,7 +2394,7 @@ class Frame(BinaryOperand, Scannable):
         b   -0.37037
         dtype: float64
         """
-        if axis not in (0, "index", None):
+        if axis not in (0, "index", None, no_default):
             raise NotImplementedError("Only axis=0 is currently supported.")
 
         return self._reduce(
