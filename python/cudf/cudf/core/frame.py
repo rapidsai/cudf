@@ -2090,24 +2090,11 @@ class Frame(BinaryOperand, Scannable):
         b    5040
         dtype: int64
         """
-        if axis in {no_default, None}:
-            if axis is None:
-                # Do not remove until pandas 3.0 support is added.
-                warnings.warn(
-                    f"In a future version, {type(self).__name__}"
-                    f".product(axis=None) will return a scalar product over "
-                    "the entire DataFrame. To retain the old behavior, "
-                    f"use '{type(self).__name__}.product(axis=0)' or "
-                    f"just '{type(self)}.product()'",
-                    FutureWarning,
-                )
-            axis = 0
-        else:
-            axis = self._get_axis_from_axis_arg(axis)
+
         return self._reduce(
             # cuDF columns use "product" as the op name, but cupy uses "prod"
             # and we need cupy if axis == 1.
-            "product" if axis == 0 else "prod",
+            "prod" if axis in {1, "columns"} else "product",
             axis=axis,
             skipna=skipna,
             dtype=dtype,
