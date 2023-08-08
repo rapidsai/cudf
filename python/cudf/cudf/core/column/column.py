@@ -2231,8 +2231,8 @@ def as_column(
         data = ColumnBase.from_scalar(arbitrary, length if length else 1)
     elif isinstance(arbitrary, pd.core.arrays.masked.BaseMaskedArray):
         data = as_column(pa.Array.from_pandas(arbitrary), dtype=dtype)
-    elif isinstance(arbitrary, pd.DatetimeIndex) and is_datetime64tz_dtype(
-        arbitrary.dtype
+    elif isinstance(arbitrary, pd.DatetimeIndex) and isinstance(
+        arbitrary.dtype, pd.DatetimeTZDtype
     ):
         raise NotImplementedError(
             "cuDF does not yet support timezone-aware datetimes"
