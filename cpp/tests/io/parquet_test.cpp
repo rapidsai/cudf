@@ -213,12 +213,10 @@ void read_footer(std::unique_ptr<cudf::io::datasource> const& source,
   auto const ender = reinterpret_cast<cudf::io::parquet::file_ender_s const*>(ender_buffer->data());
 
   // checks for valid header, footer, and file length
-  CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
-  CUDF_EXPECTS(header->magic == cudf::io::parquet::parquet_magic &&
-                 ender->magic == cudf::io::parquet::parquet_magic,
-               "Corrupted header or footer");
-  CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
-               "Incorrect footer length");
+  ASSERT_GT(len, header_len + ender_len);
+  ASSERT_TRUE(header->magic == cudf::io::parquet::parquet_magic &&
+              ender->magic == cudf::io::parquet::parquet_magic);
+  ASSERT_TRUE(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len));
 
   // parquet files end with 4-byte footer_length and 4-byte magic == "PAR1"
   // seek backwards from the end of the file (footer_length + 8 bytes of ender)
@@ -228,7 +226,7 @@ void read_footer(std::unique_ptr<cudf::io::datasource> const& source,
 
   // returns true on success
   bool res = cp.read(file_meta_data);
-  CUDF_EXPECTS(res, "Cannot parse file metadata");
+  ASSERT_TRUE(res);
 }
 
 // returns the number of bits used for dictionary encoding data at the given page location.
@@ -1622,7 +1620,7 @@ TEST_F(ParquetChunkedWriterTest, LargeTables)
   cudf::io::chunked_parquet_writer_options args =
     cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{filepath});
   auto md = cudf::io::parquet_chunked_writer(args).write(*table1).write(*table2).close();
-  CUDF_EXPECTS(!md, "The return value should be null.");
+  ASSERT_EQ(md, nullptr);
 
   cudf::io::parquet_reader_options read_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
@@ -1653,7 +1651,7 @@ TEST_F(ParquetChunkedWriterTest, ManyTables)
     writer.write(tbl);
   });
   auto md = writer.close({"dummy/path"});
-  CUDF_EXPECTS(md, "The returned metadata should not be null.");
+  ASSERT_NE(md, nullptr);
 
   cudf::io::parquet_reader_options read_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
@@ -3660,10 +3658,10 @@ TEST_F(ParquetWriterTest, CheckPageRows)
   cudf::io::parquet::FileMetaData fmd;
 
   read_footer(source, &fmd);
-  CUDF_EXPECTS(fmd.row_groups.size() > 0, "No row groups found");
-  CUDF_EXPECTS(fmd.row_groups[0].columns.size() == 1, "Invalid number of columns");
+  ASSERT_GT(fmd.row_groups.size(), 0);
+  ASSERT_EQ(fmd.row_groups[0].columns.size(), 1);
   auto const& first_chunk = fmd.row_groups[0].columns[0].meta_data;
-  CUDF_EXPECTS(first_chunk.data_page_offset > 0, "Invalid location for first data page");
+  ASSERT_GT(first_chunk.data_page_offset, 0);
 
   // read first data page header.  sizeof(PageHeader) is not exact, but the thrift encoded
   // version should be smaller than size of the struct.
@@ -3696,10 +3694,10 @@ TEST_F(ParquetWriterTest, CheckPageRowsAdjusted)
   cudf::io::parquet::FileMetaData fmd;
 
   read_footer(source, &fmd);
-  CUDF_EXPECTS(fmd.row_groups.size() > 0, "No row groups found");
-  CUDF_EXPECTS(fmd.row_groups[0].columns.size() == 1, "Invalid number of columns");
+  ASSERT_GT(fmd.row_groups.size(), 0);
+  ASSERT_EQ(fmd.row_groups[0].columns.size(), 1);
   auto const& first_chunk = fmd.row_groups[0].columns[0].meta_data;
-  CUDF_EXPECTS(first_chunk.data_page_offset > 0, "Invalid location for first data page");
+  ASSERT_GT(first_chunk.data_page_offset, 0);
 
   // read first data page header.  sizeof(PageHeader) is not exact, but the thrift encoded
   // version should be smaller than size of the struct.
@@ -4005,11 +4003,10 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
   cudf::io::parquet::FileMetaData fmd;
 
   read_footer(source, &fmd);
-  CUDF_EXPECTS(fmd.row_groups.size() > 0, "No row groups found");
+  ASSERT_GT(fmd.row_groups.size(), 0);
 
   auto const& columns = fmd.row_groups[0].columns;
-  CUDF_EXPECTS(columns.size() == static_cast<size_t>(expected.num_columns()),
-               "Invalid number of columns");
+  ASSERT_EQ(columns.size(), static_cast<size_t>(expected.num_columns()));
 
   // now check that the boundary order for chunk 1 is ascending,
   // chunk 2 is descending, and chunk 3 is unordered

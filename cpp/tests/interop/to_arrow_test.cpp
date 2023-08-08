@@ -188,9 +188,8 @@ TEST_F(ToArrowTest, DateTimeTable)
   std::shared_ptr<arrow::Array> arr;
   arrow::TimestampBuilder timestamp_builder(timestamp(arrow::TimeUnit::type::MILLI),
                                             arrow::default_memory_pool());
-  CUDF_EXPECTS(timestamp_builder.AppendValues(std::vector<int64_t>{1, 2, 3, 4, 5, 6}).ok(),
-               "Failed to append values");
-  CUDF_EXPECTS(timestamp_builder.Finish(&arr).ok(), "Failed to build array");
+  ASSERT_TRUE(timestamp_builder.AppendValues(std::vector<int64_t>{1, 2, 3, 4, 5, 6}).ok());
+  ASSERT_TRUE(timestamp_builder.Finish(&arr).ok());
 
   std::vector<std::shared_ptr<arrow::Field>> schema_vector({arrow::field("a", arr->type())});
   auto schema = std::make_shared<arrow::Schema>(schema_vector);
@@ -222,9 +221,8 @@ TYPED_TEST(ToArrowTestDurationsTest, DurationTable)
     default: CUDF_FAIL("Unsupported duration unit in arrow");
   }
   arrow::DurationBuilder duration_builder(duration(arrow_unit), arrow::default_memory_pool());
-  CUDF_EXPECTS(duration_builder.AppendValues(std::vector<int64_t>{1, 2, 3, 4, 5, 6}).ok(),
-               "Failed to append values");
-  CUDF_EXPECTS(duration_builder.Finish(&arr).ok(), "Failed to build array");
+  ASSERT_TRUE(duration_builder.AppendValues(std::vector<int64_t>{1, 2, 3, 4, 5, 6}).ok());
+  ASSERT_TRUE(duration_builder.Finish(&arr).ok());
 
   std::vector<std::shared_ptr<arrow::Field>> schema_vector({arrow::field("a", arr->type())});
   auto schema = std::make_shared<arrow::Schema>(schema_vector);
