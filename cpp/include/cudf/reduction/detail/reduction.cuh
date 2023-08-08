@@ -31,6 +31,8 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/iterator_traits.h>
 
+#include <cuda/functional>
+
 #include <optional>
 
 namespace cudf {
@@ -224,9 +226,10 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   thrust::for_each_n(rmm::exec_policy(stream),
                      intermediate_result.data(),
                      1,
-                     [dres = result->data(), op, valid_count, ddof] __device__(auto i) {
-                       *dres = op.template compute_result<OutputType>(i, valid_count, ddof);
-                     });
+                     cuda::proclaim_return_type<OutputType>(
+                       [dres = result->data(), op, valid_count, ddof] __device__(auto i) {
+                         *dres = op.template compute_result<OutputType>(i, valid_count, ddof);
+                       }));
   return std::unique_ptr<scalar>(result);
 }
 
