@@ -120,12 +120,23 @@ __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
         // place value for this thread
         if (dst_pos >= 0 && sp < target_pos) {
           void* const dst = nesting_info_base[leaf_level_index].data_out + dst_pos * s->dtype_len;
-          if (s->dtype_len == 8) {
-            *static_cast<int64_t*>(dst) =
-              db->value[rolling_index<delta_rolling_buf_size>(sp + skipped_leaf_values)];
-          } else if (s->dtype_len == 4) {
-            *static_cast<int32_t*>(dst) =
-              db->value[rolling_index<delta_rolling_buf_size>(sp + skipped_leaf_values)];
+          switch (s->dtype_len) {
+            case 1:
+              *static_cast<int8_t*>(dst) =
+                db->value[rolling_index<delta_rolling_buf_size>(sp + skipped_leaf_values)];
+              break;
+            case 2:
+              *static_cast<int16_t*>(dst) =
+                db->value[rolling_index<delta_rolling_buf_size>(sp + skipped_leaf_values)];
+              break;
+            case 4:
+              *static_cast<int32_t*>(dst) =
+                db->value[rolling_index<delta_rolling_buf_size>(sp + skipped_leaf_values)];
+              break;
+            case 8:
+              *static_cast<int64_t*>(dst) =
+                db->value[rolling_index<delta_rolling_buf_size>(sp + skipped_leaf_values)];
+              break;
           }
         }
       }

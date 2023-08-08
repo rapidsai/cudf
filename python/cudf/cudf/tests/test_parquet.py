@@ -1295,6 +1295,16 @@ def test_delta_binary(add_nulls, tmpdir):
     arrow_table = dg.rand_dataframe(
         dtypes_meta=[
             {
+                "dtype": "int8",
+                "null_frequency": null_frequency,
+                "cardinality": nrows,
+            },
+            {
+                "dtype": "int16",
+                "null_frequency": null_frequency,
+                "cardinality": nrows,
+            },
+            {
                 "dtype": "int32",
                 "null_frequency": null_frequency,
                 "cardinality": nrows,
