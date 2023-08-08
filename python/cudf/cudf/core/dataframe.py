@@ -5798,7 +5798,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     _SUPPORT_AXIS_LOOKUP = {
         0: 0,
         1: 1,
-        # None: 0,
         "index": 0,
         "columns": 1,
     }

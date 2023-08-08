@@ -31,7 +31,6 @@ class SingleColumnFrame(Frame, NotIterable):
 
     _SUPPORT_AXIS_LOOKUP = {
         0: 0,
-        # None: 0,
         "index": 0,
     }
 
