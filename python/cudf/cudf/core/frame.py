@@ -2418,10 +2418,10 @@ class Frame(BinaryOperand, Scannable):
             Indicate which axis or axes should be reduced. For `Series`
             this parameter is unused and defaults to `0`.
 
-            - 0 / 'index' : reduce the index, return a Series
-            whose index is the original column labels.
-            - 1 / 'columns' : reduce the columns, return a Series
-            whose index is the original index.
+            - 0 or 'index' : reduce the index, return a Series
+                whose index is the original column labels.
+            - 1 or 'columns' : reduce the columns, return a Series
+                whose index is the original index.
             - None : reduce all axes, return a scalar.
         skipna: bool, default True
             Exclude NA/null values. If the entire row/column is NA and
@@ -2436,7 +2436,7 @@ class Frame(BinaryOperand, Scannable):
 
         Notes
         -----
-        Parameters currently not supported are `axis`, `bool_only`, `level`.
+        Parameters currently not supported are `bool_only`, `level`.
 
         Examples
         --------
@@ -2462,6 +2462,15 @@ class Frame(BinaryOperand, Scannable):
 
         Parameters
         ----------
+        axis : {0 or 'index', 1 or 'columns', None}, default 0
+            Indicate which axis or axes should be reduced. For `Series`
+            this parameter is unused and defaults to `0`.
+
+            - 0 or 'index' : reduce the index, return a Series
+                whose index is the original column labels.
+            - 1 or 'columns' : reduce the columns, return a Series
+                whose index is the original index.
+            - None : reduce all axes, return a scalar.
         skipna: bool, default True
             Exclude NA/null values. If the entire row/column is NA and
             skipna is True, then the result will be False, as for an
@@ -2475,7 +2484,7 @@ class Frame(BinaryOperand, Scannable):
 
         Notes
         -----
-        Parameters currently not supported are `axis`, `bool_only`, `level`.
+        Parameters currently not supported are `bool_only`, `level`.
 
         Examples
         --------
