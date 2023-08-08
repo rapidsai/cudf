@@ -5,6 +5,12 @@ String handling
 strings and apply several methods to it. These can be accessed like
 ``Series.str.<function/property>``.
 
+.. currentmodule:: cudf
+.. autosummary::
+   :toctree: api/
+
+   Series.str
+
 .. currentmodule:: cudf.core.column.string.StringMethods
 .. autosummary::
    :toctree: api/

@@ -71,9 +71,7 @@ class lists_column_view : private column_view {
   using column_view::null_mask;
   using column_view::offset;
   using column_view::size;
-  static_assert(std::is_same_v<offset_type, size_type>,
-                "offset_type is expected to be the same as size_type.");
-  using offset_iterator = offset_type const*;  ///< Iterator type for offsets
+  using offset_iterator = size_type const*;  ///< Iterator type for offsets
 
   /**
    * @brief Returns the parent column.
@@ -119,7 +117,7 @@ class lists_column_view : private column_view {
    */
   [[nodiscard]] offset_iterator offsets_begin() const noexcept
   {
-    return offsets().begin<offset_type>() + offset();
+    return offsets().begin<size_type>() + offset();
   }
 
   /**

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ namespace {
  */
 struct reverse_characters_fn {
   column_device_view const d_strings;
-  offset_type const* d_offsets;
+  size_type const* d_offsets;
   char* d_chars;
 
   __device__ void operator()(size_type idx)
@@ -64,7 +64,7 @@ std::unique_ptr<column> reverse(strings_column_view const& input,
   // copy the column; replace data in the chars column
   auto result = std::make_unique<column>(input.parent(), stream, mr);
   auto const d_offsets =
-    result->view().child(strings_column_view::offsets_column_index).data<offset_type>();
+    result->view().child(strings_column_view::offsets_column_index).data<size_type>();
   auto d_chars = result->mutable_view().child(strings_column_view::chars_column_index).data<char>();
 
   auto const d_column = column_device_view::create(input.parent(), stream);
