@@ -5827,21 +5827,24 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 return Series(index=cudf.Index([], dtype="str"))
 
         if axis is None:
-            warnings.warn(
-                f"In a future version, {type(self).__name__}"
-                f".{op}(axis=None) will return a scalar {op} over "
-                "the entire DataFrame. To retain the old behavior, "
-                f"use '{type(self).__name__}.{op}(axis=0)' or "
-                f"just '{type(self)}.{op}()'",
-                FutureWarning,
-            )
-            axis = 0
-        if axis is no_default:
+            if op in {"any", "all"}:
+                axis = 2
+            else:
+                warnings.warn(
+                    f"In a future version, {type(self).__name__}"
+                    f".{op}(axis=None) will return a scalar {op} over "
+                    "the entire DataFrame. To retain the old behavior, "
+                    f"use '{type(self).__name__}.{op}(axis=0)' or "
+                    f"just '{type(self)}.{op}()'",
+                    FutureWarning,
+                )
+                axis = 0
+        elif axis is no_default:
             axis = 0
         else:
             axis = source._get_axis_from_axis_arg(axis)
 
-        if axis == 0:
+        if axis in {0, 2}:
             try:
                 result = [
                     getattr(source._data[col], op)(**kwargs)
@@ -5880,7 +5883,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     )
                     source = self._get_columns_by_label(numeric_cols)
                     if source.empty:
-                        return Series(index=cudf.Index([], dtype="str"))
+                        if axis == 2:
+                            return getattr(as_column([]), op)(**kwargs)
+                        else:
+                            return Series(index=cudf.Index([], dtype="str"))
                     try:
                         result = [
                             getattr(source._data[col], op)(**kwargs)
@@ -5892,12 +5898,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         )
                 else:
                     raise
-
-            return Series._from_data(
-                {None: result}, as_index(source._data.names)
-            )
+            if axis == 2:
+                return getattr(as_column(result), op)(**kwargs)
+            else:
+                return Series._from_data(
+                    {None: result}, as_index(source._data.names)
+                )
         elif axis == 1:
             return source._apply_cupy_method_axis_1(op, **kwargs)
+        else:
+            raise ValueError(f"Incorrect value of {axis=} received for {op}")
 
     @_cudf_nvtx_annotate
     def _scan(

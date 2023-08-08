@@ -306,3 +306,26 @@ def test_categorical_reductions(op):
     psr = gsr.to_pandas()
 
     utils.assert_exceptions_equal(getattr(psr, op), getattr(gsr, op))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [1, 2, 3], "b": [10, 11, 12]},
+        {"a": [1, 0, 3], "b": [10, 11, 12]},
+        {"a": [1, 2, 3], "b": [10, 11, None]},
+        {
+            "a": [],
+        },
+        {},
+    ],
+)
+@pytest.mark.parametrize("op", ["all", "any"])
+def test_any_all_axis_none(data, op):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    expected = getattr(pdf, op)(axis=None)
+    actual = getattr(gdf, op)(axis=None)
+
+    assert expected == actual
