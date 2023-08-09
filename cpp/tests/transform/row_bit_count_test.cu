@@ -750,7 +750,7 @@ TEST_F(RowBitCount, EmptyTable)
   {
     cudf::table_view empty;
     auto result = cudf::row_bit_count(empty);
-    CUDF_EXPECTS(result != nullptr && result->size() == 0, "Expected an empty column");
+    EXPECT_TRUE(result != nullptr && result->size() == 0);
   }
 
   {
@@ -759,6 +759,6 @@ TEST_F(RowBitCount, EmptyTable)
     cudf::table_view empty({*strings, *ints});
 
     auto result = cudf::row_bit_count(empty);
-    CUDF_EXPECTS(result != nullptr && result->size() == 0, "Expected an empty column");
+    EXPECT_TRUE(result != nullptr && result->size() == 0);
   }
 }

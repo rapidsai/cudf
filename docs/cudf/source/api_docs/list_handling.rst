@@ -5,6 +5,12 @@ List handling
 lists and apply list methods to it. These can be accessed like
 ``Series.list.<function/property>``.
 
+.. currentmodule:: cudf
+.. autosummary::
+   :toctree: api/
+
+   Series.list
+
 .. currentmodule:: cudf.core.column.lists.ListMethods
 .. autosummary::
    :toctree: api/
