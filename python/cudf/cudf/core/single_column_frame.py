@@ -11,6 +11,7 @@ import numpy
 
 import cudf
 from cudf._typing import Dtype, NotImplementedType, ScalarLike
+from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
@@ -30,7 +31,6 @@ class SingleColumnFrame(Frame, NotIterable):
 
     _SUPPORT_AXIS_LOOKUP = {
         0: 0,
-        None: 0,
         "index": 0,
     }
 
@@ -38,12 +38,12 @@ class SingleColumnFrame(Frame, NotIterable):
     def _reduce(
         self,
         op,
-        axis=None,
+        axis=no_default,
         level=None,
         numeric_only=None,
         **kwargs,
     ):
-        if axis not in (None, 0):
+        if axis not in (None, 0, no_default):
             raise NotImplementedError("axis parameter is not implemented yet")
 
         if level is not None:
