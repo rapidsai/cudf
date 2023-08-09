@@ -389,3 +389,23 @@ def _warn_no_dask_cudf(fn):
 def _is_same_name(left_name, right_name):
     # Internal utility to compare if two names are same.
     return (left_name is right_name) or (left_name == right_name)
+
+
+def _all_bools_with_nulls(lhs, rhs, bool_fill_value):
+    # Internal utility to construct a boolean column
+    # by combining nulls from `lhs` & `rhs`.
+    if lhs.has_nulls() and rhs.has_nulls():
+        result_mask = lhs._get_mask_as_column() & rhs._get_mask_as_column()
+    elif lhs.has_nulls():
+        result_mask = lhs._get_mask_as_column()
+    elif rhs.has_nulls():
+        result_mask = rhs._get_mask_as_column()
+    else:
+        result_mask = None
+
+    result_col = column.full(
+        size=len(lhs), fill_value=bool_fill_value, dtype=cudf.dtype(np.bool_)
+    )
+    if result_mask is not None:
+        result_col = result_col.set_mask(result_mask.as_mask())
+    return result_col

@@ -65,6 +65,7 @@ from cudf.utils.dtypes import (
 )
 from cudf.utils.utils import (
     _cudf_nvtx_annotate,
+    _is_same_name,
     _warn_no_dask_cudf,
     search_range,
 )
@@ -1046,7 +1047,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         # GenericIndexes, not dtype-specific subclasses.
         if type(ret) in {GenericIndex, cudf.Series} and ret.dtype.kind == "b":
             if ret._column.has_nulls():
-                ret = ret.fillna(False)
+                ret = ret.fillna(op == "__ne__")
             return ret.values
         return ret
 
@@ -3321,7 +3322,7 @@ def as_index(arbitrary, nan_as_null=None, **kwargs) -> BaseIndex:
     if isinstance(arbitrary, cudf.MultiIndex):
         return arbitrary
     elif isinstance(arbitrary, BaseIndex):
-        if arbitrary.name == kwargs["name"]:
+        if _is_same_name(arbitrary.name, kwargs["name"]):
             return arbitrary
         idx = arbitrary.copy(deep=False)
         idx.rename(kwargs["name"], inplace=True)
