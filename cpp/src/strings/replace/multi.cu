@@ -45,6 +45,8 @@
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -283,12 +285,13 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   replace_multi_parallel_fn fn{*d_strings, d_targets, d_replacements};
 
   // count the number of targets in the entire column
-  auto const target_count = thrust::count_if(rmm::exec_policy(stream),
-                                             thrust::make_counting_iterator<size_type>(0),
-                                             thrust::make_counting_iterator<size_type>(chars_bytes),
-                                             [fn, chars_bytes] __device__(size_type idx) {
-                                               return fn.has_target(idx, chars_bytes).has_value();
-                                             });
+  auto const target_count =
+    thrust::count_if(rmm::exec_policy(stream),
+                     thrust::make_counting_iterator<size_type>(0),
+                     thrust::make_counting_iterator<size_type>(chars_bytes),
+                     cuda::proclaim_return_type<bool>([fn, chars_bytes] __device__(size_type idx) {
+                       return fn.has_target(idx, chars_bytes).has_value();
+                     }));
   // Create a vector of every target position in the chars column.
   // These may include overlapping targets which will be resolved later.
   auto targets_positions = rmm::device_uvector<target_pair>(target_count, stream);
@@ -304,7 +307,9 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
     auto string_indices = rmm::device_uvector<size_type>(target_count, stream);
 
     auto const pos_itr = cudf::detail::make_counting_transform_iterator(
-      0, [d_positions] __device__(auto idx) -> size_type { return d_positions[idx].first; });
+      0, cuda::proclaim_return_type<size_type>([d_positions] __device__(auto idx) -> size_type {
+        return d_positions[idx].first;
+      }));
     auto pos_count = std::distance(d_positions, copy_end);
 
     thrust::upper_bound(rmm::exec_policy(stream),
@@ -327,10 +332,11 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        target_count,
-                       [d_string_indices, d_targets_offsets] __device__(size_type idx) {
-                         auto const str_idx = d_string_indices[idx] - 1;
-                         atomicAdd(d_targets_offsets + str_idx, 1);
-                       });
+                       cuda::proclaim_return_type<void>(
+                         [d_string_indices, d_targets_offsets] __device__(size_type idx) {
+                           auto const str_idx = d_string_indices[idx] - 1;
+                           atomicAdd(d_targets_offsets + str_idx, 1);
+                         }));
     // finally, convert the counts into offsets
     thrust::exclusive_scan(rmm::exec_policy(stream),
                            targets_offsets.begin(),
@@ -346,9 +352,10 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     counts.begin(),
-                    [fn, d_positions, d_targets_offsets] __device__(size_type idx) -> size_type {
-                      return fn.count_strings(idx, d_positions, d_targets_offsets);
-                    });
+                    cuda::proclaim_return_type<size_type>(
+                      [fn, d_positions, d_targets_offsets] __device__(size_type idx) -> size_type {
+                        return fn.count_strings(idx, d_positions, d_targets_offsets);
+                      }));
 
   // create offsets from the counts
   auto offsets =
@@ -365,11 +372,12 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
-    [fn, d_strings_offsets, d_positions, d_targets_offsets, d_indices, d_sizes] __device__(
-      size_type idx) {
-      d_sizes[idx] =
-        fn.get_strings(idx, d_strings_offsets, d_positions, d_targets_offsets, d_indices);
-    });
+    cuda::proclaim_return_type<void>(
+      [fn, d_strings_offsets, d_positions, d_targets_offsets, d_indices, d_sizes] __device__(
+        size_type idx) {
+        d_sizes[idx] =
+          fn.get_strings(idx, d_strings_offsets, d_positions, d_targets_offsets, d_indices);
+      }));
 
   // use this utility to gather the string parts into a contiguous chars column
   auto chars = make_strings_column(indices.begin(), indices.end(), stream, mr);
