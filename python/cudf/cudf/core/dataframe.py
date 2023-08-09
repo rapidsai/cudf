@@ -711,7 +711,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         data,
                         index=index,
                         columns=columns,
-                        nan_as_null=nan_as_null,
                     )
                 self._check_data_index_length_match()
             else:
@@ -830,9 +829,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             self._data = self._data.select_by_label(columns)
 
     @_cudf_nvtx_annotate
-    def _init_from_list_like(
-        self, data, index=None, columns=None, nan_as_null=None
-    ):
+    def _init_from_list_like(self, data, index=None, columns=None):
         if index is None:
             index = RangeIndex(start=0, stop=len(data))
         else:
