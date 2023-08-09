@@ -708,9 +708,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     )
                 else:
                     self._init_from_list_like(
-                        data,
-                        index=index,
-                        columns=columns,
+                        data, index=index, columns=columns
                     )
                 self._check_data_index_length_match()
             else:
