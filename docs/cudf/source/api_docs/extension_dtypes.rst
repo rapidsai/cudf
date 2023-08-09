@@ -10,7 +10,6 @@ cudf.CategoricalDtype
 =====================
 .. autosummary::
    :toctree: api/
-   :template: autosummary/class_without_autosummary.rst
 
    CategoricalDtype
 
@@ -41,7 +40,6 @@ cudf.Decimal32Dtype
 ===================
 .. autosummary::
    :toctree: api/
-   :template: autosummary/class_without_autosummary.rst
 
    Decimal32Dtype
 
@@ -70,7 +68,6 @@ cudf.Decimal64Dtype
 ===================
 .. autosummary::
    :toctree: api/
-   :template: autosummary/class_without_autosummary.rst
 
    Decimal64Dtype
 
@@ -99,7 +96,6 @@ cudf.Decimal128Dtype
 ====================
 .. autosummary::
    :toctree: api/
-   :template: autosummary/class_without_autosummary.rst
 
    Decimal128Dtype
 
@@ -128,7 +124,6 @@ cudf.ListDtype
 ==============
 .. autosummary::
    :toctree: api/
-   :template: autosummary/class_without_autosummary.rst
 
    ListDtype
 
@@ -154,7 +149,6 @@ cudf.StructDtype
 ================
 .. autosummary::
    :toctree: api/
-   :template: autosummary/class_without_autosummary.rst
 
    StructDtype
 
