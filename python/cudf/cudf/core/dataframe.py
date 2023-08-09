@@ -5912,7 +5912,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         elif axis == 1:
             return source._apply_cupy_method_axis_1(op, **kwargs)
         else:
-            raise ValueError(f"Incorrect value of {axis=} received for {op}")
+            raise ValueError(f"Invalid value of {axis=} received for {op}")
 
     @_cudf_nvtx_annotate
     def _scan(
