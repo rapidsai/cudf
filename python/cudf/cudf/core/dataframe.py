@@ -5922,6 +5922,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         *args,
         **kwargs,
     ):
+        if axis is None:
+            axis = 0
         axis = self._get_axis_from_axis_arg(axis)
 
         if axis == 0:
