@@ -39,6 +39,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform_scan.h>
 
+#include <cuda/functional>
+
 namespace nvtext {
 namespace detail {
 namespace {
@@ -107,16 +109,17 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
                                    strings.offsets_begin(),
                                    nullptr,
                                    0);
-    auto table_offsets = cudf::detail::copy_if(
-                           cudf::table_view({offsets_view}),
-                           [d_strings, strings_count] __device__(cudf::size_type idx) {
-                             if (idx == strings_count) return true;
-                             if (d_strings.is_null(idx)) return false;
-                             return !d_strings.element<cudf::string_view>(idx).empty();
-                           },
-                           stream,
-                           rmm::mr::get_current_device_resource())
-                           ->release();
+    auto table_offsets =
+      cudf::detail::copy_if(cudf::table_view({offsets_view}),
+                            cuda::proclaim_return_type<bool>(
+                              [d_strings, strings_count] __device__(cudf::size_type idx) {
+                                if (idx == strings_count) return true;
+                                if (d_strings.is_null(idx)) return false;
+                                return !d_strings.element<cudf::string_view>(idx).empty();
+                              }),
+                            stream,
+                            rmm::mr::get_current_device_resource())
+        ->release();
     strings_count = table_offsets.front()->size() - 1;
     auto result   = std::move(table_offsets.front());
     return result;
@@ -259,11 +262,12 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
     thrust::make_counting_iterator<cudf::size_type>(0),
     thrust::make_counting_iterator<cudf::size_type>(strings_count + 1),
     ngram_offsets.begin(),
-    [d_strings, strings_count, ngrams] __device__(auto idx) {
-      if (d_strings.is_null(idx) || (idx == strings_count)) return 0;
-      auto const length = d_strings.element<cudf::string_view>(idx).length();
-      return std::max(0, static_cast<int32_t>(length + 1 - ngrams));
-    },
+    cuda::proclaim_return_type<cudf::size_type>(
+      [d_strings, strings_count, ngrams] __device__(auto idx) {
+        if (d_strings.is_null(idx) || (idx == strings_count)) return 0;
+        auto const length = d_strings.element<cudf::string_view>(idx).length();
+        return std::max(0, static_cast<int32_t>(length + 1 - ngrams));
+      }),
     cudf::size_type{0},
     thrust::plus<cudf::size_type>());
 
@@ -317,11 +321,13 @@ std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view co
 
   // build offsets column by computing the number of ngrams per string
   auto sizes_itr = cudf::detail::make_counting_transform_iterator(
-    0, [d_strings = *d_strings, ngrams] __device__(auto idx) {
-      if (d_strings.is_null(idx)) { return 0; }
-      auto const length = d_strings.element<cudf::string_view>(idx).length();
-      return std::max(0, static_cast<cudf::size_type>(length + 1 - ngrams));
-    });
+    0,
+    cuda::proclaim_return_type<cudf::size_type>(
+      [d_strings = *d_strings, ngrams] __device__(auto idx) {
+        if (d_strings.is_null(idx)) { return 0; }
+        auto const length = d_strings.element<cudf::string_view>(idx).length();
+        return std::max(0, static_cast<cudf::size_type>(length + 1 - ngrams));
+      }));
   auto [offsets, total_ngrams] =
     cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + input.size(), stream, mr);
   auto d_offsets = offsets->view().data<cudf::size_type>();
