@@ -31,6 +31,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -62,9 +64,9 @@ std::unique_ptr<column> fill(strings_column_view const& strings,
     return cudf::detail::valid_if(
       thrust::make_counting_iterator<size_type>(0),
       thrust::make_counting_iterator<size_type>(d_strings.size()),
-      [d_strings, begin, end, d_value] __device__(size_type idx) {
+      cuda::proclaim_return_type<bool>([d_strings, begin, end, d_value] __device__(size_type idx) {
         return ((begin <= idx) && (idx < end)) ? d_value.is_valid() : !d_strings.is_null(idx);
-      },
+      }),
       stream,
       mr);
   }();
@@ -72,11 +74,12 @@ std::unique_ptr<column> fill(strings_column_view const& strings,
   rmm::device_buffer& null_mask = valid_mask.first;
 
   // build offsets column
-  auto offsets_transformer = [d_strings, begin, end, d_value] __device__(size_type idx) {
-    if (((begin <= idx) && (idx < end)) ? !d_value.is_valid() : d_strings.is_null(idx)) return 0;
-    return ((begin <= idx) && (idx < end)) ? d_value.size()
-                                           : d_strings.element<string_view>(idx).size_bytes();
-  };
+  auto offsets_transformer = cuda::proclaim_return_type<size_type>(
+    [d_strings, begin, end, d_value] __device__(size_type idx) {
+      if (((begin <= idx) && (idx < end)) ? !d_value.is_valid() : d_strings.is_null(idx)) return 0;
+      return ((begin <= idx) && (idx < end)) ? d_value.size()
+                                             : d_strings.element<string_view>(idx).size_bytes();
+    });
   auto offsets_transformer_itr = thrust::make_transform_iterator(
     thrust::make_counting_iterator<size_type>(0), offsets_transformer);
   auto [offsets_column, bytes] = cudf::detail::make_offsets_child_column(
@@ -91,12 +94,13 @@ std::unique_ptr<column> fill(strings_column_view const& strings,
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
-    [d_strings, begin, end, d_value, d_offsets, d_chars] __device__(size_type idx) {
-      if (((begin <= idx) && (idx < end)) ? !d_value.is_valid() : d_strings.is_null(idx)) return;
-      string_view const d_str =
-        ((begin <= idx) && (idx < end)) ? d_value.value() : d_strings.element<string_view>(idx);
-      memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes());
-    });
+    cuda::proclaim_return_type<void>(
+      [d_strings, begin, end, d_value, d_offsets, d_chars] __device__(size_type idx) {
+        if (((begin <= idx) && (idx < end)) ? !d_value.is_valid() : d_strings.is_null(idx)) return;
+        string_view const d_str =
+          ((begin <= idx) && (idx < end)) ? d_value.value() : d_strings.element<string_view>(idx);
+        memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes());
+      }));
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
