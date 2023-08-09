@@ -24,6 +24,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/reduction.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -119,8 +120,11 @@ struct scan_functor {
     auto d_input = column_device_view::create(input_view, stream);
     auto const begin =
       make_null_replacement_iterator(*d_input, Op::template identity<T>(), input_view.has_nulls());
+
+    // CUB 2.0.0 requires that the binary operator returns the same type as the identity.
+    auto const binary_op = cudf::detail::cast_functor<T>(Op{});
     thrust::inclusive_scan(
-      rmm::exec_policy(stream), begin, begin + input_view.size(), result.data<T>(), Op{});
+      rmm::exec_policy(stream), begin, begin + input_view.size(), result.data<T>(), binary_op);
 
     CUDF_CHECK_CUDA(stream.value());
     return output_column;

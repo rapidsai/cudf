@@ -21,6 +21,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/null_mask.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -66,12 +67,11 @@ struct scan_dispatcher {
     auto identity = Op::template identity<T>();
 
     auto begin = make_null_replacement_iterator(*d_input, identity, input.has_nulls());
-    thrust::exclusive_scan(rmm::exec_policy(stream),
-                           begin,
-                           begin + input.size(),
-                           output.data<T>(),
-                           identity,
-                           cuda::proclaim_return_type<T>(Op{}));
+
+    // CUB 2.0.0 requires that the binary operator returns the same type as the identity.
+    auto const binary_op = cudf::detail::cast_functor<T>(Op{});
+    thrust::exclusive_scan(
+      rmm::exec_policy(stream), begin, begin + input.size(), output.data<T>(), identity, binary_op);
 
     CUDF_CHECK_CUDA(stream.value());
     return output_column;
