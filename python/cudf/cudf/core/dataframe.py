@@ -848,6 +848,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 for col in data
             ):
                 raise TypeError("Inputs should be an iterable or sequence.")
+            if (
+                len(data) > 0
+                and columns is None
+                and isinstance(data[0], tuple)
+                and hasattr(data[0], "_fields")
+            ):
+                # pandas behavior is to use the fields from the first
+                # namedtuple as the column names
+                columns = data[0]._fields
 
             data = list(itertools.zip_longest(*data))
 
