@@ -819,3 +819,13 @@ void struct_from_scalar(bool is_valid)
 TEST_F(ColumnFactoryTest, FromStructScalar) { struct_from_scalar(true); }
 
 TEST_F(ColumnFactoryTest, FromStructScalarNull) { struct_from_scalar(false); }
+
+TEST_F(ColumnFactoryTest, FromScalarErrors)
+{
+  cudf::string_scalar ss("hello world");
+  EXPECT_THROW(cudf::make_column_from_scalar(ss, 214748365), std::overflow_error);
+
+  using FCW = cudf::test::fixed_width_column_wrapper<int8_t>;
+  auto s    = cudf::make_list_scalar(FCW({1, 2, 3, 4, 5, 6, 7, 8, 9, 10}));
+  EXPECT_THROW(cudf::make_column_from_scalar(*s, 214748365), std::overflow_error);
+}
