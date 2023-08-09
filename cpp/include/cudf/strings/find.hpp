@@ -100,8 +100,8 @@ std::unique_ptr<column> rfind(
  *
  * @throw cudf::logic_error if `input.size() != target.size()`
  *
- * @param input Strings instance for this operation.
- * @param target Strings to search for in input
+ * @param input Strings to search against
+ * @param target Strings to search for in `input`
  * @param start First character position to include in the search
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New integer column with character position values
