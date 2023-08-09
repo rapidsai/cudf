@@ -144,6 +144,16 @@ class CategoricalDtype(_BaseDtype):
         when used in operations that combine categoricals, e.g. astype, and
         will resolve to False if there is no existing ordered to maintain.
 
+    Attributes
+    ----------
+    categories
+    ordered
+
+    Methods
+    -------
+    from_pandas
+    to_pandas
+
     Examples
     --------
     >>> import cudf
@@ -319,6 +329,16 @@ class ListDtype(_BaseDtype):
     ----------
     element_type : object
         A dtype with which represents the element types in the list.
+
+    Attributes
+    ----------
+    element_type
+    leaf_type
+
+    Methods
+    -------
+    from_arrow
+    to_arrow
 
     Examples
     --------
@@ -496,6 +516,16 @@ class StructDtype(_BaseDtype):
         A mapping of field names to dtypes, the dtypes can themselves
         be of ``StructDtype`` too.
 
+    Attributes
+    ----------
+    fields
+    itemsize
+
+    Methods
+    -------
+    from_arrow
+    to_arrow
+
     Examples
     --------
     >>> import cudf
@@ -648,6 +678,17 @@ decimal_dtype_template = textwrap.dedent(
             The total number of digits in each value of this dtype
         scale : int, optional
             The scale of the dtype. See Notes below.
+
+        Attributes
+        ----------
+        precision
+        scale
+        itemsize
+
+        Methods
+        -------
+        to_arrow
+        from_arrow
 
         Notes
         -----
