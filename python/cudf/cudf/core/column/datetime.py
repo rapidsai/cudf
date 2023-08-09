@@ -429,6 +429,10 @@ class DatetimeColumn(column.ColumnBase):
             "NULL_EQUALS",
         }:
             out_dtype = cudf.dtype(np.bool_)
+            if isinstance(other, ColumnBase) and not isinstance(
+                other, DatetimeColumn
+            ):
+                return self._early_exit_eq_op(other)
         elif (
             op
             in {

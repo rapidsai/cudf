@@ -386,6 +386,25 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             self.base_mask, self.offset, self.offset + len(self)
         )
 
+    def _early_exit_eq_op(self, other):
+        if self.has_nulls() and other.has_nulls():
+            result_mask = (
+                self._get_mask_as_column() | other._get_mask_as_column()
+            )
+        elif self.has_nulls():
+            result_mask = self._get_mask_as_column()
+        elif other.has_nulls():
+            result_mask = other._get_mask_as_column()
+        else:
+            result_mask = None
+
+        result_col = full(
+            size=len(self), fill_value=False, dtype=cudf.dtype(np.bool_)
+        )
+        if result_mask is not None:
+            result_col = result_col.apply_boolean_mask(result_mask)
+        return result_col
+
     @cached_property
     def memory_usage(self) -> int:
         n = 0

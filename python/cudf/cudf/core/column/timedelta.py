@@ -202,6 +202,11 @@ class TimeDeltaColumn(ColumnBase):
         elif other.dtype.kind in {"f", "i", "u"}:
             if op in {"__mul__", "__mod__", "__truediv__", "__floordiv__"}:
                 out_dtype = self.dtype
+            elif op in {"__eq__", "NULL_EQUALS"}:
+                if isinstance(other, ColumnBase) and not isinstance(
+                    other, TimeDeltaColumn
+                ):
+                    return self._early_exit_eq_op(other)
 
         if out_dtype is None:
             return NotImplemented

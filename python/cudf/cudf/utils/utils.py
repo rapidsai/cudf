@@ -384,3 +384,8 @@ def _warn_no_dask_cudf(fn):
         return fn(self)
 
     return wrapper
+
+
+def _is_same_name(left_name, right_name):
+    # Internal utility to compare if two names are same.
+    return (left_name is right_name) or (left_name == right_name)
