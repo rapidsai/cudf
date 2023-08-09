@@ -166,6 +166,7 @@ inline __device__ bool is_page_contained(page_state_s* const s, size_t start_row
  * @param[in] s Page state input
  * @param[out] sb Page state buffer output
  * @param[in] src_pos Source position
+ * @tparam state_buf Typename of the `state_buf` (usually inferred)
  *
  * @return A pair containing a pointer to the string and its length
  */
@@ -208,6 +209,8 @@ inline __device__ cuda::std::pair<char const*, size_t> gpuGetStringData(page_sta
  * @param[in] target_pos Target index position in dict_idx buffer (may exceed this value by up to
  * 31)
  * @param[in] t Warp1 thread ID (0..31)
+ * @tparam sizes_only True if only sizes are to be calculated
+ * @tparam state_buf Typename of the `state_buf` (usually inferred)
  *
  * @return A pair containing the new output position, and the total length of strings decoded (this
  * will only be valid on thread 0 and if sizes_only is true). In the event that this function
@@ -327,6 +330,7 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(
  * @param[out] sb Page state buffer output
  * @param[in] target_pos Target write position
  * @param[in] t Thread ID
+ * @tparam state_buf Typename of the `state_buf` (usually inferred)
  *
  * @return The new output position
  */
@@ -396,6 +400,8 @@ inline __device__ int gpuDecodeRleBooleans(page_state_s volatile* s,
  * @param[out] sb Page state buffer output
  * @param[in] target_pos Target output position
  * @param[in] t Thread ID
+ * @tparam sizes_only True if only sizes are to be calculated
+ * @tparam state_buf Typename of the `state_buf` (usually inferred)
  *
  * @return Total length of strings processed
  */
@@ -441,10 +447,13 @@ __device__ size_type gpuInitStringDescriptors(page_state_s volatile* s,
 /**
  * @brief Decode values out of a definition or repetition stream
  *
+ * @param[out] output Pointer to buffer to store level data to
  * @param[in,out] s Page state input/output
- * @param[in] t target_count Target count of stream values on output
+ * @param[in] target_count Target count of stream values on output
  * @param[in] t Warp0 thread ID (0..31)
  * @param[in] lvl The level type we are decoding - DEFINITION or REPETITION
+ * @tparam level_t Type used to store decoded repetition and definition levels
+ * @tparam rolling_buf_size Size of the cyclic buffer used to store value data
  */
 template <typename level_t, int rolling_buf_size>
 __device__ void gpuDecodeStream(
@@ -535,6 +544,7 @@ __device__ void gpuDecodeStream(
  *
  * @param[in,out] nesting_info The page/nesting information to store the mask in. The validity map
  * offset is also updated
+ * @param[in,out] valid_map Pointer to bitmask to store validity information to
  * @param[in] valid_mask The validity mask to be stored
  * @param[in] value_count # of bits in the validity mask
  */
@@ -592,6 +602,8 @@ inline __device__ void store_validity(int valid_map_offset,
  * @param[in] input_value_count The current count of input level values we have processed
  * @param[in] target_input_value_count The desired # of input level values we want to process
  * @param[in] t Thread index
+ * @tparam rolling_buf_size Size of the cyclic buffer used to store value data
+ * @tparam level_t Type used to store decoded repetition and definition levels
  */
 template <int rolling_buf_size, typename level_t>
 inline __device__ void get_nesting_bounds(int& start_depth,
@@ -636,6 +648,9 @@ inline __device__ void get_nesting_bounds(int& start_depth,
  * @param[in] rep Repetition level buffer
  * @param[in] def Definition level buffer
  * @param[in] t Thread index
+ * @tparam level_t Type used to store decoded repetition and definition levels
+ * @tparam state_buf Typename of the `state_buf` (usually inferred)
+ * @tparam rolling_buf_size Size of the cyclic buffer used to store value data
  */
 template <typename level_t, typename state_buf, int rolling_buf_size>
 __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value_count,
@@ -818,6 +833,9 @@ __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value
  * @param[in] rep Repetition level buffer
  * @param[in] def Definition level buffer
  * @param[in] t Thread index
+ * @tparam rolling_buf_size Size of the cyclic buffer used to store value data
+ * @tparam level_t Type used to store decoded repetition and definition levels
+ * @tparam state_buf Typename of the `state_buf` (usually inferred)
  */
 template <int rolling_buf_size, typename level_t, typename state_buf>
 __device__ void gpuDecodeLevels(page_state_s* s,
@@ -861,9 +879,7 @@ __device__ void gpuDecodeLevels(page_state_s* s,
  * @param[in,out] s The page state
  * @param[in] cur The current data position
  * @param[in] end The end of the data
- * @param[in] level_bits The bits required
- * @param[in] is_decode_step True if we are performing the decode step.
- * @param[in,out] decoders The repetition and definition level stream decoders
+ * @param[in] lvl Enum indicating whether this is to initialize repetition or definition level data
  *
  * @return The length of the section
  */
@@ -973,9 +989,9 @@ struct mask_filter {
  * @param[in] num_rows Maximum number of rows to read
  * @param[in] filter Filtering function used to decide which pages to operate on
  * @param[in] is_decode_step If we are setting up for the decode step (instead of the preprocess)
- * @param[in] decoders rle_stream decoders which will be used for decoding levels. Optional.
  * @tparam Filter Function that takes a PageInfo reference and returns true if the given page should
  * be operated on Currently only used by gpuComputePageSizes step)
+ * @return True if this page should be processed further
  */
 template <typename Filter>
 inline __device__ bool setupLocalPageInfo(page_state_s* const s,
