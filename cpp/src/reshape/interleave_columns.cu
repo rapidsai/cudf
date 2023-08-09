@@ -35,6 +35,8 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace detail {
 namespace {
@@ -119,9 +121,10 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::struc
 
     auto const create_mask_fn = [&] {
       auto const input_dv_ptr = table_device_view::create(structs_columns, stream);
-      auto const validity_fn  = [input_dv = *input_dv_ptr, num_columns] __device__(auto const idx) {
-        return input_dv.column(idx % num_columns).is_valid(idx / num_columns);
-      };
+      auto const validity_fn  = cuda::proclaim_return_type<bool>(
+        [input_dv = *input_dv_ptr, num_columns] __device__(auto const idx) {
+          return input_dv.column(idx % num_columns).is_valid(idx / num_columns);
+        });
       return cudf::detail::valid_if(thrust::make_counting_iterator<size_type>(0),
                                     thrust::make_counting_iterator<size_type>(output_size),
                                     validity_fn,
@@ -163,11 +166,11 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::strin
       valid_mask = cudf::detail::valid_if(
         thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(num_strings),
-        [num_columns, d_table] __device__(size_type idx) {
+        cuda::proclaim_return_type<bool>([num_columns, d_table] __device__(size_type idx) {
           auto source_row_idx = idx % num_columns;
           auto source_col_idx = idx / num_columns;
           return !d_table.column(source_row_idx).is_null(source_col_idx);
-        },
+        }),
         stream,
         mr);
     }
@@ -175,14 +178,15 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::strin
     auto const null_count = valid_mask.second;
 
     // Build offsets column by computing sizes of each string in the output
-    auto offsets_transformer = [num_columns, d_table] __device__(size_type idx) {
-      // First compute the column and the row this item belongs to
-      auto source_row_idx = idx % num_columns;
-      auto source_col_idx = idx / num_columns;
-      return d_table.column(source_row_idx).is_valid(source_col_idx)
-               ? d_table.column(source_row_idx).element<string_view>(source_col_idx).size_bytes()
-               : 0;
-    };
+    auto offsets_transformer =
+      cuda::proclaim_return_type<size_type>([num_columns, d_table] __device__(size_type idx) {
+        // First compute the column and the row this item belongs to
+        auto source_row_idx = idx % num_columns;
+        auto source_col_idx = idx / num_columns;
+        return d_table.column(source_row_idx).is_valid(source_col_idx)
+                 ? d_table.column(source_row_idx).element<string_view>(source_col_idx).size_bytes()
+                 : 0;
+      });
     auto offsets_transformer_itr = thrust::make_transform_iterator(
       thrust::make_counting_iterator<size_type>(0), offsets_transformer);
     auto [offsets_column, bytes] = cudf::detail::make_offsets_child_column(
@@ -197,18 +201,19 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::strin
       rmm::exec_policy(stream),
       thrust::make_counting_iterator<size_type>(0),
       num_strings,
-      [num_columns, d_table, d_results_offsets, d_results_chars] __device__(size_type idx) {
-        auto source_row_idx = idx % num_columns;
-        auto source_col_idx = idx / num_columns;
+      cuda::proclaim_return_type<void>(
+        [num_columns, d_table, d_results_offsets, d_results_chars] __device__(size_type idx) {
+          auto source_row_idx = idx % num_columns;
+          auto source_col_idx = idx / num_columns;
 
-        // Do not write to buffer if the column value for this row is null
-        if (d_table.column(source_row_idx).is_null(source_col_idx)) return;
+          // Do not write to buffer if the column value for this row is null
+          if (d_table.column(source_row_idx).is_null(source_col_idx)) return;
 
-        size_type offset = d_results_offsets[idx];
-        char* d_buffer   = d_results_chars + offset;
-        strings::detail::copy_string(
-          d_buffer, d_table.column(source_row_idx).element<string_view>(source_col_idx));
-      });
+          size_type offset = d_results_offsets[idx];
+          char* d_buffer   = d_results_chars + offset;
+          strings::detail::copy_string(
+            d_buffer, d_table.column(source_row_idx).element<string_view>(source_col_idx));
+        }));
 
     return make_strings_column(num_strings,
                                std::move(offsets_column),
@@ -234,10 +239,10 @@ struct interleave_columns_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
     auto index_begin   = thrust::make_counting_iterator<size_type>(0);
     auto index_end     = thrust::make_counting_iterator<size_type>(output_size);
 
-    auto func_value = [input   = *device_input,
-                       divisor = input.num_columns()] __device__(size_type idx) {
-      return input.column(idx % divisor).element<T>(idx / divisor);
-    };
+    auto func_value = cuda::proclaim_return_type<T>(
+      [input = *device_input, divisor = input.num_columns()] __device__(size_type idx) {
+        return input.column(idx % divisor).element<T>(idx / divisor);
+      });
 
     if (not create_mask) {
       thrust::transform(
@@ -246,10 +251,10 @@ struct interleave_columns_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
       return output;
     }
 
-    auto func_validity = [input   = *device_input,
-                          divisor = input.num_columns()] __device__(size_type idx) {
-      return input.column(idx % divisor).is_valid(idx / divisor);
-    };
+    auto func_validity = cuda::proclaim_return_type<bool>(
+      [input = *device_input, divisor = input.num_columns()] __device__(size_type idx) {
+        return input.column(idx % divisor).is_valid(idx / divisor);
+      });
 
     thrust::transform_if(rmm::exec_policy(stream),
                          index_begin,
