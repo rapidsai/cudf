@@ -2093,6 +2093,8 @@ def test_construction_from_tz_timestamps(data):
         _ = cudf.Series(data)
     with pytest.raises(NotImplementedError):
         _ = cudf.Index(data)
+    with pytest.raises(NotImplementedError):
+        _ = cudf.DatetimeIndex(data)
 
 
 @pytest.mark.parametrize("op", _cmpops)
