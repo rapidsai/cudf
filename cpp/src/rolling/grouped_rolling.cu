@@ -360,74 +360,74 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
   auto [h_nulls_begin_idx, h_nulls_end_idx] = get_null_bounds_for_orderby_column(orderby_column);
   auto const p_orderby_device_view = cudf::column_device_view::create(orderby_column, stream);
 
-  auto const preceding_calculator =
+  auto const preceding_calculator = cuda::proclaim_return_type<size_type>(
     [nulls_begin_idx     = h_nulls_begin_idx,
      nulls_end_idx       = h_nulls_end_idx,
      orderby_device_view = *p_orderby_device_view,
      preceding_window,
      preceding_window_is_unbounded] __device__(size_type idx) -> size_type {
-    if (preceding_window_is_unbounded) {
-      return idx + 1;  // Technically `idx - 0 + 1`,
-                       // where 0 == Group start,
-                       // and   1 accounts for the current row
-    }
-    if (idx >= nulls_begin_idx && idx < nulls_end_idx) {
-      // Current row is in the null group.
-      // Must consider beginning of null-group as window start.
-      return idx - nulls_begin_idx + 1;
-    }
+      if (preceding_window_is_unbounded) {
+        return idx + 1;  // Technically `idx - 0 + 1`,
+                         // where 0 == Group start,
+                         // and   1 accounts for the current row
+      }
+      if (idx >= nulls_begin_idx && idx < nulls_end_idx) {
+        // Current row is in the null group.
+        // Must consider beginning of null-group as window start.
+        return idx - nulls_begin_idx + 1;
+      }
 
-    auto const d_orderby = begin<T>(orderby_device_view);
-    // orderby[idx] not null. Binary search the group, excluding null group.
-    // If nulls_begin_idx == 0, either
-    //  1. NULLS FIRST ordering: Binary search starts where nulls_end_idx.
-    //  2. NO NULLS: Binary search starts at 0 (also nulls_end_idx).
-    // Otherwise, NULLS LAST ordering. Start at 0.
-    auto const group_start      = nulls_begin_idx == 0 ? nulls_end_idx : 0;
-    auto const lowest_in_window = compute_lowest_in_window(d_orderby, idx, preceding_window);
+      auto const d_orderby = begin<T>(orderby_device_view);
+      // orderby[idx] not null. Binary search the group, excluding null group.
+      // If nulls_begin_idx == 0, either
+      //  1. NULLS FIRST ordering: Binary search starts where nulls_end_idx.
+      //  2. NO NULLS: Binary search starts at 0 (also nulls_end_idx).
+      // Otherwise, NULLS LAST ordering. Start at 0.
+      auto const group_start      = nulls_begin_idx == 0 ? nulls_end_idx : 0;
+      auto const lowest_in_window = compute_lowest_in_window(d_orderby, idx, preceding_window);
 
-    return ((d_orderby + idx) - thrust::lower_bound(thrust::seq,
-                                                    d_orderby + group_start,
-                                                    d_orderby + idx,
-                                                    lowest_in_window,
-                                                    cudf::detail::nan_aware_less{})) +
-           1;  // Add 1, for `preceding` to account for current row.
-  };
+      return ((d_orderby + idx) - thrust::lower_bound(thrust::seq,
+                                                      d_orderby + group_start,
+                                                      d_orderby + idx,
+                                                      lowest_in_window,
+                                                      cudf::detail::nan_aware_less{})) +
+             1;  // Add 1, for `preceding` to account for current row.
+    });
 
   auto const preceding_column = expand_to_column(preceding_calculator, input.size(), stream);
 
-  auto const following_calculator =
+  auto const following_calculator = cuda::proclaim_return_type<size_type>(
     [nulls_begin_idx     = h_nulls_begin_idx,
      nulls_end_idx       = h_nulls_end_idx,
      num_rows            = input.size(),
      orderby_device_view = *p_orderby_device_view,
      following_window,
      following_window_is_unbounded] __device__(size_type idx) -> size_type {
-    if (following_window_is_unbounded) { return num_rows - idx - 1; }
-    if (idx >= nulls_begin_idx && idx < nulls_end_idx) {
-      // Current row is in the null group.
-      // Window ends at the end of the null group.
-      return nulls_end_idx - idx - 1;
-    }
+      if (following_window_is_unbounded) { return num_rows - idx - 1; }
+      if (idx >= nulls_begin_idx && idx < nulls_end_idx) {
+        // Current row is in the null group.
+        // Window ends at the end of the null group.
+        return nulls_end_idx - idx - 1;
+      }
 
-    auto const d_orderby = begin<T>(orderby_device_view);
-    // orderby[idx] not null. Binary search the group, excluding null group.
-    // If nulls_begin_idx == 0, either
-    //  1. NULLS FIRST ordering: Binary search ends at num_rows.
-    //  2. NO NULLS: Binary search also ends at num_rows.
-    // Otherwise, NULLS LAST ordering. End at nulls_begin_idx.
+      auto const d_orderby = begin<T>(orderby_device_view);
+      // orderby[idx] not null. Binary search the group, excluding null group.
+      // If nulls_begin_idx == 0, either
+      //  1. NULLS FIRST ordering: Binary search ends at num_rows.
+      //  2. NO NULLS: Binary search also ends at num_rows.
+      // Otherwise, NULLS LAST ordering. End at nulls_begin_idx.
 
-    auto const group_end         = nulls_begin_idx == 0 ? num_rows : nulls_begin_idx;
-    auto const highest_in_window = compute_highest_in_window(d_orderby, idx, following_window);
+      auto const group_end         = nulls_begin_idx == 0 ? num_rows : nulls_begin_idx;
+      auto const highest_in_window = compute_highest_in_window(d_orderby, idx, following_window);
 
-    return (thrust::upper_bound(thrust::seq,
-                                d_orderby + idx,
-                                d_orderby + group_end,
-                                highest_in_window,
-                                cudf::detail::nan_aware_less{}) -
-            (d_orderby + idx)) -
-           1;
-  };
+      return (thrust::upper_bound(thrust::seq,
+                                  d_orderby + idx,
+                                  d_orderby + group_end,
+                                  highest_in_window,
+                                  cudf::detail::nan_aware_less{}) -
+              (d_orderby + idx)) -
+             1;
+    });
 
   auto const following_column = expand_to_column(following_calculator, input.size(), stream);
 
@@ -465,10 +465,10 @@ get_null_bounds_for_orderby_column(column_view const& orderby_column,
       rmm::exec_policy(stream),
       thrust::make_counting_iterator(static_cast<size_type>(0)),
       thrust::make_counting_iterator(static_cast<size_type>(num_groups)),
-      [d_orderby       = *p_orderby_device_view,
-       d_group_offsets = group_offsets.data(),
-       d_null_start    = null_start.data(),
-       d_null_end      = null_end.data()] __device__(auto group_label) {
+      cuda::proclaim_return_type<void>([d_orderby       = *p_orderby_device_view,
+                                        d_group_offsets = group_offsets.data(),
+                                        d_null_start    = null_start.data(),
+                                        d_null_end = null_end.data()] __device__(auto group_label) {
         auto group_start           = d_group_offsets[group_label];
         auto group_end             = d_group_offsets[group_label + 1];
         auto first_element_is_null = d_orderby.is_null_nocheck(group_start);
@@ -488,7 +488,8 @@ get_null_bounds_for_orderby_column(column_view const& orderby_column,
             thrust::seq,
             thrust::make_counting_iterator(group_start),
             thrust::make_counting_iterator(group_end),
-            [&d_orderby] __device__(auto i) { return d_orderby.is_null_nocheck(i); });
+            cuda::proclaim_return_type<bool>(
+              [&d_orderby] __device__(auto i) { return d_orderby.is_null_nocheck(i); }));
         } else {
           // NULLS LAST.
           d_null_end[group_label]   = group_end;
@@ -496,9 +497,10 @@ get_null_bounds_for_orderby_column(column_view const& orderby_column,
             thrust::seq,
             thrust::make_counting_iterator(group_start),
             thrust::make_counting_iterator(group_end),
-            [&d_orderby] __device__(auto i) { return d_orderby.is_valid_nocheck(i); });
+            cuda::proclaim_return_type<bool>(
+              [&d_orderby] __device__(auto i) { return d_orderby.is_valid_nocheck(i); }));
         }
-      });
+      }));
 
     return std::make_tuple(std::move(null_start), std::move(null_end));
   } else {
@@ -534,7 +536,7 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
     get_null_bounds_for_orderby_column(orderby_column, group_offsets, stream);
   auto const p_orderby_device_view = cudf::column_device_view::create(orderby_column, stream);
 
-  auto const preceding_calculator =
+  auto const preceding_calculator = cuda::proclaim_return_type<size_type>(
     [d_group_offsets     = group_offsets.data(),
      d_group_labels      = group_labels.data(),
      orderby_device_view = *p_orderby_device_view,
@@ -542,41 +544,41 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
      d_nulls_end         = null_end.data(),
      preceding_window,
      preceding_window_is_unbounded] __device__(size_type idx) -> size_type {
-    auto const group_label = d_group_labels[idx];
-    auto const group_start = d_group_offsets[group_label];
-    auto const nulls_begin = d_nulls_begin[group_label];
-    auto const nulls_end   = d_nulls_end[group_label];
+      auto const group_label = d_group_labels[idx];
+      auto const group_start = d_group_offsets[group_label];
+      auto const nulls_begin = d_nulls_begin[group_label];
+      auto const nulls_end   = d_nulls_end[group_label];
 
-    if (preceding_window_is_unbounded) { return idx - group_start + 1; }
+      if (preceding_window_is_unbounded) { return idx - group_start + 1; }
 
-    // If idx lies in the null-range, the window is the null range.
-    if (idx >= nulls_begin && idx < nulls_end) {
-      // Current row is in the null group.
-      // The window starts at the start of the null group.
-      return idx - nulls_begin + 1;
-    }
+      // If idx lies in the null-range, the window is the null range.
+      if (idx >= nulls_begin && idx < nulls_end) {
+        // Current row is in the null group.
+        // The window starts at the start of the null group.
+        return idx - nulls_begin + 1;
+      }
 
-    auto const d_orderby = begin<T>(orderby_device_view);
+      auto const d_orderby = begin<T>(orderby_device_view);
 
-    // orderby[idx] not null. Search must exclude the null group.
-    // If nulls_begin == group_start, either of the following is true:
-    //  1. NULLS FIRST ordering: Search must begin at nulls_end.
-    //  2. NO NULLS: Search must begin at group_start (which also equals nulls_end.)
-    // Otherwise, NULLS LAST ordering. Search must start at nulls group_start.
-    auto const search_start     = nulls_begin == group_start ? nulls_end : group_start;
-    auto const lowest_in_window = compute_lowest_in_window(d_orderby, idx, preceding_window);
+      // orderby[idx] not null. Search must exclude the null group.
+      // If nulls_begin == group_start, either of the following is true:
+      //  1. NULLS FIRST ordering: Search must begin at nulls_end.
+      //  2. NO NULLS: Search must begin at group_start (which also equals nulls_end.)
+      // Otherwise, NULLS LAST ordering. Search must start at nulls group_start.
+      auto const search_start     = nulls_begin == group_start ? nulls_end : group_start;
+      auto const lowest_in_window = compute_lowest_in_window(d_orderby, idx, preceding_window);
 
-    return ((d_orderby + idx) - thrust::lower_bound(thrust::seq,
-                                                    d_orderby + search_start,
-                                                    d_orderby + idx,
-                                                    lowest_in_window,
-                                                    cudf::detail::nan_aware_less{})) +
-           1;  // Add 1, for `preceding` to account for current row.
-  };
+      return ((d_orderby + idx) - thrust::lower_bound(thrust::seq,
+                                                      d_orderby + search_start,
+                                                      d_orderby + idx,
+                                                      lowest_in_window,
+                                                      cudf::detail::nan_aware_less{})) +
+             1;  // Add 1, for `preceding` to account for current row.
+    });
 
   auto const preceding_column = expand_to_column(preceding_calculator, input.size(), stream);
 
-  auto const following_calculator =
+  auto const following_calculator = cuda::proclaim_return_type<size_type>(
     [d_group_offsets     = group_offsets.data(),
      d_group_labels      = group_labels.data(),
      orderby_device_view = *p_orderby_device_view,
@@ -584,41 +586,41 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
      d_nulls_end         = null_end.data(),
      following_window,
      following_window_is_unbounded] __device__(size_type idx) -> size_type {
-    auto const group_label = d_group_labels[idx];
-    auto const group_start = d_group_offsets[group_label];
-    auto const group_end =
-      d_group_offsets[group_label + 1];  // Cannot fall off the end, since offsets
-                                         // is capped with `input.size()`.
-    auto const nulls_begin = d_nulls_begin[group_label];
-    auto const nulls_end   = d_nulls_end[group_label];
+      auto const group_label = d_group_labels[idx];
+      auto const group_start = d_group_offsets[group_label];
+      auto const group_end =
+        d_group_offsets[group_label + 1];  // Cannot fall off the end, since offsets
+                                           // is capped with `input.size()`.
+      auto const nulls_begin = d_nulls_begin[group_label];
+      auto const nulls_end   = d_nulls_end[group_label];
 
-    if (following_window_is_unbounded) { return (group_end - idx) - 1; }
+      if (following_window_is_unbounded) { return (group_end - idx) - 1; }
 
-    // If idx lies in the null-range, the window is the null range.
-    if (idx >= nulls_begin && idx < nulls_end) {
-      // Current row is in the null group.
-      // The window ends at the end of the null group.
-      return nulls_end - idx - 1;
-    }
+      // If idx lies in the null-range, the window is the null range.
+      if (idx >= nulls_begin && idx < nulls_end) {
+        // Current row is in the null group.
+        // The window ends at the end of the null group.
+        return nulls_end - idx - 1;
+      }
 
-    auto const d_orderby = begin<T>(orderby_device_view);
+      auto const d_orderby = begin<T>(orderby_device_view);
 
-    // orderby[idx] not null. Search must exclude the null group.
-    // If nulls_begin == group_start, either of the following is true:
-    //  1. NULLS FIRST ordering: Search ends at group_end.
-    //  2. NO NULLS: Search ends at group_end.
-    // Otherwise, NULLS LAST ordering. Search ends at nulls_begin.
-    auto const search_end        = nulls_begin == group_start ? group_end : nulls_begin;
-    auto const highest_in_window = compute_highest_in_window(d_orderby, idx, following_window);
+      // orderby[idx] not null. Search must exclude the null group.
+      // If nulls_begin == group_start, either of the following is true:
+      //  1. NULLS FIRST ordering: Search ends at group_end.
+      //  2. NO NULLS: Search ends at group_end.
+      // Otherwise, NULLS LAST ordering. Search ends at nulls_begin.
+      auto const search_end        = nulls_begin == group_start ? group_end : nulls_begin;
+      auto const highest_in_window = compute_highest_in_window(d_orderby, idx, following_window);
 
-    return (thrust::upper_bound(thrust::seq,
-                                d_orderby + idx,
-                                d_orderby + search_end,
-                                highest_in_window,
-                                cudf::detail::nan_aware_less{}) -
-            (d_orderby + idx)) -
-           1;
-  };
+      return (thrust::upper_bound(thrust::seq,
+                                  d_orderby + idx,
+                                  d_orderby + search_end,
+                                  highest_in_window,
+                                  cudf::detail::nan_aware_less{}) -
+              (d_orderby + idx)) -
+             1;
+    });
 
   auto const following_column = expand_to_column(following_calculator, input.size(), stream);
 
@@ -645,74 +647,74 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
   auto [h_nulls_begin_idx, h_nulls_end_idx] = get_null_bounds_for_orderby_column(orderby_column);
   auto const p_orderby_device_view = cudf::column_device_view::create(orderby_column, stream);
 
-  auto const preceding_calculator =
+  auto const preceding_calculator = cuda::proclaim_return_type<size_type>(
     [nulls_begin_idx     = h_nulls_begin_idx,
      nulls_end_idx       = h_nulls_end_idx,
      orderby_device_view = *p_orderby_device_view,
      preceding_window,
      preceding_window_is_unbounded] __device__(size_type idx) -> size_type {
-    if (preceding_window_is_unbounded) {
-      return idx + 1;  // Technically `idx - 0 + 1`,
-                       // where 0 == Group start,
-                       // and   1 accounts for the current row
-    }
-    if (idx >= nulls_begin_idx && idx < nulls_end_idx) {
-      // Current row is in the null group.
-      // Must consider beginning of null-group as window start.
-      return idx - nulls_begin_idx + 1;
-    }
+      if (preceding_window_is_unbounded) {
+        return idx + 1;  // Technically `idx - 0 + 1`,
+                         // where 0 == Group start,
+                         // and   1 accounts for the current row
+      }
+      if (idx >= nulls_begin_idx && idx < nulls_end_idx) {
+        // Current row is in the null group.
+        // Must consider beginning of null-group as window start.
+        return idx - nulls_begin_idx + 1;
+      }
 
-    auto const d_orderby = begin<T>(orderby_device_view);
-    // orderby[idx] not null. Binary search the group, excluding null group.
-    // If nulls_begin_idx == 0, either
-    //  1. NULLS FIRST ordering: Binary search starts where nulls_end_idx.
-    //  2. NO NULLS: Binary search starts at 0 (also nulls_end_idx).
-    // Otherwise, NULLS LAST ordering. Start at 0.
-    auto const group_start       = nulls_begin_idx == 0 ? nulls_end_idx : 0;
-    auto const highest_in_window = compute_highest_in_window(d_orderby, idx, preceding_window);
+      auto const d_orderby = begin<T>(orderby_device_view);
+      // orderby[idx] not null. Binary search the group, excluding null group.
+      // If nulls_begin_idx == 0, either
+      //  1. NULLS FIRST ordering: Binary search starts where nulls_end_idx.
+      //  2. NO NULLS: Binary search starts at 0 (also nulls_end_idx).
+      // Otherwise, NULLS LAST ordering. Start at 0.
+      auto const group_start       = nulls_begin_idx == 0 ? nulls_end_idx : 0;
+      auto const highest_in_window = compute_highest_in_window(d_orderby, idx, preceding_window);
 
-    return ((d_orderby + idx) - thrust::lower_bound(thrust::seq,
-                                                    d_orderby + group_start,
-                                                    d_orderby + idx,
-                                                    highest_in_window,
-                                                    cudf::detail::nan_aware_greater{})) +
-           1;  // Add 1, for `preceding` to account for current row.
-  };
+      return ((d_orderby + idx) - thrust::lower_bound(thrust::seq,
+                                                      d_orderby + group_start,
+                                                      d_orderby + idx,
+                                                      highest_in_window,
+                                                      cudf::detail::nan_aware_greater{})) +
+             1;  // Add 1, for `preceding` to account for current row.
+    });
 
   auto const preceding_column = expand_to_column(preceding_calculator, input.size(), stream);
 
-  auto const following_calculator =
+  auto const following_calculator = cuda::proclaim_return_type<size_type>(
     [nulls_begin_idx     = h_nulls_begin_idx,
      nulls_end_idx       = h_nulls_end_idx,
      num_rows            = input.size(),
      orderby_device_view = *p_orderby_device_view,
      following_window,
      following_window_is_unbounded] __device__(size_type idx) -> size_type {
-    if (following_window_is_unbounded) { return (num_rows - idx) - 1; }
-    if (idx >= nulls_begin_idx && idx < nulls_end_idx) {
-      // Current row is in the null group.
-      // Window ends at the end of the null group.
-      return nulls_end_idx - idx - 1;
-    }
+      if (following_window_is_unbounded) { return (num_rows - idx) - 1; }
+      if (idx >= nulls_begin_idx && idx < nulls_end_idx) {
+        // Current row is in the null group.
+        // Window ends at the end of the null group.
+        return nulls_end_idx - idx - 1;
+      }
 
-    auto const d_orderby = begin<T>(orderby_device_view);
-    // orderby[idx] not null. Search must exclude null group.
-    // If nulls_begin_idx = 0, either
-    //  1. NULLS FIRST ordering: Search ends at num_rows.
-    //  2. NO NULLS: Search also ends at num_rows.
-    // Otherwise, NULLS LAST ordering: End at nulls_begin_idx.
+      auto const d_orderby = begin<T>(orderby_device_view);
+      // orderby[idx] not null. Search must exclude null group.
+      // If nulls_begin_idx = 0, either
+      //  1. NULLS FIRST ordering: Search ends at num_rows.
+      //  2. NO NULLS: Search also ends at num_rows.
+      // Otherwise, NULLS LAST ordering: End at nulls_begin_idx.
 
-    auto const group_end        = nulls_begin_idx == 0 ? num_rows : nulls_begin_idx;
-    auto const lowest_in_window = compute_lowest_in_window(d_orderby, idx, following_window);
+      auto const group_end        = nulls_begin_idx == 0 ? num_rows : nulls_begin_idx;
+      auto const lowest_in_window = compute_lowest_in_window(d_orderby, idx, following_window);
 
-    return (thrust::upper_bound(thrust::seq,
-                                d_orderby + idx,
-                                d_orderby + group_end,
-                                lowest_in_window,
-                                cudf::detail::nan_aware_greater{}) -
-            (d_orderby + idx)) -
-           1;
-  };
+      return (thrust::upper_bound(thrust::seq,
+                                  d_orderby + idx,
+                                  d_orderby + group_end,
+                                  lowest_in_window,
+                                  cudf::detail::nan_aware_greater{}) -
+              (d_orderby + idx)) -
+             1;
+    });
 
   auto const following_column = expand_to_column(following_calculator, input.size(), stream);
 
@@ -739,7 +741,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
     get_null_bounds_for_orderby_column(orderby_column, group_offsets, stream);
   auto const p_orderby_device_view = cudf::column_device_view::create(orderby_column, stream);
 
-  auto const preceding_calculator =
+  auto const preceding_calculator = cuda::proclaim_return_type<size_type>(
     [d_group_offsets     = group_offsets.data(),
      d_group_labels      = group_labels.data(),
      orderby_device_view = *p_orderby_device_view,
@@ -747,40 +749,40 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
      d_nulls_end         = null_end.data(),
      preceding_window,
      preceding_window_is_unbounded] __device__(size_type idx) -> size_type {
-    auto const group_label = d_group_labels[idx];
-    auto const group_start = d_group_offsets[group_label];
-    auto const nulls_begin = d_nulls_begin[group_label];
-    auto const nulls_end   = d_nulls_end[group_label];
+      auto const group_label = d_group_labels[idx];
+      auto const group_start = d_group_offsets[group_label];
+      auto const nulls_begin = d_nulls_begin[group_label];
+      auto const nulls_end   = d_nulls_end[group_label];
 
-    if (preceding_window_is_unbounded) { return (idx - group_start) + 1; }
+      if (preceding_window_is_unbounded) { return (idx - group_start) + 1; }
 
-    // If idx lies in the null-range, the window is the null range.
-    if (idx >= nulls_begin && idx < nulls_end) {
-      // Current row is in the null group.
-      // The window starts at the start of the null group.
-      return idx - nulls_begin + 1;
-    }
+      // If idx lies in the null-range, the window is the null range.
+      if (idx >= nulls_begin && idx < nulls_end) {
+        // Current row is in the null group.
+        // The window starts at the start of the null group.
+        return idx - nulls_begin + 1;
+      }
 
-    auto const d_orderby = begin<T>(orderby_device_view);
-    // orderby[idx] not null. Search must exclude the null group.
-    // If nulls_begin == group_start, either of the following is true:
-    //  1. NULLS FIRST ordering: Search must begin at nulls_end.
-    //  2. NO NULLS: Search must begin at group_start (which also equals nulls_end.)
-    // Otherwise, NULLS LAST ordering. Search must start at nulls group_start.
-    auto const search_start      = nulls_begin == group_start ? nulls_end : group_start;
-    auto const highest_in_window = compute_highest_in_window(d_orderby, idx, preceding_window);
+      auto const d_orderby = begin<T>(orderby_device_view);
+      // orderby[idx] not null. Search must exclude the null group.
+      // If nulls_begin == group_start, either of the following is true:
+      //  1. NULLS FIRST ordering: Search must begin at nulls_end.
+      //  2. NO NULLS: Search must begin at group_start (which also equals nulls_end.)
+      // Otherwise, NULLS LAST ordering. Search must start at nulls group_start.
+      auto const search_start      = nulls_begin == group_start ? nulls_end : group_start;
+      auto const highest_in_window = compute_highest_in_window(d_orderby, idx, preceding_window);
 
-    return ((d_orderby + idx) - thrust::lower_bound(thrust::seq,
-                                                    d_orderby + search_start,
-                                                    d_orderby + idx,
-                                                    highest_in_window,
-                                                    cudf::detail::nan_aware_greater{})) +
-           1;  // Add 1, for `preceding` to account for current row.
-  };
+      return ((d_orderby + idx) - thrust::lower_bound(thrust::seq,
+                                                      d_orderby + search_start,
+                                                      d_orderby + idx,
+                                                      highest_in_window,
+                                                      cudf::detail::nan_aware_greater{})) +
+             1;  // Add 1, for `preceding` to account for current row.
+    });
 
   auto const preceding_column = expand_to_column(preceding_calculator, input.size(), stream);
 
-  auto const following_calculator =
+  auto const following_calculator = cuda::proclaim_return_type<size_type>(
     [d_group_offsets     = group_offsets.data(),
      d_group_labels      = group_labels.data(),
      orderby_device_view = *p_orderby_device_view,
@@ -788,38 +790,38 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
      d_nulls_end         = null_end.data(),
      following_window,
      following_window_is_unbounded] __device__(size_type idx) -> size_type {
-    auto const group_label = d_group_labels[idx];
-    auto const group_start = d_group_offsets[group_label];
-    auto const group_end   = d_group_offsets[group_label + 1];
-    auto const nulls_begin = d_nulls_begin[group_label];
-    auto const nulls_end   = d_nulls_end[group_label];
+      auto const group_label = d_group_labels[idx];
+      auto const group_start = d_group_offsets[group_label];
+      auto const group_end   = d_group_offsets[group_label + 1];
+      auto const nulls_begin = d_nulls_begin[group_label];
+      auto const nulls_end   = d_nulls_end[group_label];
 
-    if (following_window_is_unbounded) { return (group_end - idx) - 1; }
+      if (following_window_is_unbounded) { return (group_end - idx) - 1; }
 
-    // If idx lies in the null-range, the window is the null range.
-    if (idx >= nulls_begin && idx < nulls_end) {
-      // Current row is in the null group.
-      // The window ends at the end of the null group.
-      return nulls_end - idx - 1;
-    }
+      // If idx lies in the null-range, the window is the null range.
+      if (idx >= nulls_begin && idx < nulls_end) {
+        // Current row is in the null group.
+        // The window ends at the end of the null group.
+        return nulls_end - idx - 1;
+      }
 
-    auto const d_orderby = begin<T>(orderby_device_view);
-    // orderby[idx] not null. Search must exclude the null group.
-    // If nulls_begin == group_start, either of the following is true:
-    //  1. NULLS FIRST ordering: Search ends at group_end.
-    //  2. NO NULLS: Search ends at group_end.
-    // Otherwise, NULLS LAST ordering. Search ends at nulls_begin.
-    auto const search_end       = nulls_begin == group_start ? group_end : nulls_begin;
-    auto const lowest_in_window = compute_lowest_in_window(d_orderby, idx, following_window);
+      auto const d_orderby = begin<T>(orderby_device_view);
+      // orderby[idx] not null. Search must exclude the null group.
+      // If nulls_begin == group_start, either of the following is true:
+      //  1. NULLS FIRST ordering: Search ends at group_end.
+      //  2. NO NULLS: Search ends at group_end.
+      // Otherwise, NULLS LAST ordering. Search ends at nulls_begin.
+      auto const search_end       = nulls_begin == group_start ? group_end : nulls_begin;
+      auto const lowest_in_window = compute_lowest_in_window(d_orderby, idx, following_window);
 
-    return (thrust::upper_bound(thrust::seq,
-                                d_orderby + idx,
-                                d_orderby + search_end,
-                                lowest_in_window,
-                                cudf::detail::nan_aware_greater{}) -
-            (d_orderby + idx)) -
-           1;
-  };
+      return (thrust::upper_bound(thrust::seq,
+                                  d_orderby + idx,
+                                  d_orderby + search_end,
+                                  lowest_in_window,
+                                  cudf::detail::nan_aware_greater{}) -
+              (d_orderby + idx)) -
+             1;
+    });
 
   auto const following_column = expand_to_column(following_calculator, input.size(), stream);
 
