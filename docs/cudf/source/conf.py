@@ -35,6 +35,7 @@ sys.path.append(os.path.abspath("./_ext"))
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
+    "breathe",
     "sphinx.ext.intersphinx",
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
@@ -46,9 +47,14 @@ extensions = [
     "myst_nb",
 ]
 
+# Breathe Configuration
+breathe_projects = {"libcudf": "../../../cpp/doxygen/xml"}
+breathe_default_project = "libcudf"
+
+
 nb_execution_excludepatterns = ['performance-comparisons.ipynb']
 
-nb_execution_mode = "force"
+nb_execution_mode = "off"
 nb_execution_timeout = 300
 
 copybutton_prompt_text = ">>> "
@@ -201,6 +207,7 @@ intersphinx_mapping = {
     "pyarrow": ("https://arrow.apache.org/docs/", None),
     "pandas": ("https://pandas.pydata.org/docs/", None),
     "typing_extensions": ("https://typing-extensions.readthedocs.io/en/stable/", None),
+    "rmm": ("../../../../../rmm/python/docs/_build/html/", "../../../../rmm/python/docs/_build/html/objects.inv"),
 }
 
 # Config numpydoc

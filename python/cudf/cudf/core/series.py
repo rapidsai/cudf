@@ -432,6 +432,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     not be the same length. The result index will be the
     sorted union of the two indexes.
 
+    View the underlying C++ data using :cpp:class:`cudf::column_view`
+    Also interesting, :class:`rmm.DeviceBuffer`
+
     ``Series`` objects are used as columns of ``DataFrame``.
 
     Parameters
