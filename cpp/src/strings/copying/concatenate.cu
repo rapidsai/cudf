@@ -121,7 +121,7 @@ __global__ void fused_concatenate_string_offset_kernel(column_device_view const*
                                                        bitmask_type* output_mask,
                                                        size_type* out_valid_count)
 {
-  size_type output_index     = threadIdx.x + blockIdx.x * blockDim.x;
+  int64_t output_index       = threadIdx.x + blockIdx.x * blockDim.x;
   size_type warp_valid_count = 0;
 
   unsigned active_mask;
@@ -175,7 +175,7 @@ __global__ void fused_concatenate_string_chars_kernel(column_device_view const* 
                                                       size_type const output_size,
                                                       char* output_data)
 {
-  size_type output_index = threadIdx.x + blockIdx.x * blockDim.x;
+  int64_t output_index = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (output_index < output_size) {
     // Lookup input index by searching for output index in offsets
