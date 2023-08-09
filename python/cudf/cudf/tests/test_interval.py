@@ -138,6 +138,7 @@ def test_create_interval_df(data1, data2, data3, data4, closed):
     "start, stop, freq, periods",
     [
         (0, 10, 2, None),
+        (0, 5, 2, None),
         (0, None, 2, 5),
         (0, 10, None, 5),
         (None, 10, 2, 5),
