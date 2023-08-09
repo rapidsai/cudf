@@ -847,27 +847,21 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         elif len(data) > 0 and isinstance(data[0], pd._libs.interval.Interval):
             data = DataFrame.from_pandas(pd.DataFrame(data))
             self._data = data._data
-        # namedtuple in a list
-        elif (
-            len(data) > 0
-            and columns is None
-            and isinstance(data[0], tuple)
-            and hasattr(data[0], "_fields")
-        ):
-            # pandas behavior is to use the fields from the first tuple
-            # as the column names
-            columns = data[0]._fields
-            values = itertools.zip_longest(*data)
-            data = dict(zip(columns, values))
-            self._init_from_dict_like(
-                data, index=index, nan_as_null=nan_as_null
-            )
         else:
             if any(
                 not isinstance(col, (abc.Iterable, abc.Sequence))
                 for col in data
             ):
                 raise TypeError("Inputs should be an iterable or sequence.")
+            if (
+                len(data) > 0
+                and columns is None
+                and isinstance(data[0], tuple)
+                and hasattr(data[0], "_fields")
+            ):
+                # pandas behavior is to use the fields from the first
+                # namedtuple as the column names
+                columns = data[0]._fields
 
             data = list(itertools.zip_longest(*data))
 

@@ -10273,3 +10273,9 @@ def test_dataframe_constructor_from_namedtuple():
     pdf = pd.DataFrame(data, index=idx)
 
     assert_eq(gdf, pdf)
+
+    data = [Point2(4, 5), Point1(1, 2, 3)]
+    with pytest.raises(ValueError):
+        cudf.DataFrame(data, index=idx)
+    with pytest.raises(ValueError):
+        pd.DataFrame(data, index=idx)
