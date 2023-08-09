@@ -45,6 +45,7 @@ from cudf._lib.stream_compaction import (
     drop_nulls,
 )
 from cudf._lib.transform import bools_to_mask
+from cudf._lib.types import size_type_dtype
 from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -139,8 +140,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         if self.data is not None:
             if mode == "read":
-                obj = _proxy_cai_obj(
-                    self.data._get_cuda_array_interface(readonly=True),
+                obj = cuda_array_interface_wrapper(
+                    ptr=self.data.get_ptr(mode="read"),
+                    size=self.data.size,
                     owner=self.data,
                 )
             elif mode == "write":
@@ -175,8 +177,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         if self.mask is not None:
             if mode == "read":
-                obj = _proxy_cai_obj(
-                    self.mask._get_cuda_array_interface(readonly=True),
+                obj = cuda_array_interface_wrapper(
+                    ptr=self.mask.get_ptr(mode="read"),
+                    size=self.mask.size,
                     owner=self.mask,
                 )
             elif mode == "write":
@@ -548,14 +551,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def slice(
         self, start: int, stop: int, stride: Optional[int] = None
-    ) -> ColumnBase:
+    ) -> Self:
         stride = 1 if stride is None else stride
         if start < 0:
             start = start + len(self)
         if stop < 0 and not (stride < 0 and stop == -1):
             stop = stop + len(self)
         if (stride > 0 and start >= stop) or (stride < 0 and start <= stop):
-            return column_empty(0, self.dtype, masked=True)
+            return cast(Self, column_empty(0, self.dtype, masked=True))
         # compute mask slice
         if stride == 1:
             return libcudf.copying.column_slice(self, [start, stop])[
@@ -734,29 +737,79 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         return result
 
-    def find_first_value(
-        self, value: ScalarLike, closest: bool = False
-    ) -> int:
+    def indices_of(
+        self, value: ScalarLike | Self
+    ) -> cudf.core.column.NumericalColumn:
         """
-        Returns offset of first value that matches
-        """
-        # FIXME: Inefficient, may be need a libcudf api
-        index = cudf.core.index.RangeIndex(0, stop=len(self))
-        indices = index.take(self == value)
-        if not len(indices):
-            raise ValueError("value not found")
-        return indices[0]
+        Find locations of value in the column
 
-    def find_last_value(self, value: ScalarLike, closest: bool = False) -> int:
+        Parameters
+        ----------
+        value
+            Scalar to look for (cast to dtype of column), or a length-1 column
+
+        Returns
+        -------
+        Column of indices that match value
         """
-        Returns offset of last value that matches
+        if not isinstance(value, ColumnBase):
+            value = as_column([value], dtype=self.dtype)
+        else:
+            assert len(value) == 1
+        mask = libcudf.search.contains(value, self)
+        return apply_boolean_mask(
+            [arange(0, len(self), dtype=size_type_dtype)], mask
+        )[0]
+
+    def _find_first_and_last(self, value: ScalarLike) -> Tuple[int, int]:
+        indices = self.indices_of(value)
+        if n := len(indices):
+            return (
+                indices.element_indexing(0),
+                indices.element_indexing(n - 1),
+            )
+        else:
+            raise ValueError(f"Value {value} not found in column")
+
+    def find_first_value(self, value: ScalarLike) -> int:
         """
-        # FIXME: Inefficient, may be need a libcudf api
-        index = cudf.core.index.RangeIndex(0, stop=len(self))
-        indices = index.take(self == value)
-        if not len(indices):
-            raise ValueError("value not found")
-        return indices[-1]
+        Return index of first value that matches
+
+        Parameters
+        ----------
+        value
+            Value to search for (cast to dtype of column)
+
+        Returns
+        -------
+        Index of value
+
+        Raises
+        ------
+        ValueError if value is not found
+        """
+        first, _ = self._find_first_and_last(value)
+        return first
+
+    def find_last_value(self, value: ScalarLike) -> int:
+        """
+        Return index of last value that matches
+
+        Parameters
+        ----------
+        value
+            Value to search for (cast to dtype of column)
+
+        Returns
+        -------
+        Index of value
+
+        Raises
+        ------
+        ValueError if value is not found
+        """
+        _, last = self._find_first_and_last(value)
+        return last
 
     def append(self, other: ColumnBase) -> ColumnBase:
         return concat_columns([self, as_column(other)])
@@ -893,49 +946,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             ascending=[False], null_position=None
         )
 
-    def get_slice_bound(self, label: ScalarLike, side: str, kind: str) -> int:
-        """
-        Calculate slice bound that corresponds to given label.
-        Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
-        of given label.
-
-        Parameters
-        ----------
-        label : Scalar
-        side : {'left', 'right'}
-        kind : {'ix', 'loc', 'getitem'}
-        """
-        if kind not in {"ix", "loc", "getitem", None}:
-            raise ValueError(
-                f"Invalid value for ``kind`` parameter,"
-                f" must be either one of the following: "
-                f"{'ix', 'loc', 'getitem', None}, but found: {kind}"
-            )
-        if side not in {"left", "right"}:
-            raise ValueError(
-                "Invalid value for side kwarg,"
-                " must be either 'left' or 'right': %s" % (side,)
-            )
-
-        # TODO: Handle errors/missing keys correctly
-        #       Not currently using `kind` argument.
-        if side == "left":
-            return self.find_first_value(label, closest=True)
-        elif side == "right":
-            return self.find_last_value(label, closest=True) + 1
-        else:
-            raise ValueError(f"Invalid value for side: {side}")
-
-    def sort_by_values(
+    def sort_values(
         self: ColumnBase,
         ascending: bool = True,
         na_position: str = "last",
-    ) -> Tuple[ColumnBase, "cudf.core.column.NumericalColumn"]:
-        col_inds = self.as_frame()._get_sorted_inds(
-            ascending=ascending, na_position=na_position
-        )
-        col_keys = self.take(col_inds)
-        return col_keys, col_inds
+    ) -> ColumnBase:
+        return libcudf.sort.sort(
+            [self], column_order=[ascending], null_precedence=[na_position]
+        )[0]
 
     def distinct_count(self, dropna: bool = True) -> int:
         try:
@@ -1022,7 +1040,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             )
 
         # Categories must be unique and sorted in ascending order.
-        cats = self.unique().sort_by_values()[0].astype(self.dtype)
+        cats = self.unique().sort_values().astype(self.dtype)
         label_dtype = min_unsigned_type(len(cats))
         labels = self._label_encoding(
             cats=cats, dtype=label_dtype, na_sentinel=cudf.Scalar(1)
@@ -1131,17 +1149,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             values, side, ascending=ascending, na_position=na_position
         )
 
-    def unique(self, preserve_order=True) -> ColumnBase:
+    def unique(self) -> ColumnBase:
         """
         Get unique values in the data
         """
-        if preserve_order is not True:
-            warnings.warn(
-                "The preserve_order argument is deprecated. It will be "
-                "removed in a future version. As of now, unique always "
-                "preserves order regardless of the argument's value.",
-                FutureWarning,
-            )
         return drop_duplicates([self], keep="first")[0]
 
     def serialize(self) -> Tuple[dict, list]:
@@ -1947,9 +1958,7 @@ def as_column(
         ):
             arbitrary = cupy.ascontiguousarray(arbitrary)
 
-        data = as_buffer(arbitrary)
-        if cudf.get_option("copy_on_write"):
-            data._zero_copied = True
+        data = as_buffer(arbitrary, exposed=cudf.get_option("copy_on_write"))
         col = build_column(data, dtype=current_dtype, mask=mask)
 
         if dtype is not None:
@@ -1992,10 +2001,13 @@ def as_column(
         return col
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
-        if isinstance(arbitrary, pd.Series) and isinstance(
-            arbitrary.array, pd.core.arrays.masked.BaseMaskedArray
-        ):
-            return as_column(arbitrary.array)
+        if isinstance(arbitrary, pd.Series):
+            if isinstance(
+                arbitrary.array, pd.core.arrays.masked.BaseMaskedArray
+            ):
+                return as_column(arbitrary.array)
+            elif PANDAS_GE_150 and isinstance(arbitrary.dtype, pd.ArrowDtype):
+                return as_column(pa.array(arbitrary.array, from_pandas=True))
         if is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif is_interval_dtype(arbitrary.dtype):
@@ -2160,7 +2172,7 @@ def as_column(
         if delayed_cast:
             data = data.astype(cudf.dtype(dtype))
 
-    elif isinstance(arbitrary, pd.core.arrays.numpy_.PandasArray):
+    elif isinstance(arbitrary, pd.arrays.PandasArray):
         if is_categorical_dtype(arbitrary.dtype):
             arb_dtype = arbitrary.dtype
         else:
@@ -2617,22 +2629,3 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
 
     # Filter out inputs that have 0 length, then concatenate.
     return libcudf.concat.concat_columns([o for o in objs if len(o)])
-
-
-def _proxy_cai_obj(cai, owner):
-    """
-    Returns a proxy CAI SimpleNameSpace wrapped
-    with the provided `cai` as `__cuda_array_interface__`
-    and owner as `owner` to keep the object alive.
-    This is an internal utility for `data_array_view`
-    and `mask_array_view` where an object with
-    read-only CAI is required.
-    """
-    return cuda_array_interface_wrapper(
-        ptr=cai["data"][0],
-        size=cai["shape"][0],
-        owner=owner,
-        readonly=cai["data"][1],
-        typestr=cai["typestr"],
-        version=cai["version"],
-    )

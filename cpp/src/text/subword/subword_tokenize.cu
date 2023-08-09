@@ -159,17 +159,11 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   uint32_t stride,
                                   bool do_lower_case,
                                   bool do_truncate,
-                                  uint32_t max_rows_tensor,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(stride <= max_sequence_length,
                "stride must be less than or equal to max_sequence_length");
-  CUDF_EXPECTS(
-    max_sequence_length <=
-      (static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()) / max_rows_tensor),
-    "max_sequence_length times max_rows_tensor exceeds the column size limit",
-    std::overflow_error);
   auto const strings_count = strings.size();
   if (strings_count == strings.null_count()) {  // empty or all-null returns empty
     return tokenizer_result{0,
@@ -178,6 +172,11 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                             cudf::make_empty_column(cudf::data_type{cudf::type_id::UINT32}),
                             cudf::make_empty_column(cudf::data_type{cudf::type_id::UINT32})};
   }
+  CUDF_EXPECTS(
+    max_sequence_length <=
+      (static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()) / strings_count),
+    "max_sequence_length times number of input rows exceeds the column size limit",
+    std::overflow_error);
 
   auto const offsets   = strings.offsets();
   auto const d_offsets = offsets.data<uint32_t>() + strings.offset();
@@ -186,7 +185,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
 
   // Create tokenizer
   wordpiece_tokenizer tokenizer(
-    vocab_table, max_rows_tensor, max_sequence_length, stride, do_truncate, do_lower_case);
+    vocab_table, max_sequence_length, stride, do_truncate, do_lower_case);
   // Run tokenizer
   auto const tokens = tokenizer.tokenize(d_chars, d_offsets, strings_count, stream);
   // assign output components
@@ -292,7 +291,6 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   uint32_t stride,
                                   bool do_lower_case,
                                   bool do_truncate,
-                                  uint32_t max_rows_tensor,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -302,7 +300,6 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   stride,
                                   do_lower_case,
                                   do_truncate,
-                                  max_rows_tensor,
                                   cudf::get_default_stream(),
                                   mr);
 }

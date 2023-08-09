@@ -23,7 +23,7 @@
 namespace cudf {
 namespace io {
 namespace parquet {
-const uint8_t CompactProtocolReader::g_list2struct[16] = {0,
+uint8_t const CompactProtocolReader::g_list2struct[16] = {0,
                                                           1,
                                                           2,
                                                           ST_FLD_BYTE,
@@ -90,7 +90,7 @@ struct FunctionSwitchImpl {
   template <typename... Operator>
   static inline bool run(CompactProtocolReader* cpr,
                          int field_type,
-                         const int& field,
+                         int const& field,
                          std::tuple<Operator...>& ops)
   {
     if (field == std::get<index>(ops).field()) {
@@ -106,7 +106,7 @@ struct FunctionSwitchImpl<0> {
   template <typename... Operator>
   static inline bool run(CompactProtocolReader* cpr,
                          int field_type,
-                         const int& field,
+                         int const& field,
                          std::tuple<Operator...>& ops)
   {
     if (field == std::get<0>(ops).field()) {
@@ -245,7 +245,7 @@ bool CompactProtocolReader::read(ColumnChunkMetaData* c)
                             ParquetFieldInt64(9, c->data_page_offset),
                             ParquetFieldInt64(10, c->index_page_offset),
                             ParquetFieldInt64(11, c->dictionary_page_offset),
-                            ParquetFieldStructBlob(12, c->statistics_blob));
+                            ParquetFieldStruct(12, c->statistics));
   return function_builder(this, op);
 }
 

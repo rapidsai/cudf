@@ -83,6 +83,23 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
     assert_eq(expect, got_from_melt_method)
 
 
+def test_melt_many_columns():
+    mydict = {"id": ["foobar"]}
+    for i in range(1, 1942):
+        mydict[f"d_{i}"] = i
+
+    df = pd.DataFrame(mydict)
+    grid_df = pd.melt(df, id_vars=["id"], var_name="d", value_name="sales")
+
+    df_d = cudf.DataFrame(mydict)
+    grid_df_d = cudf.melt(
+        df_d, id_vars=["id"], var_name="d", value_name="sales"
+    )
+    grid_df_d["d"] = grid_df_d["d"].astype("str")
+
+    assert_eq(grid_df, grid_df_d)
+
+
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
 @pytest.mark.parametrize("num_rows", [1, 2, 1000])
 @pytest.mark.parametrize(

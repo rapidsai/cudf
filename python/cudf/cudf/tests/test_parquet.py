@@ -31,6 +31,7 @@ from cudf.testing._utils import (
     TIMEDELTA_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
     set_random_null_mask_inplace,
 )
 
@@ -310,9 +311,12 @@ def test_parquet_reader_strings(tmpdir, strings_to_categorical, has_null):
     assert os.path.exists(fname)
 
     if strings_to_categorical is not None:
-        gdf = cudf.read_parquet(
-            fname, engine="cudf", strings_to_categorical=strings_to_categorical
-        )
+        with expect_warning_if(strings_to_categorical is not False):
+            gdf = cudf.read_parquet(
+                fname,
+                engine="cudf",
+                strings_to_categorical=strings_to_categorical,
+            )
     else:
         gdf = cudf.read_parquet(fname, engine="cudf")
 
@@ -2534,6 +2538,15 @@ def test_parquet_reader_binary_decimal(datadir):
     assert_eq(expect, got)
 
 
+def test_parquet_reader_rle_boolean(datadir):
+    fname = datadir / "rle_boolean_encoding.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname)
+
+    assert_eq(expect, got)
+
+
 # testing a specific bug-fix/edge case.
 # specifically:  int a parquet file containing a particular way of representing
 #                a list column in a schema, the cudf reader was confusing
@@ -2789,3 +2802,30 @@ def test_parquet_writer_schema_nullability(data, force_nullable_schema):
     assert pa.parquet.read_schema(file_obj).field(0).nullable == (
         force_nullable_schema or df.isnull().any().any()
     )
+
+
+def test_parquet_read_filter_and_project():
+    # Filter on columns that are not included
+    # in the current column projection
+
+    with BytesIO() as buffer:
+        # Write parquet data
+        df = cudf.DataFrame(
+            {
+                "a": [1, 2, 3, 4, 5] * 10,
+                "b": [0, 1, 2, 3, 4] * 10,
+                "c": range(50),
+                "d": [6, 7] * 25,
+                "e": [8, 9] * 25,
+            }
+        )
+        df.to_parquet(buffer)
+
+        # Read back with filter and projection
+        columns = ["b"]
+        filters = [[("a", "==", 5), ("c", ">", 20)]]
+        got = cudf.read_parquet(buffer, columns=columns, filters=filters)
+
+    # Check result
+    expected = df[(df.a == 5) & (df.c > 20)][columns].reset_index(drop=True)
+    assert_eq(got, expected)

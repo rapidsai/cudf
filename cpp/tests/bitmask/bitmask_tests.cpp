@@ -582,7 +582,7 @@ TEST_F(CopyBitmaskTest, TestZeroOffset)
     validity_bit.begin() + begin_bit, validity_bit.begin() + end_bit));
 
   auto splice_mask = cudf::copy_bitmask(
-    static_cast<const cudf::bitmask_type*>(input_mask.data()), begin_bit, end_bit);
+    static_cast<cudf::bitmask_type const*>(input_mask.data()), begin_bit, end_bit);
 
   cleanEndWord(splice_mask, begin_bit, end_bit);
   auto number_of_bits = end_bit - begin_bit;
@@ -605,7 +605,7 @@ TEST_F(CopyBitmaskTest, TestNonZeroOffset)
     validity_bit.begin() + begin_bit, validity_bit.begin() + end_bit));
 
   auto splice_mask = cudf::copy_bitmask(
-    static_cast<const cudf::bitmask_type*>(input_mask.data()), begin_bit, end_bit);
+    static_cast<cudf::bitmask_type const*>(input_mask.data()), begin_bit, end_bit);
 
   cleanEndWord(splice_mask, begin_bit, end_bit);
   auto number_of_bits = end_bit - begin_bit;

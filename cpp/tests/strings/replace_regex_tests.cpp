@@ -31,7 +31,7 @@ struct StringsReplaceRegexTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsReplaceRegexTest, ReplaceRegexTest)
 {
-  std::vector<const char*> h_strings{"the quick brown fox jumps over the lazy dog",
+  std::vector<char const*> h_strings{"the quick brown fox jumps over the lazy dog",
                                      "the fat cat lays next to the other accénted cat",
                                      "a slow moving turtlé cannot catch the bird",
                                      "which can be composéd together to form a more complete",
@@ -43,7 +43,7 @@ TEST_F(StringsReplaceRegexTest, ReplaceRegexTest)
     h_strings.begin(), h_strings.end(), cudf::test::iterators::nulls_from_nullptrs(h_strings));
   auto strings_view = cudf::strings_column_view(strings);
 
-  std::vector<const char*> h_expected{"= quick brown fox jumps over = lazy dog",
+  std::vector<char const*> h_expected{"= quick brown fox jumps over = lazy dog",
                                       "= fat cat lays next to = other accénted cat",
                                       "a slow moving turtlé cannot catch = bird",
                                       "which can be composéd together to form a more complete",
@@ -62,7 +62,7 @@ TEST_F(StringsReplaceRegexTest, ReplaceRegexTest)
 
 TEST_F(StringsReplaceRegexTest, ReplaceMultiRegexTest)
 {
-  std::vector<const char*> h_strings{"the quick brown fox jumps over the lazy dog",
+  std::vector<char const*> h_strings{"the quick brown fox jumps over the lazy dog",
                                      "the fat cat lays next to the other accénted cat",
                                      "a slow moving turtlé cannot catch the bird",
                                      "which can be composéd together to form a more complete",
@@ -74,7 +74,7 @@ TEST_F(StringsReplaceRegexTest, ReplaceMultiRegexTest)
     h_strings.begin(), h_strings.end(), cudf::test::iterators::nulls_from_nullptrs(h_strings));
   auto strings_view = cudf::strings_column_view(strings);
 
-  std::vector<const char*> h_expected{" quick brown fox jumps over  lazy dog",
+  std::vector<char const*> h_expected{" quick brown fox jumps over  lazy dog",
                                       " fat cat lays next to  other accénted cat",
                                       "** slow moving turtlé cannot catch  bird",
                                       "which can be composéd together to form ** more complete",
@@ -105,7 +105,7 @@ TEST_F(StringsReplaceRegexTest, InvalidRegex)
 
 TEST_F(StringsReplaceRegexTest, WithEmptyPattern)
 {
-  std::vector<const char*> h_strings{"asd", "xcv"};
+  std::vector<char const*> h_strings{"asd", "xcv"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(), h_strings.end(), cudf::test::iterators::nulls_from_nullptrs(h_strings));
   auto strings_view = cudf::strings_column_view(strings);
@@ -247,7 +247,7 @@ TEST_F(StringsReplaceRegexTest, Multiline)
 
 TEST_F(StringsReplaceRegexTest, ReplaceBackrefsRegexTest)
 {
-  std::vector<const char*> h_strings{"the quick brown fox jumps over the lazy dog",
+  std::vector<char const*> h_strings{"the quick brown fox jumps over the lazy dog",
                                      "the fat cat lays next to the other accénted cat",
                                      "a slow moving turtlé cannot catch the bird",
                                      "which can be composéd together to form a more complete",
@@ -259,7 +259,7 @@ TEST_F(StringsReplaceRegexTest, ReplaceBackrefsRegexTest)
     h_strings.begin(), h_strings.end(), cudf::test::iterators::nulls_from_nullptrs(h_strings));
   auto sv = cudf::strings_column_view(strings);
 
-  std::vector<const char*> h_expected{"the-quick-brown-fox-jumps-over-the-lazy-dog",
+  std::vector<char const*> h_expected{"the-quick-brown-fox-jumps-over-the-lazy-dog",
                                       "the-fat-cat-lays-next-to-the-other-accénted-cat",
                                       "a-slow-moving-turtlé-cannot-catch-the-bird",
                                       "which-can-be-composéd-together-to-form-a more-complete",
@@ -391,7 +391,7 @@ TEST_F(StringsReplaceRegexTest, MediumReplaceRegex)
     "http://www.world.com";
   auto prog = cudf::strings::regex_program::create(medium_regex);
 
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "hello @abc @def world The quick brown @fox jumps over the lazy @dog hello "
     "http://www.world.com thats all",
     "12345678901234567890",
@@ -403,7 +403,7 @@ TEST_F(StringsReplaceRegexTest, MediumReplaceRegex)
 
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::replace_re(strings_view, *prog);
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     " thats all", "12345678901234567890", "abcdefghijklmnopqrstuvwxyz"};
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
@@ -420,7 +420,7 @@ TEST_F(StringsReplaceRegexTest, LargeReplaceRegex)
     "http://www.world.com I'm here @home zzzz";
   auto prog = cudf::strings::regex_program::create(large_regex);
 
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "zzzz hello @abc @def world The quick brown @fox jumps over the lazy @dog hello "
     "http://www.world.com I'm here @home zzzz",
     "12345678901234567890",
@@ -432,7 +432,7 @@ TEST_F(StringsReplaceRegexTest, LargeReplaceRegex)
 
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::replace_re(strings_view, *prog);
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "zzzz ", "12345678901234567890", "abcdefghijklmnopqrstuvwxyz"};
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),

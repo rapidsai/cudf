@@ -202,9 +202,9 @@ struct compound_op : public simple_op<Derived> {
    * @return transformed output result of compound operator
    */
   template <typename ResultType, typename IntermediateType>
-  CUDF_HOST_DEVICE inline static ResultType compute_result(const IntermediateType& input,
-                                                           const cudf::size_type& count,
-                                                           const cudf::size_type& ddof)
+  CUDF_HOST_DEVICE inline static ResultType compute_result(IntermediateType const& input,
+                                                           cudf::size_type const& count,
+                                                           cudf::size_type const& ddof)
   {
     // Enforced interface
     return Derived::template intermediate<ResultType>::compute_result(input, count, ddof);
@@ -231,9 +231,9 @@ struct mean : public compound_op<mean> {
     using IntermediateType = ResultType;  // sum value
 
     // compute `mean` from intermediate type `IntermediateType`
-    CUDF_HOST_DEVICE inline static ResultType compute_result(const IntermediateType& input,
-                                                             const cudf::size_type& count,
-                                                             const cudf::size_type& ddof)
+    CUDF_HOST_DEVICE inline static ResultType compute_result(IntermediateType const& input,
+                                                             cudf::size_type const& count,
+                                                             cudf::size_type const& ddof)
     {
       return (input / count);
     };
@@ -252,9 +252,9 @@ struct variance : public compound_op<variance> {
     using IntermediateType = var_std<ResultType>;  // with sum of value, and sum of squared value
 
     // compute `variance` from intermediate type `IntermediateType`
-    CUDF_HOST_DEVICE inline static ResultType compute_result(const IntermediateType& input,
-                                                             const cudf::size_type& count,
-                                                             const cudf::size_type& ddof)
+    CUDF_HOST_DEVICE inline static ResultType compute_result(IntermediateType const& input,
+                                                             cudf::size_type const& count,
+                                                             cudf::size_type const& ddof)
     {
       ResultType mean     = input.value / count;
       ResultType asum     = input.value_squared;
@@ -278,9 +278,9 @@ struct standard_deviation : public compound_op<standard_deviation> {
     using IntermediateType = var_std<ResultType>;  // with sum of value, and sum of squared value
 
     // compute `standard deviation` from intermediate type `IntermediateType`
-    CUDF_HOST_DEVICE inline static ResultType compute_result(const IntermediateType& input,
-                                                             const cudf::size_type& count,
-                                                             const cudf::size_type& ddof)
+    CUDF_HOST_DEVICE inline static ResultType compute_result(IntermediateType const& input,
+                                                             cudf::size_type const& count,
+                                                             cudf::size_type const& ddof)
     {
       using intermediateOp = variance::template intermediate<ResultType>;
       ResultType var       = intermediateOp::compute_result(input, count, ddof);

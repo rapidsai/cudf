@@ -126,7 +126,7 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
                "Unsupported list type in grouped rank scan.");
   auto const& rank_agg         = dynamic_cast<cudf::detail::rank_aggregation const&>(agg);
   auto const& group_labels     = helper.group_labels(stream);
-  auto const group_labels_view = column_view(cudf::device_span<const size_type>(group_labels));
+  auto const group_labels_view = column_view(cudf::device_span<size_type const>(group_labels));
   auto const gather_map        = [&]() {
     if (is_presorted()) {  // assumes both keys and values are sorted, Spark does this.
       return cudf::detail::sequence(group_labels.size(),

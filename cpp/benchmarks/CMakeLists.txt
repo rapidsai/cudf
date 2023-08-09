@@ -224,7 +224,8 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * hashing benchmark -----------------------------------------------------------------------------
-ConfigureBench(HASHING_BENCH hashing/hash.cpp hashing/partition.cpp)
+ConfigureBench(HASHING_BENCH hashing/partition.cpp)
+ConfigureNVBench(HASHING_NVBENCH hashing/hash.cpp)
 
 # ##################################################################################################
 # * merge benchmark -------------------------------------------------------------------------------
@@ -275,7 +276,8 @@ ConfigureBench(BINARYOP_BENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.c
 ConfigureBench(TEXT_BENCH text/ngrams.cpp text/subword.cpp)
 
 ConfigureNVBench(
-  TEXT_NVBENCH text/minhash.cpp text/normalize.cpp text/replace.cpp text/tokenize.cpp
+  TEXT_NVBENCH text/hash_ngrams.cpp text/jaccard.cpp text/minhash.cpp text/normalize.cpp
+  text/replace.cpp text/tokenize.cpp
 )
 
 # ##################################################################################################
@@ -283,28 +285,36 @@ ConfigureNVBench(
 ConfigureBench(
   STRINGS_BENCH
   string/combine.cpp
-  string/contains.cpp
   string/convert_datetime.cpp
   string/convert_durations.cpp
   string/convert_fixed_point.cpp
   string/convert_numerics.cpp
   string/copy.cu
-  string/extract.cpp
   string/factory.cu
   string/filter.cpp
   string/find.cpp
   string/repeat_strings.cpp
   string/replace.cpp
-  string/replace_re.cpp
   string/slice.cpp
-  string/split.cpp
   string/translate.cpp
   string/url_decode.cu
 )
 
 ConfigureNVBench(
-  STRINGS_NVBENCH string/case.cpp string/char_types.cpp string/join_strings.cpp string/lengths.cpp
-  string/like.cpp string/reverse.cpp
+  STRINGS_NVBENCH
+  string/case.cpp
+  string/char_types.cpp
+  string/contains.cpp
+  string/count.cpp
+  string/extract.cpp
+  string/gather.cpp
+  string/join_strings.cpp
+  string/lengths.cpp
+  string/like.cpp
+  string/replace_re.cpp
+  string/reverse.cpp
+  string/split.cpp
+  string/split_re.cpp
 )
 
 # ##################################################################################################

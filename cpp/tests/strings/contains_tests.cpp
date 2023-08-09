@@ -35,7 +35,7 @@ struct StringsContainsTests : public cudf::test::BaseFixture {};
 
 TEST_F(StringsContainsTests, ContainsTest)
 {
-  std::vector<const char*> h_strings{"5",
+  std::vector<char const*> h_strings{"5",
                                      "hej",
                                      "\t \n",
                                      "12345",
@@ -154,7 +154,7 @@ TEST_F(StringsContainsTests, ContainsTest)
 
 TEST_F(StringsContainsTests, MatchesTest)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "The quick brown @fox jumps", "ovér the", "lazy @dog", "1234", "00:0:00", nullptr, ""};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -380,7 +380,7 @@ TEST_F(StringsContainsTests, Errors)
 
 TEST_F(StringsContainsTests, CountTest)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "The quick brown @fox jumps ovér the", "lazy @dog", "1:2:3:4", "00:0:00", nullptr, ""};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(), h_strings.end(), cudf::test::iterators::nulls_from_nullptrs(h_strings));
@@ -713,7 +713,7 @@ TEST_F(StringsContainsTests, MediumRegex)
     "http://www.world.com";
   auto prog = cudf::strings::regex_program::create(medium_regex);
 
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "hello @abc @def world The quick brown @fox jumps over the lazy @dog hello "
     "http://www.world.com thats all",
     "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234"
@@ -754,7 +754,7 @@ TEST_F(StringsContainsTests, LargeRegex)
     "http://www.world.com I'm here @home zzzz";
   auto prog = cudf::strings::regex_program::create(large_regex);
 
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "hello @abc @def world The quick brown @fox jumps over the lazy @dog hello "
     "http://www.world.com I'm here @home zzzz",
     "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234"

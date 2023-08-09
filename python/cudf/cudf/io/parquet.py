@@ -1,6 +1,7 @@
 # Copyright (c) 2019-2023, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import itertools
 import math
 import operator
 import shutil
@@ -448,6 +449,12 @@ def read_parquet(
 ):
     """{docstring}"""
 
+    if strings_to_categorical is not False:
+        warnings.warn(
+            "`strings_to_categorical` is deprecated and will be removed in "
+            "a future version of cudf.",
+            FutureWarning,
+        )
     # Do not allow the user to set file-opening options
     # when `use_python_file_object=False` is specified
     if use_python_file_object is False:
@@ -552,6 +559,18 @@ def read_parquet(
                 "for full CPU-based filtering functionality."
             )
 
+    # Make sure we read in the columns needed for row-wise
+    # filtering after IO. This means that one or more columns
+    # will be dropped almost immediately after IO. However,
+    # we do NEED these columns for accurate filtering.
+    projected_columns = None
+    if columns and filters:
+        projected_columns = columns
+        columns = sorted(
+            set(v[0] for v in itertools.chain.from_iterable(filters))
+            | set(columns)
+        )
+
     # Convert parquet data to a cudf.DataFrame
     df = _parquet_to_frame(
         filepaths_or_buffers,
@@ -568,7 +587,15 @@ def read_parquet(
     )
 
     # Apply filters row-wise (if any are defined), and return
-    return _apply_post_filters(df, filters)
+    df = _apply_post_filters(df, filters)
+    if projected_columns:
+        # Elements of `projected_columns` may now be in the index.
+        # We must filter these names from our projection
+        projected_columns = [
+            col for col in projected_columns if col in df._column_names
+        ]
+        return df[projected_columns]
+    return df
 
 
 def _normalize_filters(filters: list | None) -> List[List[tuple]] | None:

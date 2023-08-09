@@ -169,6 +169,11 @@ row_groups : int, or list, or a list of lists default None
 strings_to_categorical : boolean, default False
     If True, return string columns as GDF_CATEGORY dtype; if False, return a
     as GDF_STRING dtype.
+
+    .. deprecated:: 23.08
+
+        This parameter is deprecated and will be removed in a future
+        version of cudf.
 categorical_partitions : boolean, default True
     Whether directory-partitioned columns should be interpreted as categorical
     or raw dtypes.
@@ -1229,15 +1234,8 @@ encoding : str, default 'utf-8'
     A string representing the encoding to use in the output file
     Only 'utf-8' is currently supported
 compression : str, None
-    A string representing the compression scheme to use in the the output file
+    A string representing the compression scheme to use in the output file
     Compression while writing csv is not supported currently
-line_terminator : str, optional
-
-    .. deprecated:: 23.04
-
-        Replaced with ``lineterminator`` for consistency with
-        :meth:`cudf.read_csv` and :meth:`pandas.DataFrame.to_csv`
-
 lineterminator : str, optional
     The newline character or character sequence to use in the output file.
     Defaults to :data:`os.linesep`.

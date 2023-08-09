@@ -67,7 +67,7 @@ inline trie_view make_trie_view(optional_trie const& t)
  *
  * @return A host vector of nodes representing the serialized trie
  */
-trie create_serialized_trie(const std::vector<std::string>& keys, rmm::cuda_stream_view stream);
+trie create_serialized_trie(std::vector<std::string> const& keys, rmm::cuda_stream_view stream);
 
 /*
  * @brief Searches for a string in a serialized trie.

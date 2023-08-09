@@ -32,7 +32,7 @@ class CharsTypes : public StringsCharsTest,
 
 TEST_P(CharsTypes, AllTypes)
 {
-  std::vector<const char*> h_strings{"Héllo",
+  std::vector<char const*> h_strings{"Héllo",
                                      "thesé",
                                      nullptr,
                                      "HERE",
@@ -121,7 +121,7 @@ TEST_F(StringsCharsTest, LowerUpper)
 
 TEST_F(StringsCharsTest, Alphanumeric)
 {
-  std::vector<const char*> h_strings{"Héllo",
+  std::vector<char const*> h_strings{"Héllo",
                                      "thesé",
                                      nullptr,
                                      "HERE",
@@ -157,7 +157,7 @@ TEST_F(StringsCharsTest, Alphanumeric)
 
 TEST_F(StringsCharsTest, AlphaNumericSpace)
 {
-  std::vector<const char*> h_strings{"Héllo",
+  std::vector<char const*> h_strings{"Héllo",
                                      "thesé",
                                      nullptr,
                                      "HERE",
@@ -195,7 +195,7 @@ TEST_F(StringsCharsTest, AlphaNumericSpace)
 
 TEST_F(StringsCharsTest, Numerics)
 {
-  std::vector<const char*> h_strings{"Héllo",
+  std::vector<char const*> h_strings{"Héllo",
                                      "thesé",
                                      nullptr,
                                      "HERE",

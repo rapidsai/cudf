@@ -58,7 +58,7 @@ namespace {
  */
 struct normalize_spaces_fn {
   cudf::column_device_view const d_strings;  // strings to normalize
-  int32_t* d_offsets{};                      // offsets into d_buffer
+  cudf::size_type* d_offsets{};              // offsets into d_chars
   char* d_chars{};                           // output buffer for characters
 
   __device__ void operator()(cudf::size_type idx)
@@ -70,8 +70,9 @@ struct normalize_spaces_fn {
     cudf::string_view const single_space(" ", 1);
     auto const d_str = d_strings.element<cudf::string_view>(idx);
     char* buffer     = d_chars ? d_chars + d_offsets[idx] : nullptr;
-    char* optr       = buffer;  // running output pointer
-    int32_t nbytes   = 0;       // holds the number of bytes per output string
+    char* optr       = buffer;   // running output pointer
+
+    cudf::size_type nbytes = 0;  // holds the number of bytes per output string
 
     // create a tokenizer for this string with whitespace delimiter (default)
     characters_tokenizer tokenizer(d_str);
@@ -79,15 +80,16 @@ struct normalize_spaces_fn {
     // this will retrieve tokens automatically skipping runs of whitespace
     while (tokenizer.next_token()) {
       auto const token_pos = tokenizer.token_byte_positions();
-      nbytes += token_pos.second - token_pos.first + 1;  // token size plus a single space
+      auto const token =
+        cudf::string_view(d_str.data() + token_pos.first, token_pos.second - token_pos.first);
       if (optr) {
-        cudf::string_view const token(d_str.data() + token_pos.first,
-                                      token_pos.second - token_pos.first);
-        if (optr != buffer)  // prepend space unless we are at the beginning
-          optr = cudf::strings::detail::copy_string(optr, single_space);
+        // prepend space unless we are at the beginning
+        if (optr != buffer) { optr = cudf::strings::detail::copy_string(optr, single_space); }
         // write token to output buffer
-        optr = cudf::strings::detail::copy_string(optr, token);
+        thrust::copy_n(thrust::seq, token.data(), token.size_bytes(), optr);
+        optr += token.size_bytes();
       }
+      nbytes += token.size_bytes() + 1;  // token size plus a single space
     }
     // remove trailing space
     if (!d_chars) d_offsets[idx] = (nbytes > 0) ? nbytes - 1 : 0;

@@ -30,7 +30,7 @@ struct StringsAttributesTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsAttributesTest, CodePoints)
 {
-  std::vector<const char*> h_strings{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
+  std::vector<char const*> h_strings{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
@@ -63,7 +63,7 @@ TEST_F(StringsAttributesTest, ZeroSizeStringsColumn)
 
 TEST_F(StringsAttributesTest, StringsLengths)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "eee", "bb", nullptr, "", "aa", "ééé", "something a bit longer than 32 bytes"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),

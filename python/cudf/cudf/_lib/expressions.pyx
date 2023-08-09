@@ -5,6 +5,7 @@ from enum import Enum
 from cython.operator cimport dereference
 from libc.stdint cimport int64_t
 from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.string cimport string
 
 from cudf._lib.cpp cimport expressions as libcudf_exp
 from cudf._lib.cpp.types cimport size_type
@@ -104,11 +105,6 @@ cdef class ColumnReference(Expression):
 
 cdef class Operation(Expression):
     def __cinit__(self, op, Expression left, Expression right=None):
-        # This awkward double casting is the only way to get Cython to generate
-        # valid C++. Cython doesn't support scoped enumerations, so it assumes
-        # that enums correspond to their underlying value types and will thus
-        # attempt operations that are invalid without first explicitly casting
-        # to the underlying before casting to the desired type.
         cdef libcudf_exp.ast_operator op_value = <libcudf_exp.ast_operator>(
             <underlying_type_ast_operator> op.value
         )
@@ -121,3 +117,8 @@ cdef class Operation(Expression):
             self.c_obj = <expression_ptr> make_unique[libcudf_exp.operation](
                 op_value, dereference(left.c_obj), dereference(right.c_obj)
             )
+
+cdef class ColumnNameReference(Expression):
+    def __cinit__(self, string name):
+        self.c_obj = <expression_ptr> \
+            make_unique[libcudf_exp.column_name_reference](name)

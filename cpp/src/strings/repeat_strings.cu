@@ -63,7 +63,7 @@ std::unique_ptr<string_scalar> repeat_string(string_scalar const& input,
                     iter,
                     iter + repeat_times * str_size,
                     static_cast<char*>(buff.data()),
-                    [in_ptr = input.data(), str_size] __device__(const auto idx) {
+                    [in_ptr = input.data(), str_size] __device__(auto const idx) {
                       return in_ptr[idx % str_size];
                     });
 

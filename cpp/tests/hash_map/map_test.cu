@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,10 +68,7 @@ struct InsertTest : public cudf::test::BaseFixture {
 
 using TestTypes = ::testing::Types<key_value_types<int32_t, int32_t>,
                                    key_value_types<int64_t, int64_t>,
-                                   key_value_types<int8_t, int8_t>,
                                    key_value_types<int16_t, int16_t>,
-                                   key_value_types<int8_t, float>,
-                                   key_value_types<int16_t, double>,
                                    key_value_types<int32_t, float>,
                                    key_value_types<int64_t, double>>;
 

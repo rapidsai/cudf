@@ -77,7 +77,7 @@ class row_is_valid {
  public:
   row_is_valid(bitmask_type const* row_bitmask) : _row_bitmask{row_bitmask} {}
 
-  __device__ __inline__ bool operator()(const size_type& i) const noexcept
+  __device__ __inline__ bool operator()(size_type const& i) const noexcept
   {
     return cudf::bit_is_set(_row_bitmask, i);
   }
@@ -254,9 +254,9 @@ get_left_join_indices_complement(std::unique_ptr<rmm::device_uvector<size_type>>
 template <typename T>
 struct valid_range {
   T start, stop;
-  __host__ __device__ valid_range(const T begin, const T end) : start(begin), stop(end) {}
+  __host__ __device__ valid_range(T const begin, T const end) : start(begin), stop(end) {}
 
-  __host__ __device__ __forceinline__ bool operator()(const T index)
+  __host__ __device__ __forceinline__ bool operator()(T const index)
   {
     return ((index >= start) && (index < stop));
   }
@@ -273,10 +273,10 @@ struct valid_range {
  * @param[out] joined_shared_l Pointer to the shared memory cache for left indices
  * @param[out] joined_shared_r Pointer to the shared memory cache for right indices
  */
-__inline__ __device__ void add_pair_to_cache(const size_type first,
-                                             const size_type second,
+__inline__ __device__ void add_pair_to_cache(size_type const first,
+                                             size_type const second,
                                              size_type* current_idx_shared,
-                                             const int warp_id,
+                                             int const warp_id,
                                              size_type* joined_shared_l,
                                              size_type* joined_shared_r)
 {
@@ -288,10 +288,10 @@ __inline__ __device__ void add_pair_to_cache(const size_type first,
 }
 
 template <int num_warps, cudf::size_type output_cache_size>
-__device__ void flush_output_cache(const unsigned int activemask,
-                                   const cudf::size_type max_size,
-                                   const int warp_id,
-                                   const int lane_id,
+__device__ void flush_output_cache(unsigned int const activemask,
+                                   cudf::size_type const max_size,
+                                   int const warp_id,
+                                   int const lane_id,
                                    cudf::size_type* current_idx,
                                    cudf::size_type current_idx_shared[num_warps],
                                    size_type join_shared_l[num_warps][output_cache_size],

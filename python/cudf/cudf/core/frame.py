@@ -43,7 +43,11 @@ from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type
-from cudf.utils.utils import _array_ufunc, _cudf_nvtx_annotate
+from cudf.utils.utils import (
+    _array_ufunc,
+    _cudf_nvtx_annotate,
+    _warn_no_dask_cudf,
+)
 
 
 # TODO: It looks like Frame is missing a declaration of `copy`, need to add
@@ -1563,8 +1567,10 @@ class Frame(BinaryOperand, Scannable):
         ).values
 
     def _get_sorted_inds(self, by=None, ascending=True, na_position="last"):
-        # Get an int64 column consisting of the indices required to sort self
-        # according to the columns specified in by.
+        """
+        Get the indices required to sort self according to the columns
+        specified in by.
+        """
 
         to_sort = [
             *(
@@ -1578,7 +1584,12 @@ class Frame(BinaryOperand, Scannable):
         if np.isscalar(ascending):
             ascending = [ascending] * len(to_sort)
 
-        return libcudf.sort.order_by(to_sort, ascending, na_position)
+        return libcudf.sort.order_by(
+            to_sort,
+            ascending,
+            na_position,
+            stable=True,
+        )
 
     @_cudf_nvtx_annotate
     def abs(self):
@@ -2477,35 +2488,6 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @_cudf_nvtx_annotate
-    def sum_of_squares(self, dtype=None):
-        """Return the sum of squares of values.
-
-        Parameters
-        ----------
-        dtype: data type
-            Data type to cast the result to.
-
-        Returns
-        -------
-        Series
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [3, 2, 3, 4], 'b': [7, 0, 10, 10]})
-        >>> df.sum_of_squares()
-        a     38
-        b    249
-        dtype: int64
-        """
-        warnings.warn(
-            f"Support for {self.__class__}.sum_of_squares is deprecated and "
-            "will be removed",
-            FutureWarning,
-        )
-        return self._reduce("sum_of_squares", dtype=dtype)
-
-    @_cudf_nvtx_annotate
     def median(
         self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
     ):
@@ -2831,6 +2813,14 @@ class Frame(BinaryOperand, Scannable):
             repeats = as_column(repeats)
 
         return libcudf.filling.repeat(columns, repeats)
+
+    @_warn_no_dask_cudf
+    def __dask_tokenize__(self):
+        return [
+            type(self),
+            self._dtypes,
+            self.to_pandas(),
+        ]
 
 
 def _apply_inverse_column(col: ColumnBase) -> ColumnBase:

@@ -659,7 +659,7 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
  * clustering information.
  *
  * This function is effectively just a reduce_by_key that performs a reduction
- * from input values -> centroid clusters as defined by the the cluster weight
+ * from input values -> centroid clusters as defined by the cluster weight
  * boundaries.
  *
  * @param delta              tdigest compression level

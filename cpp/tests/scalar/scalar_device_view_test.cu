@@ -114,7 +114,7 @@ TYPED_TEST(TypedScalarDeviceViewTest, SetNull)
 struct StringScalarDeviceViewTest : public cudf::test::BaseFixture {};
 
 __global__ void test_string_value(cudf::string_scalar_device_view s,
-                                  const char* value,
+                                  char const* value,
                                   cudf::size_type size,
                                   bool* result)
 {

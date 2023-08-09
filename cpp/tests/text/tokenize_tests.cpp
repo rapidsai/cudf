@@ -31,7 +31,7 @@ struct TextTokenizeTest : public cudf::test::BaseFixture {};
 
 TEST_F(TextTokenizeTest, Tokenize)
 {
-  std::vector<const char*> h_strings{"the fox jumped over the dog",
+  std::vector<char const*> h_strings{"the fox jumped over the dog",
                                      "the dog chased  the cat",
                                      " the cat chased the mouse ",
                                      nullptr,
@@ -62,7 +62,7 @@ TEST_F(TextTokenizeTest, Tokenize)
 
 TEST_F(TextTokenizeTest, TokenizeMulti)
 {
-  std::vector<const char*> h_strings{"the fox jumped over the dog",
+  std::vector<char const*> h_strings{"the fox jumped over the dog",
                                      "the dog chased  the cat",
                                      "the cat chased the mouse ",
                                      nullptr,
@@ -109,7 +109,7 @@ TEST_F(TextTokenizeTest, TokenizeErrorTest)
 
 TEST_F(TextTokenizeTest, CharacterTokenize)
 {
-  std::vector<const char*> h_strings{"the mousé ate the cheese", nullptr, ""};
+  std::vector<char const*> h_strings{"the mousé ate the cheese", nullptr, ""};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),

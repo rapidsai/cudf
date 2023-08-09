@@ -196,7 +196,7 @@ class user_sink_wrapper : public data_sink {
   cudf::io::data_sink* const user_sink;
 };
 
-std::unique_ptr<data_sink> data_sink::create(const std::string& filepath)
+std::unique_ptr<data_sink> data_sink::create(std::string const& filepath)
 {
   return std::make_unique<file_sink>(filepath);
 }

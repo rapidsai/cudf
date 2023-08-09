@@ -61,7 +61,7 @@ namespace {
  * Memory required is 13 bytes per code point values:
  * - 4 bytes each for `start_word_indices` and `end_word_indices`
  * - 4 bytes for each `token_ids`
- * - 1 byte for each each `tokens_per_word`
+ * - 1 byte for each `tokens_per_word`
  * Also, there is a code point value for each byte in the input strings.
  *
  * @param[in] code_points A pointer to the code points in the strings after normalization.
@@ -397,7 +397,6 @@ __global__ void kernel_wordpiece_tokenizer(uint32_t const* code_points,
 }  // namespace
 
 wordpiece_tokenizer::wordpiece_tokenizer(hashed_vocabulary const& vocab_table,
-                                         uint32_t max_rows_final_tensor,
                                          uint32_t max_sequence_length,
                                          uint32_t stride,
                                          bool do_truncate,
@@ -439,8 +438,8 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
   uint32_t* device_strings_offsets = cps_and_offsets.second->data();
   uint32_t const num_strings       = cps_and_offsets.second->size() - 1;
 
-  const size_t four_byte_cp_chunks = 1 + (num_code_points - 1) / sizeof(uint32_t);
-  const size_t rounded_num_cps     = sizeof(uint32_t) * four_byte_cp_chunks;
+  size_t const four_byte_cp_chunks = 1 + (num_code_points - 1) / sizeof(uint32_t);
+  size_t const rounded_num_cps     = sizeof(uint32_t) * four_byte_cp_chunks;
   rmm::device_uvector<uint8_t> device_tokens_per_word(rounded_num_cps, stream);
   rmm::device_uvector<uint32_t> device_token_ids(num_code_points, stream);
   rmm::device_uvector<uint32_t> device_word_indices(2 * num_code_points, stream);

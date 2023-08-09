@@ -70,12 +70,12 @@ cudf::test::TempDirTestEnvironment* const temp_env =
     ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
 template <typename T>
-std::vector<std::string> prepend_zeros(const std::vector<T>& input,
+std::vector<std::string> prepend_zeros(std::vector<T> const& input,
                                        int zero_count         = 0,
                                        bool add_positive_sign = false)
 {
   std::vector<std::string> output(input.size());
-  std::transform(input.begin(), input.end(), output.begin(), [=](const T& num) {
+  std::transform(input.begin(), input.end(), output.begin(), [=](T const& num) {
     auto str         = std::to_string(num);
     bool is_negative = (str[0] == '-');
     if (is_negative) {
@@ -92,12 +92,12 @@ std::vector<std::string> prepend_zeros(const std::vector<T>& input,
 }
 
 template <>
-std::vector<std::string> prepend_zeros<std::string>(const std::vector<std::string>& input,
+std::vector<std::string> prepend_zeros<std::string>(std::vector<std::string> const& input,
                                                     int zero_count,
                                                     bool add_positive_sign)
 {
   std::vector<std::string> output(input.size());
-  std::transform(input.begin(), input.end(), output.begin(), [=](const std::string& num) {
+  std::transform(input.begin(), input.end(), output.begin(), [=](std::string const& num) {
     auto str         = num;
     bool is_negative = (str[0] == '-');
     if (is_negative) {
@@ -199,6 +199,12 @@ struct JsonReaderDualTest : public cudf::test::BaseFixture,
                             public testing::WithParamInterface<json_test_t> {};
 
 /**
+ * @brief Test fixture for parametrized JSON reader tests that only tests the new nested JSON reader
+ */
+struct JsonReaderNoLegacy : public cudf::test::BaseFixture,
+                            public testing::WithParamInterface<json_test_t> {};
+
+/**
  * @brief Generates a JSON lines string that uses the record orient
  *
  * @param records An array of a map of key-value pairs
@@ -245,7 +251,7 @@ struct JsonValidFixedPointReaderTest : public JsonFixedPointReaderTest<DecimalTy
       std::accumulate(reference_strings.begin(),
                       reference_strings.end(),
                       std::string{},
-                      [](const std::string& acc, const std::string& rhs) {
+                      [](std::string const& acc, std::string const& rhs) {
                         return acc + (acc.empty() ? "" : "\n") + "{\"col0\":" + rhs + "}";
                       });
     cudf::io::json_reader_options const in_opts =
@@ -285,6 +291,12 @@ INSTANTIATE_TEST_CASE_P(JsonReaderParamTest,
 INSTANTIATE_TEST_CASE_P(JsonReaderDualTest,
                         JsonReaderDualTest,
                         ::testing::Values(json_test_t::legacy_lines_record_orient,
+                                          json_test_t::json_experimental_record_orient));
+
+// Parametrize qualifying JSON tests for executing nested reader only
+INSTANTIATE_TEST_CASE_P(JsonReaderNoLegacy,
+                        JsonReaderNoLegacy,
+                        ::testing::Values(json_test_t::json_experimental_row_orient,
                                           json_test_t::json_experimental_record_orient));
 
 TEST_P(JsonReaderParamTest, BasicJsonLines)
@@ -359,7 +371,7 @@ TEST_P(JsonReaderParamTest, FloatingPoint)
     float_wrapper{{5.6, 56.79, 12000000000., 0.7, 3.000, 12.34, 0.31, -73.98007199999998},
                   validity});
 
-  const auto bitmask = cudf::test::bitmask_to_host(result.tbl->get_column(0));
+  auto const bitmask = cudf::test::bitmask_to_host(result.tbl->get_column(0));
   ASSERT_EQ((1u << result.tbl->get_column(0).size()) - 1, bitmask[0]);
 }
 
@@ -453,7 +465,7 @@ TEST_P(JsonReaderParamTest, MultiColumn)
 
   auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
-  const auto view = result.tbl->view();
+  auto const view = result.tbl->view();
 
   EXPECT_EQ(view.num_columns(), 6);
   EXPECT_EQ(view.column(0).type().id(), cudf::type_id::INT8);
@@ -504,7 +516,7 @@ TEST_P(JsonReaderParamTest, Booleans)
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
   // Booleans are the same (integer) data type, but valued at 0 or 1
-  const auto view = result.tbl->view();
+  auto const view = result.tbl->view();
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::BOOL8);
 
@@ -549,7 +561,7 @@ TEST_P(JsonReaderParamTest, Dates)
       .legacy(is_legacy_test(test_opt));
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
-  const auto view = result.tbl->view();
+  auto const view = result.tbl->view();
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::TIMESTAMP_MILLISECONDS);
 
@@ -605,7 +617,7 @@ TEST_P(JsonReaderParamTest, Durations)
       .legacy(is_legacy_test(test_opt));
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
-  const auto view = result.tbl->view();
+  auto const view = result.tbl->view();
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::DURATION_NANOSECONDS);
 
@@ -877,7 +889,7 @@ TEST_F(JsonReaderTest, EmptyFile)
     cudf::io::json_reader_options::builder(cudf::io::source_info{filepath}).lines(true);
   auto result = cudf::io::read_json(in_options);
 
-  const auto view = result.tbl->view();
+  auto const view = result.tbl->view();
   EXPECT_EQ(0, view.num_columns());
 }
 
@@ -894,7 +906,7 @@ TEST_F(JsonReaderTest, NoDataFile)
     cudf::io::json_reader_options::builder(cudf::io::source_info{filepath}).lines(true);
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
-  const auto view = result.tbl->view();
+  auto const view = result.tbl->view();
   EXPECT_EQ(0, view.num_columns());
 }
 
@@ -911,7 +923,7 @@ TEST_F(JsonReaderTest, NoDataFileValues)
     cudf::io::json_reader_options::builder(cudf::io::source_info{filepath}).lines(true);
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
-  const auto view = result.tbl->view();
+  auto const view = result.tbl->view();
   EXPECT_EQ(0, view.num_columns());
 }
 
@@ -957,7 +969,7 @@ TEST_P(JsonReaderParamTest, InvalidFloatingPoint)
                                                 "\n");
   std::string data          = is_row_orient_test(test_opt) ? row_orient : record_orient;
 
-  const auto filepath = temp_env->get_temp_dir() + "InvalidFloatingPoint.json";
+  auto const filepath = temp_env->get_temp_dir() + "InvalidFloatingPoint.json";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
     outfile << data;
@@ -1074,7 +1086,7 @@ TEST_P(JsonReaderParamTest, ParseInRangeIntegers)
 
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
-  const auto view = result.tbl->view();
+  auto const view = result.tbl->view();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_small_int, view.column(0));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_less_equal_int64_max, view.column(1));
@@ -1178,7 +1190,7 @@ TEST_P(JsonReaderParamTest, ParseOutOfRangeIntegers)
 
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
-  const auto view = result.tbl->view();
+  auto const view = result.tbl->view();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_out_of_range_positive, view.column(0));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_out_of_range_negative, view.column(1));
@@ -1199,6 +1211,51 @@ TEST_P(JsonReaderParamTest, JsonLinesMultipleFileInputs)
   std::vector<std::string> record_orient{
     to_records_orient({{{"0", "11"}, {"1", "1.1"}}, {{"0", "22"}, {"1", "2.2"}}}, "\n") + "\n",
     to_records_orient({{{"0", "33"}, {"1", "3.3"}}, {{"0", "44"}, {"1", "4.4"}}}, "\n") + "\n"};
+  auto const& data = is_row_orient_test(test_opt) ? row_orient : record_orient;
+
+  const std::string file1 = temp_env->get_temp_dir() + "JsonLinesFileTest1.json";
+  std::ofstream outfile(file1, std::ofstream::out);
+  outfile << data[0];
+  outfile.close();
+
+  const std::string file2 = temp_env->get_temp_dir() + "JsonLinesFileTest2.json";
+  std::ofstream outfile2(file2, std::ofstream::out);
+  outfile2 << data[1];
+  outfile2.close();
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{{file1, file2}})
+      .lines(true)
+      .legacy(is_legacy_test(test_opt));
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 2);
+  EXPECT_EQ(result.tbl->num_rows(), 4);
+
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
+
+  EXPECT_EQ(result.metadata.schema_info[0].name, "0");
+  EXPECT_EQ(result.metadata.schema_info[1].name, "1");
+
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 int64_wrapper{{11, 22, 33, 44}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
+                                 float64_wrapper{{1.1, 2.2, 3.3, 4.4}, validity});
+}
+
+TEST_P(JsonReaderNoLegacy, JsonLinesMultipleFileInputsNoNL)
+{
+  auto const test_opt = GetParam();
+  // Strings for the two separate input files in row-orient that do not end with a newline
+  std::vector<std::string> row_orient{"[11, 1.1]\n[22, 2.2]", "[33, 3.3]\n[44, 4.4]"};
+  // Strings for the two separate input files in record-orient that do not end with a newline
+  std::vector<std::string> record_orient{
+    to_records_orient({{{"0", "11"}, {"1", "1.1"}}, {{"0", "22"}, {"1", "2.2"}}}, "\n"),
+    to_records_orient({{{"0", "33"}, {"1", "3.3"}}, {{"0", "44"}, {"1", "4.4"}}}, "\n")};
   auto const& data = is_row_orient_test(test_opt) ? row_orient : record_orient;
 
   const std::string file1 = temp_env->get_temp_dir() + "JsonLinesFileTest1.json";
@@ -1767,6 +1824,52 @@ TEST_F(JsonReaderTest, TrailingCommas)
     EXPECT_THROW(cudf::io::read_json(json_parser_options), cudf::logic_error)
       << "Failed on test case " << i;
   }
+}
+
+TEST_F(JsonReaderTest, JSONLinesRecovering)
+{
+  std::string data =
+    // 0 -> a: -2 (valid)
+    R"({"a":-2})"
+    "\n"
+    // 1 -> (invalid)
+    R"({"a":])"
+    "\n"
+    // 2 -> (invalid)
+    R"({"b":{"a":[321})"
+    "\n"
+    // 3 -> c: [1] (valid)
+    R"({"c":1.2})"
+    "\n"
+    "\n"
+    // 4 -> a: 123 (valid)
+    R"({"a":123})";
+
+  auto filepath = temp_env->get_temp_dir() + "RecoveringLines.json";
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    outfile << data;
+  }
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{filepath})
+      .lines(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 2);
+  EXPECT_EQ(result.tbl->num_rows(), 5);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
+
+  std::vector<bool> a_validity{true, false, false, false, true};
+  std::vector<bool> c_validity{false, false, false, true, false};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 int64_wrapper{{-2, 0, 0, 0, 123}, a_validity.cbegin()});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
+                                 float64_wrapper{{0.0, 0.0, 0.0, 1.2, 0.0}, c_validity.cbegin()});
 }
 
 CUDF_TEST_PROGRAM_MAIN()

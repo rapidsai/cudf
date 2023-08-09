@@ -202,6 +202,17 @@ def localize(
     )
 
 
+def delocalize(data: DatetimeColumn) -> DatetimeColumn:
+    """
+    Convert a timezone-aware datetime column to a timezone-naive one.
+    If the column is already timezone-naive, return it as is.
+    """
+    if isinstance(data, DatetimeTZColumn):
+        return data._local_time
+    # already timezone-naive:
+    return data
+
+
 def convert(data: DatetimeTZColumn, zone_name: str) -> DatetimeTZColumn:
     if not isinstance(data, DatetimeTZColumn):
         raise TypeError(
