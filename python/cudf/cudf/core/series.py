@@ -1512,7 +1512,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             can_use_self_column_name = cudf.utils.utils._is_same_name(
                 self.name, other.name
             )
-        except Exception:
+        except AttributeError:
             can_use_self_column_name = False
 
         operands = lhs._make_operands_for_binop(other, fill_value, reflect)
