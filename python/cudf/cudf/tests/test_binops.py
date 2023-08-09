@@ -3267,21 +3267,32 @@ def test_binop_integer_power_int_scalar():
     utils.assert_eq(expected, got)
 
 
-def test_binop_index_series():
+@pytest.mark.parametrize("op", _binops)
+def test_binop_index_series(op):
+    gi = cudf.Index([10, 11, 12])
+    gs = cudf.Series([1, 2, 3])
+
+    actual = op(gi, gs)
+    expected = op(gi.to_pandas(), gs.to_pandas())
+
+    utils.assert_eq(expected, actual)
+
+
+def test_binop_index_dt_td_series():
     gi = cudf.Index([1, 2, 3], dtype="datetime64[ns]", name=np.nan)
     gs = cudf.Series([10, 11, 12], dtype="timedelta64[ns]", name=np.nan)
 
     actual = gi + gs
     expected = gi.to_pandas() + gs.to_pandas()
 
-    utils.assert_eq(actual, expected)
+    utils.assert_eq(expected, actual)
 
     gs.name = "abc"
 
     actual = gs + gi
     expected = gs.to_pandas() + gi.to_pandas()
 
-    utils.assert_eq(actual, expected)
+    utils.assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize("data1", [[1, 2, 3], [10, 11, None]])
@@ -3293,4 +3304,4 @@ def test_binop_eq_index_series(data1, data2):
     actual = gi == gs
     expected = gi.to_pandas() == gs.to_pandas()
 
-    utils.assert_eq(actual, expected)
+    utils.assert_eq(expected, actual)
