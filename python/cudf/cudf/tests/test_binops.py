@@ -3283,8 +3283,12 @@ def test_binop_index_series():
 
     utils.assert_eq(actual, expected)
 
-    gi = cudf.Index([1, 2, 3], dtype="datetime64[ns]", name=np.nan)
-    gs = cudf.Series([10, 11, 12], dtype="timedelta64[ns]", name="abc")
+
+@pytest.mark.parametrize("data1", [[1, 2, 3], [10, 11, None]])
+@pytest.mark.parametrize("data2", [[1, 2, 3], [10, 11, None]])
+def test_binop_eq_index_series(data1, data2):
+    gi = cudf.Index(data1, dtype="datetime64[ns]", name=np.nan)
+    gs = cudf.Series(data2, dtype="timedelta64[ns]", name="abc")
 
     actual = gi == gs
     expected = gi.to_pandas() == gs.to_pandas()

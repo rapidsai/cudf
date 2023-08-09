@@ -1045,6 +1045,8 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         # explicitly _do not_ use isinstance here: we want only boolean
         # GenericIndexes, not dtype-specific subclasses.
         if type(ret) in {GenericIndex, cudf.Series} and ret.dtype.kind == "b":
+            if ret._column.has_nulls():
+                ret = ret.fillna(False)
             return ret.values
         return ret
 
