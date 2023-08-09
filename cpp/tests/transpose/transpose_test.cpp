@@ -146,12 +146,10 @@ void run_test(size_t ncols, size_t nrows, bool add_nulls)
   auto result      = transpose(input_view);
   auto result_view = std::get<1>(result);
 
-  CUDF_EXPECTS(result_view.num_columns() == expected_view.num_columns(),
-               "Expected same number of columns");
+  ASSERT_EQ(result_view.num_columns(), expected_view.num_columns());
   for (cudf::size_type i = 0; i < result_view.num_columns(); ++i) {
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_view.column(i), expected_view.column(i));
-    CUDF_EXPECTS(result_view.column(i).null_count() == expected_nulls[i],
-                 "Expected correct null count");
+    EXPECT_EQ(result_view.column(i).null_count(), expected_nulls[i]);
   }
 }
 

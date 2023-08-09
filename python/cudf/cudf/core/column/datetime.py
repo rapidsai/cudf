@@ -242,14 +242,22 @@ class DatetimeColumn(column.ColumnBase):
         if isinstance(other, (cudf.Scalar, ColumnBase, cudf.DateOffset)):
             return other
 
-        if isinstance(other, datetime.datetime):
-            other = np.datetime64(other)
-        elif isinstance(other, datetime.timedelta):
-            other = np.timedelta64(other)
-        elif isinstance(other, pd.Timestamp):
+        tz_error_msg = (
+            "Cannot perform binary operation on timezone-naive columns"
+            " and timezone-aware timestamps."
+        )
+        if isinstance(other, pd.Timestamp):
+            if other.tz is not None:
+                raise NotImplementedError(tz_error_msg)
             other = other.to_datetime64()
         elif isinstance(other, pd.Timedelta):
             other = other.to_timedelta64()
+        elif isinstance(other, datetime.datetime):
+            if other.tzinfo is not None:
+                raise NotImplementedError(tz_error_msg)
+            other = np.datetime64(other)
+        elif isinstance(other, datetime.timedelta):
+            other = np.timedelta64(other)
 
         if isinstance(other, np.datetime64):
             if np.isnat(other):
