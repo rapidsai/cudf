@@ -34,6 +34,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
+#include <cuda/functional>
+
 #include <vector>
 
 namespace cudf::detail {
@@ -141,25 +143,27 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
                       thrust::make_counting_iterator(size_type{0}),
                       thrust::make_counting_iterator(size_type{input.size()}),
                       gather_map.begin<size_type>(),
-                      [following, input_size, null_index, row_offset] __device__(size_type i) {
-                        // Note: grouped_*rolling_window() trims preceding/following to
-                        // the beginning/end of the group. `rolling_window()` does not.
-                        // Must trim _following[i] so as not to go past the column end.
-                        auto _following = min(following[i], input_size - i - 1);
-                        return (row_offset > _following) ? null_index : (i + row_offset);
-                      });
+                      cuda::proclaim_return_type<size_type>(
+                        [following, input_size, null_index, row_offset] __device__(size_type i) {
+                          // Note: grouped_*rolling_window() trims preceding/following to
+                          // the beginning/end of the group. `rolling_window()` does not.
+                          // Must trim _following[i] so as not to go past the column end.
+                          auto _following = min(following[i], input_size - i - 1);
+                          return (row_offset > _following) ? null_index : (i + row_offset);
+                        }));
   } else {
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator(size_type{0}),
                       thrust::make_counting_iterator(size_type{input.size()}),
                       gather_map.begin<size_type>(),
-                      [preceding, input_size, null_index, row_offset] __device__(size_type i) {
-                        // Note: grouped_*rolling_window() trims preceding/following to
-                        // the beginning/end of the group. `rolling_window()` does not.
-                        // Must trim _preceding[i] so as not to go past the column start.
-                        auto _preceding = min(preceding[i], i + 1);
-                        return (row_offset > (_preceding - 1)) ? null_index : (i - row_offset);
-                      });
+                      cuda::proclaim_return_type<size_type>(
+                        [preceding, input_size, null_index, row_offset] __device__(size_type i) {
+                          // Note: grouped_*rolling_window() trims preceding/following to
+                          // the beginning/end of the group. `rolling_window()` does not.
+                          // Must trim _preceding[i] so as not to go past the column start.
+                          auto _preceding = min(preceding[i], i + 1);
+                          return (row_offset > (_preceding - 1)) ? null_index : (i - row_offset);
+                        }));
   }
 
   auto output_with_nulls = cudf::detail::gather(table_view{std::vector<column_view>{input}},
