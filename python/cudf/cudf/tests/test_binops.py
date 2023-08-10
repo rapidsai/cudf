@@ -3265,3 +3265,7 @@ def test_binop_integer_power_int_scalar():
     expected = base**exponent.value
     got = base**exponent
     utils.assert_eq(expected, got)
+
+
+def test_numpy_int_scalar_binop():
+    assert (np.float32(1.0) - cudf.Scalar(1)) == 0.0
