@@ -5,6 +5,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_210
 from cudf.core.index import IntervalIndex, interval_range
 from cudf.testing._utils import assert_eq
 
@@ -275,9 +276,27 @@ def test_interval_index_from_breaks(closed):
     [
         (0.0, None, 0.2, 5),
         (0.0, 1.0, None, 5),
-        # (0.0, 1.0, 0.2, None), # Pandas returns only 4 intervals here
+        pytest.param(
+            0.0,
+            1.0,
+            0.2,
+            None,
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_210,
+                reason="https://github.com/pandas-dev/pandas/pull/54477",
+            ),
+        ),
         (None, 1.0, 0.2, 5),
-        # (0.0, 1.0, 0.1, None), # Pandas returns the wrong result here
+        pytest.param(
+            0.0,
+            1.0,
+            0.1,
+            None,
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_210,
+                reason="https://github.com/pandas-dev/pandas/pull/54477",
+            ),
+        ),
         (0.0, 1.0, None, 10),
         (0.0, None, 0.25, 4),
         (1.0, None, 2.5, 2),
