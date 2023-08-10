@@ -65,6 +65,7 @@ from cudf.utils.dtypes import (
 )
 from cudf.utils.utils import (
     _cudf_nvtx_annotate,
+    _is_same_name,
     _warn_no_dask_cudf,
     search_range,
 )
@@ -1029,12 +1030,27 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         operands = self._make_operands_for_binop(other, fill_value, reflect)
         if operands is NotImplemented:
             return NotImplemented
-        ret = _index_from_data(self._colwise_binop(operands, op))
+        binop_result = self._colwise_binop(operands, op)
+
+        if isinstance(other, cudf.Series):
+            ret = other._from_data_like_self(binop_result)
+            ret.name = (
+                self.name
+                if cudf.utils.utils._is_same_name(self.name, other.name)
+                else None
+            )
+        else:
+            ret = _index_from_data(binop_result)
 
         # pandas returns numpy arrays when the outputs are boolean. We
         # explicitly _do not_ use isinstance here: we want only boolean
         # GenericIndexes, not dtype-specific subclasses.
-        if type(ret) is GenericIndex and ret.dtype.kind == "b":
+        if (
+            isinstance(ret, (GenericIndex, cudf.Series))
+            and ret.dtype.kind == "b"
+        ):
+            if ret._column.has_nulls():
+                ret = ret.fillna(op == "__ne__")
             return ret.values
         return ret
 
@@ -3309,7 +3325,7 @@ def as_index(arbitrary, nan_as_null=None, **kwargs) -> BaseIndex:
     if isinstance(arbitrary, cudf.MultiIndex):
         return arbitrary
     elif isinstance(arbitrary, BaseIndex):
-        if arbitrary.name == kwargs["name"]:
+        if _is_same_name(arbitrary.name, kwargs["name"]):
             return arbitrary
         idx = arbitrary.copy(deep=False)
         idx.rename(kwargs["name"], inplace=True)
