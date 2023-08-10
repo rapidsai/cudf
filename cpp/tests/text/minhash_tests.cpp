@@ -34,6 +34,7 @@ struct MinHashTest : public cudf::test::BaseFixture {};
 
 TEST_F(MinHashTest, Basic)
 {
+  auto validity = cudf::test::iterators::null_at(1);
   auto input =
     cudf::test::strings_column_wrapper({"doc 1",
                                         "",
@@ -42,14 +43,14 @@ TEST_F(MinHashTest, Basic)
                                         "doc 3",
                                         "d",
                                         "The quick brown fox jumpéd over the lazy brown dog."},
-                                       {1, 0, 1, 1, 1, 1, 1});
+                                       validity);
 
   auto view = cudf::strings_column_view(input);
 
   auto results = nvtext::minhash(view);
 
   auto expected = cudf::test::fixed_width_column_wrapper<uint32_t>(
-    {1207251914u, 0u, 21141582u, 0u, 1207251914u, 655955059u, 86520422u}, {1, 0, 1, 1, 1, 1, 1});
+    {1207251914u, 0u, 21141582u, 0u, 1207251914u, 655955059u, 86520422u}, validity);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   auto results64  = nvtext::minhash64(view);
@@ -60,7 +61,7 @@ TEST_F(MinHashTest, Basic)
                                                                       13145552576991307582ul,
                                                                       14660046701545912182ul,
                                                                       398062025280761388ul},
-                                                                     {1, 0, 1, 1, 1, 1, 1});
+                                                                     validity);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results64, expected64);
 }
 
@@ -85,8 +86,7 @@ TEST_F(MinHashTest, MultiSeed)
 
   auto view = cudf::strings_column_view(input);
 
-  auto seeds = cudf::test::fixed_width_column_wrapper<uint32_t>({0, 1, 2});
-
+  auto seeds   = cudf::test::fixed_width_column_wrapper<uint32_t>({0, 1, 2});
   auto results = nvtext::minhash(view, cudf::column_view(seeds));
 
   using LCW = cudf::test::lists_column_wrapper<uint32_t>;
@@ -99,8 +99,7 @@ TEST_F(MinHashTest, MultiSeed)
   // clang-format on
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
-  auto seeds64 = cudf::test::fixed_width_column_wrapper<uint64_t>({0, 1, 2});
-
+  auto seeds64   = cudf::test::fixed_width_column_wrapper<uint64_t>({0, 1, 2});
   auto results64 = nvtext::minhash64(view, cudf::column_view(seeds64));
 
   using LCW64 = cudf::test::lists_column_wrapper<uint64_t>;
@@ -127,6 +126,17 @@ TEST_F(MinHashTest, MultiSeedWithNullInputRow)
   LCW expected({LCW{484984072u, 1074168784u}, LCW{}, LCW{0u, 0u}, LCW{571652169u, 173528385u}},
                validity);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  auto seeds64   = cudf::test::fixed_width_column_wrapper<uint64_t>({11, 22});
+  auto results64 = nvtext::minhash64(view, cudf::column_view(seeds64));
+
+  using LCW64 = cudf::test::lists_column_wrapper<uint64_t>;
+  LCW64 expected64({LCW64{2597399324547032480ul, 4461410998582111052ul},
+                    LCW64{},
+                    LCW64{0ul, 0ul},
+                    LCW64{2717781266371273264ul, 6977325820868387259ul}},
+                   validity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results64, expected64);
 }
 
 TEST_F(MinHashTest, EmptyTest)
