@@ -114,11 +114,11 @@ class file_source : public datasource {
   static std::unordered_map<int, bool> result_cache{};
 
   int deviceId{};
-  cudaGetDevice(&deviceId);
+  CUDF_CUDA_TRY(cudaGetDevice(&deviceId));
 
   if (result_cache.find(deviceId) == result_cache.end()) {
     cudaDeviceProp props{};
-    cudaGetDeviceProperties(&props, deviceId);
+    CUDF_CUDA_TRY(cudaGetDeviceProperties(&props, deviceId));
     result_cache[deviceId] = (props.pageableMemoryAccessUsesHostPageTables == 1);
     CUDF_LOG_INFO(
       "Device {} pageableMemoryAccessUsesHostPageTables: {}", deviceId, result_cache[deviceId]);
