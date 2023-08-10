@@ -477,7 +477,7 @@ static __constant__ PdaSymbolGroupIdT tos_sg_to_pda_sgid[] = {
 struct PdaSymbolToSymbolGroupId {
   template <typename SymbolT, typename StackSymbolT>
   __device__ __forceinline__ PdaSymbolGroupIdT
-  operator()(thrust::tuple<SymbolT, StackSymbolT> symbol_pair)
+  operator()(thrust::tuple<SymbolT, StackSymbolT> symbol_pair) const
   {
     // The symbol read from the input
     auto symbol = thrust::get<0>(symbol_pair);
@@ -1420,36 +1420,25 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
 
   // Prepare for PDA transducer pass, merging input symbols with stack symbols
   auto const recover_from_error = (format == tokenizer_pda::json_format_cfg_t::JSON_LINES_RECOVER);
-  rmm::device_uvector<PdaSymbolGroupIdT> pda_sgids = [json_in, stream, recover_from_error]() {
-    // Memory holding the top-of-stack stack context for the input
-    rmm::device_uvector<StackSymbolT> stack_op_indices{json_in.size(), stream};
 
-    // Identify what is the stack context for each input character (JSON-root, struct, or list)
-    auto const stack_behavior = recover_from_error ? stack_behavior_t::ResetOnDelimiter
-                                                   : stack_behavior_t::PushPopWithoutReset;
-    get_stack_context(json_in, stack_op_indices.data(), stack_behavior, stream);
+  // Memory holding the top-of-stack stack context for the input
+  rmm::device_uvector<StackSymbolT> stack_symbols{json_in.size(), stream};
 
-    rmm::device_uvector<PdaSymbolGroupIdT> pda_sgids{json_in.size(), stream};
-    auto zip_in = thrust::make_zip_iterator(json_in.data(), stack_op_indices.data());
-    thrust::transform(rmm::exec_policy(stream),
-                      zip_in,
-                      zip_in + json_in.size(),
-                      pda_sgids.data(),
-                      tokenizer_pda::PdaSymbolToSymbolGroupId{});
-    return pda_sgids;
-  }();
+  // Identify what is the stack context for each input character (JSON-root, struct, or list)
+  auto const stack_behavior =
+    recover_from_error ? stack_behavior_t::ResetOnDelimiter : stack_behavior_t::PushPopWithoutReset;
+  get_stack_context(json_in, stack_symbols.data(), stack_behavior, stream);
 
-  // Instantiating PDA transducer
-  std::array<std::vector<char>, tokenizer_pda::NUM_PDA_SGIDS> pda_sgid_identity{};
-  std::generate(std::begin(pda_sgid_identity),
-                std::end(pda_sgid_identity),
-                [i = char{0}]() mutable { return std::vector<char>{i++}; });
+  // Input to the full pushdown automaton finite-state transducer, where a input symbol comprises
+  // the combination of a character from the JSON input together with the stack context for that
+  // character.
+  auto zip_in = thrust::make_zip_iterator(json_in.data(), stack_symbols.data());
 
   constexpr auto max_translation_table_size =
     tokenizer_pda::NUM_PDA_SGIDS *
     static_cast<tokenizer_pda::StateT>(tokenizer_pda::pda_state_t::PD_NUM_STATES);
   auto json_to_tokens_fst = fst::detail::make_fst(
-    fst::detail::make_symbol_group_lut(pda_sgid_identity),
+    fst::detail::make_symbol_group_lookup_op(tokenizer_pda::PdaSymbolToSymbolGroupId{}),
     fst::detail::make_transition_table(tokenizer_pda::get_transition_table(format)),
     fst::detail::make_translation_table<max_translation_table_size>(
       tokenizer_pda::get_translation_table(recover_from_error)),
@@ -1473,7 +1462,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   rmm::device_uvector<SymbolOffsetT> tokens_indices{
     max_token_out_count + delimiter_offset, stream, mr};
 
-  json_to_tokens_fst.Transduce(pda_sgids.begin(),
+  json_to_tokens_fst.Transduce(zip_in,
                                static_cast<SymbolOffsetT>(json_in.size()),
                                tokens.data() + delimiter_offset,
                                tokens_indices.data() + delimiter_offset,
