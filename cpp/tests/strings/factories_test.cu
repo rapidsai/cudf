@@ -99,8 +99,8 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
     cudf::device_span<char const>(strings_view.chars().data<char>(), strings_view.chars().size()),
     cudf::get_default_stream());
   auto h_offsets_data = cudf::detail::make_std_vector_sync(
-    cudf::device_span<cudf::offset_type const>(
-      strings_view.offsets().data<cudf::offset_type>() + strings_view.offset(),
+    cudf::device_span<cudf::size_type const>(
+      strings_view.offsets().data<cudf::size_type>() + strings_view.offset(),
       strings_view.size() + 1),
     cudf::get_default_stream());
   EXPECT_EQ(memcmp(h_buffer.data(), h_chars_data.data(), h_buffer.size()), 0);
@@ -164,8 +164,8 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
     cudf::device_span<char const>(strings_view.chars().data<char>(), strings_view.chars().size()),
     cudf::get_default_stream());
   auto h_offsets_data = cudf::detail::make_std_vector_sync(
-    cudf::device_span<cudf::offset_type const>(
-      strings_view.offsets().data<cudf::offset_type>() + strings_view.offset(),
+    cudf::device_span<cudf::size_type const>(
+      strings_view.offsets().data<cudf::size_type>() + strings_view.offset(),
       strings_view.size() + 1),
     cudf::get_default_stream());
   EXPECT_EQ(memcmp(h_buffer.data(), h_chars_data.data(), h_buffer.size()), 0);

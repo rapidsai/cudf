@@ -454,7 +454,7 @@ def groupby_jit_datasets(
 
 
 def run_groupby_apply_jit_test(data, func, keys, *args):
-    expect_groupby_obj = data.to_pandas().groupby(keys, as_index=False)
+    expect_groupby_obj = data.to_pandas().groupby(keys)
     got_groupby_obj = data.groupby(keys)
 
     # compare cuDF jit to pandas
@@ -525,6 +525,28 @@ def groupby_apply_jit_reductions_special_vals_inner(
     run_groupby_apply_jit_test(data, func, ["key1"])
 
 
+# test unary index reductions for special values
+def groupby_apply_jit_idx_reductions_special_vals_inner(
+    func, data, dtype, special_val
+):
+    funcstr = textwrap.dedent(
+        f"""
+        def func(df):
+            return df['val1'].{func}()
+        """
+    )
+    lcl = {}
+    exec(funcstr, lcl)
+    func = lcl["func"]
+
+    data["val1"] = data["val1"].astype(dtype)
+    data["val2"] = data["val2"].astype(dtype)
+    data["val1"] = special_val
+    data["val2"] = special_val
+
+    run_groupby_apply_jit_test(data, func, ["key1"])
+
+
 @pytest.mark.parametrize("dtype", ["float64"])
 @pytest.mark.parametrize("func", ["min", "max", "sum", "mean", "var", "std"])
 @pytest.mark.parametrize("special_val", [np.nan, np.inf, -np.inf])
@@ -540,40 +562,27 @@ def test_groupby_apply_jit_reductions_special_vals(
 
 @pytest.mark.parametrize("dtype", ["float64"])
 @pytest.mark.parametrize("func", ["idxmax", "idxmin"])
-@pytest.mark.parametrize("special_val", [np.nan, np.inf, -np.inf])
+@pytest.mark.parametrize(
+    "special_val",
+    [
+        pytest.param(
+            np.nan,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/13832"
+            ),
+        ),
+        np.inf,
+        -np.inf,
+    ],
+)
+@pytest.mark.parametrize("dataset", ["small", "large", "nans"])
 def test_groupby_apply_jit_idx_reductions_special_vals(
-    func, groupby_jit_data_small, dtype, special_val
+    func, dtype, dataset, groupby_jit_datasets, special_val
 ):
-    # dynamically generate to avoid pickling error.
-    # see test_groupby_apply_jit_reductions for details.
-    funcstr = textwrap.dedent(
-        f"""
-            def func(df):
-                return df['val1'].{func}()
-        """
+    dataset = groupby_jit_datasets[dataset]
+    groupby_apply_jit_idx_reductions_special_vals_inner(
+        func, dataset, dtype, special_val
     )
-    lcl = {}
-    exec(funcstr, lcl)
-    func = lcl["func"]
-
-    groupby_jit_data_small["val1"] = special_val
-    groupby_jit_data_small["val1"] = groupby_jit_data_small["val1"].astype(
-        dtype
-    )
-
-    expect = (
-        groupby_jit_data_small.to_pandas()
-        .groupby("key1", as_index=False)
-        .apply(func)
-    )
-
-    grouped = groupby_jit_data_small.groupby("key1")
-    sorted = grouped._grouped()[3].to_pandas()
-    expect_vals = sorted["key1"].drop_duplicates().index
-    expect[None] = expect_vals
-
-    got = grouped.apply(func, engine="jit")
-    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
