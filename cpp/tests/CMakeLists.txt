@@ -59,8 +59,11 @@ function(ConfigureTest CMAKE_TEST_NAME)
                                $<TARGET_NAME_IF_EXISTS:conda_env>
   )
   rapids_test_add(
-    NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME} GPUS ${_CUDF_TEST_GPUS} PERCENT
-    ${_CUDF_TEST_PERCENT} INSTALL_COMPONENT_SET testing
+    NAME ${CMAKE_TEST_NAME}
+    COMMAND ${CMAKE_TEST_NAME}
+    GPUS ${_CUDF_TEST_GPUS}
+    PERCENT ${_CUDF_TEST_PERCENT}
+    INSTALL_COMPONENT_SET testing
   )
 
   set_tests_properties(

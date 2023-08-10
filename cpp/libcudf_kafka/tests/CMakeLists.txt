@@ -33,7 +33,11 @@ function(ConfigureTest test_name)
     ${test_name} PRIVATE GTest::gmock GTest::gmock_main GTest::gtest_main cudf_kafka
   )
   rapids_test_add(
-    NAME ${test_name} COMMAND ${test_name} GPUS 1 PERCENT 25 INSTALL_COMPONENT_SET testing
+    NAME ${test_name}
+    COMMAND ${test_name}
+    GPUS 1
+    PERCENT 25
+    INSTALL_COMPONENT_SET testing
   )
 endfunction()
 
