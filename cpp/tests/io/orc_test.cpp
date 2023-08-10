@@ -1263,9 +1263,8 @@ TEST_F(OrcStatisticsTest, Overflow)
 
 TEST_F(OrcStatisticsTest, HasNull)
 {
-  // cudf's ORC writer doesn't yet support the ability to encode the hasNull value in statistics so
-  // we're embedding a file created using pyorc
-  //
+  // This test can now be implemented with libcudf; keeping the pyorc version to keep the test
+  // inputs diversified
   // Method to create file:
   // >>> import pyorc
   // >>> output = open("./temp.orc", "wb")

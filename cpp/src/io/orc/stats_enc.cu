@@ -126,9 +126,6 @@ struct stats_state_s {
   statistics_chunk chunk;
   statistics_merge_group group;
   statistics_dtype stats_dtype;  //!< Statistics data type for this column
-  // ORC stats
-  uint64_t numberOfValues;
-  uint8_t hasNull;
 };
 
 /*
