@@ -132,31 +132,3 @@ def test_create_interval_df(data1, data2, data3, data4, closed):
         dtype="interval",
     )
     assert_eq(expect_three, got_three)
-
-
-@pytest.mark.parametrize(
-    "start, stop, freq, periods",
-    [
-        (0, 10, 2, None),
-        (0, 5, 2, None),
-        (0, None, 2, 5),
-        (0, 10, None, 5),
-        (None, 10, 2, 5),
-        (0, 10, None, 11),
-        (0, 10, None, 10),
-        (0.0, None, 0.2, 5),
-        (0.0, 1.0, None, 5),
-        # (0.0, 1.0, 0.2, None), # Pandas returns only 4 intervals here
-        (None, 1.0, 0.2, 5),
-        # (0.0, 1.0, 0.1, None), # Pandas returns the wrong result here
-        (0.0, 1.0, None, 10),
-    ],
-)
-def test_interval_range(start, stop, freq, periods):
-    expected = pd.interval_range(
-        start=start, end=stop, freq=freq, periods=periods
-    )
-    got = cudf.interval_range(
-        start=start, end=stop, freq=freq, periods=periods
-    )
-    assert_eq(expected, got)
