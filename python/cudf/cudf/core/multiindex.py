@@ -68,6 +68,33 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         Check that the levels/codes are consistent and valid.
         Not yet supported
 
+    Attributes
+    ----------
+    names
+    nlevels
+    dtypes
+    levels
+    codes
+
+    Methods
+    -------
+    from_arrays
+    from_tuples
+    from_product
+    from_frame
+    set_levels
+    set_codes
+    to_frame
+    to_flat_index
+    sortlevel
+    droplevel
+    swaplevel
+    reorder_levels
+    remove_unused_levels
+    get_level_values
+    get_loc
+    drop
+
     Returns
     -------
     MultiIndex

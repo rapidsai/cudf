@@ -155,9 +155,16 @@ class RangeIndex(BaseIndex, BinaryOperand):
     copy : bool, default False
         Unused, accepted for homogeneity with other index types.
 
-    Returns
+    Attributes
+    ----------
+    start
+    stop
+    step
+
+    Methods
     -------
-    RangeIndex
+    to_numpy
+    to_arrow
 
     Examples
     --------
@@ -1636,6 +1643,14 @@ class Int8Index(NumericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     Int8Index
@@ -1660,6 +1675,14 @@ class Int16Index(NumericIndex):
         Make a copy of input data.
     name : object
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
 
     Returns
     -------
@@ -1686,6 +1709,14 @@ class Int32Index(NumericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     Int32Index
@@ -1710,6 +1741,14 @@ class Int64Index(NumericIndex):
         Make a copy of input data.
     name : object
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
 
     Returns
     -------
@@ -1736,6 +1775,14 @@ class UInt8Index(NumericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     UInt8Index
@@ -1760,6 +1807,14 @@ class UInt16Index(NumericIndex):
         Make a copy of input data.
     name : object
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
 
     Returns
     -------
@@ -1786,6 +1841,14 @@ class UInt32Index(NumericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     UInt32Index
@@ -1811,6 +1874,14 @@ class UInt64Index(NumericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     UInt64Index
@@ -1835,6 +1906,14 @@ class Float32Index(NumericIndex):
         Make a copy of input data.
     name : object
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
 
     Returns
     -------
@@ -1866,6 +1945,14 @@ class Float64Index(NumericIndex):
         Make a copy of input data.
     name : object
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
 
     Returns
     -------
@@ -1906,6 +1993,32 @@ class DatetimeIndex(GenericIndex):
     yearfirst : bool, default False
         If True parse dates in data with the year first order.
         This is not yet supported
+
+    Attributes
+    ----------
+    year
+    month
+    day
+    hour
+    minute
+    second
+    microsecond
+    nanosecond
+    date
+    time
+    dayofyear
+    day_of_year
+    weekday
+    quarter
+    freq
+
+    Methods
+    -------
+    ceil
+    floor
+    round
+    tz_convert
+    tz_localize
 
     Returns
     -------
@@ -2566,6 +2679,19 @@ class TimedeltaIndex(GenericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    days
+    seconds
+    microseconds
+    nanoseconds
+    components
+    inferred_freq
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     TimedeltaIndex
@@ -2709,6 +2835,15 @@ class CategoricalIndex(GenericIndex):
         Make a copy of input.
     name : object, optional
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    codes
+    categories
+
+    Methods
+    -------
+    equals
 
     Returns
     -------
@@ -2934,6 +3069,15 @@ class IntervalIndex(GenericIndex):
         Copy the input data.
     name : object, optional
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    values
+
+    Methods
+    -------
+    from_breaks
+    get_loc
 
     Returns
     -------
