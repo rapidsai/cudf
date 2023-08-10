@@ -1230,10 +1230,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
               uint32_t len = idx < max_depth - 1 ? sizeof(cudf::size_type) : s->dtype_len;
               // if this is a string column, then dtype_len is a lie. data will be offsets rather
               // than (ptr,len) tuples.
-              if ((data_type == BYTE_ARRAY && s->dtype_len != 4) ||
-                  data_type == FIXED_LEN_BYTE_ARRAY) {
-                len = sizeof(cudf::size_type);
-              }
+              if (is_string_col(s->col)) { len = sizeof(cudf::size_type); }
               nesting_info->data_out += (output_offset * len);
             }
             if (nesting_info->string_out != nullptr) {
