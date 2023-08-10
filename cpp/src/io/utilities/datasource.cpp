@@ -26,6 +26,8 @@
 #include <kvikio/file_handle.hpp>
 #include <rmm/device_buffer.hpp>
 
+#include <arrow/io/memory.h>
+
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
