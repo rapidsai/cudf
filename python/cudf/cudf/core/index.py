@@ -1030,17 +1030,17 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         operands = self._make_operands_for_binop(other, fill_value, reflect)
         if operands is NotImplemented:
             return NotImplemented
-        result = self._colwise_binop(operands, op)
+        binop_result = self._colwise_binop(operands, op)
 
         if isinstance(other, cudf.Series):
-            ret = other._from_data_like_self(result)
+            ret = other._from_data_like_self(binop_result)
             ret.name = (
                 self.name
                 if cudf.utils.utils._is_same_name(self.name, other.name)
                 else None
             )
         else:
-            ret = _index_from_data(result)
+            ret = _index_from_data(binop_result)
 
         # pandas returns numpy arrays when the outputs are boolean. We
         # explicitly _do not_ use isinstance here: we want only boolean
