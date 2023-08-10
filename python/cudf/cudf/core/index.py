@@ -1045,7 +1045,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         # pandas returns numpy arrays when the outputs are boolean. We
         # explicitly _do not_ use isinstance here: we want only boolean
         # GenericIndexes, not dtype-specific subclasses.
-        if type(ret) in {GenericIndex, cudf.Series} and ret.dtype.kind == "b":
+        if isinstance(ret, (GenericIndex, cudf.Series)) and ret.dtype.kind == "b":
             if ret._column.has_nulls():
                 ret = ret.fillna(op == "__ne__")
             return ret.values
