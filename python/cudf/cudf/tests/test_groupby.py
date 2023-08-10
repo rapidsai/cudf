@@ -586,6 +586,41 @@ def test_groupby_apply_jit_idx_reductions_special_vals(
 
 
 @pytest.mark.parametrize(
+    "dtype",
+    [
+        "int32",
+        "int64",
+        pytest.param(
+            "float32",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/13839"
+            ),
+        ),
+        pytest.param(
+            "float64",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/13839"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("dataset", ["large", "nans"])
+def test_groupby_apply_jit_correlation(dataset, groupby_jit_datasets, dtype):
+
+    dataset = groupby_jit_datasets[dataset]
+
+    dataset["val3"] = dataset["val3"].astype(dtype)
+    dataset["val4"] = dataset["val4"].astype(dtype)
+
+    keys = ["key1"]
+
+    def func(group):
+        return group["val3"].corr(group["val4"])
+
+    run_groupby_apply_jit_test(dataset, func, keys)
+
+
+@pytest.mark.parametrize(
     "func",
     [
         lambda df: df["val1"].max() + df["val2"].min(),
