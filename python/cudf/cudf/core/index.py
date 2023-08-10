@@ -37,7 +37,7 @@ from cudf.api.types import (
     is_scalar,
     is_string_dtype,
 )
-from cudf.core._base_index import BaseIndex, _index_astype_docstring
+from cudf.core._base_index import BaseIndex
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -56,7 +56,7 @@ from cudf.core.dtypes import IntervalDtype
 from cudf.core.frame import Frame
 from cudf.core.mixins import BinaryOperand
 from cudf.core.single_column_frame import SingleColumnFrame
-from cudf.utils.docutils import copy_docstring, doc_apply
+from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     find_common_type,
@@ -156,9 +156,16 @@ class RangeIndex(BaseIndex, BinaryOperand):
     copy : bool, default False
         Unused, accepted for homogeneity with other index types.
 
-    Returns
+    Attributes
+    ----------
+    start
+    stop
+    step
+
+    Methods
     -------
-    RangeIndex
+    to_numpy
+    to_arrow
 
     Examples
     --------
@@ -220,9 +227,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def name(self):
-        """
-        Returns the name of the Index.
-        """
         return self._name
 
     @name.setter  # type: ignore
@@ -377,7 +381,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     @_cudf_nvtx_annotate
-    @doc_apply(_index_astype_docstring)
     def astype(self, dtype, copy: bool = True):
         if is_dtype_equal(dtype, self.dtype):
             return self
@@ -492,9 +495,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @property
     def is_unique(self):
-        """
-        Return if the index has unique values.
-        """
         return True
 
     @cached_property
@@ -1074,17 +1074,13 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     def memory_usage(self, deep=False):
         return self._column.memory_usage
 
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
-    def equals(self, other, **kwargs):
-        """
-        Determine if two Index objects contain the same elements.
+    def is_unique(self):
+        return self._column.is_unique
 
-        Returns
-        -------
-        out: bool
-            True if "other" is an Index and it has the same elements
-            as calling index; False otherwise.
-        """
+    @_cudf_nvtx_annotate
+    def equals(self, other):
         if (
             other is None
             or not isinstance(other, BaseIndex)
@@ -1165,7 +1161,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return _index_from_data({name: col.copy(True) if deep else col})
 
     @_cudf_nvtx_annotate
-    @doc_apply(_index_astype_docstring)
     def astype(self, dtype, copy: bool = True):
         return _index_from_data(super().astype({self.name: dtype}, copy))
 
@@ -1437,7 +1432,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         ascending=True,
         na_position="last",
     ):
-        """Return the integer indices that would sort the Series values.
+        """Return the integer indices that would sort the index.
 
         Parameters
         ----------
@@ -1649,6 +1644,14 @@ class Int8Index(NumericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     Int8Index
@@ -1673,6 +1676,14 @@ class Int16Index(NumericIndex):
         Make a copy of input data.
     name : object
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
 
     Returns
     -------
@@ -1699,6 +1710,14 @@ class Int32Index(NumericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     Int32Index
@@ -1723,6 +1742,14 @@ class Int64Index(NumericIndex):
         Make a copy of input data.
     name : object
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
 
     Returns
     -------
@@ -1749,6 +1776,14 @@ class UInt8Index(NumericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     UInt8Index
@@ -1773,6 +1808,14 @@ class UInt16Index(NumericIndex):
         Make a copy of input data.
     name : object
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
 
     Returns
     -------
@@ -1799,6 +1842,14 @@ class UInt32Index(NumericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     UInt32Index
@@ -1824,6 +1875,14 @@ class UInt64Index(NumericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     UInt64Index
@@ -1848,6 +1907,14 @@ class Float32Index(NumericIndex):
         Make a copy of input data.
     name : object
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
 
     Returns
     -------
@@ -1879,6 +1946,14 @@ class Float64Index(NumericIndex):
         Make a copy of input data.
     name : object
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
 
     Returns
     -------
@@ -1919,6 +1994,32 @@ class DatetimeIndex(GenericIndex):
     yearfirst : bool, default False
         If True parse dates in data with the year first order.
         This is not yet supported
+
+    Attributes
+    ----------
+    year
+    month
+    day
+    hour
+    minute
+    second
+    microsecond
+    nanosecond
+    date
+    time
+    dayofyear
+    day_of_year
+    weekday
+    quarter
+    freq
+
+    Methods
+    -------
+    ceil
+    floor
+    round
+    tz_convert
+    tz_localize
 
     Returns
     -------
@@ -2579,6 +2680,19 @@ class TimedeltaIndex(GenericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    days
+    seconds
+    microseconds
+    nanoseconds
+    components
+    inferred_freq
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     TimedeltaIndex
@@ -2722,6 +2836,15 @@ class CategoricalIndex(GenericIndex):
         Make a copy of input.
     name : object, optional
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    codes
+    categories
+
+    Methods
+    -------
+    equals
 
     Returns
     -------
@@ -2980,6 +3103,15 @@ class IntervalIndex(GenericIndex):
         Copy the input data.
     name : object, optional
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    values
+
+    Methods
+    -------
+    from_breaks
+    get_loc
 
     Returns
     -------
@@ -3267,9 +3399,9 @@ class Index(BaseIndex, metaclass=IndexMeta):
     Warnings
     --------
     This class should not be subclassed. It is designed as a factory for
-    different subclasses of :class:`BaseIndex` depending on the provided input.
+    different subclasses of `BaseIndex` depending on the provided input.
     If you absolutely must, and if you're intimately familiar with the
-    internals of cuDF, subclass :class:`BaseIndex` instead.
+    internals of cuDF, subclass `BaseIndex` instead.
 
     Examples
     --------

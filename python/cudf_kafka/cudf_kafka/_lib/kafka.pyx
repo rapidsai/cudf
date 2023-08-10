@@ -7,7 +7,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 
-from cudf._lib.cpp.io.types cimport datasource
+from cudf._lib.cpp.io.datasource cimport datasource
 from cudf._lib.cpp.libcpp.memory cimport make_unique
 
 from cudf_kafka._lib.kafka cimport kafka_consumer

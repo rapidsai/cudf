@@ -1426,3 +1426,14 @@ def test_timedelta_constructor(data, dtype):
     actual = cudf.TimedeltaIndex(data=cudf.Series(data), dtype=dtype)
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("op", [operator.add, operator.sub])
+def test_timdelta_binop_tz_timestamp(op):
+    s = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
+    pd_tz_timestamp = pd.Timestamp("1970-01-01 00:00:00.000000001", tz="utc")
+    with pytest.raises(NotImplementedError):
+        op(s, pd_tz_timestamp)
+    date_tz_scalar = datetime.datetime.now(datetime.timezone.utc)
+    with pytest.raises(NotImplementedError):
+        op(s, date_tz_scalar)

@@ -53,6 +53,7 @@ from cudf.api.types import (
     infer_dtype,
     is_bool_dtype,
     is_categorical_dtype,
+    is_datetime64_dtype,
     is_datetime64tz_dtype,
     is_decimal32_dtype,
     is_decimal64_dtype,
@@ -2230,6 +2231,12 @@ def as_column(
         data = ColumnBase.from_scalar(arbitrary, length if length else 1)
     elif isinstance(arbitrary, pd.core.arrays.masked.BaseMaskedArray):
         data = as_column(pa.Array.from_pandas(arbitrary), dtype=dtype)
+    elif isinstance(arbitrary, pd.DatetimeIndex) and isinstance(
+        arbitrary.dtype, pd.DatetimeTZDtype
+    ):
+        raise NotImplementedError(
+            "cuDF does not yet support timezone-aware datetimes"
+        )
     else:
         try:
             data = as_column(
@@ -2279,6 +2286,18 @@ def as_column(
                             "Use `tz_localize()` to construct "
                             "timezone aware data."
                         )
+                    elif is_datetime64_dtype(dtype):
+                        # Error checking only, actual construction happens
+                        # below.
+                        pa_array = pa.array(arbitrary)
+                        if (
+                            isinstance(pa_array.type, pa.TimestampType)
+                            and pa_array.type.tz is not None
+                        ):
+                            raise NotImplementedError(
+                                "cuDF does not yet support timezone-aware "
+                                "datetimes"
+                            )
                     if is_list_dtype(dtype):
                         data = pa.array(arbitrary)
                         if type(data) not in (pa.ListArray, pa.NullArray):
