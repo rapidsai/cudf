@@ -10,6 +10,8 @@ from libcpp.unordered_map cimport unordered_map
 from libcpp.vector cimport vector
 from pyarrow.includes.libarrow cimport CRandomAccessFile
 
+cimport cudf._lib.cpp.io.data_sink as cudf_io_data_sink
+cimport cudf._lib.cpp.io.datasource as cudf_io_datasource
 cimport cudf._lib.cpp.table.table_view as cudf_table_view
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.types cimport size_type
@@ -105,35 +107,18 @@ cdef extern from "cudf/io/types.hpp" \
         source_info() except +
         source_info(const vector[string] &filepaths) except +
         source_info(const vector[host_buffer] &host_buffers) except +
-        source_info(datasource *source) except +
-        source_info(const vector[datasource*] &datasources) except +
+        source_info(cudf_io_datasource.datasource *source) except +
+        source_info(const vector[cudf_io_datasource.datasource*] &datasources) except +
 
     cdef cppclass sink_info:
         io_type type
         const vector[string]& filepaths()
         const vector[vector[char] *]& buffers()
-        const vector[data_sink *]& user_sinks()
+        const vector[cudf_io_data_sink.data_sink *]& user_sinks()
 
         sink_info() except +
         sink_info(string file_path) except +
         sink_info(vector[string] file_path) except +
         sink_info(vector[char] * buffer) except +
-        sink_info(data_sink * user_sink) except +
-        sink_info(vector[data_sink *] user_sink) except +
-
-
-cdef extern from "cudf/io/data_sink.hpp" \
-        namespace "cudf::io" nogil:
-
-    cdef cppclass data_sink:
-        pass
-
-cdef extern from "cudf/io/datasource.hpp" \
-        namespace "cudf::io" nogil:
-
-    cdef cppclass datasource:
-        pass
-
-    cdef cppclass arrow_io_source(datasource):
-        arrow_io_source(string arrow_uri) except +
-        arrow_io_source(shared_ptr[CRandomAccessFile]) except +
+        sink_info(cudf_io_data_sink.data_sink * user_sink) except +
+        sink_info(vector[cudf_io_data_sink.data_sink *] user_sink) except +

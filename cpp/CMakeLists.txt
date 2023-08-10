@@ -408,6 +408,7 @@ add_library(
   src/io/text/bgzip_data_chunk_source.cu
   src/io/text/bgzip_utils.cpp
   src/io/text/multibyte_split.cu
+  src/io/utilities/arrow_io_source.cpp
   src/io/utilities/column_buffer.cpp
   src/io/utilities/config_utils.cpp
   src/io/utilities/data_sink.cpp

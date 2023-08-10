@@ -16,7 +16,7 @@ from cudf.api.types import is_scalar, is_timedelta64_dtype
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column import ColumnBase, column, string
 from cudf.utils.dtypes import np_to_pa_dtype
-from cudf.utils.utils import _fillna_natwise
+from cudf.utils.utils import _all_bools_with_nulls, _fillna_natwise
 
 _dtype_to_format_conversion = {
     "timedelta64[ns]": "%D days %H:%M:%S",
@@ -202,6 +202,13 @@ class TimeDeltaColumn(ColumnBase):
         elif other.dtype.kind in {"f", "i", "u"}:
             if op in {"__mul__", "__mod__", "__truediv__", "__floordiv__"}:
                 out_dtype = self.dtype
+            elif op in {"__eq__", "NULL_EQUALS", "__ne__"}:
+                if isinstance(other, ColumnBase) and not isinstance(
+                    other, TimeDeltaColumn
+                ):
+                    return _all_bools_with_nulls(
+                        self, other, bool_fill_value=op == "__ne__"
+                    )
 
         if out_dtype is None:
             return NotImplemented
