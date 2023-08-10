@@ -1505,9 +1505,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                     "Can only compare identically-labeled Series objects"
                 )
             lhs, other = _align_indices([self, other], allow_non_unique=True)
-            can_use_self_column_name = self.name == other.name
         else:
             lhs = self
+
+        try:
+            can_use_self_column_name = cudf.utils.utils._is_same_name(
+                self.name, other.name
+            )
+        except AttributeError:
             can_use_self_column_name = False
 
         operands = lhs._make_operands_for_binop(other, fill_value, reflect)
