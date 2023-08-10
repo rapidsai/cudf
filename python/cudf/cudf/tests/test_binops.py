@@ -3,6 +3,7 @@
 import decimal
 import operator
 import random
+import warnings
 from itertools import combinations_with_replacement, product
 
 import cupy as cp
@@ -147,6 +148,33 @@ _cudf_scalar_reflected_ops = [
     lambda x: cudf.Scalar(0) - x,
     lambda x: cudf.Scalar(0) // x,
     lambda x: cudf.Scalar(0) / x,
+]
+
+_series_or_index_names = [
+    None,
+    pd.NA,
+    cudf.NA,
+    np.nan,
+    float("NaN"),
+    "abc",
+    1,
+    pd.NaT,
+    np.datetime64("nat"),
+    np.timedelta64("NaT"),
+    np.timedelta64(10, "D"),
+    np.timedelta64(5, "D"),
+    np.datetime64("1970-01-01 00:00:00.000000001"),
+    np.datetime64("1970-01-01 00:00:00.000000002"),
+    pd.Timestamp(1),
+    pd.Timestamp(2),
+    pd.Timedelta(1),
+    pd.Timedelta(2),
+    decimal.Decimal("NaN"),
+    decimal.Decimal("1.2"),
+    np.int64(1),
+    np.int32(1),
+    np.float32(1),
+    pd.Timestamp(1),
 ]
 
 pytest_xfail = pytest.mark.xfail
@@ -3278,19 +3306,18 @@ def test_binop_index_series(op):
     utils.assert_eq(expected, actual)
 
 
-def test_binop_index_dt_td_series():
-    gi = cudf.Index([1, 2, 3], dtype="datetime64[ns]", name=np.nan)
-    gs = cudf.Series([10, 11, 12], dtype="timedelta64[ns]", name=np.nan)
+@pytest.mark.parametrize("name1", _series_or_index_names)
+@pytest.mark.parametrize("name2", _series_or_index_names)
+def test_binop_index_dt_td_series_with_names(name1, name2):
+    gi = cudf.Index([1, 2, 3], dtype="datetime64[ns]", name=name1)
+    gs = cudf.Series([10, 11, 12], dtype="timedelta64[ns]", name=name2)
+    with warnings.catch_warnings():
+        # Numpy raises a deprecation warning:
+        # "elementwise comparison failed; this will raise an error "
+        warnings.simplefilter("ignore", (DeprecationWarning,))
 
+        expected = gi.to_pandas() + gs.to_pandas()
     actual = gi + gs
-    expected = gi.to_pandas() + gs.to_pandas()
-
-    utils.assert_eq(expected, actual)
-
-    gs.name = "abc"
-
-    actual = gs + gi
-    expected = gs.to_pandas() + gi.to_pandas()
 
     utils.assert_eq(expected, actual)
 

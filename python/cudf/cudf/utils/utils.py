@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
+import decimal
 import functools
 import hashlib
 import os
@@ -388,7 +389,28 @@ def _warn_no_dask_cudf(fn):
 
 def _is_same_name(left_name, right_name):
     # Internal utility to compare if two names are same.
-    return (left_name is right_name) or (left_name == right_name)
+    with warnings.catch_warnings():
+        # numpy throws warnings while comparing
+        # NaT values with non-NaT values.
+        warnings.simplefilter("ignore")
+        try:
+            same = (left_name is right_name) or (left_name == right_name)
+            if not same:
+                if isinstance(left_name, decimal.Decimal) and isinstance(
+                    right_name, decimal.Decimal
+                ):
+                    return left_name.is_nan() and right_name.is_nan()
+                if isinstance(left_name, float) and isinstance(
+                    right_name, float
+                ):
+                    return np.isnan(left_name) and np.isnan(right_name)
+                if isinstance(left_name, np.datetime64) and isinstance(
+                    right_name, np.datetime64
+                ):
+                    return np.isnan(left_name) and np.isnan(right_name)
+            return same
+        except TypeError:
+            return False
 
 
 def _all_bools_with_nulls(lhs, rhs, bool_fill_value):
