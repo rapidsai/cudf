@@ -228,12 +228,14 @@ __global__ void __launch_bounds__(encode_threads_per_block)
 
   // Encode and update actual bfr size
   if (idx < statistics_count && t == 0) {
-    s->chunk           = chunks[idx];
-    s->group           = groups[idx];
-    s->stats_dtype     = s->group.stats_dtype;
-    s->base            = blob_bfr + s->group.start_chunk;
-    s->end             = blob_bfr + s->group.start_chunk + s->group.num_chunks;
-    uint8_t* cur       = pb_put_uint(s->base, 1, s->chunk.non_nulls);
+    s->chunk       = chunks[idx];
+    s->group       = groups[idx];
+    s->stats_dtype = s->group.stats_dtype;
+    s->base        = blob_bfr + s->group.start_chunk;
+    s->end         = blob_bfr + s->group.start_chunk + s->group.num_chunks;
+    uint8_t* cur   = pb_put_uint(s->base, 1, s->chunk.non_nulls);
+    cur            = pb_put_uint(cur, 10, s->chunk.null_count != 0);  // hasNull (bool)
+
     uint8_t* fld_start = cur;
     switch (s->stats_dtype) {
       case dtype_int8:
