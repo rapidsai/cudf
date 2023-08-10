@@ -103,8 +103,7 @@ class union_member {
  * @tparam is_aggregation_supported Set to true if input type is meant to be aggregated
  */
 template <typename T, bool is_aggregation_supported>
-struct typed_statistics_chunk {
-};
+struct typed_statistics_chunk {};
 
 template <typename T>
 struct typed_statistics_chunk<T, true> {
