@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import builtins
 import pickle
 import warnings
 from functools import cached_property
-from typing import Any, Set
+from typing import Any, Set, Tuple
 
 import pandas as pd
 from typing_extensions import Self
@@ -18,7 +19,6 @@ from cudf._lib.stream_compaction import (
     drop_nulls,
 )
 from cudf._lib.types import size_type_dtype
-from cudf._typing import DtypeObj
 from cudf.api.types import (
     is_bool_dtype,
     is_integer,
@@ -31,51 +31,24 @@ from cudf.core.column import ColumnBase, column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils import ioutils
 from cudf.utils.dtypes import is_mixed_with_object_dtype
-
-_index_astype_docstring = """\
-Create an Index with values cast to dtypes.
-
-The class of a new Index is determined by dtype. When conversion is
-impossible, a ValueError exception is raised.
-
-Parameters
-----------
-dtype : :class:`numpy.dtype`
-    Use a :class:`numpy.dtype` to cast entire Index object to.
-copy : bool, default False
-    By default, astype always returns a newly allocated object.
-    If copy is set to False and internal requirements on dtype are
-    satisfied, the original data is used to create a new Index
-    or the original Index is returned.
-
-Returns
--------
-Index
-    Index with values cast to specified dtype.
-
-Examples
---------
->>> import cudf
->>> index = cudf.Index([1, 2, 3])
->>> index
-Int64Index([1, 2, 3], dtype='int64')
->>> index.astype('float64')
-Float64Index([1.0, 2.0, 3.0], dtype='float64')
-"""
+from cudf.utils.utils import _is_same_name
 
 
 class BaseIndex(Serializable):
     """Base class for all cudf Index types."""
 
-    dtype: DtypeObj
     _accessors: Set[Any] = set()
     _data: ColumnAccessor
+
+    @property
+    def _columns(self) -> Tuple[Any, ...]:
+        raise NotImplementedError
 
     @cached_property
     def _values(self) -> ColumnBase:
         raise NotImplementedError
 
-    def copy(self, deep: bool = True) -> BaseIndex:
+    def copy(self, deep: bool = True) -> Self:
         raise NotImplementedError
 
     def __len__(self):
@@ -86,8 +59,128 @@ class BaseIndex(Serializable):
         # The size of an index is always its length irrespective of dimension.
         return len(self)
 
+    def astype(self, dtype, copy: bool = True):
+        """Create an Index with values cast to dtypes.
+
+        The class of a new Index is determined by dtype. When conversion is
+        impossible, a ValueError exception is raised.
+
+        Parameters
+        ----------
+        dtype : :class:`numpy.dtype`
+            Use a :class:`numpy.dtype` to cast entire Index object to.
+        copy : bool, default False
+            By default, astype always returns a newly allocated object.
+            If copy is set to False and internal requirements on dtype are
+            satisfied, the original data is used to create a new Index
+            or the original Index is returned.
+
+        Returns
+        -------
+        Index
+            Index with values cast to specified dtype.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.Index([1, 2, 3])
+        >>> index
+        Int64Index([1, 2, 3], dtype='int64')
+        >>> index.astype('float64')
+        Float64Index([1.0, 2.0, 3.0], dtype='float64')
+        """
+        raise NotImplementedError
+
+    def argsort(self, *args, **kwargs):
+        """Return the integer indices that would sort the index.
+
+        Parameters vary by subclass.
+        """
+        raise NotImplementedError
+
+    @property
+    def dtype(self):
+        raise NotImplementedError
+
+    @property
+    def empty(self):
+        return self.size == 0
+
+    @property
+    def is_unique(self):
+        """Return if the index has unique values."""
+        raise NotImplementedError
+
+    def memory_usage(self, deep=False):
+        """Return the memory usage of an object.
+
+        Parameters
+        ----------
+        deep : bool
+            The deep parameter is ignored and is only included for pandas
+            compatibility.
+
+        Returns
+        -------
+        The total bytes used.
+        """
+        raise NotImplementedError
+
+    def tolist(self):  # noqa: D102
+        raise TypeError(
+            "cuDF does not support conversion to host memory "
+            "via the `tolist()` method. Consider using "
+            "`.to_arrow().to_pylist()` to construct a Python list."
+        )
+
+    to_list = tolist
+
+    @property
+    def name(self):
+        """Returns the name of the Index."""
+        raise NotImplementedError
+
+    @property  # type: ignore
+    def ndim(self):  # noqa: D401
+        """Number of dimensions of the underlying data, by definition 1."""
+        return 1
+
+    def equals(self, other):
+        """
+        Determine if two Index objects contain the same elements.
+
+        Returns
+        -------
+        out: bool
+            True if "other" is an Index and it has the same elements
+            as calling index; False otherwise.
+        """
+        raise NotImplementedError
+
+    def shift(self, periods=1, freq=None):
+        """Not yet implemented"""
+        raise NotImplementedError
+
+    @property
+    def shape(self):
+        """Get a tuple representing the dimensionality of the data."""
+        return (len(self),)
+
+    @property
+    def str(self):
+        """Not yet implemented."""
+        raise NotImplementedError
+
     @property
     def values(self):
+        raise NotImplementedError
+
+    def max(self):
+        """The maximum value of the index."""
+        raise NotImplementedError
+
+    def min(self):
+        """The minimum value of the index."""
         raise NotImplementedError
 
     def get_loc(self, key, method=None, tolerance=None):
@@ -198,6 +291,7 @@ class BaseIndex(Serializable):
         -------
         bool
         """
+        # Do not remove until pandas 2.0 support is added.
         warnings.warn(
             "is_monotonic is deprecated and will be removed in a future "
             "version. Use is_monotonic_increasing instead.",
@@ -335,6 +429,30 @@ class BaseIndex(Serializable):
     @property
     def has_duplicates(self):
         return not self.is_unique
+
+    def where(self, cond, other=None, inplace=False):
+        """
+        Replace values where the condition is False.
+
+        The replacement is taken from other.
+
+        Parameters
+        ----------
+        cond : bool array-like with the same length as self
+            Condition to select the values on.
+        other : scalar, or array-like, default None
+            Replacement if the condition is False.
+
+        Returns
+        -------
+        cudf.Index
+            A copy of self with values replaced from other
+            where the condition is False.
+        """
+        raise NotImplementedError
+
+    def factorize(self, sort=False, na_sentinel=None, use_na_sentinel=None):
+        raise NotImplementedError
 
     def union(self, other, sort=None):
         """
@@ -594,6 +712,18 @@ class BaseIndex(Serializable):
             {col_name: self._values}, index=self if index else None
         )
 
+    def to_arrow(self):
+        """Convert to a suitable Arrow object."""
+        raise NotImplementedError
+
+    def to_cupy(self):
+        """Convert to a cupy array."""
+        raise NotImplementedError
+
+    def to_numpy(self):
+        """Convert to a numpy array."""
+        raise NotImplementedError
+
     def any(self):
         """
         Return whether any elements is True in Index.
@@ -605,7 +735,7 @@ class BaseIndex(Serializable):
         Detect missing values.
 
         Return a boolean same-sized object indicating if the values are NA.
-        NA values, such as ``None``, :attr:`numpy.NaN` or :attr:`cudf.NaN`, get
+        NA values, such as ``None``, `numpy.NAN` or `cudf.NA`, get
         mapped to ``True`` values.
         Everything else get mapped to ``False`` values.
 
@@ -623,7 +753,7 @@ class BaseIndex(Serializable):
 
         Return a boolean same-sized object indicating if the values are not NA.
         Non-missing values get mapped to ``True``.
-        NA values, such as None or :attr:`numpy.NaN`, get mapped to ``False``
+        NA values, such as None or `numpy.NAN`, get mapped to ``False``
         values.
 
         Returns
@@ -876,6 +1006,7 @@ class BaseIndex(Serializable):
         >>> idx.is_numeric()
         False
         """
+        # Do not remove until pandas removes this.
         warnings.warn(
             f"{type(self).__name__}.is_numeric is deprecated. "
             "Use cudf.api.types.is_any_real_numeric_dtype instead",
@@ -920,6 +1051,7 @@ class BaseIndex(Serializable):
         >>> idx.is_boolean()
         False
         """
+        # Do not remove until pandas removes this.
         warnings.warn(
             f"{type(self).__name__}.is_boolean is deprecated. "
             "Use cudf.api.types.is_bool_dtype instead",
@@ -964,6 +1096,7 @@ class BaseIndex(Serializable):
         >>> idx.is_integer()
         False
         """
+        # Do not remove until pandas removes this.
         warnings.warn(
             f"{type(self).__name__}.is_integer is deprecated. "
             "Use cudf.api.types.is_integer_dtype instead",
@@ -1015,6 +1148,7 @@ class BaseIndex(Serializable):
         >>> idx.is_floating()
         False
         """
+        # Do not remove until pandas removes this.
         warnings.warn(
             f"{type(self).__name__}.is_floating is deprecated. "
             "Use cudf.api.types.is_float_dtype instead",
@@ -1060,6 +1194,7 @@ class BaseIndex(Serializable):
         >>> idx.is_object()
         False
         """
+        # Do not remove until pandas removes this.
         warnings.warn(
             f"{type(self).__name__}.is_object is deprecated. "
             "Use cudf.api.types.is_object_dtype instead",
@@ -1112,6 +1247,7 @@ class BaseIndex(Serializable):
         >>> s.index.is_categorical()
         False
         """
+        # Do not remove until pandas removes this.
         warnings.warn(
             f"{type(self).__name__}.is_categorical is deprecated. "
             "Use cudf.api.types.is_categorical_dtype instead",
@@ -1158,6 +1294,7 @@ class BaseIndex(Serializable):
         >>> idx.is_interval()
         False
         """
+        # Do not remove until pandas removes this.
         warnings.warn(
             f"{type(self).__name__}.is_interval is deprecated. "
             "Use cudf.api.types.is_interval_dtype instead",
@@ -1490,9 +1627,9 @@ class BaseIndex(Serializable):
     def searchsorted(
         self,
         value,
-        side: str = "left",
+        side: builtins.str = "left",
         ascending: bool = True,
-        na_position: str = "last",
+        na_position: builtins.str = "last",
     ):
         """Find index where elements should be inserted to maintain order
 
@@ -1517,9 +1654,9 @@ class BaseIndex(Serializable):
         As a precondition the index must be sorted in the same order
         as requested by the `ascending` flag.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
-    def get_slice_bound(self, label, side: str, kind=None) -> int:
+    def get_slice_bound(self, label, side: builtins.str, kind=None) -> int:
         """
         Calculate slice bound that corresponds to given label.
         Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
@@ -1537,6 +1674,7 @@ class BaseIndex(Serializable):
             Index of label.
         """
         if kind is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "'kind' argument in get_slice_bound is deprecated and will be "
                 "removed in a future version.",
@@ -1873,7 +2011,4 @@ class BaseIndex(Serializable):
 
 
 def _get_result_name(left_name, right_name):
-    if left_name == right_name:
-        return left_name
-    else:
-        return None
+    return left_name if _is_same_name(left_name, right_name) else None

@@ -23,8 +23,8 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/io/arrow_io_source.hpp>
 #include <cudf/io/csv.hpp>
-#include <cudf/io/datasource.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -169,8 +169,7 @@ void check_float_column(cudf::column_view const& col_lhs,
 
   CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(col_lhs,
                                                 (wrapper<T>{data.begin(), data.end(), validity}));
-  CUDF_EXPECTS(col_lhs.null_count() == 0 and col_rhs.null_count() == 0,
-               "All elements should be valid");
+  EXPECT_TRUE(col_lhs.null_count() == 0 and col_rhs.null_count() == 0);
   EXPECT_THAT(cudf::test::to_host<T>(col_lhs).first,
               ::testing::Pointwise(FloatNearPointwise(tol), data));
 }

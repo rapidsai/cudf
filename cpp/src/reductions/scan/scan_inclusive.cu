@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
+#include <reductions/nested_type_minmax_util.cuh>
 #include <reductions/scan/scan.cuh>
-#include <reductions/struct_minmax_util.cuh>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>

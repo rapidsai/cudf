@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import numbers
+import operator
 import pickle
 import warnings
 from collections import abc
@@ -23,14 +24,8 @@ from cudf.api.types import is_integer, is_list_like, is_object_dtype
 from cudf.core import column
 from cudf.core._compat import PANDAS_GE_150
 from cudf.core.frame import Frame
-from cudf.core.index import (
-    BaseIndex,
-    _index_astype_docstring,
-    _lexsorted_equal_range,
-    as_index,
-)
-from cudf.utils.docutils import doc_apply
-from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
+from cudf.core.index import BaseIndex, _lexsorted_equal_range, as_index
+from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate, _is_same_name
 
 
 def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:
@@ -72,6 +67,33 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     verify_integrity : bool, default True
         Check that the levels/codes are consistent and valid.
         Not yet supported
+
+    Attributes
+    ----------
+    names
+    nlevels
+    dtypes
+    levels
+    codes
+
+    Methods
+    -------
+    from_arrays
+    from_tuples
+    from_product
+    from_frame
+    set_levels
+    set_codes
+    to_frame
+    to_flat_index
+    sortlevel
+    droplevel
+    swaplevel
+    reorder_levels
+    remove_unused_levels
+    get_level_values
+    get_loc
+    drop
 
     Returns
     -------
@@ -198,7 +220,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         self._names = pd.core.indexes.frozen.FrozenList(value)
 
     @_cudf_nvtx_annotate
-    @doc_apply(_index_astype_docstring)
     def astype(self, dtype, copy: bool = True):
         if not is_object_dtype(dtype):
             raise TypeError(
@@ -285,8 +306,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             level = [self._level_index_from_level(lev) for lev in level]
 
         existing_names = list(self.names)
-        for i, l in enumerate(level):
-            existing_names[l] = names[i]
+        for i, lev in enumerate(level):
+            existing_names[lev] = names[i]
         names = existing_names
 
         return self._set_names(names=names, inplace=inplace)
@@ -403,6 +424,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         # TODO: Update message when set_levels is implemented.
         # https://github.com/rapidsai/cudf/issues/12307
         if levels is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "parameter levels is deprecated and will be removed in a "
                 "future version.",
@@ -412,6 +434,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         # TODO: Update message when set_codes is implemented.
         # https://github.com/rapidsai/cudf/issues/12308
         if codes is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "parameter codes is deprecated and will be removed in a "
                 "future version.",
@@ -419,6 +442,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             )
 
         if dtype is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "parameter dtype is deprecated and will be removed in a "
                 "future version. Use the astype method instead.",
@@ -772,7 +796,20 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             ],
             axis=1,
         )
-        result = lookup.merge(data_table)["idx"]
+        # Sort indices in pandas compatible mode
+        # because we want the indices to be fetched
+        # in a deterministic order.
+        # TODO: Remove this after merge/join
+        # obtain deterministic ordering.
+        if cudf.get_option("mode.pandas_compatible"):
+            lookup_order = "_" + "_".join(map(str, lookup._data.names))
+            lookup[lookup_order] = column.arange(len(lookup))
+            postprocess = operator.methodcaller(
+                "sort_values", by=[lookup_order, "idx"]
+            )
+        else:
+            postprocess = lambda r: r  # noqa: E731
+        result = postprocess(lookup.merge(data_table))["idx"]
         # Avoid computing levels unless the result of the merge is empty,
         # which suggests that a KeyError should be raised.
         if len(result) == 0:
@@ -901,13 +938,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             df.index, row_tuple, len(df.index)
         )
         indices = cudf.Series(valid_indices)
-        if cudf.get_option("mode.pandas_compatible"):
-            # Sort indices in pandas compatible mode
-            # because we want the indices to be fetched
-            # in a deterministic order.
-            # TODO: Remove this after merge/join
-            # obtain deterministic ordering.
-            indices = indices.sort_values()
         result = df.take(indices)
         final = self._index_and_downcast(result, result.index, row_tuple)
         return final
@@ -1520,6 +1550,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def is_unique(self):
         return len(self) == len(self.unique())
 
+    @property
+    def dtype(self):
+        return np.dtype("O")
+
     @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def is_monotonic_increasing(self):
@@ -1857,7 +1891,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         if len(self.names) != len(other.names):
             return [None] * len(self.names)
         return [
-            self_name if self_name == other_name else None
+            self_name if _is_same_name(self_name, other_name) else None
             for self_name, other_name in zip(self.names, other.names)
         ]
 

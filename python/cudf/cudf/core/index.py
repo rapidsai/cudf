@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import pickle
 import warnings
-from functools import cached_property
+from functools import cache, cached_property
 from numbers import Number
 from typing import (
     Any,
@@ -37,7 +37,7 @@ from cudf.api.types import (
     is_scalar,
     is_string_dtype,
 )
-from cudf.core._base_index import BaseIndex, _index_astype_docstring
+from cudf.core._base_index import BaseIndex
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -56,14 +56,19 @@ from cudf.core.dtypes import IntervalDtype
 from cudf.core.frame import Frame
 from cudf.core.mixins import BinaryOperand
 from cudf.core.single_column_frame import SingleColumnFrame
-from cudf.utils.docutils import copy_docstring, doc_apply
+from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     find_common_type,
     is_mixed_with_object_dtype,
     numeric_normalize_types,
 )
-from cudf.utils.utils import _cudf_nvtx_annotate, search_range
+from cudf.utils.utils import (
+    _cudf_nvtx_annotate,
+    _is_same_name,
+    _warn_no_dask_cudf,
+    search_range,
+)
 
 
 def _lexsorted_equal_range(
@@ -152,9 +157,16 @@ class RangeIndex(BaseIndex, BinaryOperand):
     copy : bool, default False
         Unused, accepted for homogeneity with other index types.
 
-    Returns
+    Attributes
+    ----------
+    start
+    stop
+    step
+
+    Methods
     -------
-    RangeIndex
+    to_numpy
+    to_arrow
 
     Examples
     --------
@@ -216,9 +228,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def name(self):
-        """
-        Returns the name of the Index.
-        """
         return self._name
 
     @name.setter  # type: ignore
@@ -307,6 +316,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
             item, tuple(np.sctypes["int"] + np.sctypes["float"] + [int, float])
         ):
             return False
+        try:
+            item = pd.core.dtypes.common.ensure_python_int(item)
+        except TypeError:
+            return False
         if not item % 1 == 0:
             return False
         return item in range(self._start, self._stop, self._step)
@@ -342,6 +355,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         New RangeIndex instance with same range, casted to new dtype
         """
         if dtype is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "parameter dtype is deprecated and will be removed in a "
                 "future version. Use the astype method instead.",
@@ -349,6 +363,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             )
 
         if names is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "parameter names is deprecated and will be removed in a "
                 "future version. Use the name parameter instead.",
@@ -367,7 +382,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     @_cudf_nvtx_annotate
-    @doc_apply(_index_astype_docstring)
     def astype(self, dtype, copy: bool = True):
         if is_dtype_equal(dtype, self.dtype):
             return self
@@ -482,9 +496,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @property
     def is_unique(self):
-        """
-        Return if the index has unique values.
-        """
         return True
 
     @cached_property
@@ -554,6 +565,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         # get_indexers method as an alternative, see
         # https://github.com/rapidsai/cudf/issues/12312
         if method is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 f"Passing method to {self.__class__.__name__}.get_loc is "
                 "deprecated and will raise in a future version.",
@@ -915,6 +927,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def __abs__(self):
         return abs(self._as_int_index())
 
+    @_warn_no_dask_cudf
+    def __dask_tokenize__(self):
+        return (type(self), self.start, self.stop, self.step)
+
 
 class GenericIndex(SingleColumnFrame, BaseIndex):
     """
@@ -1014,12 +1030,27 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         operands = self._make_operands_for_binop(other, fill_value, reflect)
         if operands is NotImplemented:
             return NotImplemented
-        ret = _index_from_data(self._colwise_binop(operands, op))
+        binop_result = self._colwise_binop(operands, op)
+
+        if isinstance(other, cudf.Series):
+            ret = other._from_data_like_self(binop_result)
+            ret.name = (
+                self.name
+                if cudf.utils.utils._is_same_name(self.name, other.name)
+                else None
+            )
+        else:
+            ret = _index_from_data(binop_result)
 
         # pandas returns numpy arrays when the outputs are boolean. We
         # explicitly _do not_ use isinstance here: we want only boolean
         # GenericIndexes, not dtype-specific subclasses.
-        if type(ret) is GenericIndex and ret.dtype.kind == "b":
+        if (
+            isinstance(ret, (GenericIndex, cudf.Series))
+            and ret.dtype.kind == "b"
+        ):
+            if ret._column.has_nulls():
+                ret = ret.fillna(op == "__ne__")
             return ret.values
         return ret
 
@@ -1059,17 +1090,13 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     def memory_usage(self, deep=False):
         return self._column.memory_usage
 
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
-    def equals(self, other, **kwargs):
-        """
-        Determine if two Index objects contain the same elements.
+    def is_unique(self):
+        return self._column.is_unique
 
-        Returns
-        -------
-        out: bool
-            True if "other" is an Index and it has the same elements
-            as calling index; False otherwise.
-        """
+    @_cudf_nvtx_annotate
+    def equals(self, other):
         if (
             other is None
             or not isinstance(other, BaseIndex)
@@ -1128,6 +1155,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         New index instance, casted to new dtype
         """
         if dtype is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "parameter dtype is deprecated and will be removed in a "
                 "future version. Use the astype method instead.",
@@ -1135,6 +1163,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             )
 
         if names is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 "parameter names is deprecated and will be removed in a "
                 "future version. Use the name parameter instead.",
@@ -1148,7 +1177,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return _index_from_data({name: col.copy(True) if deep else col})
 
     @_cudf_nvtx_annotate
-    @doc_apply(_index_astype_docstring)
     def astype(self, dtype, copy: bool = True):
         return _index_from_data(super().astype({self.name: dtype}, copy))
 
@@ -1197,6 +1225,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         # get_indexers method as an alternative, see
         # https://github.com/rapidsai/cudf/issues/12312
         if method is not None:
+            # Do not remove until pandas 2.0 support is added.
             warnings.warn(
                 f"Passing method to {self.__class__.__name__}.get_loc is "
                 "deprecated and will raise in a future version.",
@@ -1419,7 +1448,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         ascending=True,
         na_position="last",
     ):
-        """Return the integer indices that would sort the Series values.
+        """Return the integer indices that would sort the index.
 
         Parameters
         ----------
@@ -1543,6 +1572,12 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         """Return indices of value in index"""
         return self._column.indices_of(value)
 
+    @cache
+    @_warn_no_dask_cudf
+    def __dask_tokenize__(self):
+        # We can use caching, because an index is immutable
+        return super().__dask_tokenize__()
+
 
 class NumericIndex(GenericIndex):
     """Immutable, ordered and sliceable sequence of labels.
@@ -1568,6 +1603,7 @@ class NumericIndex(GenericIndex):
 
     @_cudf_nvtx_annotate
     def __init__(self, data=None, dtype=None, copy=False, name=None):
+        # Do not remove until pandas 2.0 support is added.
         warnings.warn(
             f"cudf.{self.__class__.__name__} is deprecated and will be "
             "removed from cudf in a future version. Use cudf.Index with the "
@@ -1624,6 +1660,14 @@ class Int8Index(NumericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     Int8Index
@@ -1648,6 +1692,14 @@ class Int16Index(NumericIndex):
         Make a copy of input data.
     name : object
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
 
     Returns
     -------
@@ -1674,6 +1726,14 @@ class Int32Index(NumericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     Int32Index
@@ -1698,6 +1758,14 @@ class Int64Index(NumericIndex):
         Make a copy of input data.
     name : object
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
 
     Returns
     -------
@@ -1724,6 +1792,14 @@ class UInt8Index(NumericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     UInt8Index
@@ -1748,6 +1824,14 @@ class UInt16Index(NumericIndex):
         Make a copy of input data.
     name : object
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
 
     Returns
     -------
@@ -1774,6 +1858,14 @@ class UInt32Index(NumericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     UInt32Index
@@ -1799,6 +1891,14 @@ class UInt64Index(NumericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     UInt64Index
@@ -1823,6 +1923,14 @@ class Float32Index(NumericIndex):
         Make a copy of input data.
     name : object
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
 
     Returns
     -------
@@ -1854,6 +1962,14 @@ class Float64Index(NumericIndex):
         Make a copy of input data.
     name : object
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
 
     Returns
     -------
@@ -1894,6 +2010,32 @@ class DatetimeIndex(GenericIndex):
     yearfirst : bool, default False
         If True parse dates in data with the year first order.
         This is not yet supported
+
+    Attributes
+    ----------
+    year
+    month
+    day
+    hour
+    minute
+    second
+    microsecond
+    nanosecond
+    date
+    time
+    dayofyear
+    day_of_year
+    weekday
+    quarter
+    freq
+
+    Methods
+    -------
+    ceil
+    floor
+    round
+    tz_convert
+    tz_localize
 
     Returns
     -------
@@ -2554,6 +2696,19 @@ class TimedeltaIndex(GenericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    days
+    seconds
+    microseconds
+    nanoseconds
+    components
+    inferred_freq
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     TimedeltaIndex
@@ -2697,6 +2852,15 @@ class CategoricalIndex(GenericIndex):
         Make a copy of input.
     name : object, optional
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    codes
+    categories
+
+    Methods
+    -------
+    equals
 
     Returns
     -------
@@ -2956,6 +3120,15 @@ class IntervalIndex(GenericIndex):
     name : object, optional
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    values
+
+    Methods
+    -------
+    from_breaks
+    get_loc
+
     Returns
     -------
     IntervalIndex
@@ -3065,6 +3238,7 @@ class StringIndex(GenericIndex):
 
     @_cudf_nvtx_annotate
     def __init__(self, values, copy=False, **kwargs):
+        # Do not remove until pandas 2.0 support is added.
         warnings.warn(
             f"cudf.{self.__class__.__name__} is deprecated and will be "
             "removed from cudf in a future version. Use cudf.Index with the "
@@ -3151,7 +3325,7 @@ def as_index(arbitrary, nan_as_null=None, **kwargs) -> BaseIndex:
     if isinstance(arbitrary, cudf.MultiIndex):
         return arbitrary
     elif isinstance(arbitrary, BaseIndex):
-        if arbitrary.name == kwargs["name"]:
+        if _is_same_name(arbitrary.name, kwargs["name"]):
             return arbitrary
         idx = arbitrary.copy(deep=False)
         idx.rename(kwargs["name"], inplace=True)
@@ -3241,9 +3415,9 @@ class Index(BaseIndex, metaclass=IndexMeta):
     Warnings
     --------
     This class should not be subclassed. It is designed as a factory for
-    different subclasses of :class:`BaseIndex` depending on the provided input.
+    different subclasses of `BaseIndex` depending on the provided input.
     If you absolutely must, and if you're intimately familiar with the
-    internals of cuDF, subclass :class:`BaseIndex` instead.
+    internals of cuDF, subclass `BaseIndex` instead.
 
     Examples
     --------

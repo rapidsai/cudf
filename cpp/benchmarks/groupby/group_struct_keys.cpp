@@ -15,7 +15,6 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
@@ -34,10 +33,10 @@ void bench_groupby_struct_keys(nvbench::state& state)
   std::default_random_engine generator;
   std::uniform_int_distribution<int> distribution(0, 100);
 
-  const cudf::size_type n_rows{static_cast<cudf::size_type>(state.get_int64("NumRows"))};
-  const cudf::size_type n_cols{1};
-  const cudf::size_type depth{static_cast<cudf::size_type>(state.get_int64("Depth"))};
-  const bool nulls{static_cast<bool>(state.get_int64("Nulls"))};
+  cudf::size_type const n_rows{static_cast<cudf::size_type>(state.get_int64("NumRows"))};
+  cudf::size_type const n_cols{1};
+  cudf::size_type const depth{static_cast<cudf::size_type>(state.get_int64("Depth"))};
+  bool const nulls{static_cast<bool>(state.get_int64("Nulls"))};
 
   // Create columns with values in the range [0,100)
   std::vector<column_wrapper> columns;
