@@ -432,7 +432,7 @@ constexpr bool is_string_col(ColumnChunkDesc const& chunk)
 {
   return ((chunk.data_type & 7) == BYTE_ARRAY and (chunk.data_type >> 3) != 4 and
           chunk.converted_type != DECIMAL) or
-         (chunk.data_type & 7) == FIXED_LEN_BYTE_ARRAY;
+         ((chunk.data_type & 7) == FIXED_LEN_BYTE_ARRAY and chunk.converted_type != DECIMAL);
 }
 
 /**
