@@ -58,6 +58,7 @@ from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
+    find_common_type,
     is_mixed_with_object_dtype,
     numeric_normalize_types,
 )
@@ -2854,39 +2855,47 @@ def interval_range(
             closed='left',
             dtype='interval')
     """
-    # check that exactly 3 of start, end, periods and freq are
-    # specified:
-    if sum(_ is not None for _ in (start, end, periods, freq)) != 3:
+    nargs = sum(_ is not None for _ in (start, end, periods, freq))
+
+    # we need at least three of (start, end, periods, freq)
+    if nargs == 2 and freq is None:
+        freq = 1
+        nargs += 1
+
+    if nargs != 3:
         raise ValueError(
             "Of the four parameters: start, end, periods, and "
             "freq, exactly three must be specified"
         )
-    args = [
-        cudf.Scalar(x) if x is not None else None
-        for x in (start, end, freq, periods)
-    ]
-    if any(
-        not _is_non_decimal_numeric_dtype(x.dtype) if x is not None else False
-        for x in args
-    ):
-        raise ValueError("start, end, periods, freq must be numeric values.")
-    *rargs, periods = args
-    start, end, freq = rargs
-    periods = periods.astype("int64") if periods is not None else None
+
+    start = cudf.Scalar(start) if start is not None else start
+    end = cudf.Scalar(end) if end is not None else end
+    periods = cudf.Scalar(int(periods)) if periods is not None else periods
+    freq = cudf.Scalar(freq) if freq is not None else freq
 
     if start is None:
         start = end - freq * periods
     elif freq is None:
         quotient, remainder = divmod((end - start).value, periods.value)
         if remainder:
-            freq = cudf.Scalar((end - start) / periods)
+            freq = (end - start) / periods
         else:
-            freq = cudf.Scalar(quotient)
+            freq = cudf.Scalar(int(quotient))
     elif periods is None:
-        periods = int((end - start) / freq)
+        periods = cudf.Scalar(int((end - start) / freq))
+    elif end is None:
+        end = start + periods * freq
 
-    if start.dtype != freq.dtype:
-        start = start.astype(freq.dtype)
+    if any(
+        not _is_non_decimal_numeric_dtype(x.dtype) if x is not None else False
+        for x in (start, periods, freq, end)
+    ):
+        raise ValueError("start, end, periods, freq must be numeric values.")
+
+    periods = periods.astype("int64")
+    common_dtype = find_common_type((start.dtype, freq.dtype, end.dtype))
+    start = start.astype(common_dtype)
+    freq = freq.astype(common_dtype)
 
     bin_edges = sequence(
         size=periods + 1,

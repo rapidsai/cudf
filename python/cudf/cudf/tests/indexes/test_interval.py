@@ -279,6 +279,8 @@ def test_interval_index_from_breaks(closed):
         (None, 1.0, 0.2, 5),
         # (0.0, 1.0, 0.1, None), # Pandas returns the wrong result here
         (0.0, 1.0, None, 10),
+        (0.0, None, 0.25, 4),
+        (1.0, None, 2.5, 2),
     ],
 )
 def test_interval_range_floating(start, stop, freq, periods):
