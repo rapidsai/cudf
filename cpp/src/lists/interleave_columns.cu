@@ -273,12 +273,12 @@ struct interleave_list_entries_impl<T, std::enable_if_t<cudf::is_fixed_width<T>(
       rmm::exec_policy(stream),
       thrust::make_counting_iterator<size_type>(0),
       num_output_lists,
-      cuda::proclaim_return_type<void>([num_cols,
-                                        table_dv     = *table_dv_ptr,
-                                        d_validities = validities.begin(),
-                                        d_offsets = output_list_offsets.template begin<size_type>(),
-                                        d_output  = output_dv_ptr->template begin<T>(),
-                                        data_has_null_mask] __device__(size_type const idx) {
+      [num_cols,
+       table_dv     = *table_dv_ptr,
+       d_validities = validities.begin(),
+       d_offsets    = output_list_offsets.template begin<size_type>(),
+       d_output     = output_dv_ptr->template begin<T>(),
+       data_has_null_mask] __device__(size_type const idx) {
         auto const col_id     = idx % num_cols;
         auto const list_id    = idx / num_cols;
         auto const& lists_col = table_dv.column(col_id);
@@ -307,7 +307,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<cudf::is_fixed_width<T>(
         auto const output_ptr = reinterpret_cast<char*>(&d_output[write_start]);
         thrust::copy(
           thrust::seq, input_ptr, input_ptr + sizeof(T) * (end_idx - start_idx), output_ptr);
-      }));
+      });
 
     if (data_has_null_mask) {
       auto [null_mask, null_count] = cudf::detail::valid_if(

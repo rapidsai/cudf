@@ -94,13 +94,12 @@ std::unique_ptr<column> fill(strings_column_view const& strings,
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
-    cuda::proclaim_return_type<void>(
-      [d_strings, begin, end, d_value, d_offsets, d_chars] __device__(size_type idx) {
-        if (((begin <= idx) && (idx < end)) ? !d_value.is_valid() : d_strings.is_null(idx)) return;
-        string_view const d_str =
-          ((begin <= idx) && (idx < end)) ? d_value.value() : d_strings.element<string_view>(idx);
-        memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes());
-      }));
+    [d_strings, begin, end, d_value, d_offsets, d_chars] __device__(size_type idx) {
+      if (((begin <= idx) && (idx < end)) ? !d_value.is_valid() : d_strings.is_null(idx)) return;
+      string_view const d_str =
+        ((begin <= idx) && (idx < end)) ? d_value.value() : d_strings.element<string_view>(idx);
+      memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes());
+    });
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),

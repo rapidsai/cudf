@@ -123,11 +123,11 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
         // this approach is 2-3x faster for a large number of smaller string lengths
         auto chars_column = create_chars_child_column(bytes, stream, mr);
         auto d_chars      = chars_column->mutable_view().template data<char>();
-        auto copy_chars   = cuda::proclaim_return_type<void>([d_chars] __device__(auto item) {
+        auto copy_chars   = [d_chars] __device__(auto item) {
           string_index_pair const str = thrust::get<0>(item);
           size_type const offset      = thrust::get<1>(item);
           if (str.first != nullptr) memcpy(d_chars + offset, str.first, str.second);
-        });
+        };
         thrust::for_each_n(rmm::exec_policy(stream),
                            thrust::make_zip_iterator(
                              thrust::make_tuple(begin, offsets_view.template begin<int32_t>())),

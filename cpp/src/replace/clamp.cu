@@ -122,7 +122,7 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
   auto d_offsets = offsets_column->view().template data<size_type>();
   auto d_chars   = chars_column->mutable_view().template data<char>();
   // fill in chars
-  auto copy_transformer = cuda::proclaim_return_type<void>(
+  auto copy_transformer =
     [d_input, lo_itr, hi_itr, lo_replace_itr, hi_replace_itr, d_offsets, d_chars] __device__(
       size_type idx) {
       if (d_input.is_null(idx)) { return; }
@@ -139,7 +139,7 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
       } else {
         memcpy(d_chars + d_offsets[idx], input_element.data(), input_element.size_bytes());
       }
-    });
+    };
 
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),

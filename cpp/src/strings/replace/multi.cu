@@ -332,11 +332,10 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        target_count,
-                       cuda::proclaim_return_type<void>(
-                         [d_string_indices, d_targets_offsets] __device__(size_type idx) {
-                           auto const str_idx = d_string_indices[idx] - 1;
-                           atomicAdd(d_targets_offsets + str_idx, 1);
-                         }));
+                       [d_string_indices, d_targets_offsets] __device__(size_type idx) {
+                         auto const str_idx = d_string_indices[idx] - 1;
+                         atomicAdd(d_targets_offsets + str_idx, 1);
+                       });
     // finally, convert the counts into offsets
     thrust::exclusive_scan(rmm::exec_policy(stream),
                            targets_offsets.begin(),
@@ -372,12 +371,11 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
-    cuda::proclaim_return_type<void>(
-      [fn, d_strings_offsets, d_positions, d_targets_offsets, d_indices, d_sizes] __device__(
-        size_type idx) {
-        d_sizes[idx] =
-          fn.get_strings(idx, d_strings_offsets, d_positions, d_targets_offsets, d_indices);
-      }));
+    [fn, d_strings_offsets, d_positions, d_targets_offsets, d_indices, d_sizes] __device__(
+      size_type idx) {
+      d_sizes[idx] =
+        fn.get_strings(idx, d_strings_offsets, d_positions, d_targets_offsets, d_indices);
+    });
 
   // use this utility to gather the string parts into a contiguous chars column
   auto chars = make_strings_column(indices.begin(), indices.end(), stream, mr);

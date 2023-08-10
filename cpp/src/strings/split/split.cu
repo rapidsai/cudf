@@ -369,10 +369,9 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
-                     cuda::proclaim_return_type<void>(
-                       [tokenizer, d_token_counts, d_tokens] __device__(size_type idx) {
-                         tokenizer.process_tokens(idx, d_token_counts, d_tokens);
-                       }));
+                     [tokenizer, d_token_counts, d_tokens] __device__(size_type idx) {
+                       tokenizer.process_tokens(idx, d_token_counts, d_tokens);
+                     });
 
   // Create each column.
   // - Each pair points to a string for that column for each row.

@@ -246,39 +246,38 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
       return (i - offsets[0]) - 1;
     }));
 
-  auto fill_gather_maps = cuda::proclaim_return_type<void>(
-    [offsets_minus_one,
-     gather_map_p             = gather_map.begin(),
-     explode_col_gather_map_p = explode_col_gather_map.begin(),
-     position_array           = pos.begin(),
-     sliced_child_size        = sliced_child.size(),
-     null_or_empty_offset_p   = null_or_empty_offset.begin(),
-     include_position,
-     offsets,
-     null_or_empty,
-     offset_size = explode_col.offsets().size() - 1] __device__(auto idx) {
-      if (idx < sliced_child_size) {
-        auto lb_idx = thrust::distance(
-          offsets_minus_one,
-          thrust::lower_bound(
-            thrust::seq, offsets_minus_one, offsets_minus_one + (offset_size), idx));
-        auto index_to_write                      = null_or_empty_offset_p[lb_idx] + idx;
-        gather_map_p[index_to_write]             = lb_idx;
-        explode_col_gather_map_p[index_to_write] = idx;
-        if (include_position) {
-          position_array[index_to_write] = idx - (offsets[lb_idx] - offsets[0]);
-        }
+  auto fill_gather_maps = [offsets_minus_one,
+                           gather_map_p             = gather_map.begin(),
+                           explode_col_gather_map_p = explode_col_gather_map.begin(),
+                           position_array           = pos.begin(),
+                           sliced_child_size        = sliced_child.size(),
+                           null_or_empty_offset_p   = null_or_empty_offset.begin(),
+                           include_position,
+                           offsets,
+                           null_or_empty,
+                           offset_size = explode_col.offsets().size() - 1] __device__(auto idx) {
+    if (idx < sliced_child_size) {
+      auto lb_idx =
+        thrust::distance(offsets_minus_one,
+                         thrust::lower_bound(
+                           thrust::seq, offsets_minus_one, offsets_minus_one + (offset_size), idx));
+      auto index_to_write                      = null_or_empty_offset_p[lb_idx] + idx;
+      gather_map_p[index_to_write]             = lb_idx;
+      explode_col_gather_map_p[index_to_write] = idx;
+      if (include_position) {
+        position_array[index_to_write] = idx - (offsets[lb_idx] - offsets[0]);
       }
-      if (null_or_empty[idx]) {
-        auto invalid_index          = null_or_empty_offset_p[idx] == 0
-                                        ? offsets[idx]
-                                        : offsets[idx] + null_or_empty_offset_p[idx] - 1;
-        gather_map_p[invalid_index] = idx;
+    }
+    if (null_or_empty[idx]) {
+      auto invalid_index          = null_or_empty_offset_p[idx] == 0
+                                      ? offsets[idx]
+                                      : offsets[idx] + null_or_empty_offset_p[idx] - 1;
+      gather_map_p[invalid_index] = idx;
 
-        explode_col_gather_map_p[invalid_index] = InvalidIndex;
-        if (include_position) { position_array[invalid_index] = 0; }
-      }
-    });
+      explode_col_gather_map_p[invalid_index] = InvalidIndex;
+      if (include_position) { position_array[invalid_index] = 0; }
+    }
+  };
 
   // we need to do this loop at least explode_col times or we may not properly fill in null and
   // empty entries.

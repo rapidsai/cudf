@@ -95,15 +95,13 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
-                     cuda::proclaim_return_type<void>(
-                       [d_lhs, d_rhs, begin, d_offsets, d_chars] __device__(size_type idx) {
-                         auto const [side, index] = begin[idx];
-                         if (side == side::LEFT ? d_lhs.is_null(index) : d_rhs.is_null(index))
-                           return;
-                         auto d_str = side == side::LEFT ? d_lhs.element<string_view>(index)
-                                                         : d_rhs.element<string_view>(index);
-                         memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes());
-                       }));
+                     [d_lhs, d_rhs, begin, d_offsets, d_chars] __device__(size_type idx) {
+                       auto const [side, index] = begin[idx];
+                       if (side == side::LEFT ? d_lhs.is_null(index) : d_rhs.is_null(index)) return;
+                       auto d_str = side == side::LEFT ? d_lhs.element<string_view>(index)
+                                                       : d_rhs.element<string_view>(index);
+                       memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes());
+                     });
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),

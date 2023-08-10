@@ -201,19 +201,18 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::strin
       rmm::exec_policy(stream),
       thrust::make_counting_iterator<size_type>(0),
       num_strings,
-      cuda::proclaim_return_type<void>(
-        [num_columns, d_table, d_results_offsets, d_results_chars] __device__(size_type idx) {
-          auto source_row_idx = idx % num_columns;
-          auto source_col_idx = idx / num_columns;
+      [num_columns, d_table, d_results_offsets, d_results_chars] __device__(size_type idx) {
+        auto source_row_idx = idx % num_columns;
+        auto source_col_idx = idx / num_columns;
 
-          // Do not write to buffer if the column value for this row is null
-          if (d_table.column(source_row_idx).is_null(source_col_idx)) return;
+        // Do not write to buffer if the column value for this row is null
+        if (d_table.column(source_row_idx).is_null(source_col_idx)) return;
 
-          size_type offset = d_results_offsets[idx];
-          char* d_buffer   = d_results_chars + offset;
-          strings::detail::copy_string(
-            d_buffer, d_table.column(source_row_idx).element<string_view>(source_col_idx));
-        }));
+        size_type offset = d_results_offsets[idx];
+        char* d_buffer   = d_results_chars + offset;
+        strings::detail::copy_string(
+          d_buffer, d_table.column(source_row_idx).element<string_view>(source_col_idx));
+      });
 
     return make_strings_column(num_strings,
                                std::move(offsets_column),

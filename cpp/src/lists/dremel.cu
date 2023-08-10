@@ -228,10 +228,10 @@ dremel_data get_encoding(column_view h_col,
 
   auto d_col = column_device_view::create(h_col, stream);
   cudf::detail::device_single_thread(
-    cuda::proclaim_return_type<void>([offset_at_level  = d_column_offsets.data(),
-                                      end_idx_at_level = d_column_ends.data(),
-                                      level_max        = d_column_offsets.size(),
-                                      col              = *d_col] __device__() {
+    [offset_at_level  = d_column_offsets.data(),
+     end_idx_at_level = d_column_ends.data(),
+     level_max        = d_column_offsets.size(),
+     col              = *d_col] __device__() {
       auto curr_col           = col;
       size_type off           = curr_col.offset();
       size_type end           = off + curr_col.size();
@@ -255,7 +255,7 @@ dremel_data get_encoding(column_view h_col,
           curr_col = curr_col.child(0);
         }
       }
-    }),
+    },
     stream);
 
   thrust::host_vector<size_type> column_offsets =
@@ -354,12 +354,11 @@ dremel_data get_encoding(column_view h_col,
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator(0),
                        offset_size_at_level,
-                       cuda::proclaim_return_type<void>(
-                         [off      = lcv.offsets().data<size_type>() + column_offsets[level],
-                          scan_out = scan_out.data(),
-                          new_off  = new_offsets.data()] __device__(auto i) {
-                           new_off[i] = off[i] - off[0] + scan_out[i];
-                         }));
+                       [off      = lcv.offsets().data<size_type>() + column_offsets[level],
+                        scan_out = scan_out.data(),
+                        new_off  = new_offsets.data()] __device__(auto i) {
+                         new_off[i] = off[i] - off[0] + scan_out[i];
+                       });
 
     // Set rep level values at level starts to appropriate rep level
     auto scatter_it = thrust::make_constant_iterator(level);
@@ -443,13 +442,12 @@ dremel_data get_encoding(column_view h_col,
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator(0),
                        offset_size_at_level,
-                       cuda::proclaim_return_type<void>(
-                         [off      = lcv.offsets().data<size_type>() + column_offsets[level],
-                          scan_out = scan_out.data(),
-                          new_off  = temp_new_offsets.data(),
-                          offset_transformer] __device__(auto i) {
-                           new_off[i] = offset_transformer(off[i]) + scan_out[i];
-                         }));
+                       [off      = lcv.offsets().data<size_type>() + column_offsets[level],
+                        scan_out = scan_out.data(),
+                        new_off  = temp_new_offsets.data(),
+                        offset_transformer] __device__(auto i) {
+                         new_off[i] = offset_transformer(off[i]) + scan_out[i];
+                       });
     new_offsets = std::move(temp_new_offsets);
 
     // Set rep level values at level starts to appropriate rep level

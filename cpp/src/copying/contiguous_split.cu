@@ -1430,11 +1430,11 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
     rmm::exec_policy(stream, temp_mr),
     iter,
     iter + num_batches,
-    cuda::proclaim_return_type<void>([d_orig_dst_buf_info,
-                                      d_batched_dst_buf_info = d_batched_dst_buf_info.begin(),
-                                      batches                = batches.begin(),
-                                      d_batch_offsets        = d_batch_offsets.begin(),
-                                      out_to_in_index] __device__(size_type i) {
+    [d_orig_dst_buf_info,
+     d_batched_dst_buf_info = d_batched_dst_buf_info.begin(),
+     batches                = batches.begin(),
+     d_batch_offsets        = d_batch_offsets.begin(),
+     out_to_in_index] __device__(size_type i) {
       size_type const in_buf_index = out_to_in_index(i);
       size_type const batch_index  = i - d_batch_offsets[in_buf_index];
       auto const batch_size        = thrust::get<1>(batches[in_buf_index]);
@@ -1473,7 +1473,7 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
       // calculate real output buffer sizes. the data we are generating here is
       // purely intermediate for the purposes of doing more uniform copying of data
       // underneath the final structure of the output
-    }));
+    });
 
   /**
    * In the chunked case, this is the code that fixes up the offsets of each batch
@@ -1556,22 +1556,21 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
       auto num_batches_in_first_iteration = num_batches_per_iteration[0];
       auto const iter     = thrust::make_counting_iterator(num_batches_in_first_iteration);
       auto num_iterations = accum_size_per_iteration.size();
-      thrust::for_each(rmm::exec_policy(stream, temp_mr),
-                       iter,
-                       iter + num_batches - num_batches_in_first_iteration,
-                       cuda::proclaim_return_type<void>(
-                         [num_iterations,
-                          d_batched_dst_buf_info = d_batched_dst_buf_info.begin(),
-                          d_accum_size_per_iteration =
-                            d_accum_size_per_iteration.begin()] __device__(size_type i) {
-                           auto prior_iteration_size =
-                             thrust::upper_bound(thrust::seq,
-                                                 d_accum_size_per_iteration,
-                                                 d_accum_size_per_iteration + num_iterations,
-                                                 d_batched_dst_buf_info[i].dst_offset) -
-                             1;
-                           d_batched_dst_buf_info[i].dst_offset -= *prior_iteration_size;
-                         }));
+      thrust::for_each(
+        rmm::exec_policy(stream, temp_mr),
+        iter,
+        iter + num_batches - num_batches_in_first_iteration,
+        [num_iterations,
+         d_batched_dst_buf_info     = d_batched_dst_buf_info.begin(),
+         d_accum_size_per_iteration = d_accum_size_per_iteration.begin()] __device__(size_type i) {
+          auto prior_iteration_size =
+            thrust::upper_bound(thrust::seq,
+                                d_accum_size_per_iteration,
+                                d_accum_size_per_iteration + num_iterations,
+                                d_batched_dst_buf_info[i].dst_offset) -
+            1;
+          d_batched_dst_buf_info[i].dst_offset -= *prior_iteration_size;
+        });
     }
     return std::make_unique<chunk_iteration_state>(std::move(d_batched_dst_buf_info),
                                                    std::move(d_batch_offsets),

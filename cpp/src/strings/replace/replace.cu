@@ -742,12 +742,11 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
-                     cuda::proclaim_return_type<void>(
-                       [d_strings, d_repl, d_offsets, d_chars] __device__(size_type idx) {
-                         string_view d_str = d_repl;
-                         if (!d_strings.is_null(idx)) d_str = d_strings.element<string_view>(idx);
-                         memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes());
-                       }));
+                     [d_strings, d_repl, d_offsets, d_chars] __device__(size_type idx) {
+                       string_view d_str = d_repl;
+                       if (!d_strings.is_null(idx)) d_str = d_strings.element<string_view>(idx);
+                       memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes());
+                     });
 
   return make_strings_column(
     strings_count, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
