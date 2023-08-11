@@ -29,7 +29,6 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/device/polymorphic_allocator.hpp>
 
-#include <cuco/operator.hpp>
 #include <cuco/static_map.cuh>
 
 #include <cstdint>
