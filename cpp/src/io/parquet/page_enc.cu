@@ -1355,12 +1355,12 @@ __global__ void __launch_bounds__(128, 8)
     s->page.max_data_size = actual_data_size;
     if (not comp_in.empty()) {
       // V2 does not compress rep and def level data
-      size_t const offset  = s->page.def_lvl_bytes + s->page.rep_lvl_bytes;
-      comp_in[blockIdx.x]  = {base + offset, actual_data_size - offset};
-      comp_out[blockIdx.x] = {s->page.compressed_data + s->page.max_hdr_size + offset,
+      size_t const skip_comp_size = s->page.def_lvl_bytes + s->page.rep_lvl_bytes;
+      comp_in[blockIdx.x]         = {base + skip_comp_size, actual_data_size - skip_comp_size};
+      comp_out[blockIdx.x] = {s->page.compressed_data + s->page.max_hdr_size + skip_comp_size,
                               0};  // size is unused
       // copy uncompressed bytes over
-      memcpy(s->page.compressed_data + s->page.max_hdr_size, base, offset);
+      memcpy(s->page.compressed_data + s->page.max_hdr_size, base, skip_comp_size);
     }
     pages[blockIdx.x] = s->page;
     if (not comp_results.empty()) {
