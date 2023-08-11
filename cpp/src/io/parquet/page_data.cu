@@ -774,7 +774,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   if (s->dict_base) {
     out_thread0 = (s->dict_bits > 0) ? 64 : 32;
   } else {
-    switch (s->col.data_type) {
+    switch (s->col.data_type & 7) {
       case BOOLEAN: [[fallthrough]];
       case BYTE_ARRAY: [[fallthrough]];
       case FIXED_LEN_BYTE_ARRAY: out_thread0 = 64; break;
