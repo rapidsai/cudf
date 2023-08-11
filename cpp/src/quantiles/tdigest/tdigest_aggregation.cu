@@ -585,9 +585,9 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
                                             rmm::mr::device_memory_resource* mr)
 {
   // whether or not this weight is a stub
-  auto is_stub_weight =
-    cuda::proclaim_return_type<bool>([weights = weights->view().begin<double>()] __device__(
-                                       size_type i) { return weights[i] == 0; });
+  auto is_stub_weight = [weights = weights->view().begin<double>()] __device__(size_type i) {
+    return weights[i] == 0;
+  };
   // whether or not this particular tdigest is a stub
   auto is_stub_digest = cuda::proclaim_return_type<size_type>(
     [offsets = offsets->view().begin<size_type>(), is_stub_weight] __device__(size_type i) {

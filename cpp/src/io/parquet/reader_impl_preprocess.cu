@@ -550,9 +550,9 @@ int decode_page_headers(cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc>& c
   CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
                               comp_res.begin(),
                               comp_res.end(),
-                              cuda::proclaim_return_type<bool>([] __device__(auto const& res) {
+                              [] __device__(auto const& res) {
                                 return res.status == compression_status::SUCCESS;
-                              })),
+                              }),
                "Error during decompression");
 
   // now copy the uncompressed V2 def and rep level data
@@ -1212,10 +1212,9 @@ std::vector<gpu::chunk_read_info> compute_splits(
   thrust::sort(rmm::exec_policy(stream),
                c_info_sorted.begin(),
                c_info_sorted.end(),
-               cuda::proclaim_return_type<bool>(
-                 [] __device__(cumulative_row_info const& a, cumulative_row_info const& b) {
-                   return a.row_count < b.row_count;
-                 }));
+               [] __device__(cumulative_row_info const& a, cumulative_row_info const& b) {
+                 return a.row_count < b.row_count;
+               });
 
   // std::vector<cumulative_row_info> h_c_info_sorted(c_info_sorted.size());
   // CUDF_CUDA_TRY(cudaMemcpy(h_c_info_sorted.data(),

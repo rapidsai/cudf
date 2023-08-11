@@ -115,12 +115,11 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
     // copy rotated right partition indexes that
     // fall in the interval [0, nrows):
     //(this relies on a _stable_ copy_if())
-    thrust::copy_if(
-      rmm::exec_policy(stream),
-      rotated_iter_begin,
-      rotated_iter_begin + num_partitions,
-      d_row_indices.begin(),
-      cuda::proclaim_return_type<bool>([nrows] __device__(auto index) { return (index < nrows); }));
+    thrust::copy_if(rmm::exec_policy(stream),
+                    rotated_iter_begin,
+                    rotated_iter_begin + num_partitions,
+                    d_row_indices.begin(),
+                    [nrows] __device__(auto index) { return (index < nrows); });
 
     //...and then use the result, d_row_indices, as gather map:
     auto uniq_tbl = cudf::detail::gather(input,

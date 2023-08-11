@@ -178,14 +178,13 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
         auto const true_index = row_indices[index] + offset;
         return offsets[true_index] - first_offset;
       }));
-  thrust::scatter_if(
-    rmm::exec_policy(cudf::test::get_default_stream()),
-    output_row_iter,
-    output_row_iter + row_indices.size(),
-    output_row_start->view().begin<size_type>(),
-    row_size_iter,
-    result->mutable_view().begin<size_type>(),
-    cuda::proclaim_return_type<bool>([] __device__(auto row_size) { return row_size != 0; }));
+  thrust::scatter_if(rmm::exec_policy(cudf::test::get_default_stream()),
+                     output_row_iter,
+                     output_row_iter + row_indices.size(),
+                     output_row_start->view().begin<size_type>(),
+                     row_size_iter,
+                     result->mutable_view().begin<size_type>(),
+                     [] __device__(auto row_size) { return row_size != 0; });
 
   // generate keys for each output row
   //
@@ -197,14 +196,13 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
                    keys->mutable_view().begin<size_type>(),
                    keys->mutable_view().end<size_type>(),
                    cuda::proclaim_return_type<size_type>([] __device__() { return 0; }));
-  thrust::scatter_if(
-    rmm::exec_policy(cudf::test::get_default_stream()),
-    row_size_iter,
-    row_size_iter + row_indices.size(),
-    output_row_start->view().begin<size_type>(),
-    row_size_iter,
-    keys->mutable_view().begin<size_type>(),
-    cuda::proclaim_return_type<bool>([] __device__(auto row_size) { return row_size != 0; }));
+  thrust::scatter_if(rmm::exec_policy(cudf::test::get_default_stream()),
+                     row_size_iter,
+                     row_size_iter + row_indices.size(),
+                     output_row_start->view().begin<size_type>(),
+                     row_size_iter,
+                     keys->mutable_view().begin<size_type>(),
+                     [] __device__(auto row_size) { return row_size != 0; });
   thrust::inclusive_scan(rmm::exec_policy(cudf::test::get_default_stream()),
                          keys->view().begin<size_type>(),
                          keys->view().end<size_type>(),
@@ -677,37 +675,36 @@ struct column_comparator_impl<list_view, check_exact_equality> {
       input_iter,
       input_iter + lhs_row_indices.size(),
       differences.begin(),
-      cuda::proclaim_return_type<bool>(
-        [lhs_offsets,
-         rhs_offsets,
-         lhs_valids,
-         rhs_valids,
-         lhs_indices = lhs_row_indices.begin<size_type>(),
-         rhs_indices = rhs_row_indices.begin<size_type>()] __device__(size_type index) {
-          auto const lhs_index = lhs_indices[index];
-          auto const rhs_index = rhs_indices[index];
+      [lhs_offsets,
+       rhs_offsets,
+       lhs_valids,
+       rhs_valids,
+       lhs_indices = lhs_row_indices.begin<size_type>(),
+       rhs_indices = rhs_row_indices.begin<size_type>()] __device__(size_type index) {
+        auto const lhs_index = lhs_indices[index];
+        auto const rhs_index = rhs_indices[index];
 
-          // check for validity match
-          if (lhs_valids[lhs_index] != rhs_valids[rhs_index]) { return true; }
+        // check for validity match
+        if (lhs_valids[lhs_index] != rhs_valids[rhs_index]) { return true; }
 
-          // if the row is valid, check that the length of the list is the same. do this
-          // for both the equivalency and exact equality checks.
-          if (lhs_valids[lhs_index] && ((lhs_offsets[lhs_index + 1] - lhs_offsets[lhs_index]) !=
-                                        (rhs_offsets[rhs_index + 1] - rhs_offsets[rhs_index]))) {
-            return true;
-          }
+        // if the row is valid, check that the length of the list is the same. do this
+        // for both the equivalency and exact equality checks.
+        if (lhs_valids[lhs_index] && ((lhs_offsets[lhs_index + 1] - lhs_offsets[lhs_index]) !=
+                                      (rhs_offsets[rhs_index + 1] - rhs_offsets[rhs_index]))) {
+          return true;
+        }
 
-          // if validity matches -and- is false, we can ignore the actual offset values. this
-          // is technically not checking "equal()", but it's how the non-list code path handles it
-          if (!lhs_valids[lhs_index]) { return false; }
+        // if validity matches -and- is false, we can ignore the actual offset values. this
+        // is technically not checking "equal()", but it's how the non-list code path handles it
+        if (!lhs_valids[lhs_index]) { return false; }
 
-          // if checking exact equality, compare the actual offset values
-          if (check_exact_equality && lhs_offsets[lhs_index] != rhs_offsets[rhs_index]) {
-            return true;
-          }
+        // if checking exact equality, compare the actual offset values
+        if (check_exact_equality && lhs_offsets[lhs_index] != rhs_offsets[rhs_index]) {
+          return true;
+        }
 
-          return false;
-        }));
+        return false;
+      });
 
     differences.resize(thrust::distance(differences.begin(), diff_iter),
                        cudf::test::get_default_stream());  // shrink back down

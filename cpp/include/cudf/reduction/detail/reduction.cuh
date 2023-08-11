@@ -32,14 +32,11 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/iterator_traits.h>
 
-#include <cuda/functional>
-
 #include <optional>
 
 namespace cudf {
 namespace reduction {
 namespace detail {
-
 /**
  * @brief Compute the specified simple reduction over the input range of elements.
  *

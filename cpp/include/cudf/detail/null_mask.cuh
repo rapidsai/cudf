@@ -558,9 +558,9 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
     return cudf::detail::valid_if(
       segment_length_iterator,
       segment_length_iterator + num_segments,
-      cuda::proclaim_return_type<bool>([valid_initial_value] __device__(auto const& length) {
+      [valid_initial_value] __device__(auto const& length) {
         return valid_initial_value.value_or(length > 0);
-      }),
+      },
       stream,
       mr);
   }
@@ -578,14 +578,13 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
   return cudf::detail::valid_if(
     length_and_valid_count,
     length_and_valid_count + num_segments,
-    cuda::proclaim_return_type<bool>(
-      [null_handling, valid_initial_value] __device__(auto const& length_and_valid_count) {
-        auto const length      = thrust::get<0>(length_and_valid_count);
-        auto const valid_count = thrust::get<1>(length_and_valid_count);
-        return (null_handling == null_policy::EXCLUDE)
-                 ? (valid_initial_value.value_or(false) || valid_count > 0)
-                 : (valid_initial_value.value_or(length > 0) && valid_count == length);
-      }),
+    [null_handling, valid_initial_value] __device__(auto const& length_and_valid_count) {
+      auto const length      = thrust::get<0>(length_and_valid_count);
+      auto const valid_count = thrust::get<1>(length_and_valid_count);
+      return (null_handling == null_policy::EXCLUDE)
+               ? (valid_initial_value.value_or(false) || valid_count > 0)
+               : (valid_initial_value.value_or(length > 0) && valid_count == length);
+    },
     stream,
     mr);
 }

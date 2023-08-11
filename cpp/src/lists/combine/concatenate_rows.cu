@@ -137,10 +137,9 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
       return cudf::detail::valid_if(
         row_null_counts.begin(),
         row_null_counts.begin() + input.num_rows(),
-        cuda::proclaim_return_type<bool>(
-          [num_columns = input.num_columns()] __device__(size_type null_count) {
-            return null_count != num_columns;
-          }),
+        [num_columns = input.num_columns()] __device__(size_type null_count) {
+          return null_count != num_columns;
+        },
         stream,
         mr);
     }
@@ -149,8 +148,7 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
     return cudf::detail::valid_if(
       row_null_counts.begin(),
       row_null_counts.begin() + input.num_rows(),
-      cuda::proclaim_return_type<bool>(
-        [] __device__(size_type null_count) { return null_count == 0; }),
+      [] __device__(size_type null_count) { return null_count == 0; },
       stream,
       mr);
   }();

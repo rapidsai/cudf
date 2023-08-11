@@ -71,9 +71,9 @@ std::unique_ptr<cudf::column> copy_if_else(StringIterLeft lhs_begin,
   auto valid_mask = cudf::detail::valid_if(
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings_count),
-    cuda::proclaim_return_type<bool>([lhs_begin, rhs_begin, filter_fn] __device__(size_type idx) {
+    [lhs_begin, rhs_begin, filter_fn] __device__(size_type idx) {
       return filter_fn(idx) ? lhs_begin[idx].has_value() : rhs_begin[idx].has_value();
-    }),
+    },
     stream,
     mr);
   size_type null_count = valid_mask.second;

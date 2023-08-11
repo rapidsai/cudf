@@ -121,10 +121,9 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::struc
 
     auto const create_mask_fn = [&] {
       auto const input_dv_ptr = table_device_view::create(structs_columns, stream);
-      auto const validity_fn  = cuda::proclaim_return_type<bool>(
-        [input_dv = *input_dv_ptr, num_columns] __device__(auto const idx) {
-          return input_dv.column(idx % num_columns).is_valid(idx / num_columns);
-        });
+      auto const validity_fn  = [input_dv = *input_dv_ptr, num_columns] __device__(auto const idx) {
+        return input_dv.column(idx % num_columns).is_valid(idx / num_columns);
+      };
       return cudf::detail::valid_if(thrust::make_counting_iterator<size_type>(0),
                                     thrust::make_counting_iterator<size_type>(output_size),
                                     validity_fn,
@@ -166,11 +165,11 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::strin
       valid_mask = cudf::detail::valid_if(
         thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(num_strings),
-        cuda::proclaim_return_type<bool>([num_columns, d_table] __device__(size_type idx) {
+        [num_columns, d_table] __device__(size_type idx) {
           auto source_row_idx = idx % num_columns;
           auto source_col_idx = idx / num_columns;
           return !d_table.column(source_row_idx).is_null(source_col_idx);
-        }),
+        },
         stream,
         mr);
     }
@@ -250,10 +249,10 @@ struct interleave_columns_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
       return output;
     }
 
-    auto func_validity = cuda::proclaim_return_type<bool>(
-      [input = *device_input, divisor = input.num_columns()] __device__(size_type idx) {
-        return input.column(idx % divisor).is_valid(idx / divisor);
-      });
+    auto func_validity = [input   = *device_input,
+                          divisor = input.num_columns()] __device__(size_type idx) {
+      return input.column(idx % divisor).is_valid(idx / divisor);
+    };
 
     thrust::transform_if(rmm::exec_policy(stream),
                          index_begin,

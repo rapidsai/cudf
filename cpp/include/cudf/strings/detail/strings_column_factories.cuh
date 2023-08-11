@@ -91,9 +91,8 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
   auto offsets_view = offsets_column->view();
 
   // create null mask
-  auto validator = cuda::proclaim_return_type<bool>(
-    [] __device__(string_index_pair const item) { return item.first != nullptr; });
-  auto new_nulls        = cudf::detail::valid_if(begin, end, validator, stream, mr);
+  auto validator = [] __device__(string_index_pair const item) { return item.first != nullptr; };
+  auto new_nulls = cudf::detail::valid_if(begin, end, validator, stream, mr);
   auto const null_count = new_nulls.second;
   auto null_mask =
     (null_count > 0) ? std::move(new_nulls.first) : rmm::device_buffer{0, stream, mr};

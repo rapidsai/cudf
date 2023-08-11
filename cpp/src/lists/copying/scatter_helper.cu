@@ -57,20 +57,19 @@ std::pair<rmm::device_buffer, size_type> construct_child_nullmask(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  auto is_valid_predicate =
-    cuda::proclaim_return_type<bool>([d_list_vector = parent_list_vector.begin(),
-                                      d_offsets = parent_list_offsets.template data<size_type>(),
-                                      d_offsets_size = parent_list_offsets.size(),
-                                      source_lists,
-                                      target_lists] __device__(auto const& i) {
-      auto list_start =
-        thrust::upper_bound(thrust::seq, d_offsets, d_offsets + d_offsets_size, i) - 1;
-      auto list_index    = list_start - d_offsets;
-      auto element_index = i - *list_start;
+  auto is_valid_predicate = [d_list_vector  = parent_list_vector.begin(),
+                             d_offsets      = parent_list_offsets.template data<size_type>(),
+                             d_offsets_size = parent_list_offsets.size(),
+                             source_lists,
+                             target_lists] __device__(auto const& i) {
+    auto list_start =
+      thrust::upper_bound(thrust::seq, d_offsets, d_offsets + d_offsets_size, i) - 1;
+    auto list_index    = list_start - d_offsets;
+    auto element_index = i - *list_start;
 
-      auto list_row = d_list_vector[list_index];
-      return !list_row.bind_to_column(source_lists, target_lists).is_null(element_index);
-    });
+    auto list_row = d_list_vector[list_index];
+    return !list_row.bind_to_column(source_lists, target_lists).is_null(element_index);
+  };
 
   return cudf::detail::valid_if(thrust::make_counting_iterator<size_type>(0),
                                 thrust::make_counting_iterator<size_type>(num_child_rows),

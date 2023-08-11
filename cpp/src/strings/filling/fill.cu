@@ -64,9 +64,9 @@ std::unique_ptr<column> fill(strings_column_view const& strings,
     return cudf::detail::valid_if(
       thrust::make_counting_iterator<size_type>(0),
       thrust::make_counting_iterator<size_type>(d_strings.size()),
-      cuda::proclaim_return_type<bool>([d_strings, begin, end, d_value] __device__(size_type idx) {
+      [d_strings, begin, end, d_value] __device__(size_type idx) {
         return ((begin <= idx) && (idx < end)) ? d_value.is_valid() : !d_strings.is_null(idx);
-      }),
+      },
       stream,
       mr);
   }();

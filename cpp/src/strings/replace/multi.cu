@@ -285,13 +285,12 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   replace_multi_parallel_fn fn{*d_strings, d_targets, d_replacements};
 
   // count the number of targets in the entire column
-  auto const target_count =
-    thrust::count_if(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     thrust::make_counting_iterator<size_type>(chars_bytes),
-                     cuda::proclaim_return_type<bool>([fn, chars_bytes] __device__(size_type idx) {
-                       return fn.has_target(idx, chars_bytes).has_value();
-                     }));
+  auto const target_count = thrust::count_if(rmm::exec_policy(stream),
+                                             thrust::make_counting_iterator<size_type>(0),
+                                             thrust::make_counting_iterator<size_type>(chars_bytes),
+                                             [fn, chars_bytes] __device__(size_type idx) {
+                                               return fn.has_target(idx, chars_bytes).has_value();
+                                             });
   // Create a vector of every target position in the chars column.
   // These may include overlapping targets which will be resolved later.
   auto targets_positions = rmm::device_uvector<target_pair>(target_count, stream);

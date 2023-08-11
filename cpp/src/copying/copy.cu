@@ -329,11 +329,10 @@ std::unique_ptr<column> copy_if_else(Left const& lhs,
   column_device_view bool_mask_device = *bool_mask_device_p;
 
   auto const has_nulls = boolean_mask.has_nulls();
-  auto filter =
-    cuda::proclaim_return_type<bool>([bool_mask_device, has_nulls] __device__(cudf::size_type i) {
-      return (!has_nulls || bool_mask_device.is_valid_nocheck(i)) and
-             bool_mask_device.element<bool>(i);
-    });
+  auto filter          = [bool_mask_device, has_nulls] __device__(cudf::size_type i) {
+    return (!has_nulls || bool_mask_device.is_valid_nocheck(i)) and
+           bool_mask_device.element<bool>(i);
+  };
 
   // always dispatch on dictionary-type if either input is a dictionary
   auto dispatch_type = cudf::is_dictionary(rhs.type()) ? rhs.type() : lhs.type();

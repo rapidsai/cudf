@@ -225,10 +225,9 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
              ? cudf::detail::valid_if(
                  thrust::make_counting_iterator<size_type>(0),
                  thrust::make_counting_iterator<size_type>(0) + num_output_values,
-                 cuda::proclaim_return_type<bool>(
-                   [percentiles = *percentiles_cdv] __device__(size_type i) {
-                     return percentiles.is_valid(i % percentiles.size());
-                   }),
+                 [percentiles = *percentiles_cdv] __device__(size_type i) {
+                   return percentiles.is_valid(i % percentiles.size());
+                 },
                  stream,
                  mr)
              : std::pair<rmm::device_buffer, size_type>{rmm::device_buffer{}, 0};
@@ -361,8 +360,7 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
     thrust::count_if(rmm::exec_policy(stream),
                      detail::size_begin(input),
                      detail::size_begin(input) + input.size(),
-                     cuda::proclaim_return_type<bool>(
-                       [] __device__(auto const x) { return x == 0; })) == input.size();
+                     [] __device__(auto const x) { return x == 0; }) == input.size();
   auto row_size_iter = thrust::make_constant_iterator(all_empty_rows ? 0 : percentiles.size());
   thrust::exclusive_scan(rmm::exec_policy(stream),
                          row_size_iter,

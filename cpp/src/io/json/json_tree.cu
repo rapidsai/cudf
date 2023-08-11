@@ -428,18 +428,16 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
         d_input + node_range_begin[node_id], node_range_end[node_id] - node_range_begin[node_id]);
       return cudf::hashing::detail::default_hash<cudf::string_view>{}(field_name);
     });
-  auto const d_equal = cuda::proclaim_return_type<bool>(
-    [d_input          = d_input.data(),
-     node_range_begin = d_tree.node_range_begin.data(),
-     node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id1, auto node_id2) {
-      auto const field_name1 =
-        cudf::string_view(d_input + node_range_begin[node_id1],
-                          node_range_end[node_id1] - node_range_begin[node_id1]);
-      auto const field_name2 =
-        cudf::string_view(d_input + node_range_begin[node_id2],
-                          node_range_end[node_id2] - node_range_begin[node_id2]);
-      return field_name1 == field_name2;
-    });
+  auto const d_equal = [d_input          = d_input.data(),
+                        node_range_begin = d_tree.node_range_begin.data(),
+                        node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id1,
+                                                                                  auto node_id2) {
+    auto const field_name1 = cudf::string_view(
+      d_input + node_range_begin[node_id1], node_range_end[node_id1] - node_range_begin[node_id1]);
+    auto const field_name2 = cudf::string_view(
+      d_input + node_range_begin[node_id2], node_range_end[node_id2] - node_range_begin[node_id2]);
+    return field_name1 == field_name2;
+  };
   // key-value pairs: uses node_id itself as node_type. (unique node_id for a field name due to
   // hashing)
   auto const iter = cudf::detail::make_counting_transform_iterator(
@@ -447,10 +445,10 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
       return cuco::pair(i, i);
     }));
 
-  auto const is_field_name_node = cuda::proclaim_return_type<bool>(
-    [node_categories = d_tree.node_categories.data()] __device__(auto node_id) {
-      return node_categories[node_id] == node_t::NC_FN;
-    });
+  auto const is_field_name_node = [node_categories =
+                                     d_tree.node_categories.data()] __device__(auto node_id) {
+    return node_categories[node_id] == node_t::NC_FN;
+  };
   key_map.insert_if(iter,
                     iter + num_nodes,
                     thrust::counting_iterator<size_type>(0),  // stencil

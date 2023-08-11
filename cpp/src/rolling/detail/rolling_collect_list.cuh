@@ -213,15 +213,14 @@ std::unique_ptr<column> rolling_collect_list(column_view const& input,
                                             stream,
                                             mr);
 
-  auto [null_mask, null_count] =
-    valid_if(thrust::make_counting_iterator<size_type>(0),
-             thrust::make_counting_iterator<size_type>(input.size()),
-             cuda::proclaim_return_type<bool>(
-               [preceding_begin, following_begin, min_periods] __device__(auto i) {
-                 return (preceding_begin[i] + following_begin[i]) >= min_periods;
-               }),
-             stream,
-             mr);
+  auto [null_mask, null_count] = valid_if(
+    thrust::make_counting_iterator<size_type>(0),
+    thrust::make_counting_iterator<size_type>(input.size()),
+    [preceding_begin, following_begin, min_periods] __device__(auto i) {
+      return (preceding_begin[i] + following_begin[i]) >= min_periods;
+    },
+    stream,
+    mr);
 
   return make_lists_column(input.size(),
                            std::move(offsets),

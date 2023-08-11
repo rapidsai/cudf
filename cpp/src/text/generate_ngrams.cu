@@ -109,17 +109,16 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
                                    strings.offsets_begin(),
                                    nullptr,
                                    0);
-    auto table_offsets =
-      cudf::detail::copy_if(cudf::table_view({offsets_view}),
-                            cuda::proclaim_return_type<bool>(
-                              [d_strings, strings_count] __device__(cudf::size_type idx) {
-                                if (idx == strings_count) return true;
-                                if (d_strings.is_null(idx)) return false;
-                                return !d_strings.element<cudf::string_view>(idx).empty();
-                              }),
-                            stream,
-                            rmm::mr::get_current_device_resource())
-        ->release();
+    auto table_offsets = cudf::detail::copy_if(
+                           cudf::table_view({offsets_view}),
+                           [d_strings, strings_count] __device__(cudf::size_type idx) {
+                             if (idx == strings_count) return true;
+                             if (d_strings.is_null(idx)) return false;
+                             return !d_strings.element<cudf::string_view>(idx).empty();
+                           },
+                           stream,
+                           rmm::mr::get_current_device_resource())
+                           ->release();
     strings_count = table_offsets.front()->size() - 1;
     auto result   = std::move(table_offsets.front());
     return result;

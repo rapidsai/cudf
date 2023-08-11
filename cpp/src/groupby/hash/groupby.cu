@@ -526,8 +526,9 @@ rmm::device_uvector<size_type> extract_populated_keys(map_type<ComparatorType> c
 
   auto const get_key = cuda::proclaim_return_type<typename map_type<ComparatorType>::key_type>(
     [] __device__(auto const& element) { return element.first; });  // first = key
-  auto const key_used = cuda::proclaim_return_type<bool>(
-    [unused = map.get_unused_key()] __device__(auto key) { return key != unused; });
+  auto const key_used = [unused = map.get_unused_key()] __device__(auto key) {
+    return key != unused;
+  };
   auto const key_itr = thrust::make_transform_iterator(map.data(), get_key);
   auto const end_it  = cudf::detail::copy_if_safe(
     key_itr, key_itr + map.capacity(), populated_keys.begin(), key_used, stream);

@@ -52,10 +52,9 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
   auto const value_device_view       = column_device_view::create(value_column.parent(), stream);
   auto const map_begin =
     cudf::detail::indexalator_factory::make_input_iterator(gather_map_sliced_child);
-  auto const out_of_bounds =
-    cuda::proclaim_return_type<bool>([] __device__(auto const index, auto const list_size) {
-      return index >= list_size || (index < 0 && -index > list_size);
-    });
+  auto const out_of_bounds = [] __device__(auto const index, auto const list_size) {
+    return index >= list_size || (index < 0 && -index > list_size);
+  };
 
   // Calculate Flattened gather indices  (value_offset[row]+sub_index
   auto transformer =
