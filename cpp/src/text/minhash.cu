@@ -111,7 +111,9 @@ __global__ void minhash_fn(cudf::column_device_view const d_strings,
         cuda::atomic_ref<hash_value_type, cuda::thread_scope_block> ref{*(d_output + seed_idx)};
         ref.fetch_min(hvalue, cuda::std::memory_order_relaxed);
       } else {
-        auto const hvalue = thrust::get<0>(hasher(hash_str));  // just use the first uint64_t
+        // This code path assumes the murmurhash3_x64_128 which produces 2 uint64 values
+        // but only uses the first uint64 value as per requested by the LLM team.
+        auto const hvalue = thrust::get<0>(hasher(hash_str));
         cuda::atomic_ref<hash_value_type, cuda::thread_scope_block> ref{*(d_output + seed_idx)};
         ref.fetch_min(hvalue, cuda::std::memory_order_relaxed);
       }
