@@ -1,8 +1,6 @@
 # Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 
-import re
-
 import cupy as cp
 import numpy as np
 from numba import cuda, types
@@ -104,38 +102,6 @@ def _groupby_apply_kernel_string_from_template(frame, args):
         extra_args=extra_args,
         group_initializers="\n".join(initializers),
     )
-
-
-def _post_process_and_raise(e):
-    """
-    Post-processes the error message from numba and raises it.
-    """
-    error = str(e)
-    breakpoint()
-    # missing attribute of a logical series, such as .abcdefg()
-    if "Unknown attribute" in error:
-        pattern = r"Unknown attribute '(\w+)'"
-        match = re.search(pattern, error)
-        attr = match.group(1)
-        raise TypingError(
-            f"The method '{attr}' is not supported in Groupby.apply through "
-            "JIT. Please file an issue request for this feature on cuDF's "
-            "GitHub page. "
-        )
-
-    # attempted series level op returning series, such as + or -
-    elif "No implementation of" in error:
-        pattern = r"function\s+Function\(<built-in function (\w+)>"
-        match = re.search(pattern, error)
-
-        op = match.group(1)
-        raise TypingError(
-            f"The Series level operation '{op}' is not yet supported "
-            "in Groupby.apply through JIT. Please file an issue request for "
-            "this feature on cuDF's GitHub page. "
-        )
-    else:
-        raise e
 
 
 def _get_groupby_apply_kernel(frame, func, args):
