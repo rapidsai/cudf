@@ -45,6 +45,7 @@ namespace nvtext {
  * @param seed  Seed value used for the hash algorithm
  * @param width The character width used for apply substrings;
  *              Default is 4 characters.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Minhash values for each string in input
  */
@@ -52,6 +53,7 @@ std::unique_ptr<cudf::column> minhash(
   cudf::strings_column_view const& input,
   cudf::numeric_scalar<uint32_t> seed = 0,
   cudf::size_type width               = 4,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -76,14 +78,15 @@ std::unique_ptr<cudf::column> minhash(
  * @param seeds Seed values used for the hash algorithm
  * @param width The character width used for apply substrings;
  *              Default is 4 characters.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return List column of minhash values for each string per seed
- *         or a UINT32 type column if only a single seed is specified
  */
 std::unique_ptr<cudf::column> minhash(
   cudf::strings_column_view const& input,
   cudf::device_span<uint32_t const> seeds,
   cudf::size_type width               = 4,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -104,6 +107,7 @@ std::unique_ptr<cudf::column> minhash(
  * @param seed  Seed value used for the hash algorithm
  * @param width The character width used for apply substrings;
  *              Default is 4 characters.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Minhash values as UINT64 for each string in input
  */
@@ -111,6 +115,7 @@ std::unique_ptr<cudf::column> minhash64(
   cudf::strings_column_view const& input,
   cudf::numeric_scalar<uint64_t> seed = 0,
   cudf::size_type width               = 4,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -135,14 +140,15 @@ std::unique_ptr<cudf::column> minhash64(
  * @param seeds Seed values used for the hash algorithm
  * @param width The character width used for apply substrings;
  *              Default is 4 characters.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return List column of minhash values for each string per seed
- *         or a UINT64 type column if only a single seed is specified
  */
 std::unique_ptr<cudf::column> minhash64(
   cudf::strings_column_view const& input,
   cudf::device_span<uint64_t const> seeds,
   cudf::size_type width               = 4,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
