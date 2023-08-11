@@ -77,7 +77,7 @@ class BaseFixtureWithParam : public ::testing::TestWithParam<T> {
    * all tests inheriting from this fixture
    * @return pointer to memory resource
    */
-  rmm::mr::device_memory_resource* mr() { return _mr; }
+  rmm::mr::device_memory_resource* mr() const { return _mr; }
 };
 
 template <typename T, typename Enable = void>
