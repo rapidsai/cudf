@@ -990,10 +990,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             np.object_,
             str,
         }:
-            if (
-                cudf.get_option("mode.pandas_compatible")
-                and np.dtype(dtype).type in {np.object_}
-            ):
+            if cudf.get_option("mode.pandas_compatible") and np.dtype(
+                dtype
+            ).type in {np.object_}:
                 raise ValueError(
                     f"{dtype} is an unsupported dtype to type-cast to, use "
                     "`.astype('str')` instead."

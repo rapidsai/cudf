@@ -2226,7 +2226,7 @@ def test_series_constructor_error_mixed_type():
         cudf.Series(["abc", np.nan, "123"], nan_as_null=False)
 
 
-def test_series_typecast_error():
+def test_series_typecast_to_object_error():
     actual = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
     with cudf.option_context("mode.pandas_compatible", True):
         with pytest.raises(ValueError):
@@ -2234,4 +2234,13 @@ def test_series_typecast_error():
         with pytest.raises(ValueError):
             actual.astype(np.dtype("object"))
         new_series = actual.astype("str")
+        assert new_series[0] == "1970-01-01 00:00:00.000000001"
+
+
+def test_series_typecast_to_object():
+    actual = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
+    with cudf.option_context("mode.pandas_compatible", False):
+        new_series = actual.astype(object)
+        assert new_series[0] == "1970-01-01 00:00:00.000000001"
+        new_series = actual.astype(np.dtype("object"))
         assert new_series[0] == "1970-01-01 00:00:00.000000001"
