@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from numba import cuda
+from numba.core.errors import TypingError
 from numpy.testing import assert_array_equal
 
 import rmm
@@ -435,7 +436,7 @@ def test_groupby_apply_jit_reductions(func, groupby_jit_data, dtype):
     run_groupby_apply_jit_test(groupby_jit_data, func, ["key1"])
 
 
-@pytest.mark.parametrize("dtype", ["int32", "int64"])
+@pytest.mark.parametrize("dtype", SUPPORTED_GROUPBY_NUMPY_TYPES)
 def test_groupby_apply_jit_correlation(groupby_jit_data, dtype):
 
     groupby_jit_data["val3"] = groupby_jit_data["val3"].astype(dtype)
@@ -446,6 +447,13 @@ def test_groupby_apply_jit_correlation(groupby_jit_data, dtype):
     def func(group):
         return group["val3"].corr(group["val4"])
 
+    if dtype.kind == "f":
+        with pytest.raises(
+            TypingError,
+            match=f"Series.corr is not supported between {dtype} and {dtype}",
+        ):
+            run_groupby_apply_jit_test(groupby_jit_data, func, keys)
+        return
     run_groupby_apply_jit_test(groupby_jit_data, func, keys)
 
 

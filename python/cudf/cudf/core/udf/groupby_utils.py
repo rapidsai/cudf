@@ -1,6 +1,8 @@
 # Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 
+import re
+
 import cupy as cp
 import numpy as np
 from numba import cuda, types
@@ -9,6 +11,7 @@ from numba.cuda.cudadrv.devices import get_context
 from numba.np import numpy_support
 
 import cudf.core.udf.utils
+from cudf.core.udf.errors import udf_errors
 from cudf.core.udf.groupby_typing import (
     SUPPORTED_GROUPBY_NUMPY_TYPES,
     Group,
@@ -103,6 +106,38 @@ def _groupby_apply_kernel_string_from_template(frame, args):
     )
 
 
+def _post_process_and_raise(e):
+    """
+    Post-processes the error message from numba and raises it.
+    """
+    error = str(e)
+    breakpoint()
+    # missing attribute of a logical series, such as .abcdefg()
+    if "Unknown attribute" in error:
+        pattern = r"Unknown attribute '(\w+)'"
+        match = re.search(pattern, error)
+        attr = match.group(1)
+        raise TypingError(
+            f"The method '{attr}' is not supported in Groupby.apply through "
+            "JIT. Please file an issue request for this feature on cuDF's "
+            "GitHub page. "
+        )
+
+    # attempted series level op returning series, such as + or -
+    elif "No implementation of" in error:
+        pattern = r"function\s+Function\(<built-in function (\w+)>"
+        match = re.search(pattern, error)
+
+        op = match.group(1)
+        raise TypingError(
+            f"The Series level operation '{op}' is not yet supported "
+            "in Groupby.apply through JIT. Please file an issue request for "
+            "this feature on cuDF's GitHub page. "
+        )
+    else:
+        raise e
+
+
 def _get_groupby_apply_kernel(frame, func, args):
     np_field_types = np.dtype(
         list(
@@ -114,7 +149,14 @@ def _get_groupby_apply_kernel(frame, func, args):
     dataframe_group_type = _get_frame_groupby_type(
         np_field_types, frame.index.dtype
     )
-    return_type = _get_udf_return_type(dataframe_group_type, func, args)
+
+    try:
+        return_type = _get_udf_return_type(dataframe_group_type, func, args)
+    except TypingError as e:
+        if udf_errors:
+            raise TypingError(udf_errors[0])
+        else:
+            raise e
 
     # Dict of 'local' variables into which `_kernel` is defined
     global_exec_context = {

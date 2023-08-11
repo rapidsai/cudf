@@ -15,6 +15,8 @@ from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
 from numba.cuda.cudadecl import registry as cuda_registry
 from numba.np import numpy_support
 
+from cudf.core.udf.errors import udf_errors
+
 index_default_type = types.int64
 group_size_type = types.int64
 SUPPORTED_GROUPBY_NUMBA_TYPES = [
@@ -153,15 +155,28 @@ def _register_cuda_idx_reduction_caller(funcname, inputty):
     call_cuda_functions[funcname.lower()][type_key] = caller
 
 
-def _make_unary_attr(funcname):
-    class GroupUnaryReductionAttrTyping(AbstractTemplate):
-        key = f"GroupType.{funcname}"
+class GroupUnaryAttrBase(AbstractTemplate):
+    def make_error_string(self, args):
+        fname = self.key.split(".")[-1]
+        return (
+            f"\nSeries.{fname} is not supported for "
+            f"{self.this.group_scalar_type} within JIT GroupBy "
+            "apply.\nPlease file an issue "
+            "requesting support for this feature at cuDF's GitHub page."
+        )
 
-        def generic(self, args, kws):
-            for retty, inputty in call_cuda_functions[funcname.lower()].keys():
-                if self.this.group_scalar_type == inputty:
-                    return nb_signature(retty, recvr=self.this)
-            return None
+    def generic(self, args, kws):
+        fname = self.key.split(".")[-1]
+        for retty, selfty in call_cuda_functions[fname].keys():
+            if self.this.group_scalar_type == selfty:
+                return nb_signature(retty, recvr=self.this)
+        udf_errors[0] = self.make_error_string(args)
+        return None
+
+
+def _make_unary_attr(funcname):
+    class GroupUnaryReductionAttrTyping(GroupUnaryAttrBase):
+        key = f"GroupType.{funcname}"
 
     def _attr(self, mod):
         return types.BoundFunction(
@@ -206,11 +221,30 @@ class GroupIdxMin(AbstractTemplate):
         return nb_signature(self.this.index_type, recvr=self.this)
 
 
-class GroupCorr(AbstractTemplate):
-    key = "GroupType.corr"
+class GroupBinaryMethodBase(AbstractTemplate):
+    def make_error_string(self, args):
+        fname = self.key.split(".")[-1]
+        return (
+            f"\nSeries.{fname} is not supported between "
+            f"{self.this.group_scalar_type} and {args[0].group_scalar_type} "
+            "within JIT GroupBy apply.\nPlease file an issue "
+            "requesting support for this feature at cuDF's GitHub page."
+        )
 
     def generic(self, args, kws):
-        return nb_signature(types.float64, args[0], recvr=self.this)
+        fname = self.key.split(".")[-1]
+        for retty, lty, rty in call_cuda_functions[fname].keys():
+            if (
+                self.this.group_scalar_type == lty
+                and args[0].group_scalar_type == rty
+            ):
+                return nb_signature(retty, args[0], recvr=self.this)
+        udf_errors[0] = self.make_error_string(args)
+        return None
+
+
+class GroupCorr(GroupBinaryMethodBase):
+    key = "GroupType.corr"
 
 
 @cuda_registry.register_attr
