@@ -992,7 +992,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         }:
             if (
                 cudf.get_option("mode.pandas_compatible")
-                and not isinstance(self, cudf.core.column.StringColumn)
                 and np.dtype(dtype).type in {np.object_}
             ):
                 raise ValueError(
