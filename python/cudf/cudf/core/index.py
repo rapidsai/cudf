@@ -47,7 +47,6 @@ from cudf.core.column import (
     StringColumn,
     StructColumn,
     TimeDeltaColumn,
-    arange,
     column,
 )
 from cudf.core.column.column import as_column, concat_columns
@@ -3007,89 +3006,56 @@ def interval_range(
             closed='left',
             dtype='interval')
     """
-    if freq and periods and start and end:
+    nargs = sum(_ is not None for _ in (start, end, periods, freq))
+
+    # we need at least three of (start, end, periods, freq)
+    if nargs == 2 and freq is None:
+        freq = 1
+        nargs += 1
+
+    if nargs != 3:
         raise ValueError(
             "Of the four parameters: start, end, periods, and "
             "freq, exactly three must be specified"
         )
-    args = [
-        cudf.Scalar(x) if x is not None else None
-        for x in (start, end, freq, periods)
-    ]
+
+    start = cudf.Scalar(start) if start is not None else start
+    end = cudf.Scalar(end) if end is not None else end
+    periods = cudf.Scalar(int(periods)) if periods is not None else periods
+    freq = cudf.Scalar(freq) if freq is not None else freq
+
+    if start is None:
+        start = end - freq * periods
+    elif freq is None:
+        quotient, remainder = divmod((end - start).value, periods.value)
+        if remainder:
+            freq = (end - start) / periods
+        else:
+            freq = cudf.Scalar(int(quotient))
+    elif periods is None:
+        periods = cudf.Scalar(int((end - start) / freq))
+    elif end is None:
+        end = start + periods * freq
+
     if any(
-        not _is_non_decimal_numeric_dtype(x.dtype) if x is not None else False
-        for x in args
+        not _is_non_decimal_numeric_dtype(x.dtype)
+        for x in (start, periods, freq, end)
     ):
         raise ValueError("start, end, periods, freq must be numeric values.")
-    *rargs, periods = args
-    common_dtype = find_common_type([x.dtype for x in rargs if x])
-    start, end, freq = rargs
-    periods = periods.astype("int64") if periods is not None else None
 
-    if periods and not freq:
-        # if statement for mypy to pass
-        if end is not None and start is not None:
-            # divmod only supported on host side scalars
-            quotient, remainder = divmod((end - start).value, periods.value)
-            if remainder:
-                freq_step = cudf.Scalar((end - start) / periods)
-            else:
-                freq_step = cudf.Scalar(quotient)
-            if start.dtype != freq_step.dtype:
-                start = start.astype(freq_step.dtype)
-            bin_edges = sequence(
-                size=periods + 1,
-                init=start.device_value,
-                step=freq_step.device_value,
-            )
-            left_col = bin_edges.slice(0, len(bin_edges) - 1)
-            right_col = bin_edges.slice(1, len(bin_edges))
-    elif freq and periods:
-        if end:
-            start = end - (freq * periods)
-        if start:
-            end = freq * periods + start
-        if end is not None and start is not None:
-            left_col = arange(
-                start.value, end.value, freq.value, dtype=common_dtype
-            )
-            end = end + 1
-            start = start + freq
-            right_col = arange(
-                start.value, end.value, freq.value, dtype=common_dtype
-            )
-    elif freq and not periods:
-        if end is not None and start is not None:
-            end = end - freq + 1
-            left_col = arange(
-                start.value, end.value, freq.value, dtype=common_dtype
-            )
-            end = end + freq + 1
-            start = start + freq
-            right_col = arange(
-                start.value, end.value, freq.value, dtype=common_dtype
-            )
-    elif start is not None and end is not None:
-        # if statements for mypy to pass
-        if freq:
-            left_col = arange(
-                start.value, end.value, freq.value, dtype=common_dtype
-            )
-        else:
-            left_col = arange(start.value, end.value, dtype=common_dtype)
-        start = start + 1
-        end = end + 1
-        if freq:
-            right_col = arange(
-                start.value, end.value, freq.value, dtype=common_dtype
-            )
-        else:
-            right_col = arange(start.value, end.value, dtype=common_dtype)
-    else:
-        raise ValueError(
-            "Of the four parameters: start, end, periods, and "
-            "freq, at least two must be specified"
-        )
+    periods = periods.astype("int64")
+    common_dtype = find_common_type((start.dtype, freq.dtype, end.dtype))
+    start = start.astype(common_dtype)
+    freq = freq.astype(common_dtype)
+
+    bin_edges = sequence(
+        size=periods + 1,
+        init=start.device_value,
+        step=freq.device_value,
+    )
+    left_col = bin_edges.slice(0, len(bin_edges) - 1)
+    right_col = bin_edges.slice(1, len(bin_edges))
+
     if len(right_col) == 0 or len(left_col) == 0:
         dtype = IntervalDtype("int64", closed)
         data = column.column_empty_like_same_mask(left_col, dtype)
