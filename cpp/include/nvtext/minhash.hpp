@@ -39,7 +39,6 @@ namespace nvtext {
  * This function uses MurmurHash3_x86_32 for the hash algorithm.
  *
  * @throw std::invalid_argument if the width < 2
- * @throw std::invalid_argument if hash_function is not HASH_MURMUR3
  *
  * @param input Strings column to compute minhash
  * @param seed  Seed value used for the hash algorithm
@@ -70,7 +69,6 @@ std::unique_ptr<cudf::column> minhash(
  * Any null row entries result in corresponding null output rows.
  *
  * @throw std::invalid_argument if the width < 2
- * @throw std::invalid_argument if hash_function is not HASH_MURMUR3
  * @throw std::invalid_argument if seeds is empty
  * @throw std::overflow_error if `seeds * input.size()` exceeds the column size limit
  *
@@ -132,7 +130,6 @@ std::unique_ptr<cudf::column> minhash64(
  * Any null row entries result in corresponding null output rows.
  *
  * @throw std::invalid_argument if the width < 2
- * @throw std::invalid_argument if hash_function is not HASH_MURMUR3
  * @throw std::invalid_argument if seeds is empty
  * @throw std::overflow_error if `seeds * input.size()` exceeds the column size limit
  *
