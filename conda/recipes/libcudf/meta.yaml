@@ -46,7 +46,7 @@ requirements:
     - ninja
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
-    - librmm ={{ minor_version }}
+    # - librmm ={{ minor_version }}
     - libkvikio ={{ minor_version }}
     {% if cuda_major == "11" %}
     - cudatoolkit
@@ -100,7 +100,7 @@ outputs:
         {% endif %}
         - cuda-version {{ cuda_spec }}
         - nvcomp {{ nvcomp_version }}
-        - librmm ={{ minor_version }}
+        # - librmm ={{ minor_version }}
         - libkvikio ={{ minor_version }}
         - libarrow {{ libarrow_version }}
         - dlpack {{ dlpack_version }}
