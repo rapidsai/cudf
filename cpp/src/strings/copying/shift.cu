@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,15 +36,15 @@ struct adjust_offsets_fn {
   string_view const d_filler;
   size_type const offset;
 
-  __device__ offset_type operator()(size_type idx)
+  __device__ size_type operator()(size_type idx)
   {
     if (offset < 0) {
-      auto const first      = d_column.element<offset_type>(-offset);
+      auto const first      = d_column.element<size_type>(-offset);
       auto const last_index = d_column.size() + offset;
       if (idx < last_index) {
-        return d_column.element<offset_type>(idx - offset) - first;
+        return d_column.element<size_type>(idx - offset) - first;
       } else {
-        auto const last = d_column.element<offset_type>(d_column.size() - 1);
+        auto const last = d_column.element<size_type>(d_column.size() - 1);
         return (last - first) + ((idx - last_index + 1) * d_filler.size_bytes());
       }
     } else {
@@ -52,7 +52,7 @@ struct adjust_offsets_fn {
         return idx * d_filler.size_bytes();
       } else {
         auto const total_filler = d_filler.size_bytes() * offset;
-        return total_filler + d_column.element<offset_type>(idx - offset);
+        return total_filler + d_column.element<size_type>(idx - offset);
       }
     }
   }
@@ -112,19 +112,19 @@ std::unique_ptr<column> shift(strings_column_view const& input,
   thrust::transform(rmm::exec_policy(stream),
                     thrust::counting_iterator<size_type>(0),
                     thrust::counting_iterator<size_type>(offsets_size),
-                    d_offsets->data<offset_type>(),
+                    d_offsets->data<size_type>(),
                     adjust_offsets_fn{*d_input_offsets, d_fill_str, offset});
 
   // compute the shift-offset for the output characters child column
   auto const shift_offset = [&] {
     auto const index = (offset >= 0) ? offset : offsets_size - 1 + offset;
     return (offset < 0 ? -1 : 1) *
-           cudf::detail::get_value<offset_type>(offsets_column->view(), index, stream);
+           cudf::detail::get_value<size_type>(offsets_column->view(), index, stream);
   }();
 
   // create output chars child column
   auto const chars_size =
-    cudf::detail::get_value<offset_type>(offsets_column->view(), offsets_size - 1, stream);
+    cudf::detail::get_value<size_type>(offsets_column->view(), offsets_size - 1, stream);
   auto chars_column = create_chars_child_column(chars_size, stream, mr);
   auto d_chars      = mutable_column_device_view::create(chars_column->mutable_view(), stream);
   auto const d_input_chars = column_device_view::create(input.chars(), stream);

@@ -32,12 +32,13 @@ from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
 from libcpp.map cimport map
-from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.unordered_map cimport unordered_map
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
+cimport cudf._lib.cpp.io.data_sink as cudf_io_data_sink
 cimport cudf._lib.cpp.io.types as cudf_io_types
 cimport cudf._lib.cpp.types as cudf_types
 from cudf._lib.column cimport Column
@@ -51,6 +52,7 @@ from cudf._lib.cpp.io.parquet cimport (
     write_parquet as parquet_writer,
 )
 from cudf._lib.cpp.io.types cimport column_in_metadata, table_input_metadata
+from cudf._lib.cpp.libcpp.memory cimport make_unique
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type, size_type
 from cudf._lib.io.datasource cimport NativeFileDatasource
@@ -120,7 +122,6 @@ def _parse_metadata(meta):
 
 
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
-                   strings_to_categorical=False,
                    use_pandas_metadata=True):
     """
     Cython function to call into libcudf API, see `read_parquet`.
@@ -144,7 +145,6 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     cdef cudf_io_types.source_info source = make_source_info(
         filepaths_or_buffers)
 
-    cdef bool cpp_strings_to_categorical = strings_to_categorical
     cdef bool cpp_use_pandas_metadata = use_pandas_metadata
 
     cdef vector[vector[size_type]] cpp_row_groups
@@ -160,7 +160,6 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     args = move(
         parquet_reader_options.builder(source)
         .row_groups(cpp_row_groups)
-        .convert_strings_to_categories(cpp_strings_to_categorical)
         .use_pandas_metadata(cpp_use_pandas_metadata)
         .timestamp_type(cpp_timestamp_type)
         .build()
@@ -336,7 +335,7 @@ def write_parquet(
 
     cdef vector[map[string, string]] user_data
     cdef table_view tv
-    cdef vector[unique_ptr[cudf_io_types.data_sink]] _data_sinks
+    cdef vector[unique_ptr[cudf_io_data_sink.data_sink]] _data_sinks
     cdef cudf_io_types.sink_info sink = make_sinks_info(
         filepaths_or_buffers, _data_sinks
     )
@@ -478,7 +477,7 @@ cdef class ParquetWriter:
     cdef unique_ptr[cpp_parquet_chunked_writer] writer
     cdef table_input_metadata tbl_meta
     cdef cudf_io_types.sink_info sink
-    cdef vector[unique_ptr[cudf_io_types.data_sink]] _data_sink
+    cdef vector[unique_ptr[cudf_io_data_sink.data_sink]] _data_sink
     cdef cudf_io_types.statistics_freq stat_freq
     cdef cudf_io_types.compression_type comp_type
     cdef object index
@@ -644,7 +643,7 @@ cpdef merge_filemetadata(object filemetadata_list):
 
     for blob_py in filemetadata_list:
         blob_c = blob_py
-        list_c.push_back(make_unique[vector[uint8_t]](blob_c))
+        list_c.push_back(move(make_unique[vector[uint8_t]](blob_c)))
 
     with nogil:
         output_c = move(parquet_merge_metadata(list_c))

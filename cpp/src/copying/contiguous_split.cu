@@ -939,7 +939,7 @@ struct batch_byte_size_function {
  * @brief Get the input buffer index given the output buffer index.
  */
 struct out_to_in_index_function {
-  offset_type const* const batch_offsets;
+  size_type const* const batch_offsets;
   int const num_bufs;
   __device__ int operator()(size_type i) const
   {
@@ -1312,7 +1312,7 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
  */
 struct chunk_iteration_state {
   chunk_iteration_state(rmm::device_uvector<dst_buf_info> _d_batched_dst_buf_info,
-                        rmm::device_uvector<offset_type> _d_batch_offsets,
+                        rmm::device_uvector<size_type> _d_batch_offsets,
                         std::vector<std::size_t>&& _h_num_buffs_per_iteration,
                         std::vector<std::size_t>&& _h_size_of_buffs_per_iteration,
                         std::size_t total_size)
@@ -1375,11 +1375,10 @@ struct chunk_iteration_state {
   bool has_more_copies() const { return current_iteration < num_iterations; }
 
   rmm::device_uvector<dst_buf_info> d_batched_dst_buf_info;  ///< dst_buf_info per 1MB batch
-  rmm::device_uvector<offset_type> const
-    d_batch_offsets;             ///< Offset within a batch per dst_buf_info
-  std::size_t const total_size;  ///< The aggregate size of all iterations
-  int const num_iterations;      ///< The total number of iterations
-  int current_iteration;         ///< Marks the current iteration being worked on
+  rmm::device_uvector<size_type> const d_batch_offsets;  ///< Offset within a batch per dst_buf_info
+  std::size_t const total_size;                          ///< The aggregate size of all iterations
+  int const num_iterations;                              ///< The total number of iterations
+  int current_iteration;  ///< Marks the current iteration being worked on
 
  private:
   std::size_t starting_batch;  ///< Starting batch index for the current iteration
@@ -1398,7 +1397,7 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* temp_mr)
 {
-  rmm::device_uvector<offset_type> d_batch_offsets(num_bufs + 1, stream, temp_mr);
+  rmm::device_uvector<size_type> d_batch_offsets(num_bufs + 1, stream, temp_mr);
 
   auto const buf_count_iter = cudf::detail::make_counting_transform_iterator(
     0, [num_bufs, num_batches = num_batches_func{batches.begin()}] __device__(size_type i) {

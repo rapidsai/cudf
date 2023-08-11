@@ -1507,7 +1507,7 @@ class lists_column_wrapper : public detail::column_wrapper {
    */
   static lists_column_wrapper<T> make_one_empty_row_column(bool valid = true)
   {
-    cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets{0, 0};
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets{0, 0};
     cudf::test::fixed_width_column_wrapper<int> values{};
     return lists_column_wrapper<T>(
       1,

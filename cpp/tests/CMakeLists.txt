@@ -164,8 +164,12 @@ ConfigureTest(DATETIME_OPS_TEST datetime/datetime_ops_test.cpp)
 # ##################################################################################################
 # * hashing tests ---------------------------------------------------------------------------------
 ConfigureTest(
-  HASHING_TEST hashing/md5_test.cpp hashing/murmurhash3_x86_32_test.cpp
-  hashing/murmurhash3_x64_128_test.cpp hashing/spark_murmurhash3_x86_32_test.cpp
+  HASHING_TEST
+  hashing/md5_test.cpp
+  hashing/murmurhash3_x86_32_test.cpp
+  hashing/murmurhash3_x64_128_test.cpp
+  hashing/spark_murmurhash3_x86_32_test.cpp
+  hashing/xxhash_64_test.cpp
 )
 
 # ##################################################################################################
@@ -540,6 +544,7 @@ ConfigureTest(
   TEXT_TEST
   text/bpe_tests.cpp
   text/edit_distance_tests.cpp
+  text/jaccard_tests.cpp
   text/minhash_tests.cpp
   text/ngrams_tests.cpp
   text/ngrams_tokenize_tests.cpp
@@ -617,6 +622,7 @@ ConfigureTest(
 
 ConfigureTest(STREAM_HASHING_TEST streams/hash_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_COPYING_TEST streams/copying_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_GROUPBY_TEST streams/groupby_test.cpp STREAM_MODE testing)
 
 # ##################################################################################################
 # Install tests ####################################################################################

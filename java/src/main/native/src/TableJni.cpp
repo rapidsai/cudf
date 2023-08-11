@@ -3211,7 +3211,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_makeChunkedPack(JNIEnv *env, j
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
     JNIEnv *env, jclass, jlong j_input_table, jintArray j_keys, jlongArray j_default_output,
     jintArray j_aggregate_column_indices, jlongArray j_agg_instances, jintArray j_min_periods,
-    jintArray j_preceding, jintArray j_following, jboolean ignore_null_keys) {
+    jintArray j_preceding, jintArray j_following, jbooleanArray j_unbounded_preceding,
+    jbooleanArray j_unbounded_following, jboolean ignore_null_keys) {
 
   JNI_NULL_CHECK(env, j_input_table, "input table is null", NULL);
   JNI_NULL_CHECK(env, j_keys, "input keys are null", NULL);
@@ -3233,6 +3234,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
     cudf::jni::native_jintArray min_periods{env, j_min_periods};
     cudf::jni::native_jintArray preceding{env, j_preceding};
     cudf::jni::native_jintArray following{env, j_following};
+    cudf::jni::native_jbooleanArray unbounded_preceding{env, j_unbounded_preceding};
+    cudf::jni::native_jbooleanArray unbounded_following{env, j_unbounded_following};
 
     if (not valid_window_parameters(values, agg_instances, min_periods, preceding, following)) {
       JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
@@ -3251,14 +3254,21 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
                     nullptr);
 
       int agg_column_index = values[i];
+      auto const preceding_window_bounds = unbounded_preceding[i] ?
+                                               cudf::window_bounds::unbounded() :
+                                               cudf::window_bounds::get(preceding[i]);
+      auto const following_window_bounds = unbounded_following[i] ?
+                                               cudf::window_bounds::unbounded() :
+                                               cudf::window_bounds::get(following[i]);
+
       if (default_output[i] != nullptr) {
         result_columns.emplace_back(cudf::grouped_rolling_window(
-            groupby_keys, input_table->column(agg_column_index), *default_output[i], preceding[i],
-            following[i], min_periods[i], *agg));
+            groupby_keys, input_table->column(agg_column_index), *default_output[i],
+            preceding_window_bounds, following_window_bounds, min_periods[i], *agg));
       } else {
-        result_columns.emplace_back(
-            cudf::grouped_rolling_window(groupby_keys, input_table->column(agg_column_index),
-                                         preceding[i], following[i], min_periods[i], *agg));
+        result_columns.emplace_back(cudf::grouped_rolling_window(
+            groupby_keys, input_table->column(agg_column_index), preceding_window_bounds,
+            following_window_bounds, min_periods[i], *agg));
       }
     }
 

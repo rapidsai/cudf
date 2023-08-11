@@ -23,7 +23,7 @@ gtest_version:
   - ">=1.13.0"
 
 libarrow_version:
-  - "=11"
+  - "=12"
 
 dlpack_version:
   - ">=0.5,<0.6.0a0"

@@ -96,12 +96,12 @@ std::unique_ptr<column> group_collect(column_view const& values,
   auto [child_column,
         offsets_column] = [null_handling, num_groups, &values, &group_offsets, stream, mr] {
     auto offsets_column = make_numeric_column(
-      data_type(type_to_id<offset_type>()), num_groups + 1, mask_state::UNALLOCATED, stream, mr);
+      data_type(type_to_id<size_type>()), num_groups + 1, mask_state::UNALLOCATED, stream, mr);
 
     thrust::copy(rmm::exec_policy(stream),
                  group_offsets.begin(),
                  group_offsets.end(),
-                 offsets_column->mutable_view().template begin<offset_type>());
+                 offsets_column->mutable_view().template begin<size_type>());
 
     // If column of grouped values contains null elements, and null_policy == EXCLUDE,
     // those elements must be filtered out, and offsets recomputed.

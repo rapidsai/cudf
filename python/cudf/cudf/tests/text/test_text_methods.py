@@ -1,5 +1,8 @@
 # Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
+import random
+import string
+
 import numpy as np
 import pytest
 
@@ -855,3 +858,78 @@ def test_minhash():
     with pytest.raises(ValueError):
         seeds = cudf.Series([0, 1, 2], dtype=np.int32)
         strings.str.minhash(seeds=seeds)
+
+
+def test_jaccard_index():
+    str1 = cudf.Series(["the brown dog", "jumped about"])
+    str2 = cudf.Series(["the black cat", "jumped around"])
+
+    expected = cudf.Series([0.058824, 0.307692], dtype=np.float32)
+    actual = str1.str.jaccard_index(str2, 5)
+    assert_eq(expected, actual)
+
+    actual = str2.str.jaccard_index(str1, 5)
+    assert_eq(expected, actual)
+
+    with pytest.raises(ValueError):
+        str1.str.jaccard_index(str2, 1)
+    with pytest.raises(ValueError):
+        str3 = cudf.Series(["not enough rows"])
+        str1.str.jaccard_index(str3, 5)
+
+
+def _make_list_of_strings_of_random_length(
+    num_strings, min_length, max_length
+):
+    return [
+        "".join(
+            random.choice(string.ascii_lowercase)
+            for _ in range(random.randint(min_length, max_length))
+        )
+        for _ in range(num_strings)
+    ]
+
+
+def test_jaccard_index_random_strings():
+    # Seed the rng before random string generation.
+    random.seed(42)
+    num_strings = 100
+    jaccard_width = 5
+    common_strings = _make_list_of_strings_of_random_length(
+        num_strings, jaccard_width, 50
+    )
+    uncommon_strings1 = _make_list_of_strings_of_random_length(
+        num_strings, jaccard_width, 10
+    )
+    uncommon_strings2 = _make_list_of_strings_of_random_length(
+        num_strings, jaccard_width, 20
+    )
+    str1 = cudf.Series(uncommon_strings1).str.cat(cudf.Series(common_strings))
+    str2 = cudf.Series(uncommon_strings2).str.cat(cudf.Series(common_strings))
+
+    # adopted from https://github.com/rapidsai/rapids-deduplication/issues/36
+    da = str1.str.character_ngrams(jaccard_width, True)
+    db = str2.str.character_ngrams(jaccard_width, True)
+    da = da.list.unique()
+    db = db.list.unique()
+    da = da.explode()
+    db = db.explode()
+    da = da.to_frame()
+    db = db.to_frame()
+    da = da.reset_index()
+    db = db.reset_index()
+    da = da.rename(columns={0: "token"})
+    db = db.rename(columns={0: "token"})
+    db["match"] = 1
+    inter = da.merge(db, on=["index", "token"], how="left")
+    inter = inter.groupby("index")["match"].sum()
+    union = da.merge(db, on=["index", "token"], how="outer")
+    union = union.groupby("index").size()
+    res = inter / union
+    res.fillna(0, inplace=True)
+    res = res.sort_index()
+    res = res.values.astype("float32")
+    expected = cudf.Series(res)
+
+    actual = str1.str.jaccard_index(str2, jaccard_width)
+    assert_eq(expected, actual)

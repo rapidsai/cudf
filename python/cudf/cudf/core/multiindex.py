@@ -24,14 +24,8 @@ from cudf.api.types import is_integer, is_list_like, is_object_dtype
 from cudf.core import column
 from cudf.core._compat import PANDAS_GE_150
 from cudf.core.frame import Frame
-from cudf.core.index import (
-    BaseIndex,
-    _index_astype_docstring,
-    _lexsorted_equal_range,
-    as_index,
-)
-from cudf.utils.docutils import doc_apply
-from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
+from cudf.core.index import BaseIndex, _lexsorted_equal_range, as_index
+from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate, _is_same_name
 
 
 def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:
@@ -73,6 +67,33 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     verify_integrity : bool, default True
         Check that the levels/codes are consistent and valid.
         Not yet supported
+
+    Attributes
+    ----------
+    names
+    nlevels
+    dtypes
+    levels
+    codes
+
+    Methods
+    -------
+    from_arrays
+    from_tuples
+    from_product
+    from_frame
+    set_levels
+    set_codes
+    to_frame
+    to_flat_index
+    sortlevel
+    droplevel
+    swaplevel
+    reorder_levels
+    remove_unused_levels
+    get_level_values
+    get_loc
+    drop
 
     Returns
     -------
@@ -199,7 +220,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         self._names = pd.core.indexes.frozen.FrozenList(value)
 
     @_cudf_nvtx_annotate
-    @doc_apply(_index_astype_docstring)
     def astype(self, dtype, copy: bool = True):
         if not is_object_dtype(dtype):
             raise TypeError(
@@ -1530,6 +1550,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def is_unique(self):
         return len(self) == len(self.unique())
 
+    @property
+    def dtype(self):
+        return np.dtype("O")
+
     @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def is_monotonic_increasing(self):
@@ -1867,7 +1891,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         if len(self.names) != len(other.names):
             return [None] * len(self.names)
         return [
-            self_name if self_name == other_name else None
+            self_name if _is_same_name(self_name, other_name) else None
             for self_name, other_name in zip(self.names, other.names)
         ]
 

@@ -50,15 +50,6 @@ class CudfEngine(ArrowDatasetEngine):
             kwargs.get("schema", None),
         )
 
-        # If `strings_to_categorical==True`, convert objects to int32
-        strings_to_cats = kwargs.get("strings_to_categorical", False)
-        for col in meta_cudf._data.names:
-            if (
-                isinstance(meta_cudf._data[col], cudf.core.column.StringColumn)
-                and strings_to_cats
-            ):
-                meta_cudf._data[col] = meta_cudf._data[col].astype("int32")
-
         return meta_cudf
 
     @classmethod
@@ -75,7 +66,6 @@ class CudfEngine(ArrowDatasetEngine):
         columns=None,
         row_groups=None,
         filters=None,
-        strings_to_categorical=None,
         partitions=None,
         partitioning=None,
         partition_keys=None,
@@ -124,7 +114,6 @@ class CudfEngine(ArrowDatasetEngine):
                     engine="cudf",
                     columns=columns,
                     row_groups=row_groups if row_groups else None,
-                    strings_to_categorical=strings_to_categorical,
                     dataset_kwargs=dataset_kwargs,
                     categorical_partitions=False,
                     **kwargs,
@@ -142,7 +131,6 @@ class CudfEngine(ArrowDatasetEngine):
                                 row_groups=row_groups[i]
                                 if row_groups
                                 else None,
-                                strings_to_categorical=strings_to_categorical,
                                 dataset_kwargs=dataset_kwargs,
                                 categorical_partitions=False,
                                 **kwargs,
@@ -245,7 +233,6 @@ class CudfEngine(ArrowDatasetEngine):
             pieces = [pieces]
 
         # Extract supported kwargs from `kwargs`
-        strings_to_cats = kwargs.get("strings_to_categorical", False)
         read_kwargs = kwargs.get("read", {})
         read_kwargs.update(open_file_options or {})
         check_file_size = read_kwargs.pop("check_file_size", None)
@@ -291,7 +278,6 @@ class CudfEngine(ArrowDatasetEngine):
                             columns=read_columns,
                             row_groups=rgs if rgs else None,
                             filters=filters,
-                            strings_to_categorical=strings_to_cats,
                             partitions=partitions,
                             partitioning=partitioning,
                             partition_keys=last_partition_keys,
@@ -318,7 +304,6 @@ class CudfEngine(ArrowDatasetEngine):
                     columns=read_columns,
                     row_groups=rgs if rgs else None,
                     filters=filters,
-                    strings_to_categorical=strings_to_cats,
                     partitions=partitions,
                     partitioning=partitioning,
                     partition_keys=last_partition_keys,

@@ -199,7 +199,7 @@ struct byte_pair_encoding_fn {
     }
 
     auto const offset = d_strings.child(cudf::strings_column_view::offsets_column_index)
-                          .element<cudf::offset_type>(idx);
+                          .element<cudf::size_type>(idx);
     auto const d_indices = d_byte_indices + offset;
 
     // initialize the byte indices for this string;
@@ -304,7 +304,7 @@ struct byte_pair_encoding_fn {
 struct build_encoding_fn {
   cudf::column_device_view const d_strings;
   cudf::size_type const* d_byte_indices;
-  cudf::offset_type const* d_offsets;
+  cudf::size_type const* d_offsets;
   char* d_chars{};
 
   __device__ void operator()(cudf::size_type idx)
@@ -314,7 +314,7 @@ struct build_encoding_fn {
     if (d_str.empty()) { return; }
 
     auto const offset = d_strings.child(cudf::strings_column_view::offsets_column_index)
-                          .element<cudf::offset_type>(idx);
+                          .element<cudf::size_type>(idx);
     auto const d_indices = d_byte_indices + offset;
     auto d_output        = d_chars ? d_chars + d_offsets[idx] : nullptr;
 
@@ -362,12 +362,12 @@ std::unique_ptr<cudf::column> byte_pair_encoding(
   auto const d_merges  = cudf::column_device_view::create(merge_pairs.get_merge_pairs(), stream);
   auto const d_strings = cudf::column_device_view::create(input.parent(), stream);
 
-  auto offsets   = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<cudf::offset_type>()},
+  auto offsets   = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
                                            static_cast<cudf::size_type>(input.size() + 1),
                                            cudf::mask_state::UNALLOCATED,
                                            stream,
                                            rmm::mr::get_current_device_resource());
-  auto d_offsets = offsets->mutable_view().data<cudf::offset_type>();
+  auto d_offsets = offsets->mutable_view().data<cudf::size_type>();
 
   byte_pair_encoding_fn fn{*d_merges,
                            *d_strings,
@@ -406,14 +406,14 @@ std::unique_ptr<cudf::column> byte_pair_encoding(
  */
 struct edge_of_space_fn {
   cudf::column_device_view const d_strings;
-  __device__ bool operator()(cudf::offset_type offset)
+  __device__ bool operator()(cudf::size_type offset)
   {
     auto const d_chars =
       d_strings.child(cudf::strings_column_view::chars_column_index).data<char>();
     if (is_whitespace(d_chars[offset]) || !is_whitespace(d_chars[offset - 1])) { return false; }
 
     auto const offsets   = d_strings.child(cudf::strings_column_view::offsets_column_index);
-    auto const d_offsets = offsets.data<cudf::offset_type>() + d_strings.offset();
+    auto const d_offsets = offsets.data<cudf::size_type>() + d_strings.offset();
     // ignore offsets outside sliced range
     if (offset < d_offsets[0] || offset >= d_offsets[d_strings.size()]) { return false; }
 
@@ -452,12 +452,12 @@ std::unique_ptr<cudf::column> space_offsets(cudf::strings_column_view const& inp
   auto const space_count = thrust::count_if(rmm::exec_policy(stream), begin, end, edge_of_space);
 
   // copy space offsets
-  rmm::device_uvector<cudf::offset_type> space_offsets(space_count, stream);
+  rmm::device_uvector<cudf::size_type> space_offsets(space_count, stream);
   thrust::copy_if(rmm::exec_policy(stream), begin, end, space_offsets.data(), edge_of_space);
 
   // create output offsets
   auto result =
-    cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<cudf::offset_type>()},
+    cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
                               static_cast<cudf::size_type>(space_count + input.size() + 1),
                               cudf::mask_state::UNALLOCATED,
                               stream,
@@ -469,7 +469,7 @@ std::unique_ptr<cudf::column> space_offsets(cudf::strings_column_view const& inp
                 input.offsets_end(),
                 space_offsets.begin(),
                 space_offsets.end(),
-                result->mutable_view().begin<cudf::offset_type>());
+                result->mutable_view().begin<cudf::size_type>());
 
   return result;
 }

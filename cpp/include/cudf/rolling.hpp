@@ -114,19 +114,29 @@ struct window_bounds {
     return window_bounds(true, std::numeric_limits<cudf::size_type>::max());
   }
 
-  // TODO: In the future, add units for bounds.
-  //       E.g. {value=1, unit=DAYS, unbounded=false}
-  //       For the present, assume units from context:
-  //         1. For time-based window functions, assume DAYS as before
-  //         2. For all else, assume ROWS as before.
-  bool const is_unbounded;  ///< Whether the window boundary is unbounded
-  size_type const value;    ///< Finite window boundary value (in days or rows)
+  /**
+   * Whether the window_bounds is unbounded.
+   *
+   * @return true if the window bounds is unbounded.
+   * @return false if the window bounds has a finite row boundary.
+   */
+  [[nodiscard]] bool is_unbounded() const { return _is_unbounded; }
+
+  /**
+   * @brief Gets the row-boundary for this window_bounds.
+   *
+   * @return the row boundary value (in days or rows)
+   */
+  [[nodiscard]] size_type value() const { return _value; }
 
  private:
   explicit window_bounds(bool is_unbounded_, size_type value_ = 0)
-    : is_unbounded{is_unbounded_}, value{value_}
+    : _is_unbounded{is_unbounded_}, _value{value_}
   {
   }
+
+  bool const _is_unbounded;  ///< Whether the window boundary is unbounded
+  size_type const _value;    ///< Finite window boundary value (in days or rows)
 };
 
 /**
