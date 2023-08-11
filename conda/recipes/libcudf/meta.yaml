@@ -194,6 +194,7 @@ outputs:
         - test -f $PREFIX/include/cudf/hashing.hpp
         - test -f $PREFIX/include/cudf/hashing/detail/hashing.hpp
         - test -f $PREFIX/include/cudf/interop.hpp
+        - test -f $PREFIX/include/cudf/io/arrow_io_source.hpp
         - test -f $PREFIX/include/cudf/io/avro.hpp
         - test -f $PREFIX/include/cudf/io/csv.hpp
         - test -f $PREFIX/include/cudf/io/data_sink.hpp

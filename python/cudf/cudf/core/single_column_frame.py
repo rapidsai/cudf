@@ -327,7 +327,9 @@ class SingleColumnFrame(Frame, NotIterable):
         # Get the appropriate name for output operations involving two objects
         # that are Series-like objects. The output shares the lhs's name unless
         # the rhs is a _differently_ named Series-like object.
-        if isinstance(other, SingleColumnFrame) and self.name != other.name:
+        if isinstance(
+            other, SingleColumnFrame
+        ) and not cudf.utils.utils._is_same_name(self.name, other.name):
             result_name = None
         else:
             result_name = self.name
