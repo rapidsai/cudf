@@ -350,16 +350,15 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
 
   // get 1-string index per warp
   auto warp_inc_count = [&]() {
-    size_type istring=0;
-    if(warp_lane==0) {
-      istring = atomicAdd(str_counter, 1);
-    }
+    size_type istring = 0;
+    if (warp_lane == 0) { istring = atomicAdd(str_counter, 1); }
     __syncwarp();
     return __shfl_sync(0xffffffff, istring, 0);
   };
   // grid-stride loop.
   // for (size_type istring = global_warp_id; istring < total_out_strings; istring += nwarps) {
-  for (size_type istring = warp_inc_count(); istring < total_out_strings; istring = warp_inc_count()) {
+  for (size_type istring = warp_inc_count(); istring < total_out_strings;
+       istring           = warp_inc_count()) {
     // if (!d_chars)
     // printf("%d:%d<%d\n", global_thread_id, istring, total_out_strings);
     if (null_mask != nullptr && not bit_is_set(null_mask, istring)) {
@@ -370,7 +369,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
     auto in_begin           = str_tuples[istring].first;
     auto in_end             = in_begin + str_tuples[istring].second;
     auto const num_in_chars = str_tuples[istring].second;
-    // if(!(num_in_chars >= 1024)) continue;
+    if (num_in_chars >= 1024) continue;
 
     // Check if the value corresponds to the null literal
     auto const is_null_literal =
@@ -419,25 +418,28 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
     // 0-31, 32-63, ... i*32-n.
     // entire warp executes but with mask.
     auto MASK = 0xffffffff;
-    for (size_type char_index = warp_lane; (MASK = __ballot_sync(0xffffffff, char_index < (in_end - in_begin))) != 0;
+    for (size_type char_index = warp_lane;
+         (MASK = __ballot_sync(0xffffffff, char_index < (in_end - in_begin))) != 0;
          char_index += cudf::detail::warp_size) {
-      bool is_within_bounds = char_index < (in_end - in_begin); //TODO more conditions below to avoid out-of-bound memory access.
-      auto c            = in_begin[char_index];
-      auto prev_c       = char_index > 0 ? in_begin[char_index - 1] : 'a';
+      bool is_within_bounds =
+        char_index <
+        (in_end - in_begin);  // TODO more conditions below to avoid out-of-bound memory access.
+      auto c            = is_within_bounds ? in_begin[char_index] : '\0';
+      auto prev_c       = (char_index > 0 and is_within_bounds) ? in_begin[char_index - 1] : '\0';
       auto escaped_char = get_escape_char(c);
       bool error        = false;
       // FIXME: \\ at end is a problem here.
       // \uXXXXe e-u=5 4<=4
       //  012345
-      if(is_within_bounds) {
-      error |= (c == '\\' && char_index == (in_end - in_begin) - 1);
-      error |= (prev_c == '\\' && escaped_char == NON_ESCAPE_CHAR);
-      error |= (prev_c == '\\' && c == 'u' &&
-                // TODO check if following condition is right or off by one error.
-                ((in_begin + char_index + UNICODE_HEX_DIGIT_COUNT >= in_end) |
-                 // ((in_end - (in_begin + char_index) <= UNICODE_HEX_DIGIT_COUNT) |
-                 !is_hex(in_begin[char_index + 1]) | !is_hex(in_begin[char_index + 2]) |
-                 !is_hex(in_begin[char_index + 3]) | !is_hex(in_begin[char_index + 4])));
+      if (is_within_bounds) {
+        error |= (c == '\\' && char_index == (in_end - in_begin) - 1);
+        error |= (prev_c == '\\' && escaped_char == NON_ESCAPE_CHAR);
+        error |= (prev_c == '\\' && c == 'u' &&
+                  // TODO check if following condition is right or off by one error.
+                  ((in_begin + char_index + UNICODE_HEX_DIGIT_COUNT >= in_end) |
+                   // ((in_end - (in_begin + char_index) <= UNICODE_HEX_DIGIT_COUNT) |
+                   !is_hex(in_begin[char_index + 1]) | !is_hex(in_begin[char_index + 2]) |
+                   !is_hex(in_begin[char_index + 3]) | !is_hex(in_begin[char_index + 4])));
       }
       // propagate error using warp shuffle.
       error = __any_sync(MASK, error);
@@ -453,20 +455,20 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
         break;  // return to grid-stride loop for next string.
       }
       // TODO one more error condition of second \uXXXX is not hex.
-      bool skip = !is_within_bounds; //false;
+      bool skip = !is_within_bounds;  // false;
       // TODO FIXME: continue slashes are a problem!
       // skip |= (prev_c != '\\') && (c=='\\'); // skip '\'
       // corner case \\uXXXX TODO
       // skip XXXX in \uXXXX
       if (is_within_bounds) {
-      skip |=
-        char_index - 2 >= 0 && in_begin[char_index - 2] == '\\' && in_begin[char_index - 1] == 'u';
-      skip |=
-        char_index - 3 >= 0 && in_begin[char_index - 3] == '\\' && in_begin[char_index - 2] == 'u';
-      skip |=
-        char_index - 4 >= 0 && in_begin[char_index - 4] == '\\' && in_begin[char_index - 3] == 'u';
-      skip |=
-        char_index - 5 >= 0 && in_begin[char_index - 5] == '\\' && in_begin[char_index - 4] == 'u';
+        skip |= char_index - 2 >= 0 && in_begin[char_index - 2] == '\\' &&
+                in_begin[char_index - 1] == 'u';
+        skip |= char_index - 3 >= 0 && in_begin[char_index - 3] == '\\' &&
+                in_begin[char_index - 2] == 'u';
+        skip |= char_index - 4 >= 0 && in_begin[char_index - 4] == '\\' &&
+                in_begin[char_index - 3] == 'u';
+        skip |= char_index - 5 >= 0 && in_begin[char_index - 5] == '\\' &&
+                in_begin[char_index - 4] == 'u';
       }
       int this_num_out = 0;
       cudf::char_utf8 write_char{'a'};
@@ -496,8 +498,8 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
       // inclusive scan. TODO both inclusive and exclusive available in cub.
       cub::WarpScan<state_table>(temp_slash[warp_id]).InclusiveScan(curr, scanned, composite_op);
       auto is_escaping_backslash = scanned.state[init_state];
-      auto last_active_lane = 31 - __clz(MASK);  // TODO simplify 0xffffffff case?
-      init_state            = __shfl_sync(MASK, is_escaping_backslash, last_active_lane);
+      auto last_active_lane      = 31 - __clz(MASK);  // TODO simplify 0xffffffff case?
+      init_state                 = __shfl_sync(MASK, is_escaping_backslash, last_active_lane);
       // TODO replace/add prev_c with proper scan of escapes
       skip |= is_escaping_backslash;
 
@@ -507,7 +509,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
           // if (true) {
           this_num_out = 1;
           if (d_chars) write_char = c;
-          //FIXME: can you skip write like this for string_size count at other places?
+          // FIXME: can you skip write like this for string_size count at other places?
         } else {
           // already taken care early.
           // if (escaped_char == NON_ESCAPE_CHAR) {
@@ -516,7 +518,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
           // } else
           if (escaped_char != UNICODE_SEQ) {
             this_num_out = 1;
-            write_char = escaped_char;
+            write_char   = escaped_char;
           } else {
             // \uXXXX- u
             // Unicode
@@ -574,6 +576,269 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
       }
     }  // char for-loop
     if (!d_chars && warp_lane == 0) { d_offsets[istring] = last_offset; }
+  }    // grid-stride for-loop
+}
+
+template <typename str_tuple_it>
+__global__ void parse_fn_block_parallel(str_tuple_it str_tuples,
+                                        size_type total_out_strings,
+                                        size_type* str_counter,
+                                        bitmask_type* null_mask,
+                                        size_type* null_count_data,
+                                        cudf::io::parse_options_view const options,
+                                        size_type* d_offsets,
+                                        char* d_chars)
+{
+  // int global_thread_id = blockIdx.x * blockDim.x + threadIdx.x;
+  int lane = threadIdx.x;
+  // int global_warp_id   = blockIdx.x;
+  // int nwarps           = gridDim.x;
+  // TODO alignment - aligned access possible?
+
+  // get 1-string index per warp
+  auto warp_inc_count = [&]() {
+    __shared__ size_type istring;
+    if (lane == 0) { istring = atomicAdd(str_counter, 1); }
+    __syncthreads();  // memory fence?
+    return istring;
+  };
+  // grid-stride loop.
+  // TODO if large number of small strings, then this loop is not efficient. So, switch to old
+  // method. for (size_type istring = global_warp_id; istring < total_out_strings; istring +=
+  // nwarps) {
+  for (size_type istring = warp_inc_count(); istring < total_out_strings;
+       istring           = warp_inc_count()) {
+    // if (!d_chars)
+    // printf("%d:%d<%d\n", global_thread_id, istring, total_out_strings);
+    if (null_mask != nullptr && not bit_is_set(null_mask, istring)) {
+      if (!d_chars) d_offsets[istring] = 0;
+      continue;  // gride-stride return;
+    }
+
+    auto in_begin           = str_tuples[istring].first;
+    auto in_end             = in_begin + str_tuples[istring].second;
+    auto const num_in_chars = str_tuples[istring].second;
+    if (num_in_chars < 1024) continue;
+
+    // Check if the value corresponds to the null literal
+    auto const is_null_literal =
+      (!d_chars) &&
+      serialized_trie_contains(options.trie_na, {in_begin, static_cast<std::size_t>(num_in_chars)});
+    if (is_null_literal && null_mask != nullptr) {
+      if (lane == 0) {
+        clear_bit(null_mask, istring);
+        atomicAdd(null_count_data, 1);
+        if (!d_chars) d_offsets[istring] = 0;
+      }
+      continue;  // gride-stride return;
+    }
+    // String values are indicated by keeping the quote character
+    bool const is_string_value =
+      num_in_chars >= 2LL &&
+      (options.quotechar == '\0' ||
+       (*in_begin == options.quotechar) && (*thrust::prev(in_end) == options.quotechar));
+    char* d_buffer = d_chars ? d_chars + d_offsets[istring] : nullptr;
+
+    // Copy literal/numeric value
+    if (not is_string_value) {
+      if (!d_chars) {
+        if (lane == 0) { d_offsets[istring] = in_end - in_begin; }
+      } else {
+        for (size_type char_index = lane; char_index < (in_end - in_begin);
+             char_index += blockDim.x) {
+          d_buffer[char_index] = in_begin[char_index];
+        }
+      }
+      continue;  // gride-stride return;
+    }
+
+    // Exclude beginning and ending quote chars from string range
+    if (!options.keepquotes) {
+      ++in_begin;
+      --in_end;
+    }
+    // auto str_process_info = process_string(in_begin, in_end, d_buffer, options);
+
+    auto is_hex = [](auto ch) {
+      return (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F') || (ch >= 'a' && ch <= 'f');
+    };
+    __shared__ bool init_state;        //{false};  // for backslash scan calculation
+    __shared__ size_type last_offset;  // = 0;
+    if (lane == 0) {
+      init_state  = false;
+      last_offset = 0;
+    }
+    // 0-31, 32-63, ... i*32-n.
+    // entire warp executes but with mask.
+    // auto MASK = 0xffffffff;
+    for (size_type char_index = lane;
+         char_index < (in_end - in_begin + 32 * 8 - 1) / (32 * 8) * (32 * 8);
+         char_index += blockDim.x) {
+      bool is_within_bounds =
+        char_index <
+        (in_end - in_begin);  // TODO more conditions below to avoid out-of-bound memory access.
+      auto c            = is_within_bounds ? in_begin[char_index] : '\0';
+      auto prev_c       = (char_index > 0 and is_within_bounds) ? in_begin[char_index - 1] : 'a';
+      auto escaped_char = get_escape_char(c);
+      bool error        = false;
+      // FIXME: \\ at end is a problem here.
+      // \uXXXXe e-u=5 4<=4
+      //  012345
+      if (is_within_bounds) {
+        error |= (c == '\\' && char_index == (in_end - in_begin) - 1);
+        error |= (prev_c == '\\' && escaped_char == NON_ESCAPE_CHAR);
+        error |= (prev_c == '\\' && c == 'u' &&
+                  // TODO check if following condition is right or off by one error.
+                  ((in_begin + char_index + UNICODE_HEX_DIGIT_COUNT >= in_end) |
+                   // ((in_end - (in_begin + char_index) <= UNICODE_HEX_DIGIT_COUNT) |
+                   !is_hex(in_begin[char_index + 1]) | !is_hex(in_begin[char_index + 2]) |
+                   !is_hex(in_begin[char_index + 3]) | !is_hex(in_begin[char_index + 4])));
+      }
+      // propagate error using warp shuffle.
+      // error = __any_sync(MASK, error);
+      using BlockReduce = cub::BlockReduce<bool, 32 * 8>;
+      __shared__ typename BlockReduce::TempStorage temp_storage_error;
+      __shared__ bool error_reduced;
+      error_reduced = BlockReduce(temp_storage_error).Sum(error);  // TODO use cub::LogicalOR.
+      // only valid in thread0.
+      __syncthreads();
+      if (error_reduced) {
+        if (lane == 0) {
+          if (null_mask != nullptr) {
+            clear_bit(null_mask, istring);
+            atomicAdd(null_count_data, 1);
+          }
+          last_offset = 0;
+          if (!d_chars) d_offsets[istring] = 0;
+        }
+        break;  // return to grid-stride loop for next string.
+      }
+      // TODO one more error condition of second \uXXXX is not hex.
+      bool skip = !is_within_bounds;  // false;
+      // TODO FIXME: continue slashes are a problem!
+      // skip |= (prev_c != '\\') && (c=='\\'); // skip '\'
+      // corner case \\uXXXX TODO
+      // skip XXXX in \uXXXX
+      if (is_within_bounds) {
+        skip |= char_index - 2 >= 0 && in_begin[char_index - 2] == '\\' &&
+                in_begin[char_index - 1] == 'u';
+        skip |= char_index - 3 >= 0 && in_begin[char_index - 3] == '\\' &&
+                in_begin[char_index - 2] == 'u';
+        skip |= char_index - 4 >= 0 && in_begin[char_index - 4] == '\\' &&
+                in_begin[char_index - 3] == 'u';
+        skip |= char_index - 5 >= 0 && in_begin[char_index - 5] == '\\' &&
+                in_begin[char_index - 4] == 'u';
+      }
+      int this_num_out = 0;
+      cudf::char_utf8 write_char{'a'};
+
+      // To check current is backslash by checking if previous is backslash.
+      // curr = !prev & c=='\\'
+      // So, scan is required from beginning of string.
+      // State table approach (intra-warp FST)
+      // 2 states: Not-Slash(NS), Slash(S).
+      // prev  /   *
+      // NS    S  NS
+      //  S   NS  NS
+      // After inclusive scan, all current S states translate to escaping backslash.
+      // All escaping backslash should be skipped.
+
+      struct state_table {
+        bool state[2];
+      };
+      // using state_table = bool[2]; Try this. and see if compiler errors
+      using BlockScan = cub::BlockScan<state_table, 32 * 8>;
+      __shared__ typename BlockScan::TempStorage temp_slash;
+      state_table curr{is_within_bounds && c == '\\', false};  // state transition vector.
+      auto composite_op = [](state_table op1, state_table op2) {
+        return state_table{op2.state[op1.state[0]], op2.state[op1.state[1]]};
+      };
+      state_table scanned;
+      // auto warp_id = threadIdx.x / 32;
+      // inclusive scan. TODO both inclusive and exclusive available in cub.
+      BlockScan(temp_slash).InclusiveScan(curr, scanned, composite_op);
+      auto is_escaping_backslash = scanned.state[init_state];
+      auto last_active_lane      = blockDim.x - 1;  // TODO simplify 0xffffffff case?
+      if (threadIdx.x == last_active_lane) init_state = is_escaping_backslash;
+      // There is another __syncthreads() at the end of for-loop.
+      // TODO replace/add prev_c with proper scan of escapes
+      skip |= is_escaping_backslash;
+
+      if (!skip) {
+        // is prev_is_not backslash?
+        if (prev_c != '\\') {  // FIXME: enable this after debugging.
+          // if (true) {
+          this_num_out = 1;
+          if (d_chars) write_char = c;
+          // FIXME: can you skip write like this for string_size count at other places?
+        } else {
+          // already taken care early.
+          // if (escaped_char == NON_ESCAPE_CHAR) {
+          //    this_num_out = 0;
+          //    error = true;
+          // } else
+          if (escaped_char != UNICODE_SEQ) {
+            this_num_out = 1;
+            write_char   = escaped_char;
+          } else {
+            // \uXXXX- u
+            // Unicode
+            auto hex_val     = parse_unicode_hex(in_begin + char_index + 1);
+            auto hex_low_val = 0;
+            // if next is \uXXXX
+            // in_begin + char_index
+            // 01234567890
+            //\uXXXX\uXXXX TODO cleanup these conditions.
+            // if ((in_end - (in_begin + char_index + 1 + 4)) > 6 &&
+            if ((in_begin + char_index + 4 + 6) < in_end && in_begin[char_index + 1 + 4] == '\\' &&
+                in_begin[char_index + 1 + 5] == 'u') {
+              hex_low_val = parse_unicode_hex(in_begin + char_index + 1 + 6);
+            }
+            if (hex_val >= UTF16_HIGH_SURROGATE_BEGIN && hex_val < UTF16_HIGH_SURROGATE_END &&
+                hex_low_val >= UTF16_LOW_SURROGATE_BEGIN && hex_low_val < UTF16_LOW_SURROGATE_END) {
+              // Compute UTF16-encoded code point
+              uint32_t unicode_code_point = 0x10000 +
+                                            ((hex_val - UTF16_HIGH_SURROGATE_BEGIN) << 10) +
+                                            (hex_low_val - UTF16_LOW_SURROGATE_BEGIN);
+              write_char   = strings::detail::codepoint_to_utf8(unicode_code_point);
+              this_num_out = strings::detail::bytes_in_char_utf8(write_char);
+            } else {
+              // auto hex_high_val = parse_unicode_hex(in_begin + char_index + 1 - 6);
+              if (
+                // hex_high_val >= UTF16_HIGH_SURROGATE_BEGIN && hex_high_val <
+                // UTF16_HIGH_SURROGATE_END &&
+                hex_val >= UTF16_LOW_SURROGATE_BEGIN && hex_val < UTF16_LOW_SURROGATE_END) {
+                skip         = true;
+                this_num_out = 0;
+                write_char   = 0;
+              } else {
+                // if u8
+                write_char   = strings::detail::codepoint_to_utf8(hex_val);
+                this_num_out = strings::detail::bytes_in_char_utf8(write_char);
+              }
+            }
+          }
+        }
+      }  // !skip end.
+      {
+        // TODO think about writing error conditions as normal, so that program flow is easy to read
+        // and can process error here.
+        // WRITE now (compute out_idx offset then write)
+        // intra-warp scan of this_num_out.
+        // TODO union to save shared memory
+        using BlockScan2 = cub::BlockScan<size_type, 32 * 8>;
+        __shared__ BlockScan2::TempStorage temp_storage;
+        size_type offset;
+        BlockScan2(temp_storage).ExclusiveSum(this_num_out, offset);
+        offset += last_offset;
+        // TODO add last active lane this_num_out for correct last_offset.
+        if (d_chars && !skip) { strings::detail::from_char_utf8(write_char, d_buffer + offset); }
+        offset += this_num_out;
+        if (threadIdx.x == last_active_lane) last_offset = offset;
+        __syncthreads();
+      }
+    }  // char for-loop
+    if (!d_chars && lane == 0) { d_offsets[istring] = last_offset; }
   }    // grid-stride for-loop
 }
 
@@ -684,19 +949,29 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
       data_type{cudf::type_id::INT32}, col_size + 1, cudf::mask_state::UNALLOCATED, stream, mr);
     auto d_offsets = offsets2->mutable_view().data<size_type>();
 
-    int max_blocks = 0;
+    int max_blocks                 = 0;
     constexpr auto warps_per_block = 8;
-    int threads_per_block = cudf::detail::warp_size * warps_per_block;
-    CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_blocks, parse_fn_string_parallel<str_tuple_it>, threads_per_block, 0));
+    int threads_per_block          = cudf::detail::warp_size * warps_per_block;
+    CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+      &max_blocks, parse_fn_string_parallel<str_tuple_it>, threads_per_block, 0));
 
     int device = 0;
     CUDF_CUDA_TRY(cudaGetDevice(&device));
     int num_sms = 0;
     CUDF_CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, device));
-    auto num_blocks = min(num_sms * max_blocks, min(65535, col_size / warps_per_block + 1));
+    auto num_blocks  = min(num_sms * max_blocks, min(65535, col_size / warps_per_block + 1));
     auto str_counter = cudf::numeric_scalar(size_type{0}, true, stream);
 
     parse_fn_string_parallel<<<num_blocks, threads_per_block, 0, stream.value()>>>(
+      str_tuples,
+      col_size,
+      str_counter.data(),
+      static_cast<bitmask_type*>(null_mask.data()),
+      null_count_data2,
+      options,
+      d_offsets,
+      nullptr);
+    parse_fn_block_parallel<<<num_blocks, threads_per_block, 0, stream.value()>>>(
       str_tuples,
       col_size,
       str_counter.data(),
@@ -726,6 +1001,15 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
       d_offsets,
       d_chars2);
 
+    parse_fn_block_parallel<<<num_blocks, threads_per_block, 0, stream.value()>>>(
+      str_tuples,
+      col_size,
+      str_counter.data(),
+      static_cast<bitmask_type*>(null_mask.data()),
+      null_count_data2,
+      options,
+      d_offsets,
+      d_chars2);
     // if(bytes!=chars->size()) {
     //   std::cout<<"new bytes="<<bytes<<std::endl;
     //   print_raw(d_offsets, offsets2->size(), stream);
