@@ -3295,6 +3295,10 @@ def test_binop_integer_power_int_scalar():
     utils.assert_eq(expected, got)
 
 
+def test_numpy_int_scalar_binop():
+    assert (np.float32(1.0) - cudf.Scalar(1)) == 0.0
+
+
 @pytest.mark.parametrize("op", _binops)
 def test_binop_index_series(op):
     gi = cudf.Index([10, 11, 12])
