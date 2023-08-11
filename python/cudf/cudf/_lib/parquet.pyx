@@ -38,6 +38,7 @@ from libcpp.unordered_map cimport unordered_map
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
+cimport cudf._lib.cpp.io.data_sink as cudf_io_data_sink
 cimport cudf._lib.cpp.io.types as cudf_io_types
 cimport cudf._lib.cpp.types as cudf_types
 from cudf._lib.column cimport Column
@@ -334,7 +335,7 @@ def write_parquet(
 
     cdef vector[map[string, string]] user_data
     cdef table_view tv
-    cdef vector[unique_ptr[cudf_io_types.data_sink]] _data_sinks
+    cdef vector[unique_ptr[cudf_io_data_sink.data_sink]] _data_sinks
     cdef cudf_io_types.sink_info sink = make_sinks_info(
         filepaths_or_buffers, _data_sinks
     )
@@ -476,7 +477,7 @@ cdef class ParquetWriter:
     cdef unique_ptr[cpp_parquet_chunked_writer] writer
     cdef table_input_metadata tbl_meta
     cdef cudf_io_types.sink_info sink
-    cdef vector[unique_ptr[cudf_io_types.data_sink]] _data_sink
+    cdef vector[unique_ptr[cudf_io_data_sink.data_sink]] _data_sink
     cdef cudf_io_types.statistics_freq stat_freq
     cdef cudf_io_types.compression_type comp_type
     cdef object index
