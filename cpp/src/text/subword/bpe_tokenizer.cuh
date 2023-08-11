@@ -44,8 +44,8 @@ using string_hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<cudf::strin
 /**
  * @brief Hasher function used for building and using the cuco static-map
  *
- * This takes advantage of hetergenouse lookup feature in cuco static-map which
- * allows inserting with one type (index)  and looking up with a different type (string).
+ * This takes advantage of heterogeneous lookup feature in cuco static-map which
+ * allows inserting with one type (index) and looking up with a different type (string).
  */
 struct bpe_hasher {
   cudf::column_device_view const d_strings;
@@ -62,8 +62,8 @@ struct bpe_hasher {
 /**
  * @brief Equal function used for building and using the cuco static-map
  *
- * This takes advantage of hetergenouse lookup feature in cuco static-map which
- * allows inserting with one type (index)  and looking up with a different type (string).
+ * This takes advantage of heterogeneous lookup feature in cuco static-map which
+ * allows inserting with one type (index) and looking up with a different type (string).
  */
 struct bpe_equal {
   cudf::column_device_view const d_strings;
@@ -109,8 +109,8 @@ struct bpe_merge_pairs::bpe_merge_pairs_impl {
                        col_device_view&& d_merge_pairs,
                        std::unique_ptr<detail::merge_pairs_map_type>&& merge_pairs_map);
 
-  auto get_merge_pairs() const { return merge_pairs->view(); }
-  auto get_merge_pairs_map() const { return merge_pairs_map->ref(cuco::experimental::op::find); }
+  auto const get_merge_pairs() const { return *d_merge_pairs; }
+  auto get_merge_pairs_ref() const { return merge_pairs_map->ref(cuco::experimental::op::find); }
 };
 
 }  // namespace nvtext

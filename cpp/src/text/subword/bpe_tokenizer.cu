@@ -136,6 +136,13 @@ struct byte_pair_encoding_fn {
     return cudf::string_view(d_str.data() + *begin, size);
   }
 
+  /**
+   * @brief Lookup the pair of strings in the d_map/d_merges
+   *
+   * @param lhs Left half of the string
+   * @param rhs Right half of the string
+   * @return Position of merge pair within d_map
+   */
   __device__ auto get_merge_pair(cudf::string_view const& lhs, cudf::string_view const& rhs)
   {
     __shared__ char shmem[48 * 1024];  // max for Pascal
@@ -343,12 +350,12 @@ std::unique_ptr<cudf::column> byte_pair_encoding(
   bpe_merge_pairs::bpe_merge_pairs_impl const& merge_pairs,
   rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(!merge_pairs.get_merge_pairs().is_empty(), "Merge pairs table must not be empty");
+  auto const d_merges = merge_pairs.get_merge_pairs();
+  CUDF_EXPECTS(d_merges.size() > 0, "Merge pairs table must not be empty");
 
   // build working vector to hold index values per byte
   rmm::device_uvector<cudf::size_type> d_byte_indices(input.chars().size(), stream);
 
-  auto const d_merges  = cudf::column_device_view::create(merge_pairs.get_merge_pairs(), stream);
   auto const d_strings = cudf::column_device_view::create(input.parent(), stream);
 
   auto offsets   = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
@@ -358,9 +365,9 @@ std::unique_ptr<cudf::column> byte_pair_encoding(
                                            rmm::mr::get_current_device_resource());
   auto d_offsets = offsets->mutable_view().data<cudf::size_type>();
 
-  auto map_ref = merge_pairs.get_merge_pairs_map();
+  auto map_ref = merge_pairs.get_merge_pairs_ref();
   byte_pair_encoding_fn<decltype(map_ref)> fn{
-    *d_merges, *d_strings, map_ref, d_offsets, string_hasher_type{}, d_byte_indices.data()};
+    d_merges, *d_strings, map_ref, d_offsets, string_hasher_type{}, d_byte_indices.data()};
   thrust::for_each_n(
     rmm::exec_policy(stream), thrust::make_counting_iterator<cudf::size_type>(0), input.size(), fn);
 
