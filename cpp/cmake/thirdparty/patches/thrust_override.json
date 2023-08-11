@@ -4,6 +4,16 @@
     "Thrust" : {
       "patches" : [
         {
+          "file" : "Thrust/reroot_support.diff",
+          "issue" : "Support conda-forge usage of CMake rerooting [https://github.com/NVIDIA/thrust/pull/1969]",
+          "fixed_in" : "2.2"
+        },
+        {
+          "file" : "Thrust/thrust_libcudacxx_2.1.0.diff",
+          "issue" : "Use libcudacxx 2.1.0 in Thrust config.",
+          "fixed_in" : "2.2"
+        },
+        {
           "file" : "${current_json_dir}/thrust_disable_64bit_dispatching.diff",
           "issue" : "Remove 64bit dispatching as not needed by libcudf and results in compiling twice as many kernels [https://github.com/rapidsai/cudf/pull/11437]",
           "fixed_in" : ""
