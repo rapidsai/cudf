@@ -95,9 +95,10 @@ std::unique_ptr<cudf::column> minhash(
  * Any null row entries result in corresponding null output rows.
  *
  * This function uses MurmurHash3_x64_128 for the hash algorithm.
+ * The hash function returns 2 uint64 values but only the first value
+ * is used with the minhash calculation.
  *
  * @throw std::invalid_argument if the width < 2
- * @throw std::invalid_argument if hash_function is not HASH_MURMUR3
  *
  * @param input Strings column to compute minhash
  * @param seed  Seed value used for the hash algorithm

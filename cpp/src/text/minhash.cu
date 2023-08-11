@@ -92,7 +92,7 @@ __global__ void minhash_fn(cudf::column_device_view const d_strings,
   auto const begin = d_str.data() + lane_idx;
   auto const end   = d_str.data() + d_str.size_bytes();
 
-  // each lane hashes 'width'  substrings of d_str
+  // each lane hashes 'width' substrings of d_str
   for (auto itr = begin; itr < end; itr += cudf::detail::warp_size) {
     if (cudf::strings::detail::is_utf8_continuation_char(*itr)) { continue; }
     auto const check_str =  // used for counting 'width' characters
@@ -141,7 +141,7 @@ std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
                "The number of seeds times the number of input rows exceeds the column size limit",
                std::overflow_error);
 
-  auto output_type = cudf::data_type{cudf::type_to_id<hash_value_type>()};
+  auto const output_type = cudf::data_type{cudf::type_to_id<hash_value_type>()};
   if (input.is_empty()) { return cudf::make_empty_column(output_type); }
 
   auto const d_strings = cudf::column_device_view::create(input.parent(), stream);
