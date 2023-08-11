@@ -6407,7 +6407,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         assert level in (None, -1)
         repeated_index = self.index.repeat(self.shape[1])
         name_index = libcudf.reshape.tile(
-            [as_column(self._column_names)], self.shape[0]
+            [as_column(self.columns.get_level_values(level))], self.shape[0]
         )
         new_index_columns = [*repeated_index._columns, *name_index]
         if isinstance(self._index, MultiIndex):
@@ -6434,9 +6434,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             }
         )
 
+        if isinstance(self.columns, pd.MultiIndex):
+            try:
+                (name,) = set(name[:level] for name in self._column_names)
+            except ValueError:
+                raise NotImplementedError("Cannot stack into dataframe")
+        else:
+            name = None
+
         result = Series._from_data(
             {
-                None: libcudf.reshape.interleave_columns(
+                name: libcudf.reshape.interleave_columns(
                     [*homogenized._columns]
                 )
             },
