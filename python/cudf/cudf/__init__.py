@@ -124,6 +124,7 @@ __all__ = [
     "IntervalIndex",
     "ListDtype",
     "MultiIndex",
+    "NaT",
     "NA",
     "RangeIndex",
     "Scalar",

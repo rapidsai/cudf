@@ -178,7 +178,7 @@ cdef class DeviceScalar:
         return self.get_raw_ptr()[0].is_valid()
 
     def __repr__(self):
-        if self.value is NA:
+        if self.value is NA or self.value is NaT:
             return (
                 f"{self.__class__.__name__}"
                 f"({self.value}, {repr(self.dtype)})"
@@ -586,7 +586,7 @@ def as_device_scalar(val, dtype=None):
 
 
 def _is_null_host_scalar(slr):
-    if slr is None or slr is NA:
+    if slr is None or slr is NA or slr is NaT:
         return True
     elif isinstance(slr, (np.datetime64, np.timedelta64)) and np.isnat(slr):
         return True
