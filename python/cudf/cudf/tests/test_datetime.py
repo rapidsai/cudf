@@ -2107,3 +2107,8 @@ def test_datetime_binop_tz_timestamp(op):
     date_scalar = datetime.datetime.now(datetime.timezone.utc)
     with pytest.raises(NotImplementedError):
         op(s, date_scalar)
+
+
+def test_datetime_getitem_na():
+    s = cudf.Series([1, 2, None, 3], dtype="datetime64[ns]")
+    assert s[2] is cudf.NaT
