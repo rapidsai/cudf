@@ -19,7 +19,7 @@ from cudf.api.types import (
     is_string_dtype,
     is_struct_dtype,
 )
-from cudf.core.missing import NaT, NA
+from cudf.core.missing import NA, NaT
 
 
 def dtype_can_compare_equal_to_other(dtype):

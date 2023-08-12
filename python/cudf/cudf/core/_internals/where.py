@@ -13,7 +13,7 @@ from cudf.api.types import (
     is_scalar,
 )
 from cudf.core.column import ColumnBase
-from cudf.core.missing import NaT, NA
+from cudf.core.missing import NA, NaT
 from cudf.utils.dtypes import (
     _can_cast,
     _dtype_can_hold_element,

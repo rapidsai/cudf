@@ -81,7 +81,7 @@ from cudf.core.dtypes import (
     ListDtype,
     StructDtype,
 )
-from cudf.core.missing import NaT, NA
+from cudf.core.missing import NA, NaT
 from cudf.core.mixins import BinaryOperand, Reducible
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
