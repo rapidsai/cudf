@@ -1500,7 +1500,12 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     def _clean_nulls_from_index(self):
         if self._values.has_nulls():
             return cudf.Index(
-                self._values.astype("str").fillna(cudf._NA_REP), name=self.name
+                self._values.astype("str").fillna(
+                    cudf._NAT_REP
+                    if isinstance(self, (DatetimeIndex, TimedeltaIndex))
+                    else cudf._NA_REP
+                ),
+                name=self.name,
             )
 
         return self
@@ -2611,7 +2616,7 @@ class DatetimeIndex(GenericIndex):
         ...                                   '2018-10-28 03:46:00']))
         >>> s.dt.tz_localize("CET")
         0    2018-10-28 01:20:00.000000000
-        1                             <NA>
+        1                              NaT
         2    2018-10-28 03:46:00.000000000
         dtype: datetime64[ns, CET]
 

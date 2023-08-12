@@ -504,7 +504,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                     ),
                 ):
                     preprocess_df[name] = col.astype("str").fillna(
-                        cudf._NA_REP
+                        cudf._NAT_REP
                     )
 
             tuples_list = list(

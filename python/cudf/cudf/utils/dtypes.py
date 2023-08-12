@@ -16,6 +16,7 @@ from cudf.api.types import is_bool, is_float, is_integer
 from cudf.core.missing import NA
 
 _NA_REP = "<NA>"
+_NAT_REP = "NaT"
 
 """Map numpy dtype to pyarrow types.
 Note that np.bool_ bitwidth (8) is different from pa.bool_ (1). Special
