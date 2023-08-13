@@ -19,10 +19,15 @@ from pandas import testing as tm
 
 import cudf
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
-from cudf.api.types import is_scalar
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
-from cudf.core.udf.strings_lowering import cast_string_view_to_udf_string
-from cudf.core.udf.strings_typing import StringView, string_view, udf_string
+from cudf.core.udf.strings_lowering import (
+    cast_string_view_to_managed_udf_string,
+)
+from cudf.core.udf.strings_typing import (
+    StringView,
+    managed_udf_string,
+    string_view,
+)
 from cudf.utils import dtypes as dtypeutils
 
 supported_numpy_dtypes = [
@@ -372,9 +377,7 @@ def assert_column_memory_ne(
 
 def _create_pandas_series(data=None, index=None, dtype=None, *args, **kwargs):
     # Wrapper around pd.Series using a float64 default dtype for empty data.
-    if dtype is None and (
-        data is None or (not is_scalar(data) and len(data) == 0)
-    ):
+    if dtype is None and (data is None or len(data) == 0):
         dtype = "float64"
     return pd.Series(data=data, index=index, dtype=dtype, *args, **kwargs)
 
@@ -398,14 +401,12 @@ def expect_warning_if(condition, warning=FutureWarning, *args, **kwargs):
         yield
 
 
-def sv_to_udf_str(sv):
+def sv_to_managed_udf_str(sv):
     """
-    Cast a string_view object to a udf_string object
-
+    Cast a string_view object to a managed_udf_string object
     This placeholder function never runs in python
     It exists only for numba to have something to replace
     with the typing and lowering code below
-
     This is similar conceptually to needing a translation
     engine to emit an expression in target language "B" when
     there is no equivalent in the source language "A" to
@@ -417,15 +418,15 @@ def sv_to_udf_str(sv):
     pass
 
 
-@cuda_decl_registry.register_global(sv_to_udf_str)
+@cuda_decl_registry.register_global(sv_to_managed_udf_str)
 class StringViewToUDFStringDecl(AbstractTemplate):
     def generic(self, args, kws):
         if isinstance(args[0], StringView) and len(args) == 1:
-            return nb_signature(udf_string, string_view)
+            return nb_signature(managed_udf_string, string_view)
 
 
-@cuda_lower(sv_to_udf_str, string_view)
-def sv_to_udf_str_testing_lowering(context, builder, sig, args):
-    return cast_string_view_to_udf_string(
+@cuda_lower(sv_to_managed_udf_str, string_view)
+def sv_to_managed_udf_str_testing_lowering(context, builder, sig, args):
+    return cast_string_view_to_managed_udf_string(
         context, builder, sig.args[0], sig.return_type, args[0]
     )
