@@ -23,10 +23,10 @@ dependencies:
 - cupy>=12.0.0
 - cxx-compiler
 - cython>=0.29,<0.30
-- dask-core>=2023.5.1
+- dask-core==2023.7.1
 - dask-cuda==23.8.*
-- dask>=2023.5.1
-- distributed>=2023.5.1
+- dask==2023.7.1
+- distributed==2023.7.1
 - dlpack>=0.5,<0.6.0a0
 - doxygen=1.8.20
 - fastavro>=0.22.9
@@ -36,6 +36,7 @@ dependencies:
 - gmock>=1.13.0
 - gtest>=1.13.0
 - hypothesis
+- identify>=2.5.20
 - ipython
 - libarrow==11.0.0.*
 - libcufile-dev=1.4.0.31
@@ -63,7 +64,7 @@ dependencies:
 - pandoc
 - pip
 - pre-commit
-- protobuf>=4.21.6,<4.22
+- protobuf>=4.21,<5
 - ptxcompiler
 - pyarrow==11.0.0.*
 - pydata-sphinx-theme

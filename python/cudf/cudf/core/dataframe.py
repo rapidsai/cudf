@@ -4851,6 +4851,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if datetime_is_numeric:
                 default_include.append("datetime")
             else:
+                # Do not remove until pandas 2.0 support is added.
                 warnings.warn(
                     "`datetime_is_numeric` is deprecated. Specify "
                     "`datetime_is_numeric=True` to silence this "
@@ -5801,6 +5802,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
 
                 if numeric_only is None and op in numeric_ops:
+                    # Do not remove until pandas 2.0 support is added.
                     warnings.warn(
                         f"The default value of numeric_only in DataFrame.{op} "
                         "is deprecated. In a future version, it will default "
@@ -6275,26 +6277,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         encoding=None,
         compression=None,
         lineterminator=None,
-        line_terminator=None,
         chunksize=None,
         storage_options=None,
     ):
         """{docstring}"""
         from cudf.io import csv
 
-        if line_terminator is not None:
-            warnings.warn(
-                "line_terminator is a deprecated keyword argument, "
-                "use lineterminator instead.",
-                FutureWarning,
-            )
-            if lineterminator is not None:
-                warnings.warn(
-                    f"Ignoring {line_terminator=} in favor "
-                    f"of {lineterminator=}"
-                )
-            else:
-                lineterminator = line_terminator
         if lineterminator is None:
             lineterminator = os.linesep
         return csv.to_csv(
