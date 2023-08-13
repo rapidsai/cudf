@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 cimport cython
 
@@ -536,7 +536,7 @@ cdef _get_np_scalar_from_timedelta64(unique_ptr[scalar]& s):
     cdef scalar* s_ptr = s.get()
 
     if not s_ptr[0].is_valid():
-        return None
+        return NA
 
     cdef libcudf_types.data_type cdtype = s_ptr[0].type()
 
