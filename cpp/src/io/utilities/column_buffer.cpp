@@ -350,4 +350,16 @@ template std::unique_ptr<column> empty_like<pointer_type>(pointer_column_buffer&
 
 template class column_buffer_base<pointer_type>;
 template class column_buffer_base<string_type>;
+
+void gather_column_buffer::set_stream(rmm::cuda_stream_view stream) noexcept
+{
+  if (_strings) _strings->set_stream(stream);
+  column_buffer_base<gather_column_buffer>::set_stream(stream);
+}
+
+void inline_column_buffer::set_stream(rmm::cuda_stream_view stream) noexcept
+{
+  _string_data.set_stream(stream);
+  column_buffer_base<inline_column_buffer>::set_stream(stream);
+}
 }  // namespace cudf::io::detail

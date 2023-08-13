@@ -136,6 +136,11 @@ class column_buffer_base {
     return static_cast<string_policy*>(this)->make_string_column_impl(stream);
   }
 
+  /**
+   * @brief Sets the stream to be used for deallocation of internal buffers
+   */
+  void set_stream(rmm::cuda_stream_view stream) noexcept;
+
  protected:
   rmm::device_buffer _data{};
   rmm::device_buffer _null_mask{};
@@ -188,6 +193,11 @@ class gather_column_buffer : public column_buffer_base<gather_column_buffer> {
 
   std::unique_ptr<column> make_string_column_impl(rmm::cuda_stream_view stream);
 
+  /**
+   * @brief Sets the stream to be used for deallocation of internal buffers
+   */
+  void set_stream(rmm::cuda_stream_view stream) noexcept;
+
  public:
   std::unique_ptr<rmm::device_uvector<string_index_pair>> _strings;
 };
@@ -225,6 +235,13 @@ class inline_column_buffer : public column_buffer_base<inline_column_buffer> {
   void* string_data() { return _string_data.data(); }
   void const* string_data() const { return _string_data.data(); }
   size_t string_size() const { return _string_data.size(); }
+
+  /**
+   * @brief Sets the stream to be used for deallocation of internal buffers
+   *
+   * @param stream CUDA stream used for device memory free.
+   */
+  void set_stream(rmm::cuda_stream_view stream) noexcept;
 
  private:
   rmm::device_buffer _string_data{};

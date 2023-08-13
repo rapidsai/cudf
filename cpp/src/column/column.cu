@@ -261,4 +261,12 @@ column::column(column_view view, rmm::cuda_stream_view stream, rmm::mr::device_m
 {
 }
 
+void column::set_stream(rmm::cuda_stream_view stream) noexcept
+{
+  _data.set_stream(stream);
+  _null_mask.set_stream(stream);
+  for (auto& child : _children) {
+    child->set_stream(stream);
+  }
+}
 }  // namespace cudf

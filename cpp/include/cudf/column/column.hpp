@@ -319,6 +319,13 @@ class column {
    */
   operator mutable_column_view() { return this->mutable_view(); };
 
+  /**
+   * @brief Sets the stream to be used for deallocation of internal buffers
+   *
+   * @param stream CUDA stream used for device memory free.
+   */
+  void set_stream(rmm::cuda_stream_view stream) noexcept;
+
  private:
   cudf::data_type _type{type_id::EMPTY};  ///< Logical type of elements in the column
   cudf::size_type _size{};                ///< The number of elements in the column
