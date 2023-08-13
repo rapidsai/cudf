@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
+import decimal
 import functools
 import hashlib
 import os
@@ -384,3 +385,49 @@ def _warn_no_dask_cudf(fn):
         return fn(self)
 
     return wrapper
+
+
+def _is_same_name(left_name, right_name):
+    # Internal utility to compare if two names are same.
+    with warnings.catch_warnings():
+        # numpy throws warnings while comparing
+        # NaT values with non-NaT values.
+        warnings.simplefilter("ignore")
+        try:
+            same = (left_name is right_name) or (left_name == right_name)
+            if not same:
+                if isinstance(left_name, decimal.Decimal) and isinstance(
+                    right_name, decimal.Decimal
+                ):
+                    return left_name.is_nan() and right_name.is_nan()
+                if isinstance(left_name, float) and isinstance(
+                    right_name, float
+                ):
+                    return np.isnan(left_name) and np.isnan(right_name)
+                if isinstance(left_name, np.datetime64) and isinstance(
+                    right_name, np.datetime64
+                ):
+                    return np.isnan(left_name) and np.isnan(right_name)
+            return same
+        except TypeError:
+            return False
+
+
+def _all_bools_with_nulls(lhs, rhs, bool_fill_value):
+    # Internal utility to construct a boolean column
+    # by combining nulls from `lhs` & `rhs`.
+    if lhs.has_nulls() and rhs.has_nulls():
+        result_mask = lhs._get_mask_as_column() & rhs._get_mask_as_column()
+    elif lhs.has_nulls():
+        result_mask = lhs._get_mask_as_column()
+    elif rhs.has_nulls():
+        result_mask = rhs._get_mask_as_column()
+    else:
+        result_mask = None
+
+    result_col = column.full(
+        size=len(lhs), fill_value=bool_fill_value, dtype=cudf.dtype(np.bool_)
+    )
+    if result_mask is not None:
+        result_col = result_col.set_mask(result_mask.as_mask())
+    return result_col
