@@ -18,11 +18,13 @@
 
 package ai.rapids.cudf;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
+@Tag("noSanitizer")
 public class UnsafeMemoryAccessorTest {
   @Test
   public void testAllocate() {
