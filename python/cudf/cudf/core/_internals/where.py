@@ -13,7 +13,6 @@ from cudf.api.types import (
     is_scalar,
 )
 from cudf.core.column import ColumnBase
-from cudf.core.missing import NA, NaT
 from cudf.utils.dtypes import (
     _can_cast,
     _dtype_can_hold_element,
@@ -59,7 +58,7 @@ def _check_and_cast_columns_with_other(
                 f"{type(other).__name__} to {source_dtype.name}"
             )
 
-        if other in {None, NA, NaT}:
+        if cudf.utils.utils.is_na_like(other):
             return _normalize_categorical(
                 source_col, cudf.Scalar(other, dtype=source_dtype)
             )
