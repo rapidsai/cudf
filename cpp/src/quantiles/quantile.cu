@@ -91,8 +91,6 @@ struct quantile_functor {
       cudf::detail::make_device_uvector_sync(q, stream, rmm::mr::get_current_device_resource());
 
     if (!cudf::is_dictionary(input.type())) {
-      CUDF_FAIL("TODO: This fails to compile when uncommented.");
-      /*
       auto sorted_data =
         thrust::make_permutation_iterator(input.data<StorageType>(), ordered_indices);
       thrust::transform(rmm::exec_policy(stream),
@@ -104,10 +102,7 @@ struct quantile_functor {
                             return select_quantile_data<StorageResult>(
                               sorted_data, size, q, interp);
                           }));
-      */
     } else {
-      CUDF_FAIL("TODO: This fails to compile when uncommented.");
-      /*
       auto sorted_data = thrust::make_permutation_iterator(
         dictionary::detail::make_dictionary_iterator<T>(*d_input), ordered_indices);
       thrust::transform(rmm::exec_policy(stream),
@@ -119,7 +114,6 @@ struct quantile_functor {
                             return select_quantile_data<StorageResult>(
                               sorted_data, size, q, interp);
                           }));
-      */
     }
 
     if (input.nullable()) {
