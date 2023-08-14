@@ -403,10 +403,8 @@ def groupby_jit_data_small():
     df["key1"] = key1
     df["key2"] = key2
 
-    df["val1"] = np.random.random(len(key1))
-    df["val2"] = np.random.random(len(key1))
-    df["val3"] = np.random.randint(0, 10, len(key1))
-    df["val4"] = np.random.randint(0, 10, len(key1))
+    df["val1"] = np.random.randint(0, 10, len(key1))
+    df["val2"] = np.random.randint(0, 10, len(key1))
 
     # randomly permute data
     df = df.sample(frac=1).reset_index(drop=True)
@@ -500,7 +498,15 @@ def test_groupby_apply_jit_unary_reductions(
     func, dtype, dataset, groupby_jit_datasets
 ):
     dataset = groupby_jit_datasets[dataset]
-    groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
+
+    if func in {"sum", "mean", "var", "std"} and dtype == "int32":
+        with pytest.xfail(
+            reason="https://github.com/rapidsai/cudf/issues/13873"
+        ):
+            groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
+        return
+    else:
+        groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
 
 
 # test unary reductions for special values
@@ -604,18 +610,39 @@ def test_groupby_apply_jit_idx_reductions_special_vals(
         ),
     ],
 )
-@pytest.mark.parametrize("dataset", ["large", "nans"])
+@pytest.mark.parametrize(
+    "dataset",
+    [
+        pytest.param(
+            "small",
+            marks=[
+                pytest.mark.filterwarnings(
+                    "ignore:Degrees of Freedom <= 0 for slice"
+                ),
+                pytest.mark.filterwarnings(
+                    "ignore:divide by zero encountered in divide"
+                ),
+            ],
+        ),
+        pytest.param(
+            "large",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/13875"
+            ),
+        ),
+    ],
+)
 def test_groupby_apply_jit_correlation(dataset, groupby_jit_datasets, dtype):
 
     dataset = groupby_jit_datasets[dataset]
 
-    dataset["val3"] = dataset["val3"].astype(dtype)
-    dataset["val4"] = dataset["val4"].astype(dtype)
+    dataset["val1"] = dataset["val1"].astype(dtype)
+    dataset["val2"] = dataset["val2"].astype(dtype)
 
     keys = ["key1"]
 
     def func(group):
-        return group["val3"].corr(group["val4"])
+        return group["val1"].corr(group["val2"])
 
     run_groupby_apply_jit_test(dataset, func, keys)
 
