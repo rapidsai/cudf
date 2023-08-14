@@ -21,11 +21,12 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/io/datasource.hpp>
+#include <cudf/io/arrow_io_source.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/parquet.hpp>
 
 #include <arrow/filesystem/filesystem.h>
+#include <arrow/filesystem/s3fs.h>
 #include <arrow/io/api.h>
 #include <arrow/util/config.h>
 
@@ -48,8 +49,7 @@ TEST_F(ArrowIOTest, URIFileSystem)
   outfile.close();
 
   std::string file_uri = "file://" + file_name;
-  std::unique_ptr<cudf::io::arrow_io_source> datasource =
-    std::make_unique<cudf::io::arrow_io_source>(file_uri);
+  auto datasource      = std::make_unique<cudf::io::arrow_io_source>(file_uri);
 
   // Populate the JSON Reader Options
   cudf::io::json_reader_options options =
@@ -72,8 +72,7 @@ TEST_F(ArrowIOTest, S3FileSystem)
   if (s3_unsupported) {
     EXPECT_THROW(std::make_unique<cudf::io::arrow_io_source>(s3_uri), cudf::logic_error);
   } else {
-    std::unique_ptr<cudf::io::arrow_io_source> datasource =
-      std::make_unique<cudf::io::arrow_io_source>(s3_uri);
+    auto datasource = std::make_unique<cudf::io::arrow_io_source>(s3_uri);
 
     // Populate the Parquet Reader Options
     cudf::io::source_info src(datasource.get());

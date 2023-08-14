@@ -31,6 +31,7 @@ from cudf.core.column import ColumnBase, column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils import ioutils
 from cudf.utils.dtypes import is_mixed_with_object_dtype
+from cudf.utils.utils import _is_same_name
 
 
 class BaseIndex(Serializable):
@@ -2010,7 +2011,4 @@ class BaseIndex(Serializable):
 
 
 def _get_result_name(left_name, right_name):
-    if left_name == right_name:
-        return left_name
-    else:
-        return None
+    return left_name if _is_same_name(left_name, right_name) else None
