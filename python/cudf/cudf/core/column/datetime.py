@@ -474,7 +474,7 @@ class DatetimeColumn(column.ColumnBase):
         if cudf.get_option(
             "mode.pandas_compatible"
         ) and out_dtype == cudf.dtype(np.bool_):
-            result = result.fillna(True if op == "__ne__" else False)
+            result = result.fillna(op == "__ne__")
         return result
 
     def fillna(

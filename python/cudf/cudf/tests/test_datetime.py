@@ -2109,8 +2109,8 @@ def test_datetime_binop_tz_timestamp(op):
         op(s, date_scalar)
 
 
-@pytest.mark.parametrize("data1", [["20110101", "20120101", None]])
-@pytest.mark.parametrize("data2", [["20110101", "20120101", "20130101"]])
+@pytest.mark.parametrize("data1", [["20110101", "20120101", None, "20140101", None]])
+@pytest.mark.parametrize("data2", [["20110101", "20120101", "20130101", None, None]])
 @pytest.mark.parametrize("op", _cmpops)
 def test_datetime_series_cmpops_pandas_compatibility(data1, data2, op):
     gsr1 = cudf.Series(data=data1, dtype="datetime64[ns]")

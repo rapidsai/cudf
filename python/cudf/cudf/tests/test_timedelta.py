@@ -1453,8 +1453,8 @@ def test_timedelta_getitem_na():
     assert s[2] is cudf.NA
 
 
-@pytest.mark.parametrize("data1", [[123, 456, None]])
-@pytest.mark.parametrize("data2", [[123, 456, 789]])
+@pytest.mark.parametrize("data1", [[123, 456, None, 321, None]])
+@pytest.mark.parametrize("data2", [[123, 456, 789, None, None]])
 @pytest.mark.parametrize("op", _cmpops)
 def test_timedelta_series_cmpops_pandas_compatibility(data1, data2, op):
     gsr1 = cudf.Series(data=data1, dtype="timedelta64[ns]")
