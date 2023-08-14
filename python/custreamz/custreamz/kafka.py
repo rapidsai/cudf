@@ -283,7 +283,7 @@ class Consumer(CudfKafkaClient):
 
         Parameters
         ----------
-        timeout : float,
+        timeout : float
             Maximum time to block waiting for message, event or callback
             (default: infinite (None translated into -1 in the
             library)). (Seconds)
