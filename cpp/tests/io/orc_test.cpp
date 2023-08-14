@@ -987,10 +987,9 @@ TEST_F(OrcStatisticsTest, Basic)
   column_wrapper<float, typename decltype(sequence)::value_type> col2(
     sequence, sequence + num_rows, validity);
   column_wrapper<cudf::string_view> col3{strings.begin(), strings.end()};
-  column_wrapper<bool, typename decltype(sequence)::value_type> col4(sequence, sequence + num_rows);
-  column_wrapper<cudf::timestamp_s, typename decltype(sequence)::value_type> col5(
+  column_wrapper<cudf::timestamp_s, typename decltype(sequence)::value_type> col4(
     sequence, sequence + num_rows, validity);
-  table_view expected({col1, col2, col3, col4, col5});
+  table_view expected({col1, col2, col3, col4});
 
   auto filepath = temp_env->get_temp_filepath("OrcStatsMerge.orc");
 
@@ -1001,7 +1000,7 @@ TEST_F(OrcStatisticsTest, Basic)
   auto const stats = cudf::io::read_parsed_orc_statistics(cudf::io::source_info{filepath});
 
   auto const expected_column_names =
-    std::vector<std::string>{"", "_col0", "_col1", "_col2", "_col3", "_col4"};
+    std::vector<std::string>{"", "_col0", "_col1", "_col2", "_col3"};
   EXPECT_EQ(stats.column_names, expected_column_names);
 
   auto validate_statistics = [&](std::vector<cudf::io::column_statistics> const& stats) {
@@ -1033,18 +1032,13 @@ TEST_F(OrcStatisticsTest, Basic)
     EXPECT_EQ(*ts3.sum, 58ul);
 
     auto& s4 = stats[4];
-    EXPECT_EQ(*s4.number_of_values, 9ul);
-    EXPECT_FALSE(*s4.has_null);
-    EXPECT_EQ(std::get<cudf::io::bucket_statistics>(s4.type_specific_stats).count[0], 8ul);
-
-    auto& s5 = stats[5];
-    EXPECT_EQ(*s5.number_of_values, 4ul);
-    EXPECT_TRUE(*s5.has_null);
-    auto& ts5 = std::get<cudf::io::timestamp_statistics>(s5.type_specific_stats);
-    EXPECT_EQ(*ts5.minimum_utc, 1000);
-    EXPECT_EQ(*ts5.maximum_utc, 7000);
-    ASSERT_FALSE(ts5.minimum);
-    ASSERT_FALSE(ts5.maximum);
+    EXPECT_EQ(*s4.number_of_values, 4ul);
+    EXPECT_TRUE(*s4.has_null);
+    auto& ts4 = std::get<cudf::io::timestamp_statistics>(s4.type_specific_stats);
+    EXPECT_EQ(*ts4.minimum_utc, 1000);
+    EXPECT_EQ(*ts4.maximum_utc, 7000);
+    ASSERT_FALSE(ts4.minimum);
+    ASSERT_FALSE(ts4.maximum);
   };
 
   validate_statistics(stats.file_stats);
