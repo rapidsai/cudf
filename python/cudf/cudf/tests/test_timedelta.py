@@ -1441,4 +1441,4 @@ def test_timdelta_binop_tz_timestamp(op):
 
 def test_timedelta_getitem_na():
     s = cudf.Series([1, 2, None, 3], dtype="timedelta64[ns]")
-    assert s[2] is cudf.NA
+    assert s[2] is cudf.NaT
