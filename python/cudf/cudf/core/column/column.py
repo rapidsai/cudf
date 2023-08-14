@@ -2237,6 +2237,12 @@ def as_column(
         raise NotImplementedError(
             "cuDF does not yet support timezone-aware datetimes"
         )
+    elif (
+        cudf.get_option("mode.pandas_compatible")
+        and isinstance(arbitrary, (pd.DatetimeIndex, pd.TimedeltaIndex))
+        and arbitrary.freq is not None
+    ):
+        raise NotImplementedError("freq is not implemented yet")
     else:
         try:
             data = as_column(
