@@ -2235,11 +2235,15 @@ def test_isin_index(data, values):
             [[1, 2, 3, 10, 100], ["red", "blue", "green", "pink", "white"]],
             names=("number", "color"),
         ),
+        pd.MultiIndex.from_product(
+            [[0, 1], ["red", "blue", "green"]], names=("number", "color")
+        ),
     ],
 )
 @pytest.mark.parametrize(
     "values,level,err",
     [
+        ([(1, "red"), (2, "blue"), (0, "green")], None, None),
         (["red", "orange", "yellow"], "color", None),
         (["red", "white", "yellow"], "color", None),
         ([0, 1, 2, 10, 11, 15], "number", None),
