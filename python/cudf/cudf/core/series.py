@@ -1415,7 +1415,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 else str(cudf.NA)
             )
             output = repr(
-                preprocess.astype("O").fillna(fill_value).to_pandas()
+                preprocess.astype("str").fillna(fill_value).to_pandas()
             )
         elif isinstance(
             preprocess._column, cudf.core.column.CategoricalColumn
