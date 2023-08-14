@@ -308,11 +308,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         // message BucketStatistics {
         //  repeated uint64 count = 1 [packed=true];
         // }
-        if (s->chunk.has_sum) {  // Sum is equal to the number of 'true' values
-          cur[0]       = 5 * 8 + ProtofType::FIXEDLEN;
-          cur          = pb_put_packed_uint(cur + 2, 1, s->chunk.sum.u_val);
-          fld_start[1] = cur - (fld_start + 2);
-        }
+        // Not implemented, see https://github.com/rapidsai/cudf/issues/7087
         break;
       case dtype_decimal64:
       case dtype_decimal128:
