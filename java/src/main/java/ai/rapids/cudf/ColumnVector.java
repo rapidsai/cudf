@@ -264,6 +264,7 @@ public final class ColumnVector extends ColumnView {
       eventHandler.onClosed(this, refCount);
     }
     if (refCount == 0) {
+      super.close();
       offHeap.clean(false);
     } else if (refCount < 0) {
       offHeap.logRefCountDebug("double free " + this);

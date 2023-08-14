@@ -5,6 +5,7 @@ from __future__ import annotations
 import builtins
 import pickle
 import warnings
+from collections import abc
 from functools import cached_property
 from itertools import chain
 from types import SimpleNamespace
@@ -52,6 +53,7 @@ from cudf.api.types import (
     infer_dtype,
     is_bool_dtype,
     is_categorical_dtype,
+    is_datetime64_dtype,
     is_datetime64tz_dtype,
     is_decimal32_dtype,
     is_decimal64_dtype,
@@ -2009,6 +2011,11 @@ def as_column(
                 return as_column(arbitrary.array)
             elif PANDAS_GE_150 and isinstance(arbitrary.dtype, pd.ArrowDtype):
                 return as_column(pa.array(arbitrary.array, from_pandas=True))
+            elif isinstance(arbitrary.dtype, pd.SparseDtype):
+                raise NotImplementedError(
+                    f"{arbitrary.dtype} is not supported. Convert first to "
+                    f"{arbitrary.dtype.subtype}."
+                )
         if is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif is_interval_dtype(arbitrary.dtype):
@@ -2155,9 +2162,7 @@ def as_column(
             if dtype is not None:
                 data = data.astype(dtype)
         elif arb_dtype.kind in ("O", "U"):
-            data = as_column(
-                pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
-            )
+            data = as_column(pa.array(arbitrary), dtype=arbitrary.dtype)
             # There is no cast operation available for pa.Array from int to
             # str, Hence instead of handling in pa.Array block, we
             # will have to type-cast here.
@@ -2213,6 +2218,11 @@ def as_column(
             )
         if dtype is not None:
             data = data.astype(dtype)
+    elif isinstance(arbitrary, pd.arrays.SparseArray):
+        raise NotImplementedError(
+            f"{arbitrary.dtype} is not supported. Convert first to "
+            f"{arbitrary.dtype.subtype}."
+        )
     elif isinstance(arbitrary, memoryview):
         data = as_column(
             np.asarray(arbitrary), dtype=dtype, nan_as_null=nan_as_null
@@ -2221,6 +2231,18 @@ def as_column(
         data = ColumnBase.from_scalar(arbitrary, length if length else 1)
     elif isinstance(arbitrary, pd.core.arrays.masked.BaseMaskedArray):
         data = as_column(pa.Array.from_pandas(arbitrary), dtype=dtype)
+    elif isinstance(arbitrary, pd.DatetimeIndex) and isinstance(
+        arbitrary.dtype, pd.DatetimeTZDtype
+    ):
+        raise NotImplementedError(
+            "cuDF does not yet support timezone-aware datetimes"
+        )
+    elif (
+        cudf.get_option("mode.pandas_compatible")
+        and isinstance(arbitrary, (pd.DatetimeIndex, pd.TimedeltaIndex))
+        and arbitrary.freq is not None
+    ):
+        raise NotImplementedError("freq is not implemented yet")
     else:
         try:
             data = as_column(
@@ -2270,6 +2292,18 @@ def as_column(
                             "Use `tz_localize()` to construct "
                             "timezone aware data."
                         )
+                    elif is_datetime64_dtype(dtype):
+                        # Error checking only, actual construction happens
+                        # below.
+                        pa_array = pa.array(arbitrary)
+                        if (
+                            isinstance(pa_array.type, pa.TimestampType)
+                            and pa_array.type.tz is not None
+                        ):
+                            raise NotImplementedError(
+                                "cuDF does not yet support timezone-aware "
+                                "datetimes"
+                            )
                     if is_list_dtype(dtype):
                         data = pa.array(arbitrary)
                         if type(data) not in (pa.ListArray, pa.NullArray):
@@ -2384,12 +2418,16 @@ def as_column(
                     return cudf.core.column.ListColumn.from_sequences(
                         arbitrary
                     )
-                else:
+                elif isinstance(arbitrary, abc.Iterable) or isinstance(
+                    arbitrary, abc.Sequence
+                ):
                     data = as_column(
                         _construct_array(arbitrary, dtype),
                         dtype=dtype,
                         nan_as_null=nan_as_null,
                     )
+                else:
+                    raise e
     return data
 
 
@@ -2407,7 +2445,7 @@ def _construct_array(
         if (
             dtype is None
             and not cudf._lib.scalar._is_null_host_scalar(arbitrary)
-            and infer_dtype(arbitrary)
+            and infer_dtype(arbitrary, skipna=False)
             in (
                 "mixed",
                 "mixed-integer",

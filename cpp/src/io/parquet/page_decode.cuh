@@ -443,8 +443,9 @@ __device__ size_type gpuInitStringDescriptors(page_state_s volatile* s,
 /**
  * @brief Decode values out of a definition or repetition stream
  *
+ * @param[out] output Level buffer output
  * @param[in,out] s Page state input/output
- * @param[in] t target_count Target count of stream values on output
+ * @param[in] target_count Target count of stream values on output
  * @param[in] t Warp0 thread ID (0..31)
  * @param[in] lvl The level type we are decoding - DEFINITION or REPETITION
  */
