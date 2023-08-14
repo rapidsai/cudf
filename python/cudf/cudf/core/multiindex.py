@@ -730,18 +730,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 values_idx = cudf.MultiIndex.from_tuples(
                     values, names=self.names
                 )
-
-            res = []
-            for name in self.names:
-                level_idx = self.get_level_values(name)
-                value_idx = values_idx.get_level_values(name)
-
-                existence = level_idx.isin(value_idx)
-                res.append(existence)
-
-            result = res[0]
-            for i in res[1:]:
-                result = result & i
+            self_df = self.to_frame(index=False).reset_index()
+            values_df = values_idx.to_frame(index=False)
+            idx = self_df.merge(values_df)._data["index"]
+            res = cudf.core.column.full(size=len(self), fill_value=False)
+            res[idx] = True
+            result = res.values
         else:
             level_series = self.get_level_values(level)
             result = level_series.isin(values)
