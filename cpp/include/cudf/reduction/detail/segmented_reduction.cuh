@@ -45,7 +45,7 @@ namespace detail {
  * @param d_offset_begin Begin iterator to segment indices
  * @param d_offset_end   End iterator to segment indices
  * @param d_out          Output data iterator
- * @param binary_op      The reduction operator
+ * @param op             The reduction operator
  * @param initial_value  Initial value of the reduction
  * @param stream         CUDA stream used for device memory operations and kernel launches
  *
