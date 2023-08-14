@@ -6,8 +6,9 @@
     "dockerfile": "${localWorkspaceFolder}/.devcontainer/Dockerfile",
     "args": {
       "CUDA": "12.0",
-      "LLVM": "16",
-      "PYTHON_PACKAGE_MANAGER": "conda"
+      "PYTHON_PACKAGE_MANAGER": "pip",
+      "CONDA_BASE": "rapidsai/devcontainers:23.10-cpp-mambaforge-ubuntu22.04",
+      "PIP_BASE": "rapidsai/devcontainers:23.10-cpp-llvm16-cuda12.0-ubuntu22.04"
     }
   },
   "hostRequirements": {
@@ -23,7 +24,7 @@
   ],
 
   "initializeCommand": [
-    "/bin/bash", "-c", "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config,conda/pkgs,conda/${localWorkspaceFolderBasename}/single}"
+    "/bin/bash", "-c", "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config/pip,local/${localWorkspaceFolderBasename}/single}"
   ],
 
   "updateContentCommand": [
@@ -33,7 +34,9 @@
   ],
 
   "containerEnv": {
-    "DEFAULT_CONDA_ENV": "rapids"
+    "PYTHONSAFEPATH": "true",
+    "PYTHONUNBUFFERED": "true",
+    "DEFAULT_VIRTUAL_ENV": "rapids"
   },
 
   "workspaceFolder": "/home/coder",
@@ -42,8 +45,7 @@
     "source=${localWorkspaceFolder}/../.aws,target=/home/coder/.aws,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.cache,target=/home/coder/.cache,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.config,target=/home/coder/.config,type=bind,consistency=consistent",
-    "source=${localWorkspaceFolder}/../.conda/pkgs,target=/home/coder/.conda/pkgs,type=bind,consistency=consistent",
-    "source=${localWorkspaceFolder}/../.conda/${localWorkspaceFolderBasename}/single,target=/home/coder/.conda/envs,type=bind,consistency=consistent"
+    "source=${localWorkspaceFolder}/../.local/${localWorkspaceFolderBasename}/single,target=/home/coder/.local,type=bind,consistency=consistent"
   ],
 
   "customizations": {

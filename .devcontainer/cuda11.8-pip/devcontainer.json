@@ -5,9 +5,10 @@
     "context": "${localWorkspaceFolder}/.devcontainer",
     "dockerfile": "${localWorkspaceFolder}/.devcontainer/Dockerfile",
     "args": {
-      "CUDA": "12.0",
-      "LLVM": "16",
-      "PYTHON_PACKAGE_MANAGER": "pip"
+      "CUDA": "11.8",
+      "PYTHON_PACKAGE_MANAGER": "pip",
+      "CONDA_BASE": "rapidsai/devcontainers:23.10-cpp-llvm16-cuda11.8-mambaforge-ubuntu22.04",
+      "PIP_BASE": "rapidsai/devcontainers:23.10-cpp-llvm16-cuda11.8-ubuntu22.04"
     }
   },
   "hostRequirements": {
