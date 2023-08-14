@@ -8603,6 +8603,7 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  @Tag("noSanitizer")
   @Test
   void testORCReadAndWriteForDecimal128() throws IOException {
     File tempFile = File.createTempFile("test", ".orc");
