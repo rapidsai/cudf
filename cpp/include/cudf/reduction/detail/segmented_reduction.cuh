@@ -18,6 +18,8 @@
 
 #include "reduction_operators.cuh"
 
+#include <cudf/detail/utilities/cast_functor.cuh>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>

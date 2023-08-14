@@ -56,33 +56,6 @@ CUDF_HOST_DEVICE inline auto max(LHS const& lhs, RHS const& rhs)
   return std::max(lhs, rhs);
 }
 
-/**
- * @brief Functor that casts another functor's result to a specified type.
- *
- * CUB 2.0.0 reductions require that the binary operator returns the same type
- * as the initial value type, so we wrap binary operators with this when used
- * by CUB.
- */
-template <typename ResultType, typename F>
-struct cast_functor_fn {
-  F f;
-
-  template <typename... Ts>
-  CUDF_HOST_DEVICE inline ResultType operator()(Ts&&... args)
-  {
-    return static_cast<ResultType>(f(std::forward<Ts>(args)...));
-  }
-};
-
-/**
- * @brief Function creating a casting functor.
- */
-template <typename ResultType, typename F>
-cast_functor_fn<ResultType, F> cast_functor(F&& f)
-{
-  return {std::forward<F>(f)};
-}
-
 }  // namespace detail
 
 /**

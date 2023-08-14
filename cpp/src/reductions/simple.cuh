@@ -19,6 +19,7 @@
 #include "nested_type_minmax_util.cuh"
 
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/utilities/cast_functor.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>

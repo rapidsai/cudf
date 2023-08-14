@@ -21,7 +21,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/detail/utilities/cast_functor.cuh>
 #include <cudf/null_mask.hpp>
 
 #include <rmm/cuda_stream_view.hpp>

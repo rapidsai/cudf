@@ -24,7 +24,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
-#include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/detail/utilities/cast_functor.cuh>
 #include <cudf/reduction.hpp>
 
 #include <rmm/cuda_stream_view.hpp>

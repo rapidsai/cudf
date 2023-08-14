@@ -19,7 +19,7 @@
 #include "reduction_operators.cuh"
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/detail/utilities/cast_functor.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
