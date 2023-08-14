@@ -61,12 +61,12 @@ void segmented_reduce(InputIterator d_in,
                       OffsetIterator d_offset_begin,
                       OffsetIterator d_offset_end,
                       OutputIterator d_out,
-                      BinaryOp binary_op,
+                      BinaryOp op,
                       OutputType initial_value,
                       rmm::cuda_stream_view stream)
 {
   auto const num_segments = static_cast<size_type>(std::distance(d_offset_begin, d_offset_end)) - 1;
-
+  auto const binary_op    = cudf::detail::cast_functor<OutputType>(op);
   // Allocate temporary storage
   size_t temp_storage_bytes = 0;
   cub::DeviceSegmentedReduce::Reduce(nullptr,
@@ -148,8 +148,8 @@ void segmented_reduce(InputIterator d_in,
   using OutputType       = typename thrust::iterator_value<OutputIterator>::type;
   using IntermediateType = typename thrust::iterator_value<InputIterator>::type;
   auto num_segments      = static_cast<size_type>(std::distance(d_offset_begin, d_offset_end)) - 1;
-  auto const binary_op   = op.get_binary_op();
   auto const initial_value = op.template get_identity<IntermediateType>();
+  auto const binary_op     = cudf::detail::cast_functor<IntermediateType>(op.get_binary_op());
 
   rmm::device_uvector<IntermediateType> intermediate_result{static_cast<std::size_t>(num_segments),
                                                             stream};
