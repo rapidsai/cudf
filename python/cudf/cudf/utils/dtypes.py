@@ -14,7 +14,6 @@ import cudf
 from cudf._typing import DtypeObj
 from cudf.api.types import is_bool, is_float, is_integer
 
-
 """Map numpy dtype to pyarrow types.
 Note that np.bool_ bitwidth (8) is different from pa.bool_ (1). Special
 handling is required when converting a Boolean column into arrow.
