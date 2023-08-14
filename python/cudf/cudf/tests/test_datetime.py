@@ -2128,3 +2128,8 @@ def test_datetime_series_cmpops_pandas_compatibility(data1, data2, op):
         got = op(gsr1, gsr2)
 
     assert_eq(expect, got)
+
+
+def test_datetime_getitem_na():
+    s = cudf.Series([1, 2, None, 3], dtype="datetime64[ns]")
+    assert s[2] is cudf.NaT
