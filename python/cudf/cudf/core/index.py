@@ -1347,7 +1347,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             else:
                 output = repr(preprocess.to_pandas())
 
-            output = output.replace("nan", cudf._NA_REP)
+            output = output.replace("nan", str(cudf.NA))
         elif preprocess._values.nullable:
             output = repr(self._clean_nulls_from_index().to_pandas())
 
@@ -1499,8 +1499,14 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
     def _clean_nulls_from_index(self):
         if self._values.has_nulls():
+            fill_value = (
+                str(cudf.NaT)
+                if isinstance(self, (DatetimeIndex, TimedeltaIndex))
+                else str(cudf.NA)
+            )
             return cudf.Index(
-                self._values.astype("str").fillna(cudf._NA_REP), name=self.name
+                self._values.astype("str").fillna(fill_value),
+                name=self.name,
             )
 
         return self
@@ -2611,7 +2617,7 @@ class DatetimeIndex(GenericIndex):
         ...                                   '2018-10-28 03:46:00']))
         >>> s.dt.tz_localize("CET")
         0    2018-10-28 01:20:00.000000000
-        1                             <NA>
+        1                              NaT
         2    2018-10-28 03:46:00.000000000
         dtype: datetime64[ns, CET]
 
@@ -3254,7 +3260,7 @@ class StringIndex(GenericIndex):
 
     def _clean_nulls_from_index(self):
         if self._values.has_nulls():
-            return self.fillna(cudf._NA_REP)
+            return self.fillna(str(cudf.NA))
         else:
             return self
 
