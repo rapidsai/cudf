@@ -1404,7 +1404,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             cudf.core.column.timedelta.TimeDeltaColumn,
         ):
             output = repr(
-                preprocess.astype("O")
+                preprocess.astype("str")
                 .fillna(
                     cudf._NAT_REP
                     if isinstance(
