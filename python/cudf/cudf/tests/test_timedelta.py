@@ -1437,3 +1437,8 @@ def test_timdelta_binop_tz_timestamp(op):
     date_tz_scalar = datetime.datetime.now(datetime.timezone.utc)
     with pytest.raises(NotImplementedError):
         op(s, date_tz_scalar)
+
+
+def test_timedelta_getitem_na():
+    s = cudf.Series([1, 2, None, 3], dtype="timedelta64[ns]")
+    assert s[2] is cudf.NA

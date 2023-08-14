@@ -2670,3 +2670,11 @@ def test_index_mixed_dtype_error(data):
     pi = pd.Index(data)
     with pytest.raises(TypeError):
         cudf.Index(pi)
+
+
+@pytest.mark.parametrize("cls", [pd.DatetimeIndex, pd.TimedeltaIndex])
+def test_index_date_duration_freq_error(cls):
+    s = cls([1, 2, 3], freq="infer")
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.Index(s)
