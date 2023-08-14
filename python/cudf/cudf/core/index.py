@@ -1347,7 +1347,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             else:
                 output = repr(preprocess.to_pandas())
 
-            output = output.replace("nan", cudf._NA_REP)
+            output = output.replace("nan", str(cudf.NA))
         elif preprocess._values.nullable:
             output = repr(self._clean_nulls_from_index().to_pandas())
 
@@ -1499,12 +1499,13 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
     def _clean_nulls_from_index(self):
         if self._values.has_nulls():
+            fill_value = (
+                str(cudf.NaT)
+                if isinstance(self, (DatetimeIndex, TimedeltaIndex))
+                else str(cudf.NA)
+            )
             return cudf.Index(
-                self._values.astype("str").fillna(
-                    cudf._NAT_REP
-                    if isinstance(self, (DatetimeIndex, TimedeltaIndex))
-                    else cudf._NA_REP
-                ),
+                self._values.astype("str").fillna(fill_value),
                 name=self.name,
             )
 
@@ -3259,7 +3260,7 @@ class StringIndex(GenericIndex):
 
     def _clean_nulls_from_index(self):
         if self._values.has_nulls():
-            return self.fillna(cudf._NA_REP)
+            return self.fillna(str(cudf.NA))
         else:
             return self
 

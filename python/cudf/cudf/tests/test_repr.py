@@ -40,8 +40,7 @@ def test_null_series(nrows, dtype):
         ps = sr.to_pandas()
 
     pd.options.display.max_rows = int(nrows)
-    psrepr = repr(ps)
-    psrepr = psrepr.replace("NaN", "<NA>").replace("None", "<NA>")
+    psrepr = repr(ps).replace("NaN", "<NA>").replace("None", "<NA>")
     if "UInt" in psrepr:
         psrepr = psrepr.replace("UInt", "uint")
     elif "Int" in psrepr:

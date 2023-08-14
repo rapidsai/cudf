@@ -90,7 +90,6 @@ from cudf.options import (
     option_context,
     set_option,
 )
-from cudf.utils.dtypes import _NA_REP, _NAT_REP
 from cudf.utils.utils import clear_cache
 
 cuda.set_memory_manager(RMMNumbaManager)
