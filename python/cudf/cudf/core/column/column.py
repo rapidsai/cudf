@@ -994,7 +994,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 dtype
             ).type in {np.object_}:
                 raise ValueError(
-                    f"{dtype} is an unsupported dtype to type-cast to, use "
+                    f"Casting to {dtype} is not supported, use "
                     "`.astype('str')` instead."
                 )
             return self.as_string_column(dtype, **kwargs)
