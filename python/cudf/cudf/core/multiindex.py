@@ -619,14 +619,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                     (3, 12)],
                 names=['a', 'b'])
         >>> midx.levels
-        [0    1
-        1    2
-        2    3
-        dtype: int64, 0    10
-        1    11
-        2    12
-        dtype: int64]
-        """
+        [Int64Index([1, 2, 3], dtype='int64', name='a'), Int64Index([10, 11, 12], dtype='int64', name='b')]
+        """  # noqa: E501
         if self._levels is None:
             self._compute_levels_and_codes()
         return self._levels
@@ -772,8 +766,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 # `factorize` show up in other parts of public APIs.
                 warnings.simplefilter("ignore")
                 code, cats = cudf.Series._from_data({None: col}).factorize()
+            cats.name = name
             codes[name] = code.astype(np.int64)
-            levels.append(cudf.Series(cats, name=None))
+            levels.append(cats)
 
         self._levels = levels
         self._codes = cudf.DataFrame._from_data(codes)
