@@ -169,7 +169,7 @@ namespace {
 struct character_ngram_generator_fn {
   cudf::column_device_view const d_strings;
   cudf::size_type ngrams;
-  int32_t const* d_ngram_offsets{};
+  cudf::size_type const* d_ngram_offsets{};
   cudf::size_type* d_offsets{};
   char* d_chars{};
 
@@ -212,7 +212,7 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
   auto const d_strings      = *strings_column;
 
   // create a vector of ngram offsets for each string
-  rmm::device_uvector<int32_t> ngram_offsets(strings_count + 1, stream);
+  rmm::device_uvector<cudf::size_type> ngram_offsets(strings_count + 1, stream);
   thrust::transform_exclusive_scan(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
@@ -221,7 +221,7 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
     [d_strings, strings_count, ngrams] __device__(auto idx) {
       if (d_strings.is_null(idx) || (idx == strings_count)) return 0;
       auto const length = d_strings.element<cudf::string_view>(idx).length();
-      return std::max(0, static_cast<int32_t>(length + 1 - ngrams));
+      return std::max(0, static_cast<cudf::size_type>(length + 1 - ngrams));
     },
     cudf::size_type{0},
     thrust::plus<cudf::size_type>());
