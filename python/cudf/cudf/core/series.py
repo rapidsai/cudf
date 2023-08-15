@@ -1403,8 +1403,19 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             preprocess._column,
             cudf.core.column.timedelta.TimeDeltaColumn,
         ):
+            fill_value = (
+                str(cudf.NaT)
+                if isinstance(
+                    preprocess._column,
+                    (
+                        cudf.core.column.TimeDeltaColumn,
+                        cudf.core.column.DatetimeColumn,
+                    ),
+                )
+                else str(cudf.NA)
+            )
             output = repr(
-                preprocess.astype("O").fillna(cudf._NA_REP).to_pandas()
+                preprocess.astype("str").fillna(fill_value).to_pandas()
             )
         elif isinstance(
             preprocess._column, cudf.core.column.CategoricalColumn
@@ -1436,7 +1447,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 min_rows=min_rows,
                 max_rows=max_rows,
                 length=show_dimensions,
-                na_rep=cudf._NA_REP,
+                na_rep=str(cudf.NA),
             )
         else:
             output = repr(preprocess.to_pandas())
