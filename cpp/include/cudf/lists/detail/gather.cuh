@@ -17,6 +17,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -28,7 +29,6 @@
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
-#include <thrust/transform_scan.h>
 
 namespace cudf {
 namespace lists {
@@ -74,25 +74,15 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
 {
   // size of the gather map is the # of output rows
   size_type output_count = gather_map_size;
-  size_type offset_count = output_count + 1;
 
   // offsets of the source column
   int32_t const* src_offsets{source_column.offsets().data<int32_t>() + source_column.offset()};
   size_type const src_size = source_column.size();
 
-  // outgoing offsets.  these will persist as output from the entire gather operation
-  auto dst_offsets_c = cudf::make_fixed_width_column(
-    data_type{type_id::INT32}, offset_count, mask_state::UNALLOCATED, stream, mr);
-  mutable_column_view dst_offsets_v = dst_offsets_c->mutable_view();
   auto const source_column_nullmask = source_column.null_mask();
 
-  // generate the compacted outgoing offsets.
-  auto count_iter = thrust::make_counting_iterator<int32_t>(0);
-  thrust::transform_exclusive_scan(
-    rmm::exec_policy_nosync(stream),
-    count_iter,
-    count_iter + offset_count,
-    dst_offsets_v.begin<int32_t>(),
+  auto sizes_itr = cudf::detail::make_counting_transform_iterator(
+    0,
     [source_column_nullmask,
      source_column_offset = source_column.offset(),
      gather_map,
@@ -112,9 +102,10 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
 
       // the length of this list
       return src_offsets[offset_index + 1] - src_offsets[offset_index];
-    },
-    0,
-    thrust::plus<int32_t>());
+    });
+
+  auto [dst_offsets_c, map_size] =
+    cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + output_count, stream, mr);
 
   // handle sliced columns
   size_type const shift =
@@ -147,9 +138,7 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
     });
 
   // Retrieve size of the resulting gather map for level N+1 (the last offset)
-  size_type child_gather_map_size =
-    cudf::detail::get_value<size_type>(dst_offsets_c->view(), output_count, stream);
-
+  auto const child_gather_map_size = static_cast<size_type>(map_size);
   return {std::move(dst_offsets_c), std::move(base_offsets), child_gather_map_size};
 }
 
