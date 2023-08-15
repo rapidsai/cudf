@@ -996,6 +996,7 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                      uint32_t num_columns,
                      size_t max_page_size_bytes,
                      size_type max_page_size_rows,
+                     bool write_v2_headers,
                      Compression compression_codec,
                      rmm::cuda_stream_view stream)
 {
@@ -1012,6 +1013,7 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                         max_page_size_bytes,
                         max_page_size_rows,
                         page_alignment(compression_codec),
+                        write_v2_headers,
                         nullptr,
                         nullptr,
                         stream);
@@ -1036,6 +1038,7 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                         max_page_size_bytes,
                         max_page_size_rows,
                         page_alignment(compression_codec),
+                        write_v2_headers,
                         nullptr,
                         nullptr,
                         stream);
@@ -1061,6 +1064,7 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                         max_page_size_bytes,
                         max_page_size_rows,
                         page_alignment(compression_codec),
+                        write_v2_headers,
                         nullptr,
                         nullptr,
                         stream);
@@ -1197,6 +1201,7 @@ build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
  * @param compression Compression format
  * @param max_page_size_bytes Maximum uncompressed page size, in bytes
  * @param max_page_size_rows Maximum page size, in rows
+ * @param write_v2_headers True if version 2 page headers are to be written
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
@@ -1211,6 +1216,7 @@ void init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                         Compression compression,
                         size_t max_page_size_bytes,
                         size_type max_page_size_rows,
+                        bool write_v2_headers,
                         rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<statistics_merge_group> page_stats_mrg(num_stats_bfr, stream);
@@ -1224,6 +1230,7 @@ void init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                    max_page_size_bytes,
                    max_page_size_rows,
                    page_alignment(compression),
+                   write_v2_headers,
                    (num_stats_bfr) ? page_stats_mrg.data() : nullptr,
                    (num_stats_bfr > num_pages) ? page_stats_mrg.data() + num_pages : nullptr,
                    stream);
@@ -1424,6 +1431,7 @@ void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta)
  * @param max_dictionary_size Maximum dictionary size, in bytes
  * @param single_write_mode Flag to indicate that we are guaranteeing a single table write
  * @param int96_timestamps Flag to indicate if timestamps will be written as INT96
+ * @param write_v2_headers True if V2 page headers are to be written
  * @param out_sink Sink for checking if device write is supported, should not be used to write any
  *        data in this function
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -1447,6 +1455,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                                    size_t max_dictionary_size,
                                    single_write_mode write_mode,
                                    bool int96_timestamps,
+                                   bool write_v2_headers,
                                    host_span<std::unique_ptr<data_sink> const> out_sink,
                                    rmm::cuda_stream_view stream)
 {
@@ -1764,8 +1773,14 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   }
 
   // Build chunk dictionaries and count pages. Sends chunks to device.
-  cudf::detail::hostdevice_vector<size_type> comp_page_sizes = init_page_sizes(
-    chunks, col_desc, num_columns, max_page_size_bytes, max_page_size_rows, compression, stream);
+  cudf::detail::hostdevice_vector<size_type> comp_page_sizes = init_page_sizes(chunks,
+                                                                               col_desc,
+                                                                               num_columns,
+                                                                               max_page_size_bytes,
+                                                                               max_page_size_rows,
+                                                                               write_v2_headers,
+                                                                               compression,
+                                                                               stream);
 
   // Find which partition a rg belongs to
   std::vector<int> rg_to_part;
@@ -1878,6 +1893,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                        compression,
                        max_page_size_bytes,
                        max_page_size_rows,
+                       write_v2_headers,
                        stream);
   }
 
@@ -1982,6 +1998,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _max_dictionary_size(options.get_max_dictionary_size()),
     _max_page_fragment_size(options.get_max_page_fragment_size()),
     _int96_timestamps(options.is_enabled_int96_timestamps()),
+    _write_v2_headers(options.is_enabled_write_v2_headers()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
     _single_write_mode(mode),
@@ -2009,6 +2026,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _max_dictionary_size(options.get_max_dictionary_size()),
     _max_page_fragment_size(options.get_max_page_fragment_size()),
     _int96_timestamps(options.is_enabled_int96_timestamps()),
+    _write_v2_headers(options.is_enabled_write_v2_headers()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
     _single_write_mode(mode),
@@ -2085,6 +2103,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                                            _max_dictionary_size,
                                            _single_write_mode,
                                            _int96_timestamps,
+                                           _write_v2_headers,
                                            _out_sink,
                                            _stream);
     } catch (...) {  // catch any exception type
@@ -2199,7 +2218,7 @@ void writer::impl::write_parquet_data_to_sink(
             auto const& enc_page = h_pages[curr_page_idx++];
 
             // skip dict pages
-            if (enc_page.page_type != PageType::DATA_PAGE) { continue; }
+            if (enc_page.page_type == PageType::DICTIONARY_PAGE) { continue; }
 
             int32_t this_page_size = enc_page.hdr_size + enc_page.max_data_size;
             // first_row_idx is relative to start of row group
