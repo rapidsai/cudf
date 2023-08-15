@@ -1694,7 +1694,19 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 # TODO we need to handle this
                 pass
             elif df._data[col].has_nulls():
-                df[col] = df._data[col].astype("str").fillna(cudf._NA_REP)
+                fill_value = (
+                    str(cudf.NaT)
+                    if isinstance(
+                        df._data[col],
+                        (
+                            cudf.core.column.DatetimeColumn,
+                            cudf.core.column.TimeDeltaColumn,
+                        ),
+                    )
+                    else str(cudf.NA)
+                )
+
+                df[col] = df._data[col].astype("str").fillna(fill_value)
             else:
                 df[col] = df._data[col]
 
