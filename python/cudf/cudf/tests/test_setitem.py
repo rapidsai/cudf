@@ -103,6 +103,17 @@ def test_series_set_item(psr, arg):
 
     assert_eq(psr, gsr)
 
+@pytest.mark.parametrize("ps", [pd.Series([1, 2, 3]), pd.Series([1, 2, 3], index=pd.RangeIndex(start=2, stop=-1, step=-1))])
+@pytest.mark.parametrize(
+    "arg", [0, -1, 3, 5, 5.6, 5.0, 3.0]
+)
+def test_series_set_item_range_index(ps, arg):
+    gsr = cudf.from_pandas(ps)
+    psr = ps.copy(deep=True)
+    psr[arg] = 11
+    gsr[arg] = 11
+
+    assert_eq(psr, gsr, check_index_type=True)
 
 def test_series_setitem_singleton_range():
     sr = cudf.Series([1, 2, 3], dtype=np.int64)

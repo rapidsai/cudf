@@ -176,6 +176,33 @@ def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
 
     col._mimic_inplace(concat_columns([old_col, val_col]), inplace=True)
 
+def _try_append_to_range_index(index, value):
+    if not isinstance(value, int):
+        return None
+    import pdb;pdb.set_trace()
+    # Calculate the step size of the range object
+    step = index.step
+    
+
+
+    if step > 0:
+        if value == index[-1] + step:
+            start = index[0]
+            stop = value + step
+        elif value + step == index[0]:
+            start = value
+            stop = stop
+
+        return cudf.RangeIndex(start=start, stop=stop, step=step, name=index.name)
+    else:
+        return None
+    # Check if y can be appended to the end of x to create a new range object with the same progression
+    if (step > 0 and value == index[-1] + step) or (step < 0 and value == index[0] + step):
+        start = index[0] if step > 0 else value
+        stop = value + step if step > 0 else index[-1] + step
+        return cudf.RangeIndex(start=start, stop=stop, step=step, name=index.name)
+    else:
+        return None
 
 class _SeriesIlocIndexer(_FrameIndexer):
     """
@@ -274,7 +301,15 @@ class _SeriesLocIndexer(_FrameIndexer):
                 and not isinstance(self._frame.index, cudf.MultiIndex)
                 and is_scalar(value)
             ):
-                _append_new_row_inplace(self._frame.index._values, key)
+                if isinstance(self._frame.index, cudf.RangeIndex):
+                    new_idx = _try_append_to_range_index(self._frame.index, key)
+                    if new_idx is not None:
+                        self._frame._index = new_idx
+                    else:
+                        self._frame.index = self._frame.index._as_int_index()
+                        _append_new_row_inplace(self._frame.index._values, key)
+                else:
+                    _append_new_row_inplace(self._frame.index._values, key)
                 _append_new_row_inplace(self._frame._column, value)
                 return
             else:
