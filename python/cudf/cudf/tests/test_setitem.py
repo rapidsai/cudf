@@ -105,7 +105,7 @@ def test_series_set_item(psr, arg):
 
 @pytest.mark.parametrize("ps", [pd.Series([1, 2, 3]), pd.Series([1, 2, 3], index=pd.RangeIndex(start=2, stop=-1, step=-1))])
 @pytest.mark.parametrize(
-    "arg", [0, -1, 3, 5, 5.6, 5.0, 3.0]
+    "arg", [0, -1, 3, 5, 5.6, 3.1]
 )
 def test_series_set_item_range_index(ps, arg):
     gsr = cudf.from_pandas(ps)

@@ -179,30 +179,29 @@ def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
 def _try_append_to_range_index(index, value):
     if not isinstance(value, int):
         return None
-    import pdb;pdb.set_trace()
+    # import pdb;pdb.set_trace()
     # Calculate the step size of the range object
     step = index.step
-    
-
+    start, stop = index.start, index[-1]
 
     if step > 0:
-        if value == index[-1] + step:
-            start = index[0]
+        if value == stop + step:
             stop = value + step
-        elif value + step == index[0]:
+        elif value + step == stop:
             start = value
             stop = stop
-
-        return cudf.RangeIndex(start=start, stop=stop, step=step, name=index.name)
+        else:
+            return None
+    elif step < 0:
+        if value == start + step:
+            start = value
+        elif value + step == stop:
+            stop = value
+        else:
+            return None
     else:
         return None
-    # Check if y can be appended to the end of x to create a new range object with the same progression
-    if (step > 0 and value == index[-1] + step) or (step < 0 and value == index[0] + step):
-        start = index[0] if step > 0 else value
-        stop = value + step if step > 0 else index[-1] + step
-        return cudf.RangeIndex(start=start, stop=stop, step=step, name=index.name)
-    else:
-        return None
+    return cudf.RangeIndex(start=start, stop=stop, step=step, name=index.name)
 
 class _SeriesIlocIndexer(_FrameIndexer):
     """
