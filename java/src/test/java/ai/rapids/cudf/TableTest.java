@@ -40,6 +40,7 @@ import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.*;
@@ -8602,6 +8603,9 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  // https://github.com/NVIDIA/spark-rapids-jni/issues/1338
+  // Need to remove this tag if #1338 is fixed.
+  @Tag("noSanitizer")
   @Test
   void testORCReadAndWriteForDecimal128() throws IOException {
     File tempFile = File.createTempFile("test", ".orc");
