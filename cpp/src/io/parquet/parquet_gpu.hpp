@@ -411,6 +411,7 @@ struct EncPage {
   uint8_t* compressed_data;  //!< Ptr to compressed page
   uint16_t num_fragments;    //!< Number of fragments in page
   PageType page_type;        //!< Page type
+  Encoding encoding;         //!< Encoding used for page data
   EncColumnChunk* chunk;     //!< Chunk that this page belongs to
   uint32_t chunk_id;         //!< Index in chunk array
   uint32_t hdr_size;         //!< Size of page header
@@ -676,12 +677,14 @@ void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
  * @param[out] comp_in Compressor input buffers
  * @param[out] comp_in Compressor output buffers
  * @param[out] comp_stats Compressor results
+ * @param[in] write_v2_headers True if V2 page headers should be written
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodePages(device_span<EncPage> pages,
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
                  device_span<compression_result> comp_res,
+                 bool write_v2_headers,
                  rmm::cuda_stream_view stream);
 
 /**
