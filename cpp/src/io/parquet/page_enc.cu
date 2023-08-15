@@ -1406,8 +1406,8 @@ __global__ void __launch_bounds__(128, 8)
 
   // copy over uncompressed data
   if (skip_comp_size != 0 && not comp_in.empty()) {
-    uint8_t* src = s->page.page_data + s->page.max_hdr_size;
-    uint8_t* dst = s->page.compressed_data + s->page.max_hdr_size;
+    uint8_t const* const src = s->page.page_data + s->page.max_hdr_size;
+    uint8_t* const dst       = s->page.compressed_data + s->page.max_hdr_size;
     for (int i = t; i < skip_comp_size; i += block_size) {
       dst[i] = src[i];
     }
