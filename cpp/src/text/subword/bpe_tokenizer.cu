@@ -137,7 +137,7 @@ struct byte_pair_encoding_fn {
   }
 
   /**
-   * @brief Lookup the pair of strings in the d_map/d_merges
+   * @brief Look up the pair of strings in the d_map/d_merges
    *
    * @param lhs Left half of the string
    * @param rhs Right half of the string
@@ -151,7 +151,7 @@ struct byte_pair_encoding_fn {
 
     // Edge case check.
     // Empirically found only two merge pair strings that were greater than 70 bytes
-    // and they both looked like ignorable errors. Double check this analysis with Vibhu.
+    // and they both looked like ignorable errors.
     if (thread_memory_size < total_size) { return d_map.end(); }
 
     // build the target string in shared memory
