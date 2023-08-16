@@ -52,14 +52,15 @@ struct adjust_offsets_fn {
         return idx * d_filler.size_bytes();
       } else {
         auto const total_filler = d_filler.size_bytes() * offset;
-        return total_filler + d_column.element<size_type>(idx - offset);
+        return total_filler + d_column.element<size_type>(idx - offset) -
+               d_column.element<size_type>(0);
       }
     }
   }
 };
 
 struct shift_chars_fn {
-  column_device_view const d_column;
+  column_device_view const d_column;  // input strings column
   string_view const d_filler;
   size_type const offset;
 
@@ -68,8 +69,11 @@ struct shift_chars_fn {
     if (offset < 0) {
       auto const last_index = -offset;
       if (idx < last_index) {
-        auto const first_index = d_column.size() + offset;
-        return d_column.element<char>(idx + first_index);
+        auto const first_index =
+          offset + d_column.child(strings_column_view::offsets_column_index)
+                     .element<size_type>(d_column.offset() + d_column.size());
+        return d_column.child(strings_column_view::chars_column_index)
+          .element<char>(idx + first_index);
       } else {
         auto const char_index = idx - last_index;
         return d_filler.data()[char_index % d_filler.size_bytes()];
@@ -78,7 +82,10 @@ struct shift_chars_fn {
       if (idx < offset) {
         return d_filler.data()[idx % d_filler.size_bytes()];
       } else {
-        return d_column.element<char>(idx - offset);
+        return d_column.child(strings_column_view::chars_column_index)
+          .element<char>(idx - offset +
+                         d_column.child(strings_column_view::offsets_column_index)
+                           .element<size_type>(d_column.offset()));
       }
     }
   }
@@ -96,6 +103,9 @@ std::unique_ptr<column> shift(strings_column_view const& input,
 
   // adjust offset when greater than the size of the input
   if (std::abs(offset) > input.size()) { offset = input.size(); }
+
+  // TODO: This is fancy and all but we should try to use the make_offsets_child
+  // utility to check for overflow since we are inserting an arbitrary fill-value.
 
   // output offsets column is the same size as the input
   auto const input_offsets =
@@ -115,7 +125,7 @@ std::unique_ptr<column> shift(strings_column_view const& input,
                     d_offsets->data<size_type>(),
                     adjust_offsets_fn{*d_input_offsets, d_fill_str, offset});
 
-  // compute the shift-offset for the output characters child column
+  //  compute the shift-offset for the output characters child column
   auto const shift_offset = [&] {
     auto const index = (offset >= 0) ? offset : offsets_size - 1 + offset;
     return (offset < 0 ? -1 : 1) *
@@ -125,18 +135,18 @@ std::unique_ptr<column> shift(strings_column_view const& input,
   // create output chars child column
   auto const chars_size =
     cudf::detail::get_value<size_type>(offsets_column->view(), offsets_size - 1, stream);
-  auto chars_column = create_chars_child_column(chars_size, stream, mr);
-  auto d_chars      = mutable_column_device_view::create(chars_column->mutable_view(), stream);
-  auto const d_input_chars = column_device_view::create(input.chars(), stream);
+  auto chars_column  = create_chars_child_column(chars_size, stream, mr);
+  auto d_chars       = mutable_column_device_view::create(chars_column->mutable_view(), stream);
+  auto const d_input = column_device_view::create(input.parent(), stream);
 
   // run kernel to shift the characters
   thrust::transform(rmm::exec_policy(stream),
                     thrust::counting_iterator<size_type>(0),
                     thrust::counting_iterator<size_type>(chars_size),
                     d_chars->data<char>(),
-                    shift_chars_fn{*d_input_chars, d_fill_str, shift_offset});
+                    shift_chars_fn{*d_input, d_fill_str, shift_offset});  // d_input_chars
 
-  // caller sets the null-mask
+  //  caller sets the null-mask
   return make_strings_column(
     input.size(), std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
 }
