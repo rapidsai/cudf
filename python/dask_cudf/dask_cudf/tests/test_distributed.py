@@ -80,13 +80,18 @@ def test_str_series_roundtrip():
 
 
 def test_p2p_shuffle():
+    # Check that we can use `shuffle="p2p"`
     with dask_cuda.LocalCUDACluster(n_workers=1) as cluster:
         with Client(cluster):
-            ddf = dask.datasets.timeseries(
-                start="2000-01-01",
-                end="2000-01-08",
-                dtypes={"x": int},
-            ).reset_index().to_backend("cudf")
+            ddf = (
+                dask.datasets.timeseries(
+                    start="2000-01-01",
+                    end="2000-01-08",
+                    dtypes={"x": int},
+                )
+                .reset_index()
+                .to_backend("cudf")
+            )
             dd.assert_eq(
                 ddf.sort_values("x", shuffle="p2p").compute(),
                 ddf.compute().sort_values("x"),
