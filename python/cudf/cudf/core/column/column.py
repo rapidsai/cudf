@@ -2213,7 +2213,12 @@ def as_column(
                 pa.Array.from_pandas(interval_series), dtype=arb_dtype
             )
         elif arb_dtype.kind in ("O", "U"):
-            data = as_column(pa.Array.from_pandas(arbitrary), dtype=arb_dtype)
+            pyarrow_array = pa.Array.from_pandas(arbitrary)
+            if isinstance(
+                pyarrow_array, (pa.DurationArray, pa.TimestampArray)
+            ):
+                raise MixedTypeError("Cannot create column with mixed types")
+            data = as_column(pyarrow_array, dtype=arb_dtype)
         else:
             data = as_column(
                 pa.array(

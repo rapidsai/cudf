@@ -10279,3 +10279,10 @@ def test_dataframe_constructor_from_namedtuple():
         cudf.DataFrame(data, index=idx)
     with pytest.raises(ValueError):
         pd.DataFrame(data, index=idx)
+
+
+@pytest.mark.parametrize("dtype", ["datetime64[ns]", "timedelta64[ns]"])
+def test_dataframe_mixed_dtype_error(dtype):
+    pdf = pd.Series([1, 2, 3], dtype=dtype).to_frame().astype(object)
+    with pytest.raises(TypeError):
+        cudf.from_pandas(pdf)
