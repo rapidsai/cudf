@@ -17,6 +17,7 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 cimport cudf._lib.cpp.io.types as cudf_io_types
+from cudf._lib.cpp.io.data_sink cimport data_sink
 from cudf._lib.cpp.io.json cimport (
     json_reader_options,
     json_writer_options,
@@ -27,7 +28,6 @@ from cudf._lib.cpp.io.json cimport (
 from cudf._lib.cpp.io.types cimport (
     column_name_info,
     compression_type,
-    data_sink,
     sink_info,
     table_metadata,
     table_with_metadata,
