@@ -2115,8 +2115,7 @@ class DatetimeIndex(GenericIndex):
             value, np.datetime64
         ):
             return pd.Timestamp(value)
-        else:
-            return value
+        return value
 
     def searchsorted(
         self,
@@ -2782,8 +2781,7 @@ class TimedeltaIndex(GenericIndex):
             value, np.timedelta64
         ):
             return pd.Timedelta(value)
-        else:
-            return value
+        return value
 
     @_cudf_nvtx_annotate
     def to_pandas(self, nullable=False):
