@@ -2139,7 +2139,10 @@ def test_daterange_pandas_compatibility():
     with cudf.option_context("mode.pandas_compatible", True):
         with pytest.raises(NotImplementedError):
             cudf.date_range("20010101", "20020215", freq="400h", name="times")
-    expected = pd.date_range("20010101", "20020215", freq="400h", name="times")
-    expected.freq = None
-    actual = cudf.date_range("20010101", "20020215", freq="400h", name="times")
+        expected = pd.date_range(
+            "2010-01-01", "2010-02-01", periods=10, name="times"
+        )
+        actual = cudf.date_range(
+            "2010-01-01", "2010-02-01", periods=10, name="times"
+        )
     assert_eq(expected, actual)
