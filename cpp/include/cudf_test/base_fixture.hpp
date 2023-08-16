@@ -59,6 +59,27 @@ class BaseFixture : public ::testing::Test {
   rmm::mr::device_memory_resource* mr() { return _mr; }
 };
 
+/**
+ * @brief Base test fixture that takes a parameter.
+ *
+ * Example:
+ * ```
+ * class MyIntTestFixture : public cudf::test::BaseFixtureWithParam<int> {};
+ * ```
+ */
+template <typename T>
+class BaseFixtureWithParam : public ::testing::TestWithParam<T> {
+  rmm::mr::device_memory_resource* _mr{rmm::mr::get_current_device_resource()};
+
+ public:
+  /**
+   * @brief Returns pointer to `device_memory_resource` that should be used for
+   * all tests inheriting from this fixture
+   * @return pointer to memory resource
+   */
+  rmm::mr::device_memory_resource* mr() const { return _mr; }
+};
+
 template <typename T, typename Enable = void>
 struct uniform_distribution_impl {};
 template <typename T>
