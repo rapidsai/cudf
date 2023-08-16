@@ -5310,7 +5310,7 @@ class StringMethods(ColumnMethods):
         >>> str_series.str.minhash(seeds)
         0     [21141582]
         1    [962346254]
-        dtype: uint32
+        dtype: list
         >>> seeds = cudf.Series([0, 1, 2], dtype=np.uint32)
         >>> str_series.str.minhash(seeds)
         0    [21141582, 403093213, 1258052021]
@@ -5352,7 +5352,7 @@ class StringMethods(ColumnMethods):
         >>> import cudf
         >>> str_series = cudf.Series(['this is my', 'favorite book'])
         >>> seeds = cudf.Series([0, 1, 2], dtype=np.uint64)
-        >>> str_series.str.minhash(seeds, method='MurmurHash3_x64_128')
+        >>> str_series.str.minhash64(seeds)
         0    [3232308021562742685, 4445611509348165860, 586435843695903598]
         1    [23008204270530356, 1281229757012344693, 153762819128779913]
         dtype: list
