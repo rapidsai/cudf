@@ -2222,6 +2222,7 @@ def as_column(
                     pa.NullArray,
                     pa.Decimal128Array,
                     pa.StringArray,
+                    pa.BooleanArray,
                 ),
             ):
                 raise MixedTypeError("Cannot create column with mixed types")
