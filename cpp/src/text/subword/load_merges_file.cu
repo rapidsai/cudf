@@ -171,20 +171,18 @@ bpe_merge_pairs::bpe_merge_pairs_impl::bpe_merge_pairs_impl(
 bpe_merge_pairs::bpe_merge_pairs(std::unique_ptr<cudf::column>&& input,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource*)
-  : impl(detail::create_bpe_merge_pairs_impl(std::move(input), stream))
+  : impl(detail::create_bpe_merge_pairs_impl(std::move(input), stream).release())
 {
 }
 
 bpe_merge_pairs::bpe_merge_pairs(cudf::strings_column_view const& input,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
-  : impl(detail::create_bpe_merge_pairs_impl(input, stream, mr))
+  : impl(detail::create_bpe_merge_pairs_impl(input, stream, mr).release())
 {
 }
 
-bpe_merge_pairs::~bpe_merge_pairs() = default;
-
-cudf::size_type bpe_merge_pairs::get_size() { return impl->merge_pairs->size(); }
-std::size_t bpe_merge_pairs::get_map_size() { return impl->merge_pairs_map->get_size(); }
+bpe_merge_pairs::bpe_merge_pairs() = default;
+bpe_merge_pairs::~bpe_merge_pairs() { delete impl; }
 
 }  // namespace nvtext

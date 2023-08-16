@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ namespace nvtext {
  */
 struct bpe_merge_pairs {
   struct bpe_merge_pairs_impl;
-  std::unique_ptr<bpe_merge_pairs_impl> impl{};  ///< Implementation of the BPE merge pairs table.
+  bpe_merge_pairs_impl* impl{};  ///< Implementation of the BPE merge pairs table.
 
   /**
    * @brief Construct a new bpe merge pairs object
@@ -62,18 +62,7 @@ struct bpe_merge_pairs {
 
   ~bpe_merge_pairs();
 
-  /**
-   * @brief Returns the number of merge pairs in the table.
-   *
-   * @return The number of merge pairs in the table
-   */
-  cudf::size_type get_size();
-  /**
-   * @brief  Returns the number of unique merge pairs in the table.
-   *
-   * @return The number of unique merge pairs in the table
-   */
-  std::size_t get_map_size();
+  bpe_merge_pairs();
 };
 
 /**
