@@ -33,16 +33,17 @@ struct StringsFindTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsFindTest, Find)
 {
-  cudf::test::strings_column_wrapper strings({"Héllo", "thesé", "", "lease", "tést strings", ""},
+  cudf::test::strings_column_wrapper strings({"Héllo", "thesé", "", "lest", "tést strings", ""},
                                              {1, 1, 0, 1, 1, 1});
   auto strings_view = cudf::strings_column_view(strings);
 
   {
+    auto const target = cudf::string_scalar("é");
     cudf::test::fixed_width_column_wrapper<cudf::size_type> expected({1, 4, -1, -1, 1, -1},
                                                                      {1, 1, 0, 1, 1, 1});
-    auto results = cudf::strings::find(strings_view, cudf::string_scalar("é"));
+    auto results = cudf::strings::find(strings_view, target);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-    results = cudf::strings::rfind(strings_view, cudf::string_scalar("é"));
+    results = cudf::strings::rfind(strings_view, target);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
@@ -52,13 +53,22 @@ TEST_F(StringsFindTest, Find)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
+    auto const target = cudf::string_scalar("es");
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> expected({-1, 2, -1, 1, -1, -1},
+                                                                     {1, 1, 0, 1, 1, 1});
+    auto results = cudf::strings::find(strings_view, target);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    results = cudf::strings::rfind(strings_view, target);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
     cudf::test::fixed_width_column_wrapper<cudf::size_type> expected({0, 0, 0, 0, 0, 0},
                                                                      {1, 1, 0, 1, 1, 1});
     auto results = cudf::strings::find(strings_view, cudf::string_scalar(""));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
-    cudf::test::fixed_width_column_wrapper<cudf::size_type> expected({5, 5, 0, 5, 12, 0},
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> expected({5, 5, 0, 4, 12, 0},
                                                                      {1, 1, 0, 1, 1, 1});
     auto results = cudf::strings::rfind(strings_view, cudf::string_scalar(""));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
@@ -76,6 +86,20 @@ TEST_F(StringsFindTest, Find)
     auto results = cudf::strings::find(strings_view, strings_view);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
+}
+
+TEST_F(StringsFindTest, FindWithNullTargets)
+{
+  cudf::test::strings_column_wrapper input({"hello hello", "thesé help", "", "helicopter", "", "x"},
+                                           {1, 1, 0, 1, 1, 1});
+  auto strings_view = cudf::strings_column_view(input);
+
+  auto const targets = cudf::test::strings_column_wrapper(
+    {"lo he", "", "hhh", "cop", "help", "xyz"}, {1, 0, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected({3, -1, -1, 4, -1, -1},
+                                                                   {1, 0, 0, 1, 1, 1});
+  auto results = cudf::strings::find(strings_view, cudf::strings_column_view(targets));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsFindTest, FindLongStrings)

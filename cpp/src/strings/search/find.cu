@@ -324,10 +324,11 @@ std::unique_ptr<column> rfind(strings_column_view const& strings,
 std::unique_ptr<column> find(strings_column_view const& input,
                              strings_column_view const& target,
                              size_type start,
+                             rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::find<true>(input, target, start, cudf::get_default_stream(), mr);
+  return detail::find<true>(input, target, start, stream, mr);
 }
 
 namespace detail {

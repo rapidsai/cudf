@@ -103,6 +103,7 @@ std::unique_ptr<column> rfind(
  * @param input Strings to search against
  * @param target Strings to search for in `input`
  * @param start First character position to include in the search
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New integer column with character position values
  */
@@ -110,6 +111,7 @@ std::unique_ptr<column> find(
   strings_column_view const& input,
   strings_column_view const& target,
   size_type start                     = 0,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
