@@ -119,7 +119,7 @@ def _get_groupby_apply_kernel(frame, func, args):
     try:
         return_type = _get_udf_return_type(dataframe_group_type, func, args)
     except TypingError as e:
-        if udf_errors:
+        if udf_errors[0]:
             raise TypingError(udf_errors[0])
         else:
             raise e

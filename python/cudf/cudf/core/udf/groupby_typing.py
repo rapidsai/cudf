@@ -29,6 +29,7 @@ SUPPORTED_GROUPBY_NUMPY_TYPES = [
     numpy_support.as_dtype(dt) for dt in SUPPORTED_GROUPBY_NUMBA_TYPES
 ]
 
+docs = "https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs/"
 
 class Group:
     """
@@ -154,6 +155,26 @@ def _register_cuda_idx_reduction_caller(funcname, inputty):
     call_cuda_functions.setdefault(funcname.lower(), {})
     call_cuda_functions[funcname.lower()][type_key] = caller
 
+class GroupUnaryOp(AbstractTemplate):
+    def make_error_string(self, args):
+        fname = self.key.__name__
+        return (
+            f"\n{self.key.__name__}(Series) is not supported within JIT GroupBy "
+            f"apply.\nTo see what's available, visit\n{docs}"
+        )
+
+    def generic(self, args, kws):
+        fname = self.key.__name__
+        if fname in call_cuda_functions:
+            for retty, selfty in call_cuda_functions[fname].keys():
+                if self.this.group_scalar_type == selfty:
+                    return nb_signature(retty, recvr=self.this)
+        udf_errors[0] = self.make_error_string(args)
+        return None
+
+from cudf.core.udf._ops import unary_ops
+for op in unary_ops:
+    cuda_registry.register_global(op)(GroupUnaryOp)
 
 class GroupUnaryAttrBase(AbstractTemplate):
     def make_error_string(self, args):
@@ -161,8 +182,7 @@ class GroupUnaryAttrBase(AbstractTemplate):
         return (
             f"\nSeries.{fname} is not supported for "
             f"{self.this.group_scalar_type} within JIT GroupBy "
-            "apply.\nPlease file an issue "
-            "requesting support for this feature at cuDF's GitHub page."
+            f"apply.\n To see what's available, visit {docs}"
         )
 
     def generic(self, args, kws):
@@ -227,8 +247,8 @@ class GroupBinaryMethodBase(AbstractTemplate):
         return (
             f"\nSeries.{fname} is not supported between "
             f"{self.this.group_scalar_type} and {args[0].group_scalar_type} "
-            "within JIT GroupBy apply.\nPlease file an issue "
-            "requesting support for this feature at cuDF's GitHub page."
+            "within JIT GroupBy apply.\n To see "
+            f"what's available, visit {docs}"
         )
 
     def generic(self, args, kws):
