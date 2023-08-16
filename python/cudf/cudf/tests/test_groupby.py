@@ -17,10 +17,11 @@ from numba.core.errors import TypingError
 from numpy.testing import assert_array_equal
 
 import rmm
-from cudf.core.udf._ops import unary_ops
+
 import cudf
 from cudf import DataFrame, Series
 from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140
+from cudf.core.udf._ops import unary_ops
 from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
 from cudf.core.udf.utils import precompiled
 from cudf.testing._utils import (
@@ -456,7 +457,8 @@ def test_groupby_apply_jit_correlation(groupby_jit_data, dtype):
         return
     run_groupby_apply_jit_test(groupby_jit_data, func, keys)
 
-@pytest.mark.parametrize('op', unary_ops)
+
+@pytest.mark.parametrize("op", unary_ops)
 def test_groupby_apply_jit_invalid_ops_error(groupby_jit_data, op):
     keys = ["key1"]
 
@@ -464,6 +466,7 @@ def test_groupby_apply_jit_invalid_ops_error(groupby_jit_data, op):
         return op(group["val1"])
 
     run_groupby_apply_jit_test(groupby_jit_data, func, keys)
+
 
 @pytest.mark.parametrize("dtype", ["float64"])
 @pytest.mark.parametrize("func", ["min", "max", "sum", "mean", "var", "std"])

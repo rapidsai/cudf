@@ -31,6 +31,7 @@ SUPPORTED_GROUPBY_NUMPY_TYPES = [
 
 docs = "https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs/"
 
+
 class Group:
     """
     A piece of python code whose purpose is to be replaced
@@ -155,6 +156,7 @@ def _register_cuda_idx_reduction_caller(funcname, inputty):
     call_cuda_functions.setdefault(funcname.lower(), {})
     call_cuda_functions[funcname.lower()][type_key] = caller
 
+
 class GroupUnaryOp(AbstractTemplate):
     def make_error_string(self, args):
         fname = self.key.__name__
@@ -172,9 +174,12 @@ class GroupUnaryOp(AbstractTemplate):
         udf_errors[0] = self.make_error_string(args)
         return None
 
+
 from cudf.core.udf._ops import unary_ops
+
 for op in unary_ops:
     cuda_registry.register_global(op)(GroupUnaryOp)
+
 
 class GroupUnaryAttrBase(AbstractTemplate):
     def make_error_string(self, args):
