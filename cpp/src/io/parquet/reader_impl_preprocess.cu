@@ -480,7 +480,8 @@ int decode_page_headers(cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc>& c
       auto const dst_base = static_cast<uint8_t*>(decomp_pages.data()) + decomp_offset;
       auto& page          = pages[page_idx];
       // offset will only be non-zero for V2 pages
-      auto const offset = page.def_lvl_bytes + page.rep_lvl_bytes;
+      auto const offset =
+        page.lvl_bytes[gpu::level_type::DEFINITION] + page.lvl_bytes[gpu::level_type::REPETITION];
       // for V2 need to copy def and rep level info into place, and then offset the
       // input and output buffers. otherwise we'd have to keep both the compressed
       // and decompressed data.
