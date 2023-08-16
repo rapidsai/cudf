@@ -30,7 +30,7 @@
 #include <limits>
 #include <type_traits>
 
-#include <_nrt_cuda.cuh>
+#include "numba_cuda_runtime.cuh"
 
 using namespace cudf::strings::udf;
 
