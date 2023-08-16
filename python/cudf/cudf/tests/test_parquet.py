@@ -2264,7 +2264,7 @@ def test_parquet_writer_statistics(tmpdir, pdf, add_nulls):
         pdf = pdf.drop(columns=["col_category", "col_bool"])
 
     if not add_nulls:
-        # Timedelta types convert NA to None when reading from parquet into
+        # Timedelta types convert NaT to None when reading from parquet into
         # pandas which interferes with series.max()/min()
         for t in TIMEDELTA_TYPES:
             pdf["col_" + t] = pd.Series(np.arange(len(pdf.index))).astype(t)

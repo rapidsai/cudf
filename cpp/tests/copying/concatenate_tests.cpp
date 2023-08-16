@@ -162,6 +162,37 @@ TEST_F(StringColumnTest, ConcatenateColumnView)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
+TEST_F(StringColumnTest, ConcatenateColumnViewLarge)
+{
+  // Test large concatenate, causes out of bound device memory errors if kernel
+  // indexing is not int64_t.
+  // 1.5GB bytes, 5k columns
+  constexpr size_t num_strings        = 10000;
+  constexpr size_t string_length      = 150000;
+  constexpr size_t strings_per_column = 2;
+  constexpr size_t num_columns        = num_strings / strings_per_column;
+
+  std::vector<std::string> strings;
+  std::vector<char const*> h_strings;
+  std::vector<cudf::test::strings_column_wrapper> strings_column_wrappers;
+  std::vector<cudf::column_view> strings_columns;
+
+  std::string s(string_length, 'a');
+  for (size_t i = 0; i < num_strings; ++i)
+    h_strings.push_back(s.data());
+
+  for (size_t i = 0; i < num_columns; ++i)
+    strings_column_wrappers.push_back(cudf::test::strings_column_wrapper(
+      h_strings.data() + i * strings_per_column, h_strings.data() + (i + 1) * strings_per_column));
+  for (auto& wrapper : strings_column_wrappers)
+    strings_columns.push_back(wrapper);
+
+  auto results = cudf::concatenate(strings_columns);
+
+  cudf::test::strings_column_wrapper expected(h_strings.begin(), h_strings.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TEST_F(StringColumnTest, ConcatenateTooManyColumns)
 {
   std::vector<char const*> h_strings{"aaa",
