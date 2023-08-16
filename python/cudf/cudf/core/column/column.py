@@ -989,6 +989,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             np.object_,
             str,
         }:
+            if cudf.get_option("mode.pandas_compatible") and np.dtype(
+                dtype
+            ).type in {np.object_}:
+                raise ValueError(
+                    f"Casting to {dtype} is not supported, use "
+                    "`.astype('str')` instead."
+                )
             return self.as_string_column(dtype, **kwargs)
         elif is_list_dtype(dtype):
             if not self.dtype == dtype:
@@ -2206,7 +2213,20 @@ def as_column(
                 pa.Array.from_pandas(interval_series), dtype=arb_dtype
             )
         elif arb_dtype.kind in ("O", "U"):
-            data = as_column(pa.Array.from_pandas(arbitrary), dtype=arb_dtype)
+            pyarrow_array = pa.Array.from_pandas(arbitrary)
+            if not isinstance(
+                pyarrow_array,
+                (
+                    pa.ListArray,
+                    pa.StructArray,
+                    pa.NullArray,
+                    pa.Decimal128Array,
+                    pa.StringArray,
+                    pa.BooleanArray,
+                ),
+            ):
+                raise MixedTypeError("Cannot create column with mixed types")
+            data = as_column(pyarrow_array, dtype=arb_dtype)
         else:
             data = as_column(
                 pa.array(
