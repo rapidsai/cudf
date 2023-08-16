@@ -17,7 +17,9 @@
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 
+#include <cudf/io/csv.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <nvtext/bpe_tokenize.hpp>
@@ -25,20 +27,18 @@
 
 #include <nvbench/nvbench.cuh>
 
+static cudf::io::table_with_metadata read_csv(std::string const& file_path)
+{
+  auto source_info = cudf::io::source_info(file_path);
+  auto builder     = cudf::io::csv_reader_options::builder(source_info);
+  auto options     = builder.build();
+  return cudf::io::read_csv(options);
+}
+
 static void bench_tokenize(nvbench::state& state)
 {
-  auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const row_width = static_cast<cudf::size_type>(state.get_int64("row_width"));
-
-  if (static_cast<std::size_t>(num_rows) * static_cast<std::size_t>(row_width) >=
-      static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
-    state.skip("Skip benchmarks greater than size_type limit");
-  }
-
-  data_profile const profile = data_profile_builder().distribution(
-    cudf::type_id::STRING, distribution_id::NORMAL, 0, row_width);
-  auto const column = create_random_column(cudf::type_id::STRING, row_count{num_rows}, profile);
-  cudf::strings_column_view input(column->view());
+  auto csv_metadata = read_csv("input_strings.csv");
+  cudf::strings_column_view input(csv_metadata.tbl->view().column(0));
 
   auto mps        = nvtext::load_merge_pairs_file("merges.txt");
   auto vocab      = nvtext::load_vocabulary_file("hashed_vocab.txt");
@@ -59,7 +59,4 @@ static void bench_tokenize(nvbench::state& state)
   });
 }
 
-NVBENCH_BENCH(bench_tokenize)
-  .set_name("bpe_tokenize")
-  .add_int64_axis("row_width", {32, 64, 128, 256, 512, 1024})
-  .add_int64_axis("num_rows", {4096, 32768, 262144, 2097152, 16777216});
+NVBENCH_BENCH(bench_tokenize).set_name("bpe_tokenize");
