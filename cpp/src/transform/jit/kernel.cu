@@ -38,7 +38,7 @@ template <typename TypeOut, typename TypeIn>
 __global__ void kernel(cudf::size_type size, TypeOut* out_data, TypeIn* in_data)
 {
   thread_index_type const start  = threadIdx.x + blockIdx.x * blockDim.x;
-  thread_index_type const stride = block_size * gridDim.x;
+  thread_index_type const stride = blockDim.x * gridDim.x;
 
   for (auto i = start; i < static_cast<thread_index_type>(size); i += stride) {
     GENERIC_UNARY_OP(&out_data[i], in_data[i]);
