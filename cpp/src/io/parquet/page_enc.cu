@@ -1216,7 +1216,7 @@ __global__ void __launch_bounds__(128, 8)
         }
         rle_numvals += rle_numvals_in_block;
         __syncthreads();
-        if ((!is_v2) && (physical_type == BOOLEAN)) {
+        if (!is_v2 && physical_type == BOOLEAN) {
           PlainBoolEncode(s, rle_numvals, (cur_val_idx == s->page.num_leaf_values), t);
         } else {
           RleEncode(s, rle_numvals, dict_bits, (cur_val_idx == s->page.num_leaf_values), t);
@@ -2270,10 +2270,10 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
 }
 
 void EncodePages(device_span<gpu::EncPage> pages,
+                 bool write_v2_headers,
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
                  device_span<compression_result> comp_results,
-                 bool write_v2_headers,
                  rmm::cuda_stream_view stream)
 {
   auto num_pages = pages.size();
