@@ -2109,6 +2109,15 @@ class DatetimeIndex(GenericIndex):
 
         super().__init__(data, **kwargs)
 
+    def __getitem__(self, index):
+        value = super().__getitem__(index)
+        if cudf.get_option("mode.pandas_compatible") and isinstance(
+            value, np.datetime64
+        ):
+            return pd.Timestamp(value)
+        else:
+            return value
+
     def searchsorted(
         self,
         value,
@@ -2766,6 +2775,15 @@ class TimedeltaIndex(GenericIndex):
             data = data.copy()
 
         super().__init__(data, **kwargs)
+
+    def __getitem__(self, index):
+        value = super().__getitem__(index)
+        if cudf.get_option("mode.pandas_compatible") and isinstance(
+            value, np.timedelta64
+        ):
+            return pd.Timedelta(value)
+        else:
+            return value
 
     @_cudf_nvtx_annotate
     def to_pandas(self, nullable=False):
