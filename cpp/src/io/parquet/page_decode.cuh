@@ -902,17 +902,10 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
   // this is a little redundant. if level_bits == 0, then nothing should be encoded
   // for the level, but some V2 files in the wild violate this and encode the data anyway.
   // thus we will handle V2 headers separately.
-  if ((s->page.flags & PAGEINFO_FLAGS_V2) != 0) {
+  if ((s->page.flags & PAGEINFO_FLAGS_V2) != 0 && (len = s->page.lvl_bytes[lvl]) != 0) {
     // V2 only uses RLE encoding so no need to check encoding
-    len = lvl == level_type::DEFINITION ? s->page.def_lvl_bytes : s->page.rep_lvl_bytes;
     s->abs_lvl_start[lvl] = cur;
-    if (len == 0) {
-      s->initial_rle_run[lvl]   = s->page.num_input_values * 2;  // repeated value
-      s->initial_rle_value[lvl] = 0;
-      s->lvl_start[lvl]         = cur;
-    } else {
-      init_rle(cur, cur + len);
-    }
+    init_rle(cur, cur + len);
   } else if (level_bits == 0) {
     len                       = 0;
     s->initial_rle_run[lvl]   = s->page.num_input_values * 2;  // repeated value

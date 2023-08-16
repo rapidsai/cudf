@@ -8,9 +8,9 @@ import numpy as np
 import pyarrow as pa
 
 import cudf
-from cudf.api.types import is_scalar
+from cudf.api.types import is_datetime64_dtype, is_scalar, is_timedelta64_dtype
 from cudf.core.dtypes import ListDtype, StructDtype
-from cudf.core.missing import NA
+from cudf.core.missing import NA, NaT
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
@@ -243,7 +243,11 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
             dtype = cudf.dtype(dtype)
 
         if not valid:
-            value = NA
+            value = (
+                NaT
+                if is_datetime64_dtype(dtype) or is_timedelta64_dtype(dtype)
+                else NA
+            )
 
         return value, dtype
 
