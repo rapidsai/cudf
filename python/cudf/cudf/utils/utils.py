@@ -345,6 +345,14 @@ def search_range(x: int, ri: range, *, side: str) -> int:
     return max(min(len(ri), offset), 0)
 
 
+def is_na_like(obj):
+    """
+    Check if `obj` is a cudf NA value,
+    i.e., None, cudf.NA or cudf.NaT
+    """
+    return obj is None or obj is cudf.NA or obj is cudf.NaT
+
+
 def _get_color_for_nvtx(name):
     m = hashlib.sha256()
     m.update(name.encode())
