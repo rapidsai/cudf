@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,15 +37,10 @@ namespace jit {
 template <typename TypeOut, typename TypeIn>
 __global__ void kernel(cudf::size_type size, TypeOut* out_data, TypeIn* in_data)
 {
-  int tid    = threadIdx.x;
-  int blkid  = blockIdx.x;
-  int blksz  = blockDim.x;
-  int gridsz = gridDim.x;
+  thread_index_type const start  = threadIdx.x + blockIdx.x * blockDim.x;
+  thread_index_type const stride = block_size * gridDim.x;
 
-  int start = tid + blkid * blksz;
-  int step  = blksz * gridsz;
-
-  for (cudf::size_type i = start; i < size; i += step) {
+  for (auto i = start; i < static_cast<thread_index_type>(size); i += stride) {
     GENERIC_UNARY_OP(&out_data[i], in_data[i]);
   }
 }
