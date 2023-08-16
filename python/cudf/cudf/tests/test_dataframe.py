@@ -10281,7 +10281,9 @@ def test_dataframe_constructor_from_namedtuple():
         pd.DataFrame(data, index=idx)
 
 
-@pytest.mark.parametrize("dtype", ["datetime64[ns]", "timedelta64[ns]"])
+@pytest.mark.parametrize(
+    "dtype", ["datetime64[ns]", "timedelta64[ns]", "int64", "float32"]
+)
 def test_dataframe_mixed_dtype_error(dtype):
     pdf = pd.Series([1, 2, 3], dtype=dtype).to_frame().astype(object)
     with pytest.raises(TypeError):

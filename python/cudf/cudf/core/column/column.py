@@ -2214,8 +2214,15 @@ def as_column(
             )
         elif arb_dtype.kind in ("O", "U"):
             pyarrow_array = pa.Array.from_pandas(arbitrary)
-            if isinstance(
-                pyarrow_array, (pa.DurationArray, pa.TimestampArray)
+            if not isinstance(
+                pyarrow_array,
+                (
+                    pa.ListArray,
+                    pa.StructArray,
+                    pa.NullArray,
+                    pa.Decimal128Array,
+                    pa.StringArray,
+                ),
             ):
                 raise MixedTypeError("Cannot create column with mixed types")
             data = as_column(pyarrow_array, dtype=arb_dtype)
