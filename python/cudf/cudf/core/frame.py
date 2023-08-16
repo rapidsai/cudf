@@ -31,6 +31,7 @@ from typing_extensions import Self
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import Dtype
+from cudf.api.extensions import no_default
 from cudf.api.types import is_bool_dtype, is_dtype_equal, is_scalar
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
@@ -1885,7 +1886,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def min(
         self,
-        axis=None,
+        axis=no_default,
         skipna=True,
         level=None,
         numeric_only=None,
@@ -1936,7 +1937,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def max(
         self,
-        axis=None,
+        axis=no_default,
         skipna=True,
         level=None,
         numeric_only=None,
@@ -1987,7 +1988,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def sum(
         self,
-        axis=None,
+        axis=no_default,
         skipna=True,
         dtype=None,
         level=None,
@@ -2045,7 +2046,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def product(
         self,
-        axis=None,
+        axis=no_default,
         skipna=True,
         dtype=None,
         level=None,
@@ -2089,11 +2090,11 @@ class Frame(BinaryOperand, Scannable):
         b    5040
         dtype: int64
         """
-        axis = self._get_axis_from_axis_arg(axis)
+
         return self._reduce(
             # cuDF columns use "product" as the op name, but cupy uses "prod"
             # and we need cupy if axis == 1.
-            "product" if axis == 0 else "prod",
+            "prod" if axis in {1, "columns"} else "product",
             axis=axis,
             skipna=skipna,
             dtype=dtype,
@@ -2108,7 +2109,12 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def mean(
-        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
+        self,
+        axis=no_default,
+        skipna=True,
+        level=None,
+        numeric_only=None,
+        **kwargs,
     ):
         """
         Return the mean of the values for the requested axis.
@@ -2154,7 +2160,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def std(
         self,
-        axis=None,
+        axis=no_default,
         skipna=True,
         level=None,
         ddof=1,
@@ -2210,7 +2216,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def var(
         self,
-        axis=None,
+        axis=no_default,
         skipna=True,
         level=None,
         ddof=1,
@@ -2264,7 +2270,12 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def kurtosis(
-        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
+        self,
+        axis=no_default,
+        skipna=True,
+        level=None,
+        numeric_only=None,
+        **kwargs,
     ):
         """
         Return Fisher's unbiased kurtosis of a sample.
@@ -2305,7 +2316,7 @@ class Frame(BinaryOperand, Scannable):
         b   -1.2
         dtype: float64
         """
-        if axis not in (0, "index", None):
+        if axis not in (0, "index", None, no_default):
             raise NotImplementedError("Only axis=0 is currently supported.")
 
         return self._reduce(
@@ -2322,7 +2333,12 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def skew(
-        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
+        self,
+        axis=no_default,
+        skipna=True,
+        level=None,
+        numeric_only=None,
+        **kwargs,
     ):
         """
         Return unbiased Fisher-Pearson skew of a sample.
@@ -2366,7 +2382,7 @@ class Frame(BinaryOperand, Scannable):
         b   -0.37037
         dtype: float64
         """
-        if axis not in (0, "index", None):
+        if axis not in (0, "index", None, no_default):
             raise NotImplementedError("Only axis=0 is currently supported.")
 
         return self._reduce(
@@ -2385,6 +2401,15 @@ class Frame(BinaryOperand, Scannable):
 
         Parameters
         ----------
+        axis : {0 or 'index', 1 or 'columns', None}, default 0
+            Indicate which axis or axes should be reduced. For `Series`
+            this parameter is unused and defaults to `0`.
+
+            - 0 or 'index' : reduce the index, return a Series
+                whose index is the original column labels.
+            - 1 or 'columns' : reduce the columns, return a Series
+                whose index is the original index.
+            - None : reduce all axes, return a scalar.
         skipna: bool, default True
             Exclude NA/null values. If the entire row/column is NA and
             skipna is True, then the result will be True, as for an
@@ -2398,7 +2423,7 @@ class Frame(BinaryOperand, Scannable):
 
         Notes
         -----
-        Parameters currently not supported are `axis`, `bool_only`, `level`.
+        Parameters currently not supported are `bool_only`, `level`.
 
         Examples
         --------
@@ -2424,6 +2449,15 @@ class Frame(BinaryOperand, Scannable):
 
         Parameters
         ----------
+        axis : {0 or 'index', 1 or 'columns', None}, default 0
+            Indicate which axis or axes should be reduced. For `Series`
+            this parameter is unused and defaults to `0`.
+
+            - 0 or 'index' : reduce the index, return a Series
+                whose index is the original column labels.
+            - 1 or 'columns' : reduce the columns, return a Series
+                whose index is the original index.
+            - None : reduce all axes, return a scalar.
         skipna: bool, default True
             Exclude NA/null values. If the entire row/column is NA and
             skipna is True, then the result will be False, as for an
@@ -2437,7 +2471,7 @@ class Frame(BinaryOperand, Scannable):
 
         Notes
         -----
-        Parameters currently not supported are `axis`, `bool_only`, `level`.
+        Parameters currently not supported are `bool_only`, `level`.
 
         Examples
         --------

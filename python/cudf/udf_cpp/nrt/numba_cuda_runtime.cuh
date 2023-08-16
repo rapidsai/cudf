@@ -30,6 +30,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define _NRT_CUDA_H
 
 #include <cuda/atomic>
+#include <cuda_runtime.h>
 
 typedef __device__ void (*NRT_dtor_function)(void* ptr, size_t size, void* info);
 typedef __device__ void (*NRT_dealloc_func)(void* ptr, void* dealloc_info);
@@ -67,6 +68,8 @@ struct NRT_MemSys {
   } stats;
 };
 
+// malloc and free are special functions whose addresses can not be
+// taken. So we need these small wrappers to pass to the allocator
 __device__ void* malloc_wrapper(size_t size) { return malloc(size); }
 
 __device__ void free_wrapper(void* ptr) { free(ptr); }

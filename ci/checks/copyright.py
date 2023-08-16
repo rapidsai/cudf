@@ -30,7 +30,7 @@ FilesToCheck = [
 ]
 ExemptFiles = [
     re.compile(r"cpp/include/cudf_test/cxxopts.hpp"),
-    re.compile(r"python/cudf/udf_cpp/nrt/_nrt_cuda.cuh") # vendored from numba
+    re.compile(r"python/cudf/udf_cpp/nrt/numba_cuda_runtime.cuh") # vendored from numba
 ]
 
 # this will break starting at year 10000, which is probably OK :)
