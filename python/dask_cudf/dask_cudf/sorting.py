@@ -6,17 +6,19 @@ import cupy
 import numpy as np
 import tlz as toolz
 
-import dask
 from dask.base import tokenize
 from dask.dataframe import methods
 from dask.dataframe.core import DataFrame, Index, Series
 from dask.dataframe.shuffle import rearrange_by_column
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import M
+from dask.utils import M, get_default_shuffle_method
 
 import cudf as gd
 from cudf.api.types import is_categorical_dtype
 from cudf.utils.utils import _dask_cudf_nvtx_annotate
+
+
+_SHUFFLE_SUPPORT = ("tasks", "p2p")
 
 
 @_dask_cudf_nvtx_annotate
@@ -307,15 +309,23 @@ def sort_values(
     return df4
 
 
+def _get_default_shuffle_method():
+    # Wraps `dask.utils.get_default_shuffle_method`
+    # to avoid a "disk" shuffle default
+    default = get_default_shuffle_method()
+    if default not in _SHUFFLE_SUPPORT:
+        default = "tasks"
+    return default
+
+
 def _get_shuffle_type(shuffle):
     # Utility to set the shuffle-kwarg default
-    # and to validate user-specified options.
-    # The only supported options is currently "tasks"
-    shuffle = shuffle or dask.config.get("shuffle", "tasks")
-    if shuffle != "tasks":
+    # and to validate user-specified options
+    shuffle = shuffle or _get_default_shuffle_method()
+    if shuffle not in _SHUFFLE_SUPPORT:
         raise ValueError(
-            f"Dask-cudf only supports in-memory shuffling with "
-            f"'tasks'. Got shuffle={shuffle}"
+            "Dask-cudf only supports the following shuffle "
+            f"methds: {_SHUFFLE_SUPPORT}. Got shuffle={shuffle}"
         )
 
     return shuffle
