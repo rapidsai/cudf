@@ -41,6 +41,7 @@ inline __device__ void gpuOutputString(volatile page_state_s* s,
                                        void* dstv)
 {
   auto [ptr, len] = gpuGetStringData(s, sb, src_pos);
+  // make sure to only hash `BYTE_ARRAY` when specified with the output type size
   if (s->dtype_len == 4 and (s->col.data_type & 7) == BYTE_ARRAY) {
     // Output hash. This hash value is used if the option to convert strings to
     // categoricals is enabled. The seed value is chosen arbitrarily.
