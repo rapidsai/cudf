@@ -386,7 +386,7 @@ table_with_metadata reader::impl::read_chunk_internal(
                            ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
                            : std::nullopt;
     auto const& schema = _metadata->get_schema(_output_column_schemas[i]);
-    // FIXED_LEN_BYTE_ARRAY always read as binary
+    // FIXED_LEN_BYTE_ARRAY never read as string
     if (schema.type == FIXED_LEN_BYTE_ARRAY and schema.converted_type != DECIMAL) {
       metadata = std::make_optional<reader_column_schema>();
       metadata->set_convert_binary_to_strings(false);
