@@ -15,14 +15,14 @@ cdef class Column:
     # TODO: Should we document these attributes? Should we mark them readonly?
     cdef:
         # Core data
-        DataType data_type
-        size_type size
-        gpumemoryview data
-        gpumemoryview mask
-        size_type null_count
-        size_type offset
+        DataType _data_type
+        size_type _size
+        gpumemoryview _data
+        gpumemoryview _mask
+        size_type _null_count
+        size_type _offset
         # children: List[Column]
-        list children
+        list _children
         size_type _num_children
 
     cdef column_view view(self) nogil
@@ -33,6 +33,8 @@ cdef class Column:
     cpdef DataType type(self) noexcept
     cpdef Column child(self, size_type index) noexcept
     cpdef size_type num_children(self) noexcept
+    cpdef gpumemoryview data(self)
+    cpdef gpumemoryview null_mask(self)
 
     cpdef list_view(self)
 

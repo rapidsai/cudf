@@ -45,13 +45,13 @@ cdef class Column:
         gpumemoryview mask, size_type null_count, size_type offset,
         list children
     ):
-        self.data_type = data_type
-        self.size = size
-        self.data = data
-        self.mask = mask
-        self.null_count = null_count
-        self.offset = offset
-        self.children = children
+        self._data_type = data_type
+        self._size = size
+        self._data = data
+        self._mask = mask
+        self._null_count = null_count
+        self._offset = offset
+        self._children = children
         self._num_children = len(children)
 
     cdef column_view view(self) nogil:
@@ -64,16 +64,16 @@ cdef class Column:
         cdef const void * data = NULL
         cdef const bitmask_type * null_mask = NULL
 
-        if self.data is not None:
-            data = int_to_void_ptr(self.data.ptr)
-        if self.mask is not None:
-            null_mask = int_to_bitmask_ptr(self.mask.ptr)
+        if self._data is not None:
+            data = int_to_void_ptr(self._data.ptr)
+        if self._mask is not None:
+            null_mask = int_to_bitmask_ptr(self._mask.ptr)
 
         # TODO: Check if children can ever change. If not, this could be
         # computed once in the constructor and always be reused.
         cdef vector[column_view] c_children
         with gil:
-            if self.children is not None:
+            if self._children is not None:
                 for child in self.children:
                     # Need to cast to Column here so that Cython knows that
                     # `view` returns a typed object, not a Python object. We
@@ -87,8 +87,8 @@ cdef class Column:
                     c_children.push_back((<Column> child).view())
 
         return column_view(
-            self.data_type.c_obj, self.size, data, null_mask,
-            self.null_count, self.offset, c_children
+            self._data_type.c_obj, self._size, data, null_mask,
+            self._null_count, self._offset, c_children
         )
 
     @staticmethod
@@ -137,7 +137,7 @@ cdef class Column:
 
     cpdef DataType type(self):
         """The type of data in the column."""
-        return self.data_type
+        return self._data_type
 
     cpdef Column child(self, size_type index) noexcept:
         """Get a child column of this column.
@@ -152,7 +152,7 @@ cdef class Column:
         Column
             The child column.
         """
-        return self.children[index]
+        return self._children[index]
 
     cpdef size_type num_children(self) noexcept:
         """The number of children of this column."""
@@ -160,6 +160,12 @@ cdef class Column:
 
     cpdef list_view(self):
         return ListColumnView(self)
+
+    cpdef gpumemoryview data(self):
+        return self._data
+
+    cpdef gpumemoryview null_mask(self):
+        return self._mask
 
 
 cdef class ListColumnView:
