@@ -403,6 +403,11 @@ __global__ void __launch_bounds__(128)
       num_pages = 1;
     }
     __syncwarp();
+
+    // page padding needed for RLE encoded boolean data
+    auto const rle_pad =
+      write_v2_headers && col_g.physical_type == BOOLEAN ? RLE_LENGTH_FIELD_LEN : 0;
+
     // This loop goes over one page fragment at a time and adds it to page.
     // When page size crosses a particular limit, then it moves on to the next page and then next
     // page fragment gets added to that one.
@@ -446,12 +451,12 @@ __global__ void __launch_bounds__(128)
       // override this_max_page_size if the requested size is smaller
       this_max_page_size = min(this_max_page_size, max_page_size_bytes);
 
-      // subtract size of rep and def level vectors
-      auto num_vals = values_in_page + frag_g.num_values;
-      this_max_page_size =
-        underflow_safe_subtract(this_max_page_size,
-                                max_RLE_page_size(col_g.num_def_level_bits(), num_vals) +
-                                  max_RLE_page_size(col_g.num_rep_level_bits(), num_vals));
+      // subtract size of rep and def level vectors and RLE length field
+      auto num_vals      = values_in_page + frag_g.num_values;
+      this_max_page_size = underflow_safe_subtract(
+        this_max_page_size,
+        max_RLE_page_size(col_g.num_def_level_bits(), num_vals) +
+          max_RLE_page_size(col_g.num_rep_level_bits(), num_vals) + rle_pad);
 
       // checks to see when we need to close the current page and start a new one
       auto const is_last_chunk          = num_rows >= ck_g.num_rows;
@@ -493,11 +498,7 @@ __global__ void __launch_bounds__(128)
           page_g.num_values         = values_in_page;
           auto const def_level_size = max_RLE_page_size(col_g.num_def_level_bits(), values_in_page);
           auto const rep_level_size = max_RLE_page_size(col_g.num_rep_level_bits(), values_in_page);
-          if (write_v2_headers && col_g.physical_type == BOOLEAN) {
-            // if RLE encoding booleans then will need an extra 4 bytes to encode the length
-            page_size += RLE_LENGTH_FIELD_LEN;
-          }
-          auto const max_data_size = page_size + def_level_size + rep_level_size;
+          auto const max_data_size  = page_size + def_level_size + rep_level_size + rle_pad;
           // page size must fit in 32-bit signed integer
           if (max_data_size > std::numeric_limits<int32_t>::max()) {
             CUDF_UNREACHABLE("page size exceeds maximum for i32");
@@ -1379,8 +1380,8 @@ __global__ void __launch_bounds__(128, 8)
   // save RLE length if necessary
   if (s->rle_len_pos != nullptr && t < 32) {
     // size doesn't include the 4 bytes for the length
-    auto const rle_size = static_cast<uint32_t>(s->cur - s->rle_len_pos) - 4;
-    if (t < 4) { s->rle_len_pos[t] = rle_size >> (t * 8); }
+    auto const rle_size = static_cast<uint32_t>(s->cur - s->rle_len_pos) - RLE_LENGTH_FIELD_LEN;
+    if (t < RLE_LENGTH_FIELD_LEN) { s->rle_len_pos[t] = rle_size >> (t * 8); }
     __syncwarp();
   }
 
