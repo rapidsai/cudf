@@ -31,7 +31,7 @@ from cudf._lib.types import (
     duration_unit_map,
 )
 from cudf.core.dtypes import ListDtype, StructDtype
-from cudf.core.missing import NA
+from cudf.core.missing import NA, NaT
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -178,7 +178,7 @@ cdef class DeviceScalar:
         return self.get_raw_ptr()[0].is_valid()
 
     def __repr__(self):
-        if self.value is NA:
+        if cudf.utils.utils.is_na_like(self.value):
             return (
                 f"{self.__class__.__name__}"
                 f"({self.value}, {repr(self.dtype)})"
@@ -495,7 +495,7 @@ cdef _get_np_scalar_from_timestamp64(unique_ptr[scalar]& s):
     cdef scalar* s_ptr = s.get()
 
     if not s_ptr[0].is_valid():
-        return NA
+        return NaT
 
     cdef libcudf_types.data_type cdtype = s_ptr[0].type()
 
@@ -536,7 +536,7 @@ cdef _get_np_scalar_from_timedelta64(unique_ptr[scalar]& s):
     cdef scalar* s_ptr = s.get()
 
     if not s_ptr[0].is_valid():
-        return NA
+        return NaT
 
     cdef libcudf_types.data_type cdtype = s_ptr[0].type()
 
@@ -586,7 +586,7 @@ def as_device_scalar(val, dtype=None):
 
 
 def _is_null_host_scalar(slr):
-    if slr is None or slr is NA:
+    if cudf.utils.utils.is_na_like(slr):
         return True
     elif isinstance(slr, (np.datetime64, np.timedelta64)) and np.isnat(slr):
         return True

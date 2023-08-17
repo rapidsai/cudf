@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -33,6 +34,7 @@
 #include <thrust/binary_search.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
+#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
@@ -56,17 +58,19 @@ constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 64;
 /**
  * @brief Find function handles a string per thread
  */
-template <bool forward = true>
+template <typename TargetIterator, bool forward = true>
 struct finder_fn {
   column_device_view const d_strings;
-  string_view const d_target;
+  TargetIterator const d_targets;
   size_type const start;
   size_type const stop;
 
   __device__ size_type operator()(size_type idx) const
   {
     if (d_strings.is_null(idx)) { return -1; }
-    auto d_str = d_strings.element<string_view>(idx);
+    auto const d_str = d_strings.element<string_view>(idx);
+    if (d_str.empty() && (start > 0)) { return -1; }
+    auto const d_target = d_targets[idx];
 
     auto const length = d_str.length();
     auto const begin  = (start > length) ? length : start;
@@ -110,9 +114,9 @@ struct empty_target_fn {
 /**
  * @brief String per warp function for find/rfind
  */
-template <bool forward = true>
+template <typename TargetIterator, bool forward = true>
 __global__ void finder_warp_parallel_fn(column_device_view const d_strings,
-                                        string_view const d_target,
+                                        TargetIterator const d_targets,
                                         size_type const start,
                                         size_type const stop,
                                         size_type* d_results)
@@ -130,7 +134,8 @@ __global__ void finder_warp_parallel_fn(column_device_view const d_strings,
   if (lane_idx == 0) { d_results[str_idx] = forward ? std::numeric_limits<size_type>::max() : -1; }
   __syncwarp();
 
-  auto const d_str = d_strings.element<string_view>(str_idx);
+  auto const d_str    = d_strings.element<string_view>(str_idx);
+  auto const d_target = d_targets[str_idx];
 
   auto const [begin, left_over] = bytes_to_character_position(d_str, start);
   auto const start_char_pos     = start - left_over;  // keep track of character position
@@ -171,6 +176,33 @@ __global__ void finder_warp_parallel_fn(column_device_view const d_strings,
   }
 }
 
+template <typename TargetIterator, bool forward = true>
+void find_utility(strings_column_view const& input,
+                  TargetIterator const& target_itr,
+                  column& output,
+                  size_type start,
+                  size_type stop,
+                  rmm::cuda_stream_view stream)
+{
+  auto d_strings = column_device_view::create(input.parent(), stream);
+  auto d_results = output.mutable_view().data<size_type>();
+  if ((input.chars_size() / (input.size() - input.null_count())) > AVG_CHAR_BYTES_THRESHOLD) {
+    // warp-per-string runs faster for longer strings (but not shorter ones)
+    constexpr int block_size = 256;
+    cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
+    finder_warp_parallel_fn<TargetIterator, forward>
+      <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+        *d_strings, target_itr, start, stop, d_results);
+  } else {
+    // string-per-thread function
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator<size_type>(0),
+                      thrust::make_counting_iterator<size_type>(input.size()),
+                      d_results,
+                      finder_fn<TargetIterator, forward>{*d_strings, target_itr, start, stop});
+  }
+}
+
 template <bool forward = true>
 std::unique_ptr<column> find_fn(strings_column_view const& input,
                                 string_scalar const& target,
@@ -183,9 +215,6 @@ std::unique_ptr<column> find_fn(strings_column_view const& input,
   CUDF_EXPECTS(start >= 0, "Parameter start must be positive integer or zero.");
   if ((stop > 0) && (start > stop)) CUDF_FAIL("Parameter start must be less than stop.");
 
-  auto d_target  = string_view(target.data(), target.size());
-  auto d_strings = column_device_view::create(input.parent(), stream);
-
   // create output column
   auto results = make_numeric_column(data_type{type_to_id<size_type>()},
                                      input.size(),
@@ -196,32 +225,24 @@ std::unique_ptr<column> find_fn(strings_column_view const& input,
   // if input is empty or all-null then we are done
   if (input.size() == input.null_count()) { return results; }
 
-  auto d_results = results->mutable_view().data<size_type>();
+  auto d_target = string_view(target.data(), target.size());
 
+  // special logic for empty target results
   if (d_target.empty()) {
-    // special logic for empty target results
+    auto d_strings = column_device_view::create(input.parent(), stream);
+    auto d_results = results->mutable_view().data<size_type>();
     thrust::transform(rmm::exec_policy(stream),
                       thrust::counting_iterator<size_type>(0),
                       thrust::counting_iterator<size_type>(input.size()),
                       d_results,
                       empty_target_fn<forward>{*d_strings, start, stop});
-  } else if ((input.chars_size() / (input.size() - input.null_count())) >
-             AVG_CHAR_BYTES_THRESHOLD) {
-    // warp-per-string runs faster for longer strings (but not shorter ones)
-    constexpr int block_size = 256;
-    cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
-    finder_warp_parallel_fn<forward>
-      <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-        *d_strings, d_target, start, stop, d_results);
-  } else {
-    // string-per-thread function
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(input.size()),
-                      d_results,
-                      finder_fn<forward>{*d_strings, d_target, start, stop});
+    return results;
   }
 
+  // find-utility function fills in the results column
+  auto target_itr      = thrust::make_constant_iterator(d_target);
+  using TargetIterator = decltype(target_itr);
+  find_utility<TargetIterator, forward>(input, target_itr, *results, start, stop, stream);
   results->set_null_count(input.null_count());
   return results;
 }
@@ -247,6 +268,35 @@ std::unique_ptr<column> rfind(strings_column_view const& input,
   return find_fn<false>(input, target, start, stop, stream, mr);
 }
 
+template <bool forward = true>
+std::unique_ptr<column> find(strings_column_view const& input,
+                             strings_column_view const& target,
+                             size_type start,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(start >= 0, "Parameter start must be positive integer or zero.");
+  CUDF_EXPECTS(input.size() == target.size(), "input and target columns must be the same size");
+
+  // create output column
+  auto results = make_numeric_column(
+    data_type{type_to_id<size_type>()}, input.size(), rmm::device_buffer{}, 0, stream, mr);
+  // if input is empty or all-null then we are done
+  if (input.size() == input.null_count()) { return results; }
+
+  // call find utility with target iterator
+  auto d_targets  = column_device_view::create(target.parent(), stream);
+  auto target_itr = cudf::detail::make_null_replacement_iterator<string_view>(
+    *d_targets, string_view{}, target.has_nulls());
+  find_utility<decltype(target_itr), forward>(input, target_itr, *results, start, -1, stream);
+
+  // AND the bitmasks from input and target
+  auto [null_mask, null_count] =
+    cudf::detail::bitmask_and(table_view({input.parent(), target.parent()}), stream, mr);
+  results->set_null_mask(std::move(null_mask), null_count);
+  return results;
+}
+
 }  // namespace detail
 
 // external APIs
@@ -269,6 +319,16 @@ std::unique_ptr<column> rfind(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   return detail::rfind(strings, target, start, stop, cudf::get_default_stream(), mr);
+}
+
+std::unique_ptr<column> find(strings_column_view const& input,
+                             strings_column_view const& target,
+                             size_type start,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::find<true>(input, target, start, stream, mr);
 }
 
 namespace detail {
