@@ -51,7 +51,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
      * @note the callback is invoked with this `HostColumnVector`'s lock held.
      *
      * @param cv - a reference to the HostColumnVector we are closing
-     * @param refCount - the updated ref count for this HostColumnVector at 
+     * @param refCount - the updated ref count for this HostColumnVector at
      *                   the time of invocation
      */
     void onClosed(HostColumnVector cv, int refCount);
@@ -113,7 +113,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
   }
 
   /**
-   * Set an event handler for this host vector. This method can be invoked with 
+   * Set an event handler for this host vector. This method can be invoked with
    * null to unset the handler.
    *
    * @param newHandler - the EventHandler to use from this point forward
@@ -126,7 +126,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
   }
 
   /**
-   * Returns the current event handler for this HostColumnVector or null if no 
+   * Returns the current event handler for this HostColumnVector or null if no
    * handler is associated.
    */
   public synchronized EventHandler getEventHandler() {
