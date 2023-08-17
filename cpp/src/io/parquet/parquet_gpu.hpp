@@ -716,6 +716,8 @@ void EncodePages(device_span<EncPage> pages,
 /**
  * @brief Launches kernel to make the compressed vs uncompressed chunk-level decision
  *
+ * Also calculates the set of page encodings used for each chunk.
+ *
  * @param[in,out] chunks Column chunks (updated with actual compressed/uncompressed sizes)
  * @param[in] stream CUDA stream to use
  */
