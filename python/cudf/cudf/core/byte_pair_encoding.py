@@ -25,7 +25,7 @@ class BytePairEncoder:
     def __init__(self, merges_file: str):
         self.merge_pairs = cpp_merge_pairs(merges_file)
 
-    def __call__(self, text):
+    def __call__(self, text, separator: str = " "):
         """
 
         Parameters
@@ -48,7 +48,7 @@ class BytePairEncoder:
         1             this is it
         dtype: object
         """
-
-        result = cpp_byte_pair_encoding(text._column, self.merge_pairs)
+        sep = cudf.Scalar(separator, dtype="str")
+        result = cpp_byte_pair_encoding(text._column, self.merge_pairs, sep)
 
         return cudf.Series(result)
