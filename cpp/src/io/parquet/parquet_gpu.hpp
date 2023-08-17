@@ -154,8 +154,7 @@ struct PageInfo {
   int32_t uncompressed_page_size;  // uncompressed data size in bytes
   // for V2 pages, the def and rep level data is not compressed, and lacks the 4-byte length
   // indicator. instead the lengths for these are stored in the header.
-  int32_t def_lvl_bytes;  // length of the definition levels (V2 header)
-  int32_t rep_lvl_bytes;  // length of the repetition levels (V2 header)
+  int32_t lvl_bytes[level_type::NUM_LEVEL_TYPES];  // length of the rep/def levels (V2 header)
   // Number of values in this data page or dictionary.
   // Important : the # of input values does not necessarily
   // correspond to the number of rows in the output. It just reflects the number
@@ -412,6 +411,7 @@ struct EncPage {
   uint8_t* compressed_data;  //!< Ptr to compressed page
   uint16_t num_fragments;    //!< Number of fragments in page
   PageType page_type;        //!< Page type
+  Encoding encoding;         //!< Encoding used for page data
   EncColumnChunk* chunk;     //!< Chunk that this page belongs to
   uint32_t chunk_id;         //!< Index in chunk array
   uint32_t hdr_size;         //!< Size of page header
@@ -422,7 +422,10 @@ struct EncPage {
   uint32_t num_leaf_values;  //!< Values in page. Different from num_rows in case of nested types
   uint32_t num_values;  //!< Number of def/rep level values in page. Includes null/empty elements in
                         //!< non-leaf levels
+  uint32_t def_lvl_bytes;        //!< Number of bytes of encoded definition level data (V2 only)
+  uint32_t rep_lvl_bytes;        //!< Number of bytes of encoded repetition level data (V2 only)
   compression_result* comp_res;  //!< Ptr to compression result
+  uint32_t num_nulls;            //!< Number of null values (V2 only) (down here for alignment)
 };
 
 /**
@@ -648,6 +651,7 @@ void get_dictionary_indices(cudf::detail::device_2dspan<gpu::PageFragment const>
  * @param[in] num_columns Number of columns
  * @param[in] page_grstats Setup for page-level stats
  * @param[in] page_align Required alignment for uncompressed pages
+ * @param[in] write_v2_headers True if V2 page headers should be written
  * @param[in] chunk_grstats Setup for chunk-level stats
  * @param[in] max_page_comp_data_size Calculated maximum compressed data size of pages
  * @param[in] stream CUDA stream to use, default 0
@@ -661,6 +665,7 @@ void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                       size_t max_page_size_bytes,
                       size_type max_page_size_rows,
                       uint32_t page_align,
+                      bool write_v2_headers,
                       statistics_merge_group* page_grstats,
                       statistics_merge_group* chunk_grstats,
                       rmm::cuda_stream_view stream);
@@ -668,13 +673,18 @@ void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
 /**
  * @brief Launches kernel for packing column data into parquet pages
  *
+ * If compression is to be used, `comp_in`, `comp_out`, and `comp_res` will be initialized for
+ * use in subsequent compression operations.
+ *
  * @param[in,out] pages Device array of EncPages (unordered)
+ * @param[in] write_v2_headers True if V2 page headers should be written
  * @param[out] comp_in Compressor input buffers
- * @param[out] comp_in Compressor output buffers
- * @param[out] comp_stats Compressor results
- * @param[in] stream CUDA stream to use, default 0
+ * @param[out] comp_out Compressor output buffers
+ * @param[out] comp_res Compressor results
+ * @param[in] stream CUDA stream to use
  */
 void EncodePages(device_span<EncPage> pages,
+                 bool write_v2_headers,
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
                  device_span<compression_result> comp_res,
@@ -684,7 +694,7 @@ void EncodePages(device_span<EncPage> pages,
  * @brief Launches kernel to make the compressed vs uncompressed chunk-level decision
  *
  * @param[in,out] chunks Column chunks (updated with actual compressed/uncompressed sizes)
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use
  */
 void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
 
@@ -692,10 +702,10 @@ void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view
  * @brief Launches kernel to encode page headers
  *
  * @param[in,out] pages Device array of EncPages
- * @param[in] comp_stats Compressor status
+ * @param[in] comp_res Compressor status
  * @param[in] page_stats Optional page-level statistics to be included in page header
  * @param[in] chunk_stats Optional chunk-level statistics to be encoded
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use
  */
 void EncodePageHeaders(device_span<EncPage> pages,
                        device_span<compression_result const> comp_res,
@@ -708,7 +718,7 @@ void EncodePageHeaders(device_span<EncPage> pages,
  *
  * @param[in,out] chunks Column chunks
  * @param[in] pages Device array of EncPages
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use
  */
 void GatherPages(device_span<EncColumnChunk> chunks,
                  device_span<gpu::EncPage const> pages,

@@ -2133,3 +2133,16 @@ def test_datetime_series_cmpops_pandas_compatibility(data1, data2, op):
 def test_datetime_getitem_na():
     s = cudf.Series([1, 2, None, 3], dtype="datetime64[ns]")
     assert s[2] is cudf.NaT
+
+
+def test_daterange_pandas_compatibility():
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.date_range("20010101", "20020215", freq="400h", name="times")
+        expected = pd.date_range(
+            "2010-01-01", "2010-02-01", periods=10, name="times"
+        )
+        actual = cudf.date_range(
+            "2010-01-01", "2010-02-01", periods=10, name="times"
+        )
+    assert_eq(expected, actual)
