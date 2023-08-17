@@ -958,7 +958,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     options.is_enabled_lines() ? root_column : root_column.child_columns.begin()->second;
 
   // Zero row entries
-  if (data_root.type == json_col_t::ListColumn && data_root.child_columns.size() == 0) {
+  if (data_root.type == json_col_t::ListColumn && data_root.child_columns.empty()) {
     return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{})};
   }
 
