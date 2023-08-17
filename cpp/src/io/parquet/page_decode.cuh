@@ -417,20 +417,14 @@ __device__ size_type gpuInitStringDescriptors(page_state_s volatile* s,
     int k              = s->dict_val;
 
     while (pos < target_pos) {
-      int len;
+      int len = 0;
       if ((s->col.data_type & 7) == FIXED_LEN_BYTE_ARRAY) {
-        if (k < dict_size) {
-          len = s->dtype_len_in;
-        } else {
-          len = 0;
-        }
+        if (k < dict_size) { len = s->dtype_len_in; }
       } else {
         if (k + 4 <= dict_size) {
           len = (cur[k]) | (cur[k + 1] << 8) | (cur[k + 2] << 16) | (cur[k + 3] << 24);
           k += 4;
           if (k + len > dict_size) { len = 0; }
-        } else {
-          len = 0;
         }
       }
       if constexpr (!sizes_only) {
