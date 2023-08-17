@@ -104,9 +104,9 @@ __global__ void set_null_mask_kernel(bitmask_type* __restrict__ destination,
                                      bool valid,
                                      size_type number_of_mask_words)
 {
-  auto x                  = destination + word_index(begin_bit);
-  auto const last_word    = word_index(end_bit) - word_index(begin_bit);
-  bitmask_type fill_value = valid ? 0xffff'ffff : 0;
+  auto x                            = destination + word_index(begin_bit);
+  thread_index_type const last_word = word_index(end_bit) - word_index(begin_bit);
+  bitmask_type fill_value           = valid ? 0xffff'ffff : 0;
 
   thread_index_type const stride = blockDim.x * gridDim.x;
 
