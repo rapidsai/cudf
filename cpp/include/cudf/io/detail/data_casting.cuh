@@ -552,6 +552,7 @@ __global__ void parse_fn_warp_parallel(str_tuple_it str_tuples,
   }    // grid-stride for-loop
 }
 
+// Similar to warp-parallel algorithm but with 1 block per string. 
 template <int BLOCK_SIZE, typename str_tuple_it>
 __global__ void parse_fn_block_parallel(str_tuple_it str_tuples,
                                         size_type total_out_strings,
