@@ -229,6 +229,15 @@ Encoding __device__ determine_encoding(PageType page_type,
   }
 }
 
+struct Or {
+  /// Binary sum operator, returns <tt>a + b</tt>
+  template <typename T>
+  __host__ __device__ __forceinline__ T operator()(const T& a, const T& b) const
+  {
+    return a | b;
+  }
+};
+
 }  // anonymous namespace
 
 // blockDim {512,1,1}
@@ -1445,6 +1454,7 @@ __global__ void __launch_bounds__(decide_compression_block_size)
 
   uint32_t uncompressed_data_size = 0;
   uint32_t compressed_data_size   = 0;
+  uint32_t encodings              = 0;
   auto const num_pages            = ck_g[warp_id].num_pages;
   for (auto page_id = lane_id; page_id < num_pages; page_id += cudf::detail::warp_size) {
     auto const& curr_page     = ck_g[warp_id].pages[page_id];
@@ -1457,9 +1467,13 @@ __global__ void __launch_bounds__(decide_compression_block_size)
         atomicOr(&compression_error[warp_id], 1);
       }
     }
+    // collect encoding info for the chunk metadata
+    encodings |= encoding_to_mask(curr_page.encoding);
   }
   uncompressed_data_size = warp_reduce(temp_storage[warp_id][0]).Sum(uncompressed_data_size);
   compressed_data_size   = warp_reduce(temp_storage[warp_id][1]).Sum(compressed_data_size);
+  __syncwarp();
+  encodings = warp_reduce(temp_storage[warp_id][0]).Reduce(encodings, Or{});
   __syncwarp();
 
   if (lane_id == 0) {
@@ -1469,6 +1483,12 @@ __global__ void __launch_bounds__(decide_compression_block_size)
     chunks[chunk_id].bfr_size      = uncompressed_data_size;
     chunks[chunk_id].compressed_size =
       write_compressed ? compressed_data_size : uncompressed_data_size;
+
+    // if there is repetition or definition level data add RLE encoding
+    auto const rle_bits =
+      ck_g[warp_id].col_desc->num_def_level_bits() + ck_g[warp_id].col_desc->num_rep_level_bits();
+    if (rle_bits > 0) { encodings |= EncodingMask::RLE; }
+    chunks[chunk_id].encodings = encodings;
   }
 }
 
