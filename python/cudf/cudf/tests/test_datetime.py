@@ -2167,3 +2167,56 @@ def test_construction_from_tz_timestamps(data):
         _ = cudf.Series(data)
     with pytest.raises(NotImplementedError):
         _ = cudf.Index(data)
+    with pytest.raises(NotImplementedError):
+        _ = cudf.DatetimeIndex(data)
+
+
+@pytest.mark.parametrize("op", _cmpops)
+def test_datetime_binop_tz_timestamp(op):
+    s = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
+    pd_tz_timestamp = pd.Timestamp("1970-01-01 00:00:00.000000001", tz="utc")
+    with pytest.raises(NotImplementedError):
+        op(s, pd_tz_timestamp)
+
+    date_scalar = datetime.datetime.now(datetime.timezone.utc)
+    with pytest.raises(NotImplementedError):
+        op(s, date_scalar)
+
+
+@pytest.mark.parametrize(
+    "data1", [["20110101", "20120101", None, "20140101", None]]
+)
+@pytest.mark.parametrize(
+    "data2", [["20110101", "20120101", "20130101", None, None]]
+)
+@pytest.mark.parametrize("op", _cmpops)
+def test_datetime_series_cmpops_pandas_compatibility(data1, data2, op):
+    gsr1 = cudf.Series(data=data1, dtype="datetime64[ns]")
+    psr1 = gsr1.to_pandas()
+
+    gsr2 = cudf.Series(data=data2, dtype="datetime64[ns]")
+    psr2 = gsr2.to_pandas()
+
+    expect = op(psr1, psr2)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = op(gsr1, gsr2)
+
+    assert_eq(expect, got)
+
+
+def test_datetime_getitem_na():
+    s = cudf.Series([1, 2, None, 3], dtype="datetime64[ns]")
+    assert s[2] is cudf.NaT
+
+
+def test_daterange_pandas_compatibility():
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.date_range("20010101", "20020215", freq="400h", name="times")
+        expected = pd.date_range(
+            "2010-01-01", "2010-02-01", periods=10, name="times"
+        )
+        actual = cudf.date_range(
+            "2010-01-01", "2010-02-01", periods=10, name="times"
+        )
+    assert_eq(expected, actual)

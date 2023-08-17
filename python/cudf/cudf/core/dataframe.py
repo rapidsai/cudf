@@ -843,6 +843,21 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             data = DataFrame.from_pandas(pd.DataFrame(data))
             self._data = data._data
         else:
+            if any(
+                not isinstance(col, (abc.Iterable, abc.Sequence))
+                for col in data
+            ):
+                raise TypeError("Inputs should be an iterable or sequence.")
+            if (
+                len(data) > 0
+                and columns is None
+                and isinstance(data[0], tuple)
+                and hasattr(data[0], "_fields")
+            ):
+                # pandas behavior is to use the fields from the first
+                # namedtuple as the column names
+                columns = data[0]._fields
+
             data = list(itertools.zip_longest(*data))
 
             if columns is not None and len(data) == 0:
@@ -1012,6 +1027,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         obj._index = index
 
         return obj
+
+    @property
+    @_cudf_nvtx_annotate
+    def shape(self):
+        """Returns a tuple representing the dimensionality of the DataFrame."""
+        return self._num_rows, self._num_columns
 
     @property
     def dtypes(self):
@@ -1321,6 +1342,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             return NotImplemented
 
         try:
+            if func.__name__ in {"any", "all"}:
+                # NumPy default for `axis` is
+                # different from `cudf`/`pandas`
+                # hence need this special handling.
+                kwargs.setdefault("axis", None)
             if cudf_func := getattr(self.__class__, func.__name__, None):
                 out = cudf_func(*args, **kwargs)
                 # The dot product of two DataFrames returns an array in pandas.
@@ -1668,7 +1694,19 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 # TODO we need to handle this
                 pass
             elif df._data[col].has_nulls():
-                df[col] = df._data[col].astype("str").fillna(cudf._NA_REP)
+                fill_value = (
+                    str(cudf.NaT)
+                    if isinstance(
+                        df._data[col],
+                        (
+                            cudf.core.column.DatetimeColumn,
+                            cudf.core.column.TimeDeltaColumn,
+                        ),
+                    )
+                    else str(cudf.NA)
+                )
+
+                df[col] = df._data[col].astype("str").fillna(fill_value)
             else:
                 df[col] = df._data[col]
 
@@ -2082,6 +2120,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             - 'records' : list like
               [{column -> value}, ... , {column -> value}]
             - 'index' : dict like {index -> {column -> value}}
+
             Abbreviations are allowed. `s` indicates `series` and `sp`
             indicates `split`.
 
@@ -2486,6 +2525,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         We _highly_ recommend using keyword arguments to clarify your intent.
 
         Create a dataframe with some fictional data.
+
         >>> index = ['Firefox', 'Chrome', 'Safari', 'IE10', 'Konqueror']
         >>> df = cudf.DataFrame({'http_status': [200, 200, 404, 404, 301],
         ...                    'response_time': [0.04, 0.02, 0.07, 0.08, 1.0]},
@@ -2527,6 +2567,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Chrome                 200           0.02
 
         We can also reindex the columns.
+
         >>> df.reindex(columns=['http_status', 'user_agent'])
                 http_status user_agent
         Firefox            200       <NA>
@@ -2536,6 +2577,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Konqueror          301       <NA>
 
         Or we can use "axis-style" keyword arguments
+
         >>> df.reindex(columns=['http_status', 'user_agent'])
                 http_status user_agent
         Firefox            200       <NA>
@@ -2555,7 +2597,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "Cannot specify both 'axis' and any of 'index' or 'columns'."
             )
 
-        axis = self._get_axis_from_axis_arg(axis)
+        axis = 0 if axis is None else self._get_axis_from_axis_arg(axis)
         if axis == 0:
             if index is None:
                 index = labels
@@ -4154,10 +4196,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         func : function
             Function to apply to each row.
         axis : {0 or 'index', 1 or 'columns'}, default 0
-            Axis along which the function is applied:
-            * 0 or 'index': apply function to each column.
-              Note: axis=0 is not yet supported.
-            * 1 or 'columns': apply function to each row.
+            Axis along which the function is applied.
+            - 0 or 'index': apply function to each column (not yet supported).
+            - 1 or 'columns': apply function to each row.
         raw: bool, default False
             Not yet supported
         result_type: {'expand', 'reduce', 'broadcast', None}, default None
@@ -5782,7 +5823,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     _SUPPORT_AXIS_LOOKUP = {
         0: 0,
         1: 1,
-        None: 0,
         "index": 0,
         "columns": 1,
     }
@@ -5797,7 +5837,28 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     ):
 
         source = self
-        axis = source._get_axis_from_axis_arg(axis)
+
+        if axis is None:
+            # if op in {"any", "all"}:
+            #     axis = 2
+            if op in {"sum", "product", "std", "var"}:
+                # Do not remove until pandas 2.0 support is added.
+                warnings.warn(
+                    f"In a future version, {type(self).__name__}"
+                    f".{op}(axis=None) will return a scalar {op} over "
+                    "the entire DataFrame. To retain the old behavior, "
+                    f"use '{type(self).__name__}.{op}(axis=0)' or "
+                    f"just '{type(self)}.{op}()'",
+                    FutureWarning,
+                )
+                axis = 0
+            else:
+                axis = 2
+        elif axis is no_default:
+            axis = 0
+        else:
+            axis = source._get_axis_from_axis_arg(axis)
+
         if numeric_only:
             numeric_cols = (
                 name
@@ -5812,7 +5873,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     else source.index
                 )
 
-        if axis == 0:
+        if axis in {0, 2}:
             try:
                 result = [
                     getattr(source._data[col], op)(**kwargs)
@@ -5853,16 +5914,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                             "`numeric_only=False`, pass `numeric_only=True` "
                             f"to perform DataFrame.{op}"
                         )
-                    else:
-                        raise
                 else:
                     raise
-
-            return Series._from_data(
-                {None: result}, as_index(source._data.names)
-            )
+            if axis == 2:
+                return getattr(as_column(result, nan_as_null=False), op)(**kwargs)
+            else:
+                return Series._from_data(
+                    {None: result}, as_index(source._data.names)
+                )
         elif axis == 1:
             return source._apply_cupy_method_axis_1(op, **kwargs)
+        else:
+            raise ValueError(f"Invalid value of {axis=} received for {op}")
 
     @_cudf_nvtx_annotate
     def _scan(
@@ -5872,6 +5935,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         *args,
         **kwargs,
     ):
+        if axis is None:
+            axis = 0
         axis = self._get_axis_from_axis_arg(axis)
 
         if axis == 0:

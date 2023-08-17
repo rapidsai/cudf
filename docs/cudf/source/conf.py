@@ -22,6 +22,7 @@ import sys
 from docutils.nodes import Text
 from sphinx.addnodes import pending_xref
 
+# -- Custom Extensions ----------------------------------------------------
 sys.path.append(os.path.abspath("./_ext"))
 
 # -- General configuration ------------------------------------------------
@@ -52,9 +53,6 @@ nb_execution_timeout = 300
 
 copybutton_prompt_text = ">>> "
 autosummary_generate = True
-ipython_mplbackend = "str"
-
-html_use_modindex = True
 
 # Enable automatic generation of systematic, namespaced labels for sections
 myst_heading_anchors = 2
@@ -99,9 +97,6 @@ exclude_patterns = ['venv', "**/includes/**",]
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = "sphinx"
-
-# If true, `todo` and `todoList` produce output, else they produce nothing.
-todo_include_todos = False
 
 html_theme_options = {
     "external_links": [],
@@ -204,10 +199,17 @@ intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable", None),
     "pyarrow": ("https://arrow.apache.org/docs/", None),
     "pandas": ("https://pandas.pydata.org/docs/", None),
+    "typing_extensions": ("https://typing-extensions.readthedocs.io/en/stable/", None),
 }
 
 # Config numpydoc
-numpydoc_show_inherited_class_members = True
+numpydoc_show_inherited_class_members = {
+    # option_context inherits undocumented members from the parent class
+    "cudf.option_context": False,
+}
+
+# Rely on toctrees generated from autosummary on each of the pages we define
+# rather than the autosummaries on the numpydoc auto-generated class pages.
 numpydoc_class_members_toctree = False
 numpydoc_attributes_as_param_list = False
 
@@ -219,8 +221,6 @@ _reftarget_aliases = {
     "cudf.Index": ("cudf.core.index.Index", "cudf.Index"),
     "cupy.core.core.ndarray": ("cupy.ndarray", "cupy.ndarray"),
 }
-
-_internal_names_to_ignore = {"cudf.core.column.string.StringColumn"}
 
 
 def resolve_aliases(app, doctree):
@@ -245,33 +245,19 @@ def ignore_internal_references(app, env, node, contnode):
         # use `cudf.Index`
         node["reftarget"] = "cudf.Index"
         return contnode
-    elif name is not None and name in _internal_names_to_ignore:
-        node["reftarget"] = ""
-        return contnode
+    return None
 
 
-def process_class_docstrings(app, what, name, obj, options, lines):
-    """
-    For those classes for which we use ::
-    :template: autosummary/class_without_autosummary.rst
-    the documented attributes/methods have to be listed in the class
-    docstring. However, if one of those lists is empty, we use 'None',
-    which then generates warnings in sphinx / ugly html output.
-    This "autodoc-process-docstring" event connector removes that part
-    from the processed docstring.
-    """
-    if what == "class":
-        if name in {"cudf.RangeIndex", "cudf.CategoricalIndex", "cudf.IntervalIndex", "cudf.MultiIndex", "cudf.DatetimeIndex", "cudf.TimedeltaIndex", "cudf.TimedeltaIndex"}:
-
-            cut_index = lines.index('.. rubric:: Attributes')
-            lines[:] = lines[:cut_index]
-
-
-nitpick_ignore = [("py:class", "SeriesOrIndex"),]
+nitpick_ignore = [
+    ("py:class", "SeriesOrIndex"),
+    ("py:class", "Dtype"),
+    # TODO: Remove this when we figure out why typing_extensions doesn't seem
+    # to map types correctly for intersphinx
+    ("py:class", "typing_extensions.Self"),
+]
 
 def setup(app):
     app.add_css_file("https://docs.rapids.ai/assets/css/custom.css")
     app.add_js_file("https://docs.rapids.ai/assets/js/custom.js", loading_method="defer")
     app.connect("doctree-read", resolve_aliases)
     app.connect("missing-reference", ignore_internal_references)
-    app.connect("autodoc-process-docstring", process_class_docstrings)

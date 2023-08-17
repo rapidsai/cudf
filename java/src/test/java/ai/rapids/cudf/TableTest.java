@@ -40,6 +40,7 @@ import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.*;
@@ -8033,6 +8034,17 @@ public class TableTest extends CudfTestBase {
           .withDecimalColumn("_c8", 5)
           .build();
 
+      TableDebug.get().debug("default stderr table0", table0);
+      TableDebug.builder()
+        .withOutput(TableDebug.Output.STDOUT)
+        .build().debug("stdout table0", table0);
+      TableDebug.builder()
+          .withOutput(TableDebug.Output.LOG)
+          .build().debug("slf4j default debug table0", table0);
+      TableDebug.builder()
+          .withOutput(TableDebug.Output.LOG_ERROR)
+          .build().debug("slf4j error table0", table0);
+
       try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
         writer.write(table0);
         writer.write(table0);
@@ -8591,6 +8603,9 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  // https://github.com/NVIDIA/spark-rapids-jni/issues/1338
+  // Need to remove this tag if #1338 is fixed.
+  @Tag("noSanitizer")
   @Test
   void testORCReadAndWriteForDecimal128() throws IOException {
     File tempFile = File.createTempFile("test", ".orc");

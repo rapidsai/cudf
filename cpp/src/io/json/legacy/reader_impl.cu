@@ -16,8 +16,6 @@
 
 #include "json_gpu.hpp"
 
-#include "experimental/read_json.hpp"
-
 #include <hash/concurrent_unordered_map.cuh>
 
 #include <io/comp/io_uncomp.hpp>
@@ -56,9 +54,8 @@
 
 using cudf::host_span;
 
-namespace cudf::io::json::detail {
+namespace cudf::io::json::detail::legacy {
 
-using col_map_type     = cudf::io::json::gpu::col_map_type;
 using col_map_ptr_type = std::unique_ptr<col_map_type, std::function<void(col_map_type*)>>;
 
 /**
@@ -129,8 +126,7 @@ std::unique_ptr<table> create_json_keys_info_table(parse_options_view const& par
 {
   // Count keys
   rmm::device_scalar<unsigned long long int> key_counter(0, stream);
-  cudf::io::json::gpu::collect_keys_info(
-    parse_opts, data, row_offsets, key_counter.data(), {}, stream);
+  collect_keys_info(parse_opts, data, row_offsets, key_counter.data(), {}, stream);
 
   // Allocate columns to store hash value, length, and offset of each JSON object key in the input
   auto const num_keys = key_counter.value(stream);
@@ -148,8 +144,7 @@ std::unique_ptr<table> create_json_keys_info_table(parse_options_view const& par
   // Reset the key counter - now used for indexing
   key_counter.set_value_to_zero_async(stream);
   // Fill the allocated columns
-  cudf::io::json::gpu::collect_keys_info(
-    parse_opts, data, row_offsets, key_counter.data(), {*info_table_mdv}, stream);
+  collect_keys_info(parse_opts, data, row_offsets, key_counter.data(), {*info_table_mdv}, stream);
   return info_table;
 }
 
@@ -213,7 +208,7 @@ std::pair<std::vector<std::string>, col_map_ptr_type> get_json_object_keys_hashe
           create_col_names_hash_map(sorted_info->get_column(2).view(), stream)};
 }
 
-std::vector<uint8_t> ingest_raw_input(std::vector<std::unique_ptr<datasource>> const& sources,
+std::vector<uint8_t> ingest_raw_input(host_span<std::unique_ptr<datasource>> sources,
                                       compression_type compression,
                                       size_t range_offset,
                                       size_t range_size,
@@ -447,7 +442,7 @@ std::vector<data_type> get_data_types(json_reader_options const& reader_opts,
     auto const num_columns       = column_names.size();
     auto const do_set_null_count = column_map->capacity() > 0;
 
-    auto const h_column_infos = cudf::io::json::gpu::detect_data_types(
+    auto const h_column_infos = detect_data_types(
       parse_opts, data, rec_starts, do_set_null_count, num_columns, column_map, stream);
 
     auto get_type_id = [&](auto const& cinfo) {
@@ -523,7 +518,7 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
   auto d_valid_counts = cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(
     num_columns, stream, rmm::mr::get_current_device_resource());
 
-  cudf::io::json::gpu::convert_json_to_columns(
+  convert_json_to_columns(
     parse_opts, data, rec_starts, d_dtypes, column_map, d_data, d_valid, d_valid_counts, stream);
 
   stream.synchronize();
@@ -591,16 +586,11 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
  *
  * @return Table and its metadata
  */
-table_with_metadata read_json(std::vector<std::unique_ptr<datasource>>& sources,
+table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               json_reader_options const& reader_opts,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
-  CUDF_FUNC_RANGE();
-  if (not reader_opts.is_enabled_legacy()) {
-    return cudf::io::detail::json::experimental::read_json(sources, reader_opts, stream, mr);
-  }
-
   CUDF_EXPECTS(not sources.empty(), "No sources were defined");
   CUDF_EXPECTS(sources.size() == 1 or reader_opts.get_compression() == compression_type::NONE,
                "Multiple compressed inputs are not supported");
@@ -664,4 +654,4 @@ table_with_metadata read_json(std::vector<std::unique_ptr<datasource>>& sources,
                                mr);
 }
 
-}  // namespace cudf::io::json::detail
+}  // namespace cudf::io::json::detail::legacy

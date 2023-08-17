@@ -255,7 +255,8 @@ bool CompactProtocolReader::read(PageHeader* p)
                             ParquetFieldInt32(2, p->uncompressed_page_size),
                             ParquetFieldInt32(3, p->compressed_page_size),
                             ParquetFieldStruct(5, p->data_page_header),
-                            ParquetFieldStruct(7, p->dictionary_page_header));
+                            ParquetFieldStruct(7, p->dictionary_page_header),
+                            ParquetFieldStruct(8, p->data_page_header_v2));
   return function_builder(this, op);
 }
 
@@ -272,6 +273,18 @@ bool CompactProtocolReader::read(DictionaryPageHeader* d)
 {
   auto op = std::make_tuple(ParquetFieldInt32(1, d->num_values),
                             ParquetFieldEnum<Encoding>(2, d->encoding));
+  return function_builder(this, op);
+}
+
+bool CompactProtocolReader::read(DataPageHeaderV2* d)
+{
+  auto op = std::make_tuple(ParquetFieldInt32(1, d->num_values),
+                            ParquetFieldInt32(2, d->num_nulls),
+                            ParquetFieldInt32(3, d->num_rows),
+                            ParquetFieldEnum<Encoding>(4, d->encoding),
+                            ParquetFieldInt32(5, d->definition_levels_byte_length),
+                            ParquetFieldInt32(6, d->repetition_levels_byte_length),
+                            ParquetFieldBool(7, d->is_compressed));
   return function_builder(this, op);
 }
 

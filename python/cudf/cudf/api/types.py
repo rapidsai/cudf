@@ -461,16 +461,22 @@ is_complex_dtype = pd_types.is_complex_dtype
 # TODO: Evaluate which of the datetime types need special handling for cudf.
 is_datetime_dtype = _wrap_pandas_is_dtype_api(pd_types.is_datetime64_dtype)
 is_datetime64_any_dtype = pd_types.is_datetime64_any_dtype
-is_datetime64_dtype = pd_types.is_datetime64_dtype
-is_datetime64_ns_dtype = pd_types.is_datetime64_ns_dtype
-is_datetime64tz_dtype = pd_types.is_datetime64tz_dtype
+is_datetime64_dtype = _wrap_pandas_is_dtype_api(pd_types.is_datetime64_dtype)
+is_datetime64_ns_dtype = _wrap_pandas_is_dtype_api(
+    pd_types.is_datetime64_ns_dtype
+)
+is_datetime64tz_dtype = _wrap_pandas_is_dtype_api(
+    pd_types.is_datetime64tz_dtype
+)
 is_extension_array_dtype = pd_types.is_extension_array_dtype
 is_int64_dtype = pd_types.is_int64_dtype
 is_period_dtype = pd_types.is_period_dtype
 is_signed_integer_dtype = pd_types.is_signed_integer_dtype
 is_timedelta_dtype = _wrap_pandas_is_dtype_api(pd_types.is_timedelta64_dtype)
-is_timedelta64_dtype = pd_types.is_timedelta64_dtype
-is_timedelta64_ns_dtype = pd_types.is_timedelta64_ns_dtype
+is_timedelta64_dtype = _wrap_pandas_is_dtype_api(pd_types.is_timedelta64_dtype)
+is_timedelta64_ns_dtype = _wrap_pandas_is_dtype_api(
+    pd_types.is_timedelta64_ns_dtype
+)
 is_unsigned_integer_dtype = pd_types.is_unsigned_integer_dtype
 is_sparse = pd_types.is_sparse
 # is_list_like = pd_types.is_list_like

@@ -144,6 +144,16 @@ class CategoricalDtype(_BaseDtype):
         when used in operations that combine categoricals, e.g. astype, and
         will resolve to False if there is no existing ordered to maintain.
 
+    Attributes
+    ----------
+    categories
+    ordered
+
+    Methods
+    -------
+    from_pandas
+    to_pandas
+
     Examples
     --------
     >>> import cudf
@@ -321,6 +331,16 @@ class ListDtype(_BaseDtype):
     element_type : object
         A dtype with which represents the element types in the list.
 
+    Attributes
+    ----------
+    element_type
+    leaf_type
+
+    Methods
+    -------
+    from_arrow
+    to_arrow
+
     Examples
     --------
     >>> import cudf
@@ -497,6 +517,16 @@ class StructDtype(_BaseDtype):
         A mapping of field names to dtypes, the dtypes can themselves
         be of ``StructDtype`` too.
 
+    Attributes
+    ----------
+    fields
+    itemsize
+
+    Methods
+    -------
+    from_arrow
+    to_arrow
+
     Examples
     --------
     >>> import cudf
@@ -650,19 +680,32 @@ decimal_dtype_template = textwrap.dedent(
         scale : int, optional
             The scale of the dtype. See Notes below.
 
+        Attributes
+        ----------
+        precision
+        scale
+        itemsize
+
+        Methods
+        -------
+        to_arrow
+        from_arrow
+
         Notes
         -----
-            When the scale is positive:
-                - numbers with fractional parts (e.g., 0.0042) can be represented
-                - the scale is the total number of digits to the right of the
-                decimal point
-            When the scale is negative:
-                - only multiples of powers of 10 (including 10**0) can be
-                represented (e.g., 1729, 4200, 1000000)
-                - the scale represents the number of trailing zeros in the value.
-            For example, 42 is representable with precision=2 and scale=0.
-            13.0051 is representable with precision=6 and scale=4,
-            and *not* representable with precision<6 or scale<4.
+        When the scale is positive:
+            - numbers with fractional parts (e.g., 0.0042) can be represented
+            - the scale is the total number of digits to the right of the
+              decimal point
+
+        When the scale is negative:
+            - only multiples of powers of 10 (including 10**0) can be
+              represented (e.g., 1729, 4200, 1000000)
+            - the scale represents the number of trailing zeros in the value.
+
+        For example, 42 is representable with precision=2 and scale=0.
+        13.0051 is representable with precision=6 and scale=4,
+        and *not* representable with precision<6 or scale<4.
 
         Examples
         --------

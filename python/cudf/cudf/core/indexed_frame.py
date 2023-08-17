@@ -448,6 +448,68 @@ class IndexedFrame(Frame):
                 f"match length of index ({len(self._index)})"
             )
 
+    @property
+    @_cudf_nvtx_annotate
+    def empty(self):
+        """
+        Indicator whether DataFrame or Series is empty.
+
+        True if DataFrame/Series is entirely empty (no items),
+        meaning any of the axes are of length 0.
+
+        Returns
+        -------
+        out : bool
+            If DataFrame/Series is empty, return True, if not return False.
+
+        Notes
+        -----
+        If DataFrame/Series contains only `null` values, it is still not
+        considered empty. See the example below.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'A' : []})
+        >>> df
+        Empty DataFrame
+        Columns: [A]
+        Index: []
+        >>> df.empty
+        True
+
+        If we only have `null` values in our DataFrame, it is
+        not considered empty! We will need to drop
+        the `null`'s to make the DataFrame empty:
+
+        >>> df = cudf.DataFrame({'A' : [None, None]})
+        >>> df
+              A
+        0  <NA>
+        1  <NA>
+        >>> df.empty
+        False
+        >>> df.dropna().empty
+        True
+
+        Non-empty and empty Series example:
+
+        >>> s = cudf.Series([1, 2, None])
+        >>> s
+        0       1
+        1       2
+        2    <NA>
+        dtype: int64
+        >>> s.empty
+        False
+        >>> s = cudf.Series([])
+        >>> s
+        Series([], dtype: float64)
+        >>> s.empty
+        True
+        """
+        return self.size == 0
+
     def copy(self, deep: bool = True) -> Self:
         """Make a copy of this object's indices and data.
 
@@ -1491,6 +1553,7 @@ class IndexedFrame(Frame):
         Examples
         --------
         **Series**
+
         >>> import cudf
         >>> series = cudf.Series(['a', 'b', 'c', 'd'], index=[3, 2, 1, 4])
         >>> series
@@ -1516,6 +1579,7 @@ class IndexedFrame(Frame):
         dtype: object
 
         **DataFrame**
+
         >>> df = cudf.DataFrame(
         ... {"b":[3, 2, 1], "a":[2, 1, 3]}, index=[1, 3, 2])
         >>> df.sort_index(axis=0)
@@ -2242,6 +2306,7 @@ class IndexedFrame(Frame):
         Examples
         --------
         **Series**
+
         >>> s = cudf.Series([1, 2, 3, 4])
         >>> s
         0    1
@@ -2257,6 +2322,7 @@ class IndexedFrame(Frame):
         dtype: int64
 
         **DataFrame**
+
         >>> df = cudf.DataFrame({'A': [1, 2, 3, 4], 'B': [3, 4, 5, 6]})
         >>> df
            A  B
@@ -2271,10 +2337,7 @@ class IndexedFrame(Frame):
         2       3       5
         3       4       6
         """
-        raise NotImplementedError(
-            "`IndexedFrame.add_suffix` not currently implemented. \
-                Use `Series.add_suffix` or `DataFrame.add_suffix`"
-        )
+        raise NotImplementedError
 
     @acquire_spill_lock()
     @_cudf_nvtx_annotate
@@ -3358,7 +3421,7 @@ class IndexedFrame(Frame):
         0  1  3
         1  2  4
         """
-        axis = self._get_axis_from_axis_arg(axis)
+        axis = 0 if axis is None else self._get_axis_from_axis_arg(axis)
         size = self.shape[axis]
 
         # Compute `n` from parameter `frac`.

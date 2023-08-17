@@ -1218,8 +1218,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             {None: chunk_results}, index=group_names
         )
         result.index.names = self.grouping.names
-        result = result.reset_index()
-        result[None] = result.pop(0)
+
         return result
 
     @_cudf_nvtx_annotate
@@ -1378,10 +1377,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         ...   lambda group: group['b'].max() - group['b'].min(),
         ...   engine='jit'
         ... )
-           a  None
-        0  1     1
-        1  2     1
-        2  3     1
+        a
+        1    1
+        2    1
+        3    1
+        dtype: int64
+
         """
 
         if self.obj.empty:

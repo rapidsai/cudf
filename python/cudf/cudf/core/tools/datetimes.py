@@ -839,6 +839,10 @@ def date_range(
         arr = cp.linspace(start=start, stop=end, num=periods)
         result = cudf.core.column.as_column(arr).astype("datetime64[ns]")
         return cudf.DatetimeIndex._from_data({name: result})
+    elif cudf.get_option("mode.pandas_compatible"):
+        raise NotImplementedError(
+            "`DatetimeIndex` with `freq` cannot be constructed."
+        )
 
     # The code logic below assumes `freq` is defined. It is first normalized
     # into `DateOffset` for further computation with timestamps.

@@ -46,7 +46,7 @@ from cudf.core.index import (
     TimedeltaIndex,
     interval_range,
 )
-from cudf.core.missing import NA
+from cudf.core.missing import NA, NaT
 from cudf.core.multiindex import MultiIndex
 from cudf.core.reshape import (
     concat,
@@ -78,7 +78,6 @@ from cudf.options import (
     option_context,
     set_option,
 )
-from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import clear_cache
 
 cuda.set_memory_manager(RMMNumbaManager)
@@ -106,6 +105,7 @@ __all__ = [
     "ListDtype",
     "MultiIndex",
     "NA",
+    "NaT",
     "RangeIndex",
     "Scalar",
     "Series",

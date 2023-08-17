@@ -32,7 +32,7 @@ from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.dtypes import _get_base_dtype
-from cudf.utils.utils import _fillna_natwise
+from cudf.utils.utils import _all_bools_with_nulls, _fillna_natwise
 
 _guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
 
@@ -250,14 +250,22 @@ class DatetimeColumn(column.ColumnBase):
         if isinstance(other, (cudf.Scalar, ColumnBase, cudf.DateOffset)):
             return other
 
-        if isinstance(other, datetime.datetime):
-            other = np.datetime64(other)
-        elif isinstance(other, datetime.timedelta):
-            other = np.timedelta64(other)
-        elif isinstance(other, pd.Timestamp):
+        tz_error_msg = (
+            "Cannot perform binary operation on timezone-naive columns"
+            " and timezone-aware timestamps."
+        )
+        if isinstance(other, pd.Timestamp):
+            if other.tz is not None:
+                raise NotImplementedError(tz_error_msg)
             other = other.to_datetime64()
         elif isinstance(other, pd.Timedelta):
             other = other.to_timedelta64()
+        elif isinstance(other, datetime.datetime):
+            if other.tzinfo is not None:
+                raise NotImplementedError(tz_error_msg)
+            other = np.datetime64(other)
+        elif isinstance(other, datetime.timedelta):
+            other = np.timedelta64(other)
 
         if isinstance(other, np.datetime64):
             if np.isnat(other):
@@ -439,12 +447,8 @@ class DatetimeColumn(column.ColumnBase):
         )
         lhs, rhs = (other, self) if reflect else (self, other)
         out_dtype = None
-        if op in {
-            "__eq__",
-            "NULL_EQUALS",
-        }:
-            out_dtype = cudf.dtype(np.bool_)
-        elif (
+
+        if (
             op
             in {
                 "__ne__",
@@ -470,13 +474,32 @@ class DatetimeColumn(column.ColumnBase):
             # well-defined if this operation was not invoked via reflection.
             elif other_is_timedelta and not reflect:
                 out_dtype = _resolve_mixed_dtypes(lhs, rhs, "datetime64")
+        elif op in {
+            "__eq__",
+            "NULL_EQUALS",
+            "__ne__",
+        }:
+            out_dtype = cudf.dtype(np.bool_)
+            if isinstance(other, ColumnBase) and not isinstance(
+                other, DatetimeColumn
+            ):
+                result = _all_bools_with_nulls(
+                    self, other, bool_fill_value=op == "__ne__"
+                )
+                if cudf.get_option("mode.pandas_compatible"):
+                    result = result.fillna(op == "__ne__")
+                return result
 
         if out_dtype is None:
             return NotImplemented
 
         result_col = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
         if out_dtype != cudf.dtype(np.bool_) and op == "__add__":
-            return result_col  # .astype(lhs.dtype)
+            return result_col
+        elif cudf.get_option(
+            "mode.pandas_compatible"
+        ) and out_dtype == cudf.dtype(np.bool_):
+            return result_col.fillna(op == "__ne__")
         else:
             return result_col
 

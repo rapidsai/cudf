@@ -13,9 +13,6 @@ from pandas.core.dtypes.common import infer_dtype_from_object
 import cudf
 from cudf._typing import DtypeObj
 from cudf.api.types import is_bool, is_float, is_integer
-from cudf.core.missing import NA
-
-_NA_REP = "<NA>"
 
 """Map numpy dtype to pyarrow types.
 Note that np.bool_ bitwidth (8) is different from pa.bool_ (1). Special
@@ -270,11 +267,19 @@ def to_cudf_compatible_scalar(val, dtype=None):
             # the string value directly (cudf.DeviceScalar will DTRT)
             return val
 
+    tz_error_msg = (
+        "Cannot covert a timezone-aware timestamp to timezone-naive scalar."
+    )
     if isinstance(val, pd.Timestamp):
+        if val.tz is not None:
+            raise NotImplementedError(tz_error_msg)
+
         val = val.to_datetime64()
     elif isinstance(val, pd.Timedelta):
         val = val.to_timedelta64()
     elif isinstance(val, datetime.datetime):
+        if val.tzinfo is not None:
+            raise NotImplementedError(tz_error_msg)
         val = np.datetime64(val)
     elif isinstance(val, datetime.timedelta):
         val = np.timedelta64(val)
@@ -632,7 +637,7 @@ def _can_cast(from_dtype, to_dtype):
     `np.can_cast` but with some special handling around
     cudf specific dtypes.
     """
-    if from_dtype in {None, NA}:
+    if cudf.utils.utils.is_na_like(from_dtype):
         return True
     if isinstance(from_dtype, type):
         from_dtype = cudf.dtype(from_dtype)

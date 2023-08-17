@@ -11,6 +11,7 @@ from cudf.core.dtypes import CategoricalDtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     INTEGER_TYPES,
     NUMERIC_TYPES,
+    TIMEDELTA_TYPES,
     assert_eq,
     assert_exceptions_equal,
     expect_warning_if,
@@ -2242,3 +2243,36 @@ def test_index_join_names(how):
     expected = idx1.to_pandas().join(idx2.to_pandas(), how=how)
     actual = idx1.join(idx2, how=how)
     assert_join_results_equal(actual, expected, how=how)
+
+
+@pytest.mark.parametrize("dtype", ["datetime64[ns]", "timedelta64[ns]"])
+def test_join_datetime_timedelta_error(dtype):
+    df1 = cudf.DataFrame({"a": cudf.Series([10, 20, 30], dtype=dtype)})
+    df2 = df1.astype("int")
+
+    with pytest.raises(TypeError):
+        df1.merge(df2)
+
+
+@pytest.mark.parametrize("dtype1", TIMEDELTA_TYPES)
+@pytest.mark.parametrize("dtype2", TIMEDELTA_TYPES)
+def test_merge_timedelta_types(dtype1, dtype2):
+    df1 = cudf.DataFrame({"a": cudf.Series([10, 20, 30], dtype=dtype1)})
+    df2 = cudf.DataFrame({"a": cudf.Series([20, 500, 33240], dtype=dtype2)})
+
+    pdf1 = df1.to_pandas()
+    pdf2 = df2.to_pandas()
+    actual = df1.merge(df2)
+    expected = pdf1.merge(pdf2)
+
+    # Pandas is materializing the index, which is unnecessary
+    # hence the special handling.
+    assert_eq(
+        actual,
+        expected,
+        check_index_type=False
+        if isinstance(actual.index, cudf.RangeIndex)
+        and isinstance(expected.index, pd.Index)
+        else True,
+        check_dtype=len(actual) > 0,
+    )

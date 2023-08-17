@@ -21,12 +21,14 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/io/datasource.hpp>
+#include <cudf/io/arrow_io_source.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/parquet.hpp>
 
 #include <arrow/filesystem/filesystem.h>
+#include <arrow/filesystem/s3fs.h>
 #include <arrow/io/api.h>
+#include <arrow/util/config.h>
 
 #include <fstream>
 #include <memory>
@@ -47,8 +49,7 @@ TEST_F(ArrowIOTest, URIFileSystem)
   outfile.close();
 
   std::string file_uri = "file://" + file_name;
-  std::unique_ptr<cudf::io::arrow_io_source> datasource =
-    std::make_unique<cudf::io::arrow_io_source>(file_uri);
+  auto datasource      = std::make_unique<cudf::io::arrow_io_source>(file_uri);
 
   // Populate the JSON Reader Options
   cudf::io::json_reader_options options =
@@ -71,8 +72,7 @@ TEST_F(ArrowIOTest, S3FileSystem)
   if (s3_unsupported) {
     EXPECT_THROW(std::make_unique<cudf::io::arrow_io_source>(s3_uri), cudf::logic_error);
   } else {
-    std::unique_ptr<cudf::io::arrow_io_source> datasource =
-      std::make_unique<cudf::io::arrow_io_source>(s3_uri);
+    auto datasource = std::make_unique<cudf::io::arrow_io_source>(s3_uri);
 
     // Populate the Parquet Reader Options
     cudf::io::source_info src(datasource.get());
@@ -87,7 +87,16 @@ TEST_F(ArrowIOTest, S3FileSystem)
     ASSERT_EQ(1, tbl.tbl->num_columns());  // Only single column specified in reader_options
     ASSERT_EQ(244, tbl.tbl->num_rows());   // known number of rows from the S3 file
   }
-  CUDF_EXPECTS(arrow::fs::EnsureS3Finalized().ok(), "Failed to finalize s3 filesystem");
+
+#ifdef ARROW_S3
+  if (!s3_unsupported) {
+    // Verify that we are using Arrow with S3, and call finalize
+    // https://github.com/apache/arrow/issues/36974
+    // This needs to be in a separate conditional to ensure we call
+    // finalize after all arrow_io_source instances have been deleted.
+    [[maybe_unused]] auto _ = arrow::fs::EnsureS3Finalized();
+  }
+#endif
 }
 
 CUDF_TEST_PROGRAM_MAIN()
