@@ -1889,12 +1889,12 @@ void make_json_column(json_column& root_column,
  *
  * @param options The reader options to influence the relevant type inference and type casting
  * options
+ * @param stream The CUDA stream to which kernels are dispatched
  */
-auto parsing_options(cudf::io::json_reader_options const& options)
+auto parsing_options(cudf::io::json_reader_options const& options, rmm::cuda_stream_view stream)
 {
   auto parse_opts = cudf::io::parse_options{',', '\n', '\"', '.'};
 
-  auto const stream     = cudf::get_default_stream();
   parse_opts.dayfirst   = options.is_enabled_dayfirst();
   parse_opts.keepquotes = options.is_enabled_keep_quotes();
   parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
@@ -1975,8 +1975,12 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       }
       // Infer column type, if we don't have an explicit type for it
       else {
-        target_type = cudf::io::detail::infer_data_type(
-          parsing_options(options).json_view(), d_input, string_ranges_it, col_size, stream);
+        target_type =
+          cudf::io::detail::infer_data_type(parsing_options(options, stream).json_view(),
+                                            d_input,
+                                            string_ranges_it,
+                                            col_size,
+                                            stream);
       }
 
       auto [result_bitmask, null_count] = make_validity(json_col);
@@ -1987,7 +1991,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
                             target_type,
                             std::move(result_bitmask),
                             null_count,
-                            parsing_options(options).view(),
+                            parsing_options(options, stream).view(),
                             stream,
                             mr);
 
