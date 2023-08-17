@@ -35,7 +35,7 @@ constexpr int preprocess_block_size = 512;
 
 // the required number of runs in shared memory we will need to provide the
 // rle_stream object
-constexpr int rle_run_buffer_size = rle_stream_required_run_buffer_size(preprocess_block_size);
+constexpr int rle_run_buffer_size = rle_stream_required_run_buffer_size<preprocess_block_size>();
 
 // the size of the rolling batch buffer
 constexpr int rolling_buf_size = LEVEL_DECODE_BUF_SIZE;

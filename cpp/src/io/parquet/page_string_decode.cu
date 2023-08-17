@@ -485,7 +485,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
 
   // the required number of runs in shared memory we will need to provide the
   // rle_stream object
-  constexpr int rle_run_buffer_size = rle_stream_required_run_buffer_size(preprocess_block_size);
+  constexpr int rle_run_buffer_size = rle_stream_required_run_buffer_size<preprocess_block_size>();
 
   // the level stream decoders
   __shared__ rle_run<level_t> def_runs[rle_run_buffer_size];
