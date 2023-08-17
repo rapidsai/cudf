@@ -7,8 +7,7 @@
     "args": {
       "CUDA": "12.0",
       "PYTHON_PACKAGE_MANAGER": "pip",
-      "CONDA_BASE": "rapidsai/devcontainers:23.10-cpp-mambaforge-ubuntu22.04",
-      "PIP_BASE": "rapidsai/devcontainers:23.10-cpp-llvm16-cuda12.0-ubuntu22.04"
+      "BASE": "rapidsai/devcontainers:23.10-cpp-llvm16-cuda12.0-ubuntu22.04"
     }
   },
   "hostRequirements": {
@@ -33,14 +32,14 @@
     "mkdir -m 0755 -p ~/.config/clangd && cp -n /etc/skel/.config/clangd/config.yaml ~/.config/clangd/config.yaml"
   ],
 
-  "containerEnv": {
-    "PYTHONSAFEPATH": "true",
-    "PYTHONUNBUFFERED": "true",
-    "DEFAULT_VIRTUAL_ENV": "rapids"
-  },
+  "postAttachCommand": [
+    "/bin/bash",
+    "-c",
+    "if [ ${CODESPACES:-false} = 'true' ]; then . devcontainer-utils-post-attach-command; . rapids-post-attach-command; fi"
+  ],
 
   "workspaceFolder": "/home/coder",
-  "workspaceMount": "source=${localWorkspaceFolder},target=/home/coder/${localWorkspaceFolderBasename},type=bind,consistency=consistent",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/home/coder/cudf,type=bind,consistency=consistent",
   "mounts": [
     "source=${localWorkspaceFolder}/../.aws,target=/home/coder/.aws,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.cache,target=/home/coder/.cache,type=bind,consistency=consistent",

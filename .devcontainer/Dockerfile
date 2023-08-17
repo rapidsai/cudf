@@ -1,15 +1,15 @@
 # syntax=docker/dockerfile:1.5
 
-ARG PIP_BASE
-ARG CONDA_BASE
-
+ARG BASE
 ARG PYTHON_PACKAGE_MANAGER=conda
 
-FROM ${PIP_BASE} as pip-base
+FROM ${BASE} as pip-base
 
-FROM ${CONDA_BASE} as conda-base
+ENV DEFAULT_VIRTUAL_ENV=rapids
 
-COPY --from=pip-base /etc/skel/.config/clangd/config.yaml /etc/skel/.config/clangd/config.yaml
+FROM ${BASE} as conda-base
+
+ENV DEFAULT_CONDA_ENV=rapids
 
 FROM ${PYTHON_PACKAGE_MANAGER}-base
 
