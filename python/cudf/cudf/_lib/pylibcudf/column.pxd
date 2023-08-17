@@ -30,11 +30,15 @@ cdef class Column:
     @staticmethod
     cdef Column from_libcudf(unique_ptr[column] libcudf_col)
 
-    cpdef DataType type(self) noexcept
-    cpdef Column child(self, size_type index) noexcept
-    cpdef size_type num_children(self) noexcept
+    cpdef DataType type(self)
+    cpdef Column child(self, size_type index)
+    cpdef size_type num_children(self)
+    cpdef size_type size(self)
+    cpdef size_type null_count(self)
+    cpdef size_type offset(self)
     cpdef gpumemoryview data(self)
     cpdef gpumemoryview null_mask(self)
+    cpdef list children(self)
 
     cpdef list_view(self)
 

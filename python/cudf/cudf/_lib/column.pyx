@@ -610,15 +610,15 @@ cdef class Column:
         return cudf.core.column.build_column(
             data=as_buffer(col.data().obj) if col.data() is not None else None,
             dtype=dtype,
-            size=col.size,
+            size=col.size(),
             mask=as_buffer(
                 col.null_mask().obj
             ) if col.null_mask() is not None else None,
-            offset=col.offset,
-            null_count=col.null_count,
+            offset=col.offset(),
+            null_count=col.null_count(),
             children=tuple([
                 Column.from_pylibcudf(child)
-                for child in col.children
+                for child in col.children()
             ])
         )
 

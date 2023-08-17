@@ -74,7 +74,7 @@ cdef class Column:
         cdef vector[column_view] c_children
         with gil:
             if self._children is not None:
-                for child in self.children:
+                for child in self._children:
                     # Need to cast to Column here so that Cython knows that
                     # `view` returns a typed object, not a Python object. We
                     # cannot use a typed variable for `child` because cdef
@@ -139,7 +139,7 @@ cdef class Column:
         """The type of data in the column."""
         return self._data_type
 
-    cpdef Column child(self, size_type index) noexcept:
+    cpdef Column child(self, size_type index):
         """Get a child column of this column.
 
         Parameters
@@ -154,7 +154,7 @@ cdef class Column:
         """
         return self._children[index]
 
-    cpdef size_type num_children(self) noexcept:
+    cpdef size_type num_children(self):
         """The number of children of this column."""
         return self._num_children
 
@@ -167,6 +167,17 @@ cdef class Column:
     cpdef gpumemoryview null_mask(self):
         return self._mask
 
+    cpdef size_type size(self):
+        return self._size
+
+    cpdef size_type offset(self):
+        return self._offset
+
+    cpdef size_type null_count(self):
+        return self._null_count
+
+    cpdef list children(self):
+        return self._children
 
 cdef class ListColumnView:
     """Accessor for methods of a Column that are specific to lists."""
