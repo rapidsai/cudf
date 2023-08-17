@@ -40,6 +40,7 @@ from cudf._lib.types cimport (
 )
 
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
+from cudf._lib.types import dtype_from_pylibcudf_column
 
 cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.unary as libcudf_unary
@@ -607,8 +608,7 @@ cdef class Column:
         pylibcudf.Column
             A new pylibcudf.Column referencing the same data.
         """
-        # TODO: Rewrite utility for dtype conversion to not need a column view.
-        dtype = dtype_from_column_view(col.view())
+        dtype = dtype_from_pylibcudf_column(col)
 
         return cudf.core.column.build_column(
             data=as_buffer(col.data.obj) if col.data is not None else None,

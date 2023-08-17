@@ -52,6 +52,7 @@ cdef class Column:
         self.null_count = null_count
         self.offset = offset
         self.children = children
+        self._num_children = len(children)
 
     cdef column_view view(self) nogil:
         """Generate a libcudf column_view to pass to libcudf algorithms.
@@ -133,3 +134,26 @@ cdef class Column:
             0,
             children,
         )
+
+    cpdef DataType type(self):
+        """The type of data in the column."""
+        return self.data_type
+
+    cpdef Column child(self, size_type index) noexcept:
+        """Get a child column of this column.
+
+        Parameters
+        ----------
+        index : size_type
+            The index of the child column to get.
+
+        Returns
+        -------
+        Column
+            The child column.
+        """
+        return self.children[index]
+
+    cpdef size_type num_children(self) noexcept:
+        """The number of children of this column."""
+        return self._num_children

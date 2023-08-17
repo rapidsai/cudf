@@ -23,8 +23,13 @@ cdef class Column:
         size_type offset
         # children: List[Column]
         list children
+        size_type _num_children
 
     cdef column_view view(self) nogil
 
     @staticmethod
     cdef Column from_libcudf(unique_ptr[column] libcudf_col)
+
+    cpdef DataType type(self) noexcept
+    cpdef Column child(self, size_type index) noexcept
+    cpdef size_type num_children(self) noexcept

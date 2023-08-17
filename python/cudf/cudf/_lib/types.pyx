@@ -129,6 +129,11 @@ LIBCUDF_TO_SUPPORTED_NUMPY_TYPES = {
     TypeId.STRUCT: np.dtype("object"),
 }
 
+PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES = {
+    pylibcudf.TypeId(k).value: v
+    for k, v in LIBCUDF_TO_SUPPORTED_NUMPY_TYPES.items()
+}
+
 duration_unit_map = {
     TypeId.DURATION_SECONDS: "s",
     TypeId.DURATION_MILLISECONDS: "ms",
@@ -275,3 +280,55 @@ cdef bool is_decimal_type_id(libcudf_types.type_id tid) except *:
         libcudf_types.type_id.DECIMAL64,
         libcudf_types.type_id.DECIMAL32,
     )
+
+
+def dtype_from_pylibcudf_lists_column(pylibcudf.Column col):
+    # TODO: Currently hardcoding the child column index for lists, should come
+    # up with a cleaner solution here.
+    child = col.child(1)
+
+    if child.type().id() == pylibcudf.TypeId.LIST:
+        return cudf.ListDtype(dtype_from_pylibcudf_lists_column(child))
+    elif child.type().id() == pylibcudf.TypeId.EMPTY:
+        return cudf.ListDtype("int8")
+    else:
+        return cudf.ListDtype(
+            dtype_from_pylibcudf_column(child)
+        )
+
+
+def dtype_from_pylibcudf_structs_column(pylibcudf.Column col):
+    fields = {
+        str(i): dtype_from_pylibcudf_column(col.child(i))
+        for i in range(col.num_children())
+    }
+    return cudf.StructDtype(fields)
+
+
+def dtype_from_pylibcudf_column(pylibcudf.Column col):
+    type_ = col.type()
+    tid = type_.id()
+
+    if tid == pylibcudf.TypeId.LIST:
+        return dtype_from_pylibcudf_lists_column(col)
+    elif tid == pylibcudf.TypeId.STRUCT:
+        return dtype_from_pylibcudf_structs_column(col)
+    elif tid == pylibcudf.TypeId.DECIMAL64:
+        return cudf.Decimal64Dtype(
+            precision=cudf.Decimal64Dtype.MAX_PRECISION,
+            scale=-type_.scale()
+        )
+    elif tid == pylibcudf.TypeId.DECIMAL32:
+        return cudf.Decimal32Dtype(
+            precision=cudf.Decimal32Dtype.MAX_PRECISION,
+            scale=-type_.scale()
+        )
+    elif tid == pylibcudf.TypeId.DECIMAL128:
+        return cudf.Decimal128Dtype(
+            precision=cudf.Decimal128Dtype.MAX_PRECISION,
+            scale=-type_.scale()
+        )
+    else:
+        return PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[
+            <underlying_type_t_type_id>(tid)
+        ]
