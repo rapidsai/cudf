@@ -64,6 +64,9 @@ constexpr uint32_t WARP_MASK = cudf::detail::warp_size - 1;
 // currently 64k - 1
 constexpr uint32_t MAX_GRID_Y_SIZE = (1 << 16) - 1;
 
+// space needed for RLE length field
+constexpr int RLE_LENGTH_FIELD_LEN = 4;
+
 struct frag_init_state_s {
   parquet_column_device_view col;
   PageFragment frag;
@@ -491,8 +494,8 @@ __global__ void __launch_bounds__(128)
           auto const def_level_size = max_RLE_page_size(col_g.num_def_level_bits(), values_in_page);
           auto const rep_level_size = max_RLE_page_size(col_g.num_rep_level_bits(), values_in_page);
           if (write_v2_headers && col_g.physical_type == BOOLEAN) {
-            // if RLE encoding booleans then will need an extra 4 bytes
-            page_size += 4;
+            // if RLE encoding booleans then will need an extra 4 bytes to encode the length
+            page_size += RLE_LENGTH_FIELD_LEN;
           }
           auto const max_data_size = page_size + def_level_size + rep_level_size;
           // page size must fit in 32-bit signed integer
@@ -1161,7 +1164,7 @@ __global__ void __launch_bounds__(128, 8)
       s->rle_out = dst + 1;
     } else if (is_v2 && physical_type == BOOLEAN) {
       // save space for RLE length. we don't know the total length yet.
-      s->rle_out     = dst + 4;
+      s->rle_out     = dst + RLE_LENGTH_FIELD_LEN;
       s->rle_len_pos = dst;
     }
     s->page_start_val  = row_to_value_idx(s->page.start_row, s->col);
