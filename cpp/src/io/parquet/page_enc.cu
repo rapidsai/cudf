@@ -229,8 +229,9 @@ Encoding __device__ determine_encoding(PageType page_type,
   }
 }
 
+// operator to use with warp_reduce. stolen from cub::Sum
 struct Or {
-  /// Binary sum operator, returns <tt>a + b</tt>
+  /// Binary OR operator, returns <tt>a | b</tt>
   template <typename T>
   __host__ __device__ __forceinline__ T operator()(const T& a, const T& b) const
   {
