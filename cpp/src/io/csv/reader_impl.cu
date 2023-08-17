@@ -410,12 +410,9 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
 
   // Transfer source data to GPU
   if (!source->is_empty()) {
-    auto buffer = [&]() {
-      auto const data_size = (range_size_padded != 0) ? range_size_padded : source->size();
-      return source->host_read(range_offset, data_size);
-    }();
+    auto buffer = source->host_read(range_offset, range_size_padded != 0 ? range_size_padded : source->size());
     auto h_data =
-      host_span<char const>(reinterpret_cast<const char*>(buffer->data()), buffer->size());
+      host_span<char const>(reinterpret_cast<char const*>(buffer->data()), buffer->size());
 
     std::vector<uint8_t> h_uncomp_data_owner;
     if (reader_opts.get_compression() != compression_type::NONE) {
