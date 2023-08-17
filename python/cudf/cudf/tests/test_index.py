@@ -2682,3 +2682,15 @@ def test_index_date_duration_freq_error(cls):
     with cudf.option_context("mode.pandas_compatible", True):
         with pytest.raises(NotImplementedError):
             cudf.Index(s)
+
+
+@pytest.mark.parametrize("dtype", ["datetime64[ns]", "timedelta64[ns]"])
+def test_index_getitem_time_duration(dtype):
+    gidx = cudf.Index([1, 2, 3, 4, None], dtype=dtype)
+    pidx = gidx.to_pandas()
+    with cudf.option_context("mode.pandas_compatible", True):
+        for i in range(len(gidx)):
+            if i == 4:
+                assert gidx[i] is pidx[i]
+            else:
+                assert_eq(gidx[i], pidx[i])
