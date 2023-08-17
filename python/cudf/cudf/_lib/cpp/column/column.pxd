@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -19,12 +19,6 @@ cdef extern from "cudf/column/column.hpp" namespace "cudf" nogil:
     cdef cppclass column:
         column() except +
         column(const column& other) except +
-
-        column(
-            data_type dtype,
-            size_type size,
-            device_buffer&& data
-        ) except +
 
         column(column_view view) except +
 

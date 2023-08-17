@@ -2206,6 +2206,12 @@ def test_series_contains(data, index):
     assert_eq(False in ps, False in gs)
 
 
+def test_series_from_pandas_sparse():
+    pser = pd.Series(range(2), dtype=pd.SparseDtype(np.int64, 0))
+    with pytest.raises(NotImplementedError):
+        cudf.Series(pser)
+
+
 def test_series_constructor_unbounded_sequence():
     class A:
         def __getitem__(self, key):
@@ -2213,3 +2219,28 @@ def test_series_constructor_unbounded_sequence():
 
     with pytest.raises(TypeError):
         cudf.Series(A())
+
+
+def test_series_constructor_error_mixed_type():
+    with pytest.raises(pa.ArrowTypeError):
+        cudf.Series(["abc", np.nan, "123"], nan_as_null=False)
+
+
+def test_series_typecast_to_object_error():
+    actual = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(ValueError):
+            actual.astype(object)
+        with pytest.raises(ValueError):
+            actual.astype(np.dtype("object"))
+        new_series = actual.astype("str")
+        assert new_series[0] == "1970-01-01 00:00:00.000000001"
+
+
+def test_series_typecast_to_object():
+    actual = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
+    with cudf.option_context("mode.pandas_compatible", False):
+        new_series = actual.astype(object)
+        assert new_series[0] == "1970-01-01 00:00:00.000000001"
+        new_series = actual.astype(np.dtype("object"))
+        assert new_series[0] == "1970-01-01 00:00:00.000000001"

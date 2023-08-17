@@ -39,7 +39,7 @@
 
 #include <memory>
 
-namespace cudf::io::json::experimental::detail {
+namespace cudf::io::json::detail {
 
 constexpr auto SINGLE_THREAD_THRESHOLD = 128;
 constexpr auto WARP_THRESHOLD          = 1024;
@@ -984,4 +984,4 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
   return out_col;
 }
 
-}  // namespace cudf::io::json::experimental::detail
+}  // namespace cudf::io::json::detail
