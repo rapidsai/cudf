@@ -17,7 +17,6 @@ from cudf._lib.types cimport (
 
 import cudf
 from cudf._lib import pylibcudf
-from cudf._lib cimport pylibcudf
 
 size_type_dtype = np.dtype("int32")
 
@@ -257,7 +256,7 @@ cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
     else:
         return libcudf_types.data_type(tid)
 
-cpdef pylibcudf.DataType dtype_to_pylibcudf_type(dtype):
+cpdef dtype_to_pylibcudf_type(dtype):
     if cudf.api.types.is_list_dtype(dtype):
         return pylibcudf.DataType(pylibcudf.TypeId.LIST)
     elif cudf.api.types.is_struct_dtype(dtype):
@@ -282,7 +281,7 @@ cdef bool is_decimal_type_id(libcudf_types.type_id tid) except *:
     )
 
 
-def dtype_from_pylibcudf_lists_column(pylibcudf.Column col):
+def dtype_from_pylibcudf_lists_column(col):
     child = col.list_view().child()
     tid = child.type().id()
 
@@ -296,7 +295,7 @@ def dtype_from_pylibcudf_lists_column(pylibcudf.Column col):
         )
 
 
-def dtype_from_pylibcudf_structs_column(pylibcudf.Column col):
+def dtype_from_pylibcudf_structs_column(col):
     fields = {
         str(i): dtype_from_pylibcudf_column(col.child(i))
         for i in range(col.num_children())
@@ -304,7 +303,7 @@ def dtype_from_pylibcudf_structs_column(pylibcudf.Column col):
     return cudf.StructDtype(fields)
 
 
-def dtype_from_pylibcudf_column(pylibcudf.Column col):
+def dtype_from_pylibcudf_column(col):
     type_ = col.type()
     tid = type_.id()
 
