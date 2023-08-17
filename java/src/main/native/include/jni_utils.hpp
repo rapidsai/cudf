@@ -902,7 +902,7 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
     JNI_CHECK_THROW_CUDF_EXCEPTION(env, cudf::jni::CUDF_DTYPE_ERROR_CLASS, e.what(),               \
                                    e.stacktrace(), ret_val);                                       \
   }                                                                                                \
-  catch (std::overflow_error const& e) {                                                           \
+  catch (std::overflow_error const &e) {                                                           \
     JNI_CHECK_THROW_CUDF_EXCEPTION(env, cudf::jni::CUDF_OVERFLOW_ERROR_CLASS, e.what(),            \
                                    "No native stacktrace is available.", ret_val);                 \
   }                                                                                                \
