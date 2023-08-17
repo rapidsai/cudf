@@ -77,8 +77,8 @@ template <int block_size>
 __global__ void __launch_bounds__(block_size)
   initialize_dictionary_hash_maps_kernel(device_span<stripe_dictionary> dictionaries)
 {
-  auto const dict_map = dictionaries[blockIdx.x].map_slots;
-  auto const t        = threadIdx.x;
+  auto const dict_map             = dictionaries[blockIdx.x].map_slots;
+  cudf::thread_index_type const t = threadIdx.x;
   for (size_type i = 0; i < dict_map.size(); i += block_size) {
     if (t + i < dict_map.size()) {
       new (&dict_map[t + i].first) map_type::atomic_key_type{KEY_SENTINEL};
@@ -110,11 +110,11 @@ __global__ void __launch_bounds__(block_size)
   populate_dictionary_hash_maps_kernel(device_2dspan<stripe_dictionary> dictionaries,
                                        device_span<orc_column_device_view const> columns)
 {
-  auto const col_idx    = blockIdx.x;
-  auto const stripe_idx = blockIdx.y;
-  auto const t          = threadIdx.x;
-  auto& dict            = dictionaries[col_idx][stripe_idx];
-  auto const& col       = columns[dict.column_idx];
+  auto const col_idx              = blockIdx.x;
+  auto const stripe_idx           = blockIdx.y;
+  cudf::thread_index_type const t = threadIdx.x;
+  auto& dict                      = dictionaries[col_idx][stripe_idx];
+  auto const& col                 = columns[dict.column_idx];
 
   // Make a view of the hash map
   auto hash_map_mutable  = map_type::device_mutable_view(dict.map_slots.data(),
@@ -170,8 +170,8 @@ __global__ void __launch_bounds__(block_size)
 
   if (not dict.is_enabled) { return; }
 
-  auto const t = threadIdx.x;
-  auto map     = map_type::device_view(dict.map_slots.data(),
+  cudf::thread_index_type const t = threadIdx.x;
+  auto map                        = map_type::device_view(dict.map_slots.data(),
                                    dict.map_slots.size(),
                                    cuco::empty_key{KEY_SENTINEL},
                                    cuco::empty_value{VALUE_SENTINEL});
@@ -206,9 +206,9 @@ __global__ void __launch_bounds__(block_size)
 
   if (not dict.is_enabled) { return; }
 
-  auto const t         = threadIdx.x;
-  auto const start_row = dict.start_row;
-  auto const end_row   = dict.start_row + dict.num_rows;
+  cudf::thread_index_type const t = threadIdx.x;
+  auto const start_row            = dict.start_row;
+  auto const end_row              = dict.start_row + dict.num_rows;
 
   auto const map = map_type::device_view(dict.map_slots.data(),
                                          dict.map_slots.size(),
@@ -217,9 +217,7 @@ __global__ void __launch_bounds__(block_size)
 
   auto cur_row = start_row + t;
   while (cur_row < end_row) {
-    auto const is_valid = cur_row < col.size() and col.is_valid(cur_row);
-
-    if (is_valid) {
+    if (col.is_valid(cur_row)) {
       auto const hash_fn     = hash_functor{col};
       auto const equality_fn = equality_functor{col};
       auto const found_slot  = map.find(cur_row, hash_fn, equality_fn);

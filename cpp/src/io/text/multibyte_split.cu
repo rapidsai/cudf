@@ -143,7 +143,7 @@ __global__ void multibyte_split_init_kernel(
   cudf::io::text::detail::scan_tile_status status =
     cudf::io::text::detail::scan_tile_status::invalid)
 {
-  auto const thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
+  cudf::thread_index_type const thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (thread_idx < num_tiles) {
     auto const tile_idx = base_tile_idx + thread_idx;
     tile_multistates.set_status(tile_idx, status);
@@ -157,15 +157,12 @@ __global__ void multibyte_split_seed_kernel(
   multistate tile_multistate_seed,
   output_offset tile_output_offset)
 {
-  auto const thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
-  if (thread_idx == 0) {
-    tile_multistates.set_inclusive_prefix(-1, tile_multistate_seed);
-    tile_output_offsets.set_inclusive_prefix(-1, tile_output_offset);
-  }
+  tile_multistates.set_inclusive_prefix(-1, tile_multistate_seed);
+  tile_output_offsets.set_inclusive_prefix(-1, tile_output_offset);
 }
 
 __global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
-  cudf::size_type base_tile_idx,
+  cudf::thread_index_type base_tile_idx,
   byte_offset base_input_offset,
   output_offset base_output_offset,
   cudf::io::text::detail::scan_tile_state_view<multistate> tile_multistates,
@@ -185,10 +182,11 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
     typename OffsetScan::TempStorage offset_scan;
   } temp_storage;
 
-  int32_t const tile_idx            = base_tile_idx + blockIdx.x;
-  int32_t const tile_input_offset   = blockIdx.x * ITEMS_PER_TILE;
-  int32_t const thread_input_offset = tile_input_offset + threadIdx.x * ITEMS_PER_THREAD;
-  int32_t const thread_input_size   = chunk_input_chars.size() - thread_input_offset;
+  cudf::thread_index_type const tile_idx          = base_tile_idx + blockIdx.x;
+  cudf::thread_index_type const tile_input_offset = blockIdx.x * ITEMS_PER_TILE;
+  cudf::thread_index_type const thread_input_offset =
+    tile_input_offset + threadIdx.x * ITEMS_PER_THREAD;
+  cudf::thread_index_type const thread_input_size = chunk_input_chars.size() - thread_input_offset;
 
   // STEP 1: Load inputs
 
@@ -258,10 +256,11 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void byte_split_kernel(
     typename OffsetScan::TempStorage offset_scan;
   } temp_storage;
 
-  int32_t const tile_idx            = base_tile_idx + blockIdx.x;
-  int32_t const tile_input_offset   = blockIdx.x * ITEMS_PER_TILE;
-  int32_t const thread_input_offset = tile_input_offset + threadIdx.x * ITEMS_PER_THREAD;
-  int32_t const thread_input_size   = chunk_input_chars.size() - thread_input_offset;
+  cudf::thread_index_type const tile_idx          = base_tile_idx + blockIdx.x;
+  cudf::thread_index_type const tile_input_offset = blockIdx.x * ITEMS_PER_TILE;
+  cudf::thread_index_type const thread_input_offset =
+    tile_input_offset + threadIdx.x * ITEMS_PER_THREAD;
+  cudf::thread_index_type const thread_input_size = chunk_input_chars.size() - thread_input_offset;
 
   // STEP 1: Load inputs
 
