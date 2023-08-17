@@ -26,8 +26,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef _NRT_CUDA_H
-#define _NRT_CUDA_H
+#pragma once
 
 #include <cuda/atomic>
 #include <cuda_runtime.h>
@@ -126,4 +125,3 @@ extern "C" __device__ void NRT_MemInfo_call_dtor(NRT_MemInfo* mi)
   /* Clear and release MemInfo */
   NRT_MemInfo_destroy(mi);
 }
-#endif
