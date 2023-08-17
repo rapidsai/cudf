@@ -1370,6 +1370,39 @@ TEST_F(JsonReaderTest, JsonExperimentalLines)
   CUDF_TEST_EXPECT_TABLES_EQUAL(legacy_reader_table.tbl->view(), table.tbl->view());
 }
 
+TEST_F(JsonReaderTest, JsonLongString)
+{
+  std::string json_string =
+    R"({"a":"a0"}
+    {"a":"a1"}
+    {"a":"a2", "b":"b2"}
+    {"a":"a3", "c":"c3"})";
+  json_string += std::string("\n") + R"({"a":"a4\u20ac)" + std::string(103, 'a') + "\"}";
+  json_string += std::string("\n") + R"({"a":"a5\u20ac)" + std::string(1034, 'a') + "\"}";
+  json_string += std::string("\n") + R"({"a":"a6\u20ac)" + std::string(10340, 'a') + "\"}";
+
+  cudf::test::strings_column_wrapper col1{"a0",
+                                          "a1",
+                                          "a2",
+                                          "a3",
+                                          "a4€" + std::string(103, 'a'),
+                                          "a5€" + std::string(1034, 'a'),
+                                          "a6€" + std::string(10340, 'a')};
+  cudf::test::strings_column_wrapper col2{{"", "", "b2", "", "", "", ""}, {0, 0, 1, 0, 0, 0, 0}};
+  cudf::test::strings_column_wrapper col3{{"", "", "", "c3", "", "", ""}, {0, 0, 0, 1, 0, 0, 0}};
+  cudf::table_view expected({col1, col2, col3});
+
+  // Initialize parsing options (reading json lines)
+  cudf::io::json_reader_options json_lines_options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{json_string.c_str(), json_string.size()})
+      .lines(true);
+
+  // Read test data via nested JSON reader
+  auto const table = cudf::io::read_json(json_lines_options);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, table.tbl->view());
+}
+
 TEST_F(JsonReaderTest, TokenAllocation)
 {
   std::array<std::string const, 3> const json_inputs{
