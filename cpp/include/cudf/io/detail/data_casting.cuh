@@ -584,7 +584,7 @@ __global__ void parse_fn_warp_parallel(str_tuple_it str_tuples,
   }    // grid-stride for-loop
 }
 
-template <typename str_tuple_it>
+template <int BLOCK_SIZE, typename str_tuple_it>
 __global__ void parse_fn_block_parallel(str_tuple_it str_tuples,
                                         size_type total_out_strings,
                                         size_type* str_counter,
@@ -594,7 +594,7 @@ __global__ void parse_fn_block_parallel(str_tuple_it str_tuples,
                                         size_type* d_offsets,
                                         char* d_chars)
 {
-  const long BLOCK_SIZE = blockDim.x;
+  // const long BLOCK_SIZE = blockDim.x;
   // int global_thread_id = blockIdx.x * blockDim.x + threadIdx.x;
   int lane = threadIdx.x;
   // int global_warp_id   = blockIdx.x;
@@ -678,7 +678,8 @@ __global__ void parse_fn_block_parallel(str_tuple_it str_tuples,
     // entire warp executes but with mask.
     // auto MASK = 0xffffffff;
     for (size_type char_index = lane;
-         char_index < cudf::util::round_up_unsafe(in_end - in_begin, BLOCK_SIZE);
+         char_index <
+         cudf::util::round_up_unsafe(in_end - in_begin, static_cast<std::size_t>(BLOCK_SIZE));
          char_index += BLOCK_SIZE) {
       bool is_within_bounds = char_index < (in_end - in_begin);
       // TODO more conditions below to avoid out-of-bound memory access.
@@ -959,9 +960,9 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
       data_type{cudf::type_id::INT32}, col_size + 1, cudf::mask_state::UNALLOCATED, stream, mr);
     auto d_offsets = offsets2->mutable_view().data<size_type>();
 
-    int max_blocks                 = 0;
-    constexpr auto warps_per_block = 8;
-    int threads_per_block          = cudf::detail::warp_size * warps_per_block;
+    int max_blocks                  = 0;
+    constexpr auto warps_per_block  = 8;
+    constexpr int threads_per_block = cudf::detail::warp_size * warps_per_block;
     CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
       &max_blocks, parse_fn_warp_parallel<str_tuple_it>, threads_per_block, 0));
 
@@ -981,15 +982,16 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
       options,
       d_offsets,
       nullptr);
-    parse_fn_block_parallel<<<num_blocks, threads_per_block, 0, stream.value()>>>(
-      str_tuples,
-      col_size,
-      str_counter.data(),
-      static_cast<bitmask_type*>(null_mask.data()),
-      null_count_data2,
-      options,
-      d_offsets,
-      nullptr);
+    parse_fn_block_parallel<threads_per_block>
+      <<<num_blocks, threads_per_block, 0, stream.value()>>>(
+        str_tuples,
+        col_size,
+        str_counter.data(),
+        static_cast<bitmask_type*>(null_mask.data()),
+        null_count_data2,
+        options,
+        d_offsets,
+        nullptr);
     // print_raw(d_offsets, offsets2->size(), stream);
     auto const bytes =
       cudf::detail::sizes_to_offsets(d_offsets, d_offsets + col_size + 1, d_offsets, stream);
@@ -1011,15 +1013,16 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
       d_offsets,
       d_chars2);
 
-    parse_fn_block_parallel<<<num_blocks, threads_per_block, 0, stream.value()>>>(
-      str_tuples,
-      col_size,
-      str_counter.data(),
-      static_cast<bitmask_type*>(null_mask.data()),
-      null_count_data2,
-      options,
-      d_offsets,
-      d_chars2);
+    parse_fn_block_parallel<threads_per_block>
+      <<<num_blocks, threads_per_block, 0, stream.value()>>>(
+        str_tuples,
+        col_size,
+        str_counter.data(),
+        static_cast<bitmask_type*>(null_mask.data()),
+        null_count_data2,
+        options,
+        d_offsets,
+        d_chars2);
     // if(bytes!=chars->size()) {
     //   std::cout<<"new bytes="<<bytes<<std::endl;
     //   print_raw(d_offsets, offsets2->size(), stream);
