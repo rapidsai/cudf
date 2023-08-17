@@ -812,15 +812,6 @@ struct string_parse {
   }
 };
 
-template <typename T>
-void print_raw(T const* ptr, size_type size, rmm::cuda_stream_view stream)
-{
-  auto h_offsets2 = cudf::detail::make_std_vector_sync(device_span<T const>(ptr, size), stream);
-  for (auto i : h_offsets2)
-    std::cout << i << ",";
-  std::cout << std::endl;
-}
-
 /**
  * @brief Parses the data from an iterator of string views, casting it to the given target data type
  *
@@ -906,7 +897,6 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
           options,
           d_offsets,
           nullptr);
-      // print_raw(d_offsets, offsets2->size(), stream);
       auto const bytes =
         cudf::detail::sizes_to_offsets(d_offsets, d_offsets + col_size + 1, d_offsets, stream);
       str_counter.set_value(0, stream);
@@ -938,16 +928,6 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
           options,
           d_offsets,
           d_chars2);
-      // if(bytes!=chars->size()) {
-      //   std::cout<<"new bytes="<<bytes<<std::endl;
-      //   print_raw(d_offsets, offsets2->size(), stream);
-      //   print_raw(d_chars2, chars2->size(), stream);
-      // }
-      // if(bytes!=chars->size()) {
-      //   std::cout<<"old bytes="<<chars->size()<<std::endl;
-      //   print_raw(offsets->view().data<size_type>(), offsets->size(), stream);
-      //   print_raw(chars->view().data<size_type>(), chars->size(), stream);
-      // }
       nvtxRangePop();
 
       return make_strings_column(col_size,
