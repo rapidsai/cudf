@@ -390,10 +390,16 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
   }
 
   // Create new offsets column to use in kernel
-  std::unique_ptr<cudf::column> sizes = cudf::make_numeric_column(
-    cudf::data_type(cudf::type_id::INT32), input_col.size(), cudf::mask_state::UNALLOCATED, stream);
-  std::unique_ptr<cudf::column> indices = cudf::make_numeric_column(
-    cudf::data_type(cudf::type_id::INT32), input_col.size(), cudf::mask_state::UNALLOCATED, stream);
+  std::unique_ptr<cudf::column> sizes =
+    cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
+                              input_col.size(),
+                              cudf::mask_state::UNALLOCATED,
+                              stream);
+  std::unique_ptr<cudf::column> indices =
+    cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
+                              input_col.size(),
+                              cudf::mask_state::UNALLOCATED,
+                              stream);
 
   auto sizes_view   = sizes->mutable_view();
   auto indices_view = indices->mutable_view();
@@ -419,7 +425,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
     valid_count);
 
   auto [offsets, bytes] = cudf::detail::make_offsets_child_column(
-    sizes_view.begin<int32_t>(), sizes_view.end<int32_t>(), stream, mr);
+    sizes_view.begin<cudf::size_type>(), sizes_view.end<cudf::size_type>(), stream, mr);
   auto offsets_view   = offsets->mutable_view();
   auto device_offsets = cudf::mutable_column_device_view::create(offsets_view, stream);
 
