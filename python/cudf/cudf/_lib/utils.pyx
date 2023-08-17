@@ -261,7 +261,7 @@ cdef columns_from_pylibcudf_table(pylibcudf.Table tbl):
         A list of columns.
     """
     cdef pylibcudf.Column plc
-    return [Column.from_pylibcudf(plc) for plc in tbl.columns]
+    return [Column.from_pylibcudf(plc) for plc in tbl.columns()]
 
 
 cdef data_from_unique_ptr(
