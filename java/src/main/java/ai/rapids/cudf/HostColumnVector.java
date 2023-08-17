@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -50,9 +50,9 @@ public final class HostColumnVector extends HostColumnVectorCore {
      *
      * @note the callback is invoked with this `HostColumnVector`'s lock held.
      *
-     * @param cv - a reference to the HostColumnVector we are closing
-     * @param refCount - the updated ref count for this HostColumnVector at
-     *                   the time of invocation
+     * @param cv reference to the HostColumnVector we are closing
+     * @param refCount the updated ref count for this HostColumnVector at
+     *                 the time of invocation
      */
     void onClosed(HostColumnVector cv, int refCount);
   }
