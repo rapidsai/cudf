@@ -539,7 +539,7 @@ __global__ void parse_fn_warp_parallel(str_tuple_it str_tuples,
         }
       }  // !skip end.
       {
-        __shared__ cub::WarpScan<size_type>::TempStorage temp_storage[8];
+        __shared__ typename cub::WarpScan<size_type>::TempStorage temp_storage[8];
         size_type offset;
         cub::WarpScan<size_type>(temp_storage[warp_id]).ExclusiveSum(this_num_out, offset);
         offset += last_offset;
@@ -552,7 +552,7 @@ __global__ void parse_fn_warp_parallel(str_tuple_it str_tuples,
   }    // grid-stride for-loop
 }
 
-// Similar to warp-parallel algorithm but with 1 block per string. 
+// Similar to warp-parallel algorithm but 1 block per string.
 template <int BLOCK_SIZE, typename str_tuple_it>
 __global__ void parse_fn_block_parallel(str_tuple_it str_tuples,
                                         size_type total_out_strings,
@@ -652,7 +652,7 @@ __global__ void parse_fn_block_parallel(str_tuple_it str_tuples,
                    !is_hex(in_begin[char_index + 3]) | !is_hex(in_begin[char_index + 4])));
       }
       // propagate error across entire block
-      using BlockReduce = cub::BlockReduce<bool, 32 * 8>;
+      using BlockReduce = cub::BlockReduce<bool, BLOCK_SIZE>;
       __shared__ typename BlockReduce::TempStorage temp_storage_error;
       __shared__ bool error_reduced;
       error_reduced = BlockReduce(temp_storage_error).Sum(error);  // TODO use cub::LogicalOR.
@@ -698,7 +698,7 @@ __global__ void parse_fn_block_parallel(str_tuple_it str_tuples,
         bool state[2];
       };
       // using state_table = bool[2]; Try this. and see if compiler errors
-      using BlockScan = cub::BlockScan<state_table, 32 * 8>;
+      using BlockScan = cub::BlockScan<state_table, BLOCK_SIZE>;
       __shared__ typename BlockScan::TempStorage temp_slash;
       state_table curr{is_within_bounds && c == '\\', false};  // state transition vector.
       auto composite_op = [](state_table op1, state_table op2) {
@@ -753,8 +753,8 @@ __global__ void parse_fn_block_parallel(str_tuple_it str_tuples,
         }
       }  // !skip end.
       {
-        using BlockScan2 = cub::BlockScan<size_type, 32 * 8>;
-        __shared__ BlockScan2::TempStorage temp_storage;
+        using BlockScan2 = cub::BlockScan<size_type, BLOCK_SIZE>;
+        __shared__ typename BlockScan2::TempStorage temp_storage;
         size_type offset;
         BlockScan2(temp_storage).ExclusiveSum(this_num_out, offset);
         offset += last_offset;
