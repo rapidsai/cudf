@@ -543,6 +543,7 @@ dependencies:
             packages:
               - cuda-version=12.0
               - cuda-nvtx
+              - cuda-nvtx-dev
           - matrix:
               cuda: "11.8"
             packages:
