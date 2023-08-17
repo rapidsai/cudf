@@ -33,3 +33,12 @@ cdef class Column:
     cpdef DataType type(self) noexcept
     cpdef Column child(self, size_type index) noexcept
     cpdef size_type num_children(self) noexcept
+
+    cpdef list_view(self)
+
+
+cdef class ListColumnView:
+    """Accessor for methods of a Column that are specific to lists."""
+    cdef Column _column
+    cpdef child(self)
+    cpdef offsets(self)

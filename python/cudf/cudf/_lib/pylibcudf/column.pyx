@@ -9,7 +9,7 @@ from cudf._lib.cpp.column.column cimport column, column_contents
 from cudf._lib.cpp.types cimport size_type
 
 from .gpumemoryview cimport gpumemoryview
-from .types cimport DataType
+from .types cimport DataType, TypeId
 from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 
 
@@ -157,3 +157,20 @@ cdef class Column:
     cpdef size_type num_children(self) noexcept:
         """The number of children of this column."""
         return self._num_children
+
+    cpdef list_view(self):
+        return ListColumnView(self)
+
+
+cdef class ListColumnView:
+    """Accessor for methods of a Column that are specific to lists."""
+    def __init__(self, Column col):
+        if col.type().id() != TypeId.LIST:
+            raise TypeError("Column is not a list type")
+        self._column = col
+
+    cpdef child(self):
+        return self._column.child(1)
+
+    cpdef offsets(self):
+        return self._column.child(1)

@@ -283,13 +283,12 @@ cdef bool is_decimal_type_id(libcudf_types.type_id tid) except *:
 
 
 def dtype_from_pylibcudf_lists_column(pylibcudf.Column col):
-    # TODO: Currently hardcoding the child column index for lists, should come
-    # up with a cleaner solution here.
-    child = col.child(1)
+    child = col.list_view().child()
+    tid = child.type().id()
 
-    if child.type().id() == pylibcudf.TypeId.LIST:
+    if tid == pylibcudf.TypeId.LIST:
         return cudf.ListDtype(dtype_from_pylibcudf_lists_column(child))
-    elif child.type().id() == pylibcudf.TypeId.EMPTY:
+    elif tid == pylibcudf.TypeId.EMPTY:
         return cudf.ListDtype("int8")
     else:
         return cudf.ListDtype(
