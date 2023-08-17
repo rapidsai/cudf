@@ -503,6 +503,11 @@ std::unique_ptr<std::vector<uint8_t>> merge_row_group_metadata(
   return detail_parquet::writer::merge_row_group_metadata(metadata_list);
 }
 
+table_input_metadata table_with_metadata::get_table_input_metadata()
+{
+  return table_input_metadata(*this);
+}
+
 table_input_metadata::table_input_metadata(table_view const& table)
 {
   // Create a metadata hierarchy using `table`
@@ -515,6 +520,31 @@ table_input_metadata::table_input_metadata(table_view const& table)
 
   std::transform(
     table.begin(), table.end(), std::back_inserter(this->column_metadata), get_children);
+}
+
+table_input_metadata::table_input_metadata(table_with_metadata const& table_and_metadata)
+{
+  auto const& table = table_and_metadata.tbl->view();
+  auto const& names = table_and_metadata.metadata.schema_info;
+
+  // Create a metadata hierarchy with naming and nullability using `table_and_metadata`
+  std::function<column_in_metadata(column_view const&, column_name_info const&)> get_children =
+    [&](column_view const& col, column_name_info const& name) {
+      auto col_meta = column_in_metadata{name.name};
+      col_meta.set_nullability(col.nullable());
+      std::transform(col.child_begin(),
+                     col.child_end(),
+                     name.children.begin(),
+                     std::back_inserter(col_meta.children),
+                     get_children);
+      return col_meta;
+    };
+
+  std::transform(table.begin(),
+                 table.end(),
+                 names.begin(),
+                 std::back_inserter(this->column_metadata),
+                 get_children);
 }
 
 /**

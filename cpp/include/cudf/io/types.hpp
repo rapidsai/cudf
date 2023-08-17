@@ -230,12 +230,24 @@ struct table_metadata {
     per_file_user_data;  //!< Per file format-dependent metadata as key-values pairs
 };
 
+class table_input_metadata;
+
 /**
  * @brief Table with table metadata used by io readers to return the metadata by value
  */
 struct table_with_metadata {
   std::unique_ptr<table> tbl;  //!< Table
   table_metadata metadata;     //!< Table metadata
+
+  /**
+   * @brief Return a `table_input_metadata` populated with data from this `table_with_metadata`.
+   *
+   * The returned `table_input_metadata` will preserve the hierarchy, naming, and nullability
+   * of the contained table.
+   *
+   * @return `table_input_metadata`
+   */
+  table_input_metadata get_table_input_metadata();
 };
 
 /**
@@ -799,6 +811,16 @@ class table_input_metadata {
    * @param table The table_view to construct metadata for
    */
   table_input_metadata(table_view const& table);
+
+  /**
+   * @brief Construct a new table_input_metadata from a table_with_metadata.
+   *
+   * The constructed table_input_metadata has the same structure as the passed table_with_metadata,
+   * and also preserves any naming and nullability info from the original table.
+   *
+   * @param table_and_metadata The table_with_metadata to construct metadata for
+   */
+  table_input_metadata(table_with_metadata const& table_and_metadata);
 
   std::vector<column_in_metadata> column_metadata;  //!< List of column metadata
 };
