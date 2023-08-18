@@ -34,6 +34,8 @@
 #include <iostream>
 #include <vector>
 
+#include <cuda/functional>
+
 namespace nvtext {
 namespace detail {
 namespace {
@@ -100,7 +102,9 @@ std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
     stream.value());
 
   auto iter = cudf::detail::make_counting_transform_iterator(
-    0, [] __device__(cudf::size_type idx) { return cuco::make_pair(idx, idx); });
+    0,
+    cuda::proclaim_return_type<cuco::pair<cudf::size_type, cudf::size_type>>(
+      [] __device__(cudf::size_type idx) { return cuco::make_pair(idx, idx); }));
 
   merge_pairs_map->insert_async(iter, iter + input.size(), stream.value());
 
