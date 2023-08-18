@@ -233,7 +233,7 @@ Encoding __device__ determine_encoding(PageType page_type,
 struct Or {
   /// Binary OR operator, returns <tt>a | b</tt>
   template <typename T>
-  __host__ __device__ __forceinline__ T operator()(const T& a, const T& b) const
+  __host__ __device__ __forceinline__ T operator()(T const& a, T const& b) const
   {
     return a | b;
   }

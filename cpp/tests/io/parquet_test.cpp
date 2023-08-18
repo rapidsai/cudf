@@ -6629,11 +6629,8 @@ TEST_P(ParquetV2Test, CheckEncodings)
   cudf::io::write_parquet(out_opts);
 
   // make sure the expected encodings are present
-  auto contains = [](auto vec, auto enc) {
-    for (size_t i = 0; i < vec.size(); i++) {
-      if (vec[i] == enc) return true;
-    }
-    return false;
+  auto contains = [](auto const& vec, auto const& enc) {
+    return std::find(vec.begin(), vec.end(), enc) != vec.end();
   };
 
   auto const source = cudf::io::datasource::create(filepath);
