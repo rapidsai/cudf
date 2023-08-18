@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "cudf/io/types.hpp"
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
@@ -28,21 +29,21 @@
 #include <iostream>
 #include <string>
 
-std::unique_ptr<cudf::table> read_json(std::string filepath)
+cudf::io::table_with_metadata read_json(std::string filepath)
 {
   auto source_info = cudf::io::source_info(filepath);
   auto builder     = cudf::io::json_reader_options::builder(source_info).lines(true);
   auto options     = builder.build();
-  auto json        = cudf::io::read_json(options);
-  return std::move(json.tbl);
+  return cudf::io::read_json(options);
 }
 
-void write_json(cudf::table_view tbl, std::string filepath)
+void write_json(cudf::table_view tbl, cudf::io::table_metadata metadata, std::string filepath)
 {
   // write the data for inspection
   auto sink_info = cudf::io::sink_info(filepath);
   auto builder2  = cudf::io::json_writer_options::builder(sink_info, tbl).lines(true);
-  auto options2  = builder2.build();
+  builder2.metadata(metadata);
+  auto options2 = builder2.build();
   cudf::io::write_json(options2);
 }
 
@@ -118,7 +119,7 @@ int main(int argc, char const** argv)
   }
 
   // read input file
-  auto tbl = read_json(input_filepath);
+  auto [tbl, metadata] = read_json(input_filepath);
 
   auto st = std::chrono::steady_clock::now();
 
@@ -129,7 +130,7 @@ int main(int argc, char const** argv)
   std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - st;
   std::cout << "Wall time: " << elapsed.count() << " seconds\n";
 
-  write_json(filtered->view(), output_filepath);
+  write_json(filtered->view(), metadata, output_filepath);
 
   return 0;
 }
