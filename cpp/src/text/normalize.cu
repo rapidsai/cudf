@@ -211,8 +211,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
     auto const d_offsets   = offsets.data<cudf::size_type>() + strings.offset();
     auto const offset = cudf::detail::get_value<cudf::size_type>(offsets, strings.offset(), stream);
     auto const d_chars = strings.chars().data<char>() + offset;
-    return normalizer.normalize(
-      d_chars, reinterpret_cast<uint32_t const*>(d_offsets), strings.size(), stream);
+    return normalizer.normalize(d_chars, d_offsets, strings.size(), stream);
   }();
 
   CUDF_EXPECTS(
@@ -223,9 +222,8 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   // convert the result into a strings column
   // - the cp_chars are the new 4-byte code-point values for all the characters in the output
   // - the cp_offsets identify which code-points go with which strings
-  uint32_t const* cp_chars = result.first->data();
-  cudf::size_type const* cp_offsets =
-    reinterpret_cast<cudf::size_type const*>(result.second->data());
+  uint32_t const* cp_chars          = result.first->data();
+  cudf::size_type const* cp_offsets = result.second->data();
 
   auto d_strings = cudf::column_device_view::create(strings.parent(), stream);
 

@@ -59,7 +59,7 @@ namespace {
 __global__ void kernel_compute_tensor_metadata(
   // input
   uint32_t const* token_ids,
-  uint32_t const* offsets,
+  cudf::size_type const* offsets,
   uint32_t const* row2tensor,
   uint32_t const* row2row_within_tensor,
   uint32_t max_sequence_length,
@@ -191,11 +191,10 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   wordpiece_tokenizer tokenizer(
     vocab_table, max_sequence_length, stride, do_truncate, do_lower_case);
   // Run tokenizer
-  auto const tokens = tokenizer.tokenize(
-    d_chars, reinterpret_cast<uint32_t const*>(d_offsets), strings_count, stream);
+  auto const tokens = tokenizer.tokenize(d_chars, d_offsets, strings_count, stream);
   // assign output components
-  uint32_t const* device_token_ids = tokens.first->data();
-  uint32_t const* device_offsets   = tokens.second->data();
+  auto device_token_ids = tokens.first->data();
+  auto device_offsets   = tokens.second->data();
 
   // Format output from tokenizer
   // Each string can create 1 or more tensor entries.

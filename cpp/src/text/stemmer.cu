@@ -213,8 +213,9 @@ std::unique_ptr<cudf::column> porter_stemmer_measure(cudf::strings_column_view c
                                                      rmm::cuda_stream_view stream,
                                                      rmm::mr::device_memory_resource* mr)
 {
-  if (strings.is_empty())
+  if (strings.is_empty()) {
     return cudf::make_empty_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()});
+  }
 
   // create empty output column
   auto results =

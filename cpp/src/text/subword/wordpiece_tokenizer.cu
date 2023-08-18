@@ -132,7 +132,7 @@ __global__ void init_data_and_mark_word_start_and_ends(uint32_t const* code_poin
  * @param num_strings The total number of strings to be processed.
  */
 __global__ void mark_string_start_and_ends(uint32_t const* code_points,
-                                           uint32_t const* strings_offsets,
+                                           cudf::size_type const* strings_offsets,
                                            uint32_t* start_word_indices,
                                            uint32_t* end_word_indices,
                                            uint32_t num_strings)
@@ -420,7 +420,7 @@ wordpiece_tokenizer::wordpiece_tokenizer(hashed_vocabulary const& vocab_table,
 }
 
 uvector_pair wordpiece_tokenizer::tokenize(char const* d_strings,
-                                           uint32_t const* d_offsets,
+                                           cudf::size_type const* d_offsets,
                                            uint32_t num_strings,
                                            rmm::cuda_stream_view stream)
 {
@@ -439,10 +439,10 @@ struct tranform_fn {  // just converting uint8 value to uint32
 
 void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stream_view stream)
 {
-  uint32_t* device_code_points     = cps_and_offsets.first->data();
-  size_t const num_code_points     = cps_and_offsets.first->size();
-  uint32_t* device_strings_offsets = cps_and_offsets.second->data();
-  uint32_t const num_strings       = cps_and_offsets.second->size() - 1;
+  auto device_code_points     = cps_and_offsets.first->data();
+  auto const num_code_points  = cps_and_offsets.first->size();
+  auto device_strings_offsets = cps_and_offsets.second->data();
+  auto const num_strings      = cps_and_offsets.second->size() - 1;
 
   size_t const four_byte_cp_chunks = 1 + (num_code_points - 1) / sizeof(uint32_t);
   size_t const rounded_num_cps     = sizeof(uint32_t) * four_byte_cp_chunks;
