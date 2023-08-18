@@ -17,8 +17,6 @@ package ai.rapids.cudf;
 
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Executable;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -52,7 +50,7 @@ public class LargeTableTest extends CudfTestBase {
     // in the child column. This should cause an overflow exception.
     boolean [] arrBools = new boolean[arraySize];
     for (char i = 0; i < arraySize; ++i) { arrBools[i] = false; }
-    Exception exception = assertThrows(CudfColumnOverflowException.class, ()->{
+    Exception exception = assertThrows(CudfColumnSizeOverflowException.class, ()->{
         try (Scalar strScalar = Scalar.fromString(str);
              ColumnVector arrRow = ColumnVector.fromBooleans(arrBools);
              Scalar arrScalar = Scalar.listFromColumnView(arrRow);
@@ -61,7 +59,7 @@ public class LargeTableTest extends CudfTestBase {
              Table inputTable = new Table(strVector, arrVector);
              Table outputTable = inputTable.explode(1)) {
           assertEquals(outputTable.getColumns()[0].getRowCount(), numRows * arraySize);
-          fail("Exploding this large table should have caused a CudfColumnOverflowException.");
+          fail("Exploding this large table should have caused a CudfColumnSizeOverflowException.");
         }});
     assertTrue(exception.getMessage().contains("Size of output exceeds the column size limit"));
   }

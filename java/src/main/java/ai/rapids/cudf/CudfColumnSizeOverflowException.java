@@ -19,16 +19,16 @@ package ai.rapids.cudf;
  * Exception thrown when CUDF operation results in a column size
  * exceeding CUDF column size limits
  */
-public class CudfColumnOverflowException extends CudfException {
-  CudfColumnOverflowException(String message) {
+public class CudfColumnSizeOverflowException extends CudfException {
+  CudfColumnSizeOverflowException(String message) {
     super(message);
   }
 
-  CudfColumnOverflowException(String message, String nativeStacktrace) {
+  CudfColumnSizeOverflowException(String message, String nativeStacktrace) {
     super(message, nativeStacktrace);
   }
 
-  CudfColumnOverflowException(String message, String nativeStacktrace, Throwable cause) {
+  CudfColumnSizeOverflowException(String message, String nativeStacktrace, Throwable cause) {
     super(message, nativeStacktrace, cause);
   }
 }
