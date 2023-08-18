@@ -328,7 +328,7 @@ void reader::impl::prepare_data(int64_t skip_rows,
   auto const [skip_rows_corrected, num_rows_corrected, row_groups_info] =
     _metadata->select_row_groups(row_group_indices, skip_rows, num_rows, output_types, filter);
 
-  if (num_rows_corrected > 0 && row_groups_info.size() != 0 && _input_columns.size() != 0) {
+  if (num_rows_corrected > 0 && not row_groups_info.empty() && not _input_columns.empty()) {
     load_and_decompress_data(row_groups_info, num_rows_corrected);
     preprocess_pages(
       skip_rows_corrected, num_rows_corrected, uses_custom_row_bounds, _chunk_read_limit);
@@ -368,7 +368,7 @@ table_with_metadata reader::impl::read_chunk_internal(
   auto out_columns = std::vector<std::unique_ptr<column>>{};
   out_columns.reserve(_output_buffers.size());
 
-  if (!has_next() || _chunk_read_info.size() == 0) {
+  if (!has_next() || _chunk_read_info.empty()) {
     return finalize_output(out_metadata, out_columns, filter);
   }
 

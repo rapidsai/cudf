@@ -1647,7 +1647,7 @@ void make_json_column(json_column& root_column,
         CUDF_EXPECTS(current_data_path.top().column->child_columns.size() <= 1,
                      "Encountered a list column with more than a single child column");
         // The child column has yet to be created
-        if (current_data_path.top().column->child_columns.size() == 0) {
+        if (current_data_path.top().column->child_columns.empty()) {
           current_data_path.top().column->child_columns.emplace(std::string{list_child_name},
                                                                 json_column{json_col_t::Unknown});
           current_data_path.top().column->column_order.push_back(list_child_name);
@@ -2119,7 +2119,7 @@ table_with_metadata host_parse_nested_json(device_span<SymbolT const> d_input,
     new_line_delimited_json ? root_column : root_column.child_columns.begin()->second;
 
   // Zero row entries
-  if (data_root.type == json_col_t::ListColumn && data_root.child_columns.size() == 0) {
+  if (data_root.type == json_col_t::ListColumn && data_root.child_columns.empty()) {
     return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{})};
   }
 
