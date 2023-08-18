@@ -68,8 +68,8 @@ __global__ void minhash_kernel(cudf::column_device_view const d_strings,
                                hash_value_type* d_hashes)
 {
   auto const idx = static_cast<std::size_t>(threadIdx.x + blockIdx.x * blockDim.x);
-  if (idx >= (static_cast<std::size_t>(d_strings.size() *
-                                       static_cast<std::size_t>(cudf::detail::warp_size)))) {
+  if (idx >= (static_cast<std::size_t>(d_strings.size()) *
+              static_cast<std::size_t>(cudf::detail::warp_size))) {
     return;
   }
 
@@ -167,7 +167,7 @@ std::unique_ptr<cudf::column> build_list_result(cudf::strings_column_view const&
 {
   // build the offsets for the output lists column
   auto const zero = cudf::numeric_scalar<cudf::size_type>(0);
-  auto const size = cudf::numeric_scalar<cudf::size_type>(static_cast<cudf::size_type>(seeds_size));
+  auto const size = cudf::numeric_scalar<cudf::size_type>(seeds_size);
   auto offsets    = cudf::detail::sequence(input.size() + 1, zero, size, stream, mr);
   hashes->set_null_mask(rmm::device_buffer{}, 0);  // children have no nulls
 
