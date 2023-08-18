@@ -1,9 +1,5 @@
 /*
-<<<<<<< HEAD
-* SPDX-FileCopyrightText: Copyright (c) <2023> NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-=======
 * SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
->>>>>>> feature/numba-cuda-runtime
 * SPDX-License-Identifier: Apache-2.0
 Copyright (c) 2012, Anaconda, Inc.
 All rights reserved.
