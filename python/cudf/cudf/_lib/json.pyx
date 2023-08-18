@@ -259,9 +259,10 @@ cdef _set_col_children_metadata(Column col,
                 child_col, col_meta.children[i]
             )
     elif is_list_dtype(col):
-        _set_col_children_metadata(
-            col.children[0],
-            col_meta.children[0]
-        )
+        for i, child_col in enumerate(col.children):
+            col_meta.children.push_back(child_info)
+            _set_col_children_metadata(
+                child_col, col_meta.children[i]
+            )
     else:
         return

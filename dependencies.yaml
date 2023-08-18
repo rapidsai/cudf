@@ -289,12 +289,14 @@ dependencies:
               - cuda-version=12.0
               - cuda-cudart-dev
               - cuda-nvrtc-dev
+              - cuda-nvtx-dev
               - libcurand-dev
           - matrix:
               cuda: "11.8"
             packages:
               - cuda-version=11.8
               - cudatoolkit
+              - cuda-nvtx=11.8
               - libcurand-dev=10.3.0.86
               - libcurand=10.3.0.86
           - matrix:
@@ -302,6 +304,7 @@ dependencies:
             packages:
               - cuda-version=11.5
               - cudatoolkit
+              - cuda-nvtx=11.5
                 # Can't hard pin the version since 11.x is missing many
                 # packages for specific versions
               - libcurand-dev>=10.2.6.48,<=10.2.7.107
@@ -311,6 +314,7 @@ dependencies:
             packages:
               - cuda-version=11.4
               - cudatoolkit
+              - &cudanvtx114 cuda-nvtx=11.4
               - &libcurand_dev114 libcurand-dev>=10.2.5.43,<=10.2.5.120
               - &libcurand114 libcurand>=10.2.5.43,<=10.2.5.120
           - matrix:
@@ -321,6 +325,7 @@ dependencies:
                 # The NVIDIA channel doesn't publish pkgs older than 11.4 for
                 # these libs, so 11.2 uses 11.4 packages (the oldest
                 # available).
+              - *cudanvtx114
               - *libcurand_dev114
               - *libcurand114
       - output_types: conda
@@ -535,22 +540,6 @@ dependencies:
           - *cmake_ver
           - maven
           - openjdk=8.*
-    specific:
-      - output_types: conda
-        matrices:
-          - matrix:
-              cuda: "12.0"
-            packages:
-              - cuda-version=12.0
-              - cuda-nvtx
-          - matrix:
-              cuda: "11.8"
-            packages:
-              - cuda-nvtx=11.8
-          - matrix:
-              cuda: "11.5"
-            packages:
-              - cuda-nvtx=11.5
   test_python_common:
     common:
       - output_types: [conda, requirements, pyproject]
