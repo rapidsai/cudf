@@ -17,6 +17,7 @@
 #include "file_io_utilities.hpp"
 
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/arrow_io_source.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -25,9 +26,13 @@
 #include <kvikio/file_handle.hpp>
 #include <rmm/device_buffer.hpp>
 
+#include <arrow/io/memory.h>
+
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
+
+#include <unordered_map>
 
 namespace cudf {
 namespace io {
@@ -105,6 +110,27 @@ class file_source : public datasource {
 };
 
 /**
+ * @brief Memoized pageableMemoryAccessUsesHostPageTables device property.
+ */
+[[nodiscard]] bool pageableMemoryAccessUsesHostPageTables()
+{
+  static std::unordered_map<int, bool> result_cache{};
+
+  int deviceId{};
+  CUDF_CUDA_TRY(cudaGetDevice(&deviceId));
+
+  if (result_cache.find(deviceId) == result_cache.end()) {
+    cudaDeviceProp props{};
+    CUDF_CUDA_TRY(cudaGetDeviceProperties(&props, deviceId));
+    result_cache[deviceId] = (props.pageableMemoryAccessUsesHostPageTables == 1);
+    CUDF_LOG_INFO(
+      "Device {} pageableMemoryAccessUsesHostPageTables: {}", deviceId, result_cache[deviceId]);
+  }
+
+  return result_cache[deviceId];
+}
+
+/**
  * @brief Implementation class for reading from a file using memory mapped access.
  *
  * Unlike Arrow's memory mapped IO class, this implementation allows memory mapping a subset of the
@@ -115,12 +141,18 @@ class memory_mapped_source : public file_source {
   explicit memory_mapped_source(char const* filepath, size_t offset, size_t size)
     : file_source(filepath)
   {
-    if (_file.size() != 0) map(_file.desc(), offset, size);
+    if (_file.size() != 0) {
+      map(_file.desc(), offset, size);
+      register_mmap_buffer();
+    }
   }
 
   ~memory_mapped_source() override
   {
-    if (_map_addr != nullptr) { munmap(_map_addr, _map_size); }
+    if (_map_addr != nullptr) {
+      munmap(_map_addr, _map_size);
+      unregister_mmap_buffer();
+    }
   }
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
@@ -147,6 +179,38 @@ class memory_mapped_source : public file_source {
   }
 
  private:
+  /**
+   * @brief Page-locks (registers) the memory range of the mapped file.
+   *
+   * Fixes nvbugs/4215160
+   */
+  void register_mmap_buffer()
+  {
+    if (_map_addr == nullptr or _map_size == 0 or not pageableMemoryAccessUsesHostPageTables()) {
+      return;
+    }
+
+    auto const result = cudaHostRegister(_map_addr, _map_size, cudaHostRegisterDefault);
+    if (result == cudaSuccess) {
+      _is_map_registered = true;
+    } else {
+      CUDF_LOG_WARN("cudaHostRegister failed with {} ({})", result, cudaGetErrorString(result));
+    }
+  }
+
+  /**
+   * @brief Unregisters the memory range of the mapped file.
+   */
+  void unregister_mmap_buffer()
+  {
+    if (not _is_map_registered) { return; }
+
+    auto const result = cudaHostUnregister(_map_addr);
+    if (result != cudaSuccess) {
+      CUDF_LOG_WARN("cudaHostUnregister failed with {} ({})", result, cudaGetErrorString(result));
+    }
+  }
+
   void map(int fd, size_t offset, size_t size)
   {
     CUDF_EXPECTS(offset < _file.size(), "Offset is past end of file");
@@ -165,9 +229,10 @@ class memory_mapped_source : public file_source {
   }
 
  private:
-  size_t _map_size   = 0;
-  size_t _map_offset = 0;
-  void* _map_addr    = nullptr;
+  size_t _map_size        = 0;
+  size_t _map_offset      = 0;
+  void* _map_addr         = nullptr;
+  bool _is_map_registered = false;
 };
 
 /**

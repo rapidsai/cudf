@@ -34,10 +34,11 @@
 namespace cudf {
 
 // forward declaration
-namespace detail {
+namespace hashing::detail {
 template <typename T>
-class MurmurHash3_32;
-
+class MurmurHash3_x86_32;
+}  // namespace hashing::detail
+namespace detail {
 template <typename T>
 class hash_join;
 }  // namespace detail
@@ -272,7 +273,7 @@ enum class nullable_join : bool { YES, NO };
 class hash_join {
  public:
   using impl_type = typename cudf::detail::hash_join<
-    cudf::detail::MurmurHash3_32<cudf::hash_value_type>>;  ///< Implementation type
+    cudf::hashing::detail::MurmurHash3_x86_32<cudf::hash_value_type>>;  ///< Implementation type
 
   hash_join() = delete;
   ~hash_join();

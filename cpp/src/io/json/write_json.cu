@@ -75,10 +75,10 @@ namespace {
 struct escape_strings_fn {
   column_device_view const d_column;
   bool const append_colon{false};
-  offset_type* d_offsets{};
+  size_type* d_offsets{};
   char* d_chars{};
 
-  __device__ void write_char(char_utf8 chr, char*& d_buffer, offset_type& bytes)
+  __device__ void write_char(char_utf8 chr, char*& d_buffer, size_type& bytes)
   {
     if (d_buffer)
       d_buffer += cudf::strings::detail::from_char_utf8(chr, d_buffer);
@@ -91,7 +91,7 @@ struct escape_strings_fn {
     return nibble < 10 ? '0' + nibble : 'a' + nibble - 10;
   }
 
-  __device__ void write_utf8_codepoint(uint16_t codepoint, char*& d_buffer, offset_type& bytes)
+  __device__ void write_utf8_codepoint(uint16_t codepoint, char*& d_buffer, size_type& bytes)
   {
     if (d_buffer) {
       d_buffer[0] = '\\';
@@ -106,7 +106,7 @@ struct escape_strings_fn {
     }
   }
 
-  __device__ void write_utf16_codepoint(uint32_t codepoint, char*& d_buffer, offset_type& bytes)
+  __device__ void write_utf16_codepoint(uint32_t codepoint, char*& d_buffer, size_type& bytes)
   {
     constexpr uint16_t UTF16_HIGH_SURROGATE_BEGIN = 0xD800;
     constexpr uint16_t UTF16_LOW_SURROGATE_BEGIN  = 0xDC00;
@@ -130,8 +130,8 @@ struct escape_strings_fn {
     constexpr char_utf8 const quote = '\"';  // wrap quotes
     bool constexpr quote_row        = true;
 
-    char* d_buffer    = d_chars ? d_chars + d_offsets[idx] : nullptr;
-    offset_type bytes = 0;
+    char* d_buffer  = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    size_type bytes = 0;
 
     if (quote_row) write_char(quote, d_buffer, bytes);
     for (auto utf8_char : d_str) {
@@ -148,7 +148,7 @@ struct escape_strings_fn {
         }
         continue;
       }
-      auto escaped_chars = cudf::io::json::experimental::detail::get_escaped_char(utf8_char);
+      auto escaped_chars = get_escaped_char(utf8_char);
       if (escaped_chars.first == '\0') {
         write_char(escaped_chars.second, d_buffer, bytes);
       } else {

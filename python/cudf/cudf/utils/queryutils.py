@@ -114,7 +114,7 @@ def _check_error(tree):
         raise QuerySyntaxError("too many expressions")
 
 
-_cache = {}  # type: Dict[Any, Any]
+_cache: Dict[Any, Any] = {}
 
 
 def query_compile(expr):

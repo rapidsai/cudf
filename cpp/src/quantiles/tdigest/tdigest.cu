@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ struct make_centroid {
 
 // kernel for computing percentiles on input tdigest (mean, weight) centroid data.
 template <typename CentroidIter>
-__global__ void compute_percentiles_kernel(device_span<offset_type const> tdigest_offsets,
+__global__ void compute_percentiles_kernel(device_span<size_type const> tdigest_offsets,
                                            column_device_view percentiles,
                                            CentroidIter centroids_,
                                            double const* min_,
@@ -199,8 +199,8 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
                                                           rmm::mr::get_current_device_resource());
   auto keys               = cudf::detail::make_counting_transform_iterator(
     0,
-    [offsets_begin = offsets.begin<offset_type>(),
-     offsets_end   = offsets.end<offset_type>()] __device__(size_type i) {
+    [offsets_begin = offsets.begin<size_type>(),
+     offsets_end   = offsets.end<size_type>()] __device__(size_type i) {
       return thrust::distance(
         offsets_begin,
         thrust::prev(thrust::upper_bound(thrust::seq, offsets_begin, offsets_end, i)));
@@ -239,7 +239,7 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
   constexpr size_type block_size = 256;
   cudf::detail::grid_1d const grid(percentiles.size() * input.size(), block_size);
   compute_percentiles_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
-    {offsets.begin<offset_type>(), static_cast<size_t>(offsets.size())},
+    {offsets.begin<size_type>(), static_cast<size_t>(offsets.size())},
     *percentiles_cdv,
     centroids,
     tdv.min_begin(),
@@ -294,8 +294,8 @@ std::unique_ptr<column> make_empty_tdigest_column(rmm::cuda_stream_view stream,
   auto offsets = cudf::make_fixed_width_column(
     data_type(type_id::INT32), 2, mask_state::UNALLOCATED, stream, mr);
   thrust::fill(rmm::exec_policy(stream),
-               offsets->mutable_view().begin<offset_type>(),
-               offsets->mutable_view().end<offset_type>(),
+               offsets->mutable_view().begin<size_type>(),
+               offsets->mutable_view().end<size_type>(),
                0);
 
   auto min_col =
@@ -362,7 +362,7 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
   thrust::exclusive_scan(rmm::exec_policy(stream),
                          row_size_iter,
                          row_size_iter + input.size() + 1,
-                         offsets->mutable_view().begin<offset_type>());
+                         offsets->mutable_view().begin<size_type>());
 
   if (percentiles.size() == 0 || all_empty_rows) {
     return cudf::make_lists_column(

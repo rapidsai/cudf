@@ -40,6 +40,7 @@ import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.*;
@@ -5307,6 +5308,35 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  @Test
+  void testWindowWithUnboundedPrecedingUnboundedFollowing() {
+    try (Table unsorted = new Table.TestBuilder()
+            .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+            .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
+            .column(1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
+            .column(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column
+            .build()) {
+      try (Table sorted = unsorted.orderBy(OrderByArg.asc(0), OrderByArg.asc(1), OrderByArg.asc(2));
+           ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+        ColumnVector sortedAggColumn = sorted.getColumn(3);
+        assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+        try (WindowOptions window = WindowOptions.builder()
+                .minPeriods(1)
+                .unboundedPreceding()
+                .unboundedFollowing()
+                .build()) {
+
+          try (Table windowAggResults = sorted.groupBy(0, 1)
+                  .aggregateWindows(RollingAggregation.sum().onColumn(3).overWindow(window));
+               ColumnVector expectAggResult = ColumnVector.fromBoxedLongs(22L, 22L, 22L, 22L, 26L, 26L, 26L, 26L, 20L, 20L, 20L, 20L)) {
+            assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
+          }
+        }
+      }
+    }
+  }
+
   private Scalar getScalar(DType type, long value) {
     if (type.equals(DType.INT32)) {
       return Scalar.fromInt((int) value);
@@ -8004,6 +8034,17 @@ public class TableTest extends CudfTestBase {
           .withDecimalColumn("_c8", 5)
           .build();
 
+      TableDebug.get().debug("default stderr table0", table0);
+      TableDebug.builder()
+        .withOutput(TableDebug.Output.STDOUT)
+        .build().debug("stdout table0", table0);
+      TableDebug.builder()
+          .withOutput(TableDebug.Output.LOG)
+          .build().debug("slf4j default debug table0", table0);
+      TableDebug.builder()
+          .withOutput(TableDebug.Output.LOG_ERROR)
+          .build().debug("slf4j error table0", table0);
+
       try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
         writer.write(table0);
         writer.write(table0);
@@ -8562,6 +8603,9 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  // https://github.com/NVIDIA/spark-rapids-jni/issues/1338
+  // Need to remove this tag if #1338 is fixed.
+  @Tag("noSanitizer")
   @Test
   void testORCReadAndWriteForDecimal128() throws IOException {
     File tempFile = File.createTempFile("test", ".orc");

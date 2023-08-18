@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from cudf.core.buffer import acquire_spill_lock
 
@@ -12,7 +12,7 @@ from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.nvtext.stemmer cimport (
     is_letter as cpp_is_letter,
-    letter_type as letter_type,
+    letter_type,
     porter_stemmer_measure as cpp_porter_stemmer_measure,
     underlying_type_t_letter_type,
 )

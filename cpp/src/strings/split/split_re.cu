@@ -60,7 +60,7 @@ enum class split_direction {
 struct token_reader_fn {
   column_device_view const d_strings;
   split_direction const direction;
-  offset_type const* d_token_offsets;
+  size_type const* d_token_offsets;
   string_index_pair* d_tokens;
 
   __device__ void operator()(size_type const idx, reprog_device const prog, int32_t const prog_idx)
@@ -143,17 +143,17 @@ rmm::device_uvector<string_index_pair> generate_tokens(column_device_view const&
 
   auto const begin     = thrust::make_counting_iterator<size_type>(0);
   auto const end       = thrust::make_counting_iterator<size_type>(strings_count);
-  auto const d_offsets = offsets.data<offset_type>();
+  auto const d_offsets = offsets.data<size_type>();
 
   // convert match counts to token offsets
   auto map_fn = [d_strings, d_offsets, max_tokens] __device__(auto idx) {
     return d_strings.is_null(idx) ? 0 : std::min(d_offsets[idx], max_tokens) + 1;
   };
   thrust::transform_exclusive_scan(
-    rmm::exec_policy(stream), begin, end + 1, d_offsets, map_fn, 0, thrust::plus<offset_type>{});
+    rmm::exec_policy(stream), begin, end + 1, d_offsets, map_fn, 0, thrust::plus<size_type>{});
 
   // the last offset entry is the total number of tokens to be generated
-  auto const total_tokens = cudf::detail::get_value<offset_type>(offsets, strings_count, stream);
+  auto const total_tokens = cudf::detail::get_value<size_type>(offsets, strings_count, stream);
 
   rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
   if (total_tokens == 0) { return tokens; }
@@ -176,7 +176,7 @@ rmm::device_uvector<string_index_pair> generate_tokens(column_device_view const&
 struct tokens_transform_fn {
   column_device_view const d_strings;
   string_index_pair const* d_tokens;
-  offset_type const* d_token_offsets;
+  size_type const* d_token_offsets;
   size_type const column_index;
 
   __device__ string_index_pair operator()(size_type idx) const
@@ -215,7 +215,7 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
   auto offsets = count_matches(
     *d_strings, *d_prog, strings_count + 1, stream, rmm::mr::get_current_device_resource());
   auto offsets_view = offsets->mutable_view();
-  auto d_offsets    = offsets_view.data<offset_type>();
+  auto d_offsets    = offsets_view.data<size_type>();
 
   // get the split tokens from the input column; this also converts the counts into offsets
   auto tokens = generate_tokens(*d_strings, *d_prog, direction, maxsplit, offsets_view, stream);

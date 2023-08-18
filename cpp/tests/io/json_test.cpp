@@ -23,7 +23,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
-#include <cudf/io/datasource.hpp>
+#include <cudf/io/arrow_io_source.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -149,7 +149,7 @@ void check_float_column(cudf::column_view const& col,
                         valid_t const& validity)
 {
   CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(col, (wrapper<T>{data.begin(), data.end(), validity}));
-  CUDF_EXPECTS(col.null_count() == 0, "All elements should be valid");
+  EXPECT_EQ(col.null_count(), 0);
   EXPECT_THAT(cudf::test::to_host<T>(col).first,
               ::testing::Pointwise(FloatNearPointwise(1e-6), data));
 }
@@ -196,6 +196,12 @@ struct JsonReaderParamTest : public cudf::test::BaseFixture,
  * JSON lines reader and the nested reader
  */
 struct JsonReaderDualTest : public cudf::test::BaseFixture,
+                            public testing::WithParamInterface<json_test_t> {};
+
+/**
+ * @brief Test fixture for parametrized JSON reader tests that only tests the new nested JSON reader
+ */
+struct JsonReaderNoLegacy : public cudf::test::BaseFixture,
                             public testing::WithParamInterface<json_test_t> {};
 
 /**
@@ -285,6 +291,12 @@ INSTANTIATE_TEST_CASE_P(JsonReaderParamTest,
 INSTANTIATE_TEST_CASE_P(JsonReaderDualTest,
                         JsonReaderDualTest,
                         ::testing::Values(json_test_t::legacy_lines_record_orient,
+                                          json_test_t::json_experimental_record_orient));
+
+// Parametrize qualifying JSON tests for executing nested reader only
+INSTANTIATE_TEST_CASE_P(JsonReaderNoLegacy,
+                        JsonReaderNoLegacy,
+                        ::testing::Values(json_test_t::json_experimental_row_orient,
                                           json_test_t::json_experimental_record_orient));
 
 TEST_P(JsonReaderParamTest, BasicJsonLines)
@@ -1235,6 +1247,51 @@ TEST_P(JsonReaderParamTest, JsonLinesMultipleFileInputs)
                                  float64_wrapper{{1.1, 2.2, 3.3, 4.4}, validity});
 }
 
+TEST_P(JsonReaderNoLegacy, JsonLinesMultipleFileInputsNoNL)
+{
+  auto const test_opt = GetParam();
+  // Strings for the two separate input files in row-orient that do not end with a newline
+  std::vector<std::string> row_orient{"[11, 1.1]\n[22, 2.2]", "[33, 3.3]\n[44, 4.4]"};
+  // Strings for the two separate input files in record-orient that do not end with a newline
+  std::vector<std::string> record_orient{
+    to_records_orient({{{"0", "11"}, {"1", "1.1"}}, {{"0", "22"}, {"1", "2.2"}}}, "\n"),
+    to_records_orient({{{"0", "33"}, {"1", "3.3"}}, {{"0", "44"}, {"1", "4.4"}}}, "\n")};
+  auto const& data = is_row_orient_test(test_opt) ? row_orient : record_orient;
+
+  const std::string file1 = temp_env->get_temp_dir() + "JsonLinesFileTest1.json";
+  std::ofstream outfile(file1, std::ofstream::out);
+  outfile << data[0];
+  outfile.close();
+
+  const std::string file2 = temp_env->get_temp_dir() + "JsonLinesFileTest2.json";
+  std::ofstream outfile2(file2, std::ofstream::out);
+  outfile2 << data[1];
+  outfile2.close();
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{{file1, file2}})
+      .lines(true)
+      .legacy(is_legacy_test(test_opt));
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 2);
+  EXPECT_EQ(result.tbl->num_rows(), 4);
+
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
+
+  EXPECT_EQ(result.metadata.schema_info[0].name, "0");
+  EXPECT_EQ(result.metadata.schema_info[1].name, "1");
+
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 int64_wrapper{{11, 22, 33, 44}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
+                                 float64_wrapper{{1.1, 2.2, 3.3, 4.4}, validity});
+}
+
 TEST_F(JsonReaderTest, BadDtypeParams)
 {
   std::string buffer = "[1,2,3,4]";
@@ -1767,6 +1824,52 @@ TEST_F(JsonReaderTest, TrailingCommas)
     EXPECT_THROW(cudf::io::read_json(json_parser_options), cudf::logic_error)
       << "Failed on test case " << i;
   }
+}
+
+TEST_F(JsonReaderTest, JSONLinesRecovering)
+{
+  std::string data =
+    // 0 -> a: -2 (valid)
+    R"({"a":-2})"
+    "\n"
+    // 1 -> (invalid)
+    R"({"a":])"
+    "\n"
+    // 2 -> (invalid)
+    R"({"b":{"a":[321})"
+    "\n"
+    // 3 -> c: [1] (valid)
+    R"({"c":1.2})"
+    "\n"
+    "\n"
+    // 4 -> a: 123 (valid)
+    R"({"a":123})";
+
+  auto filepath = temp_env->get_temp_dir() + "RecoveringLines.json";
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    outfile << data;
+  }
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{filepath})
+      .lines(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 2);
+  EXPECT_EQ(result.tbl->num_rows(), 5);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
+
+  std::vector<bool> a_validity{true, false, false, false, true};
+  std::vector<bool> c_validity{false, false, false, true, false};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 int64_wrapper{{-2, 0, 0, 0, 123}, a_validity.cbegin()});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
+                                 float64_wrapper{{0.0, 0.0, 0.0, 1.2, 0.0}, c_validity.cbegin()});
 }
 
 CUDF_TEST_PROGRAM_MAIN()

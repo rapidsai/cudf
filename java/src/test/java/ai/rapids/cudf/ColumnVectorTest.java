@@ -6792,6 +6792,18 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  public void testHostEventHandlerIsCalledForEachClose() {
+    final AtomicInteger onClosedWasCalled = new AtomicInteger(0);
+    try (HostColumnVector cv = HostColumnVector.fromInts(1,2,3,4)) {
+      cv.setEventHandler((col, refCount) -> {
+        assertEquals(cv, col);
+        onClosedWasCalled.incrementAndGet();
+      });
+    }
+    assertEquals(1, onClosedWasCalled.get());
+  }
+
+  @Test
   public void testEventHandlerIsNotCalledIfNotSet() {
     final AtomicInteger onClosedWasCalled = new AtomicInteger(0);
     try (ColumnVector cv = ColumnVector.fromInts(1,2,3,4)) {
@@ -6800,6 +6812,23 @@ public class ColumnVectorTest extends CudfTestBase {
     assertEquals(0, onClosedWasCalled.get());
 
     try (ColumnVector cv = ColumnVector.fromInts(1,2,3,4)) {
+      cv.setEventHandler((col, refCount) -> {
+        onClosedWasCalled.incrementAndGet();
+      });
+      cv.setEventHandler(null);
+    }
+    assertEquals(0, onClosedWasCalled.get());
+  }
+
+  @Test
+  public void testHostEventHandlerIsNotCalledIfNotSet() {
+    final AtomicInteger onClosedWasCalled = new AtomicInteger(0);
+    try (HostColumnVector cv = HostColumnVector.fromInts(1,2,3,4)) {
+      assertNull(cv.getEventHandler());
+    }
+    assertEquals(0, onClosedWasCalled.get());
+
+    try (HostColumnVector cv = HostColumnVector.fromInts(1,2,3,4)) {
       cv.setEventHandler((col, refCount) -> {
         onClosedWasCalled.incrementAndGet();
       });
@@ -6823,5 +6852,12 @@ public class ColumnVectorTest extends CudfTestBase {
                                           vector.getDeviceBufferFor(BufferType.OFFSET))) {
       assertEquals(vector.getNullCount(), view.getNullCount());
     }
+  }
+
+  @Test
+  public void testUseAfterFree() {
+    ColumnVector vector = ColumnVector.fromBoxedInts(1, 2, 3);
+    vector.close();
+    assertThrows(NullPointerException.class, vector::getDeviceMemorySize);
   }
 }

@@ -63,7 +63,7 @@ struct base_fn {
   character_cases_table_type const* d_case_table;
   special_case_mapping const* d_special_case_mapping;
   column_device_view const d_column;
-  offset_type* d_offsets{};
+  size_type* d_offsets{};
   char* d_chars{};
 
   base_fn(column_device_view const& d_column)
@@ -111,11 +111,11 @@ struct base_fn {
       return;
     }
 
-    auto& derived     = static_cast<Derived&>(*this);
-    auto const d_str  = d_column.element<string_view>(idx);
-    offset_type bytes = 0;
-    auto d_buffer     = d_chars ? d_chars + d_offsets[idx] : nullptr;
-    bool capitalize   = true;
+    auto& derived    = static_cast<Derived&>(*this);
+    auto const d_str = d_column.element<string_view>(idx);
+    size_type bytes  = 0;
+    auto d_buffer    = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    bool capitalize  = true;
     for (auto const chr : d_str) {
       auto const info        = get_char_info(d_flags, chr);
       auto const flag        = info.second;

@@ -126,7 +126,7 @@ void BM_contiguous_split_strings(benchmark::State& state, ContiguousSplitImpl& i
   bool const include_validity       = state.range(3) != 0;
 
   constexpr int64_t string_len = 8;
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "aaaaaaaa", "bbbbbbbb", "cccccccc", "dddddddd", "eeeeeeee", "ffffffff", "gggggggg", "hhhhhhhh"};
 
   int64_t const col_len_bytes = total_desired_bytes / num_cols;
@@ -151,7 +151,7 @@ void BM_contiguous_split_strings(benchmark::State& state, ContiguousSplitImpl& i
   }
 
   int64_t const total_bytes =
-    total_desired_bytes + ((num_rows + 1) * sizeof(cudf::offset_type)) +
+    total_desired_bytes + ((num_rows + 1) * sizeof(cudf::size_type)) +
     (include_validity ? (max(int64_t{1}, (num_rows / 32)) * sizeof(cudf::bitmask_type) * num_cols)
                       : 0);
 

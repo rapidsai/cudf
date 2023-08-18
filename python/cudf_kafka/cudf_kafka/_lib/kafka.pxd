@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t, int64_t
 from libcpp cimport bool
@@ -7,7 +7,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
-from cudf._lib.cpp.io.types cimport datasource
+from cudf._lib.cpp.io.datasource cimport datasource
 from cudf._lib.io.datasource cimport Datasource
 
 

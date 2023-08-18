@@ -27,7 +27,7 @@ class Rank : public cudf::benchmark {};
 static void BM_rank(benchmark::State& state, bool nulls)
 {
   using Type = int;
-  const cudf::size_type n_rows{(cudf::size_type)state.range(0)};
+  cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
 
   // Create columns with values in the range [0,100)
   data_profile profile = data_profile_builder().cardinality(0).distribution(
