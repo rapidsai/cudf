@@ -28,6 +28,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
+#include <numba_cuda_runtime.cuh>
+
 namespace cudf {
 namespace strings {
 namespace udf {
@@ -143,7 +145,7 @@ void free_managed_udf_string_array(cudf::strings::udf::managed_udf_string* manag
                      size,
                      [managed_strings] __device__(auto idx) {
                        managed_strings[idx].udf_str.clear();
-                       free(managed_strings[idx].meminfo);
+                       NRT_MemInfo_destroy((NRT_MemInfo*)managed_strings[idx].meminfo);
                      });
 }
 
