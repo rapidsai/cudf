@@ -143,7 +143,7 @@ __global__ void multibyte_split_init_kernel(
   cudf::io::text::detail::scan_tile_status status =
     cudf::io::text::detail::scan_tile_status::invalid)
 {
-  cudf::thread_index_type const thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
+  auto const thread_idx = cudf::thread_index_type{threadIdx.x} + (blockDim.x * blockIdx.x);
   if (thread_idx < num_tiles) {
     auto const tile_idx = base_tile_idx + thread_idx;
     tile_multistates.set_status(tile_idx, status);
@@ -182,11 +182,11 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
     typename OffsetScan::TempStorage offset_scan;
   } temp_storage;
 
-  cudf::thread_index_type const tile_idx          = base_tile_idx + blockIdx.x;
-  cudf::thread_index_type const tile_input_offset = blockIdx.x * ITEMS_PER_TILE;
-  cudf::thread_index_type const thread_input_offset =
-    tile_input_offset + threadIdx.x * ITEMS_PER_THREAD;
-  cudf::thread_index_type const thread_input_size = chunk_input_chars.size() - thread_input_offset;
+  auto const tile_idx          = base_tile_idx + blockIdx.x;
+  auto const tile_input_offset = blockIdx.x * ITEMS_PER_TILE;
+  auto const thread_input_offset =
+    tile_input_offset + cudf::thread_index_type{threadIdx.x} * ITEMS_PER_THREAD;
+  auto const thread_input_size = chunk_input_chars.size() - thread_input_offset;
 
   // STEP 1: Load inputs
 
@@ -256,11 +256,11 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void byte_split_kernel(
     typename OffsetScan::TempStorage offset_scan;
   } temp_storage;
 
-  cudf::thread_index_type const tile_idx          = base_tile_idx + blockIdx.x;
-  cudf::thread_index_type const tile_input_offset = blockIdx.x * ITEMS_PER_TILE;
-  cudf::thread_index_type const thread_input_offset =
-    tile_input_offset + threadIdx.x * ITEMS_PER_THREAD;
-  cudf::thread_index_type const thread_input_size = chunk_input_chars.size() - thread_input_offset;
+  auto const tile_idx          = base_tile_idx + blockIdx.x;
+  auto const tile_input_offset = blockIdx.x * ITEMS_PER_TILE;
+  auto const thread_input_offset =
+    tile_input_offset + cudf::thread_index_type{threadIdx.x} * ITEMS_PER_THREAD;
+  auto const thread_input_size = chunk_input_chars.size() - thread_input_offset;
 
   // STEP 1: Load inputs
 

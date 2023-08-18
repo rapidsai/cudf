@@ -103,7 +103,7 @@ __device__ void block_excl_sum(size_type* arr, size_type length, size_type initi
   auto const t = threadIdx.x;
 
   // do a series of block sums, storing results in arr as we go
-  for (long pos = 0; pos < length; pos += block_size) {
+  for (int64_t pos = 0; pos < length; pos += block_size) {
     auto const tidx = pos + t;
     size_type tval  = tidx < length ? arr[tidx] : 0;
     size_type block_sum;
@@ -213,7 +213,7 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
     bool end_value_set      = false;
 
     while (processed < s->page.num_input_values) {
-      long start_val = processed;
+      int64_t start_val = processed;
 
       if (has_repetition) {
         decoders[level_type::REPETITION].decode_next(t);
@@ -329,7 +329,7 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
   else {
     int num_nulls = 0;
     while (processed < s->page.num_input_values) {
-      long start_val = processed;
+      int64_t start_val = processed;
       processed += decoders[level_type::DEFINITION].decode_next(t);
       __syncthreads();
 
