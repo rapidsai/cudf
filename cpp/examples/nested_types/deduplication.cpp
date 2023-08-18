@@ -14,11 +14,15 @@
  * limitations under the License.
  */
 
+#include <cudf/ast/expressions.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/join.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/transform.hpp>
 
 #include <chrono>
 #include <iostream>
@@ -42,10 +46,8 @@ void write_json(cudf::table_view tbl, std::string filepath)
   cudf::io::write_json(options2);
 }
 
-std::unique_ptr<cudf::table> deduplication_hash(cudf::column_view col)
+std::unique_ptr<cudf::table> count_aggregate(cudf::table_view tbl)
 {
-  auto tbl = cudf::table_view{{col}};
-
   // Get count for each key
   auto keys = cudf::table_view{{tbl.column(0)}};
   auto val  = tbl.column(0);
@@ -65,27 +67,30 @@ std::unique_ptr<cudf::table> deduplication_hash(cudf::column_view col)
   return std::make_unique<cudf::table>(agg_v);
 }
 
-std::unique_ptr<cudf::table> deduplication_sort(cudf::column_view col)
+std::unique_ptr<cudf::table> join_count(cudf::table_view left, cudf::table_view right)
 {
-  auto tbl = cudf::table_view{{col}};
+  auto [left_indices, right_indices] =
+    cudf::inner_join(cudf::table_view{{left.column(0)}}, cudf::table_view{{right.column(0)}});
+  auto new_left  = cudf::gather(left, cudf::device_span<int const>{*left_indices});
+  auto new_right = cudf::gather(right, cudf::device_span<int const>{*right_indices});
 
-  // Get count for each key
-  auto keys = cudf::table_view{{tbl.column(0)}};
-  auto val  = tbl.column(0);
-  cudf::groupby::groupby grpby_obj(keys);
-  std::vector<cudf::groupby::aggregation_request> requests;
-  requests.emplace_back(cudf::groupby::aggregation_request());
-  auto agg = cudf::make_nunique_aggregation<cudf::groupby_aggregation>();
-  requests[0].aggregations.push_back(std::move(agg));
-  requests[0].values = val;
-  auto agg_results   = grpby_obj.aggregate(requests);
-  auto result_key    = std::move(agg_results.first);
-  auto result_val    = std::move(agg_results.second[0].results[0]);
-  std::vector<cudf::column_view> columns{result_key->get_column(0), *result_val};
-  auto agg_v = cudf::table_view(columns);
+  auto left_cols  = new_left->release();
+  auto right_cols = new_right->release();
+  left_cols.push_back(std::move(right_cols[1]));
 
-  // Join on keys to get
-  return std::make_unique<cudf::table>(agg_v);
+  return std::make_unique<cudf::table>(std::move(left_cols));
+}
+
+std::unique_ptr<cudf::table> filter_duplicates(cudf::table_view tbl)
+{
+  auto const op      = cudf::ast::ast_operator::EQUAL;
+  auto literal_value = cudf::numeric_scalar<int>(1);
+  auto literal       = cudf::ast::literal(literal_value);
+  auto col_ref_1     = cudf::ast::column_reference(3);
+  auto expression    = cudf::ast::operation(op, col_ref_1, literal);
+  auto boolean_mask  = cudf::compute_column(tbl, expression);
+  auto filtered      = cudf::apply_boolean_mask(tbl, boolean_mask->view());
+  return filtered;
 }
 
 /**
@@ -93,24 +98,20 @@ std::unique_ptr<cudf::table> deduplication_sort(cudf::column_view col)
  *
  * Command line parameters:
  * 1. JSON input file name/path (default: "example.json")
- * 2. `hash` for hash based deduplication or `sort` for sort based deduplication (default: "hash")
- * 3. JSON output file name/path (default: "hash_output.json")
+ * 3. JSON output file name/path (default: "output.json")
  *
  * The stdout includes the number of rows in the input and the output size in bytes.
  */
 int main(int argc, char const** argv)
 {
   std::string input_filepath;
-  std::string algorithm;
   std::string output_filepath;
   if (argc < 2) {
     input_filepath  = "example.json";
-    algorithm       = "hash";
-    output_filepath = "hash_output.json";
+    output_filepath = "output.json";
   } else if (argc == 4) {
     input_filepath  = argv[1];
-    algorithm       = argv[2];
-    output_filepath = argv[3];
+    output_filepath = argv[2];
   } else {
     std::cout << "Either provide all command-line arguments, or none to use defaults" << std::endl;
     return 1;
@@ -121,18 +122,14 @@ int main(int argc, char const** argv)
 
   auto st = std::chrono::steady_clock::now();
 
-  // alg here
-  std::unique_ptr<cudf::table> result;
-  if (algorithm == "hash") {
-    result = deduplication_hash(tbl->view().column(0));
-  } else {
-    result = deduplication_sort(tbl->view().column(0));
-  }
+  auto count    = count_aggregate(tbl->view());
+  auto combined = join_count(tbl->view(), count->view());
+  auto filtered = filter_duplicates(combined->view());
 
   std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - st;
   std::cout << "Wall time: " << elapsed.count() << " seconds\n";
 
-  write_json(result->view(), output_filepath);
+  write_json(filtered->view(), output_filepath);
 
   return 0;
 }
