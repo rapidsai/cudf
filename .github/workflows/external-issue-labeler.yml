@@ -21,7 +21,10 @@ on:
       - opened
 
 env:
-  GITHUB_TOKEN: ${{ secrets.ISSUE_PR_WRITE_GITHUB_TOKEN }}
+  GITHUB_TOKEN: ${{ github.token }}
+
+permissions:
+  issues: write
 
 jobs:
   Label-Issue:
@@ -32,7 +35,7 @@ jobs:
       - name: add-external-labels
         run: |
           issue_url=${{ github.event.issue.html_url }}
-          gh issue edit ${issue_url} --add-label "Needs Triage,External"
+          gh issue edit ${issue_url} --add-label "External"
 
       - name: add-comment-to-issue
         run: |
