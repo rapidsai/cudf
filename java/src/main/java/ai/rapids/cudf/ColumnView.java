@@ -5161,6 +5161,58 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Calculate the total space required to copy the data to the host.
+   */
+  public long getHostBytesRequired() {
+    return getHostBytesRequiredHelper(this);
+  }
+
+  /*
+   * Align given size to account for host allocation alignment of 64
+   */
+  private static long alignAllocSize(long size) {
+    final long align = 64; // must be a power of two
+    return (size + (align - 1)) & ~(align - 1);
+  }
+
+  private static long getHostBytesRequiredHelper(
+      ColumnView deviceCvPointer) {
+    if (deviceCvPointer == null) {
+      return 0;
+    }
+    BaseDeviceMemoryBuffer valid = deviceCvPointer.getValid();
+    BaseDeviceMemoryBuffer offsets = deviceCvPointer.getOffsets();
+    BaseDeviceMemoryBuffer data = null;
+    DType type = deviceCvPointer.getType();
+    if (!type.isNestedType()) {
+      data = deviceCvPointer.getData();
+    }
+    long validityLength = 0;
+    long offsetsLength = 0;
+    long dataLength = 0;
+    long childrenLength = 0;
+    if (valid != null) {
+      validityLength = alignAllocSize(valid.getLength());
+    }
+    if (offsets != null) {
+      offsetsLength = alignAllocSize(offsets.getLength());
+    }
+    // If a strings column is all null values there is no data buffer allocated
+    if (data != null) {
+      dataLength = alignAllocSize(data.length);
+      data.close();
+    }
+    if (type.isNestedType()) {
+      for (int i = 0; i < deviceCvPointer.getNumChildren(); i++) {
+        try (ColumnView childDevPtr = deviceCvPointer.getChildColumnView(i)) {
+          childrenLength += getHostBytesRequiredHelper(childDevPtr);
+        }
+      }
+    }
+    return validityLength + offsetsLength + dataLength + childrenLength;
+  }
+
+  /**
    * Exact check if a column or its descendants have non-empty null rows
    *
    * @return Whether the column or its descendants have non-empty null rows

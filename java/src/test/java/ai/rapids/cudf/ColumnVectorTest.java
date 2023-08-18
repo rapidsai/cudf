@@ -1031,7 +1031,9 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector v0 = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5, 6);
          ColumnVector v1 = ColumnVector.fromBoxedInts(1, 2, 3, null, null, 4, 5, 6)) {
       assertEquals(24, v0.getDeviceMemorySize()); // (6*4B)
+      assertEquals(64, v0.getHostBytesRequired()); // account for alignment padding
       assertEquals(96, v1.getDeviceMemorySize()); // (8*4B) + 64B(for validity vector)
+      assertEquals(64 + 64, v1.getHostBytesRequired());
     }
   }
 
@@ -1040,7 +1042,9 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector v0 = ColumnVector.fromStrings("onetwothree", "four", "five");
          ColumnVector v1 = ColumnVector.fromStrings("onetwothree", "four", null, "five")) {
       assertEquals(35, v0.getDeviceMemorySize()); //19B data + 4*4B offsets = 35
+      assertEquals(64 + 64, v0.getHostBytesRequired()); // account for alignment padding
       assertEquals(103, v1.getDeviceMemorySize()); //19B data + 5*4B + 64B validity vector = 103B
+      assertEquals(64+64+64, v1.getHostBytesRequired()); // account for alignment padding
     }
   }
 
@@ -1064,10 +1068,12 @@ public class ColumnVectorTest extends CudfTestBase {
       // 24 bytes for offsets of of string column
       // 22 bytes of string character size
       assertEquals(64+16+64+24+22, sv.getDeviceMemorySize());
+      assertEquals(64+64+64+64+64, sv.getHostBytesRequired()); // account for alignment padding
 
       // 20 bytes for offsets of list column
       // 28 bytes for data of INT32 column
       assertEquals(20+28, iv.getDeviceMemorySize());
+      assertEquals(64+64, iv.getHostBytesRequired()); // account for alignment padding
     }
   }
 
@@ -1096,6 +1102,8 @@ public class ColumnVectorTest extends CudfTestBase {
       // 64 bytes for validity of int64 column
       // 28 bytes for data of the int64 column
       assertEquals(64+64+20+64+28+22+64+28, v.getDeviceMemorySize());
+      // account for alignment padding
+      assertEquals(64+64+64+64+64+64+64+64, v.getHostBytesRequired());
     }
   }
 
