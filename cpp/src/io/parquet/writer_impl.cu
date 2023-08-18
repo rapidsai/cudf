@@ -201,23 +201,9 @@ parquet::Compression to_parquet_compression(compression_type compression)
  */
 void update_chunk_encodings(std::vector<Encoding>& encodings, uint32_t enc_mask)
 {
-  // only convert the encodings we support
-  if ((enc_mask & gpu::EncodingMask::PLAIN) != 0) { encodings.push_back(Encoding::PLAIN); }
-  if ((enc_mask & gpu::EncodingMask::PLAIN_DICTIONARY) != 0) {
-    encodings.push_back(Encoding::PLAIN_DICTIONARY);
-  }
-  if ((enc_mask & gpu::EncodingMask::RLE) != 0) { encodings.push_back(Encoding::RLE); }
-  if ((enc_mask & gpu::EncodingMask::DELTA_BINARY_PACKED) != 0) {
-    encodings.push_back(Encoding::DELTA_BINARY_PACKED);
-  }
-  if ((enc_mask & gpu::EncodingMask::DELTA_LENGTH_BYTE_ARRAY) != 0) {
-    encodings.push_back(Encoding::DELTA_LENGTH_BYTE_ARRAY);
-  }
-  if ((enc_mask & gpu::EncodingMask::DELTA_BYTE_ARRAY) != 0) {
-    encodings.push_back(Encoding::DELTA_BYTE_ARRAY);
-  }
-  if ((enc_mask & gpu::EncodingMask::RLE_DICTIONARY) != 0) {
-    encodings.push_back(Encoding::RLE_DICTIONARY);
+  for (uint8_t enc = 0; enc < Encoding::NUM_ENCODINGS; enc++) {
+    auto const enc_enum = static_cast<Encoding>(enc);
+    if ((enc_mask & encoding_to_mask(enc_enum) != 0) { encodings.push_back(enc_enum); }
   }
 }
 
