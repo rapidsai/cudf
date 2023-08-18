@@ -14,8 +14,9 @@ from numba.core.typing import signature as nb_signature
 from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
 from numba.cuda.cudadecl import registry as cuda_registry
 from numba.np import numpy_support
+from cudf.core.udf._ops import arith_ops, comparison_ops
+from cudf.core.udf._ops import unary_ops
 
-from cudf.core.udf.errors import udf_errors
 
 index_default_type = types.int64
 group_size_type = types.int64
@@ -157,12 +158,13 @@ def _register_cuda_idx_reduction_caller(funcname, inputty):
     call_cuda_functions[funcname.lower()][type_key] = caller
 
 
+
 class GroupUnaryOp(AbstractTemplate):
     def make_error_string(self, args):
         fname = self.key.__name__
         return (
-            f"\n{self.key.__name__}(Series) is not supported within JIT GroupBy "
-            f"apply.\nTo see what's available, visit\n{docs}"
+            f"{self.key.__name__}(Series) is not supported within JIT GroupBy "
+            f"apply. To see what's available, visit\n{docs}"
         )
 
     def generic(self, args, kws):
@@ -171,16 +173,39 @@ class GroupUnaryOp(AbstractTemplate):
             for retty, selfty in call_cuda_functions[fname].keys():
                 if self.this.group_scalar_type == selfty:
                     return nb_signature(retty, recvr=self.this)
-        udf_errors[0] = self.make_error_string(args)
-        return None
+        raise TypeError(self.make_error_string(args))
+ 
 
+class GroupOpBase(AbstractTemplate):
+    def make_error_string(self, args):
+        fname = self.key.__name__
+        sr_err = ", ".join(["Series" for _ in range(len(args))])
+        return (
+            f"{self.key.__name__}({sr_err}) is not supported within JIT GroupBy "
+            f"apply. To see what's available, visit\n{docs}"
+        )
 
-from cudf.core.udf._ops import unary_ops
-
-for op in unary_ops:
-    cuda_registry.register_global(op)(GroupUnaryOp)
-
-
+    def generic(self, args, kws):
+        fname = self.key.__name__
+        breakpoint()
+        if fname in call_cuda_functions:
+            for sig in call_cuda_functions[fname].keys():
+                if all(arg.group_scalar_type == ty for arg, ty in zip(args, sig)):
+                    return nb_signature(sig[0], *args)
+        raise TypeError(self.make_error_string(args))
+"""
+    def generic(self, args, kws):
+        fname = self.key.__name__
+        if fname in call_cuda_functions:
+            for retty, lty, rty in call_cuda_functions[fname].keys():
+                if (
+                    self.this.group_scalar_type == lty
+                    and args[0].group_scalar_type == rty
+                ):
+                    return nb_signature(retty, args[0], recvr=self.this)
+        raise TypeError(self.make_error_string(args))
+"""
+        
 class GroupUnaryAttrBase(AbstractTemplate):
     def make_error_string(self, args):
         fname = self.key.split(".")[-1]
@@ -195,8 +220,7 @@ class GroupUnaryAttrBase(AbstractTemplate):
         for retty, selfty in call_cuda_functions[fname].keys():
             if self.this.group_scalar_type == selfty:
                 return nb_signature(retty, recvr=self.this)
-        udf_errors[0] = self.make_error_string(args)
-        return None
+        raise TypeError(self.make_error_string(args))
 
 
 def _make_unary_attr(funcname):
@@ -264,8 +288,7 @@ class GroupBinaryMethodBase(AbstractTemplate):
                 and args[0].group_scalar_type == rty
             ):
                 return nb_signature(retty, args[0], recvr=self.this)
-        udf_errors[0] = self.make_error_string(args)
-        return None
+        raise TypeError(self.make_error_string(args))
 
 
 class GroupCorr(GroupBinaryMethodBase):
@@ -341,3 +364,10 @@ _register_cuda_unary_reduction_caller("Var", types.float64, types.float64)
 
 for attr in ("group_data", "index", "size"):
     make_attribute_wrapper(GroupType, attr, attr)
+
+
+for op in unary_ops:
+    cuda_registry.register_global(op)(GroupUnaryOp)
+
+for op in arith_ops + comparison_ops:
+    cuda_registry.register_global(op)(GroupOpBase)

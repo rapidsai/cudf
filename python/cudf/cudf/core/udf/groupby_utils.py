@@ -9,7 +9,6 @@ from numba.cuda.cudadrv.devices import get_context
 from numba.np import numpy_support
 
 import cudf.core.udf.utils
-from cudf.core.udf.errors import udf_errors
 from cudf.core.udf.groupby_typing import (
     SUPPORTED_GROUPBY_NUMPY_TYPES,
     Group,
@@ -116,13 +115,7 @@ def _get_groupby_apply_kernel(frame, func, args):
         np_field_types, frame.index.dtype
     )
 
-    try:
-        return_type = _get_udf_return_type(dataframe_group_type, func, args)
-    except TypingError as e:
-        if udf_errors[0]:
-            raise TypingError(udf_errors[0])
-        else:
-            raise e
+    return_type = _get_udf_return_type(dataframe_group_type, func, args)
 
     # Dict of 'local' variables into which `_kernel` is defined
     global_exec_context = {
