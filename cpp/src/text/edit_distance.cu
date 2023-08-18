@@ -44,10 +44,15 @@ namespace detail {
 namespace {
 
 /**
- * @brief Compute the Levenshtein distance for each string
+ * @brief Compute the Levenshtein distance for each string pair
  *
  * Documentation here: https://www.cuelogic.com/blog/the-levenshtein-algorithm
  * And here: https://en.wikipedia.org/wiki/Levenshtein_distance
+ *
+ * @param d_str First string
+ * @param d_tgt Second string
+ * @param buffer Working buffer for intermediate calculations
+ * @return The edit distance value
  */
 __device__ cudf::size_type compute_distance(cudf::string_view const& d_str,
                                             cudf::string_view const& d_tgt,
@@ -58,23 +63,21 @@ __device__ cudf::size_type compute_distance(cudf::string_view const& d_str,
   if (str_length == 0) return tgt_length;
   if (tgt_length == 0) return str_length;
 
-  auto begin_T = str_length < tgt_length ? d_str.begin() : d_tgt.begin();
-  auto itr_S   = str_length < tgt_length ? d_tgt.begin() : d_str.begin();
+  auto begin = str_length < tgt_length ? d_str.begin() : d_tgt.begin();
+  auto itr   = str_length < tgt_length ? d_tgt.begin() : d_str.begin();
   // .first is min and .second is max
-  auto const lengths = std::minmax(str_length, tgt_length);
-  auto const n       = lengths.first;
-  auto const m       = lengths.second;
+  auto const [n, m] = std::minmax(str_length, tgt_length);
   // setup compute buffer pointers
   auto v0 = buffer;
   auto v1 = v0 + n + 1;
   // initialize v0
   thrust::sequence(thrust::seq, v0, v0 + n + 1);
 
-  for (int i = 0; i < m; ++i, ++itr_S) {
-    auto itr_T = begin_T;
-    v1[0]      = i + 1;
-    for (int j = 0; j < n; ++j, ++itr_T) {
-      auto sub_cost = v0[j] + (*itr_S != *itr_T);
+  for (int i = 0; i < m; ++i, ++itr) {
+    auto itr_tgt = begin;
+    v1[0]        = i + 1;
+    for (int j = 0; j < n; ++j, ++itr_tgt) {
+      auto sub_cost = v0[j] + (*itr != *itr_tgt);
       auto del_cost = v0[j + 1] + 1;
       auto ins_cost = v1[j] + 1;
       v1[j + 1]     = std::min(std::min(sub_cost, del_cost), ins_cost);
@@ -164,7 +167,7 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& str
                       auto d_tgt = d_targets.size() == 1
                                      ? d_targets.element<cudf::string_view>(0)
                                      : d_targets.element<cudf::string_view>(idx);
-                      // just need 2 int32's for each character of the shorter string
+                      // just need 2 integers for each character of the shorter string
                       return ((std::min(d_str.length(), d_tgt.length()) + 1) * 2);
                     });
 
@@ -234,7 +237,7 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
       cudf::string_view const d_str2 =
         d_strings.is_null(col) ? cudf::string_view{} : d_strings.element<cudf::string_view>(col);
       if (d_str1.empty() || d_str2.empty()) { return; }
-      // the temp size needed is 2 ints per character of the shorter string
+      // the temp size needed is 2 integers per character of the shorter string
       d_offsets[idx - ((row + 1) * (row + 2)) / 2] =
         (std::min(d_str1.length(), d_str2.length()) + 1) * 2;
     });
