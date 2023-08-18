@@ -77,8 +77,8 @@ template <int block_size>
 __global__ void __launch_bounds__(block_size)
   initialize_dictionary_hash_maps_kernel(device_span<stripe_dictionary> dictionaries)
 {
-  auto const dict_map             = dictionaries[blockIdx.x].map_slots;
-  cudf::thread_index_type const t = threadIdx.x;
+  auto const dict_map = dictionaries[blockIdx.x].map_slots;
+  auto const t        = threadIdx.x;
   for (size_type i = 0; i < dict_map.size(); i += block_size) {
     if (t + i < dict_map.size()) {
       new (&dict_map[t + i].first) map_type::atomic_key_type{KEY_SENTINEL};
@@ -170,8 +170,8 @@ __global__ void __launch_bounds__(block_size)
 
   if (not dict.is_enabled) { return; }
 
-  cudf::thread_index_type const t = threadIdx.x;
-  auto map                        = map_type::device_view(dict.map_slots.data(),
+  auto const t = threadIdx.x;
+  auto map     = map_type::device_view(dict.map_slots.data(),
                                    dict.map_slots.size(),
                                    cuco::empty_key{KEY_SENTINEL},
                                    cuco::empty_value{VALUE_SENTINEL});

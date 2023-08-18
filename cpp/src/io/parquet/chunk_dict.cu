@@ -197,8 +197,8 @@ __global__ void __launch_bounds__(block_size)
   auto& chunk = chunks[blockIdx.x];
   if (not chunk.use_dictionary) { return; }
 
-  cudf::thread_index_type t = threadIdx.x;
-  auto map                  = map_type::device_view(chunk.dict_map_slots,
+  auto const t = threadIdx.x;
+  auto map     = map_type::device_view(chunk.dict_map_slots,
                                    chunk.dict_map_size,
                                    cuco::empty_key{KEY_SENTINEL},
                                    cuco::empty_value{VALUE_SENTINEL});

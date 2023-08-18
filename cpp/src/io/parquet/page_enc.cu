@@ -1003,7 +1003,7 @@ __global__ void __launch_bounds__(128, 8)
   } temp_storage;
 
   page_enc_state_s* const s = &state_g;
-  cudf::thread_index_type t = threadIdx.x;
+  auto const t              = threadIdx.x;
 
   if (t == 0) {
     state_g = page_enc_state_s{};

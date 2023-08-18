@@ -177,11 +177,10 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 
   // ThreadIds range per block, so also need the blockId
   // This is entry into the fields; threadId is an element within `num_records`
-  cudf::thread_index_type const rec_id      = threadIdx.x + (blockDim.x * blockIdx.x);
-  cudf::thread_index_type const rec_id_next = rec_id + 1;
+  auto const rec_id      = cudf::thread_index_type{threadIdx.x} + (blockDim.x * blockIdx.x);
+  auto const rec_id_next = rec_id + 1;
 
-  // we can have more threads than data, make sure we are not past the end of
-  // the data
+  // we can have more threads than data, make sure we are not past the end of the data
   if (rec_id_next >= row_offsets.size()) { return; }
 
   auto field_start   = raw_csv + row_offsets[rec_id];
@@ -317,8 +316,8 @@ __global__ void __launch_bounds__(csvparse_block_dim)
   auto const raw_csv = data.data();
   // thread IDs range per block, so also need the block id.
   // this is entry into the field array - tid is an elements within the num_entries array
-  cudf::thread_index_type const rec_id      = threadIdx.x + (blockDim.x * blockIdx.x);
-  cudf::thread_index_type const rec_id_next = rec_id + 1;
+  auto const rec_id      = cudf::thread_index_type{threadIdx.x} + (blockDim.x * blockIdx.x);
+  auto const rec_id_next = rec_id + 1;
 
   // we can have more threads than data, make sure we are not past the end of the data
   if (rec_id_next >= row_offsets.size()) return;
