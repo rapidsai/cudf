@@ -201,9 +201,9 @@ parquet::Compression to_parquet_compression(compression_type compression)
  */
 void update_chunk_encodings(std::vector<Encoding>& encodings, uint32_t enc_mask)
 {
-  for (uint8_t enc = 0; enc < Encoding::NUM_ENCODINGS; enc++) {
+  for (uint8_t enc = 0; enc < static_cast<uint8_t>(Encoding::NUM_ENCODINGS); enc++) {
     auto const enc_enum = static_cast<Encoding>(enc);
-    if ((enc_mask & encoding_to_mask(enc_enum) != 0) { encodings.push_back(enc_enum); }
+    if ((enc_mask & gpu::encoding_to_mask(enc_enum)) != 0) { encodings.push_back(enc_enum); }
   }
 }
 
