@@ -6648,7 +6648,7 @@ TEST_P(ParquetV2Test, CheckEncodings)
     EXPECT_TRUE(chunk1_enc.size() == 2);
     EXPECT_TRUE(contains(chunk1_enc, Encoding::RLE));
     EXPECT_TRUE(contains(chunk1_enc, Encoding::PLAIN));
-    // col2 should have RLE for rep/def, PLAIN for dict, and PLAIN_DICTIONARY for data
+    // col2 should have RLE for rep/def, PLAIN for dict, and RLE_DICTIONARY for data
     EXPECT_TRUE(chunk2_enc.size() == 3);
     EXPECT_TRUE(contains(chunk2_enc, Encoding::RLE));
     EXPECT_TRUE(contains(chunk2_enc, Encoding::PLAIN));
