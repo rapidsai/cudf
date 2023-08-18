@@ -410,28 +410,27 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
 
   // Transfer source data to GPU
   if (!source->is_empty()) {
-    auto data_size = (range_size_padded != 0) ? range_size_padded : source->size();
-    auto buffer    = source->host_read(range_offset, data_size);
-
-    // check for and skip UTF-8 BOM
-    auto buffer_data         = buffer->data();
-    auto buffer_size         = buffer->size();
-    uint8_t const UTF8_BOM[] = {0xEF, 0xBB, 0xBF};
-    if (buffer_size > sizeof(UTF8_BOM) && memcmp(buffer_data, UTF8_BOM, sizeof(UTF8_BOM)) == 0) {
-      buffer_data += sizeof(UTF8_BOM);
-      buffer_size -= sizeof(UTF8_BOM);
-    }
-
-    auto h_data = host_span<char const>(reinterpret_cast<char const*>(buffer_data), buffer_size);
+    auto buffer =
+      source->host_read(range_offset, range_size_padded != 0 ? range_size_padded : source->size());
+    auto h_data =
+      host_span<char const>(reinterpret_cast<char const*>(buffer->data()), buffer->size());
 
     std::vector<uint8_t> h_uncomp_data_owner;
-
     if (reader_opts.get_compression() != compression_type::NONE) {
       h_uncomp_data_owner =
         decompress(reader_opts.get_compression(), {buffer->data(), buffer->size()});
       h_data = {reinterpret_cast<char const*>(h_uncomp_data_owner.data()),
                 h_uncomp_data_owner.size()};
+      buffer.reset();
     }
+
+    // check for and skip UTF-8 BOM
+    uint8_t const UTF8_BOM[] = {0xEF, 0xBB, 0xBF};
+    if (h_data.size() >= sizeof(UTF8_BOM) &&
+        memcmp(h_data.data(), UTF8_BOM, sizeof(UTF8_BOM)) == 0) {
+      h_data = h_data.subspan(sizeof(UTF8_BOM), h_data.size() - sizeof(UTF8_BOM));
+    }
+
     // None of the parameters for row selection is used, we are parsing the entire file
     bool const load_whole_file = range_offset == 0 && range_size == 0 && skip_rows <= 0 &&
                                  skip_end_rows <= 0 && num_rows == -1;
@@ -973,14 +972,14 @@ parse_options make_parse_options(csv_reader_options const& reader_opts,
 
   // Handle user-defined true values, whereby field data is substituted with a
   // boolean true or numeric `1` value
-  if (reader_opts.get_true_values().size() != 0) {
+  if (not reader_opts.get_true_values().empty()) {
     parse_opts.trie_true =
       cudf::detail::create_serialized_trie(reader_opts.get_true_values(), stream);
   }
 
   // Handle user-defined false values, whereby field data is substituted with a
   // boolean false or numeric `0` value
-  if (reader_opts.get_false_values().size() != 0) {
+  if (not reader_opts.get_false_values().empty()) {
     parse_opts.trie_false =
       cudf::detail::create_serialized_trie(reader_opts.get_false_values(), stream);
   }
