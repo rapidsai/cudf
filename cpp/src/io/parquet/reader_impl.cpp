@@ -326,7 +326,8 @@ void reader::impl::prepare_data(int64_t skip_rows,
                    [](auto const& col) { return col.type; });
   }
   auto const [skip_rows_corrected, num_rows_corrected, row_groups_info] =
-    _metadata->select_row_groups(row_group_indices, skip_rows, num_rows, output_types, filter);
+    _metadata->select_row_groups(
+      row_group_indices, skip_rows, num_rows, output_types, filter, _stream);
 
   if (num_rows_corrected > 0 && not row_groups_info.empty() && not _input_columns.empty()) {
     load_and_decompress_data(row_groups_info, num_rows_corrected);

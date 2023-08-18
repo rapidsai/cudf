@@ -195,7 +195,7 @@ device_span<uint64_t> remove_blank_rows(cudf::io::parse_options_view const& opti
  * @param[in] data The row-column data
  * @param[in] column_flags Flags that control individual column parsing
  * @param[in] row_offsets List of row data start positions (offsets)
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use
  *
  * @return stats Histogram of each dtypes' occurrence for each column
  */
@@ -218,7 +218,7 @@ std::vector<column_type_histogram> detect_column_types(
  * @param[out] columns Device memory output of column data
  * @param[out] valids Device memory output of column valids bitmap data
  * @param[out] valid_counts Device memory output of the number of valid fields in each column
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use
  */
 void decode_row_column_data(cudf::io::parse_options_view const& options,
                             device_span<char const> data,
