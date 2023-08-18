@@ -230,7 +230,7 @@ Encoding __device__ determine_encoding(PageType page_type,
 }
 
 // operator to use with warp_reduce. stolen from cub::Sum
-struct Or {
+struct BitwiseOr {
   /// Binary OR operator, returns <tt>a | b</tt>
   template <typename T>
   __host__ __device__ __forceinline__ T operator()(T const& a, T const& b) const
@@ -1474,7 +1474,7 @@ __global__ void __launch_bounds__(decide_compression_block_size)
   uncompressed_data_size = warp_reduce(temp_storage[warp_id][0]).Sum(uncompressed_data_size);
   compressed_data_size   = warp_reduce(temp_storage[warp_id][1]).Sum(compressed_data_size);
   __syncwarp();
-  encodings = warp_reduce(temp_storage[warp_id][0]).Reduce(encodings, Or{});
+  encodings = warp_reduce(temp_storage[warp_id][0]).Reduce(encodings, BitwiseOr{});
   __syncwarp();
 
   if (lane_id == 0) {
