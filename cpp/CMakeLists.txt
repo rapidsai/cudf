@@ -402,6 +402,7 @@ add_library(
   src/io/parquet/reader_impl.cpp
   src/io/parquet/reader_impl_helpers.cpp
   src/io/parquet/reader_impl_preprocess.cu
+  src/io/parquet/stream_pool.cpp
   src/io/parquet/writer_impl.cu
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
