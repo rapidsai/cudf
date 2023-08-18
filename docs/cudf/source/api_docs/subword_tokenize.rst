@@ -7,6 +7,6 @@ Constructor
 ~~~~~~~~~~~
 .. autosummary::
    :toctree: api/
-   :template: autosummary/class_with_autosummary.rst
 
    SubwordTokenizer
+   SubwordTokenizer.__call__

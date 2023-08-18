@@ -408,15 +408,15 @@ void traverse_children::operator()<cudf::string_view>(host_span<column_view cons
       return a + (scv.is_empty() ? 0
                   // if the column is unsliced, skip the offset retrieval.
                   : scv.offset() > 0
-                    ? cudf::detail::get_value<offset_type>(
+                    ? cudf::detail::get_value<size_type>(
                         scv.offsets(), scv.offset() + scv.size(), stream) -
-                        cudf::detail::get_value<offset_type>(scv.offsets(), scv.offset(), stream)
+                        cudf::detail::get_value<size_type>(scv.offsets(), scv.offset(), stream)
                   // if the offset() is 0, it can still be sliced to a shorter length. in this case
                   // we only need to read a single offset. otherwise just return the full length
                   // (chars_size())
                   : scv.size() + 1 == scv.offsets().size()
                     ? scv.chars_size()
-                    : cudf::detail::get_value<offset_type>(scv.offsets(), scv.size(), stream));
+                    : cudf::detail::get_value<size_type>(scv.offsets(), scv.size(), stream));
     });
   CUDF_EXPECTS(total_char_count <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
                "Total number of concatenated chars exceeds the column size limit",

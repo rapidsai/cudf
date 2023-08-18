@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,6 +85,33 @@ std::unique_ptr<column> rfind(
   string_scalar const& target,
   size_type start                     = 0,
   size_type stop                      = -1,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns a column of character position values where the target
+ * string is first found in the corresponding string of the provided column
+ *
+ * The output of row `i` is the character position of the target string for row `i`
+ * within input string of row `i` starting at the character position `start`.
+ * If the target is not found within the input string, -1 is returned for that
+ * row entry in the output column.
+ *
+ * Any null input or target entries return corresponding null output column entries.
+ *
+ * @throw cudf::logic_error if `input.size() != target.size()`
+ *
+ * @param input Strings to search against
+ * @param target Strings to search for in `input`
+ * @param start First character position to include in the search
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New integer column with character position values
+ */
+std::unique_ptr<column> find(
+  strings_column_view const& input,
+  strings_column_view const& target,
+  size_type start                     = 0,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

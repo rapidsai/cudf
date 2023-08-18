@@ -508,7 +508,7 @@ TYPED_TEST_SUITE(ListsDictionaryLeafTest, cudf::test::FixedWidthTypes);
 TYPED_TEST(ListsDictionaryLeafTest, FromNonNested)
 {
   using DCW      = cudf::test::dictionary_column_wrapper<TypeParam>;
-  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 
   auto s   = cudf::make_list_scalar(DCW({1, 3, -1, 1, 3}, {1, 1, 0, 1, 1}));
   auto col = cudf::make_column_from_scalar(*s, 2);
@@ -524,7 +524,7 @@ TYPED_TEST(ListsDictionaryLeafTest, FromNonNested)
 TYPED_TEST(ListsDictionaryLeafTest, FromNested)
 {
   using DCW      = cudf::test::dictionary_column_wrapper<TypeParam>;
-  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 
   DCW leaf({1, 3, -1, 1, 3, 1, 3, -1, 1, 3}, {1, 1, 0, 1, 1, 1, 1, 0, 1, 1});
   offset_t offsets{0, 3, 3, 6, 6, 10};
@@ -617,7 +617,7 @@ TYPED_TEST(ListsStructsLeafTest, FromNonNested)
 {
   using LCWinner_t = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
   using StringCW   = cudf::test::strings_column_wrapper;
-  using offset_t   = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using offset_t   = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
   using valid_t    = std::vector<cudf::valid_type>;
 
   auto data = this->make_test_structs_column(
@@ -648,7 +648,7 @@ TYPED_TEST(ListsStructsLeafTest, FromNested)
 {
   using LCWinner_t = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
   using StringCW   = cudf::test::strings_column_wrapper;
-  using offset_t   = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using offset_t   = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
   using valid_t    = std::vector<cudf::valid_type>;
   auto leaf        = this->make_test_structs_column(
     {{1, 2}, {0, 1}},
@@ -702,7 +702,7 @@ TEST_F(ListsZeroLengthColumnTest, MixedTypes)
   using FCW      = cudf::test::fixed_width_column_wrapper<int32_t>;
   using StringCW = cudf::test::strings_column_wrapper;
   using LCW      = cudf::test::lists_column_wrapper<int32_t>;
-  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
   {
     auto s   = cudf::make_list_scalar(FCW{1, 2, 3});
     auto got = cudf::make_column_from_scalar(*s, 0);
@@ -759,7 +759,7 @@ TEST_F(ListsZeroLengthColumnTest, SuperimposeNulls)
   using FCW      = cudf::test::fixed_width_column_wrapper<int32_t>;
   using StringCW = cudf::test::strings_column_wrapper;
   using LCW      = cudf::test::lists_column_wrapper<int32_t>;
-  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 
   auto const lists = [&] {
     auto child = this
@@ -819,3 +819,13 @@ void struct_from_scalar(bool is_valid)
 TEST_F(ColumnFactoryTest, FromStructScalar) { struct_from_scalar(true); }
 
 TEST_F(ColumnFactoryTest, FromStructScalarNull) { struct_from_scalar(false); }
+
+TEST_F(ColumnFactoryTest, FromScalarErrors)
+{
+  cudf::string_scalar ss("hello world");
+  EXPECT_THROW(cudf::make_column_from_scalar(ss, 214748365), std::overflow_error);
+
+  using FCW = cudf::test::fixed_width_column_wrapper<int8_t>;
+  auto s    = cudf::make_list_scalar(FCW({1, 2, 3, 4, 5, 6, 7, 8, 9, 10}));
+  EXPECT_THROW(cudf::make_column_from_scalar(*s, 214748365), std::overflow_error);
+}

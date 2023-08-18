@@ -47,12 +47,6 @@ namespace parquet {
 namespace gpu {
 
 namespace {
-// Spark doesn't support RLE encoding for BOOLEANs
-#ifdef ENABLE_BOOL_RLE
-constexpr bool enable_bool_rle = true;
-#else
-constexpr bool enable_bool_rle = false;
-#endif
 
 using ::cudf::detail::device_2dspan;
 
@@ -70,6 +64,9 @@ constexpr uint32_t WARP_MASK = cudf::detail::warp_size - 1;
 // currently 64k - 1
 constexpr uint32_t MAX_GRID_Y_SIZE = (1 << 16) - 1;
 
+// space needed for RLE length field
+constexpr int RLE_LENGTH_FIELD_LEN = 4;
+
 struct frag_init_state_s {
   parquet_column_device_view col;
   PageFragment frag;
@@ -78,6 +75,7 @@ struct frag_init_state_s {
 struct page_enc_state_s {
   uint8_t* cur;          //!< current output ptr
   uint8_t* rle_out;      //!< current RLE write ptr
+  uint8_t* rle_len_pos;  //!< position to write RLE length (for V2 boolean data)
   uint32_t rle_run;      //!< current RLE run
   uint32_t run_val;      //!< current RLE run value
   uint32_t rle_pos;      //!< RLE encoder positions
@@ -210,6 +208,27 @@ void __device__ calculate_frag_size(frag_init_state_s* const s, int t)
   }
 }
 
+Encoding __device__ determine_encoding(PageType page_type,
+                                       Type physical_type,
+                                       bool use_dictionary,
+                                       bool write_v2_headers)
+{
+  // NOTE: For dictionary encoding, parquet v2 recommends using PLAIN in dictionary page and
+  // RLE_DICTIONARY in data page, but parquet v1 uses PLAIN_DICTIONARY in both dictionary and
+  // data pages (actual encoding is identical).
+  switch (page_type) {
+    case PageType::DATA_PAGE: return use_dictionary ? Encoding::PLAIN_DICTIONARY : Encoding::PLAIN;
+    case PageType::DATA_PAGE_V2:
+      // TODO need to work in delta encodings here when they're added
+      return physical_type == BOOLEAN ? Encoding::RLE
+             : use_dictionary         ? Encoding::RLE_DICTIONARY
+                                      : Encoding::PLAIN;
+    case PageType::DICTIONARY_PAGE:
+      return write_v2_headers ? Encoding::PLAIN : Encoding::PLAIN_DICTIONARY;
+    default: CUDF_UNREACHABLE("unsupported page type");
+  }
+}
+
 }  // anonymous namespace
 
 // blockDim {512,1,1}
@@ -309,7 +328,8 @@ __global__ void __launch_bounds__(128)
                int32_t num_columns,
                size_t max_page_size_bytes,
                size_type max_page_size_rows,
-               uint32_t page_align)
+               uint32_t page_align,
+               bool write_v2_headers)
 {
   // TODO: All writing seems to be done by thread 0. Could be replaced by thrust foreach
   __shared__ __align__(8) parquet_column_device_view col_g;
@@ -318,7 +338,8 @@ __global__ void __launch_bounds__(128)
   __shared__ __align__(8) EncPage page_g;
   __shared__ __align__(8) statistics_merge_group pagestats_g;
 
-  uint32_t t = threadIdx.x;
+  uint32_t const t          = threadIdx.x;
+  auto const data_page_type = write_v2_headers ? PageType::DATA_PAGE_V2 : PageType::DATA_PAGE;
 
   if (t == 0) {
     col_g  = col_desc[blockIdx.x];
@@ -382,6 +403,11 @@ __global__ void __launch_bounds__(128)
       num_pages = 1;
     }
     __syncwarp();
+
+    // page padding needed for RLE encoded boolean data
+    auto const rle_pad =
+      write_v2_headers && col_g.physical_type == BOOLEAN ? RLE_LENGTH_FIELD_LEN : 0;
+
     // This loop goes over one page fragment at a time and adds it to page.
     // When page size crosses a particular limit, then it moves on to the next page and then next
     // page fragment gets added to that one.
@@ -425,16 +451,22 @@ __global__ void __launch_bounds__(128)
       // override this_max_page_size if the requested size is smaller
       this_max_page_size = min(this_max_page_size, max_page_size_bytes);
 
-      // subtract size of rep and def level vectors
-      auto num_vals = values_in_page + frag_g.num_values;
-      this_max_page_size =
-        underflow_safe_subtract(this_max_page_size,
-                                max_RLE_page_size(col_g.num_def_level_bits(), num_vals) +
-                                  max_RLE_page_size(col_g.num_rep_level_bits(), num_vals));
+      // subtract size of rep and def level vectors and RLE length field
+      auto num_vals      = values_in_page + frag_g.num_values;
+      this_max_page_size = underflow_safe_subtract(
+        this_max_page_size,
+        max_RLE_page_size(col_g.num_def_level_bits(), num_vals) +
+          max_RLE_page_size(col_g.num_rep_level_bits(), num_vals) + rle_pad);
 
-      if (num_rows >= ck_g.num_rows ||
-          (values_in_page > 0 && (page_size + fragment_data_size > this_max_page_size)) ||
-          rows_in_page + frag_g.num_rows > max_page_size_rows) {
+      // checks to see when we need to close the current page and start a new one
+      auto const is_last_chunk          = num_rows >= ck_g.num_rows;
+      auto const is_page_bytes_exceeded = page_size + fragment_data_size > this_max_page_size;
+      auto const is_page_rows_exceeded  = rows_in_page + frag_g.num_rows > max_page_size_rows;
+      // only check for limit overflow if there's already at least one fragment for this page
+      auto const is_page_too_big =
+        values_in_page > 0 && (is_page_bytes_exceeded || is_page_rows_exceeded);
+
+      if (is_last_chunk || is_page_too_big) {
         if (ck_g.use_dictionary) {
           // Additional byte to store entry bit width
           page_size = 1 + max_RLE_page_size(ck_g.dict_rle_bits, values_in_page);
@@ -443,7 +475,7 @@ __global__ void __launch_bounds__(128)
           page_g.num_fragments = fragments_in_chunk - page_start;
           page_g.chunk         = &chunks[blockIdx.y][blockIdx.x];
           page_g.chunk_id      = blockIdx.y * num_columns + blockIdx.x;
-          page_g.page_type     = PageType::DATA_PAGE;
+          page_g.page_type     = data_page_type;
           page_g.hdr_size      = 0;
           page_g.max_hdr_size  = 32;  // Max size excluding statistics
           if (ck_g.stats) {
@@ -466,7 +498,7 @@ __global__ void __launch_bounds__(128)
           page_g.num_values         = values_in_page;
           auto const def_level_size = max_RLE_page_size(col_g.num_def_level_bits(), values_in_page);
           auto const rep_level_size = max_RLE_page_size(col_g.num_rep_level_bits(), values_in_page);
-          auto const max_data_size  = page_size + def_level_size + rep_level_size;
+          auto const max_data_size  = page_size + def_level_size + rep_level_size + rle_pad;
           // page size must fit in 32-bit signed integer
           if (max_data_size > std::numeric_limits<int32_t>::max()) {
             CUDF_UNREACHABLE("page size exceeds maximum for i32");
@@ -933,22 +965,24 @@ constexpr auto julian_calendar_epoch_diff()
 }
 
 /**
- * @brief Converts a timestamp_ns into a pair with nanoseconds since midnight and number of Julian
- * days. Does not deal with time zones. Used by INT96 code.
+ * @brief Converts number `v` of periods of type `PeriodT` into a pair with nanoseconds since
+ * midnight and number of Julian days. Does not deal with time zones. Used by INT96 code.
  *
- * @param ns number of nanoseconds since epoch
- * @return std::pair<nanoseconds,days> where nanoseconds is the number of nanoseconds
+ * @tparam PeriodT a ratio representing the tick period in duration
+ * @param v count of ticks since epoch
+ * @return A pair of (nanoseconds, days) where nanoseconds is the number of nanoseconds
  * elapsed in the day and days is the number of days from Julian epoch.
  */
-static __device__ std::pair<duration_ns, duration_D> convert_nanoseconds(timestamp_ns const ns)
+template <typename PeriodT>
+__device__ auto julian_days_with_time(int64_t v)
 {
   using namespace cuda::std::chrono;
-  auto const nanosecond_ticks = ns.time_since_epoch();
-  auto const gregorian_days   = floor<days>(nanosecond_ticks);
-  auto const julian_days      = gregorian_days + ceil<days>(julian_calendar_epoch_diff());
-
-  auto const last_day_ticks = nanosecond_ticks - gregorian_days;
-  return {last_day_ticks, julian_days};
+  auto const dur_total             = duration<int64_t, PeriodT>{v};
+  auto const dur_days              = floor<days>(dur_total);
+  auto const dur_time_of_day       = dur_total - dur_days;
+  auto const dur_time_of_day_nanos = duration_cast<nanoseconds>(dur_time_of_day);
+  auto const julian_days           = dur_days + ceil<days>(julian_calendar_epoch_diff());
+  return std::make_pair(dur_time_of_day_nanos, julian_days);
 }
 
 // blockDim(128, 1, 1)
@@ -957,11 +991,16 @@ __global__ void __launch_bounds__(128, 8)
   gpuEncodePages(device_span<gpu::EncPage> pages,
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
-                 device_span<compression_result> comp_results)
+                 device_span<compression_result> comp_results,
+                 bool write_v2_headers)
 {
   __shared__ __align__(8) page_enc_state_s state_g;
-  using block_scan = cub::BlockScan<uint32_t, block_size>;
-  __shared__ typename block_scan::TempStorage temp_storage;
+  using block_reduce = cub::BlockReduce<uint32_t, block_size>;
+  using block_scan   = cub::BlockScan<uint32_t, block_size>;
+  __shared__ union {
+    typename block_reduce::TempStorage reduce_storage;
+    typename block_scan::TempStorage scan_storage;
+  } temp_storage;
 
   page_enc_state_s* const s = &state_g;
   uint32_t t                = threadIdx.x;
@@ -972,8 +1011,15 @@ __global__ void __launch_bounds__(128, 8)
     s->ck   = *s->page.chunk;
     s->col  = *s->ck.col_desc;
     s->cur  = s->page.page_data + s->page.max_hdr_size;
+    // init V2 info
+    s->page.def_lvl_bytes = 0;
+    s->page.rep_lvl_bytes = 0;
+    s->page.num_nulls     = 0;
+    s->rle_len_pos        = nullptr;
   }
   __syncthreads();
+
+  auto const is_v2 = s->page.page_type == PageType::DATA_PAGE_V2;
 
   // Encode Repetition and Definition levels
   if (s->page.page_type != PageType::DICTIONARY_PAGE &&
@@ -987,7 +1033,10 @@ __global__ void __launch_bounds__(128, 8)
         s->rle_run     = 0;
         s->rle_pos     = 0;
         s->rle_numvals = 0;
-        s->rle_out     = s->cur + 4;
+        s->rle_out     = s->cur;
+        if (not is_v2) {
+          s->rle_out += 4;  // save space for length
+        }
       }
       __syncthreads();
       while (s->rle_numvals < s->page.num_rows) {
@@ -1029,11 +1078,13 @@ __global__ void __launch_bounds__(128, 8)
         __syncthreads();
       }
       if (t < 32) {
-        uint8_t* cur     = s->cur;
-        uint8_t* rle_out = s->rle_out;
-        if (t < 4) {
-          uint32_t rle_bytes = (uint32_t)(rle_out - cur) - 4;
-          cur[t]             = rle_bytes >> (t * 8);
+        uint8_t* const cur       = s->cur;
+        uint8_t* const rle_out   = s->rle_out;
+        uint32_t const rle_bytes = static_cast<uint32_t>(rle_out - cur) - (is_v2 ? 0 : 4);
+        if (is_v2 && t == 0) {
+          s->page.def_lvl_bytes = rle_bytes;
+        } else if (not is_v2 && t < 4) {
+          cur[t] = rle_bytes >> (t * 8);
         }
         __syncwarp();
         if (t == 0) { s->cur = rle_out; }
@@ -1042,14 +1093,17 @@ __global__ void __launch_bounds__(128, 8)
   } else if (s->page.page_type != PageType::DICTIONARY_PAGE &&
              s->col.num_rep_level_bits() != 0  // This means there ARE repetition levels (has list)
   ) {
-    auto encode_levels = [&](uint8_t const* lvl_val_data, uint32_t nbits) {
+    auto encode_levels = [&](uint8_t const* lvl_val_data, uint32_t nbits, uint32_t& lvl_bytes) {
       // For list types, the repetition and definition levels are pre-calculated. We just need to
       // encode and write them now.
       if (!t) {
         s->rle_run     = 0;
         s->rle_pos     = 0;
         s->rle_numvals = 0;
-        s->rle_out     = s->cur + 4;
+        s->rle_out     = s->cur;
+        if (not is_v2) {
+          s->rle_out += 4;  // save space for length
+        }
       }
       __syncthreads();
       size_type page_first_val_idx = s->col.level_offsets[s->page.start_row];
@@ -1067,19 +1121,21 @@ __global__ void __launch_bounds__(128, 8)
         __syncthreads();
       }
       if (t < 32) {
-        uint8_t* cur     = s->cur;
-        uint8_t* rle_out = s->rle_out;
-        if (t < 4) {
-          uint32_t rle_bytes = (uint32_t)(rle_out - cur) - 4;
-          cur[t]             = rle_bytes >> (t * 8);
+        uint8_t* const cur       = s->cur;
+        uint8_t* const rle_out   = s->rle_out;
+        uint32_t const rle_bytes = static_cast<uint32_t>(rle_out - cur) - (is_v2 ? 0 : 4);
+        if (is_v2 && t == 0) {
+          lvl_bytes = rle_bytes;
+        } else if (not is_v2 && t < 4) {
+          cur[t] = rle_bytes >> (t * 8);
         }
         __syncwarp();
         if (t == 0) { s->cur = rle_out; }
       }
     };
-    encode_levels(s->col.rep_values, s->col.num_rep_level_bits());
+    encode_levels(s->col.rep_values, s->col.num_rep_level_bits(), s->page.rep_lvl_bytes);
     __syncthreads();
-    encode_levels(s->col.def_values, s->col.num_def_level_bits());
+    encode_levels(s->col.def_values, s->col.num_def_level_bits(), s->page.def_lvl_bytes);
   }
   // Encode data values
   __syncthreads();
@@ -1102,14 +1158,21 @@ __global__ void __launch_bounds__(128, 8)
     s->rle_pos     = 0;
     s->rle_numvals = 0;
     s->rle_out     = dst;
+    s->page.encoding =
+      determine_encoding(s->page.page_type, physical_type, s->ck.use_dictionary, write_v2_headers);
     if (dict_bits >= 0 && physical_type != BOOLEAN) {
       dst[0]     = dict_bits;
       s->rle_out = dst + 1;
+    } else if (is_v2 && physical_type == BOOLEAN) {
+      // save space for RLE length. we don't know the total length yet.
+      s->rle_out     = dst + RLE_LENGTH_FIELD_LEN;
+      s->rle_len_pos = dst;
     }
     s->page_start_val  = row_to_value_idx(s->page.start_row, s->col);
     s->chunk_start_val = row_to_value_idx(s->ck.start_row, s->col);
   }
   __syncthreads();
+  uint32_t num_valid = 0;
   for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
     uint32_t nvals = min(s->page.num_leaf_values - cur_val_idx, 128);
     uint32_t len, pos;
@@ -1136,13 +1199,15 @@ __global__ void __launch_bounds__(128, 8)
       return std::make_tuple(is_valid, val_idx);
     }();
 
+    if (is_valid) num_valid++;
+
     cur_val_idx += nvals;
     if (dict_bits >= 0) {
       // Dictionary encoding
       if (dict_bits > 0) {
         uint32_t rle_numvals;
         uint32_t rle_numvals_in_block;
-        block_scan(temp_storage).ExclusiveSum(is_valid, pos, rle_numvals_in_block);
+        block_scan(temp_storage.scan_storage).ExclusiveSum(is_valid, pos, rle_numvals_in_block);
         rle_numvals = s->rle_numvals;
         if (is_valid) {
           uint32_t v;
@@ -1155,7 +1220,7 @@ __global__ void __launch_bounds__(128, 8)
         }
         rle_numvals += rle_numvals_in_block;
         __syncthreads();
-        if ((!enable_bool_rle) && (physical_type == BOOLEAN)) {
+        if (!is_v2 && physical_type == BOOLEAN) {
           PlainBoolEncode(s, rle_numvals, (cur_val_idx == s->page.num_leaf_values), t);
         } else {
           RleEncode(s, rle_numvals, dict_bits, (cur_val_idx == s->page.num_leaf_values), t);
@@ -1182,7 +1247,7 @@ __global__ void __launch_bounds__(128, 8)
         len = 0;
       }
       uint32_t total_len = 0;
-      block_scan(temp_storage).ExclusiveSum(len, pos, total_len);
+      block_scan(temp_storage.scan_storage).ExclusiveSum(len, pos, total_len);
       __syncthreads();
       if (t == 0) { s->cur = dst + total_len; }
       if (is_valid) {
@@ -1236,22 +1301,23 @@ __global__ void __launch_bounds__(128, 8)
               }
             }
 
-            auto const ret = convert_nanoseconds([&]() {
+            auto const [last_day_nanos, julian_days] = [&] {
+              using namespace cuda::std::chrono;
               switch (s->col.leaf_column->type().id()) {
                 case type_id::TIMESTAMP_SECONDS:
                 case type_id::TIMESTAMP_MILLISECONDS: {
-                  return timestamp_ns{duration_ms{v}};
+                  return julian_days_with_time<cuda::std::milli>(v);
                 } break;
                 case type_id::TIMESTAMP_MICROSECONDS:
                 case type_id::TIMESTAMP_NANOSECONDS: {
-                  return timestamp_ns{duration_us{v}};
+                  return julian_days_with_time<cuda::std::micro>(v);
                 } break;
               }
-              return timestamp_ns{duration_ns{0}};
-            }());
+              return julian_days_with_time<cuda::std::nano>(0);
+            }();
 
             // the 12 bytes of fixed length data.
-            v             = ret.first.count();
+            v             = last_day_nanos.count();
             dst[pos + 0]  = v;
             dst[pos + 1]  = v >> 8;
             dst[pos + 2]  = v >> 16;
@@ -1260,7 +1326,7 @@ __global__ void __launch_bounds__(128, 8)
             dst[pos + 5]  = v >> 40;
             dst[pos + 6]  = v >> 48;
             dst[pos + 7]  = v >> 56;
-            uint32_t w    = ret.second.count();
+            uint32_t w    = julian_days.count();
             dst[pos + 8]  = w;
             dst[pos + 9]  = w >> 8;
             dst[pos + 10] = w >> 16;
@@ -1308,21 +1374,46 @@ __global__ void __launch_bounds__(128, 8)
       __syncthreads();
     }
   }
+
+  uint32_t const valid_count = block_reduce(temp_storage.reduce_storage).Sum(num_valid);
+
+  // save RLE length if necessary
+  if (s->rle_len_pos != nullptr && t < 32) {
+    // size doesn't include the 4 bytes for the length
+    auto const rle_size = static_cast<uint32_t>(s->cur - s->rle_len_pos) - RLE_LENGTH_FIELD_LEN;
+    if (t < RLE_LENGTH_FIELD_LEN) { s->rle_len_pos[t] = rle_size >> (t * 8); }
+    __syncwarp();
+  }
+
+  // V2 does not compress rep and def level data
+  size_t const skip_comp_size = s->page.def_lvl_bytes + s->page.rep_lvl_bytes;
+
   if (t == 0) {
-    uint8_t* base         = s->page.page_data + s->page.max_hdr_size;
-    auto actual_data_size = static_cast<uint32_t>(s->cur - base);
+    s->page.num_nulls           = s->page.num_values - valid_count;
+    uint8_t* const base         = s->page.page_data + s->page.max_hdr_size;
+    auto const actual_data_size = static_cast<uint32_t>(s->cur - base);
     if (actual_data_size > s->page.max_data_size) {
       CUDF_UNREACHABLE("detected possible page data corruption");
     }
     s->page.max_data_size = actual_data_size;
     if (not comp_in.empty()) {
-      comp_in[blockIdx.x]  = {base, actual_data_size};
-      comp_out[blockIdx.x] = {s->page.compressed_data + s->page.max_hdr_size, 0};  // size is unused
+      comp_in[blockIdx.x]  = {base + skip_comp_size, actual_data_size - skip_comp_size};
+      comp_out[blockIdx.x] = {s->page.compressed_data + s->page.max_hdr_size + skip_comp_size,
+                              0};  // size is unused
     }
     pages[blockIdx.x] = s->page;
     if (not comp_results.empty()) {
       comp_results[blockIdx.x]   = {0, compression_status::FAILURE};
       pages[blockIdx.x].comp_res = &comp_results[blockIdx.x];
+    }
+  }
+
+  // copy over uncompressed data
+  if (skip_comp_size != 0 && not comp_in.empty()) {
+    uint8_t const* const src = s->page.page_data + s->page.max_hdr_size;
+    uint8_t* const dst       = s->page.compressed_data + s->page.max_hdr_size;
+    for (int i = t; i < skip_comp_size; i += block_size) {
+      dst[i] = src[i];
     }
   }
 }
@@ -1358,9 +1449,10 @@ __global__ void __launch_bounds__(decide_compression_block_size)
   for (auto page_id = lane_id; page_id < num_pages; page_id += cudf::detail::warp_size) {
     auto const& curr_page     = ck_g[warp_id].pages[page_id];
     auto const page_data_size = curr_page.max_data_size;
+    auto const lvl_bytes      = curr_page.def_lvl_bytes + curr_page.rep_lvl_bytes;
     uncompressed_data_size += page_data_size;
     if (auto comp_res = curr_page.comp_res; comp_res != nullptr) {
-      compressed_data_size += comp_res->bytes_written;
+      compressed_data_size += comp_res->bytes_written + lvl_bytes;
       if (comp_res->status != compression_status::SUCCESS) {
         atomicOr(&compression_error[warp_id], 1);
       }
@@ -1482,6 +1574,13 @@ class header_encoder {
   inline __device__ void put_int64(T value)
   {
     current_header_ptr = cpw_put_int64(current_header_ptr, static_cast<int64_t>(value));
+  }
+
+  inline __device__ void field_bool(int field, bool value)
+  {
+    current_header_ptr = cpw_put_fldh(
+      current_header_ptr, field, current_field_index, value ? ST_FLD_TRUE : ST_FLD_FALSE);
+    current_field_index = field;
   }
 
   template <typename T>
@@ -1803,8 +1902,10 @@ __global__ void __launch_bounds__(128)
     }
     uncompressed_page_size = page_g.max_data_size;
     if (ck_g.is_compressed) {
+      auto const lvl_bytes = page_g.def_lvl_bytes + page_g.rep_lvl_bytes;
       hdr_start            = page_g.compressed_data;
-      compressed_page_size = (uint32_t)comp_results[blockIdx.x].bytes_written;
+      compressed_page_size =
+        static_cast<uint32_t>(comp_results[blockIdx.x].bytes_written) + lvl_bytes;
       page_g.max_data_size = compressed_page_size;
     } else {
       hdr_start            = page_g.page_data;
@@ -1812,28 +1913,16 @@ __global__ void __launch_bounds__(128)
     }
     header_encoder encoder(hdr_start);
     PageType page_type = page_g.page_type;
-    // NOTE: For dictionary encoding, parquet v2 recommends using PLAIN in dictionary page and
-    // RLE_DICTIONARY in data page, but parquet v1 uses PLAIN_DICTIONARY in both dictionary and
-    // data pages (actual encoding is identical).
-    Encoding encoding;
-    if (enable_bool_rle) {
-      encoding = (col_g.physical_type == BOOLEAN) ? Encoding::RLE
-                 : (page_type == PageType::DICTIONARY_PAGE || page_g.chunk->use_dictionary)
-                   ? Encoding::PLAIN_DICTIONARY
-                   : Encoding::PLAIN;
-    } else {
-      encoding = (page_type == PageType::DICTIONARY_PAGE || page_g.chunk->use_dictionary)
-                   ? Encoding::PLAIN_DICTIONARY
-                   : Encoding::PLAIN;
-    }
+
     encoder.field_int32(1, page_type);
     encoder.field_int32(2, uncompressed_page_size);
     encoder.field_int32(3, compressed_page_size);
+
     if (page_type == PageType::DATA_PAGE) {
       // DataPageHeader
       encoder.field_struct_begin(5);
       encoder.field_int32(1, page_g.num_values);  // NOTE: num_values != num_rows for list types
-      encoder.field_int32(2, encoding);           // encoding
+      encoder.field_int32(2, page_g.encoding);    // encoding
       encoder.field_int32(3, Encoding::RLE);      // definition_level_encoding
       encoder.field_int32(4, Encoding::RLE);      // repetition_level_encoding
       // Optionally encode page-level statistics
@@ -1844,11 +1933,29 @@ __global__ void __launch_bounds__(128)
         encoder.field_struct_end(5);
       }
       encoder.field_struct_end(5);
+    } else if (page_type == PageType::DATA_PAGE_V2) {
+      // DataPageHeaderV2
+      encoder.field_struct_begin(8);
+      encoder.field_int32(1, page_g.num_values);
+      encoder.field_int32(2, page_g.num_nulls);
+      encoder.field_int32(3, page_g.num_rows);
+      encoder.field_int32(4, page_g.encoding);
+      encoder.field_int32(5, page_g.def_lvl_bytes);
+      encoder.field_int32(6, page_g.rep_lvl_bytes);
+      encoder.field_bool(7, ck_g.is_compressed);  // TODO can compress at page level now
+      // Optionally encode page-level statistics
+      if (not page_stats.empty()) {
+        encoder.field_struct_begin(8);
+        encoder.set_ptr(
+          EncodeStatistics(encoder.get_ptr(), &page_stats[blockIdx.x], col_g.stats_dtype, scratch));
+        encoder.field_struct_end(8);
+      }
+      encoder.field_struct_end(8);
     } else {
       // DictionaryPageHeader
       encoder.field_struct_begin(7);
       encoder.field_int32(1, ck_g.num_dict_entries);  // number of values in dictionary
-      encoder.field_int32(2, encoding);
+      encoder.field_int32(2, page_g.encoding);
       encoder.field_struct_end(7);
     }
     encoder.end(&hdr_end, false);
@@ -2145,6 +2252,7 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                       size_t max_page_size_bytes,
                       size_type max_page_size_rows,
                       uint32_t page_align,
+                      bool write_v2_headers,
                       statistics_merge_group* page_grstats,
                       statistics_merge_group* chunk_grstats,
                       rmm::cuda_stream_view stream)
@@ -2161,10 +2269,12 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                                                      num_columns,
                                                      max_page_size_bytes,
                                                      max_page_size_rows,
-                                                     page_align);
+                                                     page_align,
+                                                     write_v2_headers);
 }
 
 void EncodePages(device_span<gpu::EncPage> pages,
+                 bool write_v2_headers,
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
                  device_span<compression_result> comp_results,
@@ -2173,8 +2283,8 @@ void EncodePages(device_span<gpu::EncPage> pages,
   auto num_pages = pages.size();
   // A page is part of one column. This is launching 1 block per page. 1 block will exclusively
   // deal with one datatype.
-  gpuEncodePages<128>
-    <<<num_pages, 128, 0, stream.value()>>>(pages, comp_in, comp_out, comp_results);
+  gpuEncodePages<128><<<num_pages, 128, 0, stream.value()>>>(
+    pages, comp_in, comp_out, comp_results, write_v2_headers);
 }
 
 void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)

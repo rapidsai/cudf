@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,10 +31,7 @@
 
 using cudf::device_span;
 
-namespace cudf {
-namespace io {
-namespace json {
-namespace gpu {
+namespace cudf::io::json::detail::legacy {
 
 using col_map_type = concurrent_unordered_map<uint32_t, cudf::size_type>;
 /**
@@ -100,7 +97,4 @@ void collect_keys_info(parse_options_view const& options,
                        thrust::optional<mutable_table_device_view> keys_info,
                        rmm::cuda_stream_view stream);
 
-}  // namespace gpu
-}  // namespace json
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::json::detail::legacy

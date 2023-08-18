@@ -123,7 +123,7 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
     0,
     [row_indices = row_indices.begin<size_type>(),
      validity    = c.null_mask(),
-     offsets     = c.offsets().begin<offset_type>(),
+     offsets     = c.offsets().begin<size_type>(),
      offset      = c.offset()] __device__(int index) {
       // both null mask and offsets data are not pre-sliced. so we need to add the column offset to
       // every incoming index.
@@ -168,9 +168,9 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   auto output_row_iter = cudf::detail::make_counting_transform_iterator(
     0,
     [row_indices  = row_indices.begin<size_type>(),
-     offsets      = c.offsets().begin<offset_type>(),
+     offsets      = c.offsets().begin<size_type>(),
      offset       = c.offset(),
-     first_offset = cudf::detail::get_value<offset_type>(
+     first_offset = cudf::detail::get_value<size_type>(
        c.offsets(), c.offset(), cudf::test::get_default_stream())] __device__(int index) {
       auto const true_index = row_indices[index] + offset;
       return offsets[true_index] - first_offset;

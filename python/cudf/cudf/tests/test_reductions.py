@@ -12,7 +12,12 @@ import cudf
 from cudf import Series
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing import _utils as utils
-from cudf.testing._utils import NUMERIC_TYPES, assert_eq, gen_rand
+from cudf.testing._utils import (
+    NUMERIC_TYPES,
+    assert_eq,
+    expect_warning_if,
+    gen_rand,
+)
 
 params_dtype = NUMERIC_TYPES
 
@@ -306,3 +311,56 @@ def test_categorical_reductions(op):
     psr = gsr.to_pandas()
 
     utils.assert_exceptions_equal(getattr(psr, op), getattr(gsr, op))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [1, 2, 3], "b": [10, 11, 12]},
+        {"a": [1, 0, 3], "b": [10, 11, 12]},
+        {"a": [1, 2, 3], "b": [10, 11, None]},
+        {
+            "a": [],
+        },
+        {},
+    ],
+)
+@pytest.mark.parametrize("op", ["all", "any"])
+def test_any_all_axis_none(data, op):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    expected = getattr(pdf, op)(axis=None)
+    actual = getattr(gdf, op)(axis=None)
+
+    assert expected == actual
+
+
+@pytest.mark.parametrize(
+    "op",
+    [
+        "sum",
+        "product",
+        "std",
+        "var",
+        "kurt",
+        "kurtosis",
+        "skew",
+        "min",
+        "max",
+        "mean",
+        "median",
+    ],
+)
+def test_reductions_axis_none_warning(op):
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": [10, 2, 3]})
+    pdf = df.to_pandas()
+    with pytest.warns(FutureWarning):
+        actual = getattr(df, op)(axis=None)
+    with expect_warning_if(
+        op in {"kurt", "kurtosis", "skew", "min", "max", "mean", "median"},
+        FutureWarning,
+    ):
+        expected = getattr(pdf, op)(axis=None)
+
+    assert_eq(expected, actual, check_dtype=False)
