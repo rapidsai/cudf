@@ -372,22 +372,6 @@ constexpr uint32_t encoding_to_mask(Encoding encoding)
 }
 
 /**
- * @brief Encoding values as mask bits
- */
-enum EncodingMask {
-  PLAIN                   = encoding_to_mask(Encoding::PLAIN),
-  GROUP_VAR_INT           = encoding_to_mask(Encoding::GROUP_VAR_INT),
-  PLAIN_DICTIONARY        = encoding_to_mask(Encoding::PLAIN_DICTIONARY),
-  RLE                     = encoding_to_mask(Encoding::RLE),
-  BIT_PACKED              = encoding_to_mask(Encoding::BIT_PACKED),
-  DELTA_BINARY_PACKED     = encoding_to_mask(Encoding::DELTA_BINARY_PACKED),
-  DELTA_LENGTH_BYTE_ARRAY = encoding_to_mask(Encoding::DELTA_LENGTH_BYTE_ARRAY),
-  DELTA_BYTE_ARRAY        = encoding_to_mask(Encoding::DELTA_BYTE_ARRAY),
-  RLE_DICTIONARY          = encoding_to_mask(Encoding::RLE_DICTIONARY),
-  BYTE_STREAM_SPLIT       = encoding_to_mask(Encoding::BYTE_STREAM_SPLIT)
-};
-
-/**
  * @brief Struct describing an encoder column chunk
  */
 struct EncColumnChunk {

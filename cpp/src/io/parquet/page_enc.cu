@@ -1488,7 +1488,7 @@ __global__ void __launch_bounds__(decide_compression_block_size)
     // if there is repetition or definition level data add RLE encoding
     auto const rle_bits =
       ck_g[warp_id].col_desc->num_def_level_bits() + ck_g[warp_id].col_desc->num_rep_level_bits();
-    if (rle_bits > 0) { encodings |= EncodingMask::RLE; }
+    if (rle_bits > 0) { encodings |= encoding_to_mask(Encoding::RLE); }
     chunks[chunk_id].encodings = encodings;
   }
 }
