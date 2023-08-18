@@ -124,9 +124,10 @@ __device__ bool is_head_byte(unsigned char utf8_byte) { return (utf8_byte >> 6) 
  * @param start_byte_for_thread Which byte to start analyzing
  * @return New code point value for this byte.
  */
-__device__ uint32_t extract_code_points_from_utf8(unsigned char const* strings,
-                                                  size_t const total_bytes,
-                                                  uint32_t const start_byte_for_thread)
+__device__ uint32_t
+extract_code_points_from_utf8(unsigned char const* strings,
+                              size_t const total_bytes,
+                              cudf::thread_index_type const start_byte_for_thread)
 {
   constexpr uint8_t max_utf8_blocks_for_char    = 4;
   uint8_t utf8_blocks[max_utf8_blocks_for_char] = {0};
@@ -214,8 +215,9 @@ __global__ void kernel_data_normalizer(unsigned char const* strings,
   constexpr uint32_t init_val                     = (1 << FILTER_BIT);
   uint32_t replacement_code_points[MAX_NEW_CHARS] = {init_val, init_val, init_val};
 
-  uint32_t const char_for_thread = blockDim.x * blockIdx.x + threadIdx.x;
-  uint32_t num_new_chars         = 0;
+  cudf::thread_index_type const char_for_thread =
+    threadIdx.x + cudf::thread_index_type(blockIdx.x) * cudf::thread_index_type(blockDim.x);
+  uint32_t num_new_chars = 0;
 
   if (char_for_thread < total_bytes) {
     auto const code_point = extract_code_points_from_utf8(strings, total_bytes, char_for_thread);

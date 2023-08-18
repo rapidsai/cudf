@@ -82,7 +82,9 @@ __global__ void init_data_and_mark_word_start_and_ends(uint32_t const* code_poin
                                                        uint32_t* token_ids,
                                                        uint8_t* tokens_per_word)
 {
-  uint32_t char_for_thread = blockDim.x * blockIdx.x + threadIdx.x;
+  cudf::thread_index_type char_for_thread = static_cast<cudf::thread_index_type>(blockDim.x) *
+                                              static_cast<cudf::thread_index_type>(blockIdx.x) +
+                                            threadIdx.x;
 
   // Deal with the start_word_indices array
   if (char_for_thread < num_code_points) {
@@ -135,7 +137,9 @@ __global__ void mark_string_start_and_ends(uint32_t const* code_points,
                                            uint32_t* end_word_indices,
                                            uint32_t num_strings)
 {
-  uint32_t idx = blockDim.x * blockIdx.x + threadIdx.x;
+  cudf::thread_index_type idx = static_cast<cudf::thread_index_type>(blockDim.x) *
+                                  static_cast<cudf::thread_index_type>(blockIdx.x) +
+                                threadIdx.x;
   // Ensure the starting character of each strings is written to the word start array.
   if (idx <= num_strings) {
     auto const offset = strings_offsets[idx];
@@ -330,7 +334,9 @@ __global__ void kernel_wordpiece_tokenizer(uint32_t const* code_points,
                                            uint32_t* token_ids,
                                            uint8_t* tokens_per_word)
 {
-  uint32_t const word_to_tokenize = blockDim.x * blockIdx.x + threadIdx.x;
+  cudf::thread_index_type word_to_tokenize = static_cast<cudf::thread_index_type>(blockDim.x) *
+                                               static_cast<cudf::thread_index_type>(blockIdx.x) +
+                                             threadIdx.x;
 
   if (word_to_tokenize >= total_words) return;
   // Each thread gets the start code_point offset for each word and resets the token_id memory to
