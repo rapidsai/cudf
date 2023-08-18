@@ -16,8 +16,39 @@
 
 #include <cudf/detail/interop.hpp>
 
+#include <memory>
+#include <sys/mman.h>
+#include <unistd.h>
+
 namespace cudf {
 namespace detail {
+
+/*
+  Enable Transparent Huge Pages (THP) for large (>4MB) allocations.
+  `buf` is returned untouched.
+  Enabling THP can improve performance of device-host memory transfers
+  significantly, see <https://github.com/rapidsai/cudf/pull/13914>.
+*/
+template <typename T>
+T enable_hugepage(T buf)
+{
+  if (buf->size() < (1u << 22u)) {  // Smaller than 4 MB
+    return buf;
+  }
+
+#ifdef MADV_HUGEPAGE
+  const auto pagesize = sysconf(_SC_PAGESIZE);
+  void* addr          = const_cast<uint8_t*>(buf->data());
+  if (addr == nullptr) { return buf; }
+  std::size_t length{static_cast<std::size_t>(buf->size())};
+  if (std::align(pagesize, pagesize, addr, length)) {
+    // Intentionally not checking for errors that may be returned by older kernel versions;
+    // optimistically tries enabling huge pages.
+    madvise(addr, length, MADV_HUGEPAGE);
+  }
+#endif
+  return buf;
+}
 
 std::unique_ptr<arrow::Buffer> allocate_arrow_buffer(int64_t const size, arrow::MemoryPool* ar_mr)
 {
@@ -30,7 +61,7 @@ std::unique_ptr<arrow::Buffer> allocate_arrow_buffer(int64_t const size, arrow::
   */
   auto result = arrow::AllocateBuffer(size, ar_mr);
   CUDF_EXPECTS(result.ok(), "Failed to allocate Arrow buffer");
-  return std::move(result).ValueOrDie();
+  return enable_hugepage(std::move(result).ValueOrDie());
 }
 
 std::shared_ptr<arrow::Buffer> allocate_arrow_bitmap(int64_t const size, arrow::MemoryPool* ar_mr)
@@ -44,7 +75,7 @@ std::shared_ptr<arrow::Buffer> allocate_arrow_bitmap(int64_t const size, arrow::
   */
   auto result = arrow::AllocateBitmap(size, ar_mr);
   CUDF_EXPECTS(result.ok(), "Failed to allocate Arrow bitmap");
-  return std::move(result).ValueOrDie();
+  return enable_hugepage(std::move(result).ValueOrDie());
 }
 
 }  // namespace detail
