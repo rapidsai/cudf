@@ -61,6 +61,8 @@ public class JCudfSerialization {
   private static final int SER_FORMAT_MAGIC_NUMBER = 0x43554446;
   private static final short VERSION_NUMBER = 0x0000;
 
+  private static final HostMemoryAllocator hostMemoryAllocator = DefaultHostMemoryAllocator.get();
+
   private static final class ColumnOffsets {
     private final long validity;
     private final long offsets;
@@ -1817,7 +1819,7 @@ public class JCudfSerialization {
     ColumnBufferProvider[][] providersPerColumn = providersFrom(headers, dataBuffers);
     try {
       SerializedTableHeader combined = calcConcatHeader(providersPerColumn);
-      HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(combined.dataLen);
+      HostMemoryBuffer hostBuffer = hostMemoryAllocator.allocate(combined.dataLen);
       try {
         try (NvtxRange range = new NvtxRange("Concat Host Side", NvtxColor.GREEN)) {
           DataWriter writer = writerFrom(hostBuffer);
@@ -1934,7 +1936,7 @@ public class JCudfSerialization {
       return new TableAndRowCountPair(0, null);
     }
 
-    try (HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(header.dataLen)) {
+    try (HostMemoryBuffer hostBuffer = hostMemoryAllocator.allocate(header.dataLen)) {
       if (header.dataLen > 0) {
         readTableIntoBuffer(din, header, hostBuffer);
       }

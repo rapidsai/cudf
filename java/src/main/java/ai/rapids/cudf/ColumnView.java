@@ -42,6 +42,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   protected final long nullCount;
   protected final ColumnVector.OffHeapState offHeap;
 
+  private static final HostMemoryAllocator hostMemoryAllocator = DefaultHostMemoryAllocator.get();
+
   /**
    * Constructs a Column View given a native view address. This asserts that if the ColumnView is
    * of nested-type it doesn't contain non-empty nulls
@@ -5023,15 +5025,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       currOffsets = deviceCvPointer.getOffsets();
       currValidity = deviceCvPointer.getValid();
       if (currData != null) {
-        hostData = HostMemoryBuffer.allocate(currData.length);
+        hostData = hostMemoryAllocator.allocate(currData.length);
         hostData.copyFromDeviceBuffer(currData);
       }
       if (currValidity != null) {
-        hostValid = HostMemoryBuffer.allocate(currValidity.length);
+        hostValid = hostMemoryAllocator.allocate(currValidity.length);
         hostValid.copyFromDeviceBuffer(currValidity);
       }
       if (currOffsets != null) {
-        hostOffsets = HostMemoryBuffer.allocate(currOffsets.length);
+        hostOffsets = hostMemoryAllocator.allocate(currOffsets.length);
         hostOffsets.copyFromDeviceBuffer(currOffsets);
       }
       int numChildren = deviceCvPointer.getNumChildren();
@@ -5094,16 +5096,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         getNullCount();
         if (!type.isNestedType()) {
           if (valid != null) {
-            hostValidityBuffer = HostMemoryBuffer.allocate(valid.getLength());
+            hostValidityBuffer = hostMemoryAllocator.allocate(valid.getLength());
             hostValidityBuffer.copyFromDeviceBuffer(valid);
           }
           if (offsets != null) {
-            hostOffsetsBuffer = HostMemoryBuffer.allocate(offsets.length);
+            hostOffsetsBuffer = hostMemoryAllocator.allocate(offsets.length);
             hostOffsetsBuffer.copyFromDeviceBuffer(offsets);
           }
           // If a strings column is all null values there is no data buffer allocated
           if (data != null) {
-            hostDataBuffer = HostMemoryBuffer.allocate(data.length);
+            hostDataBuffer = hostMemoryAllocator.allocate(data.length);
             hostDataBuffer.copyFromDeviceBuffer(data);
           }
           HostColumnVector ret = new HostColumnVector(type, rows, Optional.of(nullCount),
@@ -5112,16 +5114,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
           return ret;
         } else {
           if (data != null) {
-            hostDataBuffer = HostMemoryBuffer.allocate(data.length);
+            hostDataBuffer = hostMemoryAllocator.allocate(data.length);
             hostDataBuffer.copyFromDeviceBuffer(data);
           }
 
           if (valid != null) {
-            hostValidityBuffer = HostMemoryBuffer.allocate(valid.getLength());
+            hostValidityBuffer = hostMemoryAllocator.allocate(valid.getLength());
             hostValidityBuffer.copyFromDeviceBuffer(valid);
           }
           if (offsets != null) {
-            hostOffsetsBuffer = HostMemoryBuffer.allocate(offsets.getLength());
+            hostOffsetsBuffer = hostMemoryAllocator.allocate(offsets.getLength());
             hostOffsetsBuffer.copyFromDeviceBuffer(offsets);
           }
           List<HostColumnVectorCore> children = new ArrayList<>();

@@ -234,9 +234,10 @@ public final class PinnedMemoryPool implements AutoCloseable {
    * @return newly created buffer
    */
   public static HostMemoryBuffer allocate(long bytes) {
+    final HostMemoryAllocator allocator = DefaultHostMemoryAllocator.get();
     HostMemoryBuffer result = tryAllocate(bytes);
     if (result == null) {
-      result = HostMemoryBuffer.allocate(bytes, false);
+      result = allocator.allocate(bytes, false);
     }
     return result;
   }

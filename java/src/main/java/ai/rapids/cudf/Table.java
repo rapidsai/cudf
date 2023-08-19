@@ -47,6 +47,8 @@ public final class Table implements AutoCloseable {
   private long nativeHandle;
   private ColumnVector[] columns;
 
+  private static final HostMemoryAllocator hostMemoryAllocator = DefaultHostMemoryAllocator.get();
+
   /**
    * Table class makes a copy of the array of {@link ColumnVector}s passed to it. The class
    * will decrease the refcount
@@ -831,7 +833,7 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostMemoryBuffer newBuf = hostMemoryAllocator.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readCSV(schema, opts, newBuf, 0, len);
     }
@@ -1048,7 +1050,7 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostMemoryBuffer newBuf = hostMemoryAllocator.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readJSON(schema, opts, newBuf, 0, len);
     }
@@ -1152,7 +1154,7 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostMemoryBuffer newBuf = hostMemoryAllocator.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readParquet(opts, newBuf, 0, len);
     }
@@ -1230,7 +1232,7 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.length - offset;
     len = len > 0 ? len : buffer.length - offset;
 
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostMemoryBuffer newBuf = hostMemoryAllocator.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readAvro(opts, newBuf, 0, len);
     }
@@ -1310,7 +1312,7 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostMemoryBuffer newBuf = hostMemoryAllocator.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readORC(opts, newBuf, 0, len);
     }
@@ -1609,7 +1611,7 @@ public final class Table implements AutoCloseable {
 
     private ArrowReaderWrapper(HostBufferProvider provider) {
       this.provider = provider;
-      buffer = HostMemoryBuffer.allocate(10 * 1024 * 1024, false);
+      buffer = hostMemoryAllocator.allocate(10 * 1024 * 1024, false);
     }
 
     // Called From JNI
