@@ -20,6 +20,7 @@
 #include <io/utilities/block_utils.cuh>
 #include <io/utilities/parsing_utils.cuh>
 
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/null_mask.hpp>
@@ -45,6 +46,7 @@
 using namespace ::cudf::io;
 
 using cudf::device_span;
+using cudf::detail::grid_1d;
 
 namespace cudf {
 namespace io {
@@ -177,7 +179,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 
   // ThreadIds range per block, so also need the blockId
   // This is entry into the fields; threadId is an element within `num_records`
-  auto const rec_id      = cudf::thread_index_type{threadIdx.x} + (blockDim.x * blockIdx.x);
+  auto const rec_id      = grid_1d::global_thread_id(threadIdx.x, blockIdx.x, blockDim.x);
   auto const rec_id_next = rec_id + 1;
 
   // we can have more threads than data, make sure we are not past the end of the data
@@ -316,7 +318,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
   auto const raw_csv = data.data();
   // thread IDs range per block, so also need the block id.
   // this is entry into the field array - tid is an elements within the num_entries array
-  auto const rec_id      = cudf::thread_index_type{threadIdx.x} + (blockDim.x * blockIdx.x);
+  auto const rec_id      = grid_1d::global_thread_id(threadIdx.x, blockIdx.x, blockDim.x);
   auto const rec_id_next = rec_id + 1;
 
   // we can have more threads than data, make sure we are not past the end of the data

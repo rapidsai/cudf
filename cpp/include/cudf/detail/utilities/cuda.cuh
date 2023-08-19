@@ -65,6 +65,12 @@ class grid_1d {
     CUDF_EXPECTS(num_threads_per_block > 0, "num_threads_per_block must be > 0");
     CUDF_EXPECTS(num_blocks > 0, "num_blocks must be > 0");
   }
+  static constexpr thread_index_type global_thread_id(unsigned int thread_id,
+                                                      unsigned int block_id,
+                                                      unsigned int num_threads_per_block)
+  {
+    return thread_id + thread_index_type{block_id} * num_threads_per_block;
+  }
 };
 
 /**

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -94,7 +95,7 @@ __global__ void count_and_set_positions(char const* data,
                                         T* positions)
 {
   // thread IDs range per block, so also need the block id
-  auto const tid = cudf::thread_index_type{threadIdx.x} + (blockDim.x * blockIdx.x);
+  auto const tid = cudf::detail::grid_1d::global_thread_id(threadIdx.x, blockIdx.x, blockDim.x);
   auto const did = tid * bytes_per_find_thread;
 
   char const* raw = (data + did);
