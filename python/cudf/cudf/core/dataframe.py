@@ -447,21 +447,13 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             return frame._slice(row_spec.key)
         elif isinstance(row_spec, indexing_utils.ScalarIndexer):
             result = frame._gather(row_spec.key, keep_index=True)
-            # Attempt to turn into series.
-            try:
-                # Behaviour difference from pandas, which will merrily
-                # turn any heterogeneous set of columns into a series if
-                # you only ask for one row.
-                new_name = result.index[0]
-                result = Series._concat(
-                    [result[name] for name in column_names],
-                    index=result.keys(),
-                )
-                result.name = new_name
-                return result
-            except TypeError:
-                # Couldn't find a common type, just return a 1xN dataframe.
-                return result
+            new_name = result.index[0]
+            result = Series._concat(
+                [result[name] for name in column_names],
+                index=result.keys(),
+            )
+            result.name = new_name
+            return result
         elif isinstance(row_spec, indexing_utils.EmptyIndexer):
             return frame._empty_like(keep_index=True)
         assert_never(row_spec)

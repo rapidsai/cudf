@@ -1987,6 +1987,16 @@ def test_loc_repeated_label_ordering_issue_13658(series):
     assert_eq(actual, expect)
 
 
+def test_iloc_mixed_dtype():
+    df = cudf.DataFrame({"a": ["a", "b"], "b": [0, 1]})
+    with pytest.raises(TypeError):
+        df.iloc[0]
+    df = df.astype("str")
+    pdf = df.to_pandas()
+
+    assert_eq(df.iloc[0], pdf.iloc[0])
+
+
 class TestLocIndexWithOrder:
     # https://github.com/rapidsai/cudf/issues/12833
     @pytest.fixture(params=["increasing", "decreasing", "neither"])
