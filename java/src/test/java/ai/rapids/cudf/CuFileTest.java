@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 public class CuFileTest extends CudfTestBase {
 
   private static final HostMemoryAllocator hostMemoryAllocator = DefaultHostMemoryAllocator.get();
-  
+
   @AfterEach
   void tearDown() {
     if (PinnedMemoryPool.isInitialized()) {

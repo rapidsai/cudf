@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class GatherMapTest {
   private static final HostMemoryAllocator hostMemoryAllocator = DefaultHostMemoryAllocator.get();
-  
+
   @Test
   void testInvalidBuffer() {
     try (DeviceMemoryBuffer buffer = DeviceMemoryBuffer.allocate(707)) {
