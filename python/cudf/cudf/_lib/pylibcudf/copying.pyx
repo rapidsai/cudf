@@ -8,7 +8,10 @@ from libcpp.utility cimport move
 # we really want here would be
 # cimport libcudf... libcudf.copying.algo(...)
 from cudf._lib.cpp cimport copying as cpp_copying
-from cudf._lib.cpp.copying import out_of_bounds_policy
+
+from cudf._lib.cpp.copying import \
+    out_of_bounds_policy as OutOfBoundsPolicy  # no-cython-lint
+
 from cudf._lib.cpp.table.table cimport table
 
 from .column cimport Column
