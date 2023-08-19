@@ -16,7 +16,16 @@
 
 package ai.rapids.cudf.nvcomp;
 
-import ai.rapids.cudf.*;
+import ai.rapids.cudf.BaseDeviceMemoryBuffer;
+import ai.rapids.cudf.CloseableArray;
+import ai.rapids.cudf.Cuda;
+import ai.rapids.cudf.DefaultHostMemoryAllocator;
+import ai.rapids.cudf.DeviceMemoryBuffer;
+import ai.rapids.cudf.HostMemoryAllocator;
+import ai.rapids.cudf.HostMemoryBuffer;
+import ai.rapids.cudf.MemoryBuffer;
+import ai.rapids.cudf.NvtxColor;
+import ai.rapids.cudf.NvtxRange;
 
 /** Multi-buffer LZ4 compressor */
 public class BatchedLZ4Compressor {
