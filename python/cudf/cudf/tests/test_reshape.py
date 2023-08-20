@@ -151,6 +151,79 @@ def test_df_stack_reset_index():
     assert_eq(expected, actual)
 
 
+@pytest.mark.parametrize(
+    "columns",
+    [
+        pd.MultiIndex.from_tuples(
+            [("A", "cat"), ("A", "dog"), ("B", "cat"), ("B", "dog")],
+            names=["letter", "animal"],
+        ),
+        pd.MultiIndex.from_tuples(
+            [("A", "cat"), ("B", "bird"), ("A", "dog"), ("B", "dog")],
+            names=["letter", "animal"],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "level",
+    [
+        -1,
+        0,
+        1,
+        "letter",
+        "animal",
+        [0, 1],
+        [1, 0],
+        ["letter", "animal"],
+        ["animal", "letter"],
+    ],
+)
+@pytest.mark.parametrize("dropna", [True, False])
+def test_df_stack_multiindex_column_axis(columns, level, dropna):
+    if isinstance(level, list) and len(level) > 1 and not dropna:
+        pytest.skip(
+            "Stacking multiple levels with dropna==False is unsupported."
+        )
+
+    pdf = pd.DataFrame(data=[[1, 2, 3, 4], [2, 4, 6, 8]], columns=columns)
+    gdf = cudf.from_pandas(pdf)
+
+    got = gdf.stack(level=level, dropna=dropna)
+    expect = pdf.stack(level=level, dropna=dropna)
+
+    assert_eq(expect, got, check_dtype=False)
+
+
+# def test_df_stack_multiindex_column_axis_without_missing_value():
+#     multicol1 = pd.MultiIndex.from_tuples([('weight', 'kg'),
+#                                        ('weight', 'pounds')])
+#     df = pd.DataFrame([[1, 2], [2, 4]],
+#                                         index=['cat', 'dog'],
+#                                         columns=multicol1)
+#     gdf = cudf.from_pandas(df)
+
+#     got = gdf.stack()
+#     expect = df.stack()
+
+#     assert_eq(expect, got)
+
+
+# def test_df_stack_multiindex_column_axis_with_missing_value():
+#     multicol1 = pd.MultiIndex.from_tuples(
+#         [('height', 'm'),
+#          ('weight', 'pounds')]
+#     )
+#     df = pd.DataFrame([[1, 2], [2, 4]],
+#                                         index=['cat', 'dog'],
+#                                         columns=multicol1)
+#     gdf = cudf.from_pandas(df)
+
+#     got = gdf.stack()
+#     expect = df.stack()
+
+#     assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("num_rows", [1, 2, 10, 1000])
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
 @pytest.mark.parametrize(
