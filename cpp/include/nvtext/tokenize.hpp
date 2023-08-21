@@ -215,5 +215,36 @@ std::unique_ptr<cudf::column> detokenize(
   cudf::string_scalar const& separator = cudf::string_scalar(" "),
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief Returns the token-ids for the input string by looking up each delimited
+ * token in the given vocabulary
+ *
+ * Token ids are the row indices within the vocabulary column.
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ["hello world", "hello there", "there there world"]
+ * v = ["hello", "there", "world"]
+ * r = tokenize_with_vocabulary(s,v)
+ * r is now [[0,2], [0,1], [1,1,2]]
+ * @endcode
+ *
+ * Any null row entry results in a corresponding null entry in the output
+ *
+ * @throw cudf::logic_error is `delimiter` is invalid
+ * @throw cudf::logic_error if `vocabulary` contains nulls or is empty
+ *
+ * @param input Strings column to tokenize
+ * @param vocabulary Strings to lookup tokens within
+ * @param delimiter Used to identify tokens within `input`
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return Lists column of token ids
+ */
+std::unique_ptr<cudf::column> tokenize_with_vocabulary(
+  cudf::strings_column_view const& input,
+  cudf::strings_column_view const& vocabulary,
+  cudf::string_scalar const& delimiter = cudf::string_scalar{""},
+  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
+
 /** @} */  // end of tokenize group
 }  // namespace nvtext

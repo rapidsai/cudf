@@ -14,14 +14,16 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/strings_column_view.hpp>
-#include <nvtext/tokenize.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
+
+#include <nvtext/tokenize.hpp>
+
+#include <cudf/column/column.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -125,28 +127,33 @@ TEST_F(TextTokenizeTest, CharacterTokenize)
 
 TEST_F(TextTokenizeTest, TokenizeEmptyTest)
 {
-  auto strings = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
-  cudf::test::strings_column_wrapper all_empty({"", "", ""});
-  cudf::test::strings_column_wrapper all_null({"", "", ""}, {0, 0, 0});
-  cudf::test::fixed_width_column_wrapper<int32_t> expected({0, 0, 0});
+  auto input = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
+  auto view  = cudf::strings_column_view(input->view());
+  cudf::test::strings_column_wrapper all_empty_wrapper({"", "", ""});
+  auto all_empty = cudf::strings_column_view(all_empty_wrapper);
+  cudf::test::strings_column_wrapper all_null_wrapper({"", "", ""}, {0, 0, 0});
+  auto all_null = cudf::strings_column_view(all_null_wrapper);
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected({0, 0, 0});
 
-  auto results = nvtext::tokenize(cudf::strings_column_view(strings->view()));
+  auto results = nvtext::tokenize(view);
   EXPECT_EQ(results->size(), 0);
-  results = nvtext::tokenize(cudf::strings_column_view(all_empty));
+  results = nvtext::tokenize(all_empty);
   EXPECT_EQ(results->size(), 0);
-  results = nvtext::tokenize(cudf::strings_column_view(all_null));
+  results = nvtext::tokenize(all_null);
   EXPECT_EQ(results->size(), 0);
-  results = nvtext::count_tokens(cudf::strings_column_view(strings->view()));
+  results = nvtext::count_tokens(view);
   EXPECT_EQ(results->size(), 0);
-  results = nvtext::count_tokens(cudf::strings_column_view(all_empty));
+  results = nvtext::count_tokens(all_empty);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   results = nvtext::count_tokens(cudf::strings_column_view(all_null));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  results = nvtext::character_tokenize(cudf::strings_column_view(strings->view()));
+  results = nvtext::character_tokenize(view);
   EXPECT_EQ(results->size(), 0);
-  results = nvtext::character_tokenize(cudf::strings_column_view(all_empty));
+  results = nvtext::character_tokenize(all_empty);
   EXPECT_EQ(results->size(), 0);
-  results = nvtext::character_tokenize(cudf::strings_column_view(all_null));
+  results = nvtext::character_tokenize(all_null);
+  EXPECT_EQ(results->size(), 0);
+  results = nvtext::tokenize_with_vocabulary(view, all_empty);
   EXPECT_EQ(results->size(), 0);
 }
 
@@ -189,5 +196,48 @@ TEST_F(TextTokenizeTest, DetokenizeErrors)
 
   EXPECT_THROW(nvtext::detokenize(strings_view, none), cudf::logic_error);
   EXPECT_THROW(nvtext::detokenize(strings_view, one, cudf::string_scalar("", false)),
+               cudf::logic_error);
+}
+
+TEST_F(TextTokenizeTest, Vocabulary)
+{
+  auto validity = cudf::test::iterators::null_at(1);
+  cudf::test::strings_column_wrapper input({"the fox jumped over the dog",
+                                            "the dog chased the cat",
+                                            "the cat chased the mouse",
+                                            "the mousé  ate  cheese",
+                                            "",
+                                            ""},
+                                           validity);
+  cudf::test::strings_column_wrapper vocabulary(  // leaving out 'cat' on purpose
+    {"ate", "chased", "cheese", "dog", "fox", "jumped", "mouse", "mousé", "over", "the"});
+  auto input_view = cudf::strings_column_view(input);
+  auto vocab_view = cudf::strings_column_view(vocabulary);
+  auto results    = nvtext::tokenize_with_vocabulary(input_view, vocab_view);
+
+  using LCW = cudf::test::lists_column_wrapper<cudf::size_type>;
+  // clang-format off
+  LCW expected({LCW{9,4,5,8,9,3},
+                LCW{9,3,1,9,-1},
+                LCW{9,-1,1,9,6},
+                LCW{9,7,0,2},
+                LCW{}, LCW{}},
+                validity);
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(TextTokenizeTest, TokenizeErrors)
+{
+  cudf::test::strings_column_wrapper empty{};
+  cudf::strings_column_view view(empty);
+  cudf::test::strings_column_wrapper some{""};
+  cudf::strings_column_view vocab(some);
+  cudf::test::strings_column_wrapper vocab_nulls({""}, {0});
+  cudf::strings_column_view nulls(vocab_nulls);
+
+  EXPECT_THROW(nvtext::tokenize_with_vocabulary(view, view), cudf::logic_error);
+  EXPECT_THROW(nvtext::tokenize_with_vocabulary(view, nulls), cudf::logic_error);
+  EXPECT_THROW(nvtext::tokenize_with_vocabulary(view, vocab, cudf::string_scalar("", false)),
                cudf::logic_error);
 }
