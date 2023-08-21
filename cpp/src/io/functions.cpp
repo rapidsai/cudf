@@ -503,11 +503,6 @@ std::unique_ptr<std::vector<uint8_t>> merge_row_group_metadata(
   return detail_parquet::writer::merge_row_group_metadata(metadata_list);
 }
 
-table_input_metadata table_with_metadata::get_table_input_metadata()
-{
-  return table_input_metadata(*this);
-}
-
 table_input_metadata::table_input_metadata(table_view const& table)
 {
   // Create a metadata hierarchy using `table`
