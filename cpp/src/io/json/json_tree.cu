@@ -36,6 +36,7 @@
 #include <cub/device/device_radix_sort.cuh>
 
 #include <cuco/static_map.cuh>
+#include <cuco/static_set.cuh>
 
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
@@ -528,7 +529,6 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
 {
   CUDF_FUNC_RANGE();
   auto const num_nodes = parent_node_ids.size();
-  rmm::device_uvector<size_type> col_id(num_nodes, stream, mr);
 
   // array of arrays
   NodeIndexT const row_array_children_level = is_enabled_lines ? 1 : 2;
@@ -560,17 +560,6 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
                     list_indices.begin());
   }
 
-  using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
-  using hash_map_type =
-    cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
-
-  constexpr size_type empty_node_index_sentinel = -1;
-  hash_map_type key_map{compute_hash_table_size(num_nodes),  // TODO reduce oversubscription
-                        cuco::empty_key{empty_node_index_sentinel},
-                        cuco::empty_value{empty_node_index_sentinel},
-                        cuco::erased_key{-2},
-                        hash_table_allocator_type{default_allocator<char>{}, stream},
-                        stream.value()};
   // path compression is not used since extra writes make all map operations slow.
   auto const d_hasher = [node_level      = node_levels.begin(),
                          node_type       = node_type.begin(),
@@ -632,23 +621,27 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
     return node_id1 == node_id2;
   };
 
-  // insert and convert node ids to unique set ids
-  auto const num_inserted = thrust::count_if(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(num_nodes),
-    [d_hashed_cache,
-     d_equal,
-     view       = key_map.get_device_mutable_view(),
-     uq_node_id = col_id.begin()] __device__(auto node_id) mutable {
-      auto it = view.insert_and_find(cuco::make_pair(node_id, node_id), d_hashed_cache, d_equal);
-      uq_node_id[node_id] = (it.first)->first.load(cuda::std::memory_order_relaxed);
-      return it.second;
-    });
+  constexpr size_type empty_node_index_sentinel = -1;
+  using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
+  using hasher_type               = decltype(d_hashed_cache);
 
-  auto const num_columns = num_inserted;  // key_map.get_size() is not updated.
+  auto key_set = cuco::experimental::static_set{
+    cuco::experimental::extent{compute_hash_table_size(num_nodes)},
+    cuco::empty_key<cudf::size_type>{empty_node_index_sentinel},
+    d_equal,
+    cuco::experimental::linear_probing<1, hasher_type>{d_hashed_cache},
+    hash_table_allocator_type{default_allocator<char>{}, stream},
+    stream.value()};
+
+  // insert and convert node ids to unique set ids
+  auto nodes_itr          = thrust::make_counting_iterator<size_type>(0);
+  auto const num_inserted = key_set.insert(nodes_itr, nodes_itr + num_nodes, stream.value());
+
+  auto const num_columns = num_inserted;
   rmm::device_uvector<size_type> unique_keys(num_columns, stream);
-  key_map.retrieve_all(unique_keys.begin(), thrust::make_discard_iterator(), stream.value());
+  rmm::device_uvector<size_type> col_id(num_nodes, stream, mr);
+  key_set.find_async(nodes_itr, nodes_itr + num_nodes, col_id.begin(), stream.value());
+  std::ignore = key_set.retrieve_all(unique_keys.begin(), stream.value());
 
   return {std::move(col_id), std::move(unique_keys)};
 }
