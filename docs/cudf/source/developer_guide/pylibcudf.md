@@ -86,7 +86,7 @@ cpdef Table gather(
             cpp_copying.gather(
                 source_table.view(),
                 gather_map.view(),
-                py_policy_to_c_policy(bounds_policy)
+                bounds_policy
             )
         )
     return Table.from_libcudf(move(c_result))
@@ -94,18 +94,22 @@ cpdef Table gather(
 
 There are a couple of notable points from the snippet above:
 - The object returned from libcudf is immediately converted to a pylibcudf type.
-- `cudf::gather` accepts a `cudf::out_of_bounds_policy` enum parameter, which is mirrored by the `cdef `class OutOfBoundsPolicy` as mentioned in [the data structures example above](data-structures).
+- `cudf::gather` accepts a `cudf::out_of_bounds_policy` enum parameter. `OutOfBoundsPolicy` is an alias for this type in pylibcudf that matches our Python naming conventions (CapsCase instead of snake\_case).
 
 ## Miscellaneous Notes
 
-### Cython Scoped Enums and Casting
-Cython does not support scoped enumerations.
-It assumes that enums correspond to their underlying value types and will thus attempt operations that are invalid.
-To fix this, many places in pylibcudf Cython code contain double casts that look like
-```cython
-return <cpp_type> (
-    <underlying_type_t_cpp_type> py_policy
-)
+### Cython Scoped Enums
+Cython 3 introduced support for scoped enumerations.
+However, this support has some bugs as well as some easy pitfalls.
+Our usage of enums is intended to minimize the complexity of our code while also working around Cython's limitations.
+
+```{warning}
+The guidance in this section may change often as Cython is updated and our understanding of best practices evolves.
 ```
-where `cpp_type` is some libcudf enum with a specified underlying type.
-This double-cast will be removed when we migrate to Cython 3, which adds proper support for C++ scoped enumerations.
+
+- All pxd files that declare a C++ enum should use `cpdef enum class` declarations.
+  -  Reason: This declaration makes the C++ enum available in Cython code while also transparently creating a Python enum.
+- Any pxd file containing only C++ declarations must still have a corresponding pyx file if any of the declarations are scoped enums.
+  - Reason: The creation of the Python enum requires that Cython actually generate the necessary code Python C API code, which will not happen if only a pxd file is present.
+-  If a C++ enum will be part of a pylibcudf module's public API, then it should be imported (not cimported) directly into the pyx file and aliased with a name that matches our Python class naming conventions (CapsCase) instead of our C++ naming convention (snake\_case).
+  - Reason: We want to expose the enum to both Python and Cython consumers of the module. As a side effect, this aliasing avoids [this Cython bug](https://github.com/cython/cython/issues/5609).
