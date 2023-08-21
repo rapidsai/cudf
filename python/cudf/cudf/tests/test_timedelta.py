@@ -57,6 +57,15 @@ _TIMEDELTA_DATA_NON_OVERFLOW = [
     [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
 ]
 
+_cmpops = [
+    operator.lt,
+    operator.gt,
+    operator.le,
+    operator.ge,
+    operator.eq,
+    operator.ne,
+]
+
 
 @pytest.mark.parametrize(
     "data",
@@ -1442,3 +1451,20 @@ def test_timdelta_binop_tz_timestamp(op):
 def test_timedelta_getitem_na():
     s = cudf.Series([1, 2, None, 3], dtype="timedelta64[ns]")
     assert s[2] is cudf.NaT
+
+
+@pytest.mark.parametrize("data1", [[123, 456, None, 321, None]])
+@pytest.mark.parametrize("data2", [[123, 456, 789, None, None]])
+@pytest.mark.parametrize("op", _cmpops)
+def test_timedelta_series_cmpops_pandas_compatibility(data1, data2, op):
+    gsr1 = cudf.Series(data=data1, dtype="timedelta64[ns]")
+    psr1 = gsr1.to_pandas()
+
+    gsr2 = cudf.Series(data=data2, dtype="timedelta64[ns]")
+    psr2 = gsr2.to_pandas()
+
+    expect = op(psr1, psr2)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = op(gsr1, gsr2)
+
+    assert_eq(expect, got)

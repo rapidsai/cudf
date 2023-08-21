@@ -310,8 +310,8 @@ struct gpuParseDataPageHeaderV2 {
                                  ParquetFieldInt32(2, bs->page.num_nulls),
                                  ParquetFieldInt32(3, bs->page.num_rows),
                                  ParquetFieldEnum<Encoding>(4, bs->page.encoding),
-                                 ParquetFieldInt32(5, bs->page.def_lvl_bytes),
-                                 ParquetFieldInt32(6, bs->page.rep_lvl_bytes));
+                                 ParquetFieldInt32(5, bs->page.lvl_bytes[level_type::DEFINITION]),
+                                 ParquetFieldInt32(6, bs->page.lvl_bytes[level_type::REPETITION]));
     return parse_header(op, bs);
   }
 };
@@ -388,9 +388,9 @@ __global__ void __launch_bounds__(128)
         bs->page.num_rows = 0;
         bs->page.flags    = 0;
         // zero out V2 info
-        bs->page.num_nulls     = 0;
-        bs->page.def_lvl_bytes = 0;
-        bs->page.rep_lvl_bytes = 0;
+        bs->page.num_nulls                         = 0;
+        bs->page.lvl_bytes[level_type::DEFINITION] = 0;
+        bs->page.lvl_bytes[level_type::REPETITION] = 0;
         if (parse_page_header(bs) && bs->page.compressed_page_size >= 0) {
           switch (bs->page_type) {
             case PageType::DATA_PAGE:

@@ -31,8 +31,8 @@ size_t CompactProtocolWriter::write(FileMetaData const& f)
   c.field_struct_list(2, f.schema);
   c.field_int(3, f.num_rows);
   c.field_struct_list(4, f.row_groups);
-  if (f.key_value_metadata.size() != 0) { c.field_struct_list(5, f.key_value_metadata); }
-  if (f.created_by.size() != 0) { c.field_string(6, f.created_by); }
+  if (not f.key_value_metadata.empty()) { c.field_struct_list(5, f.key_value_metadata); }
+  if (not f.created_by.empty()) { c.field_string(6, f.created_by); }
   if (f.column_order_listsize != 0) {
     // Dummy list of struct containing an empty field1 struct
     c.put_field_header(7, c.current_field(), ST_FLD_LIST);
@@ -167,14 +167,14 @@ size_t CompactProtocolWriter::write(KeyValue const& k)
 {
   CompactProtocolFieldWriter c(*this);
   c.field_string(1, k.key);
-  if (k.value.size() != 0) { c.field_string(2, k.value); }
+  if (not k.value.empty()) { c.field_string(2, k.value); }
   return c.value();
 }
 
 size_t CompactProtocolWriter::write(ColumnChunk const& s)
 {
   CompactProtocolFieldWriter c(*this);
-  if (s.file_path.size() != 0) { c.field_string(1, s.file_path); }
+  if (not s.file_path.empty()) { c.field_string(1, s.file_path); }
   c.field_int(2, s.file_offset);
   c.field_struct(3, s.meta_data);
   if (s.offset_index_length != 0) {
@@ -208,12 +208,12 @@ size_t CompactProtocolWriter::write(ColumnChunkMetaData const& s)
 size_t CompactProtocolWriter::write(Statistics const& s)
 {
   CompactProtocolFieldWriter c(*this);
-  if (s.max.size() != 0) { c.field_binary(1, s.max); }
-  if (s.min.size() != 0) { c.field_binary(2, s.min); }
+  if (not s.max.empty()) { c.field_binary(1, s.max); }
+  if (not s.min.empty()) { c.field_binary(2, s.min); }
   if (s.null_count != -1) { c.field_int(3, s.null_count); }
   if (s.distinct_count != -1) { c.field_int(4, s.distinct_count); }
-  if (s.max_value.size() != 0) { c.field_binary(5, s.max_value); }
-  if (s.min_value.size() != 0) { c.field_binary(6, s.min_value); }
+  if (not s.max_value.empty()) { c.field_binary(5, s.max_value); }
+  if (not s.min_value.empty()) { c.field_binary(6, s.min_value); }
   return c.value();
 }
 

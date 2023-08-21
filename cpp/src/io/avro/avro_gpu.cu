@@ -419,7 +419,7 @@ __global__ void __launch_bounds__(num_warps * 32, 2)
  * @param[in] avro_data Raw block data
  * @param[in] schema_len Number of entries in schema
  * @param[in] min_row_size Minimum size in bytes of a row
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use
  */
 void DecodeAvroColumnData(device_span<block_desc_s const> blocks,
                           schemadesc_s* schema,
