@@ -6380,29 +6380,134 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def stack(self, level=-1, dropna=True):
         """Stack the prescribed level(s) from columns to index
 
-        Return a reshaped Series
+        Return a reshaped DataFrame or Series having a multi-level
+        index with one or more new inner-most levels compared to
+        the current DataFrame. The new inner-most levels are created
+        by pivoting the columns of the current dataframe:
+
+          - if the columns have a single level, the output is a Series;
+          - if the columns have multiple levels, the new index
+            level(s) is (are) taken from the prescribed level(s) and
+            the output is a DataFrame.
 
         Parameters
         ----------
+        level : int, str, list default -1
+            Level(s) to stack from the column axis onto the index axis,
+            defined as one index or label, or a list of indices or labels.
         dropna : bool, default True
-            Whether to drop rows in the resulting Series with missing values.
+            Whether to drop rows in the resulting Frame/Series with missing
+            values. When multiple levels are specified, `dropna==False` is
+            unsupported.
 
         Returns
         -------
-        The stacked cudf.Series
+        DataFrame or Series
+            Stacked dataframe or series.
+
+        See Also
+        --------
+        DataFrame.unstack : Unstack prescribed level(s) from index axis
+             onto column axis.
+        DataFrame.pivot : Reshape dataframe from long format to wide
+             format.
+        DataFrame.pivot_table : Create a spreadsheet-style pivot table
+             as a DataFrame.
+
+        Notes
+        -----
+        The function is named by analogy with a collection of books
+        being reorganized from being side by side on a horizontal
+        position (the columns of the dataframe) to being stacked
+        vertically on top of each other (in the index of the
+        dataframe).
 
         Examples
         --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [0, 1, 3], 'b': [1, 2, 4]})
-        >>> df.stack()
-        0  a    0
-           b    1
-        1  a    1
-           b    2
-        2  a    3
-           b    4
+        **Single level columns**
+
+        >>> df_single_level_cols = cudf.DataFrame([[0, 1], [2, 3]],
+        ...                                     index=['cat', 'dog'],
+        ...                                     columns=['weight', 'height'])
+
+        Stacking a dataframe with a single level column axis returns a Series:
+
+        >>> df_single_level_cols
+             weight height
+        cat       0      1
+        dog       2      3
+        >>> df_single_level_cols.stack()
+        cat  height    1
+             weight    0
+        dog  height    3
+             weight    2
         dtype: int64
+
+        **Multi level columns: simple case**
+
+        >>> import pandas as pd
+        >>> multicol1 = pd.MultiIndex.from_tuples([('weight', 'kg'),
+        ...                                        ('weight', 'pounds')])
+        >>> df_multi_level_cols1 = cudf.DataFrame([[1, 2], [2, 4]],
+        ...                                     index=['cat', 'dog'],
+        ...                                     columns=multicol1)
+
+        Stacking a dataframe with a multi-level column axis:
+
+        >>> df_multi_level_cols1
+             weight
+                 kg    pounds
+        cat       1        2
+        dog       2        4
+        >>> df_multi_level_cols1.stack()
+                    weight
+        cat kg           1
+            pounds       2
+        dog kg           2
+            pounds       4
+
+        **Missing values**
+
+        >>> multicol2 = pd.MultiIndex.from_tuples([('weight', 'kg'),
+        ...                                        ('height', 'm')])
+        >>> df_multi_level_cols2 = cudf.DataFrame([[1.0, 2.0], [3.0, 4.0]],
+        ...                                     index=['cat', 'dog'],
+        ...                                     columns=multicol2)
+
+        It is common to have missing values when stacking a dataframe
+        with multi-level columns, as the stacked dataframe typically
+        has more values than the original dataframe. Missing values
+        are filled with NULLs:
+
+        >>> df_multi_level_cols2
+            weight height
+                kg      m
+        cat    1.0    2.0
+        dog    3.0    4.0
+        >>> df_multi_level_cols2.stack()
+            height weight
+        cat kg   <NA>    1.0
+            m     2.0   <NA>
+        dog kg   <NA>    3.0
+            m     4.0   <NA>
+
+        **Prescribing the level(s) to be stacked**
+
+        The first parameter controls which level or levels are stacked:
+
+        >>> df_multi_level_cols2.stack(0)
+                    kg     m
+        cat height  <NA>   2.0
+            weight   1.0  <NA>
+        dog height  <NA>   4.0
+            weight   3.0  <NA>
+
+        >>> df_multi_level_cols2.stack([0, 1])
+        cat  height  m     2.0
+             weight  kg    1.0
+        dog  height  m     4.0
+             weight  kg    3.0
+        dtype: float64
         """
 
         level = [level] if not isinstance(level, list) else level
