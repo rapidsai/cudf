@@ -6649,13 +6649,13 @@ TEST_F(ParquetWriterTest, PreserveNullability)
     compare_names_and_nullability = [&](auto lhs, auto rhs) {
       EXPECT_EQ(lhs.get_name(), rhs.get_name());
       EXPECT_EQ(lhs.nullable(), rhs.nullable());
-      EXPECT_EQ(lhs.num_children(), rhs.num_children());
+      ASSERT_EQ(lhs.num_children(), rhs.num_children());
       for (int i = 0; i < lhs.num_children(); ++i) {
         compare_names_and_nullability(lhs.child(i), rhs.child(i));
       }
     };
 
-  EXPECT_EQ(expected_metadata.column_metadata.size(), read_metadata.column_metadata.size());
+  ASSERT_EQ(expected_metadata.column_metadata.size(), read_metadata.column_metadata.size());
 
   for (size_t i = 0; i < expected_metadata.column_metadata.size(); ++i) {
     compare_names_and_nullability(expected_metadata.column_metadata[i],
