@@ -1409,6 +1409,8 @@ class Frame(BinaryOperand, Scannable):
         if len(values) != len(self._data):
             raise ValueError("Mismatch number of columns to search for.")
 
+        # TODO: Change behavior based on the decision in
+        # https://github.com/pandas-dev/pandas/issues/54668
         common_dtype_list = [
             find_common_type([col.dtype, val.dtype])
             for col, val in zip(self._columns, values)
