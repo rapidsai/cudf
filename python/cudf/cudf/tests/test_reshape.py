@@ -194,34 +194,24 @@ def test_df_stack_multiindex_column_axis(columns, level, dropna):
     assert_eq(expect, got, check_dtype=False)
 
 
-# def test_df_stack_multiindex_column_axis_without_missing_value():
-#     multicol1 = pd.MultiIndex.from_tuples([('weight', 'kg'),
-#                                        ('weight', 'pounds')])
-#     df = pd.DataFrame([[1, 2], [2, 4]],
-#                                         index=['cat', 'dog'],
-#                                         columns=multicol1)
-#     gdf = cudf.from_pandas(df)
+@pytest.mark.parametrize("level", [["animal", "hair_length"], [1, 2]])
+def test_df_stack_multiindex_column_axis_pd_example(level):
+    columns = pd.MultiIndex.from_tuples(
+        [
+            ("A", "cat", "long"),
+            ("B", "cat", "long"),
+            ("A", "dog", "short"),
+            ("B", "dog", "short"),
+        ],
+        names=["exp", "animal", "hair_length"],
+    )
 
-#     got = gdf.stack()
-#     expect = df.stack()
+    df = pd.DataFrame(np.random.randn(4, 4), columns=columns)
 
-#     assert_eq(expect, got)
+    expect = df.stack(level=level)
+    got = cudf.from_pandas(df).stack(level=level)
 
-
-# def test_df_stack_multiindex_column_axis_with_missing_value():
-#     multicol1 = pd.MultiIndex.from_tuples(
-#         [('height', 'm'),
-#          ('weight', 'pounds')]
-#     )
-#     df = pd.DataFrame([[1, 2], [2, 4]],
-#                                         index=['cat', 'dog'],
-#                                         columns=multicol1)
-#     gdf = cudf.from_pandas(df)
-
-#     got = gdf.stack()
-#     expect = df.stack()
-
-#     assert_eq(expect, got)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("num_rows", [1, 2, 10, 1000])

@@ -6471,26 +6471,24 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # Compute the columns to stack based on specified levels
         if any(not isinstance(lv, int) for lv in level):
             # Convert level names to indices, assume a list of labels
-            names = pd.Index(self.columns.names)
+            names = pd.Index(self._data.level_names)
             level = [names.get_loc(lv) for lv in level]
-            if len(level) == 0:
-                raise ValueError(
-                    f"{level} not found in columns {self.columns.names}"
-                )
 
         normalized_level_indices = [
-            lv + self.columns.nlevels if lv < 0 else lv for lv in level
+            lv + self._data.nlevels if lv < 0 else lv for lv in level
         ]
+
         unnamed_levels_indices = [
             i
-            for i in range(self.columns.nlevels)
+            for i in range(self._data.nlevels)
             if i not in normalized_level_indices
         ]
 
+        column_name_idx = self._data.to_pandas_index()
         # Construct new index from the levels specified by `level`
         named_levels = pd.MultiIndex.from_arrays(
             [
-                self.columns.get_level_values(lv)
+                column_name_idx.get_level_values(lv)
                 for lv in normalized_level_indices
             ]
         )
@@ -6560,28 +6558,32 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             stacked.append(libcudf.reshape.interleave_columns(homogenized))
 
-        # Compute the new column names
+        # Construct the resulting dataframe / series
         if len(unnamed_levels_indices) == 0:
             result = Series._from_data(
                 data={None: stacked[0]}, index=new_index
             )
         else:
-            result = DataFrame._from_data(
-                data=dict(zip(range(0, len(stacked)), stacked)),
-                index=new_index,
-            )
             unnamed_level_values = [
-                self.columns.get_level_values(lv)
+                column_name_idx.get_level_values(lv)
                 for lv in unnamed_levels_indices
             ]
-            unnamed_level_values = pd.MultiIndex.from_arrays(
-                unnamed_level_values
+            unnamed_level_values = (
+                pd.MultiIndex.from_arrays(unnamed_level_values)
+                .unique()
+                .sort_values()
             )
-            unnamed_level_values = unnamed_level_values.unique().sort_values()
+
             if unnamed_level_values.nlevels == 1:
                 unnamed_level_values = unnamed_level_values.get_level_values(0)
 
-            result.columns = unnamed_level_values
+            data = ColumnAccessor(
+                dict(zip(unnamed_level_values, stacked)),
+                isinstance(unnamed_level_values, pd.MultiIndex),
+                unnamed_level_values.names,
+            )
+
+            result = DataFrame._from_data(data, index=new_index)
 
         if dropna:
             return result.dropna(how="all")
