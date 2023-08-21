@@ -6376,58 +6376,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             index=index,
         )
 
-    def _compute_column_indices_for_stack(self, named_level, unnamed_level):
-        """Given a list of levels from `self.columns`, return a list of
-        column indices that indicates how the columns should be interleaved
-        as the result of `.stack()`. For missing column combinations,
-        return -1.
-        """
-        sort_by_key = pd.MultiIndex.from_frame(
-            pd.DataFrame(
-                data=[self.columns.get_level_values(lv) for lv in named_level]
-            ).T
-        )
-
-        unique_level_labels = sort_by_key.unique()
-        unique_level_labels = pd.Series(
-            [-1] * len(unique_level_labels), index=unique_level_labels
-        )
-
-        column_idx_df = pd.DataFrame(
-            data=range(len(self.columns)), index=sort_by_key
-        )
-
-        column_indices: list[list[tuple]] = []
-        if len(unnamed_level) == 0:
-            column_idx_df = column_idx_df.sort_index()
-            group = []
-            for label in column_idx_df.index:
-                column_idx = column_idx_df.loc[label][0]
-                group.append((label, column_idx))
-            column_indices.append(group)
-        else:
-            groupby_key = pd.MultiIndex.from_frame(
-                pd.DataFrame(
-                    data=[
-                        self.columns.get_level_values(lv)
-                        for lv in unnamed_level
-                    ]
-                ).T
-            )
-
-            for _, grpdf in column_idx_df.groupby(by=groupby_key):
-                grpdf_aligned, _ = grpdf.align(
-                    unique_level_labels, axis=0, fill_value=-1
-                )
-                grpdf_aligned.sort_index(inplace=True)
-                group = []
-                for label in grpdf_aligned.index:
-                    column_idx = grpdf_aligned.loc[label][0]
-                    group.append((label, int(column_idx)))
-                column_indices.append(group)
-
-        return column_indices
-
     @_cudf_nvtx_annotate
     def stack(self, level=-1, dropna=True):
         """Stack the prescribed level(s) from columns to index
@@ -6496,24 +6444,24 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # Since `level` may only specify a subset of all levels, `unique()` is
         # required to remove duplicates. In pandas, the order of the keys in
         # the specified levels are always sorted.
-        named_levels = named_levels.unique().sort_values()
+        unique_named_levels = named_levels.unique().sort_values()
 
         # Each index from the original dataframe should repeat by the number
         # of unique values in the named_levels
-        repeated_index = self.index.repeat(len(named_levels))
+        repeated_index = self.index.repeat(len(unique_named_levels))
 
         # Each column name should repeat itself by len(df) times
         tiled_index = libcudf.reshape.tile(
             [
-                as_column(named_levels.get_level_values(i))
-                for i in range(named_levels.nlevels)
+                as_column(unique_named_levels.get_level_values(i))
+                for i in range(unique_named_levels.nlevels)
             ],
             self.shape[0],
         )
 
         # Assemble the final index
         new_index_columns = [*repeated_index._columns, *tiled_index]
-        index_names = [*self._index.names, *named_levels.names]
+        index_names = [*self._index.names, *unique_named_levels.names]
         new_index = MultiIndex.from_frame(
             DataFrame._from_data(
                 dict(zip(range(0, len(new_index_columns)), new_index_columns))
@@ -6521,12 +6469,49 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             names=index_names,
         )
 
-        column_indices = self._compute_column_indices_for_stack(
-            normalized_level_indices, unnamed_levels_indices
+        # Compute the column indices that serves as the input for
+        # `interleave_columns`
+        column_idx_df = pd.DataFrame(
+            data=range(len(self._data.column_names)), index=named_levels
         )
 
+        column_indices: list[list[tuple]] = []
+        if len(unnamed_levels_indices) == 0:
+            column_idx_df = column_idx_df.sort_index()
+            group = []
+            for label in column_idx_df.index:
+                column_idx = column_idx_df.loc[label][0]
+                group.append((label, column_idx))
+            column_indices.append(group)
+        else:
+            unnamed_level_values = [
+                column_name_idx.get_level_values(lv)
+                for lv in unnamed_levels_indices
+            ]
+            unnamed_level_values = pd.MultiIndex.from_arrays(
+                unnamed_level_values
+            )
+
+            for _, grpdf in column_idx_df.groupby(by=unnamed_level_values):
+                # When stacking multiple columns, some combinations of keys
+                # may not present in this group but can present in others.
+                # Reindexing with the globally computed `unique_named_levels`
+                # assigns -1 to these key combinations, representing an
+                # all-null column that is used in the subsequent libcudf call.
+                grpdf_aligned = grpdf.reindex(
+                    unique_named_levels, axis=0, fill_value=-1
+                )
+                grpdf_aligned.sort_index(inplace=True)  # this needed?
+                indices = []
+                for label in grpdf_aligned.index:
+                    column_idx = grpdf_aligned.loc[label][0]
+                    indices.append((label, int(column_idx)))
+                column_indices.append(indices)
+
+        # For each of the group constructed from the unnamed levels,
+        # invoke `interleave_columns` to stack the values.
         stacked = []
-        all_nans = None
+        all_nans = None  # lazily created when needed
         for group in column_indices:
             column_idx = [col[1] for col in group]
             columns: list(column | None) = []
@@ -6543,6 +6528,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 *[col.dtype for col in columns if col is not None]
             )
 
+            # homogenize the dtypes of the columns
             homogenized: list(column) = []
             for col in columns:
                 if col is None:
@@ -6564,16 +6550,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 data={None: stacked[0]}, index=new_index
             )
         else:
-            unnamed_level_values = [
-                column_name_idx.get_level_values(lv)
-                for lv in unnamed_levels_indices
-            ]
-            unnamed_level_values = (
-                pd.MultiIndex.from_arrays(unnamed_level_values)
-                .unique()
-                .sort_values()
-            )
-
+            unnamed_level_values = unnamed_level_values.unique().sort_values()
             if unnamed_level_values.nlevels == 1:
                 unnamed_level_values = unnamed_level_values.get_level_values(0)
 
