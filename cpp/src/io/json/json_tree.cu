@@ -633,10 +633,9 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
     stream.value()};
 
   // insert and convert node ids to unique set ids
-  auto nodes_itr          = thrust::make_counting_iterator<size_type>(0);
-  auto const num_inserted = key_set.insert(nodes_itr, nodes_itr + num_nodes, stream.value());
+  auto nodes_itr         = thrust::make_counting_iterator<size_type>(0);
+  auto const num_columns = key_set.insert(nodes_itr, nodes_itr + num_nodes, stream.value());
 
-  auto const num_columns = num_inserted;
   rmm::device_uvector<size_type> unique_keys(num_columns, stream);
   rmm::device_uvector<size_type> col_id(num_nodes, stream, mr);
   key_set.find_async(nodes_itr, nodes_itr + num_nodes, col_id.begin(), stream.value());
