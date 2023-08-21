@@ -307,7 +307,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns the amount of device memory used.
    */
   public long getDeviceMemorySize() {
-    return getDeviceMemorySize(getNativeView());
+    return getDeviceMemorySize(getNativeView(), false);
+  }
+
+  /**
+   * Returns the amount of memory used by this, but padded for 64-bit alignment. This makes it
+   * so it could be used as the amount of memory needed to copy the data to the host.
+   */
+  public long getDeviceMemorySizeAligned() {
+    return getDeviceMemorySize(getNativeView(), true);
   }
 
   @Override
@@ -4789,7 +4797,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   static native int getNativeNumChildren(long viewHandle) throws CudfException;
 
   // calculate the amount of device memory used by this column including any child columns
-  static native long getDeviceMemorySize(long viewHandle) throws CudfException;
+  static native long getDeviceMemorySize(long viewHandle, boolean aligned) throws CudfException;
 
   static native long copyColumnViewToCV(long viewHandle) throws CudfException;
 
@@ -5164,52 +5172,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Calculate the total space required to copy the data to the host.
    */
   public long getHostBytesRequired() {
-    return getHostBytesRequiredHelper(this);
-  }
-
-  /*
-   * Align given size to account for host allocation alignment of 64
-   */
-  private static long alignAllocSize(long size) {
-    final long align = 64; // must be a power of two
-    return (size + (align - 1)) & ~(align - 1);
-  }
-
-  private static long getHostBytesRequiredHelper(
-      ColumnView deviceCvPointer) {
-    if (deviceCvPointer == null) {
-      return 0;
-    }
-    BaseDeviceMemoryBuffer valid = deviceCvPointer.getValid();
-    BaseDeviceMemoryBuffer offsets = deviceCvPointer.getOffsets();
-    BaseDeviceMemoryBuffer data = null;
-    DType type = deviceCvPointer.getType();
-    if (!type.isNestedType()) {
-      data = deviceCvPointer.getData();
-    }
-    long validityLength = 0;
-    long offsetsLength = 0;
-    long dataLength = 0;
-    long childrenLength = 0;
-    if (valid != null) {
-      validityLength = alignAllocSize(valid.getLength());
-    }
-    if (offsets != null) {
-      offsetsLength = alignAllocSize(offsets.getLength());
-    }
-    // If a strings column is all null values there is no data buffer allocated
-    if (data != null) {
-      dataLength = alignAllocSize(data.length);
-      data.close();
-    }
-    if (type.isNestedType()) {
-      for (int i = 0; i < deviceCvPointer.getNumChildren(); i++) {
-        try (ColumnView childDevPtr = deviceCvPointer.getChildColumnView(i)) {
-          childrenLength += getHostBytesRequiredHelper(childDevPtr);
-        }
-      }
-    }
-    return validityLength + offsetsLength + dataLength + childrenLength;
+    return getDeviceMemorySizeAligned();
   }
 
   /**
