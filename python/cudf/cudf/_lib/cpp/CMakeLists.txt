@@ -12,7 +12,7 @@
 # the License.
 # =============================================================================
 
-set(cython_sources copying.pyx)
+set(cython_sources copying.pyx types.pyx)
 
 set(linked_libraries cudf::cudf)
 
