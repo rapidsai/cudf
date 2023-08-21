@@ -11,9 +11,9 @@ from libcpp.vector cimport vector
 from rmm._lib.device_buffer cimport DeviceBuffer
 
 import cudf
+from cudf._lib import pylibcudf
 from cudf.core.buffer import Buffer, acquire_spill_lock, as_buffer
 
-from cudf._lib cimport pylibcudf
 from cudf._lib.column cimport Column
 
 from cudf._lib.scalar import as_device_scalar
@@ -174,7 +174,7 @@ def gather(
     Column gather_map,
     bool nullify=False
 ):
-    cdef pylibcudf.Table tbl = pylibcudf.copying.gather(
+    tbl = pylibcudf.copying.gather(
         pylibcudf.Table([col.to_pylibcudf(mode="read") for col in columns]),
         gather_map.to_pylibcudf(mode="read"),
         pylibcudf.copying.OutOfBoundsPolicy.NULLIFY if nullify
