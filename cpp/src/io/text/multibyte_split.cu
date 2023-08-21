@@ -164,7 +164,7 @@ __global__ void multibyte_split_seed_kernel(
 }
 
 __global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
-  cudf::thread_index_type base_tile_idx,
+  cudf::size_type base_tile_idx,
   byte_offset base_input_offset,
   output_offset base_output_offset,
   cudf::io::text::detail::scan_tile_state_view<multistate> tile_multistates,
@@ -188,7 +188,8 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
   auto const tile_input_offset = blockIdx.x * ITEMS_PER_TILE;
   auto const thread_input_offset =
     tile_input_offset + cudf::thread_index_type{threadIdx.x} * ITEMS_PER_THREAD;
-  auto const thread_input_size = chunk_input_chars.size() - thread_input_offset;
+  auto const thread_input_size =
+    std::max<cudf::size_type>(chunk_input_chars.size() - thread_input_offset, 0);
 
   // STEP 1: Load inputs
 
@@ -262,7 +263,8 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void byte_split_kernel(
   auto const tile_input_offset = blockIdx.x * ITEMS_PER_TILE;
   auto const thread_input_offset =
     tile_input_offset + cudf::thread_index_type{threadIdx.x} * ITEMS_PER_THREAD;
-  auto const thread_input_size = chunk_input_chars.size() - thread_input_offset;
+  auto const thread_input_size =
+    std::max<cudf::size_type>(chunk_input_chars.size() - thread_input_offset, 0);
 
   // STEP 1: Load inputs
 
