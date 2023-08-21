@@ -9,8 +9,11 @@ from cudf._lib.cpp.column.column cimport column, column_contents
 from cudf._lib.cpp.types cimport size_type
 
 from .gpumemoryview cimport gpumemoryview
-from .types cimport DataType, TypeId
+from .types cimport DataType
 from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
+
+# TODO: Change to cimport when possible
+from .types import TypeId
 
 
 cdef class Column:
@@ -178,6 +181,7 @@ cdef class Column:
 
     cpdef list children(self):
         return self._children
+
 
 cdef class ListColumnView:
     """Accessor for methods of a Column that are specific to lists."""

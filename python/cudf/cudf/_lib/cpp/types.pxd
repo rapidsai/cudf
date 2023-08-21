@@ -4,6 +4,11 @@ from libc.stdint cimport int32_t, uint32_t
 
 
 cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
+    # The declaration below is to work around
+    # https://github.com/cython/cython/issues/5637
+    """
+    #define __PYX_ENUM_CLASS_DECL enum
+    """
     ctypedef int32_t size_type
     ctypedef uint32_t bitmask_type
     ctypedef uint32_t char_utf8
