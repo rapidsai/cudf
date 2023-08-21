@@ -1178,7 +1178,7 @@ std::vector<gpu::chunk_read_info> find_splits(std::vector<cumulative_row_info> c
  * @param id Additional intermediate information required to process the pages
  * @param num_rows Total number of rows to read
  * @param chunk_read_limit Limit on total number of bytes to be returned per read, for all columns
- * @param stream CUDA stream to use, default 0
+ * @param stream CUDA stream to use
  */
 std::vector<gpu::chunk_read_info> compute_splits(
   cudf::detail::hostdevice_vector<gpu::PageInfo>& pages,
