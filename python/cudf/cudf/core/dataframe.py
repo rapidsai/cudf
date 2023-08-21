@@ -177,9 +177,7 @@ class _DataFrameIndexer(_FrameIndexer):
             if type(arg[1]) is slice:
                 return False
             if isinstance(arg[1], tuple):
-                # Multiindex indexing with a slice
-                if any(isinstance(v, slice) for v in arg):
-                    return False
+                return True
             if not (is_list_like(arg[1]) or is_column_like(arg[1])):
                 return True
         return False
@@ -193,7 +191,10 @@ class _DataFrameIndexer(_FrameIndexer):
         nrows, ncols = df.shape
         # determine the axis along which the Series is taken:
         if nrows == 1 and ncols == 1:
-            if is_scalar(arg[0]) and is_scalar(arg[1]):
+            if is_scalar(arg[0]) and (
+                is_scalar(arg[1])
+                or (df._data.multiindex and arg[1] in df._column_names)
+            ):
                 return df[df._column_names[0]].iloc[0]
             elif not is_scalar(arg[0]):
                 axis = 1
@@ -287,7 +288,13 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         BooleanMask(tmp_arg[0], len(columns_df))
                     )
                 else:
-                    tmp_col_name = str(uuid4())
+                    if columns_df._data.multiindex:
+                        tmp_col_name = (
+                            str(uuid4()),
+                            "" * columns_df._data.nlevels,
+                        )
+                    else:
+                        tmp_col_name = str(uuid4())
                     other_df = DataFrame(
                         {tmp_col_name: column.arange(len(tmp_arg[0]))},
                         index=as_index(tmp_arg[0]),
@@ -296,6 +303,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         map(str, columns_df._data.names)
                     )
                     columns_df[cantor_name] = column.arange(len(columns_df))
+                    cantor_name = columns_df._data.names[-1]
                     df = other_df.join(columns_df, how="inner")
                     # as join is not assigning any names to index,
                     # update it over here

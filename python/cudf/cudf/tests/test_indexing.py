@@ -2067,3 +2067,24 @@ class TestLocIndexWithOrder:
             expect = pdf.loc[lo:hi:take_order]
             actual = df.loc[lo:hi:take_order]
             assert_eq(expect, actual)
+
+
+@pytest.mark.parametrize(
+    "arg",
+    [
+        (2, ("one", "second")),
+        (slice(None, None, None), ("two", "first")),
+        (1, ("one", "first")),
+        (slice(None, None, None), ("two", "second")),
+    ],
+)
+def test_loc_dataframe_column_multiindex(arg):
+    gdf = cudf.DataFrame(
+        [list("abcd"), list("efgh"), list("ijkl"), list("mnop")],
+        columns=cudf.MultiIndex.from_product(
+            [["one", "two"], ["first", "second"]]
+        ),
+    )
+    pdf = gdf.to_pandas()
+
+    assert_eq(gdf.loc[arg], pdf.loc[arg])
