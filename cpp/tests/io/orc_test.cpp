@@ -1873,16 +1873,9 @@ void check_all_null_stats(cudf::io::column_statistics const& stats)
 
 TEST_F(OrcStatisticsTest, AllNulls)
 {
-  bool all_null[] = {false, false, false};  // all null
-
-  std::vector doubles{1.1, 2.2, 3.3};
-  float64_col double_col(doubles.begin(), doubles.end(), all_null);
-
-  std::vector ints{1, 2, 3};
-  int32_col int_col(ints.begin(), ints.end(), all_null);
-
-  std::vector strings{"1", "2", "3"};
-  str_col string_col(strings.begin(), strings.end(), all_null);
+  float64_col double_col({0., 0., 0.}, cudf::test::iterators::all_nulls());
+  int32_col int_col({0, 0, 0}, cudf::test::iterators::all_nulls());
+  str_col string_col({"", "", ""}, cudf::test::iterators::all_nulls());
 
   cudf::table_view expected({int_col, double_col, string_col});
 
