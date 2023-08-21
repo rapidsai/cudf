@@ -6472,16 +6472,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # Compute the column indices that serves as the input for
         # `interleave_columns`
         column_idx_df = pd.DataFrame(
-            data=range(len(self._data.column_names)), index=named_levels
+            data=range(len(self._data)), index=named_levels
         )
 
-        column_indices: list[list[tuple]] = []
+        column_indices: list[list[int]] = []
         if len(unnamed_levels_indices) == 0:
             column_idx_df = column_idx_df.sort_index()
             group = []
             for label in column_idx_df.index:
                 column_idx = column_idx_df.loc[label][0]
-                group.append((label, column_idx))
+                group.append(column_idx)
             column_indices.append(group)
         else:
             unnamed_level_values = [
@@ -6505,15 +6505,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 indices = []
                 for label in grpdf_aligned.index:
                     column_idx = grpdf_aligned.loc[label][0]
-                    indices.append((label, int(column_idx)))
+                    indices.append(int(column_idx))
                 column_indices.append(indices)
 
         # For each of the group constructed from the unnamed levels,
         # invoke `interleave_columns` to stack the values.
         stacked = []
         all_nans = None  # lazily created when needed
-        for group in column_indices:
-            column_idx = [col[1] for col in group]
+        for column_idx in column_indices:
             columns: list(column | None) = []
 
             # Collect columns based on indices, append None for -1 indices.
