@@ -311,10 +311,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Returns the amount of memory used by this, but padded for 64-bit alignment. This makes it
-   * so it could be used as the amount of memory needed to copy the data to the host.
+   * Returns the amount of memory used by this, but padded to the next 64-bit boundary. This
+   * allows the returned value to also indicate the size needed to copy the data to host memory.
    */
-  public long getDeviceMemorySizeAligned() {
+  public long getDeviceMemorySizePadded64() {
     return getDeviceMemorySize(getNativeView(), true);
   }
 
@@ -4797,7 +4797,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   static native int getNativeNumChildren(long viewHandle) throws CudfException;
 
   // calculate the amount of device memory used by this column including any child columns
-  static native long getDeviceMemorySize(long viewHandle, boolean aligned) throws CudfException;
+  static native long getDeviceMemorySize(long viewHandle, boolean shouldPad) throws CudfException;
 
   static native long copyColumnViewToCV(long viewHandle) throws CudfException;
 
@@ -5172,7 +5172,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Calculate the total space required to copy the data to the host.
    */
   public long getHostBytesRequired() {
-    return getDeviceMemorySizeAligned();
+    return getDeviceMemorySizePadded64();
   }
 
   /**

@@ -91,8 +91,8 @@ using cudf::jni::release_as_jlong;
 
 namespace {
 
-std::size_t align_size(std::size_t size, bool const do_it) {
-  if (do_it) {
+std::size_t pad_size(std::size_t size, bool const should_pad_64) {
+  if (should_pad_64) {
     constexpr std::size_t ALIGN = 1 << 6; // 64-bit alignment
     return (size + (ALIGN - 1)) & ~(ALIGN - 1);
   } else {
@@ -100,22 +100,23 @@ std::size_t align_size(std::size_t size, bool const do_it) {
   }
 }
 
-std::size_t calc_device_memory_size(cudf::column_view const &view, bool const aligned) {
+std::size_t calc_device_memory_size(cudf::column_view const &view, bool const padded) {
   std::size_t total = 0;
   auto row_count = view.size();
 
   if (view.nullable()) {
-    total += align_size(cudf::bitmask_allocation_size_bytes(row_count), aligned);
+    total += pad_size(cudf::bitmask_allocation_size_bytes(row_count), padded);
   }
 
   auto dtype = view.type();
   if (cudf::is_fixed_width(dtype)) {
-    total += align_size(cudf::size_of(dtype) * view.size(), aligned);
+    total += pad_size(cudf::size_of(dtype) * view.size(), padded);
   }
 
-  return std::accumulate(
-      view.child_begin(), view.child_end(), total,
-      [aligned](std::size_t t, cudf::column_view const &v) { return t + calc_device_memory_size(v, aligned); });
+  return std::accumulate(view.child_begin(), view.child_end(), total,
+                         [padded](std::size_t t, cudf::column_view const &v) {
+                           return t + calc_device_memory_size(v, padded);
+                         });
 }
 
 } // anonymous namespace
@@ -2227,12 +2228,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeValidityLength(J
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getDeviceMemorySize(JNIEnv *env, jclass,
                                                                            jlong handle,
-                                                                           jboolean aligned) {
+                                                                           jboolean padded) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     auto view = reinterpret_cast<cudf::column_view const *>(handle);
-    return calc_device_memory_size(*view, aligned);
+    return calc_device_memory_size(*view, padded);
   }
   CATCH_STD(env, 0);
 }
