@@ -2625,7 +2625,7 @@ void writer::impl::close()
                  });
 
   // Write statistics metadata
-  if (_orc_meta.stripeStats.size() != 0) {
+  if (not _orc_meta.stripeStats.empty()) {
     ProtobufWriter pbw((_compression_kind != NONE) ? 3 : 0);
     pbw.write(_orc_meta);
     add_uncompressed_block_headers(_compression_kind, _compression_blocksize, pbw.buffer());
