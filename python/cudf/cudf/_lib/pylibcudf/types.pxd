@@ -3,14 +3,14 @@
 from libc.stdint cimport int32_t
 from libcpp cimport bool as cbool
 
-from cudf._lib.cpp cimport types as cpp_types
+from cudf._lib.cpp.types cimport data_type, type_id
 
 
 cdef class DataType:
-    cdef cpp_types.data_type c_obj
+    cdef data_type c_obj
 
-    cpdef cpp_types.type_id id(self)
+    cpdef type_id id(self)
     cpdef int32_t scale(self)
 
     @staticmethod
-    cdef DataType from_libcudf(cpp_types.data_type dt)
+    cdef DataType from_libcudf(data_type dt)

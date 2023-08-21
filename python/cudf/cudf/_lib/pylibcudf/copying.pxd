@@ -2,7 +2,7 @@
 
 from libcpp cimport bool as cbool
 
-from cudf._lib.cpp cimport copying as cpp_copying
+from cudf._lib.cpp.copying cimport out_of_bounds_policy
 
 from .column cimport Column
 from .table cimport Table
@@ -11,5 +11,5 @@ from .table cimport Table
 cpdef Table gather(
     Table source_table,
     Column gather_map,
-    cpp_copying.out_of_bounds_policy bounds_policy
+    out_of_bounds_policy bounds_policy
 )

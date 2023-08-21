@@ -8,6 +8,7 @@ from libcpp.utility cimport move
 # we really want here would be
 # cimport libcudf... libcudf.copying.algo(...)
 from cudf._lib.cpp cimport copying as cpp_copying
+from cudf._lib.cpp.copying cimport out_of_bounds_policy
 
 from cudf._lib.cpp.copying import \
     out_of_bounds_policy as OutOfBoundsPolicy  # no-cython-lint
@@ -23,7 +24,7 @@ from .table cimport Table
 cpdef Table gather(
     Table source_table,
     Column gather_map,
-    cpp_copying.out_of_bounds_policy bounds_policy
+    out_of_bounds_policy bounds_policy
 ):
     """Select rows from source_table according to the provided gather_map.
 

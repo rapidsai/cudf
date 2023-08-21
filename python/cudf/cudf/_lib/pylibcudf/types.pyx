@@ -2,7 +2,7 @@
 
 from libc.stdint cimport int32_t
 
-from cudf._lib.cpp cimport types as cpp_types
+from cudf._lib.cpp.types cimport data_type, type_id
 
 from cudf._lib.cpp.types import type_id as TypeId  # no-cython-lint
 
@@ -19,11 +19,11 @@ cdef class DataType:
     scale : int
         The scale associated with the data. Only used for decimal data types.
     """
-    def __cinit__(self, cpp_types.type_id id, int32_t scale=0):
-        self.c_obj = cpp_types.data_type(id, scale)
+    def __cinit__(self, type_id id, int32_t scale=0):
+        self.c_obj = data_type(id, scale)
 
     # TODO: Consider making both id and scale cached properties.
-    cpdef cpp_types.type_id id(self):
+    cpdef type_id id(self):
         """Get the id associated with this data type."""
         return self.c_obj.id()
 
@@ -32,7 +32,7 @@ cdef class DataType:
         return self.c_obj.scale()
 
     @staticmethod
-    cdef DataType from_libcudf(cpp_types.data_type dt):
+    cdef DataType from_libcudf(data_type dt):
         """Create a DataType from a libcudf data_type.
 
         This method is for pylibcudf's functions to use to ingest outputs of
@@ -40,6 +40,6 @@ cdef class DataType:
         (even direct pylibcudf Cython users).
         """
         # Spoof an empty data type then swap in the real one.
-        cdef DataType ret = DataType.__new__(DataType, cpp_types.type_id.EMPTY)
+        cdef DataType ret = DataType.__new__(DataType, type_id.EMPTY)
         ret.c_obj = dt
         return ret
