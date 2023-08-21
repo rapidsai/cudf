@@ -21,7 +21,7 @@ cdef class Table:
         The columns in this table.
     """
     def __init__(self, list columns):
-        self.columns = columns
+        self._columns = columns
 
     cdef table_view view(self) nogil:
         """Generate a libcudf table_view to pass to libcudf algorithms.
@@ -31,11 +31,11 @@ cdef class Table:
         (even direct pylibcudf Cython users).
         """
         # TODO: Make c_columns a class attribute that is updated along with
-        # self.columns whenever new columns are added or columns are removed.
+        # self._columns whenever new columns are added or columns are removed.
         cdef vector[column_view] c_columns
 
         with gil:
-            for col in self.columns:
+            for col in self._columns:
                 c_columns.push_back((<Column> col).view())
 
         return table_view(c_columns)
@@ -57,3 +57,6 @@ cdef class Table:
             Column.from_libcudf(move(c_columns[i]))
             for i in range(c_columns.size())
         ])
+
+    cpdef list columns(self):
+        return self._columns
