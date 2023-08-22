@@ -83,6 +83,30 @@ class _Resampler(GroupBy):
             allow_non_unique=True,
         )
 
+    def serialize(self):
+        header, frames = super().serialize()
+        grouping_head, grouping_frames = self.grouping.serialize()
+        header["grouping"] = grouping_head
+        header["resampler_type"] = pickle.dumps(type(self))
+        header["grouping_frames_count"] = len(grouping_frames)
+        frames.extend(grouping_frames)
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        obj_type = pickle.loads(header["obj_type"])
+        obj = obj_type.deserialize(
+            header["obj"], frames[: header["num_obj_frames"]]
+        )
+        grouping = _ResampleGrouping.deserialize(
+            header["grouping"], frames[header["num_obj_frames"] :]
+        )
+        resampler_cls = pickle.loads(header["resampler_type"])
+        out = resampler_cls.__new__(resampler_cls)
+        out.grouping = grouping
+        super().__init__(out, obj, by=grouping)
+        return out
+
 
 class DataFrameResampler(_Resampler, DataFrameGroupBy):
     pass
