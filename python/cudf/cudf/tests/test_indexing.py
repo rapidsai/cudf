@@ -2095,8 +2095,6 @@ def test_loc_dataframe_column_multiindex(arg):
 
 
 @pytest.mark.parametrize(
-    "arg",
-    [  
     "arg", [slice(2, 4), slice(2, 5), slice(2.3, 5), slice(4.6, 6)]
 )
 def test_series_iloc_float_int(arg):
