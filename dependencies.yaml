@@ -468,7 +468,7 @@ dependencies:
           - {matrix: {cuda: "11.5"}, packages: *run_cudf_packages_all_cu11}
           - {matrix: {cuda: "11.4"}, packages: *run_cudf_packages_all_cu11}
           - {matrix: {cuda: "11.2"}, packages: *run_cudf_packages_all_cu11}
-          - {matrix: null, packages: null}
+          - {matrix: null, packages: *run_cudf_packages_all_cu11}
       - output_types: [conda]
         matrices:
           - matrix: {cuda: "11.8"}
