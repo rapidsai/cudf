@@ -2067,3 +2067,16 @@ class TestLocIndexWithOrder:
             expect = pdf.loc[lo:hi:take_order]
             actual = df.loc[lo:hi:take_order]
             assert_eq(expect, actual)
+
+
+@pytest.mark.parametrize(
+    "arg", [slice(2, 4), slice(2, 5), slice(2.3, 5), slice(4.6, 6)]
+)
+def test_series_iloc_float_int(arg):
+    gs = cudf.Series(range(4), index=[2.0, 3.0, 4.5, 5.5])
+    ps = gs.to_pandas()
+
+    actual = gs.loc[arg]
+    expected = ps.loc[arg]
+
+    assert_eq(actual, expected)

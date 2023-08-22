@@ -449,6 +449,21 @@ def test_groupby_apply_jit_correlation(groupby_jit_data, dtype):
     run_groupby_apply_jit_test(groupby_jit_data, func, keys)
 
 
+@pytest.mark.parametrize("dtype", ["int32", "int64"])
+def test_groupby_apply_jit_correlation_zero_variance(dtype):
+    # pearson correlation is undefined when the variance of either
+    # variable is zero. This test ensures that the jit implementation
+    # returns the same result as pandas in this case.
+    data = DataFrame(
+        {"a": [0, 0, 0, 0, 0], "b": [1, 1, 1, 1, 1], "c": [2, 2, 2, 2, 2]}
+    )
+
+    def func(group):
+        return group["b"].corr(group["c"])
+
+    run_groupby_apply_jit_test(data, func, ["a"])
+
+
 @pytest.mark.parametrize("dtype", ["float64"])
 @pytest.mark.parametrize("func", ["min", "max", "sum", "mean", "var", "std"])
 @pytest.mark.parametrize("special_val", [np.nan, np.inf, -np.inf])

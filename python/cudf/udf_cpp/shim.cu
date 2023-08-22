@@ -643,9 +643,8 @@ __device__ double BlockCorr(T* const lhs_ptr, T* const rhs_ptr, int64_t size)
 {
   auto numerator   = BlockCoVar(lhs_ptr, rhs_ptr, size);
   auto denominator = BlockStd(lhs_ptr, size) * BlockStd<T>(rhs_ptr, size);
-
   if (denominator == 0.0) {
-    return 0.0;
+    return std::numeric_limits<double>::quiet_NaN();
   } else {
     return numerator / denominator;
   }
