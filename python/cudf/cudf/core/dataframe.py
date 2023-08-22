@@ -6510,6 +6510,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         dtype: float64
         """
 
+        if isinstance(level, (int, str)):
+            level = [level]
+        elif isinstance(level, list):
+            if not all(isinstance(lv, (int, str)) for lv in level):
+                raise ValueError(
+                    "level must be either an int/str, or a list of int/str."
+                )
+        else:
+            raise ValueError(
+                "level must be either an int/str, or a list of int/str."
+            )
+
         level = [level] if not isinstance(level, list) else level
 
         if len(level) > 1 and not dropna:
@@ -6522,28 +6534,32 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         # Compute the columns to stack based on specified levels
-        if any(not isinstance(lv, int) for lv in level):
-            # Convert level names to indices, assume a list of labels
-            names = pd.Index(self._data.level_names)
-            level = [names.get_loc(lv) for lv in level]
 
-        normalized_level_indices = [
-            lv + self._data.nlevels if lv < 0 else lv for lv in level
-        ]
+        level_indices: list[int] = []
+
+        # If all passed in level names match up to the dataframe column's level
+        # names, cast them to indices
+        if all(lv in self._data.level_names for lv in level):
+            level_indices = [self._data.level_names.index(lv) for lv in level]
+        elif not all(isinstance(lv, int) for lv in level):
+            raise ValueError(
+                "`level` must either be a list of names or positions, not a "
+                "mixture of both."
+            )
+        else:
+            # Must be a list of positions, normalize negative positions
+            level_indices = [
+                lv + self._data.nlevels if lv < 0 else lv for lv in level
+            ]
 
         unnamed_levels_indices = [
-            i
-            for i in range(self._data.nlevels)
-            if i not in normalized_level_indices
+            i for i in range(self._data.nlevels) if i not in level_indices
         ]
 
         column_name_idx = self._data.to_pandas_index()
         # Construct new index from the levels specified by `level`
         named_levels = pd.MultiIndex.from_arrays(
-            [
-                column_name_idx.get_level_values(lv)
-                for lv in normalized_level_indices
-            ]
+            [column_name_idx.get_level_values(lv) for lv in level_indices]
         )
 
         # Since `level` may only specify a subset of all levels, `unique()` is
