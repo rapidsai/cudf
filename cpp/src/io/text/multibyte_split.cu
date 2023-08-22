@@ -153,16 +153,6 @@ __global__ void multibyte_split_init_kernel(
   }
 }
 
-__global__ void multibyte_split_seed_kernel(
-  cudf::io::text::detail::scan_tile_state_view<multistate> tile_multistates,
-  cudf::io::text::detail::scan_tile_state_view<output_offset> tile_output_offsets,
-  multistate tile_multistate_seed,
-  output_offset tile_output_offset)
-{
-  tile_multistates.set_inclusive_prefix(-1, tile_multistate_seed);
-  tile_output_offsets.set_inclusive_prefix(-1, tile_output_offset);
-}
-
 __global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
   cudf::size_type base_tile_idx,
   byte_offset base_input_offset,
@@ -404,11 +394,14 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   // Seeding the tile state with an identity value allows the 0th tile to follow the same logic as
   // the Nth tile, assuming it can look up an inclusive prefix. Without this seed, the 0th block
   // would have to follow separate logic.
-  multibyte_split_seed_kernel<<<1, 1, 0, stream.value()>>>(  //
-    tile_multistates,
-    tile_offsets,
-    multistate_seed,
-    0);
+  cudf::detail::device_single_thread(
+    [tm = scan_tile_state_view<multistate>(tile_multistates),
+     to = scan_tile_state_view<output_offset>(tile_offsets),
+     multistate_seed] __device__() mutable {
+      tm.set_inclusive_prefix(-1, multistate_seed);
+      to.set_inclusive_prefix(-1, 0);
+    },
+    stream);
 
   auto reader               = source.create_reader();
   auto chunk_offset         = std::max<byte_offset>(0, byte_range.offset() - delimiter.size());
