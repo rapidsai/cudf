@@ -199,7 +199,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
   /**
    * Returns this column's current refcount
    */
-  synchronized int getRefCount() {
+  public synchronized int getRefCount() {
     return refCount;
   }
 
