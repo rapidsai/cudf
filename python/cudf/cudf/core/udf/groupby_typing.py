@@ -30,19 +30,6 @@ SUPPORTED_GROUPBY_NUMPY_TYPES = [
     numpy_support.as_dtype(dt) for dt in SUPPORTED_GROUPBY_NUMBA_TYPES
 ]
 
-SUPPORTED_ATTRS = [
-    "max",
-    "min",
-    "sum",
-    "mean",
-    "var",
-    "std",
-    "size",
-    "idxmax",
-    "idxmin",
-    "corr",
-]
-
 docs = "https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs/"
 
 
