@@ -173,11 +173,13 @@ class _DataFrameIndexer(_FrameIndexer):
             all_numeric = all(is_numeric_dtype(t) for t in dtypes)
             if all_numeric:
                 return True
+            if isinstance(arg[1], tuple):
+                return True
         if ncols == 1:
             if type(arg[1]) is slice:
                 return False
             if isinstance(arg[1], tuple):
-                return True
+                return len(arg[1]) == df._data.nlevels
             if not (is_list_like(arg[1]) or is_column_like(arg[1])):
                 return True
         return False
@@ -288,22 +290,22 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         BooleanMask(tmp_arg[0], len(columns_df))
                     )
                 else:
+                    tmp_col_name = str(uuid4())
+                    cantor_name = "_" + "_".join(
+                        map(str, columns_df._data.names)
+                    )
                     if columns_df._data.multiindex:
-                        tmp_col_name = (
-                            str(uuid4()),
-                            "" * columns_df._data.nlevels,
+                        # column names must be appropriate length tuples
+                        extra = tuple(
+                            "" for _ in range(columns_df._data.nlevels - 1)
                         )
-                    else:
-                        tmp_col_name = str(uuid4())
+                        tmp_col_name = (tmp_col_name, *extra)
+                        cantor_name = (cantor_name, *extra)
                     other_df = DataFrame(
                         {tmp_col_name: column.arange(len(tmp_arg[0]))},
                         index=as_index(tmp_arg[0]),
                     )
-                    cantor_name = "_" + "_".join(
-                        map(str, columns_df._data.names)
-                    )
                     columns_df[cantor_name] = column.arange(len(columns_df))
-                    cantor_name = columns_df._data.names[-1]
                     df = other_df.join(columns_df, how="inner")
                     # as join is not assigning any names to index,
                     # update it over here

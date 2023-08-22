@@ -2076,13 +2076,17 @@ class TestLocIndexWithOrder:
         (slice(None, None, None), ("two", "first")),
         (1, ("one", "first")),
         (slice(None, None, None), ("two", "second")),
+        (slice(None, None, None), ("two", "first", "three")),
+        (3, ("two", "first", "three")),
+        (slice(None, None, None), ("two",)),
+        (0, ("two",)),
     ],
 )
 def test_loc_dataframe_column_multiindex(arg):
     gdf = cudf.DataFrame(
         [list("abcd"), list("efgh"), list("ijkl"), list("mnop")],
         columns=cudf.MultiIndex.from_product(
-            [["one", "two"], ["first", "second"]]
+            [["one", "two"], ["first", "second"], ["three"]]
         ),
     )
     pdf = gdf.to_pandas()
