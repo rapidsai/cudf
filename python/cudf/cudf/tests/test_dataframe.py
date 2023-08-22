@@ -10,7 +10,7 @@ import re
 import string
 import textwrap
 import warnings
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict, defaultdict, namedtuple
 from copy import copy
 
 import cupy
@@ -10261,3 +10261,58 @@ def test_dataframe_constructor_unbounded_sequence():
 
     with pytest.raises(TypeError):
         cudf.DataFrame({"a": A()})
+
+
+def test_dataframe_constructor_from_namedtuple():
+    Point1 = namedtuple("Point1", ["a", "b", "c"])
+    Point2 = namedtuple("Point1", ["x", "y"])
+
+    data = [Point1(1, 2, 3), Point2(4, 5)]
+    idx = ["a", "b"]
+    gdf = cudf.DataFrame(data, index=idx)
+    pdf = pd.DataFrame(data, index=idx)
+
+    assert_eq(gdf, pdf)
+
+    data = [Point2(4, 5), Point1(1, 2, 3)]
+    with pytest.raises(ValueError):
+        cudf.DataFrame(data, index=idx)
+    with pytest.raises(ValueError):
+        pd.DataFrame(data, index=idx)
+
+
+@pytest.mark.parametrize(
+    "dtype", ["datetime64[ns]", "timedelta64[ns]", "int64", "float32"]
+)
+def test_dataframe_mixed_dtype_error(dtype):
+    pdf = pd.Series([1, 2, 3], dtype=dtype).to_frame().astype(object)
+    with pytest.raises(TypeError):
+        cudf.from_pandas(pdf)
+
+
+@pytest.mark.parametrize(
+    "index_data,name",
+    [([10, 13], "a"), ([30, 40, 20], "b"), (["ef"], "c"), ([2, 3], "Z")],
+)
+def test_dataframe_reindex_with_index_names(index_data, name):
+    gdf = cudf.DataFrame(
+        {
+            "a": [10, 12, 13],
+            "b": [20, 30, 40],
+            "c": cudf.Series(["ab", "cd", "ef"], dtype="category"),
+        }
+    )
+    if name in gdf.columns:
+        gdf = gdf.set_index(name)
+    pdf = gdf.to_pandas()
+
+    gidx = cudf.Index(index_data, name=name)
+    actual = gdf.reindex(gidx)
+    expected = pdf.reindex(gidx.to_pandas())
+
+    assert_eq(actual, expected)
+
+    actual = gdf.reindex(index_data)
+    expected = pdf.reindex(index_data)
+
+    assert_eq(actual, expected)

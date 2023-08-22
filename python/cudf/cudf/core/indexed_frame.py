@@ -2582,10 +2582,12 @@ class IndexedFrame(Frame):
 
         df = self
         if index is not None:
-            index = cudf.core.index.as_index(index)
+            index = cudf.core.index.as_index(
+                index, name=getattr(index, "name", self._index.name)
+            )
 
             idx_dtype_match = (df.index.nlevels == index.nlevels) and all(
-                left_dtype == right_dtype
+                _is_same_dtype(left_dtype, right_dtype)
                 for left_dtype, right_dtype in zip(
                     (col.dtype for col in df.index._data.columns),
                     (col.dtype for col in index._data.columns),
@@ -3421,7 +3423,7 @@ class IndexedFrame(Frame):
         0  1  3
         1  2  4
         """
-        axis = self._get_axis_from_axis_arg(axis)
+        axis = 0 if axis is None else self._get_axis_from_axis_arg(axis)
         size = self.shape[axis]
 
         # Compute `n` from parameter `frac`.
@@ -5405,3 +5407,24 @@ def _drop_rows_by_labels(
             res = obj.to_frame(name="tmp").join(key_df, how="leftanti")["tmp"]
             res.name = obj.name
             return res
+
+
+def _is_same_dtype(lhs_dtype, rhs_dtype):
+    # Utility specific to `_reindex` to check
+    # for matching column dtype.
+    if lhs_dtype == rhs_dtype:
+        return True
+    elif (
+        is_categorical_dtype(lhs_dtype)
+        and not is_categorical_dtype(rhs_dtype)
+        and lhs_dtype.categories.dtype == rhs_dtype
+    ):
+        return True
+    elif (
+        is_categorical_dtype(rhs_dtype)
+        and not is_categorical_dtype(lhs_dtype)
+        and rhs_dtype.categories.dtype == lhs_dtype
+    ):
+        return True
+    else:
+        return False

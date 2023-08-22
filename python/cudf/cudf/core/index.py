@@ -47,7 +47,6 @@ from cudf.core.column import (
     StringColumn,
     StructColumn,
     TimeDeltaColumn,
-    arange,
     column,
 )
 from cudf.core.column.column import as_column, concat_columns
@@ -65,6 +64,7 @@ from cudf.utils.dtypes import (
 )
 from cudf.utils.utils import (
     _cudf_nvtx_annotate,
+    _is_same_name,
     _warn_no_dask_cudf,
     search_range,
 )
@@ -156,9 +156,16 @@ class RangeIndex(BaseIndex, BinaryOperand):
     copy : bool, default False
         Unused, accepted for homogeneity with other index types.
 
-    Returns
+    Attributes
+    ----------
+    start
+    stop
+    step
+
+    Methods
     -------
-    RangeIndex
+    to_numpy
+    to_arrow
 
     Examples
     --------
@@ -1022,12 +1029,27 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         operands = self._make_operands_for_binop(other, fill_value, reflect)
         if operands is NotImplemented:
             return NotImplemented
-        ret = _index_from_data(self._colwise_binop(operands, op))
+        binop_result = self._colwise_binop(operands, op)
+
+        if isinstance(other, cudf.Series):
+            ret = other._from_data_like_self(binop_result)
+            ret.name = (
+                self.name
+                if cudf.utils.utils._is_same_name(self.name, other.name)
+                else None
+            )
+        else:
+            ret = _index_from_data(binop_result)
 
         # pandas returns numpy arrays when the outputs are boolean. We
         # explicitly _do not_ use isinstance here: we want only boolean
         # GenericIndexes, not dtype-specific subclasses.
-        if type(ret) is GenericIndex and ret.dtype.kind == "b":
+        if (
+            isinstance(ret, (GenericIndex, cudf.Series))
+            and ret.dtype.kind == "b"
+        ):
+            if ret._column.has_nulls():
+                ret = ret.fillna(op == "__ne__")
             return ret.values
         return ret
 
@@ -1325,7 +1347,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             else:
                 output = repr(preprocess.to_pandas())
 
-            output = output.replace("nan", cudf._NA_REP)
+            output = output.replace("nan", str(cudf.NA))
         elif preprocess._values.nullable:
             output = repr(self._clean_nulls_from_index().to_pandas())
 
@@ -1477,8 +1499,14 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
     def _clean_nulls_from_index(self):
         if self._values.has_nulls():
+            fill_value = (
+                str(cudf.NaT)
+                if isinstance(self, (DatetimeIndex, TimedeltaIndex))
+                else str(cudf.NA)
+            )
             return cudf.Index(
-                self._values.astype("str").fillna(cudf._NA_REP), name=self.name
+                self._values.astype("str").fillna(fill_value),
+                name=self.name,
             )
 
         return self
@@ -1637,6 +1665,14 @@ class Int8Index(NumericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     Int8Index
@@ -1661,6 +1697,14 @@ class Int16Index(NumericIndex):
         Make a copy of input data.
     name : object
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
 
     Returns
     -------
@@ -1687,6 +1731,14 @@ class Int32Index(NumericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     Int32Index
@@ -1711,6 +1763,14 @@ class Int64Index(NumericIndex):
         Make a copy of input data.
     name : object
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
 
     Returns
     -------
@@ -1737,6 +1797,14 @@ class UInt8Index(NumericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     UInt8Index
@@ -1761,6 +1829,14 @@ class UInt16Index(NumericIndex):
         Make a copy of input data.
     name : object
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
 
     Returns
     -------
@@ -1787,6 +1863,14 @@ class UInt32Index(NumericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     UInt32Index
@@ -1812,6 +1896,14 @@ class UInt64Index(NumericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     UInt64Index
@@ -1836,6 +1928,14 @@ class Float32Index(NumericIndex):
         Make a copy of input data.
     name : object
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
 
     Returns
     -------
@@ -1867,6 +1967,14 @@ class Float64Index(NumericIndex):
         Make a copy of input data.
     name : object
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    None
 
     Returns
     -------
@@ -1907,6 +2015,32 @@ class DatetimeIndex(GenericIndex):
     yearfirst : bool, default False
         If True parse dates in data with the year first order.
         This is not yet supported
+
+    Attributes
+    ----------
+    year
+    month
+    day
+    hour
+    minute
+    second
+    microsecond
+    nanosecond
+    date
+    time
+    dayofyear
+    day_of_year
+    weekday
+    quarter
+    freq
+
+    Methods
+    -------
+    ceil
+    floor
+    round
+    tz_convert
+    tz_localize
 
     Returns
     -------
@@ -1974,6 +2108,14 @@ class DatetimeIndex(GenericIndex):
             data = data.copy()
 
         super().__init__(data, **kwargs)
+
+    def __getitem__(self, index):
+        value = super().__getitem__(index)
+        if cudf.get_option("mode.pandas_compatible") and isinstance(
+            value, np.datetime64
+        ):
+            return pd.Timestamp(value)
+        return value
 
     def searchsorted(
         self,
@@ -2483,7 +2625,7 @@ class DatetimeIndex(GenericIndex):
         ...                                   '2018-10-28 03:46:00']))
         >>> s.dt.tz_localize("CET")
         0    2018-10-28 01:20:00.000000000
-        1                             <NA>
+        1                              NaT
         2    2018-10-28 03:46:00.000000000
         dtype: datetime64[ns, CET]
 
@@ -2567,6 +2709,19 @@ class TimedeltaIndex(GenericIndex):
     name : object
         Name to be stored in the index.
 
+    Attributes
+    ----------
+    days
+    seconds
+    microseconds
+    nanoseconds
+    components
+    inferred_freq
+
+    Methods
+    -------
+    None
+
     Returns
     -------
     TimedeltaIndex
@@ -2619,6 +2774,14 @@ class TimedeltaIndex(GenericIndex):
             data = data.copy()
 
         super().__init__(data, **kwargs)
+
+    def __getitem__(self, index):
+        value = super().__getitem__(index)
+        if cudf.get_option("mode.pandas_compatible") and isinstance(
+            value, np.timedelta64
+        ):
+            return pd.Timedelta(value)
+        return value
 
     @_cudf_nvtx_annotate
     def to_pandas(self, nullable=False):
@@ -2710,6 +2873,15 @@ class CategoricalIndex(GenericIndex):
         Make a copy of input.
     name : object, optional
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    codes
+    categories
+
+    Methods
+    -------
+    equals
 
     Returns
     -------
@@ -2856,89 +3028,56 @@ def interval_range(
             closed='left',
             dtype='interval')
     """
-    if freq and periods and start and end:
+    nargs = sum(_ is not None for _ in (start, end, periods, freq))
+
+    # we need at least three of (start, end, periods, freq)
+    if nargs == 2 and freq is None:
+        freq = 1
+        nargs += 1
+
+    if nargs != 3:
         raise ValueError(
             "Of the four parameters: start, end, periods, and "
             "freq, exactly three must be specified"
         )
-    args = [
-        cudf.Scalar(x) if x is not None else None
-        for x in (start, end, freq, periods)
-    ]
+
+    start = cudf.Scalar(start) if start is not None else start
+    end = cudf.Scalar(end) if end is not None else end
+    periods = cudf.Scalar(int(periods)) if periods is not None else periods
+    freq = cudf.Scalar(freq) if freq is not None else freq
+
+    if start is None:
+        start = end - freq * periods
+    elif freq is None:
+        quotient, remainder = divmod((end - start).value, periods.value)
+        if remainder:
+            freq = (end - start) / periods
+        else:
+            freq = cudf.Scalar(int(quotient))
+    elif periods is None:
+        periods = cudf.Scalar(int((end - start) / freq))
+    elif end is None:
+        end = start + periods * freq
+
     if any(
-        not _is_non_decimal_numeric_dtype(x.dtype) if x is not None else False
-        for x in args
+        not _is_non_decimal_numeric_dtype(x.dtype)
+        for x in (start, periods, freq, end)
     ):
         raise ValueError("start, end, periods, freq must be numeric values.")
-    *rargs, periods = args
-    common_dtype = find_common_type([x.dtype for x in rargs if x])
-    start, end, freq = rargs
-    periods = periods.astype("int64") if periods is not None else None
 
-    if periods and not freq:
-        # if statement for mypy to pass
-        if end is not None and start is not None:
-            # divmod only supported on host side scalars
-            quotient, remainder = divmod((end - start).value, periods.value)
-            if remainder:
-                freq_step = cudf.Scalar((end - start) / periods)
-            else:
-                freq_step = cudf.Scalar(quotient)
-            if start.dtype != freq_step.dtype:
-                start = start.astype(freq_step.dtype)
-            bin_edges = sequence(
-                size=periods + 1,
-                init=start.device_value,
-                step=freq_step.device_value,
-            )
-            left_col = bin_edges.slice(0, len(bin_edges) - 1)
-            right_col = bin_edges.slice(1, len(bin_edges))
-    elif freq and periods:
-        if end:
-            start = end - (freq * periods)
-        if start:
-            end = freq * periods + start
-        if end is not None and start is not None:
-            left_col = arange(
-                start.value, end.value, freq.value, dtype=common_dtype
-            )
-            end = end + 1
-            start = start + freq
-            right_col = arange(
-                start.value, end.value, freq.value, dtype=common_dtype
-            )
-    elif freq and not periods:
-        if end is not None and start is not None:
-            end = end - freq + 1
-            left_col = arange(
-                start.value, end.value, freq.value, dtype=common_dtype
-            )
-            end = end + freq + 1
-            start = start + freq
-            right_col = arange(
-                start.value, end.value, freq.value, dtype=common_dtype
-            )
-    elif start is not None and end is not None:
-        # if statements for mypy to pass
-        if freq:
-            left_col = arange(
-                start.value, end.value, freq.value, dtype=common_dtype
-            )
-        else:
-            left_col = arange(start.value, end.value, dtype=common_dtype)
-        start = start + 1
-        end = end + 1
-        if freq:
-            right_col = arange(
-                start.value, end.value, freq.value, dtype=common_dtype
-            )
-        else:
-            right_col = arange(start.value, end.value, dtype=common_dtype)
-    else:
-        raise ValueError(
-            "Of the four parameters: start, end, periods, and "
-            "freq, at least two must be specified"
-        )
+    periods = periods.astype("int64")
+    common_dtype = find_common_type((start.dtype, freq.dtype, end.dtype))
+    start = start.astype(common_dtype)
+    freq = freq.astype(common_dtype)
+
+    bin_edges = sequence(
+        size=periods + 1,
+        init=start.device_value,
+        step=freq.device_value,
+    )
+    left_col = bin_edges.slice(0, len(bin_edges) - 1)
+    right_col = bin_edges.slice(1, len(bin_edges))
+
     if len(right_col) == 0 or len(left_col) == 0:
         dtype = IntervalDtype("int64", closed)
         data = column.column_empty_like_same_mask(left_col, dtype)
@@ -2968,6 +3107,15 @@ class IntervalIndex(GenericIndex):
         Copy the input data.
     name : object, optional
         Name to be stored in the index.
+
+    Attributes
+    ----------
+    values
+
+    Methods
+    -------
+    from_breaks
+    get_loc
 
     Returns
     -------
@@ -3128,7 +3276,7 @@ class StringIndex(GenericIndex):
 
     def _clean_nulls_from_index(self):
         if self._values.has_nulls():
-            return self.fillna(cudf._NA_REP)
+            return self.fillna(str(cudf.NA))
         else:
             return self
 
@@ -3165,7 +3313,7 @@ def as_index(arbitrary, nan_as_null=None, **kwargs) -> BaseIndex:
     if isinstance(arbitrary, cudf.MultiIndex):
         return arbitrary
     elif isinstance(arbitrary, BaseIndex):
-        if arbitrary.name == kwargs["name"]:
+        if _is_same_name(arbitrary.name, kwargs["name"]):
             return arbitrary
         idx = arbitrary.copy(deep=False)
         idx.rename(kwargs["name"], inplace=True)
