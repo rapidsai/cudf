@@ -202,7 +202,7 @@ parquet::Compression to_parquet_compression(compression_type compression)
  */
 size_t column_size(column_view const& column, rmm::cuda_stream_view stream)
 {
-  if (column.size() == 0) { return 0; }
+  if (column.is_empty()) { return 0; }
 
   if (is_fixed_width(column.type())) {
     return size_of(column.type()) * column.size();
@@ -573,7 +573,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,
                      "Binary column's corresponding metadata should have zero or two children!");
         if (col_meta.num_children() > 0) {
-          CUDF_EXPECTS(col->children[lists_column_view::child_column_index]->children.size() == 0,
+          CUDF_EXPECTS(col->children[lists_column_view::child_column_index]->children.empty(),
                        "Binary column must not be nested!");
         }
 
@@ -859,7 +859,7 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
 
   _is_list = (_max_rep_level > 0);
 
-  if (cudf_col.size() == 0) { return; }
+  if (cudf_col.is_empty()) { return; }
 
   if (_is_list) {
     // Top level column's offsets are not applied to all children. Get the effective offset and
@@ -1103,7 +1103,7 @@ build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   std::vector<rmm::device_uvector<size_type>> dict_data;
   std::vector<rmm::device_uvector<size_type>> dict_index;
 
-  if (h_chunks.size() == 0) { return std::pair(std::move(dict_data), std::move(dict_index)); }
+  if (h_chunks.empty()) { return std::pair(std::move(dict_data), std::move(dict_index)); }
 
   if (dict_policy == dictionary_policy::NEVER) {
     thrust::for_each(
@@ -2369,11 +2369,11 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_row_group_metadata(
     }
   }
   // Reader doesn't currently populate column_order, so infer it here
-  if (md.row_groups.size() != 0) {
+  if (not md.row_groups.empty()) {
     auto const is_valid_stats = [](auto const& stats) {
-      return stats.max.size() != 0 || stats.min.size() != 0 || stats.null_count != -1 ||
-             stats.distinct_count != -1 || stats.max_value.size() != 0 ||
-             stats.min_value.size() != 0;
+      return not stats.max.empty() || not stats.min.empty() || stats.null_count != -1 ||
+             stats.distinct_count != -1 || not stats.max_value.empty() ||
+             not stats.min_value.empty();
     };
 
     uint32_t num_columns = static_cast<uint32_t>(md.row_groups[0].columns.size());
