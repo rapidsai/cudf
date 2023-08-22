@@ -113,3 +113,43 @@ The guidance in this section may change often as Cython is updated and our under
   - Reason: The creation of the Python enum requires that Cython actually generate the necessary code Python C API code, which will not happen if only a pxd file is present.
 -  If a C++ enum will be part of a pylibcudf module's public API, then it should be imported (not cimported) directly into the pyx file and aliased with a name that matches our Python class naming conventions (CapsCase) instead of our C++ naming convention (snake\_case).
   - Reason: We want to expose the enum to both Python and Cython consumers of the module. As a side effect, this aliasing avoids [this Cython bug](https://github.com/cython/cython/issues/5609).
+  - Note: Once the above Cython bug is resolved, the enum should also be aliased into the pylibcudf pxd file when it is cimported so that Python and Cython usage will match.
+
+Here is an example of appropriate enum usage.
+
+
+```cython
+# cpp/copying.pxd
+cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
+    # cpdef here so that we export both a cdef enum class and a Python enum.Enum.
+    cpdef enum class out_of_bounds_policy(bool):
+        NULLIFY
+        DONT_CHECK
+
+
+# cpp/copying.pyx
+# This file is empty, but is required to compile the Python enum in cpp/copying.pxd
+
+
+# pylibcudf/copying.pxd
+
+# cimport the enum using the exact name
+# Once https://github.com/cython/cython/issues/5609 is resolved,
+# this import should instead be
+# from cudf._lib.cpp.copying cimport out_of_bounds_policy as OutOfBoundsPolicy
+from cudf._lib.cpp.copying cimport out_of_bounds_policy
+
+
+# pylibcudf/copying.pyx
+# Access cpp.copying members that aren't part of this module's public API via
+# this module alias
+from cudf._lib.cpp cimport copying as cpp_copying
+from cudf._lib.cpp.copying cimport out_of_bounds_policy
+
+# This import exposes the enum in the public API of this module.
+# It requires a no-cython-lint tag because it will be unused: all typing of
+# parameters etc will need to use the Cython name `out_of_bounds_policy` until
+# the Cython bug is resolved.
+from cudf._lib.cpp.copying import \
+    out_of_bounds_policy as OutOfBoundsPolicy  # no-cython-lint
+```
