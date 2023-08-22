@@ -149,14 +149,17 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
                                     std::optional<reader_column_schema> const& schema,
                                     rmm::cuda_stream_view stream)
 {
-  if (schema_info != nullptr) { schema_info->name = buffer.name; }
+  if (schema_info != nullptr) {
+    schema_info->name = buffer.name;
+    schema_info->set_nullability(buffer.is_nullable);
+  }
 
   switch (buffer.type.id()) {
     case type_id::STRING:
       if (schema.value_or(reader_column_schema{}).is_enabled_convert_binary_to_strings()) {
         if (schema_info != nullptr) {
-          schema_info->children.push_back(column_name_info{"offsets"});
-          schema_info->children.push_back(column_name_info{"chars"});
+          schema_info->children.push_back(column_name_info{"offsets", false});
+          schema_info->children.push_back(column_name_info{"chars", false});
         }
 
         // make_strings_column allocates new memory, it does not simply move
@@ -180,8 +183,8 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
           data_type{type_id::UINT8}, data->size(), std::move(*data), rmm::device_buffer{}, 0);
 
         if (schema_info != nullptr) {
-          schema_info->children.push_back(column_name_info{"offsets"});
-          schema_info->children.push_back(column_name_info{"binary"});
+          schema_info->children.push_back(column_name_info{"offsets", false});
+          schema_info->children.push_back(column_name_info{"binary", false});
         }
 
         return make_lists_column(
@@ -199,8 +202,8 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
 
       column_name_info* child_info = nullptr;
       if (schema_info != nullptr) {
-        schema_info->children.push_back(column_name_info{"offsets"});
-        schema_info->children.push_back(column_name_info{""});
+        schema_info->children.push_back(column_name_info{"offsets", false});
+        schema_info->children.push_back(column_name_info{"", false});
         child_info = &schema_info->children.back();
       }
 
@@ -231,7 +234,7 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
       for (size_t i = 0; i < buffer.children.size(); ++i) {
         column_name_info* child_info = nullptr;
         if (schema_info != nullptr) {
-          schema_info->children.push_back(column_name_info{""});
+          schema_info->children.push_back(column_name_info{"", true});
           child_info = &schema_info->children.back();
         }
 

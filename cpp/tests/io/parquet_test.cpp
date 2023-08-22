@@ -6642,7 +6642,7 @@ TEST_F(ParquetWriterTest, PreserveNullability)
   cudf::io::parquet_reader_options const in_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
   auto const result        = cudf::io::read_parquet(in_opts);
-  auto const read_metadata = cudf::io::table_input_metadata{result};
+  auto const read_metadata = cudf::io::table_input_metadata{result.metadata};
 
   // test that expected_metadata matches read_metadata
   std::function<void(cudf::io::column_in_metadata, cudf::io::column_in_metadata)>

@@ -350,6 +350,7 @@ void reader::impl::populate_metadata(table_metadata& out_metadata)
   for (size_t i = 0; i < _output_column_schemas.size(); i++) {
     auto const& schema               = _metadata->get_schema(_output_column_schemas[i]);
     out_metadata.schema_info[i].name = schema.name;
+    out_metadata.schema_info[i].set_nullability(schema.repetition_type != REQUIRED);
   }
 
   // Return user metadata

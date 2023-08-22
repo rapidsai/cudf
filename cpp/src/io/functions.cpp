@@ -517,29 +517,24 @@ table_input_metadata::table_input_metadata(table_view const& table)
     table.begin(), table.end(), std::back_inserter(this->column_metadata), get_children);
 }
 
-table_input_metadata::table_input_metadata(table_with_metadata const& table_and_metadata)
+table_input_metadata::table_input_metadata(table_metadata const& metadata)
 {
-  auto const& table = table_and_metadata.tbl->view();
-  auto const& names = table_and_metadata.metadata.schema_info;
+  auto const& names = metadata.schema_info;
 
   // Create a metadata hierarchy with naming and nullability using `table_and_metadata`
-  std::function<column_in_metadata(column_view const&, column_name_info const&)> get_children =
-    [&](column_view const& col, column_name_info const& name) {
+  std::function<column_in_metadata(column_name_info const&)> get_children =
+    [&](column_name_info const& name) {
       auto col_meta = column_in_metadata{name.name};
-      col_meta.set_nullability(col.nullable());
-      std::transform(col.child_begin(),
-                     col.child_end(),
-                     name.children.begin(),
+      if (name.is_set_nullability()) { col_meta.set_nullability(name.get_nullablity()); }
+      std::transform(name.children.begin(),
+                     name.children.end(),
                      std::back_inserter(col_meta.children),
                      get_children);
       return col_meta;
     };
 
-  std::transform(table.begin(),
-                 table.end(),
-                 names.begin(),
-                 std::back_inserter(this->column_metadata),
-                 get_children);
+  std::transform(
+    names.begin(), names.end(), std::back_inserter(this->column_metadata), get_children);
 }
 
 /**

@@ -201,13 +201,14 @@ enum dictionary_policy {
 };
 
 /**
- * @brief Detailed name information for output columns.
+ * @brief Detailed name (and optionally nullability) information for output columns.
  *
  * The hierarchy of children matches the hierarchy of children in the output
  * cudf columns.
  */
 struct column_name_info {
   std::string name;                        ///< Column name
+  std::optional<bool> is_nullable;         ///< Column nullability
   std::vector<column_name_info> children;  ///< Child column names
   /**
    * @brief Construct a column name info with a name and no children
@@ -215,7 +216,40 @@ struct column_name_info {
    * @param _name Column name
    */
   column_name_info(std::string const& _name) : name(_name) {}
+
+  /**
+   * @brief Construct a column name info with a name, nullabilty, and no children
+   *
+   * @param _name Column name
+   * @param _is_nullable True if column is nullable
+   */
+  column_name_info(std::string const& _name, bool _is_nullable)
+    : name(_name), is_nullable(_is_nullable)
+  {
+  }
+
   column_name_info() = default;
+
+  /**
+   * @brief Set the nullability for this column.
+   *
+   * @param _val True if the column is nullable.
+   */
+  void set_nullability(bool _val) { is_nullable = _val; }
+
+  /**
+   * @brief Test whether nullability has been set for this column.
+   *
+   * @return True if the nullability is set, false otherwise
+   */
+  bool is_set_nullability() const { return is_nullable.has_value(); }
+
+  /**
+   * @brief Get the nullability for this column.
+   *
+   * @return True if the column is nullable, false if not, or the nullability has not been set.
+   */
+  bool get_nullablity() const { return is_nullable.value_or(false); }
 };
 
 /**
@@ -801,14 +835,14 @@ class table_input_metadata {
   explicit table_input_metadata(table_view const& table);
 
   /**
-   * @brief Construct a new table_input_metadata from a table_with_metadata.
+   * @brief Construct a new table_input_metadata from a table_metadata object.
    *
    * The constructed table_input_metadata has the same structure as the passed table_with_metadata,
    * and also preserves any naming and nullability info from the original table.
    *
-   * @param table_and_metadata The table_with_metadata to construct metadata for
+   * @param metadata The table_metadata to construct table_intput_metadata for
    */
-  explicit table_input_metadata(table_with_metadata const& table_and_metadata);
+  explicit table_input_metadata(table_metadata const& metadata);
 
   std::vector<column_in_metadata> column_metadata;  //!< List of column metadata
 };
