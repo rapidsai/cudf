@@ -798,7 +798,7 @@ class table_input_metadata {
    *
    * @param table The table_view to construct metadata for
    */
-  table_input_metadata(table_view const& table);
+  explicit table_input_metadata(table_view const& table);
 
   /**
    * @brief Construct a new table_input_metadata from a table_with_metadata.
