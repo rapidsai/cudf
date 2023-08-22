@@ -55,4 +55,4 @@ static void bench_edit_distance(nvbench::state& state)
 NVBENCH_BENCH(bench_edit_distance)
   .set_name("edit_distance")
   .add_int64_axis("num_rows", {1024, 4096, 8192, 16364, 32768, 262144})
-  .add_int64_axis("row_width", {32, 64, 128, 256});
+  .add_int64_axis("row_width", {8, 16, 32, 64, 128, 256});
