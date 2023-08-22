@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 import cupy
 import numpy as np
 import pandas as pd
@@ -156,3 +156,15 @@ def test_searchsorted_misc():
         psr.searchsorted([-100, 3.00001, 2.2, 2.0, 2.000000001]),
         sr.searchsorted([-100, 3.00001, 2.2, 2.0, 2.000000001]),
     )
+
+
+@pytest.mark.xfail(reason="https://github.com/pandas-dev/pandas/issues/54668")
+def test_searchsorted_mixed_str_int():
+    psr = pd.Series([1, 2, 3], dtype="int")
+    sr = cudf.from_pandas(psr)
+
+    with pytest.raises(ValueError):
+        actual = sr.searchsorted("a")
+    with pytest.raises(ValueError):
+        expect = psr.searchsorted("a")
+    assert_eq(expect, actual)
