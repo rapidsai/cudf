@@ -442,7 +442,7 @@ constexpr bool is_string_col(ColumnChunkDesc const& chunk)
  *
  * @param[in] chunks List of column chunks
  * @param[in] num_chunks Number of column chunks
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use
  */
 void DecodePageHeaders(ColumnChunkDesc* chunks, int32_t num_chunks, rmm::cuda_stream_view stream);
 
@@ -452,7 +452,7 @@ void DecodePageHeaders(ColumnChunkDesc* chunks, int32_t num_chunks, rmm::cuda_st
  *
  * @param[in] chunks List of column chunks
  * @param[in] num_chunks Number of column chunks
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use
  */
 void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
                                 int32_t num_chunks,
@@ -480,7 +480,7 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
  * @param compute_string_sizes If set to true, the str_bytes field in PageInfo will
  * be computed
  * @param level_type_size Size in bytes of the type for level decoding
- * @param stream CUDA stream to use, default 0
+ * @param stream CUDA stream to use
  */
 void ComputePageSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
                       cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
@@ -504,7 +504,7 @@ void ComputePageSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
  * @param[in] min_rows crop all rows below min_row
  * @param[in] num_rows Maximum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use
  */
 void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
                             cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
@@ -524,7 +524,7 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use
  */
 void DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
                     cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
@@ -544,7 +544,7 @@ void DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use
  */
 void DecodeStringPageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
                           cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
@@ -654,7 +654,7 @@ void get_dictionary_indices(cudf::detail::device_2dspan<gpu::PageFragment const>
  * @param[in] write_v2_headers True if V2 page headers should be written
  * @param[in] chunk_grstats Setup for chunk-level stats
  * @param[in] max_page_comp_data_size Calculated maximum compressed data size of pages
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use
  */
 void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                       device_span<gpu::EncPage> pages,
