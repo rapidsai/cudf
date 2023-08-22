@@ -191,11 +191,6 @@ class GroupUnaryOp(AbstractTemplate):
         raise TypeError(self.make_error_string(args))
 
 
-class DataFrameOpBase(AbstractTemplate):
-    def generic(self, args, kws):
-        breakpoint()
-
-
 class GroupOpBase(AbstractTemplate):
     def make_error_string(self, args):
         fname = self.key.__name__
