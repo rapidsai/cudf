@@ -457,31 +457,38 @@ dependencies:
     specific:
       - output_types: [conda, requirements, pyproject]
         matrices:
-          - matrix:
-              cuda: "12.0"
-            packages:
+          - matrix: {cuda: "12.2"}
+            packages: &run_cudf_packages_all_cu12
               - cuda-python>=12.0,<13.0a0
-          - matrix: # All CUDA 11 versions
-            packages:
+          - {matrix: {cuda: "12.1"}, packages: *run_cudf_packages_all_cu12}
+          - {matrix: {cuda: "12.0"}, packages: *run_cudf_packages_all_cu12}
+          - matrix: {cuda: "11.8"}
+            packages: &run_cudf_packages_all_cu11
               - cuda-python>=11.7.1,<12.0a0
-      - output_types: [conda, pyproject]
+          - {matrix: {cuda: "11.5"}, packages: *run_cudf_packages_all_cu11}
+          - {matrix: {cuda: "11.4"}, packages: *run_cudf_packages_all_cu11}
+          - {matrix: {cuda: "11.2"}, packages: *run_cudf_packages_all_cu11}
+          - {matrix: null, packages: null}
+      - output_types: [conda]
         matrices:
-          - matrix:
-              cuda: "12.0"
-            packages:
-          - matrix: # All CUDA 11 versions
-            packages:
+          - matrix: {cuda: "11.8"}
+            packages: &run_cudf_packages_conda_cu11
               - cubinlinker
               - ptxcompiler
-      - output_types: requirements
+          - {matrix: {cuda: "11.5"}, packages: *run_cudf_packages_conda_cu11}
+          - {matrix: {cuda: "11.4"}, packages: *run_cudf_packages_conda_cu11}
+          - {matrix: {cuda: "11.2"}, packages: *run_cudf_packages_conda_cu11}
+          - {matrix: null, packages: null}
+      - output_types: [requirements, pyproject]
         matrices:
-          - matrix:
-              cuda: "12.0"
-            packages:
-          - matrix: # All CUDA 11 versions
-            packages:
+          - matrix: {cuda: "11.8"}
+            packages: &run_cudf_packages_pip_cu11
               - cubinlinker-cu11
               - ptxcompiler-cu11
+          - {matrix: {cuda: "11.5"}, packages: *run_cudf_packages_pip_cu11}
+          - {matrix: {cuda: "11.4"}, packages: *run_cudf_packages_pip_cu11}
+          - {matrix: {cuda: "11.2"}, packages: *run_cudf_packages_pip_cu11}
+          - {matrix: null, packages: null}
   run_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
