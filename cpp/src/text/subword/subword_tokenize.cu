@@ -72,9 +72,10 @@ __global__ void kernel_compute_tensor_metadata(
   uint32_t* metadata)
 {
   cudf::thread_index_type const output_idx =
-    threadIdx.x + cudf::thread_index_type(blockIdx.x) * cudf::thread_index_type(blockDim.x);
-  if (output_idx >= (cudf::thread_index_type(nrows_tensor_token_ids) *
-                     cudf::thread_index_type(max_sequence_length))) {
+    threadIdx.x + static_cast<cudf::thread_index_type>(blockIdx.x) *
+                    static_cast<cudf::thread_index_type>(blockDim.x);
+  if (output_idx >= (static_cast<cudf::thread_index_type>(nrows_tensor_token_ids) *
+                     static_cast<cudf::thread_index_type>(max_sequence_length))) {
     return;
   }
 

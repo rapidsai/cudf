@@ -421,7 +421,7 @@ wordpiece_tokenizer::wordpiece_tokenizer(hashed_vocabulary const& vocab_table,
 
 uvector_pair wordpiece_tokenizer::tokenize(char const* d_strings,
                                            cudf::size_type const* d_offsets,
-                                           uint32_t num_strings,
+                                           cudf::size_type num_strings,
                                            rmm::cuda_stream_view stream)
 {
   auto cps_and_offsets = normalizer.normalize(d_strings, d_offsets, num_strings, stream);
