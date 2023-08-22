@@ -47,8 +47,6 @@ public final class Table implements AutoCloseable {
   private long nativeHandle;
   private ColumnVector[] columns;
 
-  private static final HostMemoryAllocator hostMemoryAllocator = DefaultHostMemoryAllocator.get();
-
   /**
    * Table class makes a copy of the array of {@link ColumnVector}s passed to it. The class
    * will decrease the refcount
@@ -823,10 +821,11 @@ public final class Table implements AutoCloseable {
    * @param buffer raw UTF8 formatted bytes.
    * @param offset the starting offset into buffer.
    * @param len the number of bytes to parse.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return the data parsed as a table on the GPU.
    */
   public static Table readCSV(Schema schema, CSVOptions opts, byte[] buffer, long offset,
-                              long len) {
+                              long len, HostMemoryAllocator hostMemoryAllocator) {
     if (len <= 0) {
       len = buffer.length - offset;
     }
@@ -837,6 +836,12 @@ public final class Table implements AutoCloseable {
       newBuf.setBytes(0, buffer, offset, len);
       return readCSV(schema, opts, newBuf, 0, len);
     }
+  }
+
+
+  public static Table readCSV(Schema schema, CSVOptions opts, byte[] buffer, long offset,
+                              long len) {
+    return readCSV(schema, opts, buffer, offset, len, DefaultHostMemoryAllocator.get());
   }
 
   /**
@@ -1040,10 +1045,11 @@ public final class Table implements AutoCloseable {
    * @param buffer raw UTF8 formatted bytes.
    * @param offset the starting offset into buffer.
    * @param len the number of bytes to parse.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return the data parsed as a table on the GPU.
    */
   public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
-                               long len) {
+                               long len, HostMemoryAllocator hostMemoryAllocator) {
     if (len <= 0) {
       len = buffer.length - offset;
     }
@@ -1054,6 +1060,11 @@ public final class Table implements AutoCloseable {
       newBuf.setBytes(0, buffer, offset, len);
       return readJSON(schema, opts, newBuf, 0, len);
     }
+  }
+
+  public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
+                               long len) {
+    return readJSON(schema, opts, buffer, offset, len, DefaultHostMemoryAllocator.get());
   }
 
   /**
@@ -1145,9 +1156,11 @@ public final class Table implements AutoCloseable {
    * @param buffer raw parquet formatted bytes.
    * @param offset the starting offset into buffer.
    * @param len the number of bytes to parse.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return the data parsed as a table on the GPU.
    */
-  public static Table readParquet(ParquetOptions opts, byte[] buffer, long offset, long len) {
+  public static Table readParquet(ParquetOptions opts, byte[] buffer, long offset, long len,
+      HostMemoryAllocator hostMemoryAllocator) {
     if (len <= 0) {
       len = buffer.length - offset;
     }
@@ -1158,6 +1171,10 @@ public final class Table implements AutoCloseable {
       newBuf.setBytes(0, buffer, offset, len);
       return readParquet(opts, newBuf, 0, len);
     }
+  }
+
+  public static Table readParquet(ParquetOptions opts, byte[] buffer, long offset, long len) {
+    return readParquet(opts, buffer, offset, len, DefaultHostMemoryAllocator.get());
   }
 
   /**
@@ -1225,9 +1242,11 @@ public final class Table implements AutoCloseable {
    * @param buffer raw Avro formatted bytes.
    * @param offset the starting offset into buffer.
    * @param len the number of bytes to parse.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return the data parsed as a table on the GPU.
    */
-  public static Table readAvro(AvroOptions opts, byte[] buffer, long offset, long len) {
+  public static Table readAvro(AvroOptions opts, byte[] buffer, long offset, long len,
+      HostMemoryAllocator hostMemoryAllocator) {
     assert offset >= 0 && offset < buffer.length;
     assert len <= buffer.length - offset;
     len = len > 0 ? len : buffer.length - offset;
@@ -1237,6 +1256,11 @@ public final class Table implements AutoCloseable {
       return readAvro(opts, newBuf, 0, len);
     }
   }
+
+  public static Table readAvro(AvroOptions opts, byte[] buffer, long offset, long len) {
+    return readAvro(opts, buffer, offset, len, DefaultHostMemoryAllocator.get());
+  }
+
 
   /**
    * Read Avro formatted data.
@@ -1303,9 +1327,11 @@ public final class Table implements AutoCloseable {
    * @param buffer raw ORC formatted bytes.
    * @param offset the starting offset into buffer.
    * @param len the number of bytes to parse.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return the data parsed as a table on the GPU.
    */
-  public static Table readORC(ORCOptions opts, byte[] buffer, long offset, long len) {
+  public static Table readORC(ORCOptions opts, byte[] buffer, long offset, long len,
+      HostMemoryAllocator hostMemoryAllocator) {
     if (len <= 0) {
       len = buffer.length - offset;
     }
@@ -1317,6 +1343,11 @@ public final class Table implements AutoCloseable {
       return readORC(opts, newBuf, 0, len);
     }
   }
+
+  public static Table readORC(ORCOptions opts, byte[] buffer, long offset, long len) {
+    return readORC(opts, buffer, offset, len, DefaultHostMemoryAllocator.get());
+  }
+
 
   /**
    * Read ORC formatted data.

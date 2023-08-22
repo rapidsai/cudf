@@ -61,8 +61,6 @@ public class JCudfSerialization {
   private static final int SER_FORMAT_MAGIC_NUMBER = 0x43554446;
   private static final short VERSION_NUMBER = 0x0000;
 
-  private static final HostMemoryAllocator hostMemoryAllocator = DefaultHostMemoryAllocator.get();
-
   private static final class ColumnOffsets {
     private final long validity;
     private final long offsets;
@@ -1812,10 +1810,13 @@ public class JCudfSerialization {
    * Concatenate multiple tables in host memory into a single host table buffer.
    * @param headers table headers corresponding to the host table buffers
    * @param dataBuffers host table buffer for each input table to be concatenated
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return host table header and buffer
    */
   public static HostConcatResult concatToHostBuffer(SerializedTableHeader[] headers,
-                                                    HostMemoryBuffer[] dataBuffers) throws IOException {
+                                                    HostMemoryBuffer[] dataBuffers,
+                                                    HostMemoryAllocator hostMemoryAllocator
+                                                    ) throws IOException {
     ColumnBufferProvider[][] providersPerColumn = providersFrom(headers, dataBuffers);
     try {
       SerializedTableHeader combined = calcConcatHeader(providersPerColumn);
@@ -1838,6 +1839,12 @@ public class JCudfSerialization {
       closeAll(providersPerColumn);
     }
   }
+
+    public static HostConcatResult concatToHostBuffer(SerializedTableHeader[] headers,
+                                                      HostMemoryBuffer[] dataBuffers
+                                                      ) throws IOException {
+      return concatToHostBuffer(headers, dataBuffers, DefaultHostMemoryAllocator.get());
+    }
 
   /**
    * Deserialize a serialized contiguous table into an array of host columns.
@@ -1918,12 +1925,14 @@ public class JCudfSerialization {
   /**
    * Read a serialize table from the given InputStream.
    * @param in the stream to read the table data from.
+   * @param hostMemoryAllocator a host memory allocator for an intermediate host memory buffer
    * @return the deserialized table in device memory, or null if the stream has no table to read
    * from, an end of the stream at the very beginning.
    * @throws IOException on any error.
    * @throws EOFException if the data stream ended unexpectedly in the middle of processing.
    */
-  public static TableAndRowCountPair readTableFrom(InputStream in) throws IOException {
+  public static TableAndRowCountPair readTableFrom(InputStream in,
+      HostMemoryAllocator hostMemoryAllocator) throws IOException {
     DataInputStream din;
     if (in instanceof DataInputStream) {
       din = (DataInputStream) in;
@@ -1942,6 +1951,10 @@ public class JCudfSerialization {
       }
       return readTableFrom(header, hostBuffer);
     }
+  }
+
+  public static TableAndRowCountPair readTableFrom(InputStream in) throws IOException {
+    return readTableFrom(in, DefaultHostMemoryAllocator.get());
   }
 
   /** Holds the result of deserializing a table. */
