@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2022, NVIDIA CORPORATION &
+# SPDX-FileCopyrightText: Copyright (c) 2021-2023, NVIDIA CORPORATION &
 # AFFILIATES. All rights reserved.  SPDX-License-Identifier:
 # Apache-2.0
 #
@@ -16,6 +16,7 @@
 
 import numpy as np
 import pandas as pd
+import pickle
 
 import cudf
 import cudf._lib.labeling
@@ -94,6 +95,35 @@ class SeriesResampler(_Resampler, SeriesGroupBy):
 class _ResampleGrouping(_Grouping):
 
     bin_labels: cudf.core.index.Index
+
+    def copy(self, deep=True):
+        out = super().copy(deep=deep)
+        out.bin_labels = self.bin_labels.copy(deep=deep)
+        return out
+
+    def serialize(self):
+        header, frames = super().serialize()
+        labels_head, labels_frames = self.bin_labels.serialize()
+        header["__bin_labels"] = labels_head
+        header["__bin_labels_count"] = len(labels_frames)
+        frames.extend(labels_frames)
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        names = pickle.loads(header["names"])
+        _named_columns = pickle.loads(header["_named_columns"])
+        key_columns = cudf.core.column.deserialize_columns(
+            header["columns"], frames[: -header["__bin_labels_count"]]
+        )
+        out = _ResampleGrouping.__new__(_ResampleGrouping)
+        out.names = names
+        out._named_columns = _named_columns
+        out._key_columns = key_columns
+        out.bin_labels = cudf.core.index.Index.deserialize(
+            header["__bin_labels"], frames[-header["__bin_labels_count"] :]
+        )
+        return out
 
     def _handle_frequency_grouper(self, by):
         # if `by` is a time frequency grouper, we bin the key column
