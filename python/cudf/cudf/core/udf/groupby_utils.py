@@ -12,6 +12,7 @@ import cudf.core.udf.utils
 from cudf.core.udf.groupby_typing import (
     SUPPORTED_GROUPBY_NUMPY_TYPES,
     Group,
+    GroupByJITDataFrame,
     GroupType,
 )
 from cudf.core.udf.templates import (
@@ -19,7 +20,6 @@ from cudf.core.udf.templates import (
     groupby_apply_kernel_template,
 )
 from cudf.core.udf.utils import (
-    Row,
     _all_dtypes_from_frame,
     _compile_or_get,
     _get_extensionty_size,
@@ -75,7 +75,7 @@ def _get_frame_groupby_type(dtype, index_dtype):
 
     # Numba requires that structures are aligned for the CUDA target
     _is_aligned_struct = True
-    return Row(fields, offset, _is_aligned_struct)
+    return GroupByJITDataFrame(fields, offset, _is_aligned_struct)
 
 
 def _groupby_apply_kernel_string_from_template(frame, args):
