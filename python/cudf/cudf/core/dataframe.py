@@ -6597,37 +6597,41 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
         column_indices: list[list[int]] = []
-        if len(unnamed_levels_indices) == 0:
-            column_idx_df = column_idx_df.sort_index()
-            group = []
-            for label in column_idx_df.index:
-                (column_idx,) = column_idx_df.loc[label]
-                group.append(column_idx)
-            column_indices.append(group)
-        else:
-            unnamed_level_values = [
-                column_name_idx.get_level_values(lv)
-                for lv in unnamed_levels_indices
-            ]
-            unnamed_level_values = pd.MultiIndex.from_arrays(
-                unnamed_level_values
-            )
+        unnamed_level_values = None
 
-            for _, grpdf in column_idx_df.groupby(by=unnamed_level_values):
-                # When stacking multiple columns, some combinations of keys
+        def unnamed_group_generator():
+            if len(unnamed_levels_indices) == 0:
+                yield column_idx_df
+            else:
+                nonlocal unnamed_level_values
+                unnamed_level_values = [
+                    column_name_idx.get_level_values(lv)
+                    for lv in unnamed_levels_indices
+                ]
+                unnamed_level_values = pd.MultiIndex.from_arrays(
+                    unnamed_level_values
+                )
+                for _, grpdf in column_idx_df.groupby(by=unnamed_level_values):
+                    yield grpdf
+
+        for df in unnamed_group_generator():
+            if len(unnamed_levels_indices) == 0:
+                grpdf_aligned = df
+            else:
+                # When stacking part of the levels, some combinations of keys
                 # may not present in this group but can present in others.
                 # Reindexing with the globally computed `unique_named_levels`
                 # assigns -1 to these key combinations, representing an
                 # all-null column that is used in the subsequent libcudf call.
-                grpdf_aligned = grpdf.reindex(
+                grpdf_aligned = df.reindex(
                     unique_named_levels, axis=0, fill_value=-1
                 )
-                grpdf_aligned.sort_index(inplace=True)  # this needed?
-                indices = []
-                for label in grpdf_aligned.index:
-                    (column_idx,) = grpdf_aligned.loc[label]
-                    indices.append(int(column_idx))
-                column_indices.append(indices)
+            grpdf_aligned.sort_index(inplace=True)  # this needed?
+            indices = []
+            for label in grpdf_aligned.index:
+                (column_idx,) = grpdf_aligned.loc[label]
+                indices.append(int(column_idx))
+            column_indices.append(indices)
 
         # For each of the group constructed from the unnamed levels,
         # invoke `interleave_columns` to stack the values.
