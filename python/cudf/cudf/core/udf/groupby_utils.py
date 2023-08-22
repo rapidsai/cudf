@@ -20,6 +20,7 @@ from cudf.core.udf.templates import (
 )
 from cudf.core.udf.utils import (
     Row,
+    _all_dtypes_from_frame,
     _compile_or_get,
     _get_extensionty_size,
     _get_kernel,
@@ -104,13 +105,7 @@ def _groupby_apply_kernel_string_from_template(frame, args):
 
 
 def _get_groupby_apply_kernel(frame, func, args):
-    np_field_types = np.dtype(
-        list(
-            _supported_dtypes_from_frame(
-                frame, supported_types=SUPPORTED_GROUPBY_NUMPY_TYPES
-            ).items()
-        )
-    )
+    np_field_types = np.dtype(list(_all_dtypes_from_frame(frame).items()))
     dataframe_group_type = _get_frame_groupby_type(
         np_field_types, frame.index.dtype
     )

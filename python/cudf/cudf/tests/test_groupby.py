@@ -468,6 +468,29 @@ def test_groupby_apply_jit_invalid_ops_error(groupby_jit_data, op):
     run_groupby_apply_jit_test(groupby_jit_data, func, keys)
 
 
+@pytest.mark.parametrize("dtype", ["uint8", "str"])
+def test_groupby_apply_unsupported_dtype(dtype):
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+    df["b"] = df["b"].astype(dtype)
+
+    # a UDAF that doesn't actually use the input column
+    # with the unsupported dtype should still succeed
+    def func(group):
+        return group["c"].sum()
+
+    run_groupby_apply_jit_test(df, func, ["a"])
+
+    # however a UDAF that does use the unsupported dtype
+    # should fail
+    def func(group):
+        return group["b"].sum()
+
+    with pytest.raises(
+        TypeError, match="Only columns of the following dtypes"
+    ):
+        run_groupby_apply_jit_test(df, func, ["a"])
+
+
 @pytest.mark.parametrize("dtype", ["float64"])
 @pytest.mark.parametrize("func", ["min", "max", "sum", "mean", "var", "std"])
 @pytest.mark.parametrize("special_val", [np.nan, np.inf, -np.inf])

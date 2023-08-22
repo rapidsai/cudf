@@ -14,9 +14,8 @@ from numba.core.typing import signature as nb_signature
 from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
 from numba.cuda.cudadecl import registry as cuda_registry
 from numba.np import numpy_support
-from cudf.core.udf._ops import arith_ops, comparison_ops
-from cudf.core.udf._ops import unary_ops
 
+from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
 
 index_default_type = types.int64
 group_size_type = types.int64
@@ -52,6 +51,15 @@ class GroupType(numba.types.Type):
     """
 
     def __init__(self, group_scalar_type, index_type=index_default_type):
+        if (
+            group_scalar_type not in SUPPORTED_GROUPBY_NUMBA_TYPES
+            and not isinstance(group_scalar_type, types.Poison)
+        ):
+            # an frame containing an column with an unsupported dtype
+            # is calling groupby apply. Construct a GroupType with
+            # a poisoned type so we can later error if this group is
+            # used in the UDAF body
+            group_scalar_type = types.Poison(group_scalar_type)
         self.group_scalar_type = group_scalar_type
         self.index_type = index_type
         self.group_data_type = types.CPointer(group_scalar_type)
@@ -158,12 +166,11 @@ def _register_cuda_idx_reduction_caller(funcname, inputty):
     call_cuda_functions[funcname.lower()][type_key] = caller
 
 
-
 class GroupUnaryOp(AbstractTemplate):
     def make_error_string(self, args):
         fname = self.key.__name__
         return (
-            f"{self.key.__name__}(Series) is not supported within JIT GroupBy "
+            f"{fname}(Series) is not supported within JIT GroupBy "
             f"apply. To see what's available, visit\n{docs}"
         )
 
@@ -174,25 +181,42 @@ class GroupUnaryOp(AbstractTemplate):
                 if self.this.group_scalar_type == selfty:
                     return nb_signature(retty, recvr=self.this)
         raise TypeError(self.make_error_string(args))
- 
+
 
 class GroupOpBase(AbstractTemplate):
     def make_error_string(self, args):
         fname = self.key.__name__
         sr_err = ", ".join(["Series" for _ in range(len(args))])
         return (
-            f"{self.key.__name__}({sr_err}) is not supported within JIT GroupBy "
+            f"{fname}({sr_err}) is not supported within JIT GroupBy "
             f"apply. To see what's available, visit\n{docs}"
         )
 
     def generic(self, args, kws):
+        # earlystop to make sure typing doesn't fail for normal
+        # non-group ops
+        if not all(isinstance(arg, GroupType) for arg in args):
+            return None
+        # check if any groups are poisioned for this op
+        for arg in args:
+            if arg.group_scalar_type in types.Poison:
+                raise TypeError(
+                    f"Use of a column of {arg.group_scalar_type.ty} detected "
+                    "within UDAF body. \nOnly columns of the following dtypes "
+                    "may be used through the \nGroupBy.apply() JIT engine: "
+                    f"{[str(x) for x in SUPPORTED_GROUPBY_NUMPY_TYPES]}"
+                )
         fname = self.key.__name__
-        breakpoint()
         if fname in call_cuda_functions:
             for sig in call_cuda_functions[fname].keys():
-                if all(arg.group_scalar_type == ty for arg, ty in zip(args, sig)):
+                if all(
+                    arg.group_scalar_type == ty for arg, ty in zip(args, sig)
+                ):
                     return nb_signature(sig[0], *args)
+        breakpoint()
         raise TypeError(self.make_error_string(args))
+
+
 """
     def generic(self, args, kws):
         fname = self.key.__name__
@@ -205,7 +229,8 @@ class GroupOpBase(AbstractTemplate):
                     return nb_signature(retty, args[0], recvr=self.this)
         raise TypeError(self.make_error_string(args))
 """
-        
+
+
 class GroupUnaryAttrBase(AbstractTemplate):
     def make_error_string(self, args):
         fname = self.key.split(".")[-1]
@@ -216,6 +241,21 @@ class GroupUnaryAttrBase(AbstractTemplate):
         )
 
     def generic(self, args, kws):
+        # earlystop to make sure typing doesn't fail for normal
+        # non-group ops
+        if not all(isinstance(arg, GroupType) for arg in args):
+            return None
+        # check if any groups are poisioned for this op
+        if isinstance(self.this.group_scalar_type, types.Poison):
+            raise TypeError(
+                f"Use of a column of {self.this.group_scalar_type.ty} detected"
+                " within UDAF body. \nOnly columns of the following dtypes may"
+                " be used through the \nGroupBy.apply() JIT engine: "
+                f"{[str(x) for x in SUPPORTED_GROUPBY_NUMPY_TYPES]}"
+            )
+        for arg in args:
+            if arg.group_scalar_type in types.Poison:
+                raise TypeError(str(arg.group_scalar_type))
         fname = self.key.split(".")[-1]
         for retty, selfty in call_cuda_functions[fname].keys():
             if self.this.group_scalar_type == selfty:
