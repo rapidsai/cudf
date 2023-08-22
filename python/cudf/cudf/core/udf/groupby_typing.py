@@ -213,22 +213,7 @@ class GroupOpBase(AbstractTemplate):
                     arg.group_scalar_type == ty for arg, ty in zip(args, sig)
                 ):
                     return nb_signature(sig[0], *args)
-        breakpoint()
         raise TypeError(self.make_error_string(args))
-
-
-"""
-    def generic(self, args, kws):
-        fname = self.key.__name__
-        if fname in call_cuda_functions:
-            for retty, lty, rty in call_cuda_functions[fname].keys():
-                if (
-                    self.this.group_scalar_type == lty
-                    and args[0].group_scalar_type == rty
-                ):
-                    return nb_signature(retty, args[0], recvr=self.this)
-        raise TypeError(self.make_error_string(args))
-"""
 
 
 class GroupUnaryAttrBase(AbstractTemplate):
