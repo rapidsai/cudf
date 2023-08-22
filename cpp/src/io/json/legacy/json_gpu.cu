@@ -254,7 +254,7 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
                                                device_span<bitmask_type* const> const valid_fields,
                                                device_span<cudf::size_type> const num_valid_fields)
 {
-  auto const rec_id = grid_1d::global_thread_id(threadIdx.x, blockIdx.x, blockDim.x);
+  auto const rec_id = grid_1d::global_thread_id();
   if (rec_id >= row_offsets.size()) return;
 
   auto const row_data_range = get_row_data_range(data, row_offsets, rec_id);
@@ -329,7 +329,7 @@ __global__ void detect_data_types_kernel(
   int num_columns,
   device_span<cudf::io::column_type_histogram> const column_infos)
 {
-  auto const rec_id = grid_1d::global_thread_id(threadIdx.x, blockIdx.x, blockDim.x);
+  auto const rec_id = grid_1d::global_thread_id();
   if (rec_id >= row_offsets.size()) return;
 
   auto const are_rows_objects = col_map.capacity() != 0;
@@ -487,7 +487,7 @@ __global__ void collect_keys_info_kernel(parse_options_view const options,
                                          unsigned long long int* keys_cnt,
                                          thrust::optional<mutable_table_device_view> keys_info)
 {
-  auto const rec_id = grid_1d::global_thread_id(threadIdx.x, blockIdx.x, blockDim.x);
+  auto const rec_id = grid_1d::global_thread_id();
   if (rec_id >= row_offsets.size()) return;
 
   auto const row_data_range = get_row_data_range(data, row_offsets, rec_id);

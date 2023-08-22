@@ -95,7 +95,7 @@ __global__ void count_and_set_positions(char const* data,
                                         T* positions)
 {
   // thread IDs range per block, so also need the block id
-  auto const tid = cudf::detail::grid_1d::global_thread_id(threadIdx.x, blockIdx.x, blockDim.x);
+  auto const tid = cudf::detail::grid_1d::global_thread_id();
   auto const did = tid * bytes_per_find_thread;
 
   char const* raw = (data + did);
