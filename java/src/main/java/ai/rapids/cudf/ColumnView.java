@@ -42,8 +42,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   protected final long nullCount;
   protected final ColumnVector.OffHeapState offHeap;
 
-  private static final HostMemoryAllocator hostMemoryAllocator = DefaultHostMemoryAllocator.get();
-
   /**
    * Constructs a Column View given a native view address. This asserts that if the ColumnView is
    * of nested-type it doesn't contain non-empty nulls
@@ -5005,7 +5003,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /////////////////////////////////////////////////////////////////////////////
 
   private static HostColumnVectorCore copyToHostNestedHelper(
-      ColumnView deviceCvPointer) {
+      ColumnView deviceCvPointer, HostMemoryAllocator hostMemoryAllocator) {
     if (deviceCvPointer == null) {
       return null;
     }
@@ -5039,7 +5037,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       int numChildren = deviceCvPointer.getNumChildren();
       for (int i = 0; i < numChildren; i++) {
         try(ColumnView childDevPtr = deviceCvPointer.getChildColumnView(i)) {
-          children.add(copyToHostNestedHelper(childDevPtr));
+          children.add(copyToHostNestedHelper(childDevPtr, hostMemoryAllocator));
         }
       }
       currNullCount = deviceCvPointer.getNullCount();
@@ -5076,7 +5074,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Copy the data to the host.
    */
-  public HostColumnVector copyToHost() {
+  public HostColumnVector copyToHost(HostMemoryAllocator hostMemoryAllocator) {
     try (NvtxRange toHost = new NvtxRange("ensureOnHost", NvtxColor.BLUE)) {
       HostMemoryBuffer hostDataBuffer = null;
       HostMemoryBuffer hostValidityBuffer = null;
@@ -5129,7 +5127,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
           List<HostColumnVectorCore> children = new ArrayList<>();
           for (int i = 0; i < getNumChildren(); i++) {
             try (ColumnView childDevPtr = getChildColumnView(i)) {
-              children.add(copyToHostNestedHelper(childDevPtr));
+              children.add(copyToHostNestedHelper(childDevPtr, hostMemoryAllocator));
             }
           }
           HostColumnVector ret = new HostColumnVector(type, rows, Optional.of(nullCount),
@@ -5160,6 +5158,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         }
       }
     }
+  }
+
+  public HostColumnVector copyToHost() {
+    return copyToHost(DefaultHostMemoryAllocator.get());
   }
 
   /**
