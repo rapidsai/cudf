@@ -6571,7 +6571,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # of unique values in the named_levels
         repeated_index = self.index.repeat(len(unique_named_levels))
 
-        # Each column name should repeat itself by len(df) times
+        # Each column name should tile itself by len(df) times
         tiled_index = libcudf.reshape.tile(
             [
                 as_column(unique_named_levels.get_level_values(i))
@@ -6601,7 +6601,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             column_idx_df = column_idx_df.sort_index()
             group = []
             for label in column_idx_df.index:
-                column_idx = column_idx_df.loc[label][0]
+                (column_idx,) = column_idx_df.loc[label]
                 group.append(column_idx)
             column_indices.append(group)
         else:
@@ -6625,7 +6625,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 grpdf_aligned.sort_index(inplace=True)  # this needed?
                 indices = []
                 for label in grpdf_aligned.index:
-                    column_idx = grpdf_aligned.loc[label][0]
+                    (column_idx,) = grpdf_aligned.loc[label]
                     indices.append(int(column_idx))
                 column_indices.append(indices)
 
@@ -6657,8 +6657,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                             self.shape[0], common_type, masked=True
                         )
                     col = all_nans
-                elif not np.issubdtype(col.dtype, common_type):
-                    col = col.as_type(common_type)
+                elif col.dtype != common_type:
+                    col = col.astype(common_type)
 
                 homogenized.append(col)
 

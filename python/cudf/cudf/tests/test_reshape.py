@@ -194,6 +194,22 @@ def test_df_stack_multiindex_column_axis(columns, level, dropna):
     assert_eq(expect, got, check_dtype=False)
 
 
+def test_df_stack_mixed_dtypes():
+    pdf = pd.DataFrame(
+        {
+            "A": pd.Series([1, 2, 3], dtype="f4"),
+            "B": pd.Series([4, 5, 6], dtype="f8"),
+        }
+    )
+
+    gdf = cudf.from_pandas(pdf)
+
+    got = gdf.stack()
+    expect = pdf.stack()
+
+    assert_eq(expect, got, check_dtype=False)
+
+
 @pytest.mark.parametrize("level", [["animal", "hair_length"], [1, 2]])
 def test_df_stack_multiindex_column_axis_pd_example(level):
     columns = pd.MultiIndex.from_tuples(
