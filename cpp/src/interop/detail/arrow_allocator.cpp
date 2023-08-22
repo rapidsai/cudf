@@ -59,7 +59,7 @@ std::unique_ptr<arrow::Buffer> allocate_arrow_buffer(int64_t const size, arrow::
   To work around this issue we compile an allocation shim in C++ and use
   that from our cuda sources
   */
-  auto result = arrow::AllocateBuffer(size, ar_mr);
+  arrow::Result<std::unique_ptr<arrow::Buffer>> result = arrow::AllocateBuffer(size, ar_mr);
   CUDF_EXPECTS(result.ok(), "Failed to allocate Arrow buffer");
   return enable_hugepage(std::move(result).ValueOrDie());
 }
@@ -73,7 +73,7 @@ std::shared_ptr<arrow::Buffer> allocate_arrow_bitmap(int64_t const size, arrow::
   To work around this issue we compile an allocation shim in C++ and use
   that from our cuda sources
   */
-  auto result = arrow::AllocateBitmap(size, ar_mr);
+  arrow::Result<std::shared_ptr<Buffer>> result = arrow::AllocateBitmap(size, ar_mr);
   CUDF_EXPECTS(result.ok(), "Failed to allocate Arrow bitmap");
   return enable_hugepage(std::move(result).ValueOrDie());
 }
