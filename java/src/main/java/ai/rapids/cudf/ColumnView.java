@@ -307,7 +307,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns the amount of device memory used.
    */
   public long getDeviceMemorySize() {
-    return getDeviceMemorySize(getNativeView());
+    return getDeviceMemorySize(getNativeView(), false);
   }
 
   @Override
@@ -4789,7 +4789,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   static native int getNativeNumChildren(long viewHandle) throws CudfException;
 
   // calculate the amount of device memory used by this column including any child columns
-  static native long getDeviceMemorySize(long viewHandle) throws CudfException;
+  static native long getDeviceMemorySize(long viewHandle, boolean shouldPadForCpu) throws CudfException;
 
   static native long copyColumnViewToCV(long viewHandle) throws CudfException;
 
@@ -5159,6 +5159,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       }
     }
   }
+
+  /**
+   * Calculate the total space required to copy the data to the host. This should be padded to
+   * the alignment that the CPU requires.
+   */
+  public long getHostBytesRequired() {
+    return getDeviceMemorySize(getNativeView(), true);
+  }
+
+  /**
+   * Get the size that the host will align memory allocations to in bytes.
+   */
+  public static native long hostPaddingSizeInBytes();
 
   /**
    * Exact check if a column or its descendants have non-empty null rows
