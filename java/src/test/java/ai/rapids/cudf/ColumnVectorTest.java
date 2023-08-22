@@ -1026,21 +1026,36 @@ public class ColumnVectorTest extends CudfTestBase {
     }
   }
 
+  static final long HOST_ALIGN_BYTES = ColumnView.hostPaddingSizeInBytes();
+
+  static void assertHostAligned(long expectedDeviceSize, ColumnView cv) {
+      long deviceSize = cv.getDeviceMemorySize();
+      assertEquals(expectedDeviceSize, deviceSize);
+      long hostSize = cv.getHostBytesRequired();
+      assert(hostSize >= deviceSize);
+      long roundedHostSize = (hostSize / HOST_ALIGN_BYTES) * HOST_ALIGN_BYTES;
+      assertEquals(hostSize, roundedHostSize, "The host size should be a multiple of " +
+              HOST_ALIGN_BYTES);
+  }
+
   @Test
   void testGetDeviceMemorySizeNonStrings() {
     try (ColumnVector v0 = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5, 6);
          ColumnVector v1 = ColumnVector.fromBoxedInts(1, 2, 3, null, null, 4, 5, 6)) {
-      assertEquals(24, v0.getDeviceMemorySize()); // (6*4B)
-      assertEquals(96, v1.getDeviceMemorySize()); // (8*4B) + 64B(for validity vector)
+      assertHostAligned(24, v0); // (6*4B)
+      assertHostAligned(96, v1); // (8*4B) + 64B(for validity vector)
     }
   }
 
   @Test
   void testGetDeviceMemorySizeStrings() {
+    if (ColumnView.hostPaddingSizeInBytes() != 8) {
+      System.err.println("HOST PADDING SIZE: " + ColumnView.hostPaddingSizeInBytes());
+    }
     try (ColumnVector v0 = ColumnVector.fromStrings("onetwothree", "four", "five");
          ColumnVector v1 = ColumnVector.fromStrings("onetwothree", "four", null, "five")) {
-      assertEquals(35, v0.getDeviceMemorySize()); //19B data + 4*4B offsets = 35
-      assertEquals(103, v1.getDeviceMemorySize()); //19B data + 5*4B + 64B validity vector = 103B
+      assertHostAligned(35, v0); //19B data + 4*4B offsets = 35
+      assertHostAligned(103, v1); //19B data + 5*4B + 64B validity vector = 103B
     }
   }
 
@@ -1061,13 +1076,13 @@ public class ColumnVectorTest extends CudfTestBase {
       // 64 bytes for validity of list column
       // 16 bytes for offsets of list column
       // 64 bytes for validity of string column
-      // 24 bytes for offsets of of string column
+      // 24 bytes for offsets of string column
       // 22 bytes of string character size
-      assertEquals(64+16+64+24+22, sv.getDeviceMemorySize());
+      assertHostAligned(64+16+64+24+22, sv);
 
       // 20 bytes for offsets of list column
       // 28 bytes for data of INT32 column
-      assertEquals(20+28, iv.getDeviceMemorySize());
+      assertHostAligned(20+28, iv);
     }
   }
 
@@ -1091,11 +1106,11 @@ public class ColumnVectorTest extends CudfTestBase {
       // 64 bytes for validity of list column
       // 20 bytes for offsets of list column
       // 64 bytes for validity of string column
-      // 28 bytes for offsets of of string column
+      // 28 bytes for offsets of string column
       // 22 bytes of string character size
       // 64 bytes for validity of int64 column
       // 28 bytes for data of the int64 column
-      assertEquals(64+64+20+64+28+22+64+28, v.getDeviceMemorySize());
+      assertHostAligned(64+64+20+64+28+22+64+28, v);
     }
   }
 
