@@ -11,9 +11,6 @@ import rmm
 import cudf
 import cudf._lib as libcudf
 from cudf._lib import pylibcudf
-
-from cudf._lib cimport pylibcudf
-
 from cudf.api.types import is_categorical_dtype, is_datetime64tz_dtype
 from cudf.core.buffer import (
     Buffer,
@@ -40,6 +37,7 @@ from cudf._lib.types cimport (
 )
 
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
+from cudf._lib.types import dtype_from_pylibcudf_column
 
 cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.unary as libcudf_unary
@@ -446,7 +444,7 @@ cdef class Column:
     # underlying buffers as exposed before this function can itself be exposed
     # publicly.  User requests to convert to pylibcudf must assume that the
     # data may be modified afterwards.
-    cpdef pylibcudf.Column to_pylibcudf(self, mode: Literal["read", "write"]):
+    cpdef to_pylibcudf(self, mode: Literal["read", "write"]):
         """Convert this Column to a pylibcudf.Column.
 
         This function will generate a pylibcudf Column pointing to the same
@@ -476,9 +474,9 @@ cdef class Column:
         else:
             col = self
 
-        cdef pylibcudf.DataType dtype = dtype_to_pylibcudf_type(col.dtype)
+        dtype = dtype_to_pylibcudf_type(col.dtype)
 
-        cdef pylibcudf.gpumemoryview data = None
+        data = None
         if col.base_data is not None:
             cai = cuda_array_interface_wrapper(
                 ptr=col.base_data.get_ptr(mode=mode),
@@ -487,7 +485,7 @@ cdef class Column:
             )
             data = pylibcudf.gpumemoryview(cai)
 
-        cdef pylibcudf.gpumemoryview mask = None
+        mask = None
         if self.nullable:
             # TODO: Are we intentionally use self's mask instead of col's?
             # Where is the mask stored for categoricals?
@@ -586,7 +584,7 @@ cdef class Column:
     #  TODO: Actually support exposed data pointers.
     @staticmethod
     def from_pylibcudf(
-        pylibcudf.Column col, bint data_ptr_exposed=False
+        col, bint data_ptr_exposed=False
     ):
         """Create a Column from a pylibcudf.Column.
 
@@ -607,19 +605,20 @@ cdef class Column:
         pylibcudf.Column
             A new pylibcudf.Column referencing the same data.
         """
-        # TODO: Rewrite utility for dtype conversion to not need a column view.
-        dtype = dtype_from_column_view(col.view())
+        dtype = dtype_from_pylibcudf_column(col)
 
         return cudf.core.column.build_column(
-            data=as_buffer(col.data.obj) if col.data is not None else None,
+            data=as_buffer(col.data().obj) if col.data() is not None else None,
             dtype=dtype,
-            size=col.size,
-            mask=as_buffer(col.mask.obj) if col.mask is not None else None,
-            offset=col.offset,
-            null_count=col.null_count,
+            size=col.size(),
+            mask=as_buffer(
+                col.null_mask().obj
+            ) if col.null_mask() is not None else None,
+            offset=col.offset(),
+            null_count=col.null_count(),
             children=tuple([
                 Column.from_pylibcudf(child)
-                for child in col.children
+                for child in col.children()
             ])
         )
 

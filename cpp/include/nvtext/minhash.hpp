@@ -36,24 +36,24 @@ namespace nvtext {
  *
  * Any null row entries result in corresponding null output rows.
  *
+ * This function uses MurmurHash3_x86_32 for the hash algorithm.
+ *
  * @throw std::invalid_argument if the width < 2
- * @throw std::invalid_argument if hash_function is not HASH_MURMUR3
  *
  * @param input Strings column to compute minhash
- * @param seed  Seed value used for the MurmurHash3_x86_32 algorithm
+ * @param seed  Seed value used for the hash algorithm
  * @param width The character width used for apply substrings;
  *              Default is 4 characters.
- * @param hash_function Hash algorithm to use;
- *                      Only HASH_MURMUR3 is currently supported.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Minhash values for each string in input
  */
 std::unique_ptr<cudf::column> minhash(
   cudf::strings_column_view const& input,
-  cudf::numeric_scalar<cudf::hash_value_type> seed = cudf::numeric_scalar(cudf::DEFAULT_HASH_SEED),
-  cudf::size_type width                            = 4,
-  cudf::hash_id hash_function                      = cudf::hash_id::HASH_MURMUR3,
-  rmm::mr::device_memory_resource* mr              = rmm::mr::get_current_device_resource());
+  cudf::numeric_scalar<uint32_t> seed = 0,
+  cudf::size_type width               = 4,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns the minhash values for each string per seed
@@ -64,28 +64,88 @@ std::unique_ptr<cudf::column> minhash(
  * string. The order of the elements in each row match the order of
  * the seeds provided in the `seeds` parameter.
  *
+ * This function uses MurmurHash3_x86_32 for the hash algorithm.
+ *
  * Any null row entries result in corresponding null output rows.
  *
  * @throw std::invalid_argument if the width < 2
- * @throw std::invalid_argument if hash_function is not HASH_MURMUR3
  * @throw std::invalid_argument if seeds is empty
  * @throw std::overflow_error if `seeds * input.size()` exceeds the column size limit
  *
  * @param input Strings column to compute minhash
- * @param seeds Seed values used for the MurmurHash3_x86_32 algorithm
+ * @param seeds Seed values used for the hash algorithm
  * @param width The character width used for apply substrings;
  *              Default is 4 characters.
- * @param hash_function Hash algorithm to use;
- *                      Only HASH_MURMUR3 is currently supported.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return List column of minhash values for each string per seed
- *         or a hash_value_type column if only a single seed is specified
  */
 std::unique_ptr<cudf::column> minhash(
   cudf::strings_column_view const& input,
-  cudf::device_span<cudf::hash_value_type const> seeds,
+  cudf::device_span<uint32_t const> seeds,
   cudf::size_type width               = 4,
-  cudf::hash_id hash_function         = cudf::hash_id::HASH_MURMUR3,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns the minhash value for each string
+ *
+ * Hash values are computed from substrings of each string and the
+ * minimum hash value is returned for each string.
+ *
+ * Any null row entries result in corresponding null output rows.
+ *
+ * This function uses MurmurHash3_x64_128 for the hash algorithm.
+ * The hash function returns 2 uint64 values but only the first value
+ * is used with the minhash calculation.
+ *
+ * @throw std::invalid_argument if the width < 2
+ *
+ * @param input Strings column to compute minhash
+ * @param seed  Seed value used for the hash algorithm
+ * @param width The character width used for apply substrings;
+ *              Default is 4 characters.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Minhash values as UINT64 for each string in input
+ */
+std::unique_ptr<cudf::column> minhash64(
+  cudf::strings_column_view const& input,
+  cudf::numeric_scalar<uint64_t> seed = 0,
+  cudf::size_type width               = 4,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns the minhash values for each string per seed
+ *
+ * Hash values are computed from substrings of each string and the
+ * minimum hash value is returned for each string for each seed.
+ * Each row of the list column are seed results for the corresponding
+ * string. The order of the elements in each row match the order of
+ * the seeds provided in the `seeds` parameter.
+ *
+ * This function uses MurmurHash3_x64_128 for the hash algorithm.
+ *
+ * Any null row entries result in corresponding null output rows.
+ *
+ * @throw std::invalid_argument if the width < 2
+ * @throw std::invalid_argument if seeds is empty
+ * @throw std::overflow_error if `seeds * input.size()` exceeds the column size limit
+ *
+ * @param input Strings column to compute minhash
+ * @param seeds Seed values used for the hash algorithm
+ * @param width The character width used for apply substrings;
+ *              Default is 4 characters.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return List column of minhash values for each string per seed
+ */
+std::unique_ptr<cudf::column> minhash64(
+  cudf::strings_column_view const& input,
+  cudf::device_span<uint64_t const> seeds,
+  cudf::size_type width               = 4,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
