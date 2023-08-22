@@ -130,7 +130,7 @@ __global__ void __launch_bounds__(block_size)
   size_type entry_count{0};
   size_type char_count{0};
   // all threads should loop the same number of times
-  for (int64_t cur_row = start_row + t; cur_row - t < end_row; cur_row += block_size) {
+  for (thread_index_type cur_row = start_row + t; cur_row - t < end_row; cur_row += block_size) {
     auto const is_valid = cur_row < end_row and col.is_valid(cur_row);
 
     if (is_valid) {
@@ -215,7 +215,7 @@ __global__ void __launch_bounds__(block_size)
                                          cuco::empty_key{KEY_SENTINEL},
                                          cuco::empty_value{VALUE_SENTINEL});
 
-  int64_t cur_row = start_row + t;
+  thread_index_type cur_row = start_row + t;
   while (cur_row < end_row) {
     if (col.is_valid(cur_row)) {
       auto const hash_fn     = hash_functor{col};

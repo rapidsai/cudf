@@ -77,7 +77,7 @@ __global__ void __launch_bounds__(block_size, 1)
   volatile uint32_t stats_size = 0;
   auto t                       = threadIdx.x;
   __syncthreads();
-  for (int64_t start = 0; start < statistics_count; start += block_size) {
+  for (thread_index_type start = 0; start < statistics_count; start += block_size) {
     uint32_t stats_len = 0, stats_pos;
     auto idx           = start + t;
     if (idx < statistics_count) {

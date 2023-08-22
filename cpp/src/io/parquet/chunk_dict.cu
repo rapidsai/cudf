@@ -39,7 +39,7 @@ __global__ void __launch_bounds__(block_size)
   auto const chunk = chunks[blockIdx.x];
   auto const t     = threadIdx.x;
   // fut: Now that per-chunk dict is same size as ck.num_values, try to not use one block per chunk
-  for (int64_t i = 0; i < chunk.dict_map_size; i += block_size) {
+  for (thread_index_type i = 0; i < chunk.dict_map_size; i += block_size) {
     if (t + i < chunk.dict_map_size) {
       new (&chunk.dict_map_slots[t + i].first) map_type::atomic_key_type{KEY_SENTINEL};
       new (&chunk.dict_map_slots[t + i].second) map_type::atomic_mapped_type{VALUE_SENTINEL};
@@ -131,7 +131,7 @@ __global__ void __launch_bounds__(block_size)
                                                         cuco::empty_value{VALUE_SENTINEL});
 
   __shared__ size_type total_num_dict_entries;
-  int64_t val_idx = s_start_value_idx + t;
+  thread_index_type val_idx = s_start_value_idx + t;
   while (val_idx - block_size < end_value_idx) {
     auto const is_valid =
       val_idx < end_value_idx and val_idx < data_col.size() and data_col.is_valid(val_idx);
@@ -252,7 +252,7 @@ __global__ void __launch_bounds__(block_size)
                                    cuco::empty_key{KEY_SENTINEL},
                                    cuco::empty_value{VALUE_SENTINEL});
 
-  int64_t val_idx = s_start_value_idx + t;
+  thread_index_type val_idx = s_start_value_idx + t;
   while (val_idx < end_value_idx) {
     if (data_col.is_valid(val_idx)) {
       auto found_slot = type_dispatcher(data_col.type(), map_find_fn{map}, data_col, val_idx);
