@@ -110,11 +110,11 @@ __global__ void __launch_bounds__(block_size)
   populate_dictionary_hash_maps_kernel(device_2dspan<stripe_dictionary> dictionaries,
                                        device_span<orc_column_device_view const> columns)
 {
-  auto const col_idx              = blockIdx.x;
-  auto const stripe_idx           = blockIdx.y;
-  cudf::thread_index_type const t = threadIdx.x;
-  auto& dict                      = dictionaries[col_idx][stripe_idx];
-  auto const& col                 = columns[dict.column_idx];
+  auto const col_idx    = blockIdx.x;
+  auto const stripe_idx = blockIdx.y;
+  auto const t          = threadIdx.x;
+  auto& dict            = dictionaries[col_idx][stripe_idx];
+  auto const& col       = columns[dict.column_idx];
 
   // Make a view of the hash map
   auto hash_map_mutable  = map_type::device_mutable_view(dict.map_slots.data(),
@@ -130,7 +130,7 @@ __global__ void __launch_bounds__(block_size)
   size_type entry_count{0};
   size_type char_count{0};
   // all threads should loop the same number of times
-  for (auto cur_row = start_row + t; cur_row - t < end_row; cur_row += block_size) {
+  for (int64_t cur_row = start_row + t; cur_row - t < end_row; cur_row += block_size) {
     auto const is_valid = cur_row < end_row and col.is_valid(cur_row);
 
     if (is_valid) {
@@ -206,16 +206,16 @@ __global__ void __launch_bounds__(block_size)
 
   if (not dict.is_enabled) { return; }
 
-  cudf::thread_index_type const t = threadIdx.x;
-  auto const start_row            = dict.start_row;
-  auto const end_row              = dict.start_row + dict.num_rows;
+  auto const t         = threadIdx.x;
+  auto const start_row = dict.start_row;
+  auto const end_row   = dict.start_row + dict.num_rows;
 
   auto const map = map_type::device_view(dict.map_slots.data(),
                                          dict.map_slots.size(),
                                          cuco::empty_key{KEY_SENTINEL},
                                          cuco::empty_value{VALUE_SENTINEL});
 
-  auto cur_row = start_row + t;
+  int64_t cur_row = start_row + t;
   while (cur_row < end_row) {
     if (col.is_valid(cur_row)) {
       auto const hash_fn     = hash_functor{col};

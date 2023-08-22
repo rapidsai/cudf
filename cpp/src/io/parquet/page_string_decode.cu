@@ -237,8 +237,8 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
 
       // do something with the level data
       while (start_val < processed) {
-        cudf::thread_index_type idx_t = start_val + t;
-        auto idx                      = rolling_lvl_index<lvl_buf_size>(idx_t);
+        auto const idx_t = start_val + t;
+        auto const idx   = rolling_lvl_index<lvl_buf_size>(idx_t);
 
         // get absolute thread row index
         int is_new_row = idx_t < processed && (!has_repetition || rep_decode[idx] == 0);
@@ -334,9 +334,9 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
       __syncthreads();
 
       while (start_val < processed) {
-        cudf::thread_index_type idx_t = start_val + t;
+        auto const idx_t = start_val + t;
         if (idx_t < processed) {
-          auto idx = rolling_lvl_index<lvl_buf_size>(idx_t);
+          auto const idx = rolling_lvl_index<lvl_buf_size>(idx_t);
           if (def_decode[idx] < max_def) { num_nulls++; }
         }
         start_val += preprocess_block_size;

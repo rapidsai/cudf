@@ -341,8 +341,8 @@ inline __device__ int gpuDecodeRleBooleans(page_state_s volatile* s,
                                            int target_pos,
                                            int t)
 {
-  uint8_t const* end          = s->data_end;
-  cudf::thread_index_type pos = s->dict_pos;
+  uint8_t const* end = s->data_end;
+  int64_t pos        = s->dict_pos;
 
   while (pos < target_pos) {
     int is_literal, batch_len;
