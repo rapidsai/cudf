@@ -111,7 +111,7 @@ std::unique_ptr<column> shift(strings_column_view const& input,
 
   // compute the shift-offset for the output characters child column
   auto const shift_offset = [&] {
-    auto const index = (offset >= 0) ? offset : input.size() + offset;
+    auto const index = (offset < 0) ? input.size() + offset : offset;
     return (offset < 0 ? -1 : 1) * cudf::detail::get_value<size_type>(offsets_view, index, stream);
   }();
 
