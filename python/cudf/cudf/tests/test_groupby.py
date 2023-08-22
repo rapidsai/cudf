@@ -13,7 +13,6 @@ import numpy as np
 import pandas as pd
 import pytest
 from numba import cuda
-from numba.core.errors import TypingError
 from numpy.testing import assert_array_equal
 
 import rmm
@@ -450,7 +449,7 @@ def test_groupby_apply_jit_correlation(groupby_jit_data, dtype):
 
     if dtype.kind == "f":
         with pytest.raises(
-            TypingError,
+            TypeError,
             match=f"Series.corr is not supported between {dtype} and {dtype}",
         ):
             run_groupby_apply_jit_test(groupby_jit_data, func, keys)
