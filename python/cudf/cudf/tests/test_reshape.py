@@ -178,14 +178,30 @@ def test_df_stack_reset_index():
         ["animal", "letter"],
     ],
 )
+@pytest.mark.parametrize(
+    "index",
+    [
+        pd.RangeIndex(2, name="range"),
+        pd.Index([9, 8], name="myindex"),
+        pd.MultiIndex.from_arrays(
+            [
+                ["A", "B"],
+                [101, 102],
+            ],
+            names=["first", "second"],
+        ),
+    ],
+)
 @pytest.mark.parametrize("dropna", [True, False])
-def test_df_stack_multiindex_column_axis(columns, level, dropna):
+def test_df_stack_multiindex_column_axis(columns, index, level, dropna):
     if isinstance(level, list) and len(level) > 1 and not dropna:
         pytest.skip(
             "Stacking multiple levels with dropna==False is unsupported."
         )
 
-    pdf = pd.DataFrame(data=[[1, 2, 3, 4], [2, 4, 6, 8]], columns=columns)
+    pdf = pd.DataFrame(
+        data=[[1, 2, 3, 4], [2, 4, 6, 8]], columns=columns, index=index
+    )
     gdf = cudf.from_pandas(pdf)
 
     got = gdf.stack(level=level, dropna=dropna)
