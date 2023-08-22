@@ -234,7 +234,7 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
       for (size_t i = 0; i < buffer.children.size(); ++i) {
         column_name_info* child_info = nullptr;
         if (schema_info != nullptr) {
-          schema_info->children.push_back(column_name_info{"", true});
+          schema_info->children.push_back(column_name_info{"", false});
           child_info = &schema_info->children.back();
         }
 
