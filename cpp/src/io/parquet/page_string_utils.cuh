@@ -42,8 +42,8 @@ inline __device__ void wideStrcpy(uint8_t* dst, uint8_t const* src, size_t len, 
   // `load_uint4` reading beyond string boundaries.
   // use signed int since out_end_aligned can be negative.
   int64_t const out_start_aligned = (in_datatype_size + alignment_offset + out_datatype_size - 1) /
-                                out_datatype_size * out_datatype_size -
-                              alignment_offset;
+                                      out_datatype_size * out_datatype_size -
+                                    alignment_offset;
   int64_t const out_end_aligned =
     (len - in_datatype_size + alignment_offset) / out_datatype_size * out_datatype_size -
     alignment_offset;
