@@ -576,6 +576,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                         (
                             cudf.core.column.ListColumn,
                             cudf.core.column.StructColumn,
+                            cudf.core.column.DecimalBaseColumn,
                         ),
                     )
                 ):
