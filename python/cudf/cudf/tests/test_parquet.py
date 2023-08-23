@@ -1316,6 +1316,7 @@ def test_delta_binary(nrows, add_nulls, tmpdir):
             },
         ],
         rows=nrows,
+        seed=0,
         use_threads=False,
     )
     # Roundabout conversion to pandas to preserve nulls/data types
