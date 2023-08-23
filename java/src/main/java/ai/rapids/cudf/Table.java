@@ -1639,10 +1639,13 @@ public final class Table implements AutoCloseable {
   private static class ArrowReaderWrapper implements AutoCloseable {
     private HostBufferProvider provider;
     private HostMemoryBuffer buffer;
+    private final HostMemoryAllocator hostMemoryAllocator;
 
-    private ArrowReaderWrapper(HostBufferProvider provider) {
+    private ArrowReaderWrapper(HostBufferProvider provider,
+        HostMemoryAllocator hostMemoryAllocator) {
       this.provider = provider;
-      buffer = hostMemoryAllocator.allocate(10 * 1024 * 1024, false);
+      this.hostMemoryAllocator = hostMemoryAllocator;
+      buffer = this.hostMemoryAllocator.allocate(10 * 1024 * 1024, false);
     }
 
     // Called From JNI
@@ -1689,8 +1692,9 @@ public final class Table implements AutoCloseable {
       this.callback = options.getCallback();
     }
 
-    private ArrowIPCStreamedTableReader(ArrowIPCOptions options, HostBufferProvider provider) {
-      this.provider = new ArrowReaderWrapper(provider);
+    private ArrowIPCStreamedTableReader(ArrowIPCOptions options, HostBufferProvider provider,
+      HostMemoryAllocator hostMemoryAllocator) {
+      this.provider = new ArrowReaderWrapper(provider, hostMemoryAllocator);
       this.handle = readArrowIPCBufferBegin(this.provider);
       this.callback = options.getCallback();
     }
@@ -1753,9 +1757,16 @@ public final class Table implements AutoCloseable {
    * @param provider what will provide the data being read.
    * @return a reader.
    */
+
+  public static StreamedTableReader readArrowIPCChunked(ArrowIPCOptions options,
+                                                        HostBufferProvider provider,
+                                                        HostMemoryAllocator hostMemoryAllocator) {
+    return new ArrowIPCStreamedTableReader(options, provider, hostMemoryAllocator);
+  }
+
   public static StreamedTableReader readArrowIPCChunked(ArrowIPCOptions options,
                                                         HostBufferProvider provider) {
-    return new ArrowIPCStreamedTableReader(options, provider);
+    return new ArrowIPCStreamedTableReader(options, provider, DefaultHostMemoryAllocator.get());
   }
 
   /**
