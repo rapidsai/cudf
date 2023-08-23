@@ -14,9 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import pickle
+
 import numpy as np
 import pandas as pd
-import pickle
 
 import cudf
 import cudf._lib.labeling
