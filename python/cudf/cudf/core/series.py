@@ -3096,7 +3096,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             res = self.groupby(series_bins, dropna=dropna).count(dropna=dropna)
             res = res[res.index.notna()]
         else:
-            res = self.groupby(self.copy(), dropna=dropna).count(dropna=dropna)
+            res = self.groupby(self, dropna=dropna).count(dropna=dropna)
 
         res.index.name = None
 

@@ -262,7 +262,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         self.obj = obj
         self._as_index = as_index
-        self._by = by
+        self._by = by.copy(deep=True) if isinstance(by, _Grouping) else by
         self._level = level
         self._sort = sort
         self._dropna = dropna
@@ -388,9 +388,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     len(self.obj), "int8", masked=False
                 )
             )
-            .groupby(
-                self.grouping.copy(), sort=self._sort, dropna=self._dropna
-            )
+            .groupby(self.grouping, sort=self._sort, dropna=self._dropna)
             .agg("size")
         )
 
@@ -406,7 +404,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 ),
                 index=self.obj.index,
             )
-            .groupby(self.grouping.copy(), sort=self._sort)
+            .groupby(self.grouping, sort=self._sort)
             .agg("cumcount")
         )
 
@@ -1909,7 +1907,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         column_pair_groupby = cudf.DataFrame._from_data(
             column_pair_structs
-        ).groupby(by=self.grouping.keys.copy())
+        ).groupby(by=self.grouping.keys)
 
         try:
             gb_cov_corr = column_pair_groupby.agg(func)
@@ -2293,7 +2291,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             )
 
         filled = self.fillna(method=fill_method, limit=limit)
-        fill_grp = filled.groupby(self.grouping.copy())
+        fill_grp = filled.groupby(self.grouping)
         shifted = fill_grp.shift(periods=periods, freq=freq)
         return (filled / shifted) - 1
 
@@ -2339,7 +2337,7 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
 
     def __getitem__(self, key):
         return self.obj[key].groupby(
-            by=self.grouping.keys.copy(),
+            by=self.grouping.keys,
             dropna=self._dropna,
             sort=self._sort,
             group_keys=self._group_keys,
