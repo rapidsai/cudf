@@ -21,7 +21,7 @@ from cudf._lib.reshape import interleave_columns
 from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
 from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
-from cudf.api.types import is_list_like
+from cudf.api.types import is_bool_dtype, is_list_like
 from cudf.core.abc import Serializable
 from cudf.core.column.column import ColumnBase, arange, as_column
 from cudf.core.column_accessor import ColumnAccessor
@@ -1373,7 +1373,16 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
 
         if self.obj.empty:
-            return self.obj
+            res = self.obj.copy(deep=True)
+            res.index = self.grouping.keys
+            if function in {"sum", "product"}:
+                # For `sum` & `product`, boolean types
+                # will need to result in `int64` type.
+                for name, col in res._data.items():
+                    if is_bool_dtype(col.dtype):
+                        res._data[name] = col.astype("int")
+            return res
+
         if not callable(function):
             raise TypeError(f"type {type(function)} is not callable")
         group_names, offsets, group_keys, grouped_values = self._grouped()
