@@ -388,8 +388,60 @@ __device__ bool are_all_nans(cooperative_groups::thread_block const& block,
   return count == 0;
 }
 
+
+
+template <typename T,
+    std::enable_if_t<std::is_integral_v<T>, int> = 0
+>
+__device__ int64_t device_sum_3(cooperative_groups::thread_block const& block,
+                           T const* data,
+                           int64_t size)
+{
+
+  __shared__ int64_t block_sum;
+  if (block.thread_rank() == 0) { block_sum = 0; }
+  block.sync();
+
+  int64_t local_sum = 0;
+
+  for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
+    local_sum += static_cast<int64_t>(data[idx]);
+  }
+
+  cuda::atomic_ref<int64_t, cuda::thread_scope_block> ref{block_sum};
+  ref.fetch_add(local_sum, cuda::std::memory_order_relaxed);
+
+  block.sync();
+  return block_sum;
+}
+
+template <typename T,
+    std::enable_if_t<!std::is_integral_v<T>, int> = 0
+>
+__device__ T device_sum_3(cooperative_groups::thread_block const& block,
+  T const* data,
+  int64_t size)
+{
+
+__shared__ T block_sum;
+if (block.thread_rank() == 0) { block_sum = 0; }
+block.sync();
+
+T local_sum = 0;
+
+for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
+local_sum += data[idx];
+}
+
+cuda::atomic_ref<T, cuda::thread_scope_block> ref{block_sum};
+ref.fetch_add(local_sum, cuda::std::memory_order_relaxed);
+
+block.sync();
+return block_sum;
+}
+
 template <typename T>
-__device__ void device_sum(cooperative_groups::thread_block const& block,
+__device__ T device_sum(cooperative_groups::thread_block const& block,
                            T const* data,
                            int64_t size,
                            T* sum)
@@ -406,7 +458,22 @@ __device__ void device_sum(cooperative_groups::thread_block const& block,
   block.sync();
 }
 
-template <typename T>
+
+template <typename T,
+    std::enable_if_t<std::is_integral_v<T>, int> = 0
+>
+__device__ int64_t BlockSum(T const* data, int64_t size)
+{
+  auto block = cooperative_groups::this_thread_block();
+
+
+  auto block_sum = device_sum_3<T>(block, data, size);
+  return block_sum;
+}
+
+template <typename T,
+    std::enable_if_t<!std::is_integral_v<T>, int> = 0
+>
 __device__ T BlockSum(T const* data, int64_t size)
 {
   auto block = cooperative_groups::this_thread_block();
@@ -415,11 +482,8 @@ __device__ T BlockSum(T const* data, int64_t size)
     if (are_all_nans(block, data, size)) { return 0; }
   }
 
-  __shared__ T block_sum;
-  if (block.thread_rank() == 0) { block_sum = 0; }
-  block.sync();
 
-  device_sum<T>(block, data, size, &block_sum);
+  auto block_sum = device_sum_3<T>(block, data, size);
   return block_sum;
 }
 
