@@ -2070,6 +2070,31 @@ class TestLocIndexWithOrder:
 
 
 @pytest.mark.parametrize(
+    "arg",
+    [
+        (2, ("one", "second")),
+        (slice(None, None, None), ("two", "first")),
+        (1, ("one", "first")),
+        (slice(None, None, None), ("two", "second")),
+        (slice(None, None, None), ("two", "first", "three")),
+        (3, ("two", "first", "three")),
+        (slice(None, None, None), ("two",)),
+        (0, ("two",)),
+    ],
+)
+def test_loc_dataframe_column_multiindex(arg):
+    gdf = cudf.DataFrame(
+        [list("abcd"), list("efgh"), list("ijkl"), list("mnop")],
+        columns=cudf.MultiIndex.from_product(
+            [["one", "two"], ["first", "second"], ["three"]]
+        ),
+    )
+    pdf = gdf.to_pandas()
+
+    assert_eq(gdf.loc[arg], pdf.loc[arg])
+
+
+@pytest.mark.parametrize(
     "arg", [slice(2, 4), slice(2, 5), slice(2.3, 5), slice(4.6, 6)]
 )
 def test_series_iloc_float_int(arg):
