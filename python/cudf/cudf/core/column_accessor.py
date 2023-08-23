@@ -511,7 +511,7 @@ class ColumnAccessor(abc.MutableMapping):
     def _select_by_label_grouped(self, key: Any) -> ColumnAccessor:
         result = self._grouped_data[key]
         if isinstance(result, cudf.core.column.ColumnBase):
-            return self.__class__({key: result})
+            return self.__class__({key: result}, multiindex=self.multiindex)
         else:
             if self.multiindex:
                 result = _to_flat_dict(result)
