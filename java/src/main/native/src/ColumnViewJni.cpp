@@ -91,22 +91,32 @@ using cudf::jni::release_as_jlong;
 
 namespace {
 
-std::size_t calc_device_memory_size(cudf::column_view const &view) {
+std::size_t pad_size(std::size_t size, bool const should_pad_for_cpu) {
+  if (should_pad_for_cpu) {
+    constexpr std::size_t ALIGN = sizeof(std::max_align_t);
+    return (size + (ALIGN - 1)) & ~(ALIGN - 1);
+  } else {
+    return size;
+  }
+}
+
+std::size_t calc_device_memory_size(cudf::column_view const &view, bool const pad_for_cpu) {
   std::size_t total = 0;
   auto row_count = view.size();
 
   if (view.nullable()) {
-    total += cudf::bitmask_allocation_size_bytes(row_count);
+    total += pad_size(cudf::bitmask_allocation_size_bytes(row_count), pad_for_cpu);
   }
 
   auto dtype = view.type();
   if (cudf::is_fixed_width(dtype)) {
-    total += cudf::size_of(dtype) * view.size();
+    total += pad_size(cudf::size_of(dtype) * view.size(), pad_for_cpu);
   }
 
-  return std::accumulate(
-      view.child_begin(), view.child_end(), total,
-      [](std::size_t t, cudf::column_view const &v) { return t + calc_device_memory_size(v); });
+  return std::accumulate(view.child_begin(), view.child_end(), total,
+                         [pad_for_cpu](std::size_t t, cudf::column_view const &v) {
+                           return t + calc_device_memory_size(v, pad_for_cpu);
+                         });
 }
 
 } // anonymous namespace
@@ -2217,14 +2227,19 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeValidityLength(J
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getDeviceMemorySize(JNIEnv *env, jclass,
-                                                                           jlong handle) {
+                                                                           jlong handle,
+                                                                           jboolean pad_for_cpu) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     auto view = reinterpret_cast<cudf::column_view const *>(handle);
-    return calc_device_memory_size(*view);
+    return calc_device_memory_size(*view, pad_for_cpu);
   }
   CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_hostPaddingSizeInBytes(JNIEnv *env, jclass) {
+  return sizeof(std::max_align_t);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_clamper(JNIEnv *env, jobject j_object,

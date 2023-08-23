@@ -29,9 +29,12 @@ constexpr int preprocess_block_size = num_rle_stream_decode_threads;  // 512
 constexpr int decode_block_size     = 128;
 constexpr int non_zero_buffer_size  = decode_block_size * 2;
 
-constexpr int rolling_index(int index) { return index & (non_zero_buffer_size - 1); }
+constexpr int rolling_index(cudf::thread_index_type index)
+{
+  return index & (non_zero_buffer_size - 1);
+}
 template <int lvl_buf_size>
-constexpr int rolling_lvl_index(int index)
+constexpr int rolling_lvl_index(cudf::thread_index_type index)
 {
   return index % lvl_buf_size;
 }
@@ -339,7 +342,7 @@ inline __device__ int gpuDecodeRleBooleans(page_state_s volatile* s,
                                            int t)
 {
   uint8_t const* end = s->data_end;
-  int pos            = s->dict_pos;
+  int64_t pos        = s->dict_pos;
 
   while (pos < target_pos) {
     int is_literal, batch_len;
