@@ -1,6 +1,4 @@
 {
-  "shutdownAction": "stopContainer",
-
   "build": {
     "context": "${localWorkspaceFolder}/.devcontainer",
     "dockerfile": "${localWorkspaceFolder}/.devcontainer/Dockerfile",
@@ -10,43 +8,23 @@
       "BASE": "rapidsai/devcontainers:23.10-cpp-llvm16-cuda11.8-ubuntu22.04"
     }
   },
-  "hostRequirements": {
-    "gpu": true
-  },
-
+  "hostRequirements": {"gpu": "optional"},
   "features": {
     "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:23.10": {}
   },
-
   "overrideFeatureInstallOrder": [
     "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils"
   ],
-
-  "initializeCommand": [
-    "/bin/bash", "-c", "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config/pip,local/${localWorkspaceFolderBasename}/single}"
-  ],
-
-  "updateContentCommand": [
-    "/bin/bash",
-    "-c",
-    "mkdir -m 0755 -p ~/.config/clangd && cp -n /etc/skel/.config/clangd/config.yaml ~/.config/clangd/config.yaml"
-  ],
-
-  "postAttachCommand": [
-    "/bin/bash",
-    "-c",
-    "if [ ${CODESPACES:-false} = 'true' ]; then . devcontainer-utils-post-attach-command; . rapids-post-attach-command; fi"
-  ],
-
+  "initializeCommand": ["/bin/bash", "-c", "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config/pip,local/share/${localWorkspaceFolderBasename}-cuda11.8-venvs}"],
+  "postAttachCommand": ["/bin/bash", "-c", "if [ ${CODESPACES:-false} = 'true' ]; then . devcontainer-utils-post-attach-command; . rapids-post-attach-command; fi"],
   "workspaceFolder": "/home/coder",
   "workspaceMount": "source=${localWorkspaceFolder},target=/home/coder/cudf,type=bind,consistency=consistent",
   "mounts": [
     "source=${localWorkspaceFolder}/../.aws,target=/home/coder/.aws,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.cache,target=/home/coder/.cache,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.config,target=/home/coder/.config,type=bind,consistency=consistent",
-    "source=${localWorkspaceFolder}/../.local/${localWorkspaceFolderBasename}/single,target=/home/coder/.local,type=bind,consistency=consistent"
+    "source=${localWorkspaceFolder}/../.local/share/${localWorkspaceFolderBasename}-cuda11.8-venvs,target=/home/coder/.local/share/venvs,type=bind,consistency=consistent"
   ],
-
   "customizations": {
     "vscode": {
       "extensions": [
