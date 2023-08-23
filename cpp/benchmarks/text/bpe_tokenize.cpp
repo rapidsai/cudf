@@ -17,35 +17,64 @@
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 
+#include <cudf/filling.hpp>
 #include <cudf/io/csv.hpp>
+#include <cudf/strings/combine.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
+
+#include <cudf_test/column_wrapper.hpp>
 
 #include <nvtext/bpe_tokenize.hpp>
 #include <nvtext/subword_tokenize.hpp>
 
 #include <nvbench/nvbench.cuh>
 
-static cudf::io::table_with_metadata read_csv(std::string const& file_path)
+static void bench_bpe(nvbench::state& state)
 {
-  auto source_info = cudf::io::source_info(file_path);
-  auto builder     = cudf::io::csv_reader_options::builder(source_info);
-  auto options     = builder.build();
-  return cudf::io::read_csv(options);
-}
+  auto const n_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const row_width = static_cast<cudf::size_type>(state.get_int64("row_width"));
+  if (static_cast<std::size_t>(n_rows) * static_cast<std::size_t>(row_width) >=
+      static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
+    state.skip("Skip benchmarks greater than size_type limit");
+  }
 
-static void bench_tokenize(nvbench::state& state)
-{
-  auto csv_metadata = read_csv("input_strings.csv");
-  cudf::strings_column_view input(csv_metadata.tbl->view().column(0));
+  auto raw_data = cudf::test::strings_column_wrapper({"test sentence ",
+                                                      "thisis test ",
+                                                      "this is sentence ",
+                                                      "this istest ",
+                                                      "thisistest ",
+                                                      "sentence is test ",
+                                                      "this sentence is test ",
+                                                      "test test test ",
+                                                      "this this test this ",
+                                                      "sentence "})
+                    .release();
 
-  auto mps        = nvtext::load_merge_pairs_file("merges.txt");
-  auto vocab      = nvtext::load_vocabulary_file("hashed_vocab.txt");
-  auto seq_len    = 64;
-  auto stride     = 48;
-  auto lower_case = true;
-  auto truncate   = false;
+  if (row_width / 20 > 1) {
+    std::vector<cudf::column_view> columns;
+    for (int i = 0; i < row_width / 20; ++i) {
+      columns.push_back(raw_data->view());
+    }
+    raw_data = cudf::strings::concatenate(cudf::table_view(columns));
+  }
+  auto data_view = raw_data->view();
+
+  // Create a randomized gather-map to build a column out of the raw strings in data.
+  data_profile gather_profile =
+    data_profile_builder().cardinality(0).null_probability(0.0).distribution(
+      cudf::type_id::INT32, distribution_id::UNIFORM, 1, data_view.size() - 1);
+  auto gather_table =
+    create_random_table({cudf::type_id::INT32}, row_count{n_rows}, gather_profile);
+  gather_table->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
+  auto gather_map  = gather_table->view().column(0);
+  auto table_input = cudf::gather(cudf::table_view({data_view}), gather_map);
+  auto input       = cudf::strings_column_view(table_input->view().column(0));
+
+  cudf::test::strings_column_wrapper merge_pairs(
+    {"e n", "i t", "i s", "e s", "en t", "c e", "es t", "en ce", "t est", "s ent"});
+  auto mps = nvtext::load_merge_pairs(cudf::strings_column_view(merge_pairs));
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
 
@@ -54,9 +83,11 @@ static void bench_tokenize(nvbench::state& state)
   state.add_global_memory_writes<nvbench::int8_t>(chars_size);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    auto bpe    = nvtext::byte_pair_encoding(input, *mps);
-    auto result = nvtext::subword_tokenize(input, *vocab, seq_len, stride, lower_case, truncate);
+    auto result = nvtext::byte_pair_encoding(input, *mps);
   });
 }
 
-NVBENCH_BENCH(bench_tokenize).set_name("bpe_tokenize");
+NVBENCH_BENCH(bench_bpe)
+  .set_name("byte_pair_encoding")
+  .add_int64_axis("row_width", {32, 64, 128, 256, 512})
+  .add_int64_axis("num_rows", {32768, 262144, 2097152, 16777216});

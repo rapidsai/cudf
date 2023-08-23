@@ -13,8 +13,8 @@ cdef extern from "nvtext/bpe_tokenize.hpp" namespace "nvtext" nogil:
     cdef struct bpe_merge_pairs "nvtext::bpe_merge_pairs":
         pass
 
-    cdef unique_ptr[bpe_merge_pairs] load_merge_pairs_file(
-        const string &filename_merges
+    cdef unique_ptr[bpe_merge_pairs] load_merge_pairs(
+        const column_view &merge_pairs
     ) except +
 
     cdef unique_ptr[column] byte_pair_encoding(

@@ -14,16 +14,16 @@ class BytePairEncoder:
 
     Parameters
     ----------
-    merges_file : str
-        Path to file containing merge pairs.
+    merges_pairs : str
+        Strings column of merge pairs
 
     Returns
     -------
     BytePairEncoder
     """
 
-    def __init__(self, merges_file: str):
-        self.merge_pairs = cpp_merge_pairs(merges_file)
+    def __init__(self, merges_pair: "cudf.Series"):
+        self.merge_pairs = cpp_merge_pairs(merges_pair._column)
 
     def __call__(self, text, separator: str = " "):
         """
@@ -41,7 +41,10 @@ class BytePairEncoder:
         --------
         >>> import cudf
         >>> from cudf.core.byte_pair_encoding import BytePairEncoder
-        >>> bpe = BytePairEncoder('merges.txt')
+        >>> mps = cudf.Series(["e n", "i t", "i s", "e s", "en t",
+        ...                    "c e", "es t", "en ce", "T h", "Th is",
+        ...                    "t est", "s ent", "t h", "th is"])
+        >>> bpe = BytePairEncoder(mps)
         >>> str_series = cudf.Series(['This is the sentence', 'thisisit'])
         >>> bpe(str_series)
         0    This is a sent ence

@@ -4,7 +4,6 @@
 from cudf.core.buffer import acquire_spill_lock
 
 from libcpp.memory cimport unique_ptr
-from libcpp.string cimport string
 from libcpp.utility cimport move
 
 from cudf._lib.column cimport Column
@@ -13,7 +12,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.nvtext.bpe_tokenize cimport (
     bpe_merge_pairs as cpp_bpe_merge_pairs,
     byte_pair_encoding as cpp_byte_pair_encoding,
-    load_merge_pairs_file as cpp_load_merge_pairs_file,
+    load_merge_pairs as cpp_load_merge_pairs,
 )
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.scalar cimport DeviceScalar
@@ -22,10 +21,10 @@ from cudf._lib.scalar cimport DeviceScalar
 cdef class BPE_Merge_Pairs:
     cdef unique_ptr[cpp_bpe_merge_pairs] c_obj
 
-    def __cinit__(self, merges_file):
-        cdef string c_merges_file = <string>str(merges_file).encode()
+    def __cinit__(self, Column merge_pairs):
+        cdef column_view c_pairs = merge_pairs.view()
         with nogil:
-            self.c_obj = move(cpp_load_merge_pairs_file(c_merges_file))
+            self.c_obj = move(cpp_load_merge_pairs(c_pairs))
 
 
 @acquire_spill_lock()

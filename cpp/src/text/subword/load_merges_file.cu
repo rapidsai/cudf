@@ -135,6 +135,15 @@ std::unique_ptr<bpe_merge_pairs> load_merge_pairs_file(std::string const& filena
   return std::make_unique<bpe_merge_pairs>(std::move(input_column), stream, mr);
 }
 
+std::unique_ptr<bpe_merge_pairs> load_merge_pairs(cudf::strings_column_view const& merge_pairs,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(!merge_pairs.is_empty(), "Merge pairs must not be empty");
+  CUDF_EXPECTS(!merge_pairs.has_nulls(), "Merge pairs may not contain nulls");
+  return std::make_unique<bpe_merge_pairs>(merge_pairs, stream, mr);
+}
+
 }  // namespace detail
 
 std::unique_ptr<bpe_merge_pairs> load_merge_pairs_file(std::string const& filename_merges,
@@ -142,6 +151,14 @@ std::unique_ptr<bpe_merge_pairs> load_merge_pairs_file(std::string const& filena
 {
   CUDF_FUNC_RANGE();
   return detail::load_merge_pairs_file(filename_merges, cudf::get_default_stream(), mr);
+}
+
+std::unique_ptr<bpe_merge_pairs> load_merge_pairs(cudf::strings_column_view const& merge_pairs,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::load_merge_pairs(merge_pairs, stream, mr);
 }
 
 bpe_merge_pairs::bpe_merge_pairs_impl::bpe_merge_pairs_impl(
