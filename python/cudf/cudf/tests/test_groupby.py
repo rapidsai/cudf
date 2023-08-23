@@ -3342,7 +3342,6 @@ def test_group_by_pandas_sort_order(groups, sort):
         )
 
 
-
 @pytest.mark.parametrize(
     "dtype",
     ["int32", "int64", "float64", "datetime64[ns]", "timedelta64[ns]", "bool"],
