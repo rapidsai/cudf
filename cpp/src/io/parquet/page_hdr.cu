@@ -155,6 +155,28 @@ __device__ void skip_struct_field(byte_stream_s* bs, int field_type)
 }
 
 /**
+ * @brief Determine which decode kernel to run for the given page.
+ *
+ * @param page The page to decode
+ * @param chunk Column chunk the page belongs to
+ * @return `kernel_mask_bits` value for the given page
+ */
+__device__ uint32_t kernel_mask_for_page(gpu::PageInfo const& page,
+                                         gpu::ColumnChunkDesc const& chunk)
+{
+  if (page.flags & PAGEINFO_FLAGS_DICTIONARY) { return 0; }
+
+  if (page.encoding == Encoding::DELTA_BINARY_PACKED) {
+    return KERNEL_MASK_DELTA_BINARY;
+  } else if (is_string_col(chunk)) {
+    return KERNEL_MASK_STRING;
+  }
+
+  // non-string, non-delta
+  return KERNEL_MASK_GENERAL;
+}
+
+/**
  * @brief Functor to set value to 32 bit integer read from byte stream
  *
  * @return True if field type is not int32
@@ -370,6 +392,7 @@ __global__ void __launch_bounds__(128)
       bs->page.skipped_values      = -1;
       bs->page.skipped_leaf_values = 0;
       bs->page.str_bytes           = 0;
+      bs->page.kernel_mask         = 0;
     }
     num_values     = bs->ck.num_values;
     page_info      = bs->ck.page_info;
@@ -420,6 +443,7 @@ __global__ void __launch_bounds__(128)
           }
           bs->page.page_data = const_cast<uint8_t*>(bs->cur);
           bs->cur += bs->page.compressed_page_size;
+          bs->page.kernel_mask = kernel_mask_for_page(bs->page, bs->ck);
         } else {
           bs->cur = bs->end;
         }
