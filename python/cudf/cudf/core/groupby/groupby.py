@@ -571,6 +571,13 @@ class GroupBy(Serializable, Reducible, Scannable):
                         and agg_name in Reducible._SUPPORTED_REDUCTIONS
                     )
                     and len(col) == 0
+                    and not isinstance(
+                        col,
+                        (
+                            cudf.core.column.ListColumn,
+                            cudf.core.column.StructColumn,
+                        ),
+                    )
                 ):
                     data[key] = col.astype(orig_dtype)
                 else:
