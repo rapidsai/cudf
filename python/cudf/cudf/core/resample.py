@@ -123,8 +123,12 @@ class _ResampleGrouping(_Grouping):
 
     def copy(self, deep=True):
         out = super().copy(deep=deep)
-        out.bin_labels = self.bin_labels.copy(deep=deep)
-        return out
+        result = _ResampleGrouping.__new__(_ResampleGrouping)
+        result.names = out.names
+        result._named_columns = out._named_columns
+        result._key_columns = out._key_columns
+        result.bin_labels = self.bin_labels.copy(deep=deep)
+        return result
 
     def serialize(self):
         header, frames = super().serialize()
