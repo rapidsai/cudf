@@ -33,13 +33,13 @@ template <typename T>
 T enable_hugepage(T&& buf)
 {
   if (buf->size() < (1u << 22u)) {  // Smaller than 4 MB
-    return buf;
+    return std::move(buf);
   }
 
 #ifdef MADV_HUGEPAGE
   const auto pagesize = sysconf(_SC_PAGESIZE);
   void* addr          = const_cast<uint8_t*>(buf->data());
-  if (addr == nullptr) { return buf; }
+  if (addr == nullptr) { return std::move(buf); }
   auto length{static_cast<std::size_t>(buf->size())};
   if (std::align(pagesize, pagesize, addr, length)) {
     // Intentionally not checking for errors that may be returned by older kernel versions;
@@ -47,7 +47,7 @@ T enable_hugepage(T&& buf)
     madvise(addr, length, MADV_HUGEPAGE);
   }
 #endif
-  return buf;
+  return std::move(buf);
 }
 
 std::unique_ptr<arrow::Buffer> allocate_arrow_buffer(int64_t const size, arrow::MemoryPool* ar_mr)
