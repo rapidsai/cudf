@@ -65,6 +65,33 @@ class grid_1d {
     CUDF_EXPECTS(num_threads_per_block > 0, "num_threads_per_block must be > 0");
     CUDF_EXPECTS(num_blocks > 0, "num_blocks must be > 0");
   }
+
+  /**
+   * @brief Returns the global thread index in a 1D grid.
+   *
+   * The returned index is unique across the entire grid.
+   *
+   * @param thread_id The thread index within the block
+   * @param block_id The block index within the grid
+   * @param num_threads_per_block The number of threads per block
+   * @return thread_index_type The global thread index
+   */
+  static constexpr thread_index_type global_thread_id(thread_index_type thread_id,
+                                                      thread_index_type block_id,
+                                                      thread_index_type num_threads_per_block)
+  {
+    return thread_id + block_id * num_threads_per_block;
+  }
+
+  /**
+   * @brief Returns the global thread index of the current thread in a 1D grid.
+   *
+   * @return thread_index_type The global thread index
+   */
+  static __device__ thread_index_type global_thread_id()
+  {
+    return global_thread_id(threadIdx.x, blockIdx.x, blockDim.x);
+  }
 };
 
 /**
