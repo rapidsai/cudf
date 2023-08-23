@@ -1375,7 +1375,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         if self.obj.empty:
             res = self.obj.copy(deep=True)
             res.index = self.grouping.keys
-            if function in ("sum", "product"):
+            if function in {"sum", "product"}:
                 # For `sum` & `product`, boolean types
                 # will need to result in `int64` type.
                 for name, col in res._data.items():
