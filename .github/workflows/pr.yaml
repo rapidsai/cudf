@@ -32,6 +32,7 @@ jobs:
     uses: rapidsai/shared-action-workflows/.github/workflows/checks.yaml@branch-23.10
     with:
       enable_check_generated_files: false
+      enable_check_pr_job_dependencies: false
   conda-cpp-build:
     needs: checks
     secrets: inherit
@@ -125,3 +126,19 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
       script: ci/test_wheel_dask_cudf.sh
+  devcontainer:
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/build-in-devcontainer.yaml@fea/devcontainers
+    with:
+      build_command: |
+        build-cudf-cpp -DBUILD_BENCHMARKS=ON;
+        build-cudf_kafka-cpp;
+        build-cudf-python;
+
+        # cudf_kafka's setup.py needs all this defined
+        CUDF_ROOT=~/cudf/cpp/build/latest \
+        CUDF_INCLUDE_DIR=~/cudf/cpp/include \
+        CUDF_KAFKA_ROOT=~/cudf/cpp/libcudf_kafka/build/latest \
+        CUDF_KAFKA_INCLUDE_DIR=~/cudf/cpp/libcudf_kafka/include \
+        CUDA_HOME="${CONDA_PREFIX:-${CUDA_HOME:-/usr/local/cuda}}" \
+          build-cudf_kafka-python;
