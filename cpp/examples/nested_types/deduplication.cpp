@@ -126,6 +126,7 @@ int main(int argc, char const** argv)
   auto count    = count_aggregate(tbl->view());
   auto combined = join_count(tbl->view(), count->view());
   auto filtered = filter_duplicates(combined->view());
+  metadata.schema_info.emplace_back("count");
 
   std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - st;
   std::cout << "Wall time: " << elapsed.count() << " seconds\n";
