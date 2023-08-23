@@ -14,16 +14,15 @@
  * limitations under the License.
  */
 
-#include "cudf/io/types.hpp"
-#include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/io/json.hpp>
+#include <cudf/io/types.hpp>
 #include <cudf/join.hpp>
+#include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/transform.hpp>
 
 #include <chrono>
 #include <iostream>
@@ -82,16 +81,10 @@ std::unique_ptr<cudf::table> join_count(cudf::table_view left, cudf::table_view 
   return std::make_unique<cudf::table>(std::move(left_cols));
 }
 
-std::unique_ptr<cudf::table> filter_duplicates(cudf::table_view tbl)
+std::unique_ptr<cudf::table> sort_keys(cudf::table_view tbl)
 {
-  auto const op      = cudf::ast::ast_operator::EQUAL;
-  auto literal_value = cudf::numeric_scalar<int>(1);
-  auto literal       = cudf::ast::literal(literal_value);
-  auto col_ref_1     = cudf::ast::column_reference(3);
-  auto expression    = cudf::ast::operation(op, col_ref_1, literal);
-  auto boolean_mask  = cudf::compute_column(tbl, expression);
-  auto filtered      = cudf::apply_boolean_mask(tbl, boolean_mask->view());
-  return filtered;
+  auto sort_order = cudf::sorted_order(cudf::table_view{{tbl.column(0)}});
+  return cudf::gather(tbl, *sort_order);
 }
 
 /**
@@ -99,7 +92,7 @@ std::unique_ptr<cudf::table> filter_duplicates(cudf::table_view tbl)
  *
  * Command line parameters:
  * 1. JSON input file name/path (default: "example.json")
- * 3. JSON output file name/path (default: "output.json")
+ * 2. JSON output file name/path (default: "output.json")
  *
  * The stdout includes the number of rows in the input and the output size in bytes.
  */
@@ -110,7 +103,7 @@ int main(int argc, char const** argv)
   if (argc < 2) {
     input_filepath  = "example.json";
     output_filepath = "output.json";
-  } else if (argc == 4) {
+  } else if (argc == 3) {
     input_filepath  = argv[1];
     output_filepath = argv[2];
   } else {
@@ -123,15 +116,21 @@ int main(int argc, char const** argv)
 
   auto st = std::chrono::steady_clock::now();
 
-  auto count    = count_aggregate(tbl->view());
-  auto combined = join_count(tbl->view(), count->view());
-  auto filtered = filter_duplicates(combined->view());
+  auto count                               = count_aggregate(tbl->view());
+  std::chrono::duration<double> count_time = std::chrono::steady_clock::now() - st;
+  std::cout << "Wall time: " << count_time.count() << " seconds\n";
+  auto combined                               = join_count(tbl->view(), count->view());
+  std::chrono::duration<double> combined_time = std::chrono::steady_clock::now() - st;
+  std::cout << "Wall time: " << combined_time.count() << " seconds\n";
+  auto sorted                               = sort_keys(combined->view());
+  std::chrono::duration<double> sorted_time = std::chrono::steady_clock::now() - st;
+  std::cout << "Wall time: " << sorted_time.count() << " seconds\n";
   metadata.schema_info.emplace_back("count");
 
   std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - st;
   std::cout << "Wall time: " << elapsed.count() << " seconds\n";
 
-  write_json(filtered->view(), metadata, output_filepath);
+  write_json(sorted->view(), metadata, output_filepath);
 
   return 0;
 }
