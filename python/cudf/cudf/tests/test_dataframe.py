@@ -10316,3 +10316,16 @@ def test_dataframe_reindex_with_index_names(index_data, name):
     expected = pdf.reindex(index_data)
 
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize("attr", ["nlargest", "nsmallest"])
+def test_dataframe_nlargest_nsmallest_str_error(attr):
+    gdf = cudf.DataFrame({"a": [1, 2, 3, 4], "b": ["a", "b", "c", "d"]})
+    pdf = gdf.to_pandas()
+
+    assert_exceptions_equal(
+        getattr(gdf, attr),
+        getattr(pdf, attr),
+        ([], {"n": 1, "columns": ["a", "b"]}),
+        ([], {"n": 1, "columns": ["a", "b"]}),
+    )
