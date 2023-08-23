@@ -36,9 +36,9 @@ __global__ void __launch_bounds__(init_threads_per_block)
                              device_2dspan<rowgroup_rows const> rowgroup_bounds)
 {
   __shared__ __align__(4) statistics_group group_g[init_groups_per_block];
-  uint32_t const col_id    = blockIdx.y;
-  uint32_t const chunk_id  = (blockIdx.x * init_groups_per_block) + threadIdx.y;
-  uint32_t const t         = threadIdx.x;
+  auto const col_id        = blockIdx.y;
+  auto const chunk_id      = (blockIdx.x * init_groups_per_block) + threadIdx.y;
+  auto const t             = threadIdx.x;
   auto const num_rowgroups = rowgroup_bounds.size().first;
   statistics_group* group  = &group_g[threadIdx.y];
   if (chunk_id < num_rowgroups and t == 0) {
@@ -75,11 +75,11 @@ __global__ void __launch_bounds__(block_size, 1)
   using block_scan = cub::BlockScan<uint32_t, block_size, cub::BLOCK_SCAN_WARP_SCANS>;
   __shared__ typename block_scan::TempStorage temp_storage;
   volatile uint32_t stats_size = 0;
-  uint32_t t                   = threadIdx.x;
+  auto t                       = threadIdx.x;
   __syncthreads();
-  for (uint32_t start = 0; start < statistics_count; start += block_size) {
+  for (thread_index_type start = 0; start < statistics_count; start += block_size) {
     uint32_t stats_len = 0, stats_pos;
-    uint32_t idx       = start + t;
+    auto idx           = start + t;
     if (idx < statistics_count) {
       statistics_dtype const dtype = groups[idx].stats_dtype;
       switch (dtype) {
@@ -222,8 +222,8 @@ __global__ void __launch_bounds__(encode_threads_per_block)
                         uint32_t statistics_count)
 {
   __shared__ __align__(8) stats_state_s state_g[encode_chunks_per_block];
-  uint32_t t             = threadIdx.x;
-  uint32_t idx           = blockIdx.x * encode_chunks_per_block + threadIdx.y;
+  auto t                 = threadIdx.x;
+  auto idx               = blockIdx.x * encode_chunks_per_block + threadIdx.y;
   stats_state_s* const s = &state_g[threadIdx.y];
 
   // Encode and update actual bfr size
