@@ -3340,3 +3340,30 @@ def test_group_by_pandas_sort_order(groups, sort):
             pdf.groupby(groups, sort=sort).sum(),
             df.groupby(groups, sort=sort).sum(),
         )
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    ["int32", "int64", "float64", "datetime64[ns]", "timedelta64[ns]", "bool"],
+)
+@pytest.mark.parametrize(
+    "reduce_op",
+    [
+        "min",
+        "max",
+        "idxmin",
+        "idxmax",
+        "first",
+        "last",
+    ],
+)
+def test_group_by_empty_reduction(dtype, reduce_op):
+    gdf = cudf.DataFrame({"a": [], "b": [], "c": []}, dtype=dtype)
+    pdf = gdf.to_pandas()
+
+    gg = gdf.groupby("a")["c"]
+    pg = pdf.groupby("a")["c"]
+
+    assert_eq(
+        getattr(gg, reduce_op)(), getattr(pg, reduce_op)(), check_dtype=True
+    )

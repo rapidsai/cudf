@@ -527,6 +527,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         1  1.5  1.75  2.0   2.0
         2  3.0  3.00  1.0   1.0
         """
+        is_empty = self.obj.empty
+        op_name = func.__name__ if callable(func) else func
+        is_reduction = (
+            isinstance(op_name, str)
+            and op_name in Reducible._SUPPORTED_REDUCTIONS
+        )
         column_names, columns, normalized_aggs = self._normalize_aggs(func)
         orig_dtypes = tuple(c.dtype for c in columns)
 
@@ -563,7 +569,10 @@ class GroupBy(Serializable, Reducible, Scannable):
                 ):
                     # Structs lose their labels which we reconstruct here
                     col = col._with_type_metadata(cudf.ListDtype(orig_dtype))
-                data[key] = col
+                if is_empty and is_reduction and len(col) == 0:
+                    data[key] = col.astype(orig_dtype)
+                else:
+                    data[key] = col
         data = ColumnAccessor(data, multiindex=multilevel)
         if not multilevel:
             data = data.rename_levels({np.nan: None}, level=0)
