@@ -63,7 +63,7 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
     typename block_scan::TempStorage scan_storage;
   } temp_storage;
 
-  int const t = threadIdx.x;
+  auto const t = threadIdx.x;
 
   // decode batches of level stream data using rle_stream objects and use the results to
   // calculate start and end value positions in the encoded string data.
@@ -137,7 +137,7 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
     bool end_value_set      = false;
 
     while (processed < s->page.num_input_values) {
-      int start_val = processed;
+      thread_index_type start_val = processed;
 
       if (has_repetition) {
         decoders[level_type::REPETITION].decode_next(t);
@@ -161,8 +161,8 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
 
       // do something with the level data
       while (start_val < processed) {
-        int idx_t = start_val + t;
-        int idx   = rolling_index<preproc_buf_size>(idx_t);
+        auto const idx_t = start_val + t;
+        auto const idx   = rolling_index<preproc_buf_size>(idx_t);
 
         // get absolute thread row index
         int is_new_row = idx_t < processed && (!has_repetition || rep_decode[idx] == 0);
@@ -253,14 +253,14 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
   else {
     int num_nulls = 0;
     while (processed < s->page.num_input_values) {
-      int start_val = processed;
+      thread_index_type start_val = processed;
       processed += decoders[level_type::DEFINITION].decode_next(t);
       __syncthreads();
 
       while (start_val < processed) {
-        int idx_t = start_val + t;
+        auto const idx_t = start_val + t;
         if (idx_t < processed) {
-          int idx = rolling_index<preproc_buf_size>(idx_t);
+          auto const idx = rolling_index<preproc_buf_size>(idx_t);
           if (def_decode[idx] < max_def) { num_nulls++; }
         }
         start_val += preprocess_block_size;

@@ -449,6 +449,21 @@ def test_groupby_apply_jit_correlation(groupby_jit_data, dtype):
     run_groupby_apply_jit_test(groupby_jit_data, func, keys)
 
 
+@pytest.mark.parametrize("dtype", ["int32", "int64"])
+def test_groupby_apply_jit_correlation_zero_variance(dtype):
+    # pearson correlation is undefined when the variance of either
+    # variable is zero. This test ensures that the jit implementation
+    # returns the same result as pandas in this case.
+    data = DataFrame(
+        {"a": [0, 0, 0, 0, 0], "b": [1, 1, 1, 1, 1], "c": [2, 2, 2, 2, 2]}
+    )
+
+    def func(group):
+        return group["b"].corr(group["c"])
+
+    run_groupby_apply_jit_test(data, func, ["a"])
+
+
 @pytest.mark.parametrize("dtype", ["float64"])
 @pytest.mark.parametrize("func", ["min", "max", "sum", "mean", "var", "std"])
 @pytest.mark.parametrize("special_val", [np.nan, np.inf, -np.inf])
@@ -3325,3 +3340,36 @@ def test_group_by_pandas_sort_order(groups, sort):
             pdf.groupby(groups, sort=sort).sum(),
             df.groupby(groups, sort=sort).sum(),
         )
+
+
+def test_groupby_consecutive_operations():
+    df = cudf.DataFrame([[1, np.nan], [1, 4], [5, 6]], columns=["A", "B"])
+    pdf = df.to_pandas()
+
+    gg = df.groupby("A")
+    pg = pdf.groupby("A")
+
+    actual = gg.nth(-1)
+    expected = pg.nth(-1)
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+    actual = gg.nth(0)
+    expected = pg.nth(0)
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+    actual = gg.cumsum()
+    expected = pg.cumsum()
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+    actual = gg.cumcount()
+    expected = pg.cumcount()
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+    actual = gg.cumsum()
+    expected = pg.cumsum()
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)

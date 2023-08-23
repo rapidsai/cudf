@@ -43,7 +43,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
     });
 
   // figure out which kernels to run
-  auto const kernel_mask = SumPageKernelMasks(pages, _stream);
+  auto const kernel_mask = GetAggregatedDecodeKernelMask(pages, _stream);
 
   // Check to see if there are any string columns present. If so, then we need to get size info
   // for each string page. This size info will be used to pre-allocate memory for the column,
