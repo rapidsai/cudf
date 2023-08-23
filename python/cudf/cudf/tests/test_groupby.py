@@ -3342,6 +3342,7 @@ def test_group_by_pandas_sort_order(groups, sort):
         )
 
 
+
 @pytest.mark.parametrize(
     "dtype",
     ["int32", "int64", "float64", "datetime64[ns]", "timedelta64[ns]", "bool"],
@@ -3367,3 +3368,36 @@ def test_group_by_empty_reduction(dtype, reduce_op):
     assert_eq(
         getattr(gg, reduce_op)(), getattr(pg, reduce_op)(), check_dtype=True
     )
+
+
+def test_groupby_consecutive_operations():
+    df = cudf.DataFrame([[1, np.nan], [1, 4], [5, 6]], columns=["A", "B"])
+    pdf = df.to_pandas()
+
+    gg = df.groupby("A")
+    pg = pdf.groupby("A")
+
+    actual = gg.nth(-1)
+    expected = pg.nth(-1)
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+    actual = gg.nth(0)
+    expected = pg.nth(0)
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+    actual = gg.cumsum()
+    expected = pg.cumsum()
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+    actual = gg.cumcount()
+    expected = pg.cumcount()
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+    actual = gg.cumsum()
+    expected = pg.cumsum()
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
