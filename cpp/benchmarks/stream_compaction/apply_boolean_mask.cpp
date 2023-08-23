@@ -65,7 +65,7 @@ void calculate_bandwidth(benchmark::State& state, cudf::size_type num_columns)
     (column_bytes_out + validity_bytes_out) * num_columns;  // writing columns
 
   state.SetItemsProcessed(state.iterations() * column_size * num_columns);
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * bytes_read + bytes_written);
+  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * (bytes_read + bytes_written));
 }
 
 }  // namespace

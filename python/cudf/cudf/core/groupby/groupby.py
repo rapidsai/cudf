@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
+import copy
 import itertools
 import pickle
 import textwrap
@@ -261,17 +262,17 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         self.obj = obj
         self._as_index = as_index
-        self._by = by
+        self._by = by.copy(deep=True) if isinstance(by, _Grouping) else by
         self._level = level
         self._sort = sort
         self._dropna = dropna
         self._group_keys = group_keys
 
-        if isinstance(by, _Grouping):
-            by._obj = self.obj
-            self.grouping = by
+        if isinstance(self._by, _Grouping):
+            self._by._obj = self.obj
+            self.grouping = self._by
         else:
-            self.grouping = _Grouping(obj, by, level)
+            self.grouping = _Grouping(obj, self._by, level)
 
     def __iter__(self):
         if isinstance(self._by, list) and len(self._by) == 1:
@@ -2545,6 +2546,13 @@ class _Grouping(Serializable):
         out.names = names
         out._named_columns = _named_columns
         out._key_columns = key_columns
+        return out
+
+    def copy(self, deep=True):
+        out = _Grouping.__new__(_Grouping)
+        out.names = copy.deepcopy(self.names)
+        out._named_columns = copy.deepcopy(self._named_columns)
+        out._key_columns = [col.copy(deep=deep) for col in self._key_columns]
         return out
 
 

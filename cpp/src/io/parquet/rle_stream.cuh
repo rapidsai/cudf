@@ -22,16 +22,12 @@
 
 namespace cudf::io::parquet::gpu {
 
-// TODO: consider if these should be template parameters to rle_stream
-constexpr int num_rle_stream_decode_threads = 512;
-// the -1 here is for the look-ahead warp that fills in the list of runs to be decoded
-// in an overlapped manner. so if we had 16 total warps:
-// - warp 0 would be filling in batches of runs to be processed
-// - warps 1-15 would be decoding the previous batch of runs generated
-constexpr int num_rle_stream_decode_warps =
-  (num_rle_stream_decode_threads / cudf::detail::warp_size) - 1;
-constexpr int run_buffer_size = (num_rle_stream_decode_warps * 2);
-constexpr int rolling_run_index(int index) { return index % run_buffer_size; }
+template <int num_threads>
+constexpr int rle_stream_required_run_buffer_size()
+{
+  constexpr int num_rle_stream_decode_warps = (num_threads / cudf::detail::warp_size) - 1;
+  return (num_rle_stream_decode_warps * 2);
+}
 
 /**
  * @brief Read a 32-bit varint integer
@@ -144,8 +140,18 @@ struct rle_run {
 };
 
 // a stream of rle_runs
-template <typename level_t>
+template <typename level_t, int decode_threads>
 struct rle_stream {
+  static constexpr int num_rle_stream_decode_threads = decode_threads;
+  // the -1 here is for the look-ahead warp that fills in the list of runs to be decoded
+  // in an overlapped manner. so if we had 16 total warps:
+  // - warp 0 would be filling in batches of runs to be processed
+  // - warps 1-15 would be decoding the previous batch of runs generated
+  static constexpr int num_rle_stream_decode_warps =
+    (num_rle_stream_decode_threads / cudf::detail::warp_size) - 1;
+
+  static constexpr int run_buffer_size = rle_stream_required_run_buffer_size<decode_threads>();
+
   int level_bits;
   uint8_t const* start;
   uint8_t const* cur;
@@ -210,7 +216,7 @@ struct rle_stream {
     // generate runs until we either run out of warps to decode them with, or
     // we cross the output limit.
     while (run_count < num_rle_stream_decode_warps && output_pos < max_count && cur < end) {
-      auto& run = runs[rolling_run_index(run_index)];
+      auto& run = runs[rolling_index<run_buffer_size>(run_index)];
 
       // Encoding::RLE
 
@@ -256,13 +262,13 @@ struct rle_stream {
     // if we've reached the value output limit on the last run
     if (output_pos >= max_count) {
       // first, see if we've spilled over
-      auto const& src       = runs[rolling_run_index(run_index - 1)];
+      auto const& src       = runs[rolling_index<run_buffer_size>(run_index - 1)];
       int const spill_count = output_pos - max_count;
 
       // a spill has occurred in the current run. spill the extra values over into the beginning of
       // the next run.
       if (spill_count > 0) {
-        auto& spill_run      = runs[rolling_run_index(run_index)];
+        auto& spill_run      = runs[rolling_index<run_buffer_size>(run_index)];
         spill_run            = src;
         spill_run.output_pos = 0;
         spill_run.remaining  = spill_count;
@@ -330,7 +336,7 @@ struct rle_stream {
         // repetition levels for one of the list benchmarks decodes in ~3ms total, while the
         // definition levels take ~11ms - the difference is entirely due to long runs in the
         // definition levels.
-        auto& run  = runs[rolling_run_index(run_start + warp_decode_id)];
+        auto& run  = runs[rolling_index<run_buffer_size>(run_start + warp_decode_id)];
         auto batch = run.next_batch(output + run.output_pos,
                                     min(run.remaining, (output_count - run.output_pos)));
         batch.decode(end, level_bits, warp_lane, warp_decode_id);

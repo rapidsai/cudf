@@ -27,7 +27,7 @@ namespace cudf::io::detail::parquet {
 
 namespace {
 
-int constexpr NUM_DECODERS       = 2;  // how many decode kernels are there to run
+int constexpr NUM_DECODERS       = 3;  // how many decode kernels are there to run
 int constexpr APPROX_NUM_THREADS = 4;  // guestimate from DaveB
 int constexpr STREAM_POOL_SIZE   = NUM_DECODERS * APPROX_NUM_THREADS;
 
@@ -58,14 +58,16 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
       return cursum + _metadata->get_output_nesting_depth(chunk.src_col_schema);
     });
 
+  // figure out which kernels to run
+  auto const kernel_mask = GetAggregatedDecodeKernelMask(pages, _stream);
+
   // Check to see if there are any string columns present. If so, then we need to get size info
   // for each string page. This size info will be used to pre-allocate memory for the column,
   // allowing the page decoder to write string data directly to the column buffer, rather than
   // doing a gather operation later on.
   // TODO: This step is somewhat redundant if size info has already been calculated (nested schema,
   // chunked reader).
-  auto const has_strings = std::any_of(chunks.begin(), chunks.end(), gpu::is_string_col);
-
+  auto const has_strings = (kernel_mask & gpu::KERNEL_MASK_STRING) != 0;
   std::vector<size_t> col_sizes(_input_columns.size(), 0L);
   if (has_strings) {
     gpu::ComputePageStringSizes(
@@ -178,16 +180,32 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   chunk_nested_data.host_to_device_async(_stream);
   _stream.synchronize();
 
-  auto stream1 = get_stream_pool().get_stream();
-  gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, stream1);
+  auto const level_type_size = _file_itm_data.level_type_size;
+
+  // vector of launched streams
+  std::vector<rmm::cuda_stream_view> streams;
+
+  // launch string decoder
   if (has_strings) {
-    auto stream2 = get_stream_pool().get_stream();
-    chunk_nested_str_data.host_to_device_async(stream2);
-    gpu::DecodeStringPageData(
-      pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, stream2);
-    stream2.synchronize();
+    streams.push_back(get_stream_pool().get_stream());
+    chunk_nested_str_data.host_to_device_async(streams.back());
+    gpu::DecodeStringPageData(pages, chunks, num_rows, skip_rows, level_type_size, streams.back());
   }
-  stream1.synchronize();
+
+  // launch delta binary decoder
+  if ((kernel_mask & gpu::KERNEL_MASK_DELTA_BINARY) != 0) {
+    streams.push_back(get_stream_pool().get_stream());
+    gpu::DecodeDeltaBinary(pages, chunks, num_rows, skip_rows, level_type_size, streams.back());
+  }
+
+  // launch the catch-all page decoder
+  if ((kernel_mask & gpu::KERNEL_MASK_GENERAL) != 0) {
+    streams.push_back(get_stream_pool().get_stream());
+    gpu::DecodePageData(pages, chunks, num_rows, skip_rows, level_type_size, streams.back());
+  }
+
+  // synchronize the streams
+  std::for_each(streams.begin(), streams.end(), [](auto& stream) { stream.synchronize(); });
 
   pages.device_to_host_async(_stream);
   page_nesting.device_to_host_async(_stream);
