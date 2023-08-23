@@ -6648,86 +6648,76 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
         column_indices: list[list[int]] = []
-        unnamed_level_values = None
+        unnamed_level_values = list(
+            map(column_name_idx.get_level_values, unnamed_levels_indices)
+        )
+        if unnamed_level_values:
+            unnamed_level_values = pd.MultiIndex.from_arrays(
+                unnamed_level_values
+            )
 
         def unnamed_group_generator():
             if len(unnamed_levels_indices) == 0:
                 yield column_idx_df
             else:
-                nonlocal unnamed_level_values
-                unnamed_level_values = [
-                    column_name_idx.get_level_values(lv)
-                    for lv in unnamed_levels_indices
-                ]
-                unnamed_level_values = pd.MultiIndex.from_arrays(
-                    unnamed_level_values
-                )
                 for _, grpdf in column_idx_df.groupby(by=unnamed_level_values):
-                    yield grpdf
+                    # When stacking part of the levels, some combinations
+                    # of keysmay not present in this group but can present
+                    # in others. Reindexing with the globally computed
+                    # `unique_named_levels` assigns -1 to these key
+                    # combinations, representing an all-null column that
+                    # is used in the subsequent libcudf call.
+                    grpdf_aligned = grpdf.reindex(
+                        unique_named_levels, axis=0, fill_value=-1
+                    )
+                    grpdf_aligned.sort_index(inplace=True)
+                    yield grpdf_aligned
 
-        for df in unnamed_group_generator():
-            if len(unnamed_levels_indices) == 0:
-                grpdf_aligned = df
-            else:
-                # When stacking part of the levels, some combinations of keys
-                # may not present in this group but can present in others.
-                # Reindexing with the globally computed `unique_named_levels`
-                # assigns -1 to these key combinations, representing an
-                # all-null column that is used in the subsequent libcudf call.
-                grpdf_aligned = df.reindex(
-                    unique_named_levels, axis=0, fill_value=-1
-                )
-            grpdf_aligned.sort_index(inplace=True)  # this needed?
-            indices = []
-            for label in grpdf_aligned.index:
-                (column_idx,) = grpdf_aligned.loc[label]
-                indices.append(int(column_idx))
-            column_indices.append(indices)
+        column_indices = [
+            grpdf_aligned.values for grpdf_aligned in unnamed_group_generator()
+        ]
+        # for grpdf_aligned in unnamed_group_generator():
+        #     column_indices.append(grpdf_aligned.values)
 
         # For each of the group constructed from the unnamed levels,
         # invoke `interleave_columns` to stack the values.
         stacked = []
-        all_nans = None  # lazily created when needed
-        for column_idx in column_indices:
-            columns: list(column | None) = []
 
+        for column_idx in column_indices:
             # Collect columns based on indices, append None for -1 indices.
-            for i in column_idx:
-                if i == -1:
-                    columns.append(None)
-                else:
-                    columns.append(self._data.select_by_index(i).columns[0])
+            columns = [
+                None if i == -1 else self._data.select_by_index(i).columns[0]
+                for i in column_idx
+            ]
 
             # Collect datatypes and cast columns as that type
             common_type = np.result_type(
-                *[col.dtype for col in columns if col is not None]
+                *(col.dtype for col in columns if col is not None)
+            )
+
+            all_nulls = functools.cache(
+                functools.partial(
+                    column_empty, self.shape[0], common_type, masked=True
+                )
             )
 
             # homogenize the dtypes of the columns
-            homogenized: list(column) = []
-            for col in columns:
-                if col is None:
-                    if all_nans is None:
-                        all_nans = column_empty(
-                            self.shape[0], common_type, masked=True
-                        )
-                    col = all_nans
-                elif col.dtype != common_type:
-                    col = col.astype(common_type)
-
-                homogenized.append(col)
+            homogenized = [
+                col.astype(common_type) if col is not None else all_nulls()
+                for col in columns
+            ]
 
             stacked.append(libcudf.reshape.interleave_columns(homogenized))
 
         # Construct the resulting dataframe / series
-        if len(unnamed_levels_indices) == 0:
+        if not unnamed_level_values:
             result = Series._from_data(
                 data={None: stacked[0]}, index=new_index
             )
         else:
-            unnamed_level_values = unnamed_level_values.unique().sort_values()
             if unnamed_level_values.nlevels == 1:
                 unnamed_level_values = unnamed_level_values.get_level_values(0)
+            unnamed_level_values = unnamed_level_values.unique().sort_values()
 
             data = ColumnAccessor(
                 dict(zip(unnamed_level_values, stacked)),
