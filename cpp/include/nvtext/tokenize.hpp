@@ -236,7 +236,10 @@ std::unique_ptr<cudf::column> detokenize(
  *
  * @param input Strings column to tokenize
  * @param vocabulary Strings to lookup tokens within
- * @param delimiter Used to identify tokens within `input`
+ * @param delimiter Used to identify tokens within `input`;
+ *                  Default empty/valid delimiter indicates whitespace
+ * @param default_id The token id to be used for tokens not found in the `vocabulary`
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return Lists column of token ids
  */
@@ -244,6 +247,8 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(
   cudf::strings_column_view const& input,
   cudf::strings_column_view const& vocabulary,
   cudf::string_scalar const& delimiter = cudf::string_scalar{""},
+  cudf::size_type default_id           = -1,
+  rmm::cuda_stream_view stream         = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of tokenize group

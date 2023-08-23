@@ -156,6 +156,63 @@ def test_token_count(delimiter, expected_token_counts):
     assert_eq(expected, actual, check_dtype=False)
 
 
+@pytest.mark.parametrize(
+    "delimiter, input, default_id, results",
+    [
+        (
+            "",
+            "the quick brown fox jumps over the lazy brown dog",
+            99,
+            [0, 1, 2, 3, 4, 5, 0, 99, 2, 6],
+        ),
+        (
+            " ",
+            " the sable siamésé cat jumps under the brown sofa ",
+            -1,
+            [0, 7, 8, 9, 4, 10, 0, 2, 11],
+        ),
+        (
+            "_",
+            "the_quick_brown_fox_jumped__over_the_lazy_brown_dog",
+            -99,
+            [0, 1, 2, 3, -99, 5, 0, -99, 2, 6],
+        ),
+    ],
+)
+def test_tokenize_with_vocabulary(delimiter, input, default_id, results):
+    vocab = cudf.Series(
+        [
+            "the",
+            "quick",
+            "brown",
+            "fox",
+            "jumps",
+            "over",
+            "dog",
+            "sable",
+            "siamésé",
+            "cat",
+            "under",
+            "sofa",
+        ]
+    )
+
+    strings = cudf.Series([input, None, "", input])
+
+    expected = cudf.Series(
+        [
+            cudf.Series(results, dtype=np.int32),
+            None,
+            cudf.Series([], dtype=np.int32),
+            cudf.Series(results, dtype=np.int32),
+        ]
+    )
+
+    actual = strings.str.tokenize_with_vocabulary(vocab, delimiter, default_id)
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual, check_dtype=False)
+
+
 def test_normalize_spaces():
     strings = cudf.Series(
         [

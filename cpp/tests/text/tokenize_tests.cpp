@@ -213,14 +213,16 @@ TEST_F(TextTokenizeTest, Vocabulary)
     {"ate", "chased", "cheese", "dog", "fox", "jumped", "mouse", "mousé", "over", "the"});
   auto input_view = cudf::strings_column_view(input);
   auto vocab_view = cudf::strings_column_view(vocabulary);
-  auto results    = nvtext::tokenize_with_vocabulary(input_view, vocab_view);
+  auto delimiter  = cudf::string_scalar(" ");
+  auto default_id = -7;  // should be the token for the missing 'cat'
+  auto results    = nvtext::tokenize_with_vocabulary(input_view, vocab_view, delimiter, default_id);
 
   using LCW = cudf::test::lists_column_wrapper<cudf::size_type>;
   // clang-format off
-  LCW expected({LCW{9,4,5,8,9,3},
-                LCW{9,3,1,9,-1},
-                LCW{9,-1,1,9,6},
-                LCW{9,7,0,2},
+  LCW expected({LCW{ 9, 4, 5, 8, 9, 3},
+                LCW{ 9, 3, 1, 9,-7},
+                LCW{ 9,-7, 1, 9, 6},
+                LCW{ 9, 7, 0, 2},
                 LCW{}, LCW{}},
                 validity);
   // clang-format on

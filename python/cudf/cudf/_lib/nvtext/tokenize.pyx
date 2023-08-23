@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from cudf.core.buffer import acquire_spill_lock
 
@@ -13,8 +13,10 @@ from cudf._lib.cpp.nvtext.tokenize cimport (
     count_tokens as cpp_count_tokens,
     detokenize as cpp_detokenize,
     tokenize as cpp_tokenize,
+    tokenize_with_vocabulary as cpp_tokenize_with_vocabulary,
 )
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
+from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 
 
@@ -119,6 +121,33 @@ def detokenize(Column strings, Column indices, object py_separator):
     with nogil:
         c_result = move(
             cpp_detokenize(c_strings, c_indices, c_separator[0])
+        )
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+@acquire_spill_lock()
+def tokenize_with_vocabulary(Column strings,
+                             Column vocabulary,
+                             object py_delimiter,
+                             size_type default_id):
+
+    cdef DeviceScalar delimiter = py_delimiter.device_value
+
+    cdef column_view c_strings = strings.view()
+    cdef column_view c_vocabulary = vocabulary.view()
+    cdef const string_scalar* c_delimiter = <const string_scalar*>delimiter\
+        .get_raw_ptr()
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(
+            cpp_tokenize_with_vocabulary(
+                c_strings,
+                c_vocabulary,
+                c_delimiter[0],
+                default_id
+            )
         )
 
     return Column.from_unique_ptr(move(c_result))
