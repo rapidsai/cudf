@@ -216,17 +216,18 @@ std::unique_ptr<cudf::column> detokenize(
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Returns the token-ids for the input string by looking up each delimited
+ * @brief Returns the token ids for the input string by looking up each delimited
  * token in the given vocabulary
  *
  * Token ids are the row indices within the vocabulary column.
+ * Each vocabulary entry is expected to be unique otherwise the behavior is undefined.
  *
  * @code{.pseudo}
  * Example:
- * s = ["hello world", "hello there", "there there world"]
+ * s = ["hello world", "hello there", "there there world", "watch out world"]
  * v = ["hello", "there", "world"]
  * r = tokenize_with_vocabulary(s,v)
- * r is now [[0,2], [0,1], [1,1,2]]
+ * r is now [[0,2], [0,1], [1,1,2], [-1,-1,2]]
  * @endcode
  *
  * Any null row entry results in a corresponding null entry in the output
@@ -238,7 +239,8 @@ std::unique_ptr<cudf::column> detokenize(
  * @param vocabulary Strings to lookup tokens within
  * @param delimiter Used to identify tokens within `input`;
  *                  Default empty/valid delimiter indicates whitespace
- * @param default_id The token id to be used for tokens not found in the `vocabulary`
+ * @param default_id The token id to be used for tokens not found in the `vocabulary`;
+ *                   Default is -1
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return Lists column of token ids

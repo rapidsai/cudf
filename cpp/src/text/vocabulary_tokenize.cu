@@ -39,10 +39,15 @@ namespace nvtext {
 namespace detail {
 namespace {
 
+/**
+ * @brief Tokenizes each string and uses the map to assign token id values
+ *
+ * @tparam MapRefType Type of the static_map reference for calling find()
+ */
 template <typename MapRefType>
 struct vocabulary_tokenizer_fn {
   cudf::column_device_view const d_strings;
-  cudf::string_view d_delimiter;
+  cudf::string_view const d_delimiter;
   MapRefType d_map;
   cudf::size_type default_id;
   cudf::size_type const* d_offsets;
@@ -96,11 +101,12 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
     hash_table_allocator_type{default_allocator<char>{}, stream},
     stream.value());
 
+  // the row index is the token id (value for each key in the map)
   auto iter = cudf::detail::make_counting_transform_iterator(
     0, [] __device__(cudf::size_type idx) { return cuco::make_pair(idx, idx); });
   vocab_map->insert_async(iter, iter + vocabulary.size(), stream.value());
 
-  // count the tokens per string and build the offsets
+  // count the tokens per string and build the offsets from the counts
   auto const d_strings   = cudf::column_device_view::create(input.parent(), stream);
   auto const d_delimiter = delimiter.value(stream);
   auto sizes_itr =
@@ -108,7 +114,7 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
   auto [token_offsets, total_count] =
     cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + input.size(), stream, mr);
 
-  // build output column to hold all token-ids
+  // build the output column to hold all the token ids
   auto tokens =
     cudf::make_numeric_column(output_type, total_count, cudf::mask_state::UNALLOCATED, stream, mr);
 
