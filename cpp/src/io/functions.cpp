@@ -525,7 +525,7 @@ table_input_metadata::table_input_metadata(table_metadata const& metadata)
   std::function<column_in_metadata(column_name_info const&)> get_children =
     [&](column_name_info const& name) {
       auto col_meta = column_in_metadata{name.name};
-      if (name.is_set_nullability()) { col_meta.set_nullability(name.get_nullablity()); }
+      if (name.is_nullable.has_value()) { col_meta.set_nullability(name.is_nullable.value()); }
       std::transform(name.children.begin(),
                      name.children.end(),
                      std::back_inserter(col_meta.children),

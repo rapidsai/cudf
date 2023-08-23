@@ -229,27 +229,6 @@ struct column_name_info {
   }
 
   column_name_info() = default;
-
-  /**
-   * @brief Set the nullability for this column.
-   *
-   * @param _val True if the column is nullable.
-   */
-  void set_nullability(bool _val) { is_nullable = _val; }
-
-  /**
-   * @brief Test whether nullability has been set for this column.
-   *
-   * @return True if the nullability is set, false otherwise
-   */
-  bool is_set_nullability() const { return is_nullable.has_value(); }
-
-  /**
-   * @brief Get the nullability for this column.
-   *
-   * @return True if the column is nullable, false if not, or the nullability has not been set.
-   */
-  bool get_nullablity() const { return is_nullable.value_or(false); }
 };
 
 /**
