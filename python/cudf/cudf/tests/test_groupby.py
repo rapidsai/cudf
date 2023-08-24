@@ -181,6 +181,13 @@ def test_groupby_as_index_single_agg(pdf, gdf, as_index):
 
 
 @pytest.mark.parametrize("as_index", [True, False])
+def test_groupby_as_index_apply(pdf, gdf, as_index):
+    gdf = gdf.groupby("y", as_index=as_index).apply(lambda df: df["x"].mean())
+    pdf = pdf.groupby("y", as_index=as_index).apply(lambda df: df["x"].mean())
+    assert_groupby_results_equal(pdf, gdf)
+
+
+@pytest.mark.parametrize("as_index", [True, False])
 def test_groupby_as_index_multiindex(pdf, gdf, as_index):
     pdf = pd.DataFrame(
         {"a": [1, 2, 1], "b": [3, 3, 3], "c": [2, 2, 3], "d": [3, 1, 2]}
