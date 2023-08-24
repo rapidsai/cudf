@@ -48,6 +48,12 @@ constexpr size_type MAX_DICT_SIZE = (1 << MAX_DICT_BITS) - 1;
 // level decode buffer size.
 constexpr int LEVEL_DECODE_BUF_SIZE = 2048;
 
+template <int rolling_size>
+constexpr int rolling_index(int index)
+{
+  return index % rolling_size;
+}
+
 /**
  * @brief Struct representing an input column in the file.
  */
@@ -85,6 +91,17 @@ enum level_type {
   REPETITION,
 
   NUM_LEVEL_TYPES
+};
+
+/**
+ * @brief Enum of mask bits for the PageInfo kernel_mask
+ *
+ * Used to control which decode kernels to run.
+ */
+enum kernel_mask_bits {
+  KERNEL_MASK_GENERAL      = (1 << 0),  // Run catch-all decode kernel
+  KERNEL_MASK_STRING       = (1 << 1),  // Run decode kernel for string data
+  KERNEL_MASK_DELTA_BINARY = (1 << 2)   // Run decode kernel for DELTA_BINARY_PACKED data
 };
 
 /**
@@ -203,6 +220,8 @@ struct PageInfo {
 
   // level decode buffers
   uint8_t* lvl_decode_buf[level_type::NUM_LEVEL_TYPES];
+
+  uint32_t kernel_mask;
 };
 
 /**
@@ -459,6 +478,19 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
                                 rmm::cuda_stream_view stream);
 
 /**
+ * @brief Get the set of kernels that need to be invoked on these pages as a bitmask.
+ *
+ * This function performs a bitwise OR on all of the individual `kernel_mask` fields on the pages
+ * passed in.
+ *
+ * @param[in] pages List of pages to aggregate
+ * @param[in] stream CUDA stream to use
+ * @return Bitwise OR of all page `kernel_mask` values
+ */
+uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_vector<PageInfo>& pages,
+                                       rmm::cuda_stream_view stream);
+
+/**
  * @brief Compute page output size information.
  *
  * When dealing with nested hierarchies (those that contain lists), or when doing a chunked
@@ -552,6 +584,26 @@ void DecodeStringPageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
                           size_t min_row,
                           int level_type_size,
                           rmm::cuda_stream_view stream);
+
+/**
+ * @brief Launches kernel for reading the DELTA_BINARY_PACKED column data stored in the pages
+ *
+ * The page data will be written to the output pointed to in the page's
+ * associated column chunk.
+ *
+ * @param[in,out] pages All pages to be decoded
+ * @param[in] chunks All chunks to be decoded
+ * @param[in] num_rows Total number of rows to read
+ * @param[in] min_row Minimum number of rows to read
+ * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[in] stream CUDA stream to use, default 0
+ */
+void DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages,
+                       cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+                       size_t num_rows,
+                       size_t min_row,
+                       int level_type_size,
+                       rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing encoder row group fragments
