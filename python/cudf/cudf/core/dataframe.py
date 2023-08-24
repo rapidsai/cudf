@@ -6606,6 +6606,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         unnamed_levels_indices = [
             i for i in range(self._data.nlevels) if i not in level_indices
         ]
+        has_unnamed_levels = len(unnamed_levels_indices) > 0
 
         column_name_idx = self._data.to_pandas_index()
         # Construct new index from the levels specified by `level`
@@ -6658,26 +6659,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         def unnamed_group_generator():
             if len(unnamed_levels_indices) == 0:
-                yield column_idx_df
+                yield column_idx_df.sort_index().values
             else:
                 for _, grpdf in column_idx_df.groupby(by=unnamed_level_values):
                     # When stacking part of the levels, some combinations
-                    # of keysmay not present in this group but can present
-                    # in others. Reindexing with the globally computed
+                    # of keys may not be present in this group but can be
+                    # present in others. Reindexing with the globally computed
                     # `unique_named_levels` assigns -1 to these key
                     # combinations, representing an all-null column that
                     # is used in the subsequent libcudf call.
-                    grpdf_aligned = grpdf.reindex(
+                    yield grpdf.reindex(
                         unique_named_levels, axis=0, fill_value=-1
-                    )
-                    grpdf_aligned.sort_index(inplace=True)
-                    yield grpdf_aligned
+                    ).sort_index().values
 
-        column_indices = [
-            grpdf_aligned.values for grpdf_aligned in unnamed_group_generator()
-        ]
-        # for grpdf_aligned in unnamed_group_generator():
-        #     column_indices.append(grpdf_aligned.values)
+        column_indices = list(unnamed_group_generator())
 
         # For each of the group constructed from the unnamed levels,
         # invoke `interleave_columns` to stack the values.
@@ -6710,7 +6705,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             stacked.append(libcudf.reshape.interleave_columns(homogenized))
 
         # Construct the resulting dataframe / series
-        if not unnamed_level_values:
+        if has_unnamed_levels:
             result = Series._from_data(
                 data={None: stacked[0]}, index=new_index
             )
