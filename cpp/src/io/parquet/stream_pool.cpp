@@ -26,43 +26,39 @@ namespace {
 
 std::size_t constexpr STREAM_POOL_SIZE = 32;
 
-// doing lazy initialization to avoid allocating this before cuInit is called (was
-// causing issues with compute-sanitizer).
-// deliberately allowing the pool to leak to avoid deleting streams after cuda shutdown.
-rmm::cuda_stream_pool* pool = nullptr;
-
 std::mutex stream_pool_mutex;
 
-void init()
+auto& get_stream_pool()
 {
-  std::lock_guard<std::mutex> lock(stream_pool_mutex);
-  if (pool == nullptr) { pool = new rmm::cuda_stream_pool(STREAM_POOL_SIZE); }
+  // TODO: is the following still true? test this again.
+  // TODO: creating this on the heap because there were issues with trying to call the
+  // stream pool destructor during cuda shutdown that lead to a segmentation fault in
+  // nvbench. this allocation is being deliberately leaked to avoid the above, but still
+  // results in non-fatal warnings when running nvbench in cuda-gdb.
+  static auto pool = new rmm::cuda_stream_pool{STREAM_POOL_SIZE};
+  return *pool;
 }
-
-std::atomic_size_t stream_idx{};
 
 }  // anonymous namespace
 
 rmm::cuda_stream_view get_stream()
 {
-  init();
-  return pool->get_stream();
+  return get_stream_pool().get_stream();
 }
 
 rmm::cuda_stream_view get_stream(std::size_t stream_id)
 {
-  init();
-  return pool->get_stream(stream_id);
+  return get_stream_pool().get_stream(stream_id);
 }
 
 std::vector<rmm::cuda_stream_view> get_streams(uint32_t count)
 {
-  init();
-
-  // TODO maybe add mutex to be sure streams don't overlap
+  // TODO: if count > STREAM_POOL_SIZE log a warning
+  CUDF_LOG_WARN("get_streams called with count ({}) > pool size ({})", count, STREAM_POOL_SIZE);
   auto streams = std::vector<rmm::cuda_stream_view>();
+  std::lock_guard<std::mutex> lock(stream_pool_mutex);
   for (uint32_t i = 0; i < count; i++) {
-    streams.emplace_back(pool->get_stream((stream_idx++)));
+    streams.emplace_back(pool->get_stream());
   }
   return streams;
 }
