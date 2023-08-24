@@ -27,7 +27,6 @@
 
 #include <transform/jit/operation-udf.hpp>
 
-#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
@@ -38,7 +37,9 @@ namespace jit {
 template <typename TypeOut, typename TypeIn>
 __global__ void kernel(cudf::size_type size, TypeOut* out_data, TypeIn* in_data)
 {
-  thread_index_type const start  = grid_1d::global_thread_id();
+  // cannot use global_thread_id utility due to a JIT build issue by including
+  // the `cudf/detail/utilities/cuda.cuh` header
+  thread_index_type const start  = threadIdx.x + blockIdx.x * blockDim.x;
   thread_index_type const stride = blockDim.x * gridDim.x;
 
   for (auto i = start; i < static_cast<thread_index_type>(size); i += stride) {
