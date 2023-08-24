@@ -25,19 +25,27 @@ namespace cudf::io::detail::parquet {
 
 namespace {
 
+// TODO: what is a good number here. what's the penalty for making it larger?
 std::size_t constexpr STREAM_POOL_SIZE = 32;
 
 std::mutex stream_pool_mutex;
 
 auto& get_stream_pool()
 {
-  // TODO: is the following still true? test this again.
   // TODO: creating this on the heap because there were issues with trying to call the
   // stream pool destructor during cuda shutdown that lead to a segmentation fault in
-  // nvbench. this allocation is being deliberately leaked to avoid the above, but still
-  // results in non-fatal warnings when running nvbench in cuda-gdb.
+  // nvbench. this allocation is being deliberately leaked to avoid the above.
+#if 1
   static auto pool = new rmm::cuda_stream_pool{STREAM_POOL_SIZE};
   return *pool;
+#else
+  // FIXME
+  // running ./benchmarks/PARQUET_READER_NVBENCH -b parquet_read_decode --axis data_type=STRUCT
+  // with this code results in a segmentation fault in the cuda_stream_pool dtor during shutdown.
+  // it seems cudaStreamDestroy is called twice on the streams in the pool.
+  static rmm::cuda_stream_pool pool{STREAM_POOL_SIZE};
+  return pool;
+#endif
 }
 
 }  // anonymous namespace
