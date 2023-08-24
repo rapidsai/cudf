@@ -53,7 +53,6 @@ rmm::cuda_stream_view get_stream(std::size_t stream_id)
 
 std::vector<rmm::cuda_stream_view> get_streams(uint32_t count)
 {
-  // TODO: if count > STREAM_POOL_SIZE log a warning
   CUDF_LOG_WARN("get_streams called with count ({}) > pool size ({})", count, STREAM_POOL_SIZE);
   auto streams = std::vector<rmm::cuda_stream_view>();
   std::lock_guard<std::mutex> lock(stream_pool_mutex);
