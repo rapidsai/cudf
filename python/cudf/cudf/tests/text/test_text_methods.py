@@ -836,7 +836,15 @@ def test_is_vowel_consonant():
 
 def test_minhash():
     strings = cudf.Series(["this is my", "favorite book", None, ""])
-    expected = cudf.Series([21141582, 962346254, None, 0], dtype=np.uint32)
+
+    expected = cudf.Series(
+        [
+            cudf.Series([21141582], dtype=np.uint32),
+            cudf.Series([962346254], dtype=np.uint32),
+            None,
+            cudf.Series([0], dtype=np.uint32),
+        ]
+    )
     actual = strings.str.minhash()
     assert_eq(expected, actual)
     seeds = cudf.Series([0, 1, 2], dtype=np.uint32)
@@ -848,16 +856,46 @@ def test_minhash():
             cudf.Series([0, 0, 0], dtype=np.uint32),
         ]
     )
-    actual = strings.str.minhash(seeds=seeds, n=5)
+    actual = strings.str.minhash(seeds=seeds, width=5)
     assert_eq(expected, actual)
 
+    expected = cudf.Series(
+        [
+            cudf.Series([3232308021562742685], dtype=np.uint64),
+            cudf.Series([23008204270530356], dtype=np.uint64),
+            None,
+            cudf.Series([0], dtype=np.uint64),
+        ]
+    )
+    actual = strings.str.minhash64()
+    assert_eq(expected, actual)
+    seeds = cudf.Series([0, 1, 2], dtype=np.uint64)
+    expected = cudf.Series(
+        [
+            cudf.Series(
+                [7082801294247314046, 185949556058924788, 167570629329462454],
+                dtype=np.uint64,
+            ),
+            cudf.Series(
+                [382665377781028452, 86243762733551437, 7688750597953083512],
+                dtype=np.uint64,
+            ),
+            None,
+            cudf.Series([0, 0, 0], dtype=np.uint64),
+        ]
+    )
+    actual = strings.str.minhash64(seeds=seeds, width=5)
+    assert_eq(expected, actual)
+
+    # test wrong seed types
     with pytest.raises(ValueError):
-        strings.str.minhash(seeds=7)
-    with pytest.raises(ValueError):
-        strings.str.minhash(seeds=seeds, method="md5")
+        strings.str.minhash(seeds="a")
     with pytest.raises(ValueError):
         seeds = cudf.Series([0, 1, 2], dtype=np.int32)
         strings.str.minhash(seeds=seeds)
+    with pytest.raises(ValueError):
+        seeds = cudf.Series([0, 1, 2], dtype=np.uint32)
+        strings.str.minhash64(seeds=seeds)
 
 
 def test_jaccard_index():
