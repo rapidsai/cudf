@@ -210,20 +210,14 @@ struct column_name_info {
   std::string name;                        ///< Column name
   std::optional<bool> is_nullable;         ///< Column nullability
   std::vector<column_name_info> children;  ///< Child column names
-  /**
-   * @brief Construct a column name info with a name and no children
-   *
-   * @param _name Column name
-   */
-  column_name_info(std::string const& _name) : name(_name) {}
 
   /**
-   * @brief Construct a column name info with a name, nullabilty, and no children
+   * @brief Construct a column name info with a name, optional nullabilty, and no children
    *
    * @param _name Column name
    * @param _is_nullable True if column is nullable
    */
-  column_name_info(std::string const& _name, bool _is_nullable)
+  column_name_info(std::string const& _name, std::optional<bool> _is_nullable = std::nullopt)
     : name(_name), is_nullable(_is_nullable)
   {
   }
