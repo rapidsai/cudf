@@ -75,6 +75,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TableTest extends CudfTestBase {
+  private static final HostMemoryAllocator hostMemoryAllocator = DefaultHostMemoryAllocator.get();
+
   private static final File TEST_PARQUET_FILE = TestUtils.getResourceAsFile("acq.parquet");
   private static final File TEST_PARQUET_FILE_CHUNKED_READ = TestUtils.getResourceAsFile("splittable.parquet");
   private static final File TEST_PARQUET_FILE_BINARY = TestUtils.getResourceAsFile("binary.parquet");
@@ -440,7 +442,7 @@ public class TableTest extends CudfTestBase {
             "{ \"A\": 3, \"B\": 6, \"C\": \"Z\"}\n" +
             "{ \"A\": 4, \"B\": 8, \"C\": \"W\"}\n").getBytes(StandardCharsets.UTF_8);
     final int numBytes = data.length;
-    try (HostMemoryBuffer hostbuf = HostMemoryBuffer.allocate(numBytes)) {
+    try (HostMemoryBuffer hostbuf = hostMemoryAllocator.allocate(numBytes)) {
       hostbuf.setBytes(0, data, 0, numBytes);
       try (Table expected = new Table.TestBuilder()
               .column(1L, 2L, 3L, 4L)
@@ -3465,7 +3467,7 @@ public class TableTest extends CudfTestBase {
         do {
           head = new JCudfSerialization.SerializedTableHeader(din);
           if (head.wasInitialized()) {
-            HostMemoryBuffer buff = HostMemoryBuffer.allocate(head.getDataLen());
+            HostMemoryBuffer buff = hostMemoryAllocator.allocate(head.getDataLen());
             buffers.add(buff);
             JCudfSerialization.readTableIntoBuffer(din, head, buff);
             assert head.wasDataRead();
@@ -3624,7 +3626,7 @@ public class TableTest extends CudfTestBase {
           do {
             head = new JCudfSerialization.SerializedTableHeader(din);
             if (head.wasInitialized()) {
-              HostMemoryBuffer buff = HostMemoryBuffer.allocate(100 * 1024);
+              HostMemoryBuffer buff = hostMemoryAllocator.allocate(100 * 1024);
               buffers.add(buff);
               JCudfSerialization.readTableIntoBuffer(din, head, buff);
               assert head.wasDataRead();
@@ -3665,7 +3667,7 @@ public class TableTest extends CudfTestBase {
     JCudfSerialization.SerializedTableHeader header =
             new JCudfSerialization.SerializedTableHeader(din);
     assertTrue(header.wasInitialized());
-    try (HostMemoryBuffer buffer = HostMemoryBuffer.allocate(header.getDataLen())) {
+    try (HostMemoryBuffer buffer = hostMemoryAllocator.allocate(header.getDataLen())) {
       JCudfSerialization.readTableIntoBuffer(din, header, buffer);
       assertTrue(header.wasDataRead());
       HostColumnVector[] hostColumns =
@@ -3727,7 +3729,7 @@ public class TableTest extends CudfTestBase {
       DataInputStream in = new DataInputStream(new ByteArrayInputStream(out.toByteArray()));
       JCudfSerialization.SerializedTableHeader header = new JCudfSerialization.SerializedTableHeader(in);
       assert header.wasInitialized();
-      try (HostMemoryBuffer buff = HostMemoryBuffer.allocate(header.getDataLen())) {
+      try (HostMemoryBuffer buff = hostMemoryAllocator.allocate(header.getDataLen())) {
         JCudfSerialization.readTableIntoBuffer(in, header, buff);
         assert header.wasDataRead();
         try (Table result = JCudfSerialization.readAndConcat(
@@ -3758,7 +3760,7 @@ public class TableTest extends CudfTestBase {
           do {
             head = new JCudfSerialization.SerializedTableHeader(din);
             if (head.wasInitialized()) {
-              HostMemoryBuffer buff = HostMemoryBuffer.allocate(100 * 1024);
+              HostMemoryBuffer buff = hostMemoryAllocator.allocate(100 * 1024);
               buffers.add(buff);
               JCudfSerialization.readTableIntoBuffer(din, head, buff);
               assert head.wasDataRead();
@@ -7985,7 +7987,7 @@ public class TableTest extends CudfTestBase {
     long offset = 0;
 
     public MyBufferConsumer() {
-      buffer = HostMemoryBuffer.allocate(10 * 1024 * 1024);
+      buffer = hostMemoryAllocator.allocate(10 * 1024 * 1024);
     }
 
     @Override

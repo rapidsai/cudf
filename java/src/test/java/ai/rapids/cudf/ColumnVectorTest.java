@@ -6752,10 +6752,11 @@ public class ColumnVectorTest extends CudfTestBase {
     List<Integer> list1 = Arrays.asList(4, 5, null);
     List<Integer> list2 = Arrays.asList(7, 8, 9);
     List<Integer> list3 = null;
+    final HostMemoryAllocator hostMemoryAllocator = DefaultHostMemoryAllocator.get();
     try (ColumnVector input = ColumnVectorTest.makeListsColumn(DType.INT32, list0, list1, list2, list3);
          BaseDeviceMemoryBuffer baseValidityBuffer = input.getDeviceBufferFor(BufferType.VALIDITY);
          BaseDeviceMemoryBuffer baseOffsetBuffer = input.getDeviceBufferFor(BufferType.OFFSET);
-         HostMemoryBuffer newValidity = HostMemoryBuffer.allocate(BitVectorHelper.getValidityAllocationSizeInBytes(4))) {
+         HostMemoryBuffer newValidity = hostMemoryAllocator.allocate(BitVectorHelper.getValidityAllocationSizeInBytes(4))) {
 
       newValidity.copyFromDeviceBuffer(baseValidityBuffer);
       // we are setting list1 with 3 elements to null. This will result in a non-empty null in the
