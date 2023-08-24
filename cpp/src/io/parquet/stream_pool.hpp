@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cudf/utilities/span.hpp>
+
 #include <rmm/cuda_stream_pool.hpp>
 
 namespace cudf::io::detail::parquet {
@@ -86,7 +88,7 @@ cuda_stream_pool& global_cuda_stream_pool();
  * @param streams Vector of streams to synchronize on.
  * @param stream Stream to synchronize the other streams to, usually the default stream.
  */
-void fork_streams(std::vector<rmm::cuda_stream_view>& streams, rmm::cuda_stream_view stream);
+void fork_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream);
 
 /**
  * @brief Synchronize a stream to an event on a set of streams.
@@ -94,6 +96,6 @@ void fork_streams(std::vector<rmm::cuda_stream_view>& streams, rmm::cuda_stream_
  * @param streams Vector of streams to synchronize on.
  * @param stream Stream to synchronize the other streams to, usually the default stream.
  */
-void join_streams(std::vector<rmm::cuda_stream_view>& streams, rmm::cuda_stream_view stream);
+void join_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream);
 
 }  // namespace cudf::io::detail::parquet

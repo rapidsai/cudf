@@ -89,7 +89,7 @@ cuda_stream_pool& global_cuda_stream_pool()
   return *pool;
 }
 
-void fork_streams(std::vector<rmm::cuda_stream_view>& streams, rmm::cuda_stream_view stream)
+void fork_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
 {
   cudaEvent_t event;
   CUDF_CUDA_TRY(cudaEventCreate(&event));
@@ -100,7 +100,7 @@ void fork_streams(std::vector<rmm::cuda_stream_view>& streams, rmm::cuda_stream_
   CUDF_CUDA_TRY(cudaEventDestroy(event));
 }
 
-void join_streams(std::vector<rmm::cuda_stream_view>& streams, rmm::cuda_stream_view stream)
+void join_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
 {
   cudaEvent_t event;
   CUDF_CUDA_TRY(cudaEventCreate(&event));
