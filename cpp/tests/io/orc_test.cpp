@@ -1037,10 +1037,10 @@ TEST_F(OrcStatisticsTest, Basic)
     EXPECT_EQ(*s4.number_of_values, 4ul);
     EXPECT_TRUE(*s4.has_null);
     auto& ts4 = std::get<cudf::io::timestamp_statistics>(s4.type_specific_stats);
+    EXPECT_EQ(*ts4.minimum, 1000);
+    EXPECT_EQ(*ts4.maximum, 7000);
     EXPECT_EQ(*ts4.minimum_utc, 1000);
     EXPECT_EQ(*ts4.maximum_utc, 7000);
-    ASSERT_FALSE(ts4.minimum);
-    ASSERT_FALSE(ts4.maximum);
 
     auto& s5 = stats[5];
     EXPECT_EQ(*s5.number_of_values, 4ul);

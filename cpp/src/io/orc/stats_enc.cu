@@ -352,6 +352,9 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         if (s->chunk.has_minmax) {
           cur[0] = 9 * 8 + ProtofType::FIXEDLEN;
           cur += 2;
+          // minimum/maximum are the same as minimumUtc/maximumUtc as we always write files in UTC
+          cur          = pb_put_int(cur, 1, s->chunk.min_value.i_val);  // minimum
+          cur          = pb_put_int(cur, 2, s->chunk.max_value.i_val);  // maximum
           cur          = pb_put_int(cur, 3, s->chunk.min_value.i_val);  // minimumUtc
           cur          = pb_put_int(cur, 4, s->chunk.max_value.i_val);  // maximumUtc
           fld_start[1] = cur - (fld_start + 2);
