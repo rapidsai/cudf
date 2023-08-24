@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
+import copy
 import itertools
 import pickle
 import textwrap
@@ -20,7 +21,7 @@ from cudf._lib.reshape import interleave_columns
 from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
 from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
-from cudf.api.types import is_list_like
+from cudf.api.types import is_bool_dtype, is_list_like
 from cudf.core.abc import Serializable
 from cudf.core.column.column import ColumnBase, arange, as_column
 from cudf.core.column_accessor import ColumnAccessor
@@ -261,17 +262,17 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         self.obj = obj
         self._as_index = as_index
-        self._by = by
+        self._by = by.copy(deep=True) if isinstance(by, _Grouping) else by
         self._level = level
         self._sort = sort
         self._dropna = dropna
         self._group_keys = group_keys
 
-        if isinstance(by, _Grouping):
-            by._obj = self.obj
-            self.grouping = by
+        if isinstance(self._by, _Grouping):
+            self._by._obj = self.obj
+            self.grouping = self._by
         else:
-            self.grouping = _Grouping(obj, by, level)
+            self.grouping = _Grouping(obj, self._by, level)
 
     def __iter__(self):
         if isinstance(self._by, list) and len(self._by) == 1:
@@ -552,8 +553,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             orig_dtypes,
         ):
             for agg, col in zip(aggs, cols):
+                agg_name = agg.__name__ if callable(agg) else agg
                 if multilevel:
-                    agg_name = agg.__name__ if callable(agg) else agg
                     key = (col_name, agg_name)
                 else:
                     key = col_name
@@ -563,7 +564,26 @@ class GroupBy(Serializable, Reducible, Scannable):
                 ):
                     # Structs lose their labels which we reconstruct here
                     col = col._with_type_metadata(cudf.ListDtype(orig_dtype))
-                data[key] = col
+
+                if (
+                    self.obj.empty
+                    and (
+                        isinstance(agg_name, str)
+                        and agg_name in Reducible._SUPPORTED_REDUCTIONS
+                    )
+                    and len(col) == 0
+                    and not isinstance(
+                        col,
+                        (
+                            cudf.core.column.ListColumn,
+                            cudf.core.column.StructColumn,
+                            cudf.core.column.DecimalBaseColumn,
+                        ),
+                    )
+                ):
+                    data[key] = col.astype(orig_dtype)
+                else:
+                    data[key] = col
         data = ColumnAccessor(data, multiindex=multilevel)
         if not multilevel:
             data = data.rename_levels({np.nan: None}, level=0)
@@ -1372,7 +1392,16 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
 
         if self.obj.empty:
-            return self.obj
+            res = self.obj.copy(deep=True)
+            res.index = self.grouping.keys
+            if function in {"sum", "product"}:
+                # For `sum` & `product`, boolean types
+                # will need to result in `int64` type.
+                for name, col in res._data.items():
+                    if is_bool_dtype(col.dtype):
+                        res._data[name] = col.astype("int")
+            return res
+
         if not callable(function):
             raise TypeError(f"type {type(function)} is not callable")
         group_names, offsets, group_keys, grouped_values = self._grouped()
@@ -2545,6 +2574,13 @@ class _Grouping(Serializable):
         out.names = names
         out._named_columns = _named_columns
         out._key_columns = key_columns
+        return out
+
+    def copy(self, deep=True):
+        out = _Grouping.__new__(_Grouping)
+        out.names = copy.deepcopy(self.names)
+        out._named_columns = copy.deepcopy(self._named_columns)
+        out._key_columns = [col.copy(deep=deep) for col in self._key_columns]
         return out
 
 
