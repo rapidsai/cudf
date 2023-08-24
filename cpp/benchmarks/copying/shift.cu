@@ -68,6 +68,17 @@ static void BM_shift(benchmark::State& state)
     cuda_event_timer raii(state, true);
     auto output = cudf::shift(input, offset, *fill);
   }
+
+  auto const elems_read    = (size - offset);
+  auto const elems_written = use_validity ? (size - offset) : size;
+  auto const bytes_read    = elems_read * sizeof(int);
+  auto const bytes_written = elems_written * sizeof(int);
+
+  // null bytes for input and output
+  auto const null_bytes = use_validity ? 2 * cudf::bitmask_allocation_size_bytes(size) : 0;
+
+  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) *
+                          (bytes_written + bytes_read + null_bytes));
 }
 
 class Shift : public cudf::benchmark {};
