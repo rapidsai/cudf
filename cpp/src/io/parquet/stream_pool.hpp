@@ -60,6 +60,15 @@ class cuda_stream_pool {
    * @return Vector containing `count` stream views.
    */
   virtual std::vector<rmm::cuda_stream_view> get_streams(uint32_t count) = 0;
+
+  /**
+   * @brief Get the number of streams in the pool.
+   *
+   * This function is thread safe with respect to other calls to the same function.
+   *
+   * @return the number of streams in the pool
+   */
+  virtual std::size_t get_stream_pool_size() const = 0;
 };
 
 /**
@@ -86,14 +95,5 @@ void fork_streams(std::vector<rmm::cuda_stream_view>& streams, rmm::cuda_stream_
  * @param stream Stream to synchronize the other streams to, usually the default stream.
  */
 void join_streams(std::vector<rmm::cuda_stream_view>& streams, rmm::cuda_stream_view stream);
-
-/**
- * @brief Get the number of streams in the pool.
- *
- * This function is thread safe with respect to other calls to the same function.
- *
- * @return the number of streams in the pool
- */
-std::size_t get_stream_pool_size();
 
 }  // namespace cudf::io::detail::parquet
