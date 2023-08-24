@@ -50,11 +50,7 @@ namespace detail {
 
 namespace {
 
-template <typename CharType>
-constexpr bool is_whitespace(CharType ch)
-{
-  return ch <= ' ';
-}
+constexpr bool is_whitespace(u_char ch) { return ch <= ' '; }
 
 /**
  * @brief Resolve a substring up to the first whitespace character.
@@ -69,9 +65,10 @@ constexpr bool is_whitespace(CharType ch)
 __device__ cudf::string_view get_first_token(cudf::string_view const& d_str)
 {
   auto const begin = d_str.data();
-  auto const end   = thrust::find_if(
-    thrust::seq, begin, begin + d_str.size_bytes(), [](auto ch) { return is_whitespace(ch); });
-  auto const size = static_cast<cudf::size_type>(thrust::distance(begin, end));
+  auto const end   = thrust::find_if(thrust::seq, begin, begin + d_str.size_bytes(), [](auto ch) {
+    return is_whitespace(static_cast<u_char>(ch));
+  });
+  auto const size  = static_cast<cudf::size_type>(thrust::distance(begin, end));
   return cudf::string_view(begin, size);
 }
 
@@ -402,7 +399,7 @@ struct edge_of_space_fn {
   __device__ bool operator()(cudf::size_type offset)
   {
     auto const d_chars =
-      d_strings.child(cudf::strings_column_view::chars_column_index).data<char>();
+      d_strings.child(cudf::strings_column_view::chars_column_index).data<u_char>();
     if (is_whitespace(d_chars[offset]) || !is_whitespace(d_chars[offset - 1])) { return false; }
 
     auto const offsets   = d_strings.child(cudf::strings_column_view::offsets_column_index);
@@ -484,10 +481,10 @@ struct list_offsets_fn {
     auto const end   = thrust::make_counting_iterator<cudf::size_type>(d_str.size_bytes());
 
     // this counts the number of non-adjacent delimiters
-    auto const result =
-      thrust::count_if(thrust::seq, begin, end, [data = d_str.data()](auto chidx) {
-        return !is_whitespace(data[chidx]) && is_whitespace(data[chidx - 1]);
-      });
+    auto const data   = reinterpret_cast<u_char const*>(d_str.data());
+    auto const result = thrust::count_if(thrust::seq, begin, end, [data](auto chidx) {
+      return !is_whitespace(data[chidx]) && is_whitespace(data[chidx - 1]);
+    });
     return static_cast<cudf::size_type>(result) + 1;
   }
 };
