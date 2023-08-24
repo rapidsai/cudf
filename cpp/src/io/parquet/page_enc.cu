@@ -242,9 +242,9 @@ __global__ void __launch_bounds__(block_size)
 {
   __shared__ __align__(16) frag_init_state_s state_g;
 
-  frag_init_state_s* const s              = &state_g;
-  uint32_t const t                        = threadIdx.x;
-  uint32_t const num_fragments_per_column = frag.size().second;
+  frag_init_state_s* const s          = &state_g;
+  auto const t                        = threadIdx.x;
+  auto const num_fragments_per_column = frag.size().second;
 
   if (t == 0) { s->col = col_desc[blockIdx.x]; }
   __syncthreads();
@@ -1003,7 +1003,7 @@ __global__ void __launch_bounds__(128, 8)
   } temp_storage;
 
   page_enc_state_s* const s = &state_g;
-  uint32_t t                = threadIdx.x;
+  auto const t              = threadIdx.x;
 
   if (t == 0) {
     state_g = page_enc_state_s{};
@@ -1042,7 +1042,7 @@ __global__ void __launch_bounds__(128, 8)
       while (s->rle_numvals < s->page.num_rows) {
         uint32_t rle_numvals = s->rle_numvals;
         uint32_t nrows       = min(s->page.num_rows - rle_numvals, 128);
-        uint32_t row         = s->page.start_row + rle_numvals + t;
+        auto row             = s->page.start_row + rle_numvals + t;
         // Definition level encodes validity. Checks the valid map and if it is valid, then sets the
         // def_lvl accordingly and sets it in s->vals which is then given to RleEncode to encode
         uint32_t def_lvl = [&]() {
@@ -1884,7 +1884,7 @@ __global__ void __launch_bounds__(128)
   __shared__ __align__(8) EncPage page_g;
   __shared__ __align__(8) unsigned char scratch[MIN_STATS_SCRATCH_SIZE];
 
-  uint32_t t = threadIdx.x;
+  auto const t = threadIdx.x;
 
   if (t == 0) {
     uint8_t *hdr_start, *hdr_end;
@@ -1972,7 +1972,7 @@ __global__ void __launch_bounds__(1024)
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
 
-  uint32_t t = threadIdx.x;
+  auto const t = threadIdx.x;
   uint8_t *dst, *dst_base;
   EncPage const* first_page;
   uint32_t num_pages, uncompressed_size;
