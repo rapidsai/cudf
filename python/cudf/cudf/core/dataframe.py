@@ -6658,7 +6658,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             data=range(len(self._data)), index=named_levels
         )
 
-        print("in stack")
         column_indices: list[list[int]] = []
         if has_unnamed_levels:
             unnamed_level_values = list(
