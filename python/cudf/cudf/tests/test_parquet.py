@@ -2572,7 +2572,7 @@ def test_parquet_reader_fixed_bin(datadir):
     fname = datadir / "fixed_len_byte_array.parquet"
 
     expect = pd.read_parquet(fname)
-    got = cudf.read_parquet(fname).to_pandas()
+    got = cudf.read_parquet(fname)
 
     assert_eq(expect, got)
 
