@@ -25,20 +25,6 @@
 
 namespace cudf::io::parquet::gpu {
 
-constexpr int preprocess_block_size = num_rle_stream_decode_threads;  // 512
-constexpr int decode_block_size     = 128;
-constexpr int non_zero_buffer_size  = decode_block_size * 2;
-
-constexpr int rolling_index(cudf::thread_index_type index)
-{
-  return index & (non_zero_buffer_size - 1);
-}
-template <int lvl_buf_size>
-constexpr int rolling_lvl_index(cudf::thread_index_type index)
-{
-  return index % lvl_buf_size;
-}
-
 struct page_state_s {
   uint8_t const* data_start;
   uint8_t const* data_end;
@@ -86,10 +72,15 @@ struct page_state_s {
 
 // buffers only used in the decode kernel.  separated from page_state_s to keep
 // shared memory usage in other kernels (eg, gpuComputePageSizes) down.
+template <int _nz_buf_size, int _dict_buf_size, int _str_buf_size>
 struct page_state_buffers_s {
-  uint32_t nz_idx[non_zero_buffer_size];    // circular buffer of non-null value positions
-  uint32_t dict_idx[non_zero_buffer_size];  // Dictionary index, boolean, or string offset values
-  uint32_t str_len[non_zero_buffer_size];   // String length for plain encoding of strings
+  static constexpr int nz_buf_size   = _nz_buf_size;
+  static constexpr int dict_buf_size = _dict_buf_size;
+  static constexpr int str_buf_size  = _str_buf_size;
+
+  uint32_t nz_idx[nz_buf_size];      // circular buffer of non-null value positions
+  uint32_t dict_idx[dict_buf_size];  // Dictionary index, boolean, or string offset values
+  uint32_t str_len[str_buf_size];    // String length for plain encoding of strings
 };
 
 // Copies null counts back to `nesting_decode` at the end of scope
@@ -175,11 +166,14 @@ inline __device__ bool is_page_contained(page_state_s* const s, size_t start_row
  * @param[in] s Page state input
  * @param[out] sb Page state buffer output
  * @param[in] src_pos Source position
+ * @tparam state_buf Typename of the `state_buf` (usually inferred)
  *
  * @return A pair containing a pointer to the string and its length
  */
-inline __device__ cuda::std::pair<char const*, size_t> gpuGetStringData(
-  page_state_s volatile* s, page_state_buffers_s volatile* sb, int src_pos)
+template <typename state_buf>
+inline __device__ cuda::std::pair<char const*, size_t> gpuGetStringData(page_state_s volatile* s,
+                                                                        state_buf volatile* sb,
+                                                                        int src_pos)
 {
   char const* ptr = nullptr;
   size_t len      = 0;
@@ -187,7 +181,9 @@ inline __device__ cuda::std::pair<char const*, size_t> gpuGetStringData(
   if (s->dict_base) {
     // String dictionary
     uint32_t dict_pos =
-      (s->dict_bits > 0) ? sb->dict_idx[rolling_index(src_pos)] * sizeof(string_index_pair) : 0;
+      (s->dict_bits > 0)
+        ? sb->dict_idx[rolling_index<state_buf::dict_buf_size>(src_pos)] * sizeof(string_index_pair)
+        : 0;
     if (dict_pos < (uint32_t)s->dict_size) {
       auto const* src = reinterpret_cast<string_index_pair const*>(s->dict_base + dict_pos);
       ptr             = src->first;
@@ -195,10 +191,10 @@ inline __device__ cuda::std::pair<char const*, size_t> gpuGetStringData(
     }
   } else {
     // Plain encoding
-    uint32_t dict_pos = sb->dict_idx[rolling_index(src_pos)];
+    uint32_t dict_pos = sb->dict_idx[rolling_index<state_buf::dict_buf_size>(src_pos)];
     if (dict_pos <= (uint32_t)s->dict_size) {
       ptr = reinterpret_cast<char const*>(s->data_start + dict_pos);
-      len = sb->str_len[rolling_index(src_pos)];
+      len = sb->str_len[rolling_index<state_buf::str_buf_size>(src_pos)];
     }
   }
 
@@ -213,18 +209,17 @@ inline __device__ cuda::std::pair<char const*, size_t> gpuGetStringData(
  * @param[in] target_pos Target index position in dict_idx buffer (may exceed this value by up to
  * 31)
  * @param[in] t Warp1 thread ID (0..31)
+ * @tparam sizes_only True if only sizes are to be calculated
+ * @tparam state_buf Typename of the `state_buf` (usually inferred)
  *
  * @return A pair containing the new output position, and the total length of strings decoded (this
  * will only be valid on thread 0 and if sizes_only is true). In the event that this function
  * decodes strings beyond target_pos, the total length of strings returned will include these
  * additional values.
  */
-template <bool sizes_only>
+template <bool sizes_only, typename state_buf>
 __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(
-  page_state_s volatile* s,
-  [[maybe_unused]] page_state_buffers_s volatile* sb,
-  int target_pos,
-  int t)
+  page_state_s volatile* s, [[maybe_unused]] state_buf volatile* sb, int target_pos, int t)
 {
   uint8_t const* end = s->data_end;
   int dict_bits      = s->dict_bits;
@@ -300,7 +295,9 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(
       }
 
       // if we're not computing sizes, store off the dictionary index
-      if constexpr (!sizes_only) { sb->dict_idx[rolling_index(pos + t)] = dict_idx; }
+      if constexpr (!sizes_only) {
+        sb->dict_idx[rolling_index<state_buf::dict_buf_size>(pos + t)] = dict_idx;
+      }
     }
 
     // if we're computing sizes, add the length(s)
@@ -333,11 +330,13 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(
  * @param[out] sb Page state buffer output
  * @param[in] target_pos Target write position
  * @param[in] t Thread ID
+ * @tparam state_buf Typename of the `state_buf` (usually inferred)
  *
  * @return The new output position
  */
+template <typename state_buf>
 inline __device__ int gpuDecodeRleBooleans(page_state_s volatile* s,
-                                           page_state_buffers_s volatile* sb,
+                                           state_buf volatile* sb,
                                            int target_pos,
                                            int t)
 {
@@ -386,7 +385,7 @@ inline __device__ int gpuDecodeRleBooleans(page_state_s volatile* s,
       } else {
         dict_idx = s->dict_val;
       }
-      sb->dict_idx[rolling_index(pos + t)] = dict_idx;
+      sb->dict_idx[rolling_index<state_buf::dict_buf_size>(pos + t)] = dict_idx;
     }
     pos += batch_len;
   }
@@ -401,12 +400,14 @@ inline __device__ int gpuDecodeRleBooleans(page_state_s volatile* s,
  * @param[out] sb Page state buffer output
  * @param[in] target_pos Target output position
  * @param[in] t Thread ID
+ * @tparam sizes_only True if only sizes are to be calculated
+ * @tparam state_buf Typename of the `state_buf` (usually inferred)
  *
  * @return Total length of strings processed
  */
-template <bool sizes_only>
+template <bool sizes_only, typename state_buf>
 __device__ size_type gpuInitStringDescriptors(page_state_s volatile* s,
-                                              [[maybe_unused]] page_state_buffers_s volatile* sb,
+                                              [[maybe_unused]] state_buf volatile* sb,
                                               int target_pos,
                                               int t)
 {
@@ -429,8 +430,8 @@ __device__ size_type gpuInitStringDescriptors(page_state_s volatile* s,
         len = 0;
       }
       if constexpr (!sizes_only) {
-        sb->dict_idx[rolling_index(pos)] = k;
-        sb->str_len[rolling_index(pos)]  = len;
+        sb->dict_idx[rolling_index<state_buf::dict_buf_size>(pos)] = k;
+        sb->str_len[rolling_index<state_buf::str_buf_size>(pos)]   = len;
       }
       k += len;
       total_len += len;
@@ -451,8 +452,10 @@ __device__ size_type gpuInitStringDescriptors(page_state_s volatile* s,
  * @param[in] target_count Target count of stream values on output
  * @param[in] t Warp0 thread ID (0..31)
  * @param[in] lvl The level type we are decoding - DEFINITION or REPETITION
+ * @tparam level_t Type used to store decoded repetition and definition levels
+ * @tparam rolling_buf_size Size of the cyclic buffer used to store value data
  */
-template <typename level_t>
+template <typename level_t, int rolling_buf_size>
 __device__ void gpuDecodeStream(
   level_t* output, page_state_s* s, int32_t target_count, int t, level_type lvl)
 {
@@ -519,8 +522,8 @@ __device__ void gpuDecodeStream(
       level_run -= batch_len * 2;
     }
     if (t < batch_len) {
-      int idx                    = value_count + t;
-      output[rolling_index(idx)] = level_val;
+      int idx                                      = value_count + t;
+      output[rolling_index<rolling_buf_size>(idx)] = level_val;
     }
     batch_coded_count += batch_len;
     value_count += batch_len;
@@ -541,24 +544,26 @@ __device__ void gpuDecodeStream(
  *
  * @param[in,out] nesting_info The page/nesting information to store the mask in. The validity map
  * offset is also updated
+ * @param[in,out] valid_map Pointer to bitmask to store validity information to
  * @param[in] valid_mask The validity mask to be stored
  * @param[in] value_count # of bits in the validity mask
  */
-inline __device__ void store_validity(PageNestingDecodeInfo* nesting_info,
+inline __device__ void store_validity(int valid_map_offset,
+                                      bitmask_type* valid_map,
                                       uint32_t valid_mask,
                                       int32_t value_count)
 {
-  int word_offset = nesting_info->valid_map_offset / 32;
-  int bit_offset  = nesting_info->valid_map_offset % 32;
+  int word_offset = valid_map_offset / 32;
+  int bit_offset  = valid_map_offset % 32;
   // if we fit entirely in the output word
   if (bit_offset + value_count <= 32) {
     auto relevant_mask = static_cast<uint32_t>((static_cast<uint64_t>(1) << value_count) - 1);
 
     if (relevant_mask == ~0) {
-      nesting_info->valid_map[word_offset] = valid_mask;
+      valid_map[word_offset] = valid_mask;
     } else {
-      atomicAnd(nesting_info->valid_map + word_offset, ~(relevant_mask << bit_offset));
-      atomicOr(nesting_info->valid_map + word_offset, (valid_mask & relevant_mask) << bit_offset);
+      atomicAnd(valid_map + word_offset, ~(relevant_mask << bit_offset));
+      atomicOr(valid_map + word_offset, (valid_mask & relevant_mask) << bit_offset);
     }
   }
   // we're going to spill over into the next word.
@@ -572,17 +577,15 @@ inline __device__ void store_validity(PageNestingDecodeInfo* nesting_info,
     // first word. strip bits_left bits off the beginning and store that
     uint32_t relevant_mask = ((1 << bits_left) - 1);
     uint32_t mask_word0    = valid_mask & relevant_mask;
-    atomicAnd(nesting_info->valid_map + word_offset, ~(relevant_mask << bit_offset));
-    atomicOr(nesting_info->valid_map + word_offset, mask_word0 << bit_offset);
+    atomicAnd(valid_map + word_offset, ~(relevant_mask << bit_offset));
+    atomicOr(valid_map + word_offset, mask_word0 << bit_offset);
 
     // second word. strip the remainder of the bits off the end and store that
     relevant_mask       = ((1 << (value_count - bits_left)) - 1);
     uint32_t mask_word1 = valid_mask & (relevant_mask << bits_left);
-    atomicAnd(nesting_info->valid_map + word_offset + 1, ~(relevant_mask));
-    atomicOr(nesting_info->valid_map + word_offset + 1, mask_word1 >> bits_left);
+    atomicAnd(valid_map + word_offset + 1, ~(relevant_mask));
+    atomicOr(valid_map + word_offset + 1, mask_word1 >> bits_left);
   }
-
-  nesting_info->valid_map_offset += value_count;
 }
 
 /**
@@ -599,8 +602,10 @@ inline __device__ void store_validity(PageNestingDecodeInfo* nesting_info,
  * @param[in] input_value_count The current count of input level values we have processed
  * @param[in] target_input_value_count The desired # of input level values we want to process
  * @param[in] t Thread index
+ * @tparam rolling_buf_size Size of the cyclic buffer used to store value data
+ * @tparam level_t Type used to store decoded repetition and definition levels
  */
-template <int lvl_buf_size, typename level_t>
+template <int rolling_buf_size, typename level_t>
 inline __device__ void get_nesting_bounds(int& start_depth,
                                           int& end_depth,
                                           int& d,
@@ -615,7 +620,7 @@ inline __device__ void get_nesting_bounds(int& start_depth,
   end_depth   = -1;
   d           = -1;
   if (input_value_count + t < target_input_value_count) {
-    int const index = rolling_lvl_index<lvl_buf_size>(input_value_count + t);
+    int const index = rolling_index<rolling_buf_size>(input_value_count + t);
     d               = static_cast<int>(def[index]);
     // if we have repetition (there are list columns involved) we have to
     // bound what nesting levels we apply values to
@@ -643,11 +648,14 @@ inline __device__ void get_nesting_bounds(int& start_depth,
  * @param[in] rep Repetition level buffer
  * @param[in] def Definition level buffer
  * @param[in] t Thread index
+ * @tparam level_t Type used to store decoded repetition and definition levels
+ * @tparam state_buf Typename of the `state_buf` (usually inferred)
+ * @tparam rolling_buf_size Size of the cyclic buffer used to store value data
  */
-template <int lvl_buf_size, typename level_t>
+template <typename level_t, typename state_buf, int rolling_buf_size>
 __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value_count,
                                                       page_state_s* s,
-                                                      page_state_buffers_s* sb,
+                                                      state_buf* sb,
                                                       level_t const* const rep,
                                                       level_t const* const def,
                                                       int t)
@@ -667,7 +675,7 @@ __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value
     // determine the nesting bounds for this thread (the range of nesting depths we
     // will generate new value indices and validity bits for)
     int start_depth, end_depth, d;
-    get_nesting_bounds<non_zero_buffer_size, level_t>(
+    get_nesting_bounds<rolling_buf_size, level_t>(
       start_depth, end_depth, d, s, rep, def, input_value_count, target_input_value_count, t);
 
     // 4 interesting things to track:
@@ -734,7 +742,7 @@ __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value
         int const src_pos = nesting_info->valid_count + thread_valid_count;
         int const dst_pos = nesting_info->value_count + thread_value_count;
         // nz_idx is a mapping of src buffer indices to destination buffer indices
-        sb->nz_idx[rolling_index(src_pos)] = dst_pos;
+        sb->nz_idx[rolling_index<rolling_buf_size>(src_pos)] = dst_pos;
       }
 
       // compute warp and thread value counts for the -next- nesting level. we need to
@@ -779,8 +787,11 @@ __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value
       if (!t) {
         if (nesting_info->valid_map != nullptr && warp_valid_mask_bit_count > 0) {
           uint32_t const warp_output_valid_mask = warp_valid_mask >> first_thread_in_write_range;
-          store_validity(nesting_info, warp_output_valid_mask, warp_valid_mask_bit_count);
-
+          store_validity(nesting_info->valid_map_offset,
+                         nesting_info->valid_map,
+                         warp_output_valid_mask,
+                         warp_valid_mask_bit_count);
+          nesting_info->valid_map_offset += warp_valid_mask_bit_count;
           nesting_info->null_count += warp_valid_mask_bit_count - __popc(warp_output_valid_mask);
         }
         nesting_info->valid_count += warp_valid_count;
@@ -822,10 +833,13 @@ __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value
  * @param[in] rep Repetition level buffer
  * @param[in] def Definition level buffer
  * @param[in] t Thread index
+ * @tparam rolling_buf_size Size of the cyclic buffer used to store value data
+ * @tparam level_t Type used to store decoded repetition and definition levels
+ * @tparam state_buf Typename of the `state_buf` (usually inferred)
  */
-template <int lvl_buf_size, typename level_t>
+template <int rolling_buf_size, typename level_t, typename state_buf>
 __device__ void gpuDecodeLevels(page_state_s* s,
-                                page_state_buffers_s* sb,
+                                state_buf* sb,
                                 int32_t target_leaf_count,
                                 level_t* const rep,
                                 level_t* const def,
@@ -837,8 +851,10 @@ __device__ void gpuDecodeLevels(page_state_s* s,
   int cur_leaf_count       = target_leaf_count;
   while (!s->error && s->nz_count < target_leaf_count &&
          s->input_value_count < s->num_input_values) {
-    if (has_repetition) { gpuDecodeStream(rep, s, cur_leaf_count, t, level_type::REPETITION); }
-    gpuDecodeStream(def, s, cur_leaf_count, t, level_type::DEFINITION);
+    if (has_repetition) {
+      gpuDecodeStream<level_t, rolling_buf_size>(rep, s, cur_leaf_count, t, level_type::REPETITION);
+    }
+    gpuDecodeStream<level_t, rolling_buf_size>(def, s, cur_leaf_count, t, level_type::DEFINITION);
     __syncwarp();
 
     // because the rep and def streams are encoded separately, we cannot request an exact
@@ -849,7 +865,7 @@ __device__ void gpuDecodeLevels(page_state_s* s,
                                            : s->lvl_count[level_type::DEFINITION];
 
     // process what we got back
-    gpuUpdateValidityOffsetsAndRowIndices<lvl_buf_size, level_t>(
+    gpuUpdateValidityOffsetsAndRowIndices<level_t, state_buf, rolling_buf_size>(
       actual_leaf_count, s, sb, rep, def, t);
     cur_leaf_count = actual_leaf_count + batch_size;
     __syncwarp();
@@ -863,9 +879,7 @@ __device__ void gpuDecodeLevels(page_state_s* s,
  * @param[in,out] s The page state
  * @param[in] cur The current data position
  * @param[in] end The end of the data
- * @param[in] level_bits The bits required
- * @param[in] is_decode_step True if we are performing the decode step.
- * @param[in,out] decoders The repetition and definition level stream decoders
+ * @param[in] lvl Enum indicating whether this is to initialize repetition or definition level data
  *
  * @return The length of the section
  */
@@ -951,21 +965,11 @@ struct all_types_filter {
 };
 
 /**
- * @brief Functor for setupLocalPageInfo that returns true if this is not a string column.
+ * @brief Functor for setupLocalPageInfo that takes a mask of allowed types.
  */
-struct non_string_filter {
-  device_span<ColumnChunkDesc const> chunks;
-
-  __device__ inline bool operator()(PageInfo const& page) { return !is_string_col(page, chunks); }
-};
-
-/**
- * @brief Functor for setupLocalPageInfo that returns true if this is a string column.
- */
-struct string_filter {
-  device_span<ColumnChunkDesc const> chunks;
-
-  __device__ inline bool operator()(PageInfo const& page) { return is_string_col(page, chunks); }
+struct mask_filter {
+  int mask;
+  __device__ inline bool operator()(PageInfo const& page) { return (page.kernel_mask & mask) != 0; }
 };
 
 /**
@@ -978,9 +982,9 @@ struct string_filter {
  * @param[in] num_rows Maximum number of rows to read
  * @param[in] filter Filtering function used to decide which pages to operate on
  * @param[in] is_decode_step If we are setting up for the decode step (instead of the preprocess)
- * @param[in] decoders rle_stream decoders which will be used for decoding levels. Optional.
  * @tparam Filter Function that takes a PageInfo reference and returns true if the given page should
  * be operated on Currently only used by gpuComputePageSizes step)
+ * @return True if this page should be processed further
  */
 template <typename Filter>
 inline __device__ bool setupLocalPageInfo(page_state_s* const s,
@@ -1271,6 +1275,9 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           if (cur + len > end) { s->error = 2; }
           s->dict_run = 0;
         } break;
+        case Encoding::DELTA_BINARY_PACKED:
+          // nothing to do, just don't error
+          break;
         default:
           s->error = 1;  // Unsupported encoding
           break;
