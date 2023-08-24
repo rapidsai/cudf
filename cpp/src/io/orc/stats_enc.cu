@@ -87,10 +87,14 @@ __global__ void __launch_bounds__(block_size, 1)
         case dtype_int8:
         case dtype_int16:
         case dtype_int32:
-        case dtype_date32:
         case dtype_int64:
-        case dtype_timestamp64:
           stats_len = pb_fldlen_common + pb_fld_hdrlen + 3 * (pb_fld_hdrlen + pb_fldlen_int64);
+          break;
+        case dtype_date32:
+          stats_len = pb_fldlen_common + pb_fld_hdrlen + 2 * (pb_fld_hdrlen + pb_fldlen_int64);
+          break;
+        case dtype_timestamp64:
+          stats_len = pb_fldlen_common + pb_fld_hdrlen + 4 * (pb_fld_hdrlen + pb_fldlen_int64);
           break;
         case dtype_float32:
         case dtype_float64:
