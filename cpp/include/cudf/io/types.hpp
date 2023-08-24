@@ -810,7 +810,8 @@ class table_input_metadata {
   /**
    * @brief Construct a new table_input_metadata from a table_metadata object.
    *
-   * The constructed table_input_metadata has the same structure, column names and nullability as the passed table_metadata.
+   * The constructed table_input_metadata has the same structure, column names and nullability as
+   * the passed table_metadata.
    *
    * @param metadata The table_metadata to construct table_intput_metadata for
    */
