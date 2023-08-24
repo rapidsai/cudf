@@ -20,6 +20,19 @@
 
 namespace cudf::io::detail::parquet {
 
+// TODO move docstrings
+class cuda_stream_pool {
+ public:
+  virtual ~cuda_stream_pool() = default;
+
+  virtual rmm::cuda_stream_view get_stream()                             = 0;
+  virtual rmm::cuda_stream_view get_stream(std::size_t stream_id)        = 0;
+  virtual std::vector<rmm::cuda_stream_view> get_streams(uint32_t count) = 0;
+};
+
+cuda_stream_pool& global_cuda_stream_pool();
+
+#if 0
 /**
  * @brief Get a `cuda_stream_view` of a stream in the pool.
  *
@@ -49,6 +62,7 @@ rmm::cuda_stream_view get_stream(std::size_t stream_id);
  * @return Vector containing `count` stream views.
  */
 std::vector<rmm::cuda_stream_view> get_streams(uint32_t count);
+#endif
 
 /**
  * @brief Synchronize a set of streams to an event on another stream.

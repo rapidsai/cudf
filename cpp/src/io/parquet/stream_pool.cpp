@@ -29,14 +29,6 @@ namespace {
 // TODO: what is a good number here. what's the penalty for making it larger?
 std::size_t constexpr STREAM_POOL_SIZE = 32;
 
-class cuda_stream_pool {
- public:
-  virtual ~cuda_stream_pool() = default;
-
-  virtual rmm::cuda_stream_view get_stream()                      = 0;
-  virtual rmm::cuda_stream_view get_stream(std::size_t stream_id) = 0;
-};
-
 class rmm_cuda_stream_pool : public cuda_stream_pool {
   rmm::cuda_stream_pool _pool;
 
@@ -47,6 +39,21 @@ class rmm_cuda_stream_pool : public cuda_stream_pool {
   {
     return _pool.get_stream(stream_id);
   }
+
+  std::vector<rmm::cuda_stream_view> get_streams(uint32_t count)
+  {
+    static std::mutex stream_pool_mutex;
+
+    if (count > STREAM_POOL_SIZE) {
+      CUDF_LOG_WARN("get_streams called with count ({}) > pool size ({})", count, STREAM_POOL_SIZE);
+    }
+    auto streams = std::vector<rmm::cuda_stream_view>();
+    std::lock_guard<std::mutex> lock(stream_pool_mutex);
+    for (uint32_t i = 0; i < count; i++) {
+      streams.emplace_back(_pool.get_stream());
+    }
+    return streams;
+  }
 };
 
 class debug_cuda_stream_pool : public cuda_stream_pool {
@@ -55,6 +62,11 @@ class debug_cuda_stream_pool : public cuda_stream_pool {
   rmm::cuda_stream_view get_stream(std::size_t stream_id) override
   {
     return cudf::get_default_stream();
+  }
+
+  std::vector<rmm::cuda_stream_view> get_streams(uint32_t count)
+  {
+    return std::vector<rmm::cuda_stream_view>(count, cudf::get_default_stream());
   }
 };
 
@@ -65,20 +77,16 @@ cuda_stream_pool* create_global_cuda_stream_pool()
   return new rmm_cuda_stream_pool();
 }
 
-// TODO: hidden for now...can move out of the anonymous namespace if this needs to be exposed
-// to users.
-// TODO: move get_streams(uint32_t) into the interface, or leave as is?
+}  // anonymous namespace
+
 cuda_stream_pool& global_cuda_stream_pool()
 {
   static cuda_stream_pool* pool = create_global_cuda_stream_pool();
   return *pool;
 }
 
-std::mutex stream_pool_mutex;
-
-}  // anonymous namespace
-
-// TODO: these next 2 (3?) can go away if we expose global_cuda_stream_pool()
+#if 0
+// TODO: these next 3 can go away if we expose global_cuda_stream_pool()
 rmm::cuda_stream_view get_stream() { return global_cuda_stream_pool().get_stream(); }
 
 rmm::cuda_stream_view get_stream(std::size_t stream_id)
@@ -88,16 +96,9 @@ rmm::cuda_stream_view get_stream(std::size_t stream_id)
 
 std::vector<rmm::cuda_stream_view> get_streams(uint32_t count)
 {
-  if (count > STREAM_POOL_SIZE) {
-    CUDF_LOG_WARN("get_streams called with count ({}) > pool size ({})", count, STREAM_POOL_SIZE);
-  }
-  auto streams = std::vector<rmm::cuda_stream_view>();
-  std::lock_guard<std::mutex> lock(stream_pool_mutex);
-  for (uint32_t i = 0; i < count; i++) {
-    streams.emplace_back(global_cuda_stream_pool().get_stream());
-  }
-  return streams;
+  return global_cuda_stream_pool().get_streams(count);
 }
+#endif
 
 void fork_streams(std::vector<rmm::cuda_stream_view>& streams, rmm::cuda_stream_view stream)
 {
