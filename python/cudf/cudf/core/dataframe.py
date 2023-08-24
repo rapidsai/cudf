@@ -6658,19 +6658,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             data=range(len(self._data)), index=named_levels
         )
 
+        print("in stack")
         column_indices: list[list[int]] = []
-        unnamed_level_values = list(
-            map(column_name_idx.get_level_values, unnamed_levels_indices)
-        )
-        if unnamed_level_values:
+        if has_unnamed_levels:
+            unnamed_level_values = list(
+                map(column_name_idx.get_level_values, unnamed_levels_indices)
+            )
             unnamed_level_values = pd.MultiIndex.from_arrays(
                 unnamed_level_values
             )
 
         def unnamed_group_generator():
-            if len(unnamed_levels_indices) == 0:
-                yield column_idx_df.sort_index().values
-            else:
+            if has_unnamed_levels:
                 for _, grpdf in column_idx_df.groupby(by=unnamed_level_values):
                     # When stacking part of the levels, some combinations
                     # of keys may not be present in this group but can be
@@ -6681,6 +6680,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     yield grpdf.reindex(
                         unique_named_levels, axis=0, fill_value=-1
                     ).sort_index().values
+            else:
+                yield column_idx_df.sort_index().values
 
         column_indices = list(unnamed_group_generator())
 
@@ -6715,7 +6716,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             stacked.append(libcudf.reshape.interleave_columns(homogenized))
 
         # Construct the resulting dataframe / series
-        if has_unnamed_levels:
+        if not has_unnamed_levels:
             result = Series._from_data(
                 data={None: stacked[0]}, index=new_index
             )
