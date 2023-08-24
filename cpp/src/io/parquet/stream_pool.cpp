@@ -19,6 +19,7 @@
 #include "stream_pool.hpp"
 
 #include <cudf/detail/utilities/logger.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 namespace cudf::io::detail::parquet {
@@ -28,33 +29,61 @@ namespace {
 // TODO: what is a good number here. what's the penalty for making it larger?
 std::size_t constexpr STREAM_POOL_SIZE = 32;
 
-std::mutex stream_pool_mutex;
+class cuda_stream_pool {
+ public:
+  virtual ~cuda_stream_pool() = default;
 
-auto& get_stream_pool()
+  virtual rmm::cuda_stream_view get_stream()                      = 0;
+  virtual rmm::cuda_stream_view get_stream(std::size_t stream_id) = 0;
+};
+
+class rmm_cuda_stream_pool : public cuda_stream_pool {
+  rmm::cuda_stream_pool _pool;
+
+ public:
+  rmm_cuda_stream_pool() : _pool{STREAM_POOL_SIZE} {}
+  rmm::cuda_stream_view get_stream() override { return _pool.get_stream(); }
+  rmm::cuda_stream_view get_stream(std::size_t stream_id) override
+  {
+    return _pool.get_stream(stream_id);
+  }
+};
+
+class debug_cuda_stream_pool : public cuda_stream_pool {
+ public:
+  rmm::cuda_stream_view get_stream() override { return cudf::get_default_stream(); }
+  rmm::cuda_stream_view get_stream(std::size_t stream_id) override
+  {
+    return cudf::get_default_stream();
+  }
+};
+
+cuda_stream_pool* create_global_cuda_stream_pool()
 {
-  // TODO: creating this on the heap because there were issues with trying to call the
-  // stream pool destructor during cuda shutdown that lead to a segmentation fault in
-  // nvbench. this allocation is being deliberately leaked to avoid the above.
-#if 1
-  static auto pool = new rmm::cuda_stream_pool{STREAM_POOL_SIZE};
-  return *pool;
-#else
-  // FIXME
-  // running ./benchmarks/PARQUET_READER_NVBENCH -b parquet_read_decode --axis data_type=STRUCT
-  // with this code results in a segmentation fault in the cuda_stream_pool dtor during shutdown.
-  // it seems cudaStreamDestroy is called twice on the streams in the pool.
-  static rmm::cuda_stream_pool pool{STREAM_POOL_SIZE};
-  return pool;
-#endif
+  if (getenv("LIBCUDF_USE_DEBUG_STREAM_POOL")) return new debug_cuda_stream_pool();
+
+  return new rmm_cuda_stream_pool();
 }
+
+// TODO: hidden for now...can move out of the anonymous namespace if this needs to be exposed
+// to users.
+// TODO: move get_streams(uint32_t) into the interface, or leave as is?
+cuda_stream_pool& global_cuda_stream_pool()
+{
+  static cuda_stream_pool* pool = create_global_cuda_stream_pool();
+  return *pool;
+}
+
+std::mutex stream_pool_mutex;
 
 }  // anonymous namespace
 
-rmm::cuda_stream_view get_stream() { return get_stream_pool().get_stream(); }
+// TODO: these next 2 (3?) can go away if we expose global_cuda_stream_pool()
+rmm::cuda_stream_view get_stream() { return global_cuda_stream_pool().get_stream(); }
 
 rmm::cuda_stream_view get_stream(std::size_t stream_id)
 {
-  return get_stream_pool().get_stream(stream_id);
+  return global_cuda_stream_pool().get_stream(stream_id);
 }
 
 std::vector<rmm::cuda_stream_view> get_streams(uint32_t count)
@@ -65,7 +94,7 @@ std::vector<rmm::cuda_stream_view> get_streams(uint32_t count)
   auto streams = std::vector<rmm::cuda_stream_view>();
   std::lock_guard<std::mutex> lock(stream_pool_mutex);
   for (uint32_t i = 0; i < count; i++) {
-    streams.emplace_back(get_stream_pool().get_stream());
+    streams.emplace_back(global_cuda_stream_pool().get_stream());
   }
   return streams;
 }
