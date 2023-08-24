@@ -6623,12 +6623,11 @@ TEST_F(ParquetWriterTest, PreserveNullability)
   expected_metadata.column_metadata[1].set_nullability(true);
   expected_metadata.column_metadata[2].set_name("lists");
   expected_metadata.column_metadata[2].set_nullability(true);
+  // offsets is a cudf thing that's not part of the parquet schema so it won't have nullability set
   expected_metadata.column_metadata[2].child(0).set_name("offsets");
-  expected_metadata.column_metadata[2].child(0).set_nullability(false);
   expected_metadata.column_metadata[2].child(1).set_name("element");
   expected_metadata.column_metadata[2].child(1).set_nullability(false);
   expected_metadata.column_metadata[2].child(1).child(0).set_name("offsets");
-  expected_metadata.column_metadata[2].child(1).child(0).set_nullability(false);
   expected_metadata.column_metadata[2].child(1).child(1).set_name("element");
   expected_metadata.column_metadata[2].child(1).child(1).set_nullability(true);
 
@@ -6648,7 +6647,8 @@ TEST_F(ParquetWriterTest, PreserveNullability)
   std::function<void(cudf::io::column_in_metadata, cudf::io::column_in_metadata)>
     compare_names_and_nullability = [&](auto lhs, auto rhs) {
       EXPECT_EQ(lhs.get_name(), rhs.get_name());
-      EXPECT_EQ(lhs.nullable(), rhs.nullable());
+      ASSERT_EQ(lhs.is_nullability_defined(), rhs.is_nullability_defined());
+      if (lhs.is_nullability_defined()) { EXPECT_EQ(lhs.nullable(), rhs.nullable()); }
       ASSERT_EQ(lhs.num_children(), rhs.num_children());
       for (int i = 0; i < lhs.num_children(); ++i) {
         compare_names_and_nullability(lhs.child(i), rhs.child(i));
