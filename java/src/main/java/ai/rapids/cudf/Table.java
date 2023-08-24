@@ -821,20 +821,27 @@ public final class Table implements AutoCloseable {
    * @param buffer raw UTF8 formatted bytes.
    * @param offset the starting offset into buffer.
    * @param len the number of bytes to parse.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return the data parsed as a table on the GPU.
    */
   public static Table readCSV(Schema schema, CSVOptions opts, byte[] buffer, long offset,
-                              long len) {
+                              long len, HostMemoryAllocator hostMemoryAllocator) {
     if (len <= 0) {
       len = buffer.length - offset;
     }
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostMemoryBuffer newBuf = hostMemoryAllocator.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readCSV(schema, opts, newBuf, 0, len);
     }
+  }
+
+
+  public static Table readCSV(Schema schema, CSVOptions opts, byte[] buffer, long offset,
+                              long len) {
+    return readCSV(schema, opts, buffer, offset, len, DefaultHostMemoryAllocator.get());
   }
 
   /**
@@ -1038,20 +1045,26 @@ public final class Table implements AutoCloseable {
    * @param buffer raw UTF8 formatted bytes.
    * @param offset the starting offset into buffer.
    * @param len the number of bytes to parse.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return the data parsed as a table on the GPU.
    */
   public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
-                               long len) {
+                               long len, HostMemoryAllocator hostMemoryAllocator) {
     if (len <= 0) {
       len = buffer.length - offset;
     }
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostMemoryBuffer newBuf = hostMemoryAllocator.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readJSON(schema, opts, newBuf, 0, len);
     }
+  }
+
+  public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
+                               long len) {
+    return readJSON(schema, opts, buffer, offset, len, DefaultHostMemoryAllocator.get());
   }
 
   /**
@@ -1143,19 +1156,25 @@ public final class Table implements AutoCloseable {
    * @param buffer raw parquet formatted bytes.
    * @param offset the starting offset into buffer.
    * @param len the number of bytes to parse.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return the data parsed as a table on the GPU.
    */
-  public static Table readParquet(ParquetOptions opts, byte[] buffer, long offset, long len) {
+  public static Table readParquet(ParquetOptions opts, byte[] buffer, long offset, long len,
+      HostMemoryAllocator hostMemoryAllocator) {
     if (len <= 0) {
       len = buffer.length - offset;
     }
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostMemoryBuffer newBuf = hostMemoryAllocator.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readParquet(opts, newBuf, 0, len);
     }
+  }
+
+  public static Table readParquet(ParquetOptions opts, byte[] buffer, long offset, long len) {
+    return readParquet(opts, buffer, offset, len, DefaultHostMemoryAllocator.get());
   }
 
   /**
@@ -1223,18 +1242,25 @@ public final class Table implements AutoCloseable {
    * @param buffer raw Avro formatted bytes.
    * @param offset the starting offset into buffer.
    * @param len the number of bytes to parse.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return the data parsed as a table on the GPU.
    */
-  public static Table readAvro(AvroOptions opts, byte[] buffer, long offset, long len) {
+  public static Table readAvro(AvroOptions opts, byte[] buffer, long offset, long len,
+      HostMemoryAllocator hostMemoryAllocator) {
     assert offset >= 0 && offset < buffer.length;
     assert len <= buffer.length - offset;
     len = len > 0 ? len : buffer.length - offset;
 
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostMemoryBuffer newBuf = hostMemoryAllocator.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readAvro(opts, newBuf, 0, len);
     }
   }
+
+  public static Table readAvro(AvroOptions opts, byte[] buffer, long offset, long len) {
+    return readAvro(opts, buffer, offset, len, DefaultHostMemoryAllocator.get());
+  }
+
 
   /**
    * Read Avro formatted data.
@@ -1301,20 +1327,27 @@ public final class Table implements AutoCloseable {
    * @param buffer raw ORC formatted bytes.
    * @param offset the starting offset into buffer.
    * @param len the number of bytes to parse.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return the data parsed as a table on the GPU.
    */
-  public static Table readORC(ORCOptions opts, byte[] buffer, long offset, long len) {
+  public static Table readORC(ORCOptions opts, byte[] buffer, long offset, long len,
+      HostMemoryAllocator hostMemoryAllocator) {
     if (len <= 0) {
       len = buffer.length - offset;
     }
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostMemoryBuffer newBuf = hostMemoryAllocator.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readORC(opts, newBuf, 0, len);
     }
   }
+
+  public static Table readORC(ORCOptions opts, byte[] buffer, long offset, long len) {
+    return readORC(opts, buffer, offset, len, DefaultHostMemoryAllocator.get());
+  }
+
 
   /**
    * Read ORC formatted data.
@@ -1606,10 +1639,13 @@ public final class Table implements AutoCloseable {
   private static class ArrowReaderWrapper implements AutoCloseable {
     private HostBufferProvider provider;
     private HostMemoryBuffer buffer;
+    private final HostMemoryAllocator hostMemoryAllocator;
 
-    private ArrowReaderWrapper(HostBufferProvider provider) {
+    private ArrowReaderWrapper(HostBufferProvider provider,
+        HostMemoryAllocator hostMemoryAllocator) {
       this.provider = provider;
-      buffer = HostMemoryBuffer.allocate(10 * 1024 * 1024, false);
+      this.hostMemoryAllocator = hostMemoryAllocator;
+      buffer = this.hostMemoryAllocator.allocate(10 * 1024 * 1024, false);
     }
 
     // Called From JNI
@@ -1656,8 +1692,9 @@ public final class Table implements AutoCloseable {
       this.callback = options.getCallback();
     }
 
-    private ArrowIPCStreamedTableReader(ArrowIPCOptions options, HostBufferProvider provider) {
-      this.provider = new ArrowReaderWrapper(provider);
+    private ArrowIPCStreamedTableReader(ArrowIPCOptions options, HostBufferProvider provider,
+      HostMemoryAllocator hostMemoryAllocator) {
+      this.provider = new ArrowReaderWrapper(provider, hostMemoryAllocator);
       this.handle = readArrowIPCBufferBegin(this.provider);
       this.callback = options.getCallback();
     }
@@ -1720,9 +1757,16 @@ public final class Table implements AutoCloseable {
    * @param provider what will provide the data being read.
    * @return a reader.
    */
+
+  public static StreamedTableReader readArrowIPCChunked(ArrowIPCOptions options,
+                                                        HostBufferProvider provider,
+                                                        HostMemoryAllocator hostMemoryAllocator) {
+    return new ArrowIPCStreamedTableReader(options, provider, hostMemoryAllocator);
+  }
+
   public static StreamedTableReader readArrowIPCChunked(ArrowIPCOptions options,
                                                         HostBufferProvider provider) {
-    return new ArrowIPCStreamedTableReader(options, provider);
+    return new ArrowIPCStreamedTableReader(options, provider, DefaultHostMemoryAllocator.get());
   }
 
   /**
