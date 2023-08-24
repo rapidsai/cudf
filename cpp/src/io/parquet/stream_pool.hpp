@@ -20,6 +20,13 @@
 
 namespace cudf::io::detail::parquet {
 
+/**
+ * @brief A pool of CUDA stream objects
+ *
+ * Meant to provide efficient on-demand access to CUDA streams.
+ *
+ * TODO: better docs!
+ */
 class cuda_stream_pool {
  public:
   virtual ~cuda_stream_pool() = default;
