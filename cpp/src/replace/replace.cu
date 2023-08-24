@@ -126,10 +126,11 @@ __global__ void replace_strings_first_pass(cudf::column_device_view input,
                                            cudf::bitmask_type* output_valid,
                                            cudf::size_type* __restrict__ output_valid_count)
 {
-  cudf::size_type nrows       = input.size();
-  cudf::thread_index_type tid = blockIdx.x * blockDim.x + threadIdx.x;
-  uint32_t active_mask        = 0xffff'ffffu;
-  active_mask                 = __ballot_sync(active_mask, tid < nrows);
+  cudf::size_type nrows = input.size();
+  auto tid = cudf::thread_index_type{blockIdx.x} * cudf::thread_index_type{blockDim.x} +
+             cudf::thread_index_type{threadIdx.x};
+  uint32_t active_mask = 0xffff'ffffu;
+  active_mask          = __ballot_sync(active_mask, tid < nrows);
   auto const lane_id{threadIdx.x % cudf::detail::warp_size};
   uint32_t valid_sum{0};
 
@@ -160,7 +161,7 @@ __global__ void replace_strings_first_pass(cudf::column_device_view input,
       valid_sum += __popc(bitmask);
     }
 
-    tid += blockDim.x * gridDim.x;
+    tid += cudf::thread_index_type{blockDim.x} * cudf::thread_index_type{gridDim.x};
     active_mask = __ballot_sync(active_mask, tid < nrows);
   }
 
@@ -189,8 +190,9 @@ __global__ void replace_strings_second_pass(cudf::column_device_view input,
                                             cudf::mutable_column_device_view strings,
                                             cudf::mutable_column_device_view indices)
 {
-  cudf::size_type nrows       = input.size();
-  cudf::thread_index_type tid = blockIdx.x * blockDim.x + threadIdx.x;
+  cudf::size_type nrows = input.size();
+  auto tid = cudf::thread_index_type{blockIdx.x} * cudf::thread_index_type{blockDim.x} +
+             cudf::thread_index_type{threadIdx.x};
 
   while (tid < nrows) {
     auto const idx         = static_cast<cudf::size_type>(tid);
@@ -214,7 +216,7 @@ __global__ void replace_strings_second_pass(cudf::column_device_view input,
                   output.size_bytes());
     }
 
-    tid += blockDim.x * gridDim.x;
+    tid += cudf::thread_index_type{blockDim.x} * cudf::thread_index_type{gridDim.x};
   }
 }
 
@@ -252,7 +254,8 @@ __global__ void replace_kernel(cudf::column_device_view input,
 {
   T* __restrict__ output_data = output.data<T>();
 
-  cudf::thread_index_type tid = blockIdx.x * blockDim.x + threadIdx.x;
+  auto tid = cudf::thread_index_type{blockIdx.x} * cudf::thread_index_type{blockDim.x} +
+             cudf::thread_index_type{threadIdx.x};
 
   uint32_t active_mask = 0xffff'ffffu;
   active_mask          = __ballot_sync(active_mask, tid < nrows);
@@ -285,7 +288,7 @@ __global__ void replace_kernel(cudf::column_device_view input,
       }
     }
 
-    tid += blockDim.x * gridDim.x;
+    tid += cudf::thread_index_type{blockDim.x} * cudf::thread_index_type{gridDim.x};
     active_mask = __ballot_sync(active_mask, tid < nrows);
   }
   if (input_has_nulls or replacement_has_nulls) {
