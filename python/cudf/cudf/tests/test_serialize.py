@@ -347,6 +347,17 @@ def test_serialize_seriesgroupby():
     assert_eq(recreated.sum(), gb.sum())
 
 
+def test_serialize_seriesresampler():
+    index = cudf.date_range(start="2001-01-01", periods=10, freq="1T")
+    sr = cudf.Series(range(10), index=index)
+    re_sampler = sr.resample("3T")
+    actual = re_sampler.sum()
+    recreated = re_sampler.__class__.deserialize(*re_sampler.serialize())
+    expected = recreated.sum()
+
+    assert_eq(actual, expected)
+
+
 def test_serialize_string_check_buffer_sizes():
     df = cudf.DataFrame({"a": ["a", "b", "cd", None]})
     expect = df.memory_usage(deep=True).loc["a"]
