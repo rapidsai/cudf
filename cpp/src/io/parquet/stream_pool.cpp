@@ -27,6 +27,11 @@ namespace cudf::io::detail::parquet {
 namespace {
 
 // TODO: what is a good number here. what's the penalty for making it larger?
+// Dave Baranec rule of thumb was max_streams_needed * num_concurrent_threads,
+// where num_concurrent_threads was estimated to be 4. so using 32 will allow
+// for 8 streams per thread, which should be plenty (decoding will be up to 4
+// kernels when delta_byte_array decoding is added). rmm::cuda_stream_pool
+// defaults to 16.
 std::size_t constexpr STREAM_POOL_SIZE = 32;
 
 class rmm_cuda_stream_pool : public cuda_stream_pool {
