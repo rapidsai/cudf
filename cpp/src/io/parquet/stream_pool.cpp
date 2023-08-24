@@ -40,7 +40,7 @@ class rmm_cuda_stream_pool : public cuda_stream_pool {
     return _pool.get_stream(stream_id);
   }
 
-  std::vector<rmm::cuda_stream_view> get_streams(uint32_t count)
+  std::vector<rmm::cuda_stream_view> get_streams(uint32_t count) override
   {
     static std::mutex stream_pool_mutex;
 
@@ -66,7 +66,7 @@ class debug_cuda_stream_pool : public cuda_stream_pool {
     return cudf::get_default_stream();
   }
 
-  std::vector<rmm::cuda_stream_view> get_streams(uint32_t count)
+  std::vector<rmm::cuda_stream_view> get_streams(uint32_t count) override
   {
     return std::vector<rmm::cuda_stream_view>(count, cudf::get_default_stream());
   }
