@@ -18,6 +18,7 @@
 
 #include "stream_pool.hpp"
 
+#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/utilities/error.hpp>
 
 namespace cudf::io::detail::parquet {
@@ -41,10 +42,7 @@ auto& get_stream_pool()
 
 }  // anonymous namespace
 
-rmm::cuda_stream_view get_stream()
-{
-  return get_stream_pool().get_stream();
-}
+rmm::cuda_stream_view get_stream() { return get_stream_pool().get_stream(); }
 
 rmm::cuda_stream_view get_stream(std::size_t stream_id)
 {
@@ -53,11 +51,13 @@ rmm::cuda_stream_view get_stream(std::size_t stream_id)
 
 std::vector<rmm::cuda_stream_view> get_streams(uint32_t count)
 {
-  CUDF_LOG_WARN("get_streams called with count ({}) > pool size ({})", count, STREAM_POOL_SIZE);
+  if (count > STREAM_POOL_SIZE) {
+    CUDF_LOG_WARN("get_streams called with count ({}) > pool size ({})", count, STREAM_POOL_SIZE);
+  }
   auto streams = std::vector<rmm::cuda_stream_view>();
   std::lock_guard<std::mutex> lock(stream_pool_mutex);
   for (uint32_t i = 0; i < count; i++) {
-    streams.emplace_back(pool->get_stream());
+    streams.emplace_back(get_stream_pool().get_stream());
   }
   return streams;
 }
