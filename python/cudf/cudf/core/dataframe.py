@@ -173,13 +173,13 @@ class _DataFrameIndexer(_FrameIndexer):
             all_numeric = all(is_numeric_dtype(t) for t in dtypes)
             if all_numeric:
                 return True
+            if isinstance(arg[1], tuple):
+                return True
         if ncols == 1:
             if type(arg[1]) is slice:
                 return False
             if isinstance(arg[1], tuple):
-                # Multiindex indexing with a slice
-                if any(isinstance(v, slice) for v in arg):
-                    return False
+                return len(arg[1]) == df._data.nlevels
             if not (is_list_like(arg[1]) or is_column_like(arg[1])):
                 return True
         return False
@@ -193,7 +193,10 @@ class _DataFrameIndexer(_FrameIndexer):
         nrows, ncols = df.shape
         # determine the axis along which the Series is taken:
         if nrows == 1 and ncols == 1:
-            if is_scalar(arg[0]) and is_scalar(arg[1]):
+            if is_scalar(arg[0]) and (
+                is_scalar(arg[1])
+                or (df._data.multiindex and arg[1] in df._column_names)
+            ):
                 return df[df._column_names[0]].iloc[0]
             elif not is_scalar(arg[0]):
                 axis = 1
@@ -288,12 +291,19 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     )
                 else:
                     tmp_col_name = str(uuid4())
+                    cantor_name = "_" + "_".join(
+                        map(str, columns_df._data.names)
+                    )
+                    if columns_df._data.multiindex:
+                        # column names must be appropriate length tuples
+                        extra = tuple(
+                            "" for _ in range(columns_df._data.nlevels - 1)
+                        )
+                        tmp_col_name = (tmp_col_name, *extra)
+                        cantor_name = (cantor_name, *extra)
                     other_df = DataFrame(
                         {tmp_col_name: column.arange(len(tmp_arg[0]))},
                         index=as_index(tmp_arg[0]),
-                    )
-                    cantor_name = "_" + "_".join(
-                        map(str, columns_df._data.names)
                     )
                     columns_df[cantor_name] = column.arange(len(columns_df))
                     df = other_df.join(columns_df, how="inner")
