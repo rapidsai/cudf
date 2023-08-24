@@ -20,49 +20,49 @@
 
 namespace cudf::io::detail::parquet {
 
-// TODO move docstrings
 class cuda_stream_pool {
  public:
   virtual ~cuda_stream_pool() = default;
 
-  virtual rmm::cuda_stream_view get_stream()                             = 0;
-  virtual rmm::cuda_stream_view get_stream(std::size_t stream_id)        = 0;
+  /**
+   * @brief Get a `cuda_stream_view` of a stream in the pool.
+   *
+   * This function is thread safe with respect to other calls to the same function.
+   *
+   * @return Stream view.
+   */
+  virtual rmm::cuda_stream_view get_stream() = 0;
+
+  /**
+   * @brief Get a `cuda_stream_view` of the stream associated with `stream_id`.
+   *
+   * Equivalent values of `stream_id` return a stream_view to the same underlying stream.
+   * This function is thread safe with respect to other calls to the same function.
+   *
+   * @param stream_id Unique identifier for the desired stream
+   * @return Requested stream view.
+   */
+  virtual rmm::cuda_stream_view get_stream(std::size_t stream_id) = 0;
+
+  /**
+   * @brief Get a set of `cuda_stream_view` objects from the pool.
+   *
+   * This function is thread safe with respect to other calls to the same function.
+   *
+   * @param count The number of stream views to return.
+   * @return Vector containing `count` stream views.
+   */
   virtual std::vector<rmm::cuda_stream_view> get_streams(uint32_t count) = 0;
 };
 
+/**
+ * @brief Return the global cuda_stream_pool object.
+ *
+ * TODO: document how to control the implementation
+ *
+ * @return The cuda_stream_pool singleton.
+ */
 cuda_stream_pool& global_cuda_stream_pool();
-
-#if 0
-/**
- * @brief Get a `cuda_stream_view` of a stream in the pool.
- *
- * This function is thread safe with respect to other calls to the same function.
- *
- * @return Stream view.
- */
-rmm::cuda_stream_view get_stream();
-
-/**
- * @brief Get a `cuda_stream_view` of the stream associated with `stream_id`.
- *
- * Equivalent values of `stream_id` return a stream_view to the same underlying stream.
- * This function is thread safe with respect to other calls to the same function.
- *
- * @param stream_id Unique identifier for the desired stream
- * @return Requested stream view.
- */
-rmm::cuda_stream_view get_stream(std::size_t stream_id);
-
-/**
- * @brief Get a set of `cuda_stream_view` objects from the pool.
- *
- * This function is thread safe with respect to other calls to the same function.
- *
- * @param count The number of stream views to return.
- * @return Vector containing `count` stream views.
- */
-std::vector<rmm::cuda_stream_view> get_streams(uint32_t count);
-#endif
 
 /**
  * @brief Synchronize a set of streams to an event on another stream.

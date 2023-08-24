@@ -85,21 +85,6 @@ cuda_stream_pool& global_cuda_stream_pool()
   return *pool;
 }
 
-#if 0
-// TODO: these next 3 can go away if we expose global_cuda_stream_pool()
-rmm::cuda_stream_view get_stream() { return global_cuda_stream_pool().get_stream(); }
-
-rmm::cuda_stream_view get_stream(std::size_t stream_id)
-{
-  return global_cuda_stream_pool().get_stream(stream_id);
-}
-
-std::vector<rmm::cuda_stream_view> get_streams(uint32_t count)
-{
-  return global_cuda_stream_pool().get_streams(count);
-}
-#endif
-
 void fork_streams(std::vector<rmm::cuda_stream_view>& streams, rmm::cuda_stream_view stream)
 {
   cudaEvent_t event;
