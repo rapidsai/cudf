@@ -52,12 +52,13 @@ std::unique_ptr<cudf::column> token_count_fn(cudf::size_type strings_count,
                                              rmm::mr::device_memory_resource* mr)
 {
   // create output column
-  auto token_counts   = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32},
-                                                strings_count,
-                                                cudf::mask_state::UNALLOCATED,
-                                                stream,
-                                                mr);
-  auto d_token_counts = token_counts->mutable_view().data<int32_t>();
+  auto token_counts =
+    cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
+                              strings_count,
+                              cudf::mask_state::UNALLOCATED,
+                              stream,
+                              mr);
+  auto d_token_counts = token_counts->mutable_view().data<cudf::size_type>();
   // add the counts to the column
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<cudf::size_type>(0),
@@ -79,10 +80,10 @@ std::unique_ptr<cudf::column> tokenize_fn(cudf::size_type strings_count,
     token_count_fn(strings_count, tokenizer, stream, rmm::mr::get_current_device_resource());
   auto d_token_counts = token_counts->view();
   // create token-index offsets from the counts
-  rmm::device_uvector<int32_t> token_offsets(strings_count + 1, stream);
+  rmm::device_uvector<cudf::size_type> token_offsets(strings_count + 1, stream);
   thrust::inclusive_scan(rmm::exec_policy(stream),
-                         d_token_counts.template begin<int32_t>(),
-                         d_token_counts.template end<int32_t>(),
+                         d_token_counts.template begin<cudf::size_type>(),
+                         d_token_counts.template end<cudf::size_type>(),
                          token_offsets.begin() + 1);
   token_offsets.set_element_to_zero_async(0, stream);
   auto const total_tokens = token_offsets.back_element(stream);
@@ -177,10 +178,10 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
   }
 
   auto offsets = strings_column.offsets();
-  auto offset  = cudf::detail::get_value<int32_t>(offsets, strings_column.offset(), stream);
-  auto chars_bytes =
-    cudf::detail::get_value<int32_t>(offsets, strings_column.offset() + strings_count, stream) -
-    offset;
+  auto offset  = cudf::detail::get_value<cudf::size_type>(offsets, strings_column.offset(), stream);
+  auto chars_bytes = cudf::detail::get_value<cudf::size_type>(
+                       offsets, strings_column.offset() + strings_count, stream) -
+                     offset;
   auto d_chars = strings_column.chars().data<uint8_t>();  // unsigned is necessary for checking bits
   d_chars += offset;
 
@@ -200,16 +201,17 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
   // create output offsets column
   // -- conditionally copy a counting iterator where
   //    the first byte of each character is located
-  auto offsets_column = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32},
-                                                  num_characters + 1,
-                                                  cudf::mask_state::UNALLOCATED,
-                                                  stream,
-                                                  mr);
-  auto d_new_offsets  = offsets_column->mutable_view().begin<int32_t>();
+  auto offsets_column =
+    cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
+                              num_characters + 1,
+                              cudf::mask_state::UNALLOCATED,
+                              stream,
+                              mr);
+  auto d_new_offsets = offsets_column->mutable_view().begin<cudf::size_type>();
   thrust::copy_if(
     rmm::exec_policy(stream),
-    thrust::make_counting_iterator<int32_t>(0),
-    thrust::make_counting_iterator<int32_t>(chars_bytes + 1),
+    thrust::counting_iterator<cudf::size_type>(0),
+    thrust::counting_iterator<cudf::size_type>(chars_bytes + 1),
     d_new_offsets,
     [d_chars, chars_bytes] __device__(auto idx) {
       // this will also set the final value to the size chars_bytes
