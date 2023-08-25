@@ -3187,7 +3187,7 @@ class IntervalIndex(GenericIndex):
         >>> import cudf
         >>> import pandas as pd
         >>> cudf.IntervalIndex.from_breaks([0, 1, 2, 3])
-        IntervalIndex([(0, 1], (1, 2], (2, 3]], dtype='interval')
+        IntervalIndex([(0, 1], (1, 2], (2, 3]], dtype='interval[int64, right]')
         """
         if copy:
             breaks = column.as_column(breaks, dtype=dtype).copy()
@@ -3210,6 +3210,9 @@ class IntervalIndex(GenericIndex):
 
     def _is_boolean(self):
         return False
+
+    def _clean_nulls_from_index(self):
+        return self
 
 
 class StringIndex(GenericIndex):
