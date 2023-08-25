@@ -3357,3 +3357,93 @@ def test_group_by_pandas_sort_order(groups, sort):
             pdf.groupby(groups, sort=sort).sum(),
             df.groupby(groups, sort=sort).sum(),
         )
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    ["int32", "int64", "float64", "datetime64[ns]", "timedelta64[ns]", "bool"],
+)
+@pytest.mark.parametrize(
+    "reduce_op",
+    [
+        "min",
+        "max",
+        "idxmin",
+        "idxmax",
+        "first",
+        "last",
+    ],
+)
+def test_group_by_empty_reduction(dtype, reduce_op):
+    gdf = cudf.DataFrame({"a": [], "b": [], "c": []}, dtype=dtype)
+    pdf = gdf.to_pandas()
+
+    gg = gdf.groupby("a")["c"]
+    pg = pdf.groupby("a")["c"]
+
+    assert_eq(
+        getattr(gg, reduce_op)(), getattr(pg, reduce_op)(), check_dtype=True
+    )
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    ["int32", "int64", "float64", "datetime64[ns]", "timedelta64[ns]", "bool"],
+)
+@pytest.mark.parametrize(
+    "apply_op",
+    ["sum", "min", "max", "idxmax"],
+)
+def test_group_by_empty_apply(request, dtype, apply_op):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(dtype == "datetime64[ns]" and apply_op == "sum"),
+            reason=("sum isn't supported for datetime64[ns]"),
+        )
+    )
+
+    gdf = cudf.DataFrame({"a": [], "b": [], "c": []}, dtype=dtype)
+    pdf = gdf.to_pandas()
+
+    gg = gdf.groupby("a")["c"]
+    pg = pdf.groupby("a")["c"]
+
+    assert_eq(
+        gg.apply(apply_op),
+        pg.apply(apply_op),
+        check_dtype=True,
+        check_index_type=True,
+    )
+
+
+def test_groupby_consecutive_operations():
+    df = cudf.DataFrame([[1, np.nan], [1, 4], [5, 6]], columns=["A", "B"])
+    pdf = df.to_pandas()
+
+    gg = df.groupby("A")
+    pg = pdf.groupby("A")
+
+    actual = gg.nth(-1)
+    expected = pg.nth(-1)
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+    actual = gg.nth(0)
+    expected = pg.nth(0)
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+    actual = gg.cumsum()
+    expected = pg.cumsum()
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+    actual = gg.cumcount()
+    expected = pg.cumcount()
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+    actual = gg.cumsum()
+    expected = pg.cumsum()
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
