@@ -42,6 +42,10 @@ void BM_compiled_binaryop(benchmark::State& state, cudf::binary_operator binop)
     cuda_event_timer timer(state, true);
     cudf::binary_operation(lhs, rhs, binop, output_dtype);
   }
+
+  // use number of bytes read and written to global memory
+  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * column_size *
+                          (sizeof(TypeLhs) + sizeof(TypeRhs) + sizeof(TypeOut)));
 }
 
 // TODO tparam boolean for null.

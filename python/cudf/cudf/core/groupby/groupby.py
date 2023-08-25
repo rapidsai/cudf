@@ -553,8 +553,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             orig_dtypes,
         ):
             for agg, col in zip(aggs, cols):
+                agg_name = agg.__name__ if callable(agg) else agg
                 if multilevel:
-                    agg_name = agg.__name__ if callable(agg) else agg
                     key = (col_name, agg_name)
                 else:
                     key = col_name
@@ -564,7 +564,26 @@ class GroupBy(Serializable, Reducible, Scannable):
                 ):
                     # Structs lose their labels which we reconstruct here
                     col = col._with_type_metadata(cudf.ListDtype(orig_dtype))
-                data[key] = col
+
+                if (
+                    self.obj.empty
+                    and (
+                        isinstance(agg_name, str)
+                        and agg_name in Reducible._SUPPORTED_REDUCTIONS
+                    )
+                    and len(col) == 0
+                    and not isinstance(
+                        col,
+                        (
+                            cudf.core.column.ListColumn,
+                            cudf.core.column.StructColumn,
+                            cudf.core.column.DecimalBaseColumn,
+                        ),
+                    )
+                ):
+                    data[key] = col.astype(orig_dtype)
+                else:
+                    data[key] = col
         data = ColumnAccessor(data, multiindex=multilevel)
         if not multilevel:
             data = data.rename_levels({np.nan: None}, level=0)
