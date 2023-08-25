@@ -2465,6 +2465,20 @@ class IndexedFrame(Frame):
         if isinstance(columns, str):
             columns = [columns]
 
+        method = "nlargest" if largest else "nsmallest"
+        for col in columns:
+            if isinstance(self._data[col], cudf.core.column.StringColumn):
+                if isinstance(self, cudf.DataFrame):
+                    error_msg = (
+                        f"Column '{col}' has dtype {self._data[col].dtype}, "
+                        f"cannot use method '{method}' with this dtype"
+                    )
+                else:
+                    error_msg = (
+                        f"Cannot use method '{method}' with "
+                        f"dtype {self._data[col].dtype}"
+                    )
+                raise TypeError(error_msg)
         if len(self) == 0:
             return self
 
