@@ -34,9 +34,14 @@ if ! rapids-is-release-build; then
     alpha_spec=',>=0.0.0a0'
 fi
 
-for dep in rmm cudf ptxcompiler cubinlinker; do
-    sed -r -i "s/${dep}(.*)\"/${dep}${PACKAGE_CUDA_SUFFIX}\1${alpha_spec}\"/g" ${pyproject_file}
-done
+if [[ ${package_name} == "dask_cudf" ]]; then
+    sed -r -i "s/cudf(.*)\"/cudf${PACKAGE_CUDA_SUFFIX}\1${alpha_spec}\"/g" ${pyproject_file}
+else
+    sed -r -i "s/rmm(.*)\"/rmm${PACKAGE_CUDA_SUFFIX}\1${alpha_spec}\"/g" ${pyproject_file}
+    # ptxcompiler and cubinlinker aren't version constrained
+    sed -r -i "s/ptxcompiler\"/ptxcompiler${PACKAGE_CUDA_SUFFIX}\"/g" ${pyproject_file}
+    sed -r -i "s/cubinlinker\"/cubinlinker${PACKAGE_CUDA_SUFFIX}\"/g" ${pyproject_file}
+fi
 
 if [[ $PACKAGE_CUDA_SUFFIX == "-cu12" ]]; then
     sed -i "s/cuda-python[<=>\.,0-9a]*/cuda-python>=12.0,<13.0a0/g" ${pyproject_file}
