@@ -1286,6 +1286,56 @@ def test_parquet_reader_v2(tmpdir, simple_pdf):
     assert_eq(cudf.read_parquet(pdf_fname), simple_pdf)
 
 
+@pytest.mark.parametrize("nrows", [1, 100000])
+@pytest.mark.parametrize("add_nulls", [True, False])
+def test_delta_binary(nrows, add_nulls, tmpdir):
+    null_frequency = 0.25 if add_nulls else 0
+
+    # Create a pandas dataframe with random data of mixed types
+    arrow_table = dg.rand_dataframe(
+        dtypes_meta=[
+            {
+                "dtype": "int8",
+                "null_frequency": null_frequency,
+                "cardinality": nrows,
+            },
+            {
+                "dtype": "int16",
+                "null_frequency": null_frequency,
+                "cardinality": nrows,
+            },
+            {
+                "dtype": "int32",
+                "null_frequency": null_frequency,
+                "cardinality": nrows,
+            },
+            {
+                "dtype": "int64",
+                "null_frequency": null_frequency,
+                "cardinality": nrows,
+            },
+        ],
+        rows=nrows,
+        seed=0,
+        use_threads=False,
+    )
+    # Roundabout conversion to pandas to preserve nulls/data types
+    cudf_table = cudf.DataFrame.from_arrow(arrow_table)
+    test_pdf = cudf_table.to_pandas(nullable=True)
+    pdf_fname = tmpdir.join("pdfv2.parquet")
+    test_pdf.to_parquet(
+        pdf_fname,
+        version="2.6",
+        column_encoding="DELTA_BINARY_PACKED",
+        data_page_version="2.0",
+        engine="pyarrow",
+        use_dictionary=False,
+    )
+    cdf = cudf.read_parquet(pdf_fname)
+    pcdf = cudf.from_pandas(test_pdf)
+    assert_eq(cdf, pcdf)
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -2264,7 +2314,7 @@ def test_parquet_writer_statistics(tmpdir, pdf, add_nulls):
         pdf = pdf.drop(columns=["col_category", "col_bool"])
 
     if not add_nulls:
-        # Timedelta types convert NA to None when reading from parquet into
+        # Timedelta types convert NaT to None when reading from parquet into
         # pandas which interferes with series.max()/min()
         for t in TIMEDELTA_TYPES:
             pdf["col_" + t] = pd.Series(np.arange(len(pdf.index))).astype(t)
@@ -2514,6 +2564,15 @@ def test_parquet_reader_binary_decimal(datadir):
 
     expect = pd.read_parquet(fname)
     got = cudf.read_parquet(fname).to_pandas()
+
+    assert_eq(expect, got)
+
+
+def test_parquet_reader_fixed_bin(datadir):
+    fname = datadir / "fixed_len_byte_array.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname)
 
     assert_eq(expect, got)
 

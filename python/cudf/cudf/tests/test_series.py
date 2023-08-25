@@ -2224,3 +2224,42 @@ def test_series_constructor_unbounded_sequence():
 def test_series_constructor_error_mixed_type():
     with pytest.raises(pa.ArrowTypeError):
         cudf.Series(["abc", np.nan, "123"], nan_as_null=False)
+
+
+def test_series_typecast_to_object_error():
+    actual = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(ValueError):
+            actual.astype(object)
+        with pytest.raises(ValueError):
+            actual.astype(np.dtype("object"))
+        new_series = actual.astype("str")
+        assert new_series[0] == "1970-01-01 00:00:00.000000001"
+
+
+def test_series_typecast_to_object():
+    actual = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
+    with cudf.option_context("mode.pandas_compatible", False):
+        new_series = actual.astype(object)
+        assert new_series[0] == "1970-01-01 00:00:00.000000001"
+        new_series = actual.astype(np.dtype("object"))
+        assert new_series[0] == "1970-01-01 00:00:00.000000001"
+
+
+@pytest.mark.parametrize("attr", ["nlargest", "nsmallest"])
+def test_series_nlargest_nsmallest_str_error(attr):
+    gs = cudf.Series(["a", "b", "c", "d", "e"])
+    ps = gs.to_pandas()
+
+    assert_exceptions_equal(
+        getattr(gs, attr), getattr(ps, attr), ([], {"n": 1}), ([], {"n": 1})
+    )
+
+
+def test_series_unique_pandas_compatibility():
+    gs = cudf.Series([10, 11, 12, 11, 10])
+    ps = gs.to_pandas()
+    with cudf.option_context("mode.pandas_compatible", True):
+        actual = gs.unique()
+    expected = ps.unique()
+    assert_eq(actual, expected)

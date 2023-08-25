@@ -2465,6 +2465,20 @@ class IndexedFrame(Frame):
         if isinstance(columns, str):
             columns = [columns]
 
+        method = "nlargest" if largest else "nsmallest"
+        for col in columns:
+            if isinstance(self._data[col], cudf.core.column.StringColumn):
+                if isinstance(self, cudf.DataFrame):
+                    error_msg = (
+                        f"Column '{col}' has dtype {self._data[col].dtype}, "
+                        f"cannot use method '{method}' with this dtype"
+                    )
+                else:
+                    error_msg = (
+                        f"Cannot use method '{method}' with "
+                        f"dtype {self._data[col].dtype}"
+                    )
+                raise TypeError(error_msg)
         if len(self) == 0:
             return self
 
@@ -2582,10 +2596,12 @@ class IndexedFrame(Frame):
 
         df = self
         if index is not None:
-            index = cudf.core.index.as_index(index)
+            index = cudf.core.index.as_index(
+                index, name=getattr(index, "name", self._index.name)
+            )
 
             idx_dtype_match = (df.index.nlevels == index.nlevels) and all(
-                left_dtype == right_dtype
+                _is_same_dtype(left_dtype, right_dtype)
                 for left_dtype, right_dtype in zip(
                     (col.dtype for col in df.index._data.columns),
                     (col.dtype for col in index._data.columns),
@@ -5405,3 +5421,24 @@ def _drop_rows_by_labels(
             res = obj.to_frame(name="tmp").join(key_df, how="leftanti")["tmp"]
             res.name = obj.name
             return res
+
+
+def _is_same_dtype(lhs_dtype, rhs_dtype):
+    # Utility specific to `_reindex` to check
+    # for matching column dtype.
+    if lhs_dtype == rhs_dtype:
+        return True
+    elif (
+        is_categorical_dtype(lhs_dtype)
+        and not is_categorical_dtype(rhs_dtype)
+        and lhs_dtype.categories.dtype == rhs_dtype
+    ):
+        return True
+    elif (
+        is_categorical_dtype(rhs_dtype)
+        and not is_categorical_dtype(lhs_dtype)
+        and rhs_dtype.categories.dtype == lhs_dtype
+    ):
+        return True
+    else:
+        return False

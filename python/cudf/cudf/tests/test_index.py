@@ -2235,11 +2235,15 @@ def test_isin_index(data, values):
             [[1, 2, 3, 10, 100], ["red", "blue", "green", "pink", "white"]],
             names=("number", "color"),
         ),
+        pd.MultiIndex.from_product(
+            [[0, 1], ["red", "blue", "green"]], names=("number", "color")
+        ),
     ],
 )
 @pytest.mark.parametrize(
     "values,level,err",
     [
+        ([(1, "red"), (2, "blue"), (0, "green")], None, None),
         (["red", "orange", "yellow"], "color", None),
         (["red", "white", "yellow"], "color", None),
         ([0, 1, 2, 10, 11, 15], "number", None),
@@ -2678,3 +2682,15 @@ def test_index_date_duration_freq_error(cls):
     with cudf.option_context("mode.pandas_compatible", True):
         with pytest.raises(NotImplementedError):
             cudf.Index(s)
+
+
+@pytest.mark.parametrize("dtype", ["datetime64[ns]", "timedelta64[ns]"])
+def test_index_getitem_time_duration(dtype):
+    gidx = cudf.Index([1, 2, 3, 4, None], dtype=dtype)
+    pidx = gidx.to_pandas()
+    with cudf.option_context("mode.pandas_compatible", True):
+        for i in range(len(gidx)):
+            if i == 4:
+                assert gidx[i] is pidx[i]
+            else:
+                assert_eq(gidx[i], pidx[i])
