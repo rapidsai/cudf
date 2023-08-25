@@ -375,10 +375,10 @@ class stats_expression_converter : public ast::detail::expression_transformer {
 std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::filter_row_groups(
   host_span<std::vector<size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
-  std::reference_wrapper<ast::expression const> filter) const
+  std::reference_wrapper<ast::expression const> filter,
+  rmm::cuda_stream_view stream) const
 {
-  auto stream = cudf::get_default_stream();
-  auto mr     = rmm::mr::get_current_device_resource();
+  auto mr = rmm::mr::get_current_device_resource();
   // Create row group indices.
   std::vector<std::vector<size_type>> filtered_row_group_indices;
   std::vector<std::vector<size_type>> all_row_group_indices;

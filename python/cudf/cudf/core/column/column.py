@@ -81,7 +81,6 @@ from cudf.core.dtypes import (
     ListDtype,
     StructDtype,
 )
-from cudf.core.missing import NA
 from cudf.core.mixins import BinaryOperand, Reducible
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
@@ -605,7 +604,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             self._mimic_inplace(out, inplace=True)
 
     def _wrap_binop_normalization(self, other):
-        if other is NA or other is None:
+        if cudf.utils.utils.is_na_like(other):
             return cudf.Scalar(other, dtype=self.dtype)
         if isinstance(other, np.ndarray) and other.ndim == 0:
             # Try and maintain the dtype
@@ -990,6 +989,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             np.object_,
             str,
         }:
+            if cudf.get_option("mode.pandas_compatible") and np.dtype(
+                dtype
+            ).type in {np.object_}:
+                raise ValueError(
+                    f"Casting to {dtype} is not supported, use "
+                    "`.astype('str')` instead."
+                )
             return self.as_string_column(dtype, **kwargs)
         elif is_list_dtype(dtype):
             if not self.dtype == dtype:
@@ -2207,7 +2213,20 @@ def as_column(
                 pa.Array.from_pandas(interval_series), dtype=arb_dtype
             )
         elif arb_dtype.kind in ("O", "U"):
-            data = as_column(pa.Array.from_pandas(arbitrary), dtype=arb_dtype)
+            pyarrow_array = pa.Array.from_pandas(arbitrary)
+            if not isinstance(
+                pyarrow_array,
+                (
+                    pa.ListArray,
+                    pa.StructArray,
+                    pa.NullArray,
+                    pa.Decimal128Array,
+                    pa.StringArray,
+                    pa.BooleanArray,
+                ),
+            ):
+                raise MixedTypeError("Cannot create column with mixed types")
+            data = as_column(pyarrow_array, dtype=arb_dtype)
         else:
             data = as_column(
                 pa.array(
@@ -2237,6 +2256,12 @@ def as_column(
         raise NotImplementedError(
             "cuDF does not yet support timezone-aware datetimes"
         )
+    elif (
+        cudf.get_option("mode.pandas_compatible")
+        and isinstance(arbitrary, (pd.DatetimeIndex, pd.TimedeltaIndex))
+        and arbitrary.freq is not None
+    ):
+        raise NotImplementedError("freq is not implemented yet")
     else:
         try:
             data = as_column(
