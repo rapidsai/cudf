@@ -110,7 +110,7 @@ The guidance in this section may change often as Cython is updated and our under
 - All pxd files that declare a C++ enum should use `cpdef enum class` declarations.
   -  Reason: This declaration makes the C++ enum available in Cython code while also transparently creating a Python enum.
 - Any pxd file containing only C++ declarations must still have a corresponding pyx file if any of the declarations are scoped enums.
-  - Reason: The creation of the Python enum requires that Cython actually generate the necessary code Python C API code, which will not happen if only a pxd file is present.
+  - Reason: The creation of the Python enum requires that Cython actually generate the necessary Python C API code, which will not happen if only a pxd file is present.
 -  If a C++ enum will be part of a pylibcudf module's public API, then it should be imported (not cimported) directly into the pyx file and aliased with a name that matches our Python class naming conventions (CapsCase) instead of our C++ naming convention (snake\_case).
   - Reason: We want to expose the enum to both Python and Cython consumers of the module. As a side effect, this aliasing avoids [this Cython bug](https://github.com/cython/cython/issues/5609).
   - Note: Once the above Cython bug is resolved, the enum should also be aliased into the pylibcudf pxd file when it is cimported so that Python and Cython usage will match.
