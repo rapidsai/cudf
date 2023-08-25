@@ -2970,6 +2970,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: object
         """
         res = self._column.unique()
+        if cudf.get_option("mode.pandas_compatible"):
+            return res.values
         return Series(res, name=self.name)
 
     @_cudf_nvtx_annotate

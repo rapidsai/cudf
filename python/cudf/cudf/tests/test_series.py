@@ -2254,3 +2254,12 @@ def test_series_nlargest_nsmallest_str_error(attr):
     assert_exceptions_equal(
         getattr(gs, attr), getattr(ps, attr), ([], {"n": 1}), ([], {"n": 1})
     )
+
+
+def test_series_unique_pandas_compatibility():
+    gs = cudf.Series([10, 11, 12, 11, 10])
+    ps = gs.to_pandas()
+    with cudf.option_context("mode.pandas_compatible", True):
+        actual = gs.unique()
+    expected = ps.unique()
+    assert_eq(actual, expected)
