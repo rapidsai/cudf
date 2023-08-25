@@ -372,7 +372,7 @@ __global__ void copy_string_data(char* string_pool,
     auto dst      = &string_pool[offsets[blockIdx.x]];
     auto src      = str_val.ptr;
 
-    for (int i = threadIdx.x; i < str_val.length; i += blockDim.x) {
+    for (thread_index_type i = threadIdx.x; i < str_val.length; i += blockDim.x) {
       dst[i] = src[i];
     }
     if (threadIdx.x == 0) { str_val.ptr = dst; }
