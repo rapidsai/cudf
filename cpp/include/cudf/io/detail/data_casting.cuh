@@ -305,6 +305,35 @@ process_string(in_iterator_t in_begin,
   return {bytes, data_casting_result::PARSING_SUCCESS};
 }
 
+// Attempted, but didn't work for warp_parallel kernel
+template <bool b>
+__device__ bool& init_state()
+{
+  static bool data;
+  return data;
+}
+
+template <>
+__device__ bool& init_state<false>()
+{
+  __shared__ bool data;
+  return data;
+};
+
+template <bool b>
+__device__ int& last_offset()
+{
+  static size_type data;
+  return data;
+}
+
+template <>
+__device__ int& last_offset<false>()
+{
+  __shared__ size_type data;
+  return data;
+};
+
 // 1 warp per string.
 // algorithm
 
@@ -339,7 +368,7 @@ process_string(in_iterator_t in_begin,
 // before writing, find size, then intra-warp scan for out_idx
 // propagate offset from 32nd thread to others in warp to carry forward.
 // 1 warp per string.
-template <typename str_tuple_it>
+template <bool is_warp, size_type num_warps, typename str_tuple_it>
 __global__ void parse_fn_warp_parallel(str_tuple_it str_tuples,
                                        size_type total_out_strings,
                                        size_type* str_counter,
@@ -349,17 +378,24 @@ __global__ void parse_fn_warp_parallel(str_tuple_it str_tuples,
                                        size_type* d_offsets,
                                        char* d_chars)
 {
-  constexpr auto BLOCK_SIZE = cudf::detail::warp_size;
-  int lane                  = threadIdx.x % BLOCK_SIZE;
+  constexpr auto BLOCK_SIZE =
+    is_warp ? cudf::detail::warp_size : cudf::detail::warp_size * num_warps;
+  size_type lane = is_warp ? (threadIdx.x % BLOCK_SIZE) : threadIdx.x;
 
   // get 1-string index per warp
   auto get_next_string = [&]() {
-    size_type istring;
-    if (lane == 0) { istring = atomicAdd(str_counter, 1); }
-    __syncwarp();
-    return __shfl_sync(0xffffffff, istring, 0);
+    if constexpr (is_warp) {
+      size_type istring;
+      if (lane == 0) { istring = atomicAdd(str_counter, 1); }
+      __syncwarp();
+      return __shfl_sync(0xffffffff, istring, 0);
+    } else {
+      __shared__ size_type istring;
+      if (lane == 0) { istring = atomicAdd(str_counter, 1); }
+      __syncthreads();  // memory fence?
+      return istring;
+    }
   };
-
   // grid-stride loop.
   for (size_type istring = get_next_string(); istring < total_out_strings;
        istring           = get_next_string()) {
@@ -372,7 +408,11 @@ __global__ void parse_fn_warp_parallel(str_tuple_it str_tuples,
     auto in_begin           = str_tuples[istring].first;
     auto in_end             = in_begin + str_tuples[istring].second;
     auto const num_in_chars = str_tuples[istring].second;
-    if (num_in_chars > WARP_THRESHOLD) continue;
+    if constexpr (is_warp) {
+      if (num_in_chars > WARP_THRESHOLD) continue;
+    } else {
+      if (num_in_chars <= WARP_THRESHOLD) continue;
+    }
 
     // Check if the value corresponds to the null literal
     auto const is_null_literal =
@@ -418,14 +458,26 @@ __global__ void parse_fn_warp_parallel(str_tuple_it str_tuples,
     };
 
     // for backslash scan calculation: is_previous_escaping_backslash
-    bool init_state{false};
-    auto last_offset = 0;
+    // bool init_state{false};
+    // auto last_offset = 0;
+    bool init_state_reg;
+    __shared__ bool init_state_shared;
+    size_type last_offset_reg;
+    __shared__ size_type last_offset_shared;
+    bool& init_state(is_warp ? init_state_reg : init_state_shared);
+    size_type& last_offset(is_warp ? last_offset_reg : last_offset_shared);
+    if (is_warp || lane == 0) {
+      init_state  = false;
+      last_offset = 0;
+    }
+    // if constexpr(!is_warp) { __syncthreads(); }
     // 0-31, 32-63, ... i*32-n.
     // entire warp executes but with mask.
-    auto MASK = 0xffffffff;
+    // auto MASK = 0xffffffff;
     for (size_type char_index = lane;
-         (MASK = __ballot_sync(0xffffffff, char_index < (in_end - in_begin))) != 0;
+         char_index < cudf::util::round_up_safe(in_end - in_begin, static_cast<long>(BLOCK_SIZE));
          char_index += BLOCK_SIZE) {
+      auto MASK             = __ballot_sync(0xffffffff, char_index < (in_end - in_begin));
       bool is_within_bounds = char_index < (in_end - in_begin);
       auto c                = is_within_bounds ? in_begin[char_index] : '\0';
       auto prev_c       = (char_index > 0 and is_within_bounds) ? in_begin[char_index - 1] : '\0';
@@ -442,7 +494,17 @@ __global__ void parse_fn_warp_parallel(str_tuple_it str_tuples,
                    !is_hex(in_begin[char_index + 3]) | !is_hex(in_begin[char_index + 4])));
       }
       // propagate error using warp shuffle.
-      error = __any_sync(MASK, error);
+      if constexpr (is_warp) {
+        error = __any_sync(MASK, error);
+      } else {
+        using ErrorReduce = cub::BlockReduce<bool, BLOCK_SIZE>;
+        __shared__ typename ErrorReduce::TempStorage temp_storage_error;
+        __shared__ bool error_reduced;
+        error_reduced = ErrorReduce(temp_storage_error).Sum(error);  // TODO use cub::LogicalOR.
+        // only valid in thread0.
+        __syncthreads();
+        error = error_reduced;
+      }
       if (error) {
         if (lane == 0) {
           if (null_mask != nullptr) {
@@ -487,14 +549,25 @@ __global__ void parse_fn_warp_parallel(str_tuple_it str_tuples,
         return state_table{op2.state[op1.state[0]], op2.state[op1.state[1]]};
       };
       state_table scanned;
-      auto warp_id = threadIdx.x / BLOCK_SIZE;
+      [[maybe_unused]] auto warp_id = threadIdx.x / BLOCK_SIZE;
       // inclusive scan of escaping backslashes
-      using SlashScan = cub::WarpScan<state_table>;
-      __shared__ typename SlashScan::TempStorage temp_slash[8];
-      SlashScan(temp_slash[warp_id]).InclusiveScan(curr, scanned, composite_op);
-      auto is_escaping_backslash = scanned.state[init_state];
-      init_state                 = __shfl_sync(MASK, is_escaping_backslash, BLOCK_SIZE - 1);
-      skip |= is_escaping_backslash;
+      // TODO both inclusive and exclusive available in cub.
+      if constexpr (is_warp) {
+        using SlashScan = cub::WarpScan<state_table>;
+        __shared__ typename SlashScan::TempStorage temp_slash[8];
+        SlashScan(temp_slash[warp_id]).InclusiveScan(curr, scanned, composite_op);
+        auto is_escaping_backslash = scanned.state[init_state];
+        init_state                 = __shfl_sync(MASK, is_escaping_backslash, BLOCK_SIZE - 1);
+        skip |= is_escaping_backslash;
+      } else {
+        using SlashScan = cub::BlockScan<state_table, BLOCK_SIZE>;
+        __shared__ typename SlashScan::TempStorage temp_slash;
+        SlashScan(temp_slash).InclusiveScan(curr, scanned, composite_op);
+        auto is_escaping_backslash = scanned.state[init_state];
+        if (threadIdx.x == BLOCK_SIZE - 1) init_state = is_escaping_backslash;
+        // There is another __syncthreads() at the end of for-loop.
+        skip |= is_escaping_backslash;
+      }
 
       if (!skip) {
         if (prev_c != '\\') {
@@ -539,13 +612,26 @@ __global__ void parse_fn_warp_parallel(str_tuple_it str_tuples,
         }
       }  // !skip end.
       {
-        __shared__ typename cub::WarpScan<size_type>::TempStorage temp_storage[8];
         size_type offset;
-        cub::WarpScan<size_type>(temp_storage[warp_id]).ExclusiveSum(this_num_out, offset);
+        if constexpr (is_warp) {
+          using OffsetScan = cub::WarpScan<size_type>;
+          __shared__ typename OffsetScan::TempStorage temp_storage[8];
+          OffsetScan(temp_storage[warp_id]).ExclusiveSum(this_num_out, offset);
+        } else {
+          using OffsetScan = cub::BlockScan<size_type, BLOCK_SIZE>;
+          __shared__ typename OffsetScan::TempStorage temp_storage;
+          OffsetScan(temp_storage).ExclusiveSum(this_num_out, offset);
+          __syncthreads();
+        }
         offset += last_offset;
         if (d_chars && !skip) { strings::detail::from_char_utf8(write_char, d_buffer + offset); }
         offset += this_num_out;
-        last_offset = __shfl_sync(0xffffffff, offset, BLOCK_SIZE - 1);
+        if constexpr (is_warp) {
+          last_offset = __shfl_sync(0xffffffff, offset, BLOCK_SIZE - 1);
+        } else {
+          if (threadIdx.x == BLOCK_SIZE - 1) last_offset = offset;
+          __syncthreads();
+        }
       }
     }  // char for-loop
     if (!d_chars && lane == 0) { d_offsets[istring] = last_offset; }
@@ -813,6 +899,17 @@ struct string_parse {
   }
 };
 
+template <typename SymbolT>
+struct to_string_view_pair {
+  SymbolT const* data;
+  to_string_view_pair(SymbolT const* _data) : data(_data) {}
+  __device__ auto operator()(thrust::tuple<size_type, size_type> ip)
+  {
+    return thrust::pair<char const*, std::size_t>{data + thrust::get<0>(ip),
+                                                  static_cast<std::size_t>(thrust::get<1>(ip))};
+  }
+};
+
 /**
  * @brief Parses the data from an iterator of string views, casting it to the given target data type
  *
@@ -877,7 +974,7 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
       auto num_blocks                 = min(65535, col_size / warps_per_block + 1);
       auto str_counter                = cudf::numeric_scalar(size_type{0}, true, stream);
 
-      parse_fn_warp_parallel<<<num_blocks, threads_per_block, 0, stream.value()>>>(
+      parse_fn_warp_parallel<true, 8><<<num_blocks, threads_per_block, 0, stream.value()>>>(
         str_tuples,
         col_size,
         str_counter.data(),
@@ -888,16 +985,15 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
         nullptr);
       str_counter.set_value(0, stream);
       // if (max_length > WARP_THRESHOLD)
-      parse_fn_block_parallel<threads_per_block>
-        <<<num_blocks, threads_per_block, 0, stream.value()>>>(
-          str_tuples,
-          col_size,
-          str_counter.data(),
-          static_cast<bitmask_type*>(null_mask.data()),
-          null_count_data,
-          options,
-          d_offsets,
-          nullptr);
+      parse_fn_warp_parallel<false, 8><<<num_blocks, threads_per_block, 0, stream.value()>>>(
+        str_tuples,
+        col_size,
+        str_counter.data(),
+        static_cast<bitmask_type*>(null_mask.data()),
+        null_count_data,
+        options,
+        d_offsets,
+        nullptr);
       auto const bytes =
         cudf::detail::sizes_to_offsets(d_offsets, d_offsets + col_size + 1, d_offsets, stream);
       str_counter.set_value(0, stream);
@@ -907,7 +1003,7 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
         strings::detail::create_chars_child_column(static_cast<size_type>(bytes), stream, mr);
       auto d_chars2 = chars2->mutable_view().data<char>();
 
-      parse_fn_warp_parallel<<<num_blocks, threads_per_block, 0, stream.value()>>>(
+      parse_fn_warp_parallel<true, 8><<<num_blocks, threads_per_block, 0, stream.value()>>>(
         str_tuples,
         col_size,
         str_counter.data(),
@@ -919,16 +1015,15 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
       str_counter.set_value(0, stream);
 
       // if (max_length > WARP_THRESHOLD)
-      parse_fn_block_parallel<threads_per_block>
-        <<<num_blocks, threads_per_block, 0, stream.value()>>>(
-          str_tuples,
-          col_size,
-          str_counter.data(),
-          static_cast<bitmask_type*>(null_mask.data()),
-          null_count_data,
-          options,
-          d_offsets,
-          d_chars2);
+      parse_fn_warp_parallel<false, 8><<<num_blocks, threads_per_block, 0, stream.value()>>>(
+        str_tuples,
+        col_size,
+        str_counter.data(),
+        static_cast<bitmask_type*>(null_mask.data()),
+        null_count_data,
+        options,
+        d_offsets,
+        d_chars2);
       nvtxRangePop();
 
       return make_strings_column(col_size,
