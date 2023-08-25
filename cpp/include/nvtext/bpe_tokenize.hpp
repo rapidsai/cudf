@@ -166,45 +166,5 @@ std::unique_ptr<cudf::column> byte_pair_encoding(
   cudf::string_scalar const& separator = cudf::string_scalar(" "),
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
 
-/**
- * @brief Byte pair encode the input strings
- *
- * This will split each string on whitespace, perform the encoding,
- * and then build the output column using the given `separator`.
- *
- * The encoding algorithm rebuilds each string by matching substrings
- * in the `merge_pairs` column and iteratively removing the minimum ranked pair
- * until no pairs are left. Then, a space is inserted between the remaining
- * pairs before the result is joined to make the output string.
- *
- * @code{.pseudo}
- * merge_pairs = ["e n", "i t", "i s", "e s", "en t", "c e", "es t", "en ce", "t est", "s ent"]
- * input = ["test sentence", "thisis test"]
- * result = byte_pair_encoding(input, merge_pairs)
- * result is now ["test sent ence", "this is test"]
- * @endcode
- *
- * The `merges_pairs` column should contain a unique pair of strings per line separated by
- * a single space. An incorrect format or non-unique entries will result in
- * undefined behavior.
- *
- * @throw cudf::logic_error if `merge_pairs` is empty or contains nulls
- * @throw cudf::logic_error if `separator` is invalid
- *
- * @param input Strings to encode.
- * @param merges_pairs Created by a call to @ref nvtext::load_merge_pairs_file.
- * @param separator String used to build the output after encoding.
- *                  Default is a space.
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Memory resource to allocate any returned objects.
- * @return An encoded column of strings.
- */
-std::unique_ptr<cudf::column> byte_pair_encoding(
-  cudf::strings_column_view const& input,
-  cudf::strings_column_view const& merges_pairs,
-  cudf::string_scalar const& separator = cudf::string_scalar(" "),
-  rmm::cuda_stream_view stream         = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
-
 /** @} */  // end of group
 }  // namespace nvtext
