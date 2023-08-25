@@ -363,6 +363,7 @@ __global__ void __launch_bounds__(128)
     uint32_t values_in_page      = 0;
     uint32_t leaf_values_in_page = 0;
     size_t page_size             = 0;
+    size_t var_bytes_size        = 0;
     uint32_t num_pages           = 0;
     uint32_t num_rows            = 0;
     uint32_t page_start          = 0;
@@ -513,6 +514,12 @@ __global__ void __launch_bounds__(128)
           if (max_data_size > std::numeric_limits<int32_t>::max()) {
             CUDF_UNREACHABLE("page size exceeds maximum for i32");
           }
+          // if byte_array, then we need to save the variable bytes size
+          if (ck_g.col_desc->physical_type == BYTE_ARRAY) {
+            // page size is the sum of frag sizes, and frag sizes for strings includes the
+            // 4-byte length indicator, so subtract that.
+            page_g.var_bytes_size = var_bytes_size - page_g.num_leaf_values * sizeof(size_type);
+          }
           page_g.max_data_size    = static_cast<uint32_t>(max_data_size);
           pagestats_g.start_chunk = ck_g.first_fragment + page_start;
           pagestats_g.num_chunks  = page_g.num_fragments;
@@ -528,7 +535,19 @@ __global__ void __launch_bounds__(128)
         }
         __syncwarp();
         if (t == 0) {
-          if (not pages.empty()) { pages[ck_g.first_page + num_pages] = page_g; }
+          if (not pages.empty()) {
+            // need space for the chunk histograms plus data page histograms
+            auto const num_histograms = num_pages - (ck_g.use_dictionary ? 1 : 0);
+            if (ck_g.def_histogram_data != nullptr && col_g.max_def_level > 0) {
+              page_g.def_histogram =
+                ck_g.def_histogram_data + num_histograms * (col_g.max_def_level + 1);
+            }
+            if (ck_g.rep_histogram_data != nullptr && col_g.max_rep_level > 0) {
+              page_g.rep_histogram =
+                ck_g.rep_histogram_data + num_histograms * (col_g.max_rep_level + 1);
+            }
+            pages[ck_g.first_page + num_pages] = page_g;
+          }
           if (not page_sizes.empty()) {
             page_sizes[ck_g.first_page + num_pages] = page_g.max_data_size;
           }
@@ -537,6 +556,7 @@ __global__ void __launch_bounds__(128)
 
         num_pages++;
         page_size           = 0;
+        var_bytes_size      = 0;
         rows_in_page        = 0;
         values_in_page      = 0;
         leaf_values_in_page = 0;
@@ -546,6 +566,7 @@ __global__ void __launch_bounds__(128)
       max_stats_len = max(max_stats_len, minmax_len);
       num_dict_entries += frag_g.num_dict_vals;
       page_size += fragment_data_size;
+      var_bytes_size += frag_g.fragment_data_size;
       rows_in_page += frag_g.num_rows;
       values_in_page += frag_g.num_values;
       leaf_values_in_page += frag_g.num_leaf_values;
@@ -1083,6 +1104,15 @@ __global__ void __launch_bounds__(128, 8)
         }();
         s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = def_lvl;
         __syncthreads();
+        // FIXME(ets): is there a way to do this in parallel? without atomic adds?
+        if (t == 0) {
+          if (s->page.def_histogram != nullptr) {
+            for (int i = 0; i < nrows; i++) {
+              auto const lvl = s->vals[(rle_numvals + i) & (rle_buffer_size - 1)];
+              s->page.def_histogram[lvl]++;
+            }
+          }
+        }
         rle_numvals += nrows;
         RleEncode(s, rle_numvals, def_lvl_bits, (rle_numvals == s->page.num_rows), t);
         __syncthreads();
@@ -1103,49 +1133,62 @@ __global__ void __launch_bounds__(128, 8)
   } else if (s->page.page_type != PageType::DICTIONARY_PAGE &&
              s->col.num_rep_level_bits() != 0  // This means there ARE repetition levels (has list)
   ) {
-    auto encode_levels = [&](uint8_t const* lvl_val_data, uint32_t nbits, uint32_t& lvl_bytes) {
-      // For list types, the repetition and definition levels are pre-calculated. We just need to
-      // encode and write them now.
-      if (!t) {
-        s->rle_run     = 0;
-        s->rle_pos     = 0;
-        s->rle_numvals = 0;
-        s->rle_out     = s->cur;
-        if (not is_v2) {
-          s->rle_out += 4;  // save space for length
+    auto encode_levels =
+      [&](uint8_t const* lvl_val_data, uint32_t nbits, uint32_t& lvl_bytes, uint32_t* hist) {
+        // For list types, the repetition and definition levels are pre-calculated. We just need to
+        // encode and write them now.
+        if (!t) {
+          s->rle_run     = 0;
+          s->rle_pos     = 0;
+          s->rle_numvals = 0;
+          s->rle_out     = s->cur;
+          if (not is_v2) {
+            s->rle_out += 4;  // save space for length
+          }
         }
-      }
-      __syncthreads();
-      size_type page_first_val_idx = s->col.level_offsets[s->page.start_row];
-      size_type col_last_val_idx   = s->col.level_offsets[s->col.num_rows];
-      while (s->rle_numvals < s->page.num_values) {
-        uint32_t rle_numvals = s->rle_numvals;
-        uint32_t nvals       = min(s->page.num_values - rle_numvals, 128);
-        uint32_t idx         = page_first_val_idx + rle_numvals + t;
-        uint32_t lvl_val =
-          (rle_numvals + t < s->page.num_values && idx < col_last_val_idx) ? lvl_val_data[idx] : 0;
-        s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = lvl_val;
         __syncthreads();
-        rle_numvals += nvals;
-        RleEncode(s, rle_numvals, nbits, (rle_numvals == s->page.num_values), t);
-        __syncthreads();
-      }
-      if (t < 32) {
-        uint8_t* const cur       = s->cur;
-        uint8_t* const rle_out   = s->rle_out;
-        uint32_t const rle_bytes = static_cast<uint32_t>(rle_out - cur) - (is_v2 ? 0 : 4);
-        if (is_v2 && t == 0) {
-          lvl_bytes = rle_bytes;
-        } else if (not is_v2 && t < 4) {
-          cur[t] = rle_bytes >> (t * 8);
+        size_type page_first_val_idx = s->col.level_offsets[s->page.start_row];
+        size_type col_last_val_idx   = s->col.level_offsets[s->col.num_rows];
+        while (s->rle_numvals < s->page.num_values) {
+          uint32_t rle_numvals = s->rle_numvals;
+          uint32_t nvals       = min(s->page.num_values - rle_numvals, 128);
+          uint32_t idx         = page_first_val_idx + rle_numvals + t;
+          uint32_t lvl_val     = (rle_numvals + t < s->page.num_values && idx < col_last_val_idx)
+                                   ? lvl_val_data[idx]
+                                   : 0;
+          s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = lvl_val;
+          __syncthreads();
+          // FIXME(ets): is there a way to do this in parallel? without atomic adds?
+          if (t == 0) {
+            if (hist != nullptr) {
+              for (int i = 0; i < nvals; i++) {
+                auto const lvl = s->vals[(rle_numvals + i) & (rle_buffer_size - 1)];
+                hist[lvl]++;
+              }
+            }
+          }
+          rle_numvals += nvals;
+          RleEncode(s, rle_numvals, nbits, (rle_numvals == s->page.num_values), t);
+          __syncthreads();
         }
-        __syncwarp();
-        if (t == 0) { s->cur = rle_out; }
-      }
-    };
-    encode_levels(s->col.rep_values, s->col.num_rep_level_bits(), s->page.rep_lvl_bytes);
+        if (t < 32) {
+          uint8_t* const cur       = s->cur;
+          uint8_t* const rle_out   = s->rle_out;
+          uint32_t const rle_bytes = static_cast<uint32_t>(rle_out - cur) - (is_v2 ? 0 : 4);
+          if (is_v2 && t == 0) {
+            lvl_bytes = rle_bytes;
+          } else if (not is_v2 && t < 4) {
+            cur[t] = rle_bytes >> (t * 8);
+          }
+          __syncwarp();
+          if (t == 0) { s->cur = rle_out; }
+        }
+      };
+    encode_levels(
+      s->col.rep_values, s->col.num_rep_level_bits(), s->page.rep_lvl_bytes, s->page.rep_histogram);
     __syncthreads();
-    encode_levels(s->col.def_values, s->col.num_def_level_bits(), s->page.def_lvl_bytes);
+    encode_levels(
+      s->col.def_values, s->col.num_def_level_bits(), s->page.def_lvl_bytes, s->page.def_histogram);
   }
   // Encode data values
   __syncthreads();
@@ -2171,11 +2214,13 @@ __global__ void __launch_bounds__(1)
 
   if (column_stats.empty()) { return; }
 
-  EncColumnChunk* ck_g             = &chunks[blockIdx.x];
-  uint32_t num_pages               = ck_g->num_pages;
-  parquet_column_device_view col_g = *ck_g->col_desc;
-  size_t first_data_page           = ck_g->use_dictionary ? 1 : 0;
-  uint32_t pageidx                 = ck_g->first_page;
+  auto const ck_g                = &chunks[blockIdx.x];
+  uint32_t const num_pages       = ck_g->num_pages;
+  auto const& col_g              = *ck_g->col_desc;
+  uint32_t const first_data_page = ck_g->use_dictionary ? 1 : 0;
+  uint32_t const num_data_pages  = num_pages - first_data_page;
+  uint32_t const pageidx         = ck_g->first_page;
+  size_t var_bytes               = 0;
 
   header_encoder encoder(ck_g->column_index_blob);
 
@@ -2188,13 +2233,13 @@ __global__ void __launch_bounds__(1)
       : align8(ck_g->column_index_blob + ck_g->column_index_size - column_index_truncate_length);
 
   // null_pages
-  encoder.field_list_begin(1, num_pages - first_data_page, ST_FLD_TRUE);
+  encoder.field_list_begin(1, num_data_pages, ST_FLD_TRUE);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
     encoder.put_bool(column_stats[pageidx + page].non_nulls == 0);
   }
   encoder.field_list_end(1);
   // min_values
-  encoder.field_list_begin(2, num_pages - first_data_page, ST_FLD_BINARY);
+  encoder.field_list_begin(2, num_data_pages, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
     auto const [min_ptr, min_size] = get_extremum(&column_stats[pageidx + page].min_value,
                                                   col_g.stats_dtype,
@@ -2205,7 +2250,7 @@ __global__ void __launch_bounds__(1)
   }
   encoder.field_list_end(2);
   // max_values
-  encoder.field_list_begin(3, num_pages - first_data_page, ST_FLD_BINARY);
+  encoder.field_list_begin(3, num_data_pages, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
     auto const [max_ptr, max_size] = get_extremum(&column_stats[pageidx + page].max_value,
                                                   col_g.stats_dtype,
@@ -2222,15 +2267,66 @@ __global__ void __launch_bounds__(1)
                                                col_g.converted_type,
                                                num_pages - first_data_page));
   // null_counts
-  encoder.field_list_begin(5, num_pages - first_data_page, ST_FLD_I64);
+  encoder.field_list_begin(5, num_data_pages, ST_FLD_I64);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
     encoder.put_int64(column_stats[pageidx + page].null_count);
   }
   encoder.field_list_end(5);
+
+  // SizeStatistics/RepetitionDefinitionLevelHistogram...waiting on
+  // https://github.com/apache/parquet-format/pull/197
+  // TODO: only encode if the histograms are populated or var_length > 0 in any page. maybe
+  // track the latter on the chunk. for now we encode even if it's empty
+
+  // find pointers to chunk histograms
+  auto const cd          = ck_g->col_desc;
+  auto const ck_def_hist = ck_g->def_histogram_data + (num_data_pages) * (cd->max_def_level + 1);
+  auto const ck_rep_hist = ck_g->rep_histogram_data + (num_data_pages) * (cd->max_rep_level + 1);
+
+  // SizeStatistics vs RepetitionDefinitionLevelHistogram
+  bool constexpr use_size_stats = true;
+  bool constexpr write_hist     = true;
+
+  if constexpr (write_hist) {
+    encoder.field_list_begin(6, num_data_pages, ST_FLD_STRUCT);
+    for (uint32_t page = first_data_page; page < num_pages; page++) {
+      auto const& pg = ck_g->pages[page];
+
+      var_bytes += pg.var_bytes_size;
+      if constexpr (use_size_stats) {
+        if (pg.var_bytes_size > 0) { encoder.field_int64(1, pg.var_bytes_size); }
+
+        // start the RepetitionDefinitionLevelHistogram struct
+        encoder.field_struct_begin(2);
+      }
+      if (cd->max_rep_level > 0) {
+        encoder.field_list_begin(1, cd->max_rep_level + 1, ST_FLD_I64);
+        for (int i = 0; i < cd->max_rep_level + 1; i++) {
+          encoder.put_int64(pg.rep_histogram[i]);
+          ck_rep_hist[i] += pg.rep_histogram[i];
+        }
+        encoder.field_list_end(1);
+      }
+      if (cd->max_def_level > 0) {
+        encoder.field_list_begin(2, cd->max_def_level + 1, ST_FLD_I64);
+        for (int i = 0; i < cd->max_def_level + 1; i++) {
+          encoder.put_int64(pg.def_histogram[i]);
+          ck_def_hist[i] += pg.def_histogram[i];
+        }
+        encoder.field_list_end(2);
+      }
+      encoder.field_struct_end(2);  // end the histogram struct
+      // end the SizeStatistics struct
+      if constexpr (use_size_stats) { encoder.field_struct_end(2); }
+    }
+    encoder.field_list_end(6);
+  }
+
   encoder.end(&col_idx_end, false);
 
   // now reset column_index_size to the actual size of the encoded column index blob
   ck_g->column_index_size = static_cast<uint32_t>(col_idx_end - ck_g->column_index_blob);
+  ck_g->var_bytes_size    = var_bytes;
 }
 
 void InitRowGroupFragments(device_2dspan<PageFragment> frag,

@@ -53,6 +53,8 @@ class CompactProtocolWriter {
   size_t write(Statistics const&);
   size_t write(PageLocation const&);
   size_t write(OffsetIndex const&);
+  size_t write(RepetitionDefinitionLevelHistogram const&);
+  size_t write(SizeStatistics const&);
 
  protected:
   std::vector<uint8_t>& m_buf;
@@ -90,6 +92,8 @@ class CompactProtocolFieldWriter {
 
   template <typename Enum>
   inline void field_int_list(int field, std::vector<Enum> const& val);
+
+  inline void field_int_list(int field, const std::vector<int64_t>& val);
 
   template <typename T>
   inline void field_struct(int field, T const& val);

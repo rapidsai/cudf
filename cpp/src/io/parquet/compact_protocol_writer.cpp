@@ -198,10 +198,14 @@ size_t CompactProtocolWriter::write(ColumnChunkMetaData const& s)
   c.field_int(5, s.num_values);
   c.field_int(6, s.total_uncompressed_size);
   c.field_int(7, s.total_compressed_size);
+  if (s.key_value_metadata.size() != 0) { c.field_struct_list(8, s.key_value_metadata); }
   c.field_int(9, s.data_page_offset);
   if (s.index_page_offset != 0) { c.field_int(10, s.index_page_offset); }
   if (s.dictionary_page_offset != 0) { c.field_int(11, s.dictionary_page_offset); }
   c.field_struct(12, s.statistics);
+  if (s.size_estimate_statistics.has_value()) {
+    c.field_struct(16, s.size_estimate_statistics.value());
+  }
   return c.value();
 }
 
@@ -230,6 +234,30 @@ size_t CompactProtocolWriter::write(OffsetIndex const& s)
 {
   CompactProtocolFieldWriter c(*this);
   c.field_struct_list(1, s.page_locations);
+  return c.value();
+}
+
+size_t CompactProtocolWriter::write(RepetitionDefinitionLevelHistogram const& r)
+{
+  CompactProtocolFieldWriter c(*this);
+  if (r.repetition_level_histogram.has_value()) {
+    c.field_int_list(1, r.repetition_level_histogram.value());
+  }
+  if (r.definition_level_histogram.has_value()) {
+    c.field_int_list(2, r.definition_level_histogram.value());
+  }
+  return c.value();
+}
+
+size_t CompactProtocolWriter::write(SizeStatistics const& s)
+{
+  CompactProtocolFieldWriter c(*this);
+  if (s.unencoded_variable_width_stored_bytes.has_value()) {
+    c.field_int(1, s.unencoded_variable_width_stored_bytes.value());
+  }
+  if (s.repetition_definition_level_histogram.has_value()) {
+    c.field_struct(2, s.repetition_definition_level_histogram.value());
+  }
   return c.value();
 }
 
@@ -301,6 +329,17 @@ inline void CompactProtocolFieldWriter::field_int_list(int field, std::vector<En
 {
   put_field_header(field, current_field_value, ST_FLD_LIST);
   put_byte((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_I32));
+  if (val.size() >= 0xf) put_uint(val.size());
+  for (auto& v : val) {
+    put_int(static_cast<int32_t>(v));
+  }
+  current_field_value = field;
+}
+
+inline void CompactProtocolFieldWriter::field_int_list(int field, const std::vector<int64_t>& val)
+{
+  put_field_header(field, current_field_value, ST_FLD_LIST);
+  put_byte((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_I64));
   if (val.size() >= 0xf) put_uint(val.size());
   for (auto& v : val) {
     put_int(static_cast<int32_t>(v));

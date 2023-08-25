@@ -242,10 +242,12 @@ bool CompactProtocolReader::read(ColumnChunkMetaData* c)
                             ParquetFieldInt64(5, c->num_values),
                             ParquetFieldInt64(6, c->total_uncompressed_size),
                             ParquetFieldInt64(7, c->total_compressed_size),
+                            ParquetFieldStructList(8, c->key_value_metadata),
                             ParquetFieldInt64(9, c->data_page_offset),
                             ParquetFieldInt64(10, c->index_page_offset),
                             ParquetFieldInt64(11, c->dictionary_page_offset),
-                            ParquetFieldStruct(12, c->statistics));
+                            ParquetFieldStruct(12, c->statistics),
+                            OptionalParquetFieldStruct(16, c->size_estimate_statistics));
   return function_builder(this, op);
 }
 
@@ -308,13 +310,31 @@ bool CompactProtocolReader::read(OffsetIndex* o)
   return function_builder(this, op);
 }
 
+bool CompactProtocolReader::read(RepetitionDefinitionLevelHistogram* r)
+{
+  auto op = std::make_tuple(OptionalParquetFieldInt64List(1, r->repetition_level_histogram),
+                            OptionalParquetFieldInt64List(2, r->definition_level_histogram));
+  return function_builder(this, op);
+}
+
+bool CompactProtocolReader::read(SizeStatistics* s)
+{
+  auto op =
+    std::make_tuple(OptionalParquetFieldInt64(1, s->unencoded_variable_width_stored_bytes),
+                    OptionalParquetFieldStruct(2, s->repetition_definition_level_histogram));
+  return function_builder(this, op);
+}
+
 bool CompactProtocolReader::read(ColumnIndex* c)
 {
   auto op = std::make_tuple(ParquetFieldBoolList(1, c->null_pages),
                             ParquetFieldBinaryList(2, c->min_values),
                             ParquetFieldBinaryList(3, c->max_values),
                             ParquetFieldEnum<BoundaryOrder>(4, c->boundary_order),
-                            ParquetFieldInt64List(5, c->null_counts));
+                            ParquetFieldInt64List(5, c->null_counts),
+                            // FIXME(ets): this will likely be RepetitionDefinitionLevelHistogram
+                            // https://github.com/apache/parquet-format/pull/197
+                            OptionalParquetFieldStruct(6, c->size_statistics));
   return function_builder(this, op);
 }
 

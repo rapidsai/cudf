@@ -28,6 +28,9 @@ namespace io {
 namespace parquet {
 constexpr uint32_t parquet_magic = (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24));
 
+constexpr std::string_view COL_META_SIZES_OFFSET = "sizes_offset";
+constexpr std::string_view COL_META_SIZES_SIZE   = "sizes_size";
+
 /**
  * @brief Struct that describes the Parquet file data header
  */
@@ -211,6 +214,46 @@ struct Statistics {
 };
 
 /**
+ * @brief Thrift-derived struct describing a key-value pair, for user metadata
+ */
+struct KeyValue {
+  std::string key;
+  std::string value;
+};
+
+/**
+ * @brief Thrift-derived struct containing repetition and definition level histograms
+*/
+struct RepetitionDefinitionLevelHistogram {
+  /**
+    * When present, there is expected to be one element corresponding to each
+    * repetition (i.e. size=max repetition_level+1) where each element
+    * represents the number of times the repetition level was observed in the
+    * data.
+    *
+    * This value should not be written if max_repetition_level is 0.
+    */
+  std::optional<std::vector<int64_t>> repetition_level_histogram;
+
+  /**
+    * Same as repetition_level_histogram except for definition levels.
+    *
+    * This value should not be written if max_definition_level is 0.
+    */
+  std::optional<std::vector<int64_t>> definition_level_histogram;
+};
+
+/**
+ * @brief Thrift-derived struct containing statistics used to estimate page and column chunk sizes
+*/
+struct SizeStatistics {
+  // number of variable-width bytes stored for the page/chunk. should not be set for anything
+  // but the BYTE_ARRAY physical type.
+  std::optional<int64_t> unencoded_variable_width_stored_bytes;
+  std::optional<RepetitionDefinitionLevelHistogram> repetition_definition_level_histogram;
+};
+
+/**
  * @brief Thrift-derived struct describing a column chunk
  */
 struct ColumnChunkMetaData {
@@ -223,11 +266,13 @@ struct ColumnChunkMetaData {
     0;  // total byte size of all uncompressed pages in this column chunk (including the headers)
   int64_t total_compressed_size =
     0;  // total byte size of all compressed pages in this column chunk (including the headers)
+  std::vector<KeyValue> key_value_metadata;  // per chunk metadata
   int64_t data_page_offset  = 0;  // Byte offset from beginning of file to first data page
   int64_t index_page_offset = 0;  // Byte offset from beginning of file to root index page
   int64_t dictionary_page_offset =
     0;                    // Byte offset from the beginning of file to first (only) dictionary page
   Statistics statistics;  // Encoded chunk-level statistics
+  std::optional<SizeStatistics> size_estimate_statistics;
 };
 
 /**
@@ -261,14 +306,6 @@ struct RowGroup {
   int64_t total_byte_size = 0;
   std::vector<ColumnChunk> columns;
   int64_t num_rows = 0;
-};
-
-/**
- * @brief Thrift-derived struct describing a key-value pair, for user metadata
- */
-struct KeyValue {
-  std::string key;
-  std::string value;
 };
 
 /**
@@ -367,6 +404,7 @@ struct ColumnIndex {
   BoundaryOrder boundary_order =
     BoundaryOrder::UNORDERED;                    // Indicates if min and max values are ordered
   std::vector<int64_t> null_counts;              // Optional count of null values per page
+  std::optional<SizeStatistics> size_statistics;
 };
 
 // bit space we are reserving in column_buffer::user_data

@@ -118,6 +118,8 @@ class CompactProtocolReader {
   bool read(KeyValue* k);
   bool read(PageLocation* p);
   bool read(OffsetIndex* o);
+  bool read(RepetitionDefinitionLevelHistogram* r);
+  bool read(SizeStatistics* s);
   bool read(ColumnIndex* c);
   bool read(Statistics* s);
 
@@ -300,6 +302,27 @@ class ParquetFieldInt64 {
 };
 
 /**
+ * @brief Functor to set value to 64 bit integer read from CompactProtocolReader
+ *
+ * @return True if field type is not int32 or int64
+ */
+class OptionalParquetFieldInt64 {
+  int field_val;
+  std::optional<int64_t>& val;
+
+ public:
+  OptionalParquetFieldInt64(int f, std::optional<int64_t>& v) : field_val(f), val(v) {}
+
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
+  {
+    val = cpr->get_i64();
+    return (field_type < ST_FLD_I16 || field_type > ST_FLD_I64);
+  }
+
+  int field() { return field_val; }
+};
+
+/**
  * @brief Functor to read a vector of 64-bit integers from CompactProtocolReader
  *
  * @return True if field types mismatch or if the process of reading an
@@ -320,6 +343,32 @@ class ParquetFieldInt64List {
     val.resize(n);
     for (int32_t i = 0; i < n; i++) {
       val[i] = cpr->get_i64();
+    }
+    return false;
+  }
+
+  int field() { return field_val; }
+};
+
+class OptionalParquetFieldInt64List {
+  int field_val;
+  std::optional<std::vector<int64_t>>& val;
+
+ public:
+  OptionalParquetFieldInt64List(int f, std::optional<std::vector<int64_t>>& v)
+    : field_val(f), val(v)
+  {
+  }
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
+  {
+    if (field_type != ST_FLD_LIST) return true;
+    val = std::vector<int64_t>();
+    uint8_t t;
+    int32_t n = cpr->get_listh(&t);
+    if (t != ST_FLD_I64) return true;
+    val.value().resize(n);
+    for (int32_t i = 0; i < n; i++) {
+      val.value()[i] = cpr->get_i64();
     }
     return false;
   }
@@ -421,6 +470,30 @@ template <typename T>
 ParquetFieldStructFunctor<T> ParquetFieldStruct(int f, T& v)
 {
   return ParquetFieldStructFunctor<T>(f, v);
+}
+
+template <typename T>
+class OptionalParquetFieldStructFunctor {
+  int field_val;
+  std::optional<T>& val;
+
+ public:
+  OptionalParquetFieldStructFunctor(int f, std::optional<T>& v) : field_val(f), val(v) {}
+
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
+  {
+    if (field_type != ST_FLD_STRUCT) { return true; }
+    val = T{};
+    return !(cpr->read(&val.value()));
+  }
+
+  int field() { return field_val; }
+};
+
+template <typename T>
+OptionalParquetFieldStructFunctor<T> OptionalParquetFieldStruct(int f, std::optional<T>& v)
+{
+  return OptionalParquetFieldStructFunctor<T>(f, v);
 }
 
 /**
