@@ -106,6 +106,7 @@ foreach(target IN LISTS targets_using_arrow_headers)
   target_include_directories(${target} PRIVATE "${PYARROW_INCLUDE_DIR}")
 endforeach()
 
+add_subdirectory(cpp)
 add_subdirectory(io)
 add_subdirectory(nvtext)
 add_subdirectory(pylibcudf)
