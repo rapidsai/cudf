@@ -111,9 +111,7 @@ std::unique_ptr<column> counts_fn(strings_column_view const& strings,
 __global__ void count_characters_parallel_fn(column_device_view const d_strings,
                                              size_type* d_lengths)
 {
-  auto const idx =
-    static_cast<thread_index_type>(threadIdx.x) +
-    static_cast<thread_index_type>(blockIdx.x) * static_cast<thread_index_type>(blockDim.x);
+  auto const idx    = cudf::detail::grid_1d::global_thread_id();
   using warp_reduce = cub::WarpReduce<size_type>;
   __shared__ typename warp_reduce::TempStorage temp_storage;
 
