@@ -145,7 +145,7 @@ def test_create_interval_index_from_list():
 
     expected = pd.Index(interval_list)
     actual = cudf.Index(interval_list)
-    
+
     assert_eq(expected, actual)
 
 
