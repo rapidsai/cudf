@@ -327,7 +327,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional string maximum = 2;
         //  optional string sum = 3;
         // }
-        if (s->chunk.has_minmax) {
+        if (s->chunk.has_minmax or s->chunk.has_sum) {
           // TODO: Decimal support (decimal min/max stored as strings)
         }
         break;
