@@ -323,7 +323,8 @@ constexpr bool is_supported_encoding(Encoding enc)
     case Encoding::PLAIN:
     case Encoding::PLAIN_DICTIONARY:
     case Encoding::RLE:
-    case Encoding::RLE_DICTIONARY: return true;
+    case Encoding::RLE_DICTIONARY:
+    case Encoding::DELTA_BINARY_PACKED: return true;
     default: return false;
   }
 }
@@ -730,8 +731,8 @@ std::pair<bool, std::vector<std::future<void>>> reader::impl::create_and_read_co
   auto& chunks        = _file_itm_data.chunks;
 
   // Descriptors for all the chunks that make up the selected columns
-  const auto num_input_columns = _input_columns.size();
-  const auto num_chunks        = row_groups_info.size() * num_input_columns;
+  auto const num_input_columns = _input_columns.size();
+  auto const num_chunks        = row_groups_info.size() * num_input_columns;
   chunks = cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc>(0, num_chunks, _stream);
 
   // Association between each column chunk and its source
