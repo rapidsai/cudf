@@ -1483,7 +1483,7 @@ class CategoricalColumn(column.ColumnBase):
                     ),
                 )
             elif (
-                not out_col._categories_equal(new_categories, ordered=ordered)
+                not out_col._categories_equal(new_categories, ordered=True)
                 or not self.ordered == ordered
             ):
                 out_col = out_col._set_categories(
