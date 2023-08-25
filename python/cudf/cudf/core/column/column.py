@@ -2454,25 +2454,29 @@ def as_column(
 
 def _construct_array(
     arbitrary: Any, dtype: Optional[Dtype]
-) -> Union[np.ndarray, cupy.ndarray]:
+) -> Union[np.ndarray, cupy.ndarray, pd.api.extensions.ExtensionArray]:
     """
-    Construct a CuPy or NumPy array from `arbitrary`
+    Construct a CuPy/NumPy/Pandas array from `arbitrary`
     """
     try:
         dtype = dtype if dtype is None else cudf.dtype(dtype)
         arbitrary = cupy.asarray(arbitrary, dtype=dtype)
     except (TypeError, ValueError):
         native_dtype = dtype
+        inferred_dtype = None
         if (
             dtype is None
             and not cudf._lib.scalar._is_null_host_scalar(arbitrary)
-            and infer_dtype(arbitrary, skipna=False)
+            and (inferred_dtype := infer_dtype(arbitrary, skipna=False))
             in (
                 "mixed",
                 "mixed-integer",
             )
         ):
             native_dtype = "object"
+        if inferred_dtype == "interval":
+            # Only way to construct an Interval column.
+            return pd.array(arbitrary)
         arbitrary = np.asarray(
             arbitrary,
             dtype=native_dtype

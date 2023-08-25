@@ -136,6 +136,19 @@ def test_create_interval_df(data1, data2, data3, data4, closed):
     assert_eq(expect_three, got_three)
 
 
+def test_create_interval_index_from_list():
+    interval_list = [
+        np.nan,
+        pd.Interval(2.0, 3.0, closed="right"),
+        pd.Interval(3.0, 4.0, closed="right"),
+    ]
+
+    expected = pd.Index(interval_list)
+    actual = cudf.Index(interval_list)
+
+    assert_eq(expected, actual)
+
+
 def test_interval_index_unique():
     interval_list = [
         np.nan,
