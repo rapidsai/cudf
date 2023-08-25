@@ -389,14 +389,15 @@ public final class PinnedMemoryPool implements AutoCloseable {
     @Override
     public synchronized HostMemoryBuffer allocate(long bytes) {
       if (section == null || section.size < bytes) {
-        throw new OutOfMemoryError("Reservation didn't have enough space for " + bytes);
+        throw new OutOfMemoryError("Reservation didn't have enough space " + bytes + " / " +
+                (section == null ? 0 : section.size));
       }
       long alignedSize = padToCpuAlignment(bytes);
       MemorySection allocated;
       if (section.size >= bytes && section.size <= alignedSize) {
         allocated = section;
         section = null;
-        // Not need for reserveAllocInternal because the original section is already tracked
+        // No need for reserveAllocInternal because the original section is already tracked
       } else {
         allocated = section.splitOff(alignedSize);
         PinnedMemoryPool.reserveAllocInternal(allocated);
