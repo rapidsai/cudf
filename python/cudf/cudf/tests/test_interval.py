@@ -1,5 +1,7 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
+
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -132,3 +134,21 @@ def test_create_interval_df(data1, data2, data3, data4, closed):
         dtype="interval",
     )
     assert_eq(expect_three, got_three)
+
+
+def test_interval_index_unique():
+    interval_list = [
+        np.nan,
+        pd.Interval(2.0, 3.0, closed="right"),
+        pd.Interval(3.0, 4.0, closed="right"),
+        np.nan,
+        pd.Interval(3.0, 4.0, closed="right"),
+        pd.Interval(3.0, 4.0, closed="right"),
+    ]
+    pi = pd.Index(interval_list)
+    gi = cudf.from_pandas(pi)
+
+    expected = pi.unique()
+    actual = gi.unique()
+
+    assert_eq(expected, actual)
