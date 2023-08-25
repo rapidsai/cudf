@@ -35,7 +35,7 @@ if ! rapids-is-release-build; then
 fi
 
 if [[ ${package_name} == "dask_cudf" ]]; then
-    sed -r -i "s/cudf(.*)\"/cudf${PACKAGE_CUDA_SUFFIX}\1${alpha_spec}\"/g" ${pyproject_file}
+    sed -r -i "s/cudf==(.*)\"/cudf${PACKAGE_CUDA_SUFFIX}==\1${alpha_spec}\"/g" ${pyproject_file}
 else
     sed -r -i "s/rmm(.*)\"/rmm${PACKAGE_CUDA_SUFFIX}\1${alpha_spec}\"/g" ${pyproject_file}
     # ptxcompiler and cubinlinker aren't version constrained
