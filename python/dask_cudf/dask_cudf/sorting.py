@@ -17,8 +17,7 @@ import cudf as gd
 from cudf.api.types import is_categorical_dtype
 from cudf.utils.utils import _dask_cudf_nvtx_annotate
 
-
-_SHUFFLE_SUPPORT = ("tasks", "p2p")
+_SHUFFLE_SUPPORT = ("tasks", "p2p")  # "disk" not supported
 
 
 @_dask_cudf_nvtx_annotate
@@ -325,7 +324,7 @@ def _get_shuffle_type(shuffle):
     if shuffle not in _SHUFFLE_SUPPORT:
         raise ValueError(
             "Dask-cudf only supports the following shuffle "
-            f"methds: {_SHUFFLE_SUPPORT}. Got shuffle={shuffle}"
+            f"methods: {_SHUFFLE_SUPPORT}. Got shuffle={shuffle}"
         )
 
     return shuffle
