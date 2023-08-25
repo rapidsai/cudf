@@ -1162,7 +1162,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         Get unique values in the data
         """
-        return drop_duplicates([self], keep="first")[0]
+        return drop_duplicates([self], keep="first")[0]._with_type_metadata(
+            self.dtype
+        )
 
     def serialize(self) -> Tuple[dict, list]:
         # data model:
