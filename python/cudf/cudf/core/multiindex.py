@@ -1151,6 +1151,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         pdi = pd.MultiIndex.from_tuples(tuples, names=names)
         return cls.from_pandas(pdi)
 
+    @_cudf_nvtx_annotate
+    def to_numpy(self):
+        return self.values_host
+
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def values_host(self):

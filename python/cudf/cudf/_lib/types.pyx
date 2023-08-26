@@ -236,6 +236,7 @@ cdef dtype_from_column_view(column_view cv):
         ]
 
 cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
+    cdef libcudf_types.type_id tid
     if cudf.api.types.is_list_dtype(dtype):
         tid = libcudf_types.type_id.LIST
     elif cudf.api.types.is_struct_dtype(dtype):
