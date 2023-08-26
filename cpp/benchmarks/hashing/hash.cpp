@@ -23,6 +23,8 @@
 
 #include <nvbench/nvbench.cuh>
 
+#include <optional>
+
 static void bench_hash(nvbench::state& state)
 {
   auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
