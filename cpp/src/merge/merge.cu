@@ -78,11 +78,13 @@ __global__ void materialize_merged_bitmask_kernel(
   size_type const num_destination_rows,
   index_type const* const __restrict__ merged_indices)
 {
-  size_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
+  auto tid = cudf::thread_index_type{threadIdx.x} +
+             cudf::thread_index_type{blockIdx.x} * cudf::thread_index_type{blockDim.x};
 
-  auto active_threads = __ballot_sync(0xffff'ffffu, destination_row < num_destination_rows);
+  auto active_threads = __ballot_sync(0xffff'ffffu, tid < num_destination_rows);
 
-  while (destination_row < num_destination_rows) {
+  while (tid < num_destination_rows) {
+    auto const destination_row     = static_cast<size_type>(tid);
     auto const [src_side, src_row] = merged_indices[destination_row];
     bool const from_left{src_side == side::LEFT};
     bool source_bit_is_valid{true};
@@ -99,8 +101,8 @@ __global__ void materialize_merged_bitmask_kernel(
     // Only one thread writes output
     if (0 == threadIdx.x % warpSize) { out_validity[word_index(destination_row)] = result_mask; }
 
-    destination_row += blockDim.x * gridDim.x;
-    active_threads = __ballot_sync(active_threads, destination_row < num_destination_rows);
+    tid += cudf::thread_index_type{blockDim.x} * cudf::thread_index_type{gridDim.x};
+    active_threads = __ballot_sync(active_threads, tid < num_destination_rows);
   }
 }
 
