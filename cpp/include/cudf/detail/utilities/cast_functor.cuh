@@ -53,7 +53,7 @@ struct cast_functor_fn {
  * @brief Function creating a casting functor.
  */
 template <typename ResultType, typename F>
-cast_functor_fn<ResultType, std::decay_t<F>> cast_functor(F&& f)
+inline cast_functor_fn<ResultType, std::decay_t<F>> cast_functor(F&& f)
 {
   return cast_functor_fn<ResultType, std::decay_t<F>>{std::forward<F>(f)};
 }
