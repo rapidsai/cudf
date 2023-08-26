@@ -180,6 +180,16 @@ def test_groupby_as_index_single_agg(pdf, gdf, as_index):
     assert_groupby_results_equal(pdf, gdf)
 
 
+@pytest.mark.parametrize("engine", ["cudf", "jit"])
+@pytest.mark.parametrize("as_index", [True, False])
+def test_groupby_as_index_apply(pdf, gdf, as_index, engine):
+    gdf = gdf.groupby("y", as_index=as_index).apply(
+        lambda df: df["x"].mean(), engine=engine
+    )
+    pdf = pdf.groupby("y", as_index=as_index).apply(lambda df: df["x"].mean())
+    assert_groupby_results_equal(pdf, gdf)
+
+
 @pytest.mark.parametrize("as_index", [True, False])
 def test_groupby_as_index_multiindex(pdf, gdf, as_index):
     pdf = pd.DataFrame(

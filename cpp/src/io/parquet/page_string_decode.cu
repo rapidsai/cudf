@@ -521,39 +521,44 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
     pp->num_valids = s->page.num_valids;
   }
 
-  // now process string info in the range [start_value, end_value)
-  // set up for decoding strings...can be either plain or dictionary
-  auto const& col          = s->col;
-  uint8_t const* data      = s->data_start;
-  uint8_t const* const end = s->data_end;
-  uint8_t const* dict_base = nullptr;
-  int dict_size            = 0;
-  size_t str_bytes         = 0;
+  auto const& col  = s->col;
+  size_t str_bytes = 0;
+  // short circuit for FIXED_LEN_BYTE_ARRAY
+  if ((col.data_type & 7) == FIXED_LEN_BYTE_ARRAY) {
+    str_bytes = pp->num_valids * s->dtype_len_in;
+  } else {
+    // now process string info in the range [start_value, end_value)
+    // set up for decoding strings...can be either plain or dictionary
+    uint8_t const* data      = s->data_start;
+    uint8_t const* const end = s->data_end;
+    uint8_t const* dict_base = nullptr;
+    int dict_size            = 0;
 
-  switch (pp->encoding) {
-    case Encoding::PLAIN_DICTIONARY:
-    case Encoding::RLE_DICTIONARY:
-      // RLE-packed dictionary indices, first byte indicates index length in bits
-      if (col.str_dict_index) {
-        // String dictionary: use index
-        dict_base = reinterpret_cast<const uint8_t*>(col.str_dict_index);
-        dict_size = col.page_info[0].num_input_values * sizeof(string_index_pair);
-      } else {
-        dict_base = col.page_info[0].page_data;  // dictionary is always stored in the first page
-        dict_size = col.page_info[0].uncompressed_page_size;
-      }
+    switch (pp->encoding) {
+      case Encoding::PLAIN_DICTIONARY:
+      case Encoding::RLE_DICTIONARY:
+        // RLE-packed dictionary indices, first byte indicates index length in bits
+        if (col.str_dict_index) {
+          // String dictionary: use index
+          dict_base = reinterpret_cast<const uint8_t*>(col.str_dict_index);
+          dict_size = col.page_info[0].num_input_values * sizeof(string_index_pair);
+        } else {
+          dict_base = col.page_info[0].page_data;  // dictionary is always stored in the first page
+          dict_size = col.page_info[0].uncompressed_page_size;
+        }
 
-      // FIXME: need to return an error condition...this won't actually do anything
-      if (s->dict_bits > 32 || !dict_base) { CUDF_UNREACHABLE("invalid dictionary bit size"); }
+        // FIXME: need to return an error condition...this won't actually do anything
+        if (s->dict_bits > 32 || !dict_base) { CUDF_UNREACHABLE("invalid dictionary bit size"); }
 
-      str_bytes = totalDictEntriesSize(
-        data, dict_base, s->dict_bits, dict_size, (end - data), start_value, end_value);
-      break;
-    case Encoding::PLAIN:
-      dict_size = static_cast<int32_t>(end - data);
-      str_bytes = is_bounds_pg ? totalPlainEntriesSize(data, dict_size, start_value, end_value)
-                               : dict_size - sizeof(int) * (pp->num_input_values - pp->num_nulls);
-      break;
+        str_bytes = totalDictEntriesSize(
+          data, dict_base, s->dict_bits, dict_size, (end - data), start_value, end_value);
+        break;
+      case Encoding::PLAIN:
+        dict_size = static_cast<int32_t>(end - data);
+        str_bytes = is_bounds_pg ? totalPlainEntriesSize(data, dict_size, start_value, end_value)
+                                 : dict_size - sizeof(int) * pp->num_valids;
+        break;
+    }
   }
 
   if (t == 0) {
