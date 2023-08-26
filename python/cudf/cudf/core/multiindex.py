@@ -504,7 +504,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                     ),
                 ):
                     preprocess_df[name] = col.astype("str").fillna(
-                        cudf._NA_REP
+                        str(cudf.NaT)
                     )
 
             tuples_list = list(
@@ -619,14 +619,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                     (3, 12)],
                 names=['a', 'b'])
         >>> midx.levels
-        [0    1
-        1    2
-        2    3
-        dtype: int64, 0    10
-        1    11
-        2    12
-        dtype: int64]
-        """
+        [Int64Index([1, 2, 3], dtype='int64', name='a'), Int64Index([10, 11, 12], dtype='int64', name='b')]
+        """  # noqa: E501
         if self._levels is None:
             self._compute_levels_and_codes()
         return self._levels
@@ -736,18 +730,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 values_idx = cudf.MultiIndex.from_tuples(
                     values, names=self.names
                 )
-
-            res = []
-            for name in self.names:
-                level_idx = self.get_level_values(name)
-                value_idx = values_idx.get_level_values(name)
-
-                existence = level_idx.isin(value_idx)
-                res.append(existence)
-
-            result = res[0]
-            for i in res[1:]:
-                result = result & i
+            self_df = self.to_frame(index=False).reset_index()
+            values_df = values_idx.to_frame(index=False)
+            idx = self_df.merge(values_df)._data["index"]
+            res = cudf.core.column.full(size=len(self), fill_value=False)
+            res[idx] = True
+            result = res.values
         else:
             level_series = self.get_level_values(level)
             result = level_series.isin(values)
@@ -772,8 +760,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 # `factorize` show up in other parts of public APIs.
                 warnings.simplefilter("ignore")
                 code, cats = cudf.Series._from_data({None: col}).factorize()
+            cats.name = name
             codes[name] = code.astype(np.int64)
-            levels.append(cudf.Series(cats, name=None))
+            levels.append(cats)
 
         self._levels = levels
         self._codes = cudf.DataFrame._from_data(codes)
@@ -1161,6 +1150,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         # Use Pandas for handling Python host objects
         pdi = pd.MultiIndex.from_tuples(tuples, names=names)
         return cls.from_pandas(pdi)
+
+    @_cudf_nvtx_annotate
+    def to_numpy(self):
+        return self.values_host
 
     @property  # type: ignore
     @_cudf_nvtx_annotate

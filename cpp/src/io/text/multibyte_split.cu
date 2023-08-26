@@ -20,6 +20,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/text/data_chunk_source.hpp>
@@ -143,24 +144,11 @@ __global__ void multibyte_split_init_kernel(
   cudf::io::text::detail::scan_tile_status status =
     cudf::io::text::detail::scan_tile_status::invalid)
 {
-  auto const thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
+  auto const thread_idx = cudf::detail::grid_1d::global_thread_id();
   if (thread_idx < num_tiles) {
     auto const tile_idx = base_tile_idx + thread_idx;
     tile_multistates.set_status(tile_idx, status);
     tile_output_offsets.set_status(tile_idx, status);
-  }
-}
-
-__global__ void multibyte_split_seed_kernel(
-  cudf::io::text::detail::scan_tile_state_view<multistate> tile_multistates,
-  cudf::io::text::detail::scan_tile_state_view<output_offset> tile_output_offsets,
-  multistate tile_multistate_seed,
-  output_offset tile_output_offset)
-{
-  auto const thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
-  if (thread_idx == 0) {
-    tile_multistates.set_inclusive_prefix(-1, tile_multistate_seed);
-    tile_output_offsets.set_inclusive_prefix(-1, tile_output_offset);
   }
 }
 
@@ -185,10 +173,12 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
     typename OffsetScan::TempStorage offset_scan;
   } temp_storage;
 
-  int32_t const tile_idx            = base_tile_idx + blockIdx.x;
-  int32_t const tile_input_offset   = blockIdx.x * ITEMS_PER_TILE;
-  int32_t const thread_input_offset = tile_input_offset + threadIdx.x * ITEMS_PER_THREAD;
-  int32_t const thread_input_size   = chunk_input_chars.size() - thread_input_offset;
+  auto const tile_idx          = base_tile_idx + blockIdx.x;
+  auto const tile_input_offset = blockIdx.x * ITEMS_PER_TILE;
+  auto const thread_input_offset =
+    tile_input_offset + cudf::thread_index_type{threadIdx.x} * ITEMS_PER_THREAD;
+  auto const thread_input_size =
+    std::max<cudf::size_type>(chunk_input_chars.size() - thread_input_offset, 0);
 
   // STEP 1: Load inputs
 
@@ -258,10 +248,12 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void byte_split_kernel(
     typename OffsetScan::TempStorage offset_scan;
   } temp_storage;
 
-  int32_t const tile_idx            = base_tile_idx + blockIdx.x;
-  int32_t const tile_input_offset   = blockIdx.x * ITEMS_PER_TILE;
-  int32_t const thread_input_offset = tile_input_offset + threadIdx.x * ITEMS_PER_THREAD;
-  int32_t const thread_input_size   = chunk_input_chars.size() - thread_input_offset;
+  auto const tile_idx          = base_tile_idx + blockIdx.x;
+  auto const tile_input_offset = blockIdx.x * ITEMS_PER_TILE;
+  auto const thread_input_offset =
+    tile_input_offset + cudf::thread_index_type{threadIdx.x} * ITEMS_PER_THREAD;
+  auto const thread_input_size =
+    std::max<cudf::size_type>(chunk_input_chars.size() - thread_input_offset, 0);
 
   // STEP 1: Load inputs
 
@@ -401,11 +393,14 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   // Seeding the tile state with an identity value allows the 0th tile to follow the same logic as
   // the Nth tile, assuming it can look up an inclusive prefix. Without this seed, the 0th block
   // would have to follow separate logic.
-  multibyte_split_seed_kernel<<<1, 1, 0, stream.value()>>>(  //
-    tile_multistates,
-    tile_offsets,
-    multistate_seed,
-    0);
+  cudf::detail::device_single_thread(
+    [tm = scan_tile_state_view<multistate>(tile_multistates),
+     to = scan_tile_state_view<output_offset>(tile_offsets),
+     multistate_seed] __device__() mutable {
+      tm.set_inclusive_prefix(-1, multistate_seed);
+      to.set_inclusive_prefix(-1, 0);
+    },
+    stream);
 
   auto reader               = source.create_reader();
   auto chunk_offset         = std::max<byte_offset>(0, byte_range.offset() - delimiter.size());

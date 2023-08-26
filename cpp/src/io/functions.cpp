@@ -750,6 +750,12 @@ parquet_writer_options_builder& parquet_writer_options_builder::max_page_fragmen
   return *this;
 }
 
+parquet_writer_options_builder& parquet_writer_options_builder::write_v2_headers(bool enabled)
+{
+  options.enable_write_v2_headers(enabled);
+  return *this;
+}
+
 void chunked_parquet_writer_options::set_key_value_metadata(
   std::vector<std::map<std::string, std::string>> metadata)
 {
@@ -828,6 +834,13 @@ chunked_parquet_writer_options_builder& chunked_parquet_writer_options_builder::
   size_t val)
 {
   options.set_max_dictionary_size(val);
+  return *this;
+}
+
+chunked_parquet_writer_options_builder& chunked_parquet_writer_options_builder::write_v2_headers(
+  bool enabled)
+{
+  options.enable_write_v2_headers(enabled);
   return *this;
 }
 

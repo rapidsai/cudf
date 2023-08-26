@@ -5287,26 +5287,20 @@ class StringMethods(ColumnMethods):
         )
 
     def minhash(
-        self,
-        seeds: Optional[cudf.Series] = None,
-        n: int = 4,
-        method: str = "murmur3",
+        self, seeds: Optional[ColumnLike] = None, width: int = 4
     ) -> SeriesOrIndex:
         """
         Compute the minhash of a strings column.
+        This uses the MurmurHash3_x86_32 algorithm for the hash function.
 
         Parameters
         ----------
-        seeds : Series
+        seeds : ColumnLike
             The seeds used for the hash algorithm.
             Must be of type uint32.
-        n : int
+        width : int
             The width of the substring to hash.
             Default is 4 characters.
-        method : str
-            Hash function to use.
-            Only 'murmur3' (MurmurHash3_32) is supported.
-            Default is 'murmur3'.
 
         Examples
         --------
@@ -5314,9 +5308,9 @@ class StringMethods(ColumnMethods):
         >>> str_series = cudf.Series(['this is my', 'favorite book'])
         >>> seeds = cudf.Series([0], dtype=np.uint32)
         >>> str_series.str.minhash(seeds)
-        0     21141582
-        1    962346254
-        dtype: uint32
+        0     [21141582]
+        1    [962346254]
+        dtype: list
         >>> seeds = cudf.Series([0, 1, 2], dtype=np.uint32)
         >>> str_series.str.minhash(seeds)
         0    [21141582, 403093213, 1258052021]
@@ -5325,14 +5319,54 @@ class StringMethods(ColumnMethods):
         """
         if seeds is None:
             seeds_column = column.as_column(0, dtype=np.uint32, length=1)
-        elif isinstance(seeds, cudf.Series) and seeds.dtype == np.uint32:
-            seeds_column = seeds._column
         else:
-            raise ValueError(
-                f"Expecting a Series with dtype uint32, got {type(seeds)}"
-            )
+            seeds_column = column.as_column(seeds)
+            if seeds_column.dtype != np.uint32:
+                raise ValueError(
+                    f"Expecting a Series with dtype uint32, got {type(seeds)}"
+                )
         return self._return_or_inplace(
-            libstrings.minhash(self._column, seeds_column, n, method)
+            libstrings.minhash(self._column, seeds_column, width)
+        )
+
+    def minhash64(
+        self, seeds: Optional[ColumnLike] = None, width: int = 4
+    ) -> SeriesOrIndex:
+        """
+        Compute the minhash of a strings column.
+        This uses the MurmurHash3_x64_128 algorithm for the hash function.
+        This function generates 2 uint64 values but only the first
+        uint64 value is used.
+
+        Parameters
+        ----------
+        seeds : ColumnLike
+            The seeds used for the hash algorithm.
+            Must be of type uint64.
+        width : int
+            The width of the substring to hash.
+            Default is 4 characters.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> str_series = cudf.Series(['this is my', 'favorite book'])
+        >>> seeds = cudf.Series([0, 1, 2], dtype=np.uint64)
+        >>> str_series.str.minhash64(seeds)
+        0    [3232308021562742685, 4445611509348165860, 586435843695903598]
+        1    [23008204270530356, 1281229757012344693, 153762819128779913]
+        dtype: list
+        """
+        if seeds is None:
+            seeds_column = column.as_column(0, dtype=np.uint64, length=1)
+        else:
+            seeds_column = column.as_column(seeds)
+            if seeds_column.dtype != np.uint64:
+                raise ValueError(
+                    f"Expecting a Series with dtype uint64, got {type(seeds)}"
+                )
+        return self._return_or_inplace(
+            libstrings.minhash64(self._column, seeds_column, width)
         )
 
     def jaccard_index(self, input: cudf.Series, width: int) -> SeriesOrIndex:
