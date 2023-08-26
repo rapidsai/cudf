@@ -54,19 +54,19 @@ static void bench_hash(nvbench::state& state)
   // memory written depends on used hash
 
   if (hash_name == "murmurhash3_x86_32") {
-    state.add_global_memory_reads<nvbench::uint32_t>(num_rows);
+    state.add_global_memory_writes<nvbench::uint32_t>(num_rows);
 
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       auto result = cudf::hashing::murmurhash3_x86_32(data->view());
     });
   } else if (hash_name == "md5") {
     // md5 writes out string with 32bytes
-    state.add_global_memory_reads<nvbench::int8_t>(32 * num_rows);
+    state.add_global_memory_writes<nvbench::int8_t>(32 * num_rows);
 
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { auto result = cudf::hashing::md5(data->view()); });
   } else if (hash_name == "spark_murmurhash3_x86_32") {
-    state.add_global_memory_reads<nvbench::int32_t>(num_rows);
+    state.add_global_memory_writes<nvbench::int32_t>(num_rows);
 
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       auto result = cudf::hashing::spark_murmurhash3_x86_32(data->view());
