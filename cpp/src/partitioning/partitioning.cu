@@ -134,7 +134,8 @@ __global__ void compute_row_partition_numbers(row_hasher_t the_hasher,
   // Accumulate histogram of the size of each partition in shared memory
   extern __shared__ size_type shared_partition_sizes[];
 
-  size_type row_number = threadIdx.x + blockIdx.x * blockDim.x;
+  auto tid = cudf::thread_index_type{threadIdx.x} +
+             cudf::thread_index_type{blockIdx.x} * cudf::thread_index_type{blockDim.x};
 
   // Initialize local histogram
   size_type partition_number = threadIdx.x;
@@ -148,7 +149,8 @@ __global__ void compute_row_partition_numbers(row_hasher_t the_hasher,
   // Compute the hash value for each row, store it to the array of hash values
   // and compute the partition to which the hash value belongs and increment
   // the shared memory counter for that partition
-  while (row_number < num_rows) {
+  while (tid < num_rows) {
+    auto const row_number                = static_cast<size_type>(tid);
     hash_value_type const row_hash_value = the_hasher(row_number);
 
     size_type const partition_number = the_partitioner(row_hash_value);
@@ -158,7 +160,7 @@ __global__ void compute_row_partition_numbers(row_hasher_t the_hasher,
     row_partition_offset[row_number] =
       atomicAdd(&(shared_partition_sizes[partition_number]), size_type(1));
 
-    row_number += blockDim.x * gridDim.x;
+    tid += cudf::thread_index_type{blockDim.x} * cudf::thread_index_type{gridDim.x};
   }
 
   __syncthreads();
@@ -213,12 +215,14 @@ __global__ void compute_row_output_locations(size_type* __restrict__ row_partiti
   }
   __syncthreads();
 
-  size_type row_number = threadIdx.x + blockIdx.x * blockDim.x;
+  auto tid = cudf::thread_index_type{threadIdx.x} +
+             cudf::thread_index_type{blockIdx.x} * cudf::thread_index_type{blockDim.x};
 
   // Get each row's partition number, and get it's output location by
   // incrementing block's offset counter for that partition number
   // and store the row's output location in-place
-  while (row_number < num_rows) {
+  while (tid < num_rows) {
+    auto const row_number = static_cast<size_type>(tid);
     // Get partition number of this row
     size_type const partition_number = row_partition_numbers[row_number];
 
@@ -230,7 +234,7 @@ __global__ void compute_row_output_locations(size_type* __restrict__ row_partiti
     // Store the row's output location in-place
     row_partition_numbers[row_number] = row_output_location;
 
-    row_number += blockDim.x * gridDim.x;
+    tid += cudf::thread_index_type{blockDim.x} * cudf::thread_index_type{gridDim.x};
   }
 }
 
@@ -307,8 +311,11 @@ __global__ void copy_block_partitions(InputIter input_iter,
   __syncthreads();
 
   // Fetch the input data to shared memory
-  for (size_type row_number = threadIdx.x + blockIdx.x * blockDim.x; row_number < num_rows;
-       row_number += blockDim.x * gridDim.x) {
+  for (auto tid = cudf::thread_index_type{threadIdx.x} +
+                  cudf::thread_index_type{blockIdx.x} * cudf::thread_index_type{blockDim.x};
+       tid < num_rows;
+       tid += cudf::thread_index_type{blockDim.x} * cudf::thread_index_type{gridDim.x}) {
+    auto const row_number      = static_cast<size_type>(tid);
     size_type const ipartition = row_partition_numbers[row_number];
 
     block_output[partition_offset_shared[ipartition] + row_partition_offset[row_number]] =
