@@ -738,7 +738,7 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
           d_offsets,
           nullptr);
       str_counter.set_value(0, stream);
-      // if (max_length > WARP_THRESHOLD)
+      // for strings longer than WARP_THRESHOLD, 1 block per string
       parse_fn_string_parallel<false, warps_per_block>
         <<<num_blocks, threads_per_block, 0, stream.value()>>>(
           str_tuples,
@@ -754,9 +754,9 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
       str_counter.set_value(0, stream);
 
       // CHARS column
-      std::unique_ptr<column> chars2 =
+      std::unique_ptr<column> chars =
         strings::detail::create_chars_child_column(static_cast<size_type>(bytes), stream, mr);
-      auto d_chars2 = chars2->mutable_view().data<char>();
+      auto d_chars = chars->mutable_view().data<char>();
 
       parse_fn_string_parallel<true, warps_per_block>
         <<<num_blocks, threads_per_block, 0, stream.value()>>>(
@@ -767,10 +767,10 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
           null_count_data,
           options,
           d_offsets,
-          d_chars2);
+          d_chars);
       str_counter.set_value(0, stream);
 
-      // if (max_length > WARP_THRESHOLD)
+      // for strings longer than WARP_THRESHOLD, 1 block per string
       parse_fn_string_parallel<false, warps_per_block>
         <<<num_blocks, threads_per_block, 0, stream.value()>>>(
           str_tuples,
@@ -780,12 +780,12 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
           null_count_data,
           options,
           d_offsets,
-          d_chars2);
+          d_chars);
       nvtxRangePop();
 
       return make_strings_column(col_size,
                                  std::move(offsets2),
-                                 std::move(chars2),
+                                 std::move(chars),
                                  d_null_count.value(stream),
                                  std::move(null_mask));
     }
