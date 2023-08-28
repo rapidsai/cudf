@@ -474,6 +474,23 @@ def test_groupby_apply_jit_correlation_zero_variance(dtype):
     run_groupby_apply_jit_test(data, func, ["a"])
 
 
+@pytest.mark.parametrize("dtype", ["int32"])
+def test_groupby_apply_jit_sum_integer_overflow(dtype):
+    max = np.iinfo(dtype).max
+
+    data = DataFrame(
+        {
+            "a": [0, 0, 0],
+            "b": [max, max, max],
+        }
+    )
+
+    def func(group):
+        return group["b"].sum()
+
+    run_groupby_apply_jit_test(data, func, ["a"])
+
+
 @pytest.mark.parametrize("dtype", ["float64"])
 @pytest.mark.parametrize("func", ["min", "max", "sum", "mean", "var", "std"])
 @pytest.mark.parametrize("special_val", [np.nan, np.inf, -np.inf])
@@ -3440,3 +3457,19 @@ def test_groupby_consecutive_operations():
     expected = pg.cumsum()
 
     assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+
+def test_categorical_grouping_pandas_compatibility():
+    gdf = cudf.DataFrame(
+        {
+            "key": cudf.Series([2, 1, 3, 1, 1], dtype="category"),
+            "a": [0, 1, 3, 2, 3],
+        }
+    )
+    pdf = gdf.to_pandas()
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        actual = gdf.groupby("key", sort=False).sum()
+    expected = pdf.groupby("key", sort=False).sum()
+
+    assert_eq(actual, expected)

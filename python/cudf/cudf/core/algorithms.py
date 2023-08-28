@@ -9,6 +9,7 @@ from cudf.core.index import Index, RangeIndex
 from cudf.core.indexed_frame import IndexedFrame
 from cudf.core.scalar import Scalar
 from cudf.core.series import Series
+from cudf.options import get_option
 
 
 def factorize(
@@ -137,7 +138,9 @@ def factorize(
         cats = cats.sort_values()
 
     labels = values._column._label_encoding(
-        cats=cats, na_sentinel=Scalar(na_sentinel)
+        cats=cats,
+        na_sentinel=Scalar(na_sentinel),
+        dtype="int64" if get_option("mode.pandas_compatible") else None,
     ).values
 
     return labels, cats.values if return_cupy_array else Index(cats)
