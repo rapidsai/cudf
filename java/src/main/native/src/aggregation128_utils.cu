@@ -18,6 +18,7 @@
 #include <utility>
 #include <vector>
 
+#include <cuda/functional>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/utilities/error.hpp>
@@ -86,8 +87,9 @@ std::unique_ptr<cudf::column> extract_chunk32(cudf::column_view const &in_col, c
   auto const in_begin = in_col.begin<int32_t>();
 
   // Build an iterator for every fourth 32-bit value, i.e.: one "chunk" of a __int128_t value
-  thrust::transform_iterator transform_iter{thrust::counting_iterator{0},
-                                            [] __device__(auto i) { return i * 4; }};
+  thrust::transform_iterator transform_iter{
+      thrust::counting_iterator{0},
+      cuda::proclaim_return_type<cudf::size_type>([] __device__(auto i) { return i * 4; })};
   thrust::permutation_iterator stride_iter{in_begin + chunk_idx, transform_iter};
 
   thrust::copy(rmm::exec_policy(stream), stride_iter, stride_iter + num_rows,
