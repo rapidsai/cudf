@@ -613,6 +613,15 @@ class GroupBy(Serializable, Reducible, Scannable):
                     how="left",
                 )
                 result = result.take(indices)
+                if isinstance(result._index, cudf.CategoricalIndex):
+                    # Needs re-ordering the categories in the order
+                    # they are after grouping.
+                    result._index = cudf.Index(
+                        result._index._column.reorder_categories(
+                            result._index._column._get_decategorized_column()
+                        ),
+                        name=result._index.name,
+                    )
 
         if not self._as_index:
             result = result.reset_index()
@@ -1436,6 +1445,9 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if self._sort:
             result = result.sort_index()
+        if self._as_index is False:
+            result = result.reset_index()
+            result[None] = result.pop(0)
         return result
 
     @_cudf_nvtx_annotate
