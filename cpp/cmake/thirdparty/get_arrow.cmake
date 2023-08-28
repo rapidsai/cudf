@@ -161,10 +161,10 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
   endif()
 
   # Arrow sets a number of variables that we need in this scope which won't be set via
-  # rapids_cpm_find because it is a function. Calling find_package will import targets which will
-  # duplicate targets generated from rapids_cpm_find builds, so we must call it before
-  # rapids_cpm_find has a chance to build and generate those targets or we get errors when an
-  # appropriate version of Arrow is found pre-installed on the system.
+  # rapids_cpm_find because it is a function. Calling find_package will import targets which
+  # will duplicate targets generated from rapids_cpm_find builds, so we must call it before
+  # rapids_cpm_find has a chance to build and generate those targets or we get errors when
+  # an appropriate version of Arrow is found pre-installed on the system.
   find_package(Arrow QUIET)
 
   rapids_cpm_find(
