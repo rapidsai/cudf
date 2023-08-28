@@ -3440,3 +3440,19 @@ def test_groupby_consecutive_operations():
     expected = pg.cumsum()
 
     assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+
+def test_categorical_grouping_pandas_compatibility():
+    gdf = cudf.DataFrame(
+        {
+            "key": cudf.Series([2, 1, 3, 1, 1], dtype="category"),
+            "a": [0, 1, 3, 2, 3],
+        }
+    )
+    pdf = gdf.to_pandas()
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        actual = gdf.groupby("key", sort=False).sum()
+    expected = pdf.groupby("key", sort=False).sum()
+
+    assert_eq(actual, expected)
