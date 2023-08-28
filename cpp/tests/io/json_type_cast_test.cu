@@ -21,14 +21,17 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <io/utilities/string_parsing.hpp>
+
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/detail/data_casting.cuh>
 #include <cudf/io/json.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+
+#include <rmm/exec_policy.hpp>
 
 #include <type_traits>
 

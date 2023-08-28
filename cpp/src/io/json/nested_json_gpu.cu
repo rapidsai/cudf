@@ -26,7 +26,6 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/detail/valid_if.cuh>
-#include <cudf/io/detail/data_casting.cuh>
 #include <cudf/io/detail/tokenize_json.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/table/table.hpp>

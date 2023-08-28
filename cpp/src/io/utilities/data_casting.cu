@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#pragma once
-
 #include <io/utilities/parsing_utils.cuh>
 #include <io/utilities/string_parsing.hpp>
 
