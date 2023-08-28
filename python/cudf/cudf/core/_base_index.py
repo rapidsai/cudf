@@ -1326,14 +1326,12 @@ class BaseIndex(Serializable):
         return union_result
 
     def _intersection(self, other, sort=None):
-        other_unique = other.unique()
-        other_unique.names = self.names
         intersection_result = cudf.core.index._index_from_data(
-            cudf.DataFrame._from_data(self.unique()._data)
+            cudf.DataFrame._from_data({"None": self.unique()._column})
             .merge(
-                cudf.DataFrame._from_data(other_unique._data),
+                cudf.DataFrame._from_data({"None": other.unique()._column}),
                 how="inner",
-                on=self.name,
+                on="None",
             )
             ._data
         )
