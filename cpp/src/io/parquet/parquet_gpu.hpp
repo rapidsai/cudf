@@ -345,8 +345,8 @@ struct parquet_column_device_view : stats_column_desc {
   ConvertedType converted_type;  //!< logical data type
   uint8_t level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble)
                        //!< levels
-  constexpr uint8_t num_def_level_bits() { return level_bits & 0xf; }
-  constexpr uint8_t num_rep_level_bits() { return level_bits >> 4; }
+  constexpr uint8_t num_def_level_bits() const { return level_bits & 0xf; }
+  constexpr uint8_t num_rep_level_bits() const { return level_bits >> 4; }
   size_type const* const*
     nesting_offsets;  //!< If column is a nested type, contains offset array of each nesting level
 
@@ -384,6 +384,12 @@ constexpr size_t kDictScratchSize    = (1 << kDictHashBits) * sizeof(uint32_t);
 struct EncPage;
 struct slot_type;
 
+// convert Encoding to a mask value
+constexpr uint32_t encoding_to_mask(Encoding encoding)
+{
+  return 1 << static_cast<uint32_t>(encoding);
+}
+
 /**
  * @brief Struct describing an encoder column chunk
  */
@@ -420,6 +426,7 @@ struct EncColumnChunk {
   bool use_dictionary;    //!< True if the chunk uses dictionary encoding
   uint8_t* column_index_blob;  //!< Binary blob containing encoded column index for this chunk
   uint32_t column_index_size;  //!< Size of column index blob
+  uint32_t encodings;          //!< Mask representing the set of encodings used for this chunk
 };
 
 /**
@@ -452,8 +459,11 @@ struct EncPage {
  */
 constexpr bool is_string_col(ColumnChunkDesc const& chunk)
 {
-  return (chunk.data_type & 7) == BYTE_ARRAY and (chunk.data_type >> 3) != 4 and
-         chunk.converted_type != DECIMAL;
+  auto const not_converted_to_decimal = chunk.converted_type != DECIMAL;
+  auto const non_hashed_byte_array =
+    (chunk.data_type & 7) == BYTE_ARRAY and (chunk.data_type >> 3) != 4;
+  auto const fixed_len_byte_array = (chunk.data_type & 7) == FIXED_LEN_BYTE_ARRAY;
+  return not_converted_to_decimal and (non_hashed_byte_array or fixed_len_byte_array);
 }
 
 /**
@@ -744,6 +754,8 @@ void EncodePages(device_span<EncPage> pages,
 
 /**
  * @brief Launches kernel to make the compressed vs uncompressed chunk-level decision
+ *
+ * Also calculates the set of page encodings used for each chunk.
  *
  * @param[in,out] chunks Column chunks (updated with actual compressed/uncompressed sizes)
  * @param[in] stream CUDA stream to use
