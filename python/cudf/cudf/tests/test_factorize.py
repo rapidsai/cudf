@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -139,3 +139,21 @@ def test_factorize_result_classes():
 
     assert isinstance(labels, cp.ndarray)
     assert isinstance(cats, cp.ndarray)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["abc", "def", "abc", "a", "def", None],
+        [10, 20, 100, -10, 0, 1, None, 10, 100],
+    ],
+)
+def test_category_dtype_factorize(data):
+    gs = cudf.Series(data, dtype="category")
+    ps = gs.to_pandas()
+
+    actual_codes, actual_uniques = gs.factorize()
+    expected_codes, expected_uniques = ps.factorize()
+
+    assert_eq(actual_codes, expected_codes)
+    assert_eq(actual_uniques, expected_uniques)
