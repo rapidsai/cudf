@@ -401,9 +401,15 @@ table_with_metadata reader::impl::read_chunk_internal(
 
   // Create the final output cudf columns.
   for (size_t i = 0; i < _output_buffers.size(); ++i) {
-    auto const metadata = _reader_column_schema.has_value()
-                            ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
-                            : std::nullopt;
+    auto metadata      = _reader_column_schema.has_value()
+                           ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
+                           : std::nullopt;
+    auto const& schema = _metadata->get_schema(_output_column_schemas[i]);
+    // FIXED_LEN_BYTE_ARRAY never read as string
+    if (schema.type == FIXED_LEN_BYTE_ARRAY and schema.converted_type != DECIMAL) {
+      metadata = std::make_optional<reader_column_schema>();
+      metadata->set_convert_binary_to_strings(false);
+    }
     // Only construct `out_metadata` if `_output_metadata` has not been cached.
     if (!_output_metadata) {
       column_name_info& col_name = out_metadata.schema_info[i];

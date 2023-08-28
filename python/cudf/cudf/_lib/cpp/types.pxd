@@ -4,6 +4,11 @@ from libc.stdint cimport int32_t, uint32_t
 
 
 cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
+    # The declaration below is to work around
+    # https://github.com/cython/cython/issues/5637
+    """
+    #define __PYX_ENUM_CLASS_DECL enum
+    """
     ctypedef int32_t size_type
     ctypedef uint32_t bitmask_type
     ctypedef uint32_t char_utf8
@@ -49,36 +54,36 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         ALL_EQUAL "cudf::nan_equality::ALL_EQUAL"
         NANS_UNEQUAL "cudf::nan_equality::UNEQUAL"
 
-    ctypedef enum type_id "cudf::type_id":
-        EMPTY                  "cudf::type_id::EMPTY"
-        INT8                   "cudf::type_id::INT8"
-        INT16                  "cudf::type_id::INT16"
-        INT32                  "cudf::type_id::INT32"
-        INT64                  "cudf::type_id::INT64"
-        UINT8                  "cudf::type_id::UINT8"
-        UINT16                 "cudf::type_id::UINT16"
-        UINT32                 "cudf::type_id::UINT32"
-        UINT64                 "cudf::type_id::UINT64"
-        FLOAT32                "cudf::type_id::FLOAT32"
-        FLOAT64                "cudf::type_id::FLOAT64"
-        BOOL8                  "cudf::type_id::BOOL8"
-        TIMESTAMP_DAYS         "cudf::type_id::TIMESTAMP_DAYS"
-        TIMESTAMP_SECONDS      "cudf::type_id::TIMESTAMP_SECONDS"
-        TIMESTAMP_MILLISECONDS "cudf::type_id::TIMESTAMP_MILLISECONDS"
-        TIMESTAMP_MICROSECONDS "cudf::type_id::TIMESTAMP_MICROSECONDS"
-        TIMESTAMP_NANOSECONDS  "cudf::type_id::TIMESTAMP_NANOSECONDS"
-        DICTIONARY32           "cudf::type_id::DICTIONARY32"
-        STRING                 "cudf::type_id::STRING"
-        LIST                   "cudf::type_id::LIST"
-        STRUCT                 "cudf::type_id::STRUCT"
-        NUM_TYPE_IDS           "cudf::type_id::NUM_TYPE_IDS"
-        DURATION_SECONDS       "cudf::type_id::DURATION_SECONDS"
-        DURATION_MILLISECONDS  "cudf::type_id::DURATION_MILLISECONDS"
-        DURATION_MICROSECONDS  "cudf::type_id::DURATION_MICROSECONDS"
-        DURATION_NANOSECONDS   "cudf::type_id::DURATION_NANOSECONDS"
-        DECIMAL32              "cudf::type_id::DECIMAL32"
-        DECIMAL64              "cudf::type_id::DECIMAL64"
-        DECIMAL128             "cudf::type_id::DECIMAL128"
+    cpdef enum class type_id(int32_t):
+        EMPTY
+        INT8
+        INT16
+        INT32
+        INT64
+        UINT8
+        UINT16
+        UINT32
+        UINT64
+        FLOAT32
+        FLOAT64
+        BOOL8
+        TIMESTAMP_DAYS
+        TIMESTAMP_SECONDS
+        TIMESTAMP_MILLISECONDS
+        TIMESTAMP_MICROSECONDS
+        TIMESTAMP_NANOSECONDS
+        DICTIONARY32
+        STRING
+        LIST
+        STRUCT
+        NUM_TYPE_IDS
+        DURATION_SECONDS
+        DURATION_MILLISECONDS
+        DURATION_MICROSECONDS
+        DURATION_NANOSECONDS
+        DECIMAL32
+        DECIMAL64
+        DECIMAL128
 
     cdef cppclass data_type:
         data_type() except +
