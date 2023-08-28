@@ -474,6 +474,23 @@ def test_groupby_apply_jit_correlation_zero_variance(dtype):
     run_groupby_apply_jit_test(data, func, ["a"])
 
 
+@pytest.mark.parametrize("dtype", ["int32"])
+def test_groupby_apply_jit_sum_integer_overflow(dtype):
+    max = np.iinfo(dtype).max
+
+    data = DataFrame(
+        {
+            "a": [0, 0, 0],
+            "b": [max, max, max],
+        }
+    )
+
+    def func(group):
+        return group["b"].sum()
+
+    run_groupby_apply_jit_test(data, func, ["a"])
+
+
 @pytest.mark.parametrize("dtype", ["float64"])
 @pytest.mark.parametrize("func", ["min", "max", "sum", "mean", "var", "std"])
 @pytest.mark.parametrize("special_val", [np.nan, np.inf, -np.inf])
