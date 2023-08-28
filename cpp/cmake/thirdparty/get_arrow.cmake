@@ -160,6 +160,13 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     list(APPEND ARROW_PARQUET_OPTIONS "ARROW_DEPENDENCY_SOURCE AUTO")
   endif()
 
+  # Arrow sets a number of variables that we need in this scope which won't be set via
+  # rapids_cpm_find because it is a function. Calling find_package will import targets which will
+  # duplicate targets generated from rapids_cpm_find builds, so we must call it before
+  # rapids_cpm_find has a chance to build and generate those targets or we get errors when an
+  # appropriate version of Arrow is found pre-installed on the system.
+  find_package(Arrow QUIET)
+
   rapids_cpm_find(
     Arrow ${VERSION}
     GLOBAL_TARGETS arrow_shared parquet_shared arrow_acero_shared arrow_dataset_shared arrow_static
@@ -212,10 +219,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
 
   # Arrow_DIR:   set if CPM found Arrow on the system/conda/etc.
   if(Arrow_DIR)
-    # This extra find_package is necessary because rapids_cpm_find does not propagate all the
-    # variables from find_package that we might need. This is especially problematic when
-    # rapids_cpm_find builds from source.
-    find_package(Arrow REQUIRED QUIET)
     if(ENABLE_PARQUET)
       # Setting Parquet_DIR is conditional because parquet may be installed independently of arrow.
       if(NOT Parquet_DIR)
