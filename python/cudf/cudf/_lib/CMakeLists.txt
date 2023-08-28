@@ -103,7 +103,7 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
-if (${PYARROW_RESULT})
+if(${PYARROW_RESULT})
   message(FATAL_ERROR "Error while trying to obtain pyarrow include directory:\n${PYARROW_ERROR}")
 endif()
 
