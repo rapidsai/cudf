@@ -1469,3 +1469,16 @@ def test_repr_struct_after_concat():
     pdf = df.to_pandas()
 
     assert repr(df) == repr(pdf)
+
+
+def test_interval_index_repr():
+    pi = pd.Index(
+        [
+            np.nan,
+            pd.Interval(2.0, 3.0, closed="right"),
+            pd.Interval(3.0, 4.0, closed="right"),
+        ]
+    )
+    gi = cudf.from_pandas(pi)
+
+    assert repr(pi) == repr(gi)

@@ -82,8 +82,8 @@ class wordpiece_tokenizer {
    * @return Pointer to token-ids and token-id offsets
    */
   uvector_pair tokenize(char const* d_strings,
-                        uint32_t const* d_offsets,
-                        uint32_t num_strings,
+                        cudf::size_type const* d_offsets,
+                        cudf::size_type num_strings,
                         rmm::cuda_stream_view stream);
 
  private:

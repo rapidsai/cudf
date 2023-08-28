@@ -6599,4 +6599,74 @@ TEST_F(ParquetWriterTest, TimestampMicrosINT96NoOverflow)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
+TEST_P(ParquetV2Test, CheckEncodings)
+{
+  using cudf::io::parquet::Encoding;
+  constexpr auto num_rows = 100'000;
+  auto const is_v2        = GetParam();
+
+  auto const validity = cudf::test::iterators::no_nulls();
+  // data should be PLAIN for v1, RLE for V2
+  auto col0_data =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) -> bool { return i % 2 == 0; });
+  // data should be PLAIN for both
+  auto col1_data = random_values<int32_t>(num_rows);
+  // data should be PLAIN_DICTIONARY for v1, PLAIN and RLE_DICTIONARY for v2
+  auto col2_data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return 1; });
+
+  cudf::test::fixed_width_column_wrapper<bool> col0{col0_data, col0_data + num_rows, validity};
+  column_wrapper<int32_t> col1{col1_data.begin(), col1_data.end(), validity};
+  column_wrapper<int32_t> col2{col2_data, col2_data + num_rows, validity};
+
+  auto expected = table_view{{col0, col1, col2}};
+
+  auto const filename = is_v2 ? "CheckEncodingsV2.parquet" : "CheckEncodingsV1.parquet";
+  auto filepath       = temp_env->get_temp_filepath(filename);
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .max_page_size_rows(num_rows)
+      .write_v2_headers(is_v2);
+  cudf::io::write_parquet(out_opts);
+
+  // make sure the expected encodings are present
+  auto contains = [](auto const& vec, auto const& enc) {
+    return std::find(vec.begin(), vec.end(), enc) != vec.end();
+  };
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+
+  read_footer(source, &fmd);
+  auto const& chunk0_enc = fmd.row_groups[0].columns[0].meta_data.encodings;
+  auto const& chunk1_enc = fmd.row_groups[0].columns[1].meta_data.encodings;
+  auto const& chunk2_enc = fmd.row_groups[0].columns[2].meta_data.encodings;
+  if (is_v2) {
+    // col0 should have RLE for rep/def and data
+    EXPECT_TRUE(chunk0_enc.size() == 1);
+    EXPECT_TRUE(contains(chunk0_enc, Encoding::RLE));
+    // col1 should have RLE for rep/def and PLAIN for data
+    EXPECT_TRUE(chunk1_enc.size() == 2);
+    EXPECT_TRUE(contains(chunk1_enc, Encoding::RLE));
+    EXPECT_TRUE(contains(chunk1_enc, Encoding::PLAIN));
+    // col2 should have RLE for rep/def, PLAIN for dict, and RLE_DICTIONARY for data
+    EXPECT_TRUE(chunk2_enc.size() == 3);
+    EXPECT_TRUE(contains(chunk2_enc, Encoding::RLE));
+    EXPECT_TRUE(contains(chunk2_enc, Encoding::PLAIN));
+    EXPECT_TRUE(contains(chunk2_enc, Encoding::RLE_DICTIONARY));
+  } else {
+    // col0 should have RLE for rep/def and PLAIN for data
+    EXPECT_TRUE(chunk0_enc.size() == 2);
+    EXPECT_TRUE(contains(chunk0_enc, Encoding::RLE));
+    EXPECT_TRUE(contains(chunk0_enc, Encoding::PLAIN));
+    // col1 should have RLE for rep/def and PLAIN for data
+    EXPECT_TRUE(chunk1_enc.size() == 2);
+    EXPECT_TRUE(contains(chunk1_enc, Encoding::RLE));
+    EXPECT_TRUE(contains(chunk1_enc, Encoding::PLAIN));
+    // col2 should have RLE for rep/def and PLAIN_DICTIONARY for data and dict
+    EXPECT_TRUE(chunk2_enc.size() == 2);
+    EXPECT_TRUE(contains(chunk2_enc, Encoding::RLE));
+    EXPECT_TRUE(contains(chunk2_enc, Encoding::PLAIN_DICTIONARY));
+  }
+}
+
 CUDF_TEST_PROGRAM_MAIN()
