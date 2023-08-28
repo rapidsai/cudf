@@ -37,11 +37,10 @@ using namespace cudf::test::iterators;
 struct JSONTypeCastTest : public cudf::test::BaseFixture {};
 
 namespace {
-struct to_thrust_pair_fn {
-  __device__ thrust::pair<char const*, cudf::size_type> operator()(
-    thrust::pair<cudf::string_view, bool> const& p)
+struct offsets_to_length {
+  __device__ cudf::size_type operator()(thrust::tuple<cudf::size_type, cudf::size_type> const& p)
   {
-    return {p.first.data(), p.first.size_bytes()};
+    return thrust::get<1>(p) - thrust::get<0>(p);
   }
 };
 }  // namespace
@@ -67,26 +66,31 @@ TEST_F(JSONTypeCastTest, String)
   std::vector<char const*> input_values{"this", "is", "null", "of", "", "strings", R"("null")"};
   cudf::test::strings_column_wrapper input(input_values.begin(), input_values.end(), in_valids);
 
-  auto d_column = cudf::column_device_view::create(input);
-  rmm::device_uvector<thrust::pair<char const*, cudf::size_type>> svs(d_column->size(), stream);
+  auto column        = cudf::strings_column_view(input);
+  auto offsets_begin = column.offsets_begin();
+  auto offsets_pair =
+    thrust::make_zip_iterator(thrust::make_tuple(offsets_begin, thrust::next(offsets_begin)));
+  rmm::device_uvector<cudf::size_type> svs_length(column.size(), stream);
   thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
-                    d_column->pair_begin<cudf::string_view, false>(),
-                    d_column->pair_end<cudf::string_view, false>(),
-                    svs.begin(),
-                    to_thrust_pair_fn{});
+                    offsets_pair,
+                    offsets_pair + column.size(),
+                    svs_length.begin(),
+                    offsets_to_length{});
 
   auto null_mask_it = no_nulls();
   auto null_mask =
-    std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size()));
+    std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + column.size()));
 
-  auto str_col = cudf::io::json::detail::parse_data(svs.data(),
-                                                    svs.size(),
-                                                    type,
-                                                    std::move(null_mask),
-                                                    0,
-                                                    default_json_options().view(),
-                                                    stream,
-                                                    mr);
+  auto str_col = cudf::io::json::detail::parse_data(
+    column.chars().data<char>(),
+    thrust::make_zip_iterator(thrust::make_tuple(column.offsets_begin(), svs_length.begin())),
+    column.size(),
+    type,
+    std::move(null_mask),
+    0,
+    default_json_options().view(),
+    stream,
+    mr);
 
   auto out_valids =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 2 and i != 4; });
@@ -103,26 +107,31 @@ TEST_F(JSONTypeCastTest, Int)
   auto const type   = cudf::data_type{cudf::type_id::INT64};
 
   cudf::test::strings_column_wrapper data({"1", "null", "3", "true", "5", "false"});
-  auto d_column = cudf::column_device_view::create(data);
-  rmm::device_uvector<thrust::pair<char const*, cudf::size_type>> svs(d_column->size(), stream);
+  auto column        = cudf::strings_column_view(data);
+  auto offsets_begin = column.offsets_begin();
+  auto offsets_pair =
+    thrust::make_zip_iterator(thrust::make_tuple(offsets_begin, thrust::next(offsets_begin)));
+  rmm::device_uvector<cudf::size_type> svs_length(column.size(), stream);
   thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
-                    d_column->pair_begin<cudf::string_view, false>(),
-                    d_column->pair_end<cudf::string_view, false>(),
-                    svs.begin(),
-                    to_thrust_pair_fn{});
+                    offsets_pair,
+                    offsets_pair + column.size(),
+                    svs_length.begin(),
+                    offsets_to_length{});
 
   auto null_mask_it = no_nulls();
   auto null_mask =
-    std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size()));
+    std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + column.size()));
 
-  auto col = cudf::io::json::detail::parse_data(svs.data(),
-                                                svs.size(),
-                                                type,
-                                                std::move(null_mask),
-                                                0,
-                                                default_json_options().view(),
-                                                stream,
-                                                mr);
+  auto col = cudf::io::json::detail::parse_data(
+    column.chars().data<char>(),
+    thrust::make_zip_iterator(thrust::make_tuple(column.offsets_begin(), svs_length.begin())),
+    column.size(),
+    type,
+    std::move(null_mask),
+    0,
+    default_json_options().view(),
+    stream,
+    mr);
 
   auto expected =
     cudf::test::fixed_width_column_wrapper<int64_t>{{1, 2, 3, 1, 5, 0}, {1, 0, 1, 1, 1, 1}};
@@ -146,26 +155,31 @@ TEST_F(JSONTypeCastTest, StringEscapes)
     R"("escape with nothing to escape \")",
     R"("\"\\\/\b\f\n\r\t")",
   });
-  auto d_column = cudf::column_device_view::create(data);
-  rmm::device_uvector<thrust::pair<char const*, cudf::size_type>> svs(d_column->size(), stream);
+  auto column        = cudf::strings_column_view(data);
+  auto offsets_begin = column.offsets_begin();
+  auto offsets_pair =
+    thrust::make_zip_iterator(thrust::make_tuple(offsets_begin, thrust::next(offsets_begin)));
+  rmm::device_uvector<cudf::size_type> svs_length(column.size(), stream);
   thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
-                    d_column->pair_begin<cudf::string_view, false>(),
-                    d_column->pair_end<cudf::string_view, false>(),
-                    svs.begin(),
-                    to_thrust_pair_fn{});
+                    offsets_pair,
+                    offsets_pair + column.size(),
+                    svs_length.begin(),
+                    offsets_to_length{});
 
   auto null_mask_it = no_nulls();
   auto null_mask =
-    std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size()));
+    std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + column.size()));
 
-  auto col = cudf::io::json::detail::parse_data(svs.data(),
-                                                svs.size(),
-                                                type,
-                                                std::move(null_mask),
-                                                0,
-                                                default_json_options().view(),
-                                                stream,
-                                                mr);
+  auto col = cudf::io::json::detail::parse_data(
+    column.chars().data<char>(),
+    thrust::make_zip_iterator(thrust::make_tuple(column.offsets_begin(), svs_length.begin())),
+    column.size(),
+    type,
+    std::move(null_mask),
+    0,
+    default_json_options().view(),
+    stream,
+    mr);
 
   auto expected = cudf::test::strings_column_wrapper{
     {"🚀", "Ａ🚀ＡＡ", "", "", "", "\\", "➩", "", "\"\\/\b\f\n\r\t"},

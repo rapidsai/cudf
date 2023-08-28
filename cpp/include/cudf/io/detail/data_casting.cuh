@@ -17,6 +17,7 @@
 #pragma once
 
 #include <io/utilities/parsing_utils.cuh>
+#include <io/utilities/string_parsing.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -30,6 +31,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/functional.h>
@@ -663,32 +665,24 @@ struct to_string_view_pair {
   }
 };
 
-/**
- * @brief Parses the data from an iterator of string views, casting it to the given target data type
- *
- * @param str_tuples Iterator returning a string view, i.e., a (ptr, length) pair
- * @param col_size The total number of items of this column
- * @param col_type The column's target data type
- * @param null_mask A null mask that renders certain items from the input invalid
- * @param options Settings for controlling the processing behavior
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr The resource to be used for device memory allocation
- * @return The column that contains the parsed data
- */
-template <typename str_tuple_it, typename B>
-std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
-                                   size_type col_size,
-                                   data_type col_type,
-                                   B&& null_mask,
-                                   size_type null_count,
-                                   cudf::io::parse_options_view const& options,
-                                   rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> parse_data(
+  const char* data,
+  thrust::zip_iterator<thrust::tuple<const size_type*, const size_type*>> offset_length_begin,
+  size_type col_size,
+  data_type col_type,
+  rmm::device_buffer&& null_mask,
+  size_type null_count,
+  cudf::io::parse_options_view const& options,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 
   auto d_null_count    = rmm::device_scalar<size_type>(null_count, stream);
   auto null_count_data = d_null_count.data();
+
+  // Prepare iterator that returns (string_ptr, string_length)-pairs needed by type conversion
+  auto str_tuples = thrust::make_transform_iterator(offset_length_begin, to_string_view_pair{data});
 
   if (col_type == cudf::data_type{cudf::type_id::STRING}) {
     auto const max_length = thrust::transform_reduce(

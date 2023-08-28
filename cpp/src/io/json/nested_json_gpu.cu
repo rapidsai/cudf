@@ -1949,13 +1949,6 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       auto offset_length_it =
         thrust::make_zip_iterator(d_string_offsets.begin(), d_string_lengths.begin());
 
-      // Prepare iterator that returns (string_ptr, string_length)-pairs needed by type conversion
-      auto string_spans_it = thrust::make_transform_iterator(
-        offset_length_it, [data = d_input.data()] __device__(auto ip) {
-          return thrust::pair<char const*, std::size_t>{
-            data + thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
-        });
-
       data_type target_type{};
 
       if (schema.has_value()) {
@@ -1979,7 +1972,8 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       auto [result_bitmask, null_count] = make_validity(json_col);
 
       // Convert strings to the inferred data type
-      auto col = parse_data(string_spans_it,
+      auto col = parse_data(d_input.data(),
+                            offset_length_it,
                             col_size,
                             target_type,
                             std::move(result_bitmask),

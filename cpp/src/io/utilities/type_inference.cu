@@ -252,20 +252,6 @@ cudf::io::column_type_histogram infer_column_type(OptionsView const& options,
   return d_column_info.value(stream);
 }
 
-/**
- * @brief Infers data type for a given JSON string input `data`.
- *
- * @throw cudf::logic_error if input size is 0
- * @throw cudf::logic_error if date time is not inferred as string
- * @throw cudf::logic_error if data type inference failed
- *
- * @param options View of inference options
- * @param data JSON string input
- * @param offset_length_begin The beginning of an offset-length tuple sequence
- * @param size Size of the string input
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @return The inferred data type
- */
 cudf::data_type infer_data_type(
   cudf::io::json_inference_options_view const& options,
   device_span<char const> data,
