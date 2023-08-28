@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -120,6 +120,23 @@ def test_cudf_factorize_array():
 
     np.testing.assert_array_equal(expect[0], got[0].get())
     np.testing.assert_array_equal(expect[1], got[1].get())
+
+
+@pytest.mark.parametrize("pandas_compatibility", [True, False])
+def test_factorize_code_pandas_compatibility(pandas_compatibility):
+
+    psr = pd.Series([1, 2, 3, 4, 5])
+    gsr = cudf.from_pandas(psr)
+
+    expect = pd.factorize(psr)
+    with cudf.option_context("mode.pandas_compatible", pandas_compatibility):
+        got = cudf.factorize(gsr)
+    assert_eq(got[0], expect[0])
+    assert_eq(got[1], expect[1])
+    if pandas_compatibility:
+        assert got[0].dtype == expect[0].dtype
+    else:
+        assert got[0].dtype == cudf.dtype("int8")
 
 
 def test_factorize_result_classes():
