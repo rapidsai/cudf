@@ -67,7 +67,7 @@ __global__ void compute_conditional_join_output_size(
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
 
   std::size_t thread_counter{0};
-  cudf::thread_index_type const start_idx      = threadIdx.x + blockIdx.x * block_size;
+  auto const start_idx                         = cudf::detail::grid_1d::global_thread_id();
   cudf::thread_index_type const stride         = thread_index_type{block_size} * gridDim.x;
   cudf::thread_index_type const left_num_rows  = left_table.num_rows();
   cudf::thread_index_type const right_num_rows = right_table.num_rows();
@@ -173,7 +173,7 @@ __global__ void conditional_join(table_device_view left_table,
 
   __syncwarp();
 
-  cudf::thread_index_type outer_row_index = threadIdx.x + blockIdx.x * block_size;
+  auto outer_row_index = cudf::detail::grid_1d::global_thread_id();
 
   unsigned int const activemask = __ballot_sync(0xffff'ffffu, outer_row_index < outer_num_rows);
 
