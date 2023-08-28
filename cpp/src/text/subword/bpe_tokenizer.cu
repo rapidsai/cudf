@@ -24,6 +24,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/combine.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -81,6 +82,7 @@ template <typename MapRefType>
 struct byte_pair_encoding_fn {
   cudf::column_device_view const d_merges;
   cudf::column_device_view const d_strings;
+  cudf::string_view const d_separator;
   MapRefType const d_map;
   cudf::size_type* d_sizes;  // output size of encoded string
   string_hasher_type const hasher;
@@ -273,13 +275,11 @@ struct byte_pair_encoding_fn {
     }
 
     // compute and store the output size for this string's encoding
-    auto const encoded_size = d_str.size_bytes() +  // number of original bytes +
-                              thrust::count_if(     // number of non-zero byte indices
-                                thrust::seq,
-                                d_indices,
-                                d_indices + d_str.size_bytes(),
-                                [](auto v) { return v != 0; });
-    d_sizes[idx] = static_cast<cudf::size_type>(encoded_size);
+    auto separators_size =
+      thrust::count_if(
+        thrust::seq, d_indices, d_indices + d_str.size_bytes(), [](auto v) { return v != 0; }) *
+      d_separator.size_bytes();
+    d_sizes[idx] = static_cast<cudf::size_type>(d_str.size_bytes() + separators_size);
   }
 };
 
@@ -296,6 +296,7 @@ struct byte_pair_encoding_fn {
  */
 struct build_encoding_fn {
   cudf::column_device_view const d_strings;
+  cudf::string_view const d_separator;
   cudf::size_type const* d_byte_indices;
   cudf::size_type const* d_offsets;
   char* d_chars{};
@@ -319,7 +320,7 @@ struct build_encoding_fn {
     *d_output++      = *d_input++;
     auto itr         = begin + 1;
     while (itr < end) {
-      if (*itr++) *d_output++ = ' ';
+      if (*itr++) { d_output = cudf::strings::detail::copy_string(d_output, d_separator); }
       *d_output++ = *d_input++;
     }
     // https://github.com/rapidsai/cudf/pull/10270/files#r826319405
@@ -345,6 +346,7 @@ struct build_encoding_fn {
 std::unique_ptr<cudf::column> byte_pair_encoding(
   cudf::strings_column_view const& input,
   bpe_merge_pairs::bpe_merge_pairs_impl const& merge_pairs,
+  cudf::string_view d_separator,
   rmm::cuda_stream_view stream)
 {
   auto const d_merges = merge_pairs.get_merge_pairs();
@@ -363,8 +365,13 @@ std::unique_ptr<cudf::column> byte_pair_encoding(
   auto d_offsets = offsets->mutable_view().data<cudf::size_type>();
 
   auto map_ref = merge_pairs.get_merge_pairs_ref();
-  byte_pair_encoding_fn<decltype(map_ref)> fn{
-    d_merges, *d_strings, map_ref, d_offsets, string_hasher_type{}, d_byte_indices.data()};
+  byte_pair_encoding_fn<decltype(map_ref)> fn{d_merges,
+                                              *d_strings,
+                                              d_separator,
+                                              map_ref,
+                                              d_offsets,
+                                              string_hasher_type{},
+                                              d_byte_indices.data()};
   thrust::for_each_n(
     rmm::exec_policy(stream), thrust::make_counting_iterator<cudf::size_type>(0), input.size(), fn);
 
@@ -378,10 +385,11 @@ std::unique_ptr<cudf::column> byte_pair_encoding(
     bytes, stream, rmm::mr::get_current_device_resource());
   auto d_chars = chars->mutable_view().data<char>();
 
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<cudf::size_type>(0),
-                     input.size(),
-                     build_encoding_fn{*d_strings, d_byte_indices.data(), d_offsets, d_chars});
+  thrust::for_each_n(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator<cudf::size_type>(0),
+    input.size(),
+    build_encoding_fn{*d_strings, d_separator, d_byte_indices.data(), d_offsets, d_chars});
 
   return make_strings_column(
     input.size(), std::move(offsets), std::move(chars), 0, rmm::device_buffer{});
@@ -497,8 +505,12 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
                                                  rmm::cuda_stream_view stream,
                                                  rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty() || input.chars_size() == 0)
+  if (input.is_empty() || input.chars_size() == 0) {
     return cudf::make_empty_column(cudf::type_id::STRING);
+  }
+
+  CUDF_EXPECTS(separator.is_valid(stream), "separator parameter must be valid");
+  auto const d_separator = separator.value(stream);
 
   auto const d_strings = cudf::column_device_view::create(input.parent(), stream);
   auto const offsets   = space_offsets(input, *d_strings, stream);
@@ -513,8 +525,8 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
                                             {offsets->view(), input.chars()});
 
   // run BPE on this view
-  auto const bpe_column =
-    byte_pair_encoding(cudf::strings_column_view(input_view), *(merge_pairs.impl), stream);
+  auto const bpe_column = byte_pair_encoding(
+    cudf::strings_column_view(input_view), *(merge_pairs.impl), d_separator, stream);
 
   // recombine the result:
   // compute the offsets needed to build a list view
@@ -556,16 +568,6 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
 {
   CUDF_FUNC_RANGE();
   return detail::byte_pair_encoding(input, merges_table, separator, cudf::get_default_stream(), mr);
-}
-
-std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const& input,
-                                                 cudf::strings_column_view const& merges_table,
-                                                 cudf::string_scalar const& separator,
-                                                 rmm::cuda_stream_view stream,
-                                                 rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::byte_pair_encoding(input, merges_table, separator, stream, mr);
 }
 
 }  // namespace nvtext

@@ -66,16 +66,12 @@ TEST_F(TextBPETokenize, BytePairEncoding)
                                                       ""},
                                                      validity);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
-  results = nvtext::byte_pair_encoding(sv, cudf::strings_column_view(mpt));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 
   auto sliced          = cudf::slice(input, {1, 4}).front();
   auto sliced_expected = cudf::slice(expected, {1, 4}).front();
   sv                   = cudf::strings_column_view(sliced);
 
   results = nvtext::byte_pair_encoding(sv, *merge_pairs);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), sliced_expected);
-  results = nvtext::byte_pair_encoding(sv, cudf::strings_column_view(mpt));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), sliced_expected);
 }
 
@@ -91,8 +87,10 @@ TEST_F(TextBPETokenize, BytePairEncodingSeparator)
 
   auto results = nvtext::byte_pair_encoding(sv, *merge_pairs, std::string(" Ġ"));
 
-  auto expected = cudf::test::strings_column_wrapper(
-    {"test - sent ence - 1", "test Ġsent ence - 2", "test Ġsent ence Ġ3", " Ġtest Ġsent ence Ġ4"});
+  auto expected = cudf::test::strings_column_wrapper({"test Ġ- Ġsent Ġence Ġ- Ġ1",
+                                                      "test Ġsent Ġence Ġ- Ġ2",
+                                                      "test Ġsent Ġence Ġ3",
+                                                      " Ġtest Ġsent Ġence Ġ4"});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
@@ -111,9 +109,4 @@ TEST_F(TextBPETokenize, BPE_Error)
   EXPECT_THROW(nvtext::load_merge_pairs(cudf::strings_column_view(*empty)), cudf::logic_error);
   auto null_pairs = cudf::test::strings_column_wrapper({"", ""}, {1, 0});
   EXPECT_THROW(nvtext::load_merge_pairs(cudf::strings_column_view(null_pairs)), cudf::logic_error);
-  auto input     = cudf::test::strings_column_wrapper({"isit"});
-  auto separator = cudf::string_scalar("", false);
-  EXPECT_THROW(nvtext::byte_pair_encoding(
-                 cudf::strings_column_view(input), cudf::strings_column_view(input), separator),
-               cudf::logic_error);
 }
