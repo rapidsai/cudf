@@ -16,7 +16,7 @@
 
 #include "nested_json.hpp"
 #include <io/utilities/parsing_utils.cuh>
-// #include <io/utilities/type_inference.cuh>
+#include <io/utilities/string_parsing.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
@@ -51,16 +51,6 @@
 
 #include <algorithm>
 #include <cstdint>
-
-namespace cudf::io::detail {
-
-cudf::data_type infer_data_type(
-  cudf::io::json_inference_options_view const& options,
-  device_span<char const> data,
-  thrust::zip_iterator<thrust::tuple<const size_type*, const size_type*>> offset_length_begin,
-  std::size_t const size,
-  rmm::cuda_stream_view stream);
-}
 
 namespace cudf::io::json::detail {
 

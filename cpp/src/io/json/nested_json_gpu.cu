@@ -19,7 +19,7 @@
 #include <io/fst/logical_stack.cuh>
 #include <io/fst/lookup_tables.cuh>
 #include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/type_inference.cuh>
+#include <io/utilities/string_parsing.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>

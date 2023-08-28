@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
+#include <io/utilities/string_parsing.hpp>
 #include <io/utilities/trie.cuh>
-#include <io/utilities/type_inference.cuh>
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
