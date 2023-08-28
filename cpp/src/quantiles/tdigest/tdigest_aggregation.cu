@@ -632,7 +632,7 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
   rmm::device_uvector<size_type> sizes(num_rows, stream);
   auto offsets_iter = offsets->view().begin<size_type>();
   thrust::adjacent_difference(rmm::exec_policy(stream),
-                              offsets->view().begin<size_type>(),
+                              offsets->view().begin<size_type>() + 1,
                               offsets->view().end<size_type>(),
                               sizes.begin());
 
