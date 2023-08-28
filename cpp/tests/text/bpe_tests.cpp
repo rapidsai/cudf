@@ -29,39 +29,23 @@ struct TextBPETokenize : public cudf::test::BaseFixture {};
 TEST_F(TextBPETokenize, BytePairEncoding)
 {
   // partial table based on values from https://huggingface.co/gpt2/raw/main/merges.txt
-  auto mpt = cudf::test::strings_column_wrapper({
-    "e n",    // 12
-    "i t",    // 14
-    "i s",    // 15
-    "e s",    // 18
-    "en t",   // 42
-    "c e",    // 88
-    "es t",   // 139
-    "en ce",  // 338
-    "T h",    // 561
-    "Th is",  // 956
-    "t est",  // 9032
-    "s ent",  // 33830
-  });
+  auto mpt = cudf::test::strings_column_wrapper(
+    {"e n", "i t", "i s", "e s", "en t", "c e", "es t", "en ce", "T h", "Th is", "t est", "s ent"});
 
   auto merge_pairs = nvtext::load_merge_pairs(cudf::strings_column_view(mpt));
 
   auto validity = cudf::test::iterators::null_at(4);
-  cudf::test::strings_column_wrapper input({" This\tis  it\n",
-                                            "This is test-sentence-1",
-                                            "This is test sentence-2",
-                                            "This-is test sentence 3",
-                                            "",
-                                            ""},
-                                           validity);
+  cudf::test::strings_column_wrapper input(
+    {"Thisisit", "Thisis test-sentence-1", "Thisistestsentence-2", "This-istestsentence 3", "", ""},
+    validity);
   auto sv = cudf::strings_column_view(input);
 
   auto results = nvtext::byte_pair_encoding(sv, *merge_pairs);
 
-  auto expected = cudf::test::strings_column_wrapper({" This is it",
-                                                      "This is test - sent ence - 1",
+  auto expected = cudf::test::strings_column_wrapper({"This is it",
+                                                      "This is   test - sent ence - 1",
                                                       "This is test sent ence - 2",
-                                                      "This - is test sent ence 3",
+                                                      "This - is test sent ence   3",
                                                       "",
                                                       ""},
                                                      validity);
@@ -78,19 +62,19 @@ TEST_F(TextBPETokenize, BytePairEncoding)
 TEST_F(TextBPETokenize, BytePairEncodingSeparator)
 {
   auto mpt = cudf::test::strings_column_wrapper(
-    {"e n", "i t", "e s", "en t", "c e", "es t", "en ce", "t est", "s ent"});
+    {"Ġ t", "Ġt he", "h e", "e n", "i t", "e s", "en t", "c e", "es t", "en ce", "t est", "s ent"});
   auto merge_pairs = nvtext::load_merge_pairs(cudf::strings_column_view(mpt));
 
   cudf::test::strings_column_wrapper input(
-    {"test-sentence-1", "test sentence-2", "test sentence 3", " test sentence 4 "});
+    {"Ġthe test sentence", "test Ġthe sentence", "Ġthetest sentence", "testĠthesentence"});
   auto sv = cudf::strings_column_view(input);
 
-  auto results = nvtext::byte_pair_encoding(sv, *merge_pairs, std::string(" Ġ"));
+  auto results = nvtext::byte_pair_encoding(sv, *merge_pairs, std::string("$"));
 
-  auto expected = cudf::test::strings_column_wrapper({"test Ġ- Ġsent Ġence Ġ- Ġ1",
-                                                      "test Ġsent Ġence Ġ- Ġ2",
-                                                      "test Ġsent Ġence Ġ3",
-                                                      " Ġtest Ġsent Ġence Ġ4"});
+  auto expected = cudf::test::strings_column_wrapper({"Ġthe$ $test$ $sent$ence",
+                                                      "test$ $Ġthe$ $sent$ence",
+                                                      "Ġthe$test$ $sent$ence",
+                                                      "test$Ġthe$sent$ence"});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 

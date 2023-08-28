@@ -22,6 +22,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/strings/string_view.cuh>
 
@@ -31,6 +32,11 @@
 
 #include <cuco/static_map.cuh>
 
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
+#include <thrust/find.h>
+#include <thrust/pair.h>
+
 #include <cstdint>
 #include <type_traits>
 
@@ -39,6 +45,27 @@ namespace detail {
 
 using hash_value_type    = uint32_t;
 using string_hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>;
+using merge_pair_type    = thrust::pair<cudf::string_view, cudf::string_view>;
+
+/**
+ * @brief Parse the merge pair into components.
+ *
+ * The two substrings are separated by a single space.
+ *
+ * @param idx Index of merge pair to dissect.
+ * @return The left and right halves of the merge pair.
+ */
+__device__ __inline__ merge_pair_type dissect_merge_pair(cudf::string_view d_pair)
+{
+  auto const lhs     = d_pair.data();
+  auto const end_str = d_pair.data() + d_pair.size_bytes();
+  auto const rhs     = thrust::find(thrust::seq, lhs, end_str, ' ');  // space always expected
+  // check for malformed pair entry to prevent segfault
+  if (rhs == end_str) { return merge_pair_type{cudf::string_view{}, cudf::string_view{}}; }
+  auto const lhs_size = static_cast<cudf::size_type>(thrust::distance(lhs, rhs));
+  auto const rhs_size = static_cast<cudf::size_type>(thrust::distance(rhs + 1, end_str));
+  return merge_pair_type{cudf::string_view(lhs, lhs_size), cudf::string_view(rhs + 1, rhs_size)};
+}
 
 /**
  * @brief Hasher function used for building and using the cuco static-map
@@ -52,10 +79,14 @@ struct bpe_hasher {
   // used by insert
   __device__ hash_value_type operator()(cudf::size_type index) const
   {
-    return hasher(d_strings.element<cudf::string_view>(index));
+    auto const [lhs, rhs] = dissect_merge_pair(d_strings.element<cudf::string_view>(index));
+    return cudf::hashing::detail::hash_combine(hasher(lhs), hasher(rhs));
   }
   // used by find
-  __device__ hash_value_type operator()(cudf::string_view const& s) const { return hasher(s); }
+  __device__ hash_value_type operator()(merge_pair_type const& mp) const
+  {
+    return cudf::hashing::detail::hash_combine(hasher(mp.first), hasher(mp.second));
+  }
 };
 
 /**
@@ -72,9 +103,10 @@ struct bpe_equal {
     return d_strings.element<cudf::string_view>(lhs) == d_strings.element<cudf::string_view>(rhs);
   }
   // used by find
-  __device__ bool operator()(cudf::size_type lhs, cudf::string_view const& rhs) const noexcept
+  __device__ bool operator()(cudf::size_type lhs, merge_pair_type const& rhs) const noexcept
   {
-    return d_strings.element<cudf::string_view>(lhs) == rhs;
+    auto const d_pair = dissect_merge_pair(d_strings.element<cudf::string_view>(lhs));
+    return d_pair.first == rhs.first && d_pair.second == rhs.second;
   }
 };
 
