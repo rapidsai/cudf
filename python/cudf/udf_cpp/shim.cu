@@ -415,7 +415,7 @@ __device__ AccumT BlockSum(T const* data, int64_t size)
 {
   auto block = cooperative_groups::this_thread_block();
 
-  if constexpr (std::is_floating_point_v<AccumT>) {
+  if constexpr (std::is_floating_point_v<T>) {
     if (are_all_nans(block, data, size)) { return 0; }
   }
 
