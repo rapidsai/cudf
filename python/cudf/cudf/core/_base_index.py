@@ -942,12 +942,13 @@ class BaseIndex(Serializable):
             )
 
         other = cudf.Index(other)
-        final_name = _get_result_name(self.name, other.name)
+
+        res_name = _get_result_name(self.name, other.name)
+
         if is_mixed_with_object_dtype(self, other):
             difference = self.copy()
         else:
             other = other.copy(deep=False)
-            # other.names = self.names
             difference = cudf.core.index._index_from_data(
                 cudf.DataFrame._from_data({"None": self._column})
                 .merge(
@@ -961,7 +962,8 @@ class BaseIndex(Serializable):
             if self.dtype != other.dtype:
                 difference = difference.astype(self.dtype)
 
-        difference.name = final_name
+        difference.name = res_name
+
         if sort is None and len(other):
             return difference.sort_values()
 
