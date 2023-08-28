@@ -1949,13 +1949,6 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       auto offset_length_it =
         thrust::make_zip_iterator(d_string_offsets.begin(), d_string_lengths.begin());
 
-      // Prepare iterator that returns (string_offset, string_length)-pairs needed by inference
-      auto string_ranges_it =
-        thrust::make_transform_iterator(offset_length_it, [] __device__(auto ip) {
-          return thrust::pair<json_column::row_offset_t, std::size_t>{
-            thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
-        });
-
       // Prepare iterator that returns (string_ptr, string_length)-pairs needed by type conversion
       auto string_spans_it = thrust::make_transform_iterator(
         offset_length_it, [data = d_input.data()] __device__(auto ip) {
@@ -1978,7 +1971,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
         target_type =
           cudf::io::detail::infer_data_type(parsing_options(options, stream).json_view(),
                                             d_input,
-                                            string_ranges_it,
+                                            offset_length_it,
                                             col_size,
                                             stream);
       }

@@ -16,7 +16,7 @@
 
 #include "nested_json.hpp"
 #include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/type_inference.cuh>
+// #include <io/utilities/type_inference.cuh>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
@@ -51,6 +51,16 @@
 
 #include <algorithm>
 #include <cstdint>
+
+namespace cudf::io::detail {
+
+cudf::data_type infer_data_type(
+  cudf::io::json_inference_options_view const& options,
+  device_span<char const> data,
+  thrust::zip_iterator<thrust::tuple<const size_type*, const size_type*>> offset_length_begin,
+  std::size_t const size,
+  rmm::cuda_stream_view stream);
+}
 
 namespace cudf::io::json::detail {
 
@@ -763,12 +773,6 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       // TODO how about directly storing pair<char*, size_t> in json_column?
       auto offset_length_it =
         thrust::make_zip_iterator(json_col.string_offsets.begin(), json_col.string_lengths.begin());
-      // Prepare iterator that returns (string_offset, string_length)-pairs needed by inference
-      auto string_ranges_it =
-        thrust::make_transform_iterator(offset_length_it, [] __device__(auto ip) {
-          return thrust::pair<json_column::row_offset_t, std::size_t>{
-            thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
-        });
 
       // Prepare iterator that returns (string_ptr, string_length)-pairs needed by type conversion
       auto string_spans_it = thrust::make_transform_iterator(
@@ -790,7 +794,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       // Infer column type, if we don't have an explicit type for it
       else {
         target_type = cudf::io::detail::infer_data_type(
-          options.json_view(), d_input, string_ranges_it, col_size, stream);
+          options.json_view(), d_input, offset_length_it, col_size, stream);
       }
 
       auto [result_bitmask, null_count] = make_validity(json_col);
