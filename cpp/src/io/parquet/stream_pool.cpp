@@ -86,6 +86,13 @@ cuda_stream_pool* create_global_cuda_stream_pool()
   return new rmm_cuda_stream_pool();
 }
 
+cudaEvent_t create_event()
+{
+  cudaEvent_t event;
+  CUDF_CUDA_TRY(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
+  return event;
+}
+
 }  // anonymous namespace
 
 cuda_stream_pool& global_cuda_stream_pool()
@@ -96,24 +103,20 @@ cuda_stream_pool& global_cuda_stream_pool()
 
 void fork_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
 {
-  cudaEvent_t event;
-  CUDF_CUDA_TRY(cudaEventCreate(&event));
+  static cudaEvent_t event = create_event();
   CUDF_CUDA_TRY(cudaEventRecord(event, stream));
-  std::for_each(streams.begin(), streams.end(), [&](auto& strm) {
+  for (auto& strm : streams) {
     CUDF_CUDA_TRY(cudaStreamWaitEvent(strm, event, 0));
-  });
-  CUDF_CUDA_TRY(cudaEventDestroy(event));
+  }
 }
 
 void join_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
 {
-  cudaEvent_t event;
-  CUDF_CUDA_TRY(cudaEventCreate(&event));
-  std::for_each(streams.begin(), streams.end(), [&](auto& strm) {
+  static cudaEvent_t event = create_event();
+  for (auto& strm : streams) {
     CUDF_CUDA_TRY(cudaEventRecord(event, strm));
     CUDF_CUDA_TRY(cudaStreamWaitEvent(stream, event, 0));
-  });
-  CUDF_CUDA_TRY(cudaEventDestroy(event));
+  }
 }
 
 }  // namespace cudf::io::detail::parquet
