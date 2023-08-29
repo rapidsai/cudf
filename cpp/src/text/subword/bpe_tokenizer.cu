@@ -55,9 +55,9 @@ struct byte_pair_encoding_fn {
   cudf::column_device_view const d_strings;
   cudf::string_view const d_separator;
   MapRefType const d_map;
-  cudf::size_type* d_sizes;  // output size of encoded string
+  cudf::size_type* d_sizes;         // output size of encoded string
   string_hasher_type const hasher;
-  cudf::size_type* d_byte_indices;
+  cudf::size_type* d_byte_indices;  // output indices per string
 
   /**
    * @brief Get the next substring of the given string.
@@ -76,24 +76,11 @@ struct byte_pair_encoding_fn {
   template <typename Iterator>
   __device__ cudf::string_view next_substr(Iterator begin,
                                            Iterator end,
-                                           cudf::string_view const& d_str)
+                                           cudf::string_view const& d_str) const
   {
     auto const next = thrust::find_if(thrust::seq, begin + 1, end, [](auto v) { return v != 0; });
     auto const size = static_cast<cudf::size_type>(thrust::distance(begin, next));
     return cudf::string_view(d_str.data() + *begin, size);
-  }
-
-  /**
-   * @brief Look up the pair of strings in the d_map/d_merges
-   *
-   * @param lhs Left half of the string
-   * @param rhs Right half of the string
-   * @return Position of merge pair within d_map
-   */
-  __device__ auto get_merge_pair(cudf::string_view const& lhs, cudf::string_view const& rhs)
-  {
-    auto const mp = merge_pair_type{lhs, rhs};
-    return d_map.find(mp);
   }
 
   /**
@@ -113,7 +100,7 @@ struct byte_pair_encoding_fn {
    *
    * @param idx The index of the string in `d_strings` to encode
    */
-  __device__ void operator()(cudf::size_type idx)
+  __device__ void operator()(cudf::size_type idx) const
   {
     if (d_strings.is_null(idx)) {
       d_sizes[idx] = 0;
@@ -154,13 +141,15 @@ struct byte_pair_encoding_fn {
 
       auto min_itr  = itr;               // these are set along with
       auto min_size = lhs.size_bytes();  // the min_rank variable
+      auto min_mp   = merge_pair_type{};
 
       // check each adjacent pair against the d_map
       while (itr < end) {
         auto const rhs = next_substr(itr, end, d_str);
         if (rhs.empty()) { break; }  // no more adjacent pairs
 
-        auto const map_itr = get_merge_pair(lhs, rhs);
+        auto const mp      = merge_pair_type{lhs, rhs};
+        auto const map_itr = d_map.find(mp);
         if (map_itr != d_map.end()) {
           // found a match; record the rank (and other min_ vars)
           auto const rank = map_itr->second;
@@ -168,6 +157,7 @@ struct byte_pair_encoding_fn {
             min_rank = rank;
             min_itr  = itr;
             min_size = rhs.size_bytes();
+            min_mp   = mp;
           }
         }
         // next substring
@@ -184,14 +174,11 @@ struct byte_pair_encoding_fn {
         // continue scanning for other occurrences in the remainder of the string
         itr += min_size;
         if (itr < end) {
-          // auto const d_pair = dissect_merge_pair(min_rank);
-          auto const d_pair = dissect_merge_pair(d_merges.element<cudf::string_view>(min_rank));
-
           lhs = next_substr(itr, end, d_str);
           itr += lhs.size_bytes();
           while (itr < end && !lhs.empty()) {
             auto rhs = next_substr(itr, end, d_str);
-            if (d_pair.first == lhs && d_pair.second == rhs) {
+            if ((min_mp.first == lhs) && (min_mp.second == rhs)) {
               *itr = 0;                   // removes the pair from this string
               itr += rhs.size_bytes();
               if (itr >= end) { break; }  // done checking for pairs
@@ -233,7 +220,7 @@ struct build_encoding_fn {
   cudf::size_type const* d_offsets;
   char* d_chars{};
 
-  __device__ void operator()(cudf::size_type idx)
+  __device__ void operator()(cudf::size_type idx) const
   {
     if (d_strings.is_null(idx)) { return; }
     auto const d_str = d_strings.element<cudf::string_view>(idx);
@@ -288,15 +275,15 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
 
   auto const d_merges = merge_pairs.impl->get_merge_pairs();
   auto const map_ref  = merge_pairs.impl->get_merge_pairs_ref();
-  byte_pair_encoding_fn<decltype(map_ref)> fn{d_merges,
-                                              *d_strings,
-                                              d_separator,
-                                              map_ref,
-                                              d_offsets,
-                                              string_hasher_type{},
-                                              d_byte_indices.data()};
-  thrust::for_each_n(
-    rmm::exec_policy(stream), thrust::make_counting_iterator<cudf::size_type>(0), input.size(), fn);
+  auto const bpe_fn   = byte_pair_encoding_fn<decltype(map_ref)>{d_merges,
+                                                                 *d_strings,
+                                                                 d_separator,
+                                                                 map_ref,
+                                                                 d_offsets,
+                                                                 string_hasher_type{},
+                                                                 d_byte_indices.data()};
+  auto const zero_itr = thrust::counting_iterator<cudf::size_type>(0);
+  thrust::for_each_n(rmm::exec_policy(stream), zero_itr, input.size(), bpe_fn);
 
   // build the output: add spaces between the remaining pairs in each string
   thrust::exclusive_scan(
@@ -308,11 +295,9 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
     bytes, stream, rmm::mr::get_current_device_resource());
   auto d_chars = chars->mutable_view().data<char>();
 
-  thrust::for_each_n(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<cudf::size_type>(0),
-    input.size(),
-    build_encoding_fn{*d_strings, d_separator, d_byte_indices.data(), d_offsets, d_chars});
+  auto const result_fn =
+    build_encoding_fn{*d_strings, d_separator, d_byte_indices.data(), d_offsets, d_chars};
+  thrust::for_each_n(rmm::exec_policy(stream), zero_itr, input.size(), result_fn);
 
   return cudf::make_strings_column(input.size(),
                                    std::move(offsets),

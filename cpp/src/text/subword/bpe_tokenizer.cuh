@@ -48,26 +48,6 @@ using string_hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<cudf::strin
 using merge_pair_type    = thrust::pair<cudf::string_view, cudf::string_view>;
 
 /**
- * @brief Parse the merge pair into components.
- *
- * The two substrings are separated by a single space.
- *
- * @param idx Index of merge pair to dissect.
- * @return The left and right halves of the merge pair.
- */
-__device__ __inline__ merge_pair_type dissect_merge_pair(cudf::string_view d_pair)
-{
-  auto const lhs     = d_pair.data();
-  auto const end_str = d_pair.data() + d_pair.size_bytes();
-  auto const rhs     = thrust::find(thrust::seq, lhs, end_str, ' ');  // space always expected
-  // check for malformed pair entry to prevent segfault
-  if (rhs == end_str) { return merge_pair_type{cudf::string_view{}, cudf::string_view{}}; }
-  auto const lhs_size = static_cast<cudf::size_type>(thrust::distance(lhs, rhs));
-  auto const rhs_size = static_cast<cudf::size_type>(thrust::distance(rhs + 1, end_str));
-  return merge_pair_type{cudf::string_view(lhs, lhs_size), cudf::string_view(rhs + 1, rhs_size)};
-}
-
-/**
  * @brief Hasher function used for building and using the cuco static-map
  *
  * This takes advantage of heterogeneous lookup feature in cuco static-map which
@@ -79,7 +59,9 @@ struct bpe_hasher {
   // used by insert
   __device__ hash_value_type operator()(cudf::size_type index) const
   {
-    auto const [lhs, rhs] = dissect_merge_pair(d_strings.element<cudf::string_view>(index));
+    index *= 2;
+    auto const lhs = d_strings.element<cudf::string_view>(index);
+    auto const rhs = d_strings.element<cudf::string_view>(index + 1);
     return cudf::hashing::detail::hash_combine(hasher(lhs), hasher(rhs));
   }
   // used by find
@@ -100,13 +82,20 @@ struct bpe_equal {
   // used by insert
   __device__ bool operator()(cudf::size_type lhs, cudf::size_type rhs) const noexcept
   {
-    return d_strings.element<cudf::string_view>(lhs) == d_strings.element<cudf::string_view>(rhs);
+    lhs *= 2;
+    rhs *= 2;
+    return (d_strings.element<cudf::string_view>(lhs) ==
+            d_strings.element<cudf::string_view>(rhs)) &&
+           (d_strings.element<cudf::string_view>(lhs + 1) ==
+            d_strings.element<cudf::string_view>(rhs + 1));
   }
   // used by find
   __device__ bool operator()(cudf::size_type lhs, merge_pair_type const& rhs) const noexcept
   {
-    auto const d_pair = dissect_merge_pair(d_strings.element<cudf::string_view>(lhs));
-    return d_pair.first == rhs.first && d_pair.second == rhs.second;
+    lhs *= 2;
+    auto const left  = d_strings.element<cudf::string_view>(lhs);
+    auto const right = d_strings.element<cudf::string_view>(lhs + 1);
+    return (left == rhs.first) && (right == rhs.second);
   }
 };
 
@@ -124,9 +113,8 @@ using merge_pairs_map_type = cuco::experimental::static_map<cudf::size_type,
 
 }  // namespace detail
 
-// since column_device_view::create returns is a little more than
-// std::unique_ptr<column_device_view> this helper simplifies the return type in a more maintainable
-// way
+// since column_device_view::create() returns is a little more than
+// std::unique_ptr<column_device_view> this helper simplifies the return type for us
 using col_device_view = std::invoke_result_t<decltype(&cudf::column_device_view::create),
                                              cudf::column_view,
                                              rmm::cuda_stream_view>;
