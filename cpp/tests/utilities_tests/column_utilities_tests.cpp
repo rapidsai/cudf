@@ -277,8 +277,8 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToString)
 TEST_F(ColumnUtilitiesStringsTest, PrintEscapeStrings)
 {
   char const* delimiter = ",";
-  cudf::test::strings_column_wrapper input({"e\te\ne", "é\bé\ré"});
-  std::string expected{"e\\te\\ne,é\\bé\\ré"};
+  cudf::test::strings_column_wrapper input({"e\te\ne", "é\bé\ré", "e\vé\fé\abell"});
+  std::string expected{"e\\te\\ne,é\\bé\\ré,e\\vé\\fé\\abell"};
   EXPECT_EQ(cudf::test::to_string(input, delimiter), expected);
 }
 

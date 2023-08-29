@@ -1099,10 +1099,13 @@ struct column_view_printer {
           out.replace(pos, 1, repl);
         }
       };
+      replace_char(out, '\a', "\\a");
       replace_char(out, '\b', "\\b");
-      replace_char(out, '\t', "\\t");
+      replace_char(out, '\f', "\\f");
       replace_char(out, '\r', "\\r");
+      replace_char(out, '\t', "\\t");
       replace_char(out, '\n', "\\n");
+      replace_char(out, '\v', "\\v");
       return out;
     };
 
