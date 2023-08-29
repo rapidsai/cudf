@@ -20,6 +20,7 @@
  */
 
 #include <io/csv/durations.hpp>
+#include <io/utilities/parsing_utils.cuh>
 #include <lists/utilities.hpp>
 
 #include <cudf/column/column_device_view.cuh>
@@ -61,21 +62,6 @@
 #include <vector>
 
 namespace cudf::io::json::detail {
-__device__ __forceinline__ thrust::pair<char, char> get_escaped_char(char escaped_char)
-{
-  switch (escaped_char) {
-    case '"': return {'\\', '"'};
-    case '\\': return {'\\', '\\'};
-    case '/': return {'\\', '/'};
-    case '\b': return {'\\', 'b'};
-    case '\f': return {'\\', 'f'};
-    case '\n': return {'\\', 'n'};
-    case '\r': return {'\\', 'r'};
-    case '\t': return {'\\', 't'};
-    // case 'u': return UNICODE_SEQ;
-    default: return {'\0', escaped_char};
-  }
-}
 
 std::unique_ptr<column> make_column_names_column(host_span<column_name_info const> column_names,
                                                  size_type num_columns,
