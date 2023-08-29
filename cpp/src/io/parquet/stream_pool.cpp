@@ -129,7 +129,7 @@ cuda_stream_pool& global_cuda_stream_pool()
 
 void fork_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
 {
-  static cudaEvent_t event = event_for_thread();
+  cudaEvent_t event = event_for_thread();
   CUDF_CUDA_TRY(cudaEventRecord(event, stream));
   for (auto& strm : streams) {
     CUDF_CUDA_TRY(cudaStreamWaitEvent(strm, event, 0));
@@ -138,7 +138,7 @@ void fork_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_vie
 
 void join_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
 {
-  static cudaEvent_t event = event_for_thread();
+  cudaEvent_t event = event_for_thread();
   for (auto& strm : streams) {
     CUDF_CUDA_TRY(cudaEventRecord(event, strm));
     CUDF_CUDA_TRY(cudaStreamWaitEvent(stream, event, 0));
