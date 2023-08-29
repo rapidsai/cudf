@@ -86,11 +86,37 @@ cuda_stream_pool* create_global_cuda_stream_pool()
   return new rmm_cuda_stream_pool();
 }
 
-cudaEvent_t create_event()
+// implementation of per-thread-default-event.
+class cuda_event_map {
+ public:
+  cuda_event_map() {}
+
+  cudaEvent_t find(std::thread::id thread_id)
+  {
+    std::lock_guard<std::mutex> lock(map_mutex_);
+    auto it = event_map_.find(thread_id);
+    if (it != event_map_.end()) {
+      return it->second;
+    } else {
+      cudaEvent_t event;
+      CUDF_CUDA_TRY(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
+      event_map_[thread_id] = event;
+      return event;
+    }
+  }
+
+  cuda_event_map(cuda_event_map const&) = delete;
+  void operator=(cuda_event_map const&) = delete;
+
+ private:
+  std::unordered_map<std::thread::id, cudaEvent_t> event_map_;
+  std::mutex map_mutex_;
+};
+
+cudaEvent_t event_for_thread()
 {
-  cudaEvent_t event;
-  CUDF_CUDA_TRY(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
-  return event;
+  static cuda_event_map instance;
+  return instance.find(std::this_thread::get_id());
 }
 
 }  // anonymous namespace
@@ -103,7 +129,7 @@ cuda_stream_pool& global_cuda_stream_pool()
 
 void fork_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
 {
-  static cudaEvent_t event = create_event();
+  static cudaEvent_t event = event_for_thread();
   CUDF_CUDA_TRY(cudaEventRecord(event, stream));
   for (auto& strm : streams) {
     CUDF_CUDA_TRY(cudaStreamWaitEvent(strm, event, 0));
@@ -112,7 +138,7 @@ void fork_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_vie
 
 void join_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
 {
-  static cudaEvent_t event = create_event();
+  static cudaEvent_t event = event_for_thread();
   for (auto& strm : streams) {
     CUDF_CUDA_TRY(cudaEventRecord(event, strm));
     CUDF_CUDA_TRY(cudaStreamWaitEvent(stream, event, 0));
