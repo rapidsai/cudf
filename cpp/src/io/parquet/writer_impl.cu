@@ -1406,7 +1406,9 @@ size_t column_index_buffer_size(gpu::EncColumnChunk* ck, int32_t column_index_tr
   // add on some extra padding at the end (plus extra 7 bytes of alignment padding)
   // for scratch space to do stats truncation.
   //
-  // FIXME: need to work out how much for SizeStatistics. For now just add 32 bytes per page
+  // FIXME(ets): need to work out how much for SizeStatistics. For now just add 32 bytes per page.
+  // full size is optional i64 unencoded size, then for each histogram it's
+  // (num_data_pages + 1) * (max_level + 1) ints.
   //
   // calculating this per-chunk because the sizes can be wildly different.
   constexpr size_t padding = 7;
