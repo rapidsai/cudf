@@ -229,6 +229,39 @@ Encoding __device__ determine_encoding(PageType page_type,
   }
 }
 
+template <int block_size>
+void __device__ gen_hist(uint32_t* hist,
+                         page_enc_state_s const* s,
+                         uint32_t nrows,
+                         uint32_t rle_numvals,
+                         uint32_t maxlvl,
+                         typename cub::BlockReduce<uint32_t, block_size>::TempStorage& temp_storage)
+{
+// FIXME(ets): for testing. remove later.
+#if 0
+  if (threadIdx.x == 0) {
+    for (uint32_t i = 0; i < nrows; i++) {
+      // TODO this so needs rolling_index
+      auto const lvl = s->vals[(rle_numvals + i) & (rle_buffer_size - 1)];
+      hist[lvl]++;
+    }
+  }
+#else
+  using block_reduce = cub::BlockReduce<uint32_t, block_size>;
+  auto const t       = threadIdx.x;
+
+  // TODO this so needs rolling_index
+  auto const mylvl = s->vals[(rle_numvals + t) & (rle_buffer_size - 1)];
+  for (uint32_t lvl = 0; lvl < maxlvl; lvl++) {
+    uint32_t const is_yes = mylvl == lvl;
+    auto const lvl_sum    = block_reduce(temp_storage).Sum(is_yes);
+    if (t == 0) { hist[lvl] += lvl_sum; }
+    __syncthreads();
+  }
+#endif
+  __syncthreads();
+}
+
 // operator to use with warp_reduce. stolen from cub::Sum
 struct BitwiseOr {
   /// Binary OR operator, returns <tt>a | b</tt>
@@ -1014,39 +1047,6 @@ __device__ auto julian_days_with_time(int64_t v)
   auto const dur_time_of_day_nanos = duration_cast<nanoseconds>(dur_time_of_day);
   auto const julian_days           = dur_days + ceil<days>(julian_calendar_epoch_diff());
   return std::make_pair(dur_time_of_day_nanos, julian_days);
-}
-
-template <int block_size>
-void __device__ gen_hist(uint32_t* hist,
-                         page_enc_state_s* s,
-                         uint32_t nrows,
-                         uint32_t rle_numvals,
-                         uint32_t maxlvl,
-                         typename cub::BlockReduce<uint32_t, block_size>::TempStorage& temp_storage)
-{
-// FIXME(ets): for testing. remove later.
-#if 0
-  if (threadIdx.x == 0) {
-    for (uint32_t i = 0; i < nrows; i++) {
-      // TODO this so needs rolling_index
-      auto const lvl = s->vals[(rle_numvals + i) & (rle_buffer_size - 1)];
-      hist[lvl]++;
-    }
-  }
-#else
-  using block_reduce = cub::BlockReduce<uint32_t, block_size>;
-  auto const t       = threadIdx.x;
-
-  // TODO this so needs rolling_index
-  auto const mylvl = s->vals[(rle_numvals + t) & (rle_buffer_size - 1)];
-  for (uint32_t lvl = 0; lvl < maxlvl; lvl++) {
-    uint32_t const is_yes = mylvl == lvl;
-    auto const lvl_sum    = block_reduce(temp_storage).Sum(is_yes);
-    if (t == 0) { hist[lvl] += lvl_sum; }
-    __syncthreads();
-  }
-#endif
-  __syncthreads();
 }
 
 // blockDim(128, 1, 1)
