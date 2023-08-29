@@ -16,13 +16,12 @@
 
 #include <mutex>
 
-#include "stream_pool.hpp"
-
 #include <cudf/detail/utilities/logger.hpp>
+#include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
-namespace cudf::io::detail::parquet {
+namespace cudf::detail {
 
 namespace {
 
@@ -138,4 +137,4 @@ void join_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_vie
   }
 }
 
-}  // namespace cudf::io::detail::parquet
+}  // namespace cudf::detail

@@ -20,7 +20,7 @@
 
 #include <rmm/cuda_stream_pool.hpp>
 
-namespace cudf::io::detail::parquet {
+namespace cudf::detail {
 
 /**
  * @brief A pool of CUDA stream objects
@@ -98,4 +98,4 @@ void fork_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_vie
  */
 void join_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream);
 
-}  // namespace cudf::io::detail::parquet
+}  // namespace cudf::detail

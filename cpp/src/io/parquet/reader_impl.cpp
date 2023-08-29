@@ -15,10 +15,10 @@
  */
 
 #include "reader_impl.hpp"
-#include "stream_pool.hpp"
 
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/transform.hpp>
+#include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <rmm/cuda_stream_pool.hpp>
 
@@ -165,8 +165,8 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 
   // get the number of streams we need from the pool and tell them to wait on the H2D copies
   int nkernels = std::bitset<32>(kernel_mask).count();
-  auto streams = global_cuda_stream_pool().get_streams(nkernels);
-  fork_streams(streams, _stream);
+  auto streams = cudf::detail::global_cuda_stream_pool().get_streams(nkernels);
+  cudf::detail::fork_streams(streams, _stream);
 
   auto const level_type_size = _file_itm_data.level_type_size;
 
@@ -189,7 +189,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   }
 
   // synchronize the streams
-  join_streams(streams, _stream);
+  cudf::detail::join_streams(streams, _stream);
 
   pages.device_to_host_async(_stream);
   page_nesting.device_to_host_async(_stream);
