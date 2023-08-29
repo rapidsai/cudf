@@ -1999,15 +1999,27 @@ def as_column(
             new_dtype = cudf.dtype(arbitrary.type.to_pandas_dtype())
             if dtype is not None:
                 # Cast the column to the `dtype` if specified.
-                col = col.astype(dtype)
+                cast_to_dtype = dtype
             elif len(arbitrary) == 0:
                 # If the column is empty, it has to be
                 # a `float64` dtype.
-                col = col.astype("float64")
+                cast_to_dtype = cudf.dtype("float64")
             else:
                 # If the null column is not empty, it has to
                 # be of `object` dtype.
-                col = col.astype(new_dtype)
+                cast_to_dtype = new_dtype
+
+            if cudf.get_option("mode.pandas_compatible"):
+                # We internally raise if we do `astype("object")`, hence
+                # need to cast to `str` since this is safe to do so because
+                # it is a null-array.
+                cast_to_dtype = (
+                    "str"
+                    if cast_to_dtype == cudf.dtype("O")
+                    else cast_to_dtype
+                )
+
+            col = col.astype(cast_to_dtype)
 
         return col
 
