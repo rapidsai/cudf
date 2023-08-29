@@ -274,6 +274,14 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToString)
   EXPECT_EQ(cudf::test::to_string(strings, delimiter), tmp.str());
 }
 
+TEST_F(ColumnUtilitiesStringsTest, PrintEscapeStrings)
+{
+  char const* delimiter = ",";
+  cudf::test::strings_column_wrapper input({"e\te\ne", "é\bé\ré"});
+  std::string expected{"e\\te\\ne,é\\bé\\ré"};
+  EXPECT_EQ(cudf::test::to_string(input, delimiter), expected);
+}
+
 TYPED_TEST(ColumnUtilitiesTestFixedPoint, NonNullableToHost)
 {
   using namespace numeric;
