@@ -223,29 +223,29 @@ struct KeyValue {
 
 /**
  * @brief Thrift-derived struct containing repetition and definition level histograms
-*/
+ */
 struct RepetitionDefinitionLevelHistogram {
   /**
-    * When present, there is expected to be one element corresponding to each
-    * repetition (i.e. size=max repetition_level+1) where each element
-    * represents the number of times the repetition level was observed in the
-    * data.
-    *
-    * This value should not be written if max_repetition_level is 0.
-    */
+   * When present, there is expected to be one element corresponding to each
+   * repetition (i.e. size=max repetition_level+1) where each element
+   * represents the number of times the repetition level was observed in the
+   * data.
+   *
+   * This value should not be written if max_repetition_level is 0.
+   */
   std::optional<std::vector<int64_t>> repetition_level_histogram;
 
   /**
-    * Same as repetition_level_histogram except for definition levels.
-    *
-    * This value should not be written if max_definition_level is 0.
-    */
+   * Same as repetition_level_histogram except for definition levels.
+   *
+   * This value should not be written if max_definition_level is 0.
+   */
   std::optional<std::vector<int64_t>> definition_level_histogram;
 };
 
 /**
  * @brief Thrift-derived struct containing statistics used to estimate page and column chunk sizes
-*/
+ */
 struct SizeStatistics {
   // number of variable-width bytes stored for the page/chunk. should not be set for anything
   // but the BYTE_ARRAY physical type.
@@ -404,6 +404,8 @@ struct ColumnIndex {
   BoundaryOrder boundary_order =
     BoundaryOrder::UNORDERED;                    // Indicates if min and max values are ordered
   std::vector<int64_t> null_counts;              // Optional count of null values per page
+  // FIXME(ets): this will likely be RepetitionDefinitionLevelHistogram
+  // https://github.com/apache/parquet-format/pull/197
   std::optional<SizeStatistics> size_statistics;
 };
 
