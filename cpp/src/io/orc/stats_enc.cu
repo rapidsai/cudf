@@ -16,8 +16,10 @@
 
 #include "orc_gpu.hpp"
 
-#include <cudf/io/orc_types.hpp>
 #include <io/utilities/block_utils.cuh>
+
+#include <cudf/io/orc_types.hpp>
+#include <cudf/strings/detail/convert/int_to_string.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -47,6 +49,21 @@ __global__ void __launch_bounds__(init_threads_per_block)
     group->num_rows                           = rowgroup_bounds[chunk_id][col_id].size();
     groups[col_id * num_rowgroups + chunk_id] = *group;
   }
+}
+
+__device__ int32_t compute_output_size(__int128_t const& value, int32_t scale)
+{
+  if (scale >= 0) return strings::detail::count_digits(value) + scale;
+
+  auto const abs_value = numeric::detail::abs(value);
+  auto const exp_ten   = numeric::detail::exp10<__int128_t>(-scale);
+  auto const fraction  = strings::detail::count_digits(abs_value % exp_ten);
+  auto const num_zeros = std::max(0, (-scale - fraction));
+  return static_cast<int32_t>(value < 0) +                     // sign if negative
+         strings::detail::count_digits(abs_value / exp_ten) +  // integer
+         1 +                                                   // decimal point
+         num_zeros +                                           // zeros padding
+         fraction;                                             // size of fraction
 }
 
 /**
@@ -101,9 +118,14 @@ __global__ void __launch_bounds__(block_size, 1)
           stats_len = pb_fldlen_common + pb_fld_hdrlen + 3 * (pb_fld_hdrlen + pb_fldlen_float64);
           break;
         case dtype_decimal64:
-        case dtype_decimal128:
-          stats_len = pb_fldlen_common + pb_fld_hdrlen16 + 3 * (pb_fld_hdrlen + pb_fldlen_decimal);
-          break;
+        case dtype_decimal128: {
+          auto const scale    = groups[idx].col_dtype.scale();
+          auto const min_size = compute_output_size(chunks[idx].min_value.d128_val, scale));
+          auto const max_size = compute_output_size(chunks[idx].max_value.d128_val, scale));
+          auto const sum_size = compute_output_size(chunks[idx].sum.d128_val, scale));
+          stats_len =
+            pb_fldlen_common + pb_fld_hdrlen16 + 3 * pb_fld_hdrlen + min_size + max_size + sum_size;
+        } break;
         case dtype_string:
           stats_len = pb_fldlen_common + pb_fld_hdrlen32 + 3 * (pb_fld_hdrlen + pb_fldlen_int64) +
                       chunks[idx].min_value.str_val.length + chunks[idx].max_value.str_val.length;
