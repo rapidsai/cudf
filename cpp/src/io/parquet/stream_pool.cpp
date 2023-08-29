@@ -86,37 +86,30 @@ cuda_stream_pool* create_global_cuda_stream_pool()
   return new rmm_cuda_stream_pool();
 }
 
-// implementation of per-thread-default-event.
-class cuda_event_map {
- public:
-  cuda_event_map() {}
-
-  cudaEvent_t find(std::thread::id thread_id)
+struct cuda_event {
+  cuda_event()
+    : e_{[]() {
+        cudaEvent_t event;
+        CUDF_CUDA_TRY(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
+        return event;
+      }()}
   {
-    std::lock_guard<std::mutex> lock(map_mutex_);
-    auto it = event_map_.find(thread_id);
-    if (it != event_map_.end()) {
-      return it->second;
-    } else {
-      cudaEvent_t event;
-      CUDF_CUDA_TRY(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
-      event_map_[thread_id] = event;
-      return event;
-    }
   }
 
-  cuda_event_map(cuda_event_map const&) = delete;
-  void operator=(cuda_event_map const&) = delete;
+  operator cudaEvent_t() { return e_.get(); }
 
  private:
-  std::unordered_map<std::thread::id, cudaEvent_t> event_map_;
-  std::mutex map_mutex_;
+  struct deleter {
+    using pointer = cudaEvent_t;
+    auto operator()(cudaEvent_t e) { cudaEventDestroy(e); }
+  };
+  std::unique_ptr<cudaEvent_t, deleter> e_;
 };
 
 cudaEvent_t event_for_thread()
 {
-  static cuda_event_map instance;
-  return instance.find(std::this_thread::get_id());
+  thread_local cuda_event thread_event;
+  return thread_event;
 }
 
 }  // anonymous namespace
