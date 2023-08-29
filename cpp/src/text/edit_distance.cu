@@ -140,7 +140,7 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& str
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
-  cudf::size_type strings_count = strings.size();
+  auto const strings_count = strings.size();
   if (strings_count == 0) {
     return cudf::make_empty_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()});
   }
