@@ -2220,7 +2220,7 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
     std::vector<rmm::device_uvector<char>> string_data_cols;
     std::vector<size_type *> string_col_offset_ptrs;
     std::vector<char *> string_data_col_ptrs;
-    for (auto &col_string_lengths : string_lengths) {
+    for (auto &col_string_lengths : dev_string_lengths) {
       device_uvector<size_type> output_string_offsets(num_rows + 1, stream, mr);
       auto tmp = [num_rows, col_string_lengths] __device__(auto const &i) {
         return i < num_rows ? col_string_lengths[i] : 0;
