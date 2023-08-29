@@ -521,20 +521,20 @@ table_input_metadata::table_input_metadata(table_metadata const& metadata)
 {
   auto const& names = metadata.schema_info;
 
-  // Create a metadata hierarchy with naming and nullability using `table_and_metadata`
-  std::function<column_in_metadata(column_name_info const&)> get_children =
+  // Create a metadata hierarchy with naming and nullability using `table_metadata`
+  std::function<column_in_metadata(column_name_info const&)> process_node =
     [&](column_name_info const& name) {
       auto col_meta = column_in_metadata{name.name};
       if (name.is_nullable.has_value()) { col_meta.set_nullability(name.is_nullable.value()); }
       std::transform(name.children.begin(),
                      name.children.end(),
                      std::back_inserter(col_meta.children),
-                     get_children);
+                     process_node);
       return col_meta;
     };
 
   std::transform(
-    names.begin(), names.end(), std::back_inserter(this->column_metadata), get_children);
+    names.begin(), names.end(), std::back_inserter(this->column_metadata), process_node);
 }
 
 /**
