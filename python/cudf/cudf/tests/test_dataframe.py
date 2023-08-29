@@ -10288,3 +10288,44 @@ def test_dataframe_mixed_dtype_error(dtype):
     pdf = pd.Series([1, 2, 3], dtype=dtype).to_frame().astype(object)
     with pytest.raises(TypeError):
         cudf.from_pandas(pdf)
+
+
+@pytest.mark.parametrize(
+    "index_data,name",
+    [([10, 13], "a"), ([30, 40, 20], "b"), (["ef"], "c"), ([2, 3], "Z")],
+)
+def test_dataframe_reindex_with_index_names(index_data, name):
+    gdf = cudf.DataFrame(
+        {
+            "a": [10, 12, 13],
+            "b": [20, 30, 40],
+            "c": cudf.Series(["ab", "cd", "ef"], dtype="category"),
+        }
+    )
+    if name in gdf.columns:
+        gdf = gdf.set_index(name)
+    pdf = gdf.to_pandas()
+
+    gidx = cudf.Index(index_data, name=name)
+    actual = gdf.reindex(gidx)
+    expected = pdf.reindex(gidx.to_pandas())
+
+    assert_eq(actual, expected)
+
+    actual = gdf.reindex(index_data)
+    expected = pdf.reindex(index_data)
+
+    assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize("attr", ["nlargest", "nsmallest"])
+def test_dataframe_nlargest_nsmallest_str_error(attr):
+    gdf = cudf.DataFrame({"a": [1, 2, 3, 4], "b": ["a", "b", "c", "d"]})
+    pdf = gdf.to_pandas()
+
+    assert_exceptions_equal(
+        getattr(gdf, attr),
+        getattr(pdf, attr),
+        ([], {"n": 1, "columns": ["a", "b"]}),
+        ([], {"n": 1, "columns": ["a", "b"]}),
+    )
