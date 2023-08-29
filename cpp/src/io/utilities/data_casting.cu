@@ -431,10 +431,49 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
       auto c                = is_within_bounds ? in_begin[char_index] : '\0';
       auto prev_c       = (char_index > 0 and is_within_bounds) ? in_begin[char_index - 1] : '\0';
       auto escaped_char = get_escape_char(c);
-      bool error        = false;
+
+      bool is_escaping_backslash{false};
+      // To check current is backslash by checking if previous is backslash.
+      // curr = !prev & c=='\\'
+      // So, scan is required from beginning of string.
+      // State table approach (intra-warp FST)
+      // 2 states: Not-Slash(NS), Slash(S).
+      // prev  /   *
+      // NS    S  NS
+      //  S   NS  NS
+      // After inclusive scan, all current S states translate to escaping backslash.
+      // All escaping backslash should be skipped.
+
+      struct state_table {
+        bool state[2];
+      };
+      state_table curr{is_within_bounds && c == '\\', false};  // state transition vector.
+      auto composite_op = [](state_table op1, state_table op2) {
+        return state_table{op2.state[op1.state[0]], op2.state[op1.state[1]]};
+      };
+      state_table scanned;
+      [[maybe_unused]] auto warp_id = threadIdx.x / BLOCK_SIZE;
+      // inclusive scan of escaping backslashes
+      // TODO both inclusive and exclusive available in cub.
+      if constexpr (is_warp) {
+        using SlashScan = cub::WarpScan<state_table>;
+        __shared__ typename SlashScan::TempStorage temp_slash[num_warps];
+        SlashScan(temp_slash[warp_id]).InclusiveScan(curr, scanned, composite_op);
+        is_escaping_backslash = scanned.state[init_state];
+        init_state            = __shfl_sync(MASK, is_escaping_backslash, BLOCK_SIZE - 1);
+      } else {
+        using SlashScan = cub::BlockScan<state_table, BLOCK_SIZE>;
+        __shared__ typename SlashScan::TempStorage temp_slash;
+        SlashScan(temp_slash).InclusiveScan(curr, scanned, composite_op);
+        is_escaping_backslash = scanned.state[init_state];
+        if (threadIdx.x == BLOCK_SIZE - 1) init_state = is_escaping_backslash;
+        // There is another __syncthreads() at the end of for-loop.
+      }
+
+      bool error = false;
       if (is_within_bounds) {
-        // TODO instead of '\\', use is_escaping_backslash, and previous index value also here.
-        error |= (c == '\\' && char_index == (in_end - in_begin) - 1);
+        // instead of '\\', using is_escaping_backslash, and previous index value also here.
+        error |= (is_escaping_backslash /*c == '\\'*/ && char_index == (in_end - in_begin) - 1);
         error |= (prev_c == '\\' && escaped_char == NON_ESCAPE_CHAR);
         error |= (prev_c == '\\' && c == 'u' &&
                   // TODO check if following condition is right or off by one error.
@@ -466,6 +505,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
         break;                        // gride-stride return;
       }
       bool skip = !is_within_bounds;  // false;
+      skip |= is_escaping_backslash;
       if (is_within_bounds) {
         skip |= char_index - 2 >= 0 && in_begin[char_index - 2] == '\\' &&
                 in_begin[char_index - 1] == 'u';
@@ -478,45 +518,6 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
       }
       int this_num_out = 0;
       cudf::char_utf8 write_char{};
-
-      // To check current is backslash by checking if previous is backslash.
-      // curr = !prev & c=='\\'
-      // So, scan is required from beginning of string.
-      // State table approach (intra-warp FST)
-      // 2 states: Not-Slash(NS), Slash(S).
-      // prev  /   *
-      // NS    S  NS
-      //  S   NS  NS
-      // After inclusive scan, all current S states translate to escaping backslash.
-      // All escaping backslash should be skipped.
-
-      struct state_table {
-        bool state[2];
-      };
-      state_table curr{is_within_bounds && c == '\\', false};  // state transition vector.
-      auto composite_op = [](state_table op1, state_table op2) {
-        return state_table{op2.state[op1.state[0]], op2.state[op1.state[1]]};
-      };
-      state_table scanned;
-      [[maybe_unused]] auto warp_id = threadIdx.x / BLOCK_SIZE;
-      // inclusive scan of escaping backslashes
-      // TODO both inclusive and exclusive available in cub.
-      if constexpr (is_warp) {
-        using SlashScan = cub::WarpScan<state_table>;
-        __shared__ typename SlashScan::TempStorage temp_slash[num_warps];
-        SlashScan(temp_slash[warp_id]).InclusiveScan(curr, scanned, composite_op);
-        auto is_escaping_backslash = scanned.state[init_state];
-        init_state                 = __shfl_sync(MASK, is_escaping_backslash, BLOCK_SIZE - 1);
-        skip |= is_escaping_backslash;
-      } else {
-        using SlashScan = cub::BlockScan<state_table, BLOCK_SIZE>;
-        __shared__ typename SlashScan::TempStorage temp_slash;
-        SlashScan(temp_slash).InclusiveScan(curr, scanned, composite_op);
-        auto is_escaping_backslash = scanned.state[init_state];
-        if (threadIdx.x == BLOCK_SIZE - 1) init_state = is_escaping_backslash;
-        // There is another __syncthreads() at the end of for-loop.
-        skip |= is_escaping_backslash;
-      }
 
       if (!skip) {
         if (prev_c != '\\') {
