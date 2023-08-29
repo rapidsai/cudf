@@ -1016,6 +1016,39 @@ __device__ auto julian_days_with_time(int64_t v)
   return std::make_pair(dur_time_of_day_nanos, julian_days);
 }
 
+template <int block_size>
+void __device__ gen_hist(uint32_t* hist,
+                         page_enc_state_s* s,
+                         uint32_t nrows,
+                         uint32_t rle_numvals,
+                         uint32_t maxlvl,
+                         typename cub::BlockReduce<uint32_t, block_size>::TempStorage& temp_storage)
+{
+// FIXME(ets): for testing. remove later.
+#if 0
+  if (threadIdx.x == 0) {
+    for (uint32_t i = 0; i < nrows; i++) {
+      // TODO this so needs rolling_index
+      auto const lvl = s->vals[(rle_numvals + i) & (rle_buffer_size - 1)];
+      hist[lvl]++;
+    }
+  }
+#else
+  using block_reduce = cub::BlockReduce<uint32_t, block_size>;
+  auto const t       = threadIdx.x;
+
+  // TODO this so needs rolling_index
+  auto const mylvl = s->vals[(rle_numvals + t) & (rle_buffer_size - 1)];
+  for (uint32_t lvl = 0; lvl < maxlvl; lvl++) {
+    uint32_t const is_yes = mylvl == lvl;
+    auto const lvl_sum    = block_reduce(temp_storage).Sum(is_yes);
+    if (t == 0) { hist[lvl] += lvl_sum; }
+    __syncthreads();
+  }
+#endif
+  __syncthreads();
+}
+
 // blockDim(128, 1, 1)
 template <int block_size>
 __global__ void __launch_bounds__(128, 8)
@@ -1104,14 +1137,13 @@ __global__ void __launch_bounds__(128, 8)
         }();
         s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = def_lvl;
         __syncthreads();
-        // FIXME(ets): is there a way to do this in parallel? without atomic adds?
-        if (t == 0) {
-          if (s->page.def_histogram != nullptr) {
-            for (int i = 0; i < nrows; i++) {
-              auto const lvl = s->vals[(rle_numvals + i) & (rle_buffer_size - 1)];
-              s->page.def_histogram[lvl]++;
-            }
-          }
+        if (s->page.def_histogram != nullptr) {
+          gen_hist<block_size>(s->page.def_histogram,
+                               s,
+                               nrows,
+                               rle_numvals,
+                               s->col.max_def_level + 1,
+                               temp_storage.reduce_storage);
         }
         rle_numvals += nrows;
         RleEncode(s, rle_numvals, def_lvl_bits, (rle_numvals == s->page.num_rows), t);
@@ -1133,62 +1165,64 @@ __global__ void __launch_bounds__(128, 8)
   } else if (s->page.page_type != PageType::DICTIONARY_PAGE &&
              s->col.num_rep_level_bits() != 0  // This means there ARE repetition levels (has list)
   ) {
-    auto encode_levels =
-      [&](uint8_t const* lvl_val_data, uint32_t nbits, uint32_t& lvl_bytes, uint32_t* hist) {
-        // For list types, the repetition and definition levels are pre-calculated. We just need to
-        // encode and write them now.
-        if (!t) {
-          s->rle_run     = 0;
-          s->rle_pos     = 0;
-          s->rle_numvals = 0;
-          s->rle_out     = s->cur;
-          if (not is_v2) {
-            s->rle_out += 4;  // save space for length
-          }
+    auto encode_levels = [&](uint8_t const* lvl_val_data,
+                             uint32_t nbits,
+                             uint32_t& lvl_bytes,
+                             uint32_t* hist,
+                             uint32_t max_lvl) {
+      // For list types, the repetition and definition levels are pre-calculated. We just need to
+      // encode and write them now.
+      if (!t) {
+        s->rle_run     = 0;
+        s->rle_pos     = 0;
+        s->rle_numvals = 0;
+        s->rle_out     = s->cur;
+        if (not is_v2) {
+          s->rle_out += 4;  // save space for length
         }
+      }
+      __syncthreads();
+      size_type page_first_val_idx = s->col.level_offsets[s->page.start_row];
+      size_type col_last_val_idx   = s->col.level_offsets[s->col.num_rows];
+      while (s->rle_numvals < s->page.num_values) {
+        uint32_t rle_numvals = s->rle_numvals;
+        uint32_t nvals       = min(s->page.num_values - rle_numvals, 128);
+        uint32_t idx         = page_first_val_idx + rle_numvals + t;
+        uint32_t lvl_val =
+          (rle_numvals + t < s->page.num_values && idx < col_last_val_idx) ? lvl_val_data[idx] : 0;
+        s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = lvl_val;
         __syncthreads();
-        size_type page_first_val_idx = s->col.level_offsets[s->page.start_row];
-        size_type col_last_val_idx   = s->col.level_offsets[s->col.num_rows];
-        while (s->rle_numvals < s->page.num_values) {
-          uint32_t rle_numvals = s->rle_numvals;
-          uint32_t nvals       = min(s->page.num_values - rle_numvals, 128);
-          uint32_t idx         = page_first_val_idx + rle_numvals + t;
-          uint32_t lvl_val     = (rle_numvals + t < s->page.num_values && idx < col_last_val_idx)
-                                   ? lvl_val_data[idx]
-                                   : 0;
-          s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = lvl_val;
-          __syncthreads();
-          // FIXME(ets): is there a way to do this in parallel? without atomic adds?
-          if (t == 0) {
-            if (hist != nullptr) {
-              for (int i = 0; i < nvals; i++) {
-                auto const lvl = s->vals[(rle_numvals + i) & (rle_buffer_size - 1)];
-                hist[lvl]++;
-              }
-            }
-          }
-          rle_numvals += nvals;
-          RleEncode(s, rle_numvals, nbits, (rle_numvals == s->page.num_values), t);
-          __syncthreads();
+        if (hist != nullptr) {
+          gen_hist<block_size>(hist, s, nvals, rle_numvals, max_lvl, temp_storage.reduce_storage);
         }
-        if (t < 32) {
-          uint8_t* const cur       = s->cur;
-          uint8_t* const rle_out   = s->rle_out;
-          uint32_t const rle_bytes = static_cast<uint32_t>(rle_out - cur) - (is_v2 ? 0 : 4);
-          if (is_v2 && t == 0) {
-            lvl_bytes = rle_bytes;
-          } else if (not is_v2 && t < 4) {
-            cur[t] = rle_bytes >> (t * 8);
-          }
-          __syncwarp();
-          if (t == 0) { s->cur = rle_out; }
+        rle_numvals += nvals;
+        RleEncode(s, rle_numvals, nbits, (rle_numvals == s->page.num_values), t);
+        __syncthreads();
+      }
+      if (t < 32) {
+        uint8_t* const cur       = s->cur;
+        uint8_t* const rle_out   = s->rle_out;
+        uint32_t const rle_bytes = static_cast<uint32_t>(rle_out - cur) - (is_v2 ? 0 : 4);
+        if (is_v2 && t == 0) {
+          lvl_bytes = rle_bytes;
+        } else if (not is_v2 && t < 4) {
+          cur[t] = rle_bytes >> (t * 8);
         }
-      };
-    encode_levels(
-      s->col.rep_values, s->col.num_rep_level_bits(), s->page.rep_lvl_bytes, s->page.rep_histogram);
+        __syncwarp();
+        if (t == 0) { s->cur = rle_out; }
+      }
+    };
+    encode_levels(s->col.rep_values,
+                  s->col.num_rep_level_bits(),
+                  s->page.rep_lvl_bytes,
+                  s->page.rep_histogram,
+                  s->col.max_rep_level + 1);
     __syncthreads();
-    encode_levels(
-      s->col.def_values, s->col.num_def_level_bits(), s->page.def_lvl_bytes, s->page.def_histogram);
+    encode_levels(s->col.def_values,
+                  s->col.num_def_level_bits(),
+                  s->page.def_lvl_bytes,
+                  s->page.def_histogram,
+                  s->col.max_def_level + 1);
   }
   // Encode data values
   __syncthreads();
