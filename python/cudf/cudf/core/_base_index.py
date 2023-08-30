@@ -651,7 +651,7 @@ class BaseIndex(Serializable):
         case make a shallow copy of self.
         """
         name = _get_result_name(self.name, other.name)
-        if self.name != name:
+        if not _is_same_name(self.name, name):
             return self.rename(name)
         return self
 
@@ -943,23 +943,26 @@ class BaseIndex(Serializable):
 
         other = cudf.Index(other)
 
+        res_name = _get_result_name(self.name, other.name)
+
         if is_mixed_with_object_dtype(self, other):
             difference = self.copy()
         else:
             other = other.copy(deep=False)
-            other.names = self.names
             difference = cudf.core.index._index_from_data(
-                cudf.DataFrame._from_data(self._data)
+                cudf.DataFrame._from_data({"None": self._column})
                 .merge(
-                    cudf.DataFrame._from_data(other._data),
+                    cudf.DataFrame._from_data({"None": other._column}),
                     how="leftanti",
-                    on=self.name,
+                    on="None",
                 )
                 ._data
             )
 
             if self.dtype != other.dtype:
                 difference = difference.astype(self.dtype)
+
+        difference.name = res_name
 
         if sort is None and len(other):
             return difference.sort_values()
@@ -1323,14 +1326,12 @@ class BaseIndex(Serializable):
         return union_result
 
     def _intersection(self, other, sort=None):
-        other_unique = other.unique()
-        other_unique.names = self.names
         intersection_result = cudf.core.index._index_from_data(
-            cudf.DataFrame._from_data(self.unique()._data)
+            cudf.DataFrame._from_data({"None": self.unique()._column})
             .merge(
-                cudf.DataFrame._from_data(other_unique._data),
+                cudf.DataFrame._from_data({"None": other.unique()._column}),
                 how="inner",
-                on=self.name,
+                on="None",
             )
             ._data
         )
