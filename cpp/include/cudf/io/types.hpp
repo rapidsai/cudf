@@ -201,20 +201,27 @@ enum dictionary_policy {
 };
 
 /**
- * @brief Detailed name information for output columns.
+ * @brief Detailed name (and optionally nullability) information for output columns.
  *
  * The hierarchy of children matches the hierarchy of children in the output
  * cudf columns.
  */
 struct column_name_info {
   std::string name;                        ///< Column name
+  std::optional<bool> is_nullable;         ///< Column nullability
   std::vector<column_name_info> children;  ///< Child column names
+
   /**
-   * @brief Construct a column name info with a name and no children
+   * @brief Construct a column name info with a name, optional nullabilty, and no children
    *
    * @param _name Column name
+   * @param _is_nullable True if column is nullable
    */
-  column_name_info(std::string const& _name) : name(_name) {}
+  column_name_info(std::string const& _name, std::optional<bool> _is_nullable = std::nullopt)
+    : name(_name), is_nullable(_is_nullable)
+  {
+  }
+
   column_name_info() = default;
 };
 
@@ -798,7 +805,17 @@ class table_input_metadata {
    *
    * @param table The table_view to construct metadata for
    */
-  table_input_metadata(table_view const& table);
+  explicit table_input_metadata(table_view const& table);
+
+  /**
+   * @brief Construct a new table_input_metadata from a table_metadata object.
+   *
+   * The constructed table_input_metadata has the same structure, column names and nullability as
+   * the passed table_metadata.
+   *
+   * @param metadata The table_metadata to construct table_intput_metadata for
+   */
+  explicit table_input_metadata(table_metadata const& metadata);
 
   std::vector<column_in_metadata> column_metadata;  //!< List of column metadata
 };
