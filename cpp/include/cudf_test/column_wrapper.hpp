@@ -1596,12 +1596,10 @@ class lists_column_wrapper : public detail::column_wrapper {
     thrust::copy_if(
       std::cbegin(cols), std::cend(cols), valids, std::back_inserter(children), thrust::identity{});
 
-    // TODO: Once the public concatenate API exposes streams, use that instead.
-    auto data =
-      children.empty()
-        ? cudf::empty_like(expected_hierarchy)
-        : cudf::detail::concatenate(
-            children, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
+    auto data = children.empty() ? cudf::empty_like(expected_hierarchy)
+                                 : cudf::concatenate(children,
+                                                     cudf::test::get_default_stream(),
+                                                     rmm::mr::get_current_device_resource());
 
     // increment depth
     depth = expected_depth + 1;

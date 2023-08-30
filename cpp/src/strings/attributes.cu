@@ -111,14 +111,14 @@ std::unique_ptr<column> counts_fn(strings_column_view const& strings,
 __global__ void count_characters_parallel_fn(column_device_view const d_strings,
                                              size_type* d_lengths)
 {
-  size_type const idx = static_cast<size_type>(threadIdx.x + blockIdx.x * blockDim.x);
-  using warp_reduce   = cub::WarpReduce<size_type>;
+  auto const idx    = cudf::detail::grid_1d::global_thread_id();
+  using warp_reduce = cub::WarpReduce<size_type>;
   __shared__ typename warp_reduce::TempStorage temp_storage;
 
   if (idx >= (d_strings.size() * cudf::detail::warp_size)) { return; }
 
-  auto const str_idx  = idx / cudf::detail::warp_size;
-  auto const lane_idx = idx % cudf::detail::warp_size;
+  auto const str_idx  = static_cast<size_type>(idx / cudf::detail::warp_size);
+  auto const lane_idx = static_cast<size_type>(idx % cudf::detail::warp_size);
   if (d_strings.is_null(str_idx)) {
     d_lengths[str_idx] = 0;
     return;
@@ -126,7 +126,7 @@ __global__ void count_characters_parallel_fn(column_device_view const d_strings,
   auto const d_str   = d_strings.element<string_view>(str_idx);
   auto const str_ptr = d_str.data();
 
-  auto count = 0;
+  size_type count = 0;
   for (auto i = lane_idx; i < d_str.size_bytes(); i += cudf::detail::warp_size) {
     count += static_cast<size_type>(is_begin_utf8_char(str_ptr[i]));
   }
