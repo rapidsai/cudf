@@ -28,6 +28,7 @@ namespace cudf::detail {
  * Meant to provide efficient on-demand access to CUDA streams.
  *
  * TODO: better docs!
+ * if env LIBCUDF_USE_DEBUG_STREAM_POOL is set, then use default stream...
  */
 class cuda_stream_pool {
  public:
@@ -56,6 +57,10 @@ class cuda_stream_pool {
   /**
    * @brief Get a set of `cuda_stream_view` objects from the pool.
    *
+   * An attempt is made to ensure that the returned vector does not contain duplicate
+   * streams, but this cannot be guaranteed if `count` is greater than
+   * `get_stream_pool_size()`.
+   *
    * This function is thread safe with respect to other calls to the same function.
    *
    * @param count The number of stream views to return.
@@ -74,9 +79,7 @@ class cuda_stream_pool {
 };
 
 /**
- * @brief Return the global cuda_stream_pool object.
- *
- * TODO: document how to control the implementation
+ * @brief Return a reference to the global cuda_stream_pool object.
  *
  * @return The cuda_stream_pool singleton.
  */
@@ -85,7 +88,7 @@ cuda_stream_pool& global_cuda_stream_pool();
 /**
  * @brief Synchronize a set of streams to an event on another stream.
  *
- * @param streams Vector of streams to synchronize on.
+ * @param streams Vector of streams to synchronize.
  * @param stream Stream to synchronize the other streams to, usually the default stream.
  */
 void fork_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream);
@@ -93,8 +96,8 @@ void fork_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_vie
 /**
  * @brief Synchronize a stream to an event on a set of streams.
  *
- * @param streams Vector of streams to synchronize on.
- * @param stream Stream to synchronize the other streams to, usually the default stream.
+ * @param streams Vector of streams to synchronize to.
+ * @param stream Stream to synchronize, usually the default stream.
  */
 void join_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream);
 
