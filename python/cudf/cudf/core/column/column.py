@@ -1996,18 +1996,27 @@ def as_column(
         col = ColumnBase.from_arrow(arbitrary)
 
         if isinstance(arbitrary, pa.NullArray):
-            new_dtype = cudf.dtype(arbitrary.type.to_pandas_dtype())
             if dtype is not None:
                 # Cast the column to the `dtype` if specified.
-                col = col.astype(dtype)
+                new_dtype = dtype
             elif len(arbitrary) == 0:
                 # If the column is empty, it has to be
                 # a `float64` dtype.
-                col = col.astype("float64")
+                new_dtype = cudf.dtype("float64")
             else:
                 # If the null column is not empty, it has to
                 # be of `object` dtype.
-                col = col.astype(new_dtype)
+                new_dtype = cudf.dtype(arbitrary.type.to_pandas_dtype())
+
+            if cudf.get_option(
+                "mode.pandas_compatible"
+            ) and new_dtype == cudf.dtype("O"):
+                # We internally raise if we do `astype("object")`, hence
+                # need to cast to `str` since this is safe to do so because
+                # it is a null-array.
+                new_dtype = "str"
+
+            col = col.astype(new_dtype)
 
         return col
 
