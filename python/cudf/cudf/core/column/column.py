@@ -81,7 +81,6 @@ from cudf.core.dtypes import (
     ListDtype,
     StructDtype,
 )
-from cudf.core.missing import NA
 from cudf.core.mixins import BinaryOperand, Reducible
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
@@ -292,7 +291,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def dropna(self, drop_nan: bool = False) -> ColumnBase:
         # The drop_nan argument is only used for numerical columns.
-        return drop_nulls([self])[0]
+        return drop_nulls([self])[0]._with_type_metadata(self.dtype)
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
@@ -605,7 +604,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             self._mimic_inplace(out, inplace=True)
 
     def _wrap_binop_normalization(self, other):
-        if other is NA or other is None:
+        if cudf.utils.utils.is_na_like(other):
             return cudf.Scalar(other, dtype=self.dtype)
         if isinstance(other, np.ndarray) and other.ndim == 0:
             # Try and maintain the dtype
@@ -990,6 +989,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             np.object_,
             str,
         }:
+            if cudf.get_option("mode.pandas_compatible") and np.dtype(
+                dtype
+            ).type in {np.object_}:
+                raise ValueError(
+                    f"Casting to {dtype} is not supported, use "
+                    "`.astype('str')` instead."
+                )
             return self.as_string_column(dtype, **kwargs)
         elif is_list_dtype(dtype):
             if not self.dtype == dtype:
@@ -1156,7 +1162,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         Get unique values in the data
         """
-        return drop_duplicates([self], keep="first")[0]
+        return drop_duplicates([self], keep="first")[0]._with_type_metadata(
+            self.dtype
+        )
 
     def serialize(self) -> Tuple[dict, list]:
         # data model:
@@ -2207,7 +2215,20 @@ def as_column(
                 pa.Array.from_pandas(interval_series), dtype=arb_dtype
             )
         elif arb_dtype.kind in ("O", "U"):
-            data = as_column(pa.Array.from_pandas(arbitrary), dtype=arb_dtype)
+            pyarrow_array = pa.Array.from_pandas(arbitrary)
+            if not isinstance(
+                pyarrow_array,
+                (
+                    pa.ListArray,
+                    pa.StructArray,
+                    pa.NullArray,
+                    pa.Decimal128Array,
+                    pa.StringArray,
+                    pa.BooleanArray,
+                ),
+            ):
+                raise MixedTypeError("Cannot create column with mixed types")
+            data = as_column(pyarrow_array, dtype=arb_dtype)
         else:
             data = as_column(
                 pa.array(
@@ -2237,6 +2258,12 @@ def as_column(
         raise NotImplementedError(
             "cuDF does not yet support timezone-aware datetimes"
         )
+    elif (
+        cudf.get_option("mode.pandas_compatible")
+        and isinstance(arbitrary, (pd.DatetimeIndex, pd.TimedeltaIndex))
+        and arbitrary.freq is not None
+    ):
+        raise NotImplementedError("freq is not implemented yet")
     else:
         try:
             data = as_column(
@@ -2427,25 +2454,29 @@ def as_column(
 
 def _construct_array(
     arbitrary: Any, dtype: Optional[Dtype]
-) -> Union[np.ndarray, cupy.ndarray]:
+) -> Union[np.ndarray, cupy.ndarray, pd.api.extensions.ExtensionArray]:
     """
-    Construct a CuPy or NumPy array from `arbitrary`
+    Construct a CuPy/NumPy/Pandas array from `arbitrary`
     """
     try:
         dtype = dtype if dtype is None else cudf.dtype(dtype)
         arbitrary = cupy.asarray(arbitrary, dtype=dtype)
     except (TypeError, ValueError):
         native_dtype = dtype
+        inferred_dtype = None
         if (
             dtype is None
             and not cudf._lib.scalar._is_null_host_scalar(arbitrary)
-            and infer_dtype(arbitrary, skipna=False)
+            and (inferred_dtype := infer_dtype(arbitrary, skipna=False))
             in (
                 "mixed",
                 "mixed-integer",
             )
         ):
             native_dtype = "object"
+        if inferred_dtype == "interval":
+            # Only way to construct an Interval column.
+            return pd.array(arbitrary)
         arbitrary = np.asarray(
             arbitrary,
             dtype=native_dtype

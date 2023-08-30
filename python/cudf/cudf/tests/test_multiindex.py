@@ -1182,6 +1182,17 @@ def test_multiindex_values_host():
     assert_eq(midx.values_host, pmidx.values)
 
 
+def test_multiindex_to_numpy():
+    midx = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    pmidx = midx.to_pandas()
+
+    assert_eq(midx.to_numpy(), pmidx.to_numpy())
+
+
 @pytest.mark.parametrize(
     "gdi, fill_value, expected",
     [
@@ -1868,3 +1879,13 @@ def test_multiindex_index_single_row():
     gdf.index = idx
     pdf = gdf.to_pandas()
     assert_eq(pdf.loc[("b", 3)], gdf.loc[("b", 3)])
+
+
+def test_multiindex_levels():
+    gidx = cudf.MultiIndex.from_product(
+        [range(3), ["one", "two"]], names=["first", "second"]
+    )
+    pidx = gidx.to_pandas()
+
+    assert_eq(gidx.levels[0], pidx.levels[0])
+    assert_eq(gidx.levels[1], pidx.levels[1])

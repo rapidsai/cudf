@@ -438,7 +438,7 @@ std::vector<data_type> get_data_types(json_reader_options const& reader_opts,
         }},
       reader_opts.get_dtypes());
   } else {
-    CUDF_EXPECTS(rec_starts.size() != 0, "No data available for data type inference.\n");
+    CUDF_EXPECTS(not rec_starts.empty(), "No data available for data type inference.\n");
     auto const num_columns       = column_names.size();
     auto const do_set_null_count = column_map->capacity() > 0;
 
@@ -612,7 +612,7 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
     sources, reader_opts.get_compression(), range_offset, range_size, range_size_padded);
   host_span<char const> h_data{reinterpret_cast<char const*>(h_raw_data.data()), h_raw_data.size()};
 
-  CUDF_EXPECTS(h_data.size() != 0, "Ingest failed: uncompressed input data has zero size.\n");
+  CUDF_EXPECTS(not h_data.empty(), "Ingest failed: uncompressed input data has zero size.\n");
 
   auto d_data = rmm::device_uvector<char>(0, stream);
 
@@ -629,7 +629,7 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
     d_data = upload_data_to_device(reader_opts, h_data, rec_starts, stream);
   }
 
-  CUDF_EXPECTS(d_data.size() != 0, "Error uploading input data to the GPU.\n");
+  CUDF_EXPECTS(not d_data.is_empty(), "Error uploading input data to the GPU.\n");
 
   auto column_names_and_map =
     get_column_names_and_map(parse_opts.view(), h_data, rec_starts, d_data, stream);
