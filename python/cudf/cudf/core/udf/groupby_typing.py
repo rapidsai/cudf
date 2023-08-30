@@ -16,7 +16,7 @@ from numba.cuda.cudadecl import registry as cuda_registry
 from numba.np import numpy_support
 
 from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
-from cudf.core.udf.utils import Row
+from cudf.core.udf.utils import Row, UDFError
 
 index_default_type = types.int64
 group_size_type = types.int64
@@ -183,12 +183,14 @@ class GroupUnaryOp(AbstractTemplate):
         )
 
     def generic(self, args, kws):
+        if not all(isinstance(arg, GroupType) for arg in args):
+            return None
         fname = self.key.__name__
         if fname in call_cuda_functions:
             for retty, selfty in call_cuda_functions[fname].keys():
                 if self.this.group_scalar_type == selfty:
                     return nb_signature(retty, recvr=self.this)
-        raise TypeError(self.make_error_string(args))
+        raise UDFError(self.make_error_string(args))
 
 
 class GroupOpBase(AbstractTemplate):
@@ -208,7 +210,7 @@ class GroupOpBase(AbstractTemplate):
         # check if any groups are poisioned for this op
         for arg in args:
             if isinstance(arg.group_scalar_type, types.Poison):
-                raise TypeError(
+                raise UDFError(
                     f"Use of a column of {arg.group_scalar_type.ty} detected "
                     "within UDAF body. \nOnly columns of the following dtypes "
                     "may be used through the \nGroupBy.apply() JIT engine: "
@@ -221,7 +223,7 @@ class GroupOpBase(AbstractTemplate):
                     arg.group_scalar_type == ty for arg, ty in zip(args, sig)
                 ):
                     return nb_signature(sig[0], *args)
-        raise TypeError(self.make_error_string(args))
+        raise UDFError(self.make_error_string(args))
 
 
 class GroupUnaryAttrBase(AbstractTemplate):
@@ -240,7 +242,7 @@ class GroupUnaryAttrBase(AbstractTemplate):
             return None
         # check if any groups are poisioned for this op
         if isinstance(self.this.group_scalar_type, types.Poison):
-            raise TypeError(
+            raise UDFError(
                 f"Use of a column of {self.this.group_scalar_type.ty} detected"
                 " within UDAF body. \nOnly columns of the following dtypes may"
                 " be used through the \nGroupBy.apply() JIT engine: "
@@ -253,7 +255,7 @@ class GroupUnaryAttrBase(AbstractTemplate):
         for retty, selfty in call_cuda_functions[fname].keys():
             if self.this.group_scalar_type == selfty:
                 return nb_signature(retty, recvr=self.this)
-        raise TypeError(self.make_error_string(args))
+        raise UDFError(self.make_error_string(args))
 
 
 def _make_unary_attr(funcname):
@@ -314,6 +316,8 @@ class GroupBinaryMethodBase(AbstractTemplate):
         )
 
     def generic(self, args, kws):
+        if not all(isinstance(arg, GroupType) for arg in args):
+            return None
         fname = self.key.split(".")[-1]
         for retty, lty, rty in call_cuda_functions[fname].keys():
             if (
@@ -321,7 +325,7 @@ class GroupBinaryMethodBase(AbstractTemplate):
                 and args[0].group_scalar_type == rty
             ):
                 return nb_signature(retty, args[0], recvr=self.this)
-        raise TypeError(self.make_error_string(args))
+        raise UDFError(self.make_error_string(args))
 
 
 class GroupCorr(GroupBinaryMethodBase):
@@ -330,7 +334,7 @@ class GroupCorr(GroupBinaryMethodBase):
 
 def _make_unsupported_dataframe_attr(attrname):
     def _attr(self, mod):
-        raise TypeError(
+        raise UDFError(
             f"JIT GroupBy.apply() does not support DataFrame.{attrname}(). "
             f"To see what's available, visit {docs}"
         )
@@ -340,7 +344,7 @@ def _make_unsupported_dataframe_attr(attrname):
 
 class DataFrameAttributeTemplate(AttributeTemplate):
     def resolve(self, value, attr):
-        raise AttributeError(
+        raise UDFError(
             f"JIT GroupBy.apply() does not support DataFrame.{attr}(). "
         )
 

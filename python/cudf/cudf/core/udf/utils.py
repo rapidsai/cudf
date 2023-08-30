@@ -361,3 +361,7 @@ def set_malloc_heap_size(size=None):
 def column_to_string_view_array_init_heap(col):
     # lazily allocate heap only when a string needs to be returned
     return column_to_string_view_array(col)
+
+
+class UDFError(Exception):
+    pass

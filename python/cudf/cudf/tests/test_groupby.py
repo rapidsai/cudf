@@ -22,7 +22,7 @@ from cudf import DataFrame, Series
 from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140
 from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
 from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
-from cudf.core.udf.utils import precompiled
+from cudf.core.udf.utils import UDFError, precompiled
 from cudf.testing._utils import (
     DATETIME_TYPES,
     SIGNED_TYPES,
@@ -459,7 +459,7 @@ def test_groupby_apply_jit_correlation(groupby_jit_data, dtype):
 
     if dtype.kind == "f":
         with pytest.raises(
-            TypeError,
+            UDFError,
             match=f"Series.corr is not supported between {dtype} and {dtype}",
         ):
             run_groupby_apply_jit_test(groupby_jit_data, func, keys)
@@ -475,7 +475,7 @@ def test_groupby_apply_jit_invalid_unary_ops_error(groupby_jit_data, op):
         return op(group["val1"])
 
     with pytest.raises(
-        TypeError,
+        UDFError,
         match=f"{op.__name__}\\(Series\\) is not supported within JIT GroupBy",
     ):
         run_groupby_apply_jit_test(groupby_jit_data, func, keys)
@@ -489,7 +489,7 @@ def test_groupby_apply_jit_invalid_binary_ops_error(groupby_jit_data, op):
         return op(group["val1"], group["val2"])
 
     with pytest.raises(
-        TypeError,
+        UDFError,
         match=f"{op.__name__}\\(Series, Series\\) is not supported",
     ):
         run_groupby_apply_jit_test(groupby_jit_data, func, keys)
@@ -501,7 +501,7 @@ def test_groupby_apply_jit_no_df_ops(groupby_jit_data):
         return group.sum()
 
     with pytest.raises(
-        AttributeError,
+        UDFError,
         match="JIT GroupBy.apply\\(\\) does not support DataFrame.sum\\(\\)",
     ):
         run_groupby_apply_jit_test(groupby_jit_data, func, ["key1"])
@@ -524,9 +524,7 @@ def test_groupby_apply_unsupported_dtype(dtype):
     def func(group):
         return group["b"].sum()
 
-    with pytest.raises(
-        TypeError, match="Only columns of the following dtypes"
-    ):
+    with pytest.raises(UDFError, match="Only columns of the following dtypes"):
         run_groupby_apply_jit_test(df, func, ["a"])
 
 

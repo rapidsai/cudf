@@ -20,6 +20,7 @@ from cudf.core.udf.templates import (
     groupby_apply_kernel_template,
 )
 from cudf.core.udf.utils import (
+    UDFError,
     _all_dtypes_from_frame,
     _compile_or_get,
     _get_extensionty_size,
@@ -221,5 +222,5 @@ def _can_be_jitted(frame, func, args):
     try:
         _get_udf_return_type(dataframe_group_type, func, args)
         return True
-    except TypingError:
+    except (UDFError, TypingError):
         return False
