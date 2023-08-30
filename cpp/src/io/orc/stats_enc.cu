@@ -66,6 +66,33 @@ __device__ int32_t compute_output_size(__int128_t const& value, int32_t scale)
          fraction;                                             // size of fraction
 }
 
+__device__ void decimal_to_string(__int128_t value, int32_t scale, char* out_ptr)
+{
+  if (scale >= 0) {
+    out_ptr += strings::detail::integer_to_string(value, out_ptr);
+    thrust::generate_n(thrust::seq, out_ptr, scale, []() { return '0'; });  // add zeros
+    return;
+  }
+
+  // scale < 0
+  // write format:   [-]integer.fraction
+  // where integer  = abs(value) / (10^abs(scale))
+  //       fraction = abs(value) % (10^abs(scale))
+  if (value < 0) *out_ptr++ = '-';  // add sign
+  auto const abs_value = numeric::detail::abs(value);
+  auto const exp_ten   = numeric::detail::exp10<__int128_t>(-scale);
+  auto const num_zeros = std::max(0, (-scale - strings::detail::count_digits(abs_value % exp_ten)));
+
+  out_ptr +=
+    strings::detail::integer_to_string(abs_value / exp_ten, out_ptr);  // add the integer part
+  *out_ptr++ = '.';                                                    // add decimal point
+
+  thrust::generate_n(thrust::seq, out_ptr, num_zeros, []() { return '0'; });  // add zeros
+  out_ptr += num_zeros;
+
+  strings::detail::integer_to_string(abs_value % exp_ten, out_ptr);  // add the fraction part
+}
+
 /**
  * @brief Get the buffer size and offsets of encoded statistics
  *
@@ -79,9 +106,10 @@ constexpr unsigned int pb_fld_hdrlen16   = 2;  // > 127-byte length
 constexpr unsigned int pb_fld_hdrlen32   = 5;  // > 16KB length
 constexpr unsigned int pb_fldlen_int64   = 10;
 constexpr unsigned int pb_fldlen_float64 = 8;
-constexpr unsigned int pb_fldlen_decimal = 40;  // Assume decimal2string fits in 40 characters
 constexpr unsigned int pb_fldlen_bucket1 = 1 + pb_fldlen_int64;
-constexpr unsigned int pb_fldlen_common  = 2 * pb_fld_hdrlen + pb_fldlen_int64;
+// statistics field number + number of values + has null
+constexpr unsigned int pb_fldlen_common =
+  pb_fld_hdrlen + (pb_fld_hdrlen + pb_fldlen_int64) + 2 * pb_fld_hdrlen;
 
 template <unsigned int block_size>
 __global__ void __launch_bounds__(block_size, 1)
@@ -120,14 +148,14 @@ __global__ void __launch_bounds__(block_size, 1)
         case dtype_decimal64:
         case dtype_decimal128: {
           auto const scale    = groups[idx].col_dtype.scale();
-          auto const min_size = compute_output_size(chunks[idx].min_value.d128_val, scale));
-          auto const max_size = compute_output_size(chunks[idx].max_value.d128_val, scale));
-          auto const sum_size = compute_output_size(chunks[idx].sum.d128_val, scale));
-          stats_len =
-            pb_fldlen_common + pb_fld_hdrlen16 + 3 * pb_fld_hdrlen + min_size + max_size + sum_size;
+          auto const min_size = compute_output_size(chunks[idx].min_value.d128_val, scale);
+          auto const max_size = compute_output_size(chunks[idx].max_value.d128_val, scale);
+          auto const sum_size = compute_output_size(chunks[idx].sum.d128_val, scale);
+          stats_len = pb_fldlen_common + pb_fld_hdrlen16 + 3 * (pb_fld_hdrlen + pb_fld_hdrlen16) +
+                      min_size + max_size + sum_size;
         } break;
         case dtype_string:
-          stats_len = pb_fldlen_common + pb_fld_hdrlen32 + 3 * (pb_fld_hdrlen + pb_fldlen_int64) +
+          stats_len = pb_fldlen_common + pb_fld_hdrlen32 + 3 * (pb_fld_hdrlen + pb_fld_hdrlen32) +
                       chunks[idx].min_value.str_val.length + chunks[idx].max_value.str_val.length;
           break;
         case dtype_none: stats_len = pb_fldlen_common;
@@ -198,6 +226,15 @@ __device__ inline uint8_t* pb_put_binary(uint8_t* p, uint32_t id, void const* by
   p[0] = id * 8 + ProtofType::FIXEDLEN;
   p    = pb_encode_uint(p + 1, len);
   memcpy(p, bytes, len);
+  return p + len;
+}
+
+__device__ inline uint8_t* pb_put_decimal(
+  uint8_t* p, uint32_t id, __int128_t value, int32_t scale, int32_t len)
+{
+  p[0] = id * 8 + ProtofType::FIXEDLEN;
+  p    = pb_encode_uint(p + 1, len);
+  decimal_to_string(value, scale, reinterpret_cast<char*>(p));
   return p + len;
 }
 
@@ -350,7 +387,31 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional string sum = 3;
         // }
         if (s->chunk.has_minmax or s->chunk.has_sum) {
-          // TODO: Decimal support (decimal min/max stored as strings)
+          auto const scale = s->group.col_dtype.scale();
+
+          uint32_t sz = 0;
+          auto const min_size =
+            s->chunk.has_minmax ? compute_output_size(s->chunk.min_value.d128_val, scale) : 0;
+          auto const max_size =
+            s->chunk.has_minmax ? compute_output_size(s->chunk.max_value.d128_val, scale) : 0;
+          if (s->chunk.has_minmax) {
+            // two bytes per string for length, plus the strings themselves
+            sz += 2 + min_size + 2 + max_size;
+          }
+          auto const sum_size =
+            s->chunk.has_sum ? compute_output_size(s->chunk.sum.d128_val, scale) : 0;
+          if (s->chunk.has_sum) { sz += 2 + sum_size; }
+
+          cur[0] = 6 * 8 + ProtofType::FIXEDLEN;
+          cur    = pb_encode_uint(cur + 1, sz);
+
+          if (s->chunk.has_minmax) {
+            cur = pb_put_decimal(cur, 1, s->chunk.min_value.d128_val, scale, min_size);  //  minimum
+            cur = pb_put_decimal(cur, 2, s->chunk.max_value.d128_val, scale, max_size);  // maximum
+          }
+          if (s->chunk.has_sum) {
+            cur = pb_put_decimal(cur, 3, s->chunk.sum.d128_val, scale, sum_size);  // sum
+          }
         }
         break;
       case dtype_date32:

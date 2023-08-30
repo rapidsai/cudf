@@ -990,7 +990,12 @@ TEST_F(OrcStatisticsTest, Basic)
   column_wrapper<cudf::timestamp_s, typename decltype(sequence)::value_type> col4(
     sequence, sequence + num_rows, validity);
   bool_col col5({true, true, true, true, true, false, false, false, false}, validity);
-  table_view expected({col1, col2, col3, col4, col5});
+
+  auto data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return i * 1000; });
+  cudf::test::fixed_point_column_wrapper<int64_t> col6(
+    data, data + num_rows, numeric::scale_type{-1});
+
+  table_view expected({col1, col2, col3, col4, col5, col6});
 
   auto filepath = temp_env->get_temp_filepath("OrcStatsMerge.orc");
 
@@ -1001,11 +1006,11 @@ TEST_F(OrcStatisticsTest, Basic)
   auto const stats = cudf::io::read_parsed_orc_statistics(cudf::io::source_info{filepath});
 
   auto const expected_column_names =
-    std::vector<std::string>{"", "_col0", "_col1", "_col2", "_col3", "_col4"};
+    std::vector<std::string>{"", "_col0", "_col1", "_col2", "_col3", "_col4", "_col5"};
   EXPECT_EQ(stats.column_names, expected_column_names);
 
   auto validate_statistics = [&](std::vector<cudf::io::column_statistics> const& stats) {
-    ASSERT_EQ(stats.size(), 6ul);
+    ASSERT_EQ(stats.size(), 7ul);
     auto& s0 = stats[0];
     EXPECT_EQ(*s0.number_of_values, 9ul);
 
@@ -1047,6 +1052,14 @@ TEST_F(OrcStatisticsTest, Basic)
     EXPECT_TRUE(*s5.has_null);
     auto& ts5 = std::get<cudf::io::bucket_statistics>(s5.type_specific_stats);
     EXPECT_EQ(ts5.count[0], 2);
+
+    auto& s6 = stats[6];
+    EXPECT_EQ(*s6.number_of_values, 9ul);
+    EXPECT_FALSE(*s6.has_null);
+    auto& ts6 = std::get<cudf::io::decimal_statistics>(s6.type_specific_stats);
+    EXPECT_EQ(*ts6.minimum, "0.0");
+    EXPECT_EQ(*ts6.maximum, "800.0");
+    EXPECT_EQ(*ts6.sum, "3600.0");
   };
 
   validate_statistics(stats.file_stats);
