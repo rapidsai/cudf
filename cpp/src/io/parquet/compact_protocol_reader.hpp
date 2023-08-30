@@ -114,6 +114,7 @@ class CompactProtocolReader {
   bool read(PageHeader* p);
   bool read(DataPageHeader* d);
   bool read(DictionaryPageHeader* d);
+  bool read(DataPageHeaderV2* d);
   bool read(KeyValue* k);
   bool read(PageLocation* p);
   bool read(OffsetIndex* o);
