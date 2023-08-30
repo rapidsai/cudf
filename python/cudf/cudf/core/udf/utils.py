@@ -31,7 +31,7 @@ from cudf.core.udf.strings_typing import (
     udf_string,
 )
 from cudf.utils import cudautils
-from cudf.utils._numba import _get_ptx_file
+from cudf.utils._numba import _CUDFNumbaConfig, _get_ptx_file
 from cudf.utils.dtypes import (
     BOOL_TYPES,
     DATETIME_TYPES,
@@ -85,7 +85,8 @@ def _get_udf_return_type(argty, func: Callable, args=()):
 
     # Get the return type. The PTX is also returned by compile_udf, but is not
     # needed here.
-    ptx, output_type = cudautils.compile_udf(func, compile_sig)
+    with _CUDFNumbaConfig():
+        ptx, output_type = cudautils.compile_udf(func, compile_sig)
 
     if not isinstance(output_type, MaskedType):
         numba_output_type = numpy_support.from_dtype(np.dtype(output_type))
