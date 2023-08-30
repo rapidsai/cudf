@@ -62,7 +62,7 @@ static void bench_hash(nvbench::state& state)
       auto result = cudf::hashing::murmurhash3_x86_32(data->view());
     });
   } else if (hash_name == "md5") {
-    // md5 writes out string with 32bytes
+    // md5 creates a 32-byte string
     state.add_global_memory_writes<nvbench::int8_t>(32 * num_rows);
 
     state.exec(nvbench::exec_tag::sync,
