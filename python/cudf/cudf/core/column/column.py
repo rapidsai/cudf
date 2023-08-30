@@ -2008,13 +2008,13 @@ def as_column(
                 # be of `object` dtype.
                 new_dtype = cudf.dtype(arbitrary.type.to_pandas_dtype())
 
-            if cudf.get_option("mode.pandas_compatible"):
+            if cudf.get_option(
+                "mode.pandas_compatible"
+            ) and new_dtype == cudf.dtype("O"):
                 # We internally raise if we do `astype("object")`, hence
                 # need to cast to `str` since this is safe to do so because
                 # it is a null-array.
-                new_dtype = (
-                    "str" if new_dtype == cudf.dtype("O") else new_dtype
-                )
+                new_dtype = "str"
 
             col = col.astype(new_dtype)
 
