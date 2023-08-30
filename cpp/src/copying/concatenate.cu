@@ -574,25 +574,28 @@ rmm::device_buffer concatenate_masks(host_span<column_view const> views,
 }  // namespace detail
 
 rmm::device_buffer concatenate_masks(host_span<column_view const> views,
+                                     rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate_masks(views, cudf::get_default_stream(), mr);
+  return detail::concatenate_masks(views, stream, mr);
 }
 
 // Concatenates the elements from a vector of column_views
 std::unique_ptr<column> concatenate(host_span<column_view const> columns_to_concat,
+                                    rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(columns_to_concat, cudf::get_default_stream(), mr);
+  return detail::concatenate(columns_to_concat, stream, mr);
 }
 
 std::unique_ptr<table> concatenate(host_span<table_view const> tables_to_concat,
+                                   rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(tables_to_concat, cudf::get_default_stream(), mr);
+  return detail::concatenate(tables_to_concat, stream, mr);
 }
 
 }  // namespace cudf
