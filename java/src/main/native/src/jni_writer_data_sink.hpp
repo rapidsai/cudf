@@ -26,7 +26,7 @@ constexpr long MINIMUM_WRITE_BUFFER_SIZE = 10 * 1024 * 1024; // 10 MB
 
 class jni_writer_data_sink final : public cudf::io::data_sink {
 public:
-  explicit jni_writer_data_sink(JNIEnv *env, jobject callback) {
+  explicit jni_writer_data_sink(JNIEnv *env, jobject callback, jobject host_memory_allocator) {
     if (env->GetJavaVM(&jvm) < 0) {
       throw std::runtime_error("GetJavaVM failed");
     }
@@ -42,10 +42,8 @@ public:
       throw cudf::jni::jni_exception("handleBuffer method");
     }
 
-    this->callback = env->NewGlobalRef(callback);
-    if (this->callback == nullptr) {
-      throw cudf::jni::jni_exception("global ref");
-    }
+    this->callback = add_global_ref(env, callback);
+    this->host_memory_allocator = add_global_ref(env, host_memory_allocator);
   }
 
   virtual ~jni_writer_data_sink() {
@@ -54,13 +52,13 @@ public:
     // already be destroyed and this thread should not try to attach to get an environment.
     JNIEnv *env = nullptr;
     if (jvm->GetEnv(reinterpret_cast<void **>(&env), cudf::jni::MINIMUM_JNI_VERSION) == JNI_OK) {
-      env->DeleteGlobalRef(callback);
-      if (current_buffer != nullptr) {
-        env->DeleteGlobalRef(current_buffer);
-      }
+      callback = del_global_ref(env, callback);
+      current_buffer = del_global_ref(env, current_buffer);
+      host_memory_allocator = del_global_ref(env, host_memory_allocator);
     }
     callback = nullptr;
     current_buffer = nullptr;
+    host_memory_allocator = nullptr;
   }
 
   void host_write(void const *data, size_t size) override {
@@ -126,10 +124,7 @@ public:
     if (current_buffer_written > 0) {
       JNIEnv *env = cudf::jni::get_jni_env(jvm);
       handle_buffer(env, current_buffer, current_buffer_written);
-      if (current_buffer != nullptr) {
-        env->DeleteGlobalRef(current_buffer);
-      }
-      current_buffer = nullptr;
+      current_buffer = del_global_ref(env, current_buffer);
       current_buffer_len = 0;
       current_buffer_data = nullptr;
       current_buffer_written = 0;
@@ -144,11 +139,10 @@ private:
   void rotate_buffer(JNIEnv *env) {
     if (current_buffer != nullptr) {
       handle_buffer(env, current_buffer, current_buffer_written);
-      env->DeleteGlobalRef(current_buffer);
-      current_buffer = nullptr;
     }
-    jobject tmp_buffer = allocate_host_buffer(env, alloc_size, true);
-    current_buffer = env->NewGlobalRef(tmp_buffer);
+    current_buffer = del_global_ref(env, current_buffer);
+    jobject tmp_buffer = allocate_host_buffer(env, alloc_size, true, host_memory_allocator);
+    current_buffer = add_global_ref(env, tmp_buffer);
     current_buffer_len = get_host_buffer_length(env, current_buffer);
     current_buffer_data = reinterpret_cast<char *>(get_host_buffer_address(env, current_buffer));
     current_buffer_written = 0;
@@ -170,6 +164,7 @@ private:
   long current_buffer_written = 0;
   size_t total_written = 0;
   long alloc_size = MINIMUM_WRITE_BUFFER_SIZE;
+  jobject host_memory_allocator;
 };
 
 } // namespace cudf::jni
