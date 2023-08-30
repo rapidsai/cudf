@@ -306,8 +306,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                                               byte_range_info byte_range,
                                               bool strip_delimiters,
                                               rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr,
-                                              rmm::cuda_stream_pool& stream_pool)
+                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -571,11 +570,10 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                                               parse_options options,
                                               rmm::mr::device_memory_resource* mr)
 {
-  auto stream      = cudf::get_default_stream();
-  auto stream_pool = rmm::cuda_stream_pool(2);
+  auto stream = cudf::get_default_stream();
 
   auto result = detail::multibyte_split(
-    source, delimiter, options.byte_range, options.strip_delimiters, stream, mr, stream_pool);
+    source, delimiter, options.byte_range, options.strip_delimiters, stream, mr);
 
   return result;
 }
