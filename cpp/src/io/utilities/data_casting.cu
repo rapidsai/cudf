@@ -186,8 +186,6 @@ process_string(in_iterator_t in_begin,
     }
     return {bytes, data_casting_result::PARSING_SUCCESS};
   }
-  // Whether in the original JSON this was a string value enclosed in quotes
-  // ({"a":"foo"} vs. {"a":1.23})
   char const backslash_char = '\\';
 
   // Escape-flag, set after encountering a backslash character
@@ -284,27 +282,27 @@ process_string(in_iterator_t in_begin,
   return {bytes, data_casting_result::PARSING_SUCCESS};
 }
 
-// 1 warp per string.
-// algorithm
+// Algorithm: warp/block parallel version of string_parse and process_string()
+// Decoding character classes (u8, u16, \*, *):
 // character      count: input->output
 // \uXXXX         6->2/3/4
 // \uXXXX\uXXXX  12->2/3/4
 // \"             2->1
 // *              1->1
 //
-// error conditions. (propagate)
-// c=='\' & curr_idx == end_idx-1; ERROR
+// ERROR conditions. (all collaborating threads quit)
+// c=='\' & curr_idx == end_idx-1;
 // [c-1]=='\' &  get_escape[c]==NEC
 // [c-1]=='\' &  [c]=='u' & end_idx-curr_idx < UNICODE_HEX_DIGIT_COUNT
 // [c-1]=='\' &  [c]=='u' & end_idx-curr_idx >= UNICODE_HEX_DIGIT_COUNT && non-hex
-
-// skip conditions. (scan for size)
-// c=='\' skip.
+//
+// skip conditions. (current thread skips this char, no output)
+// c=='\' skip. (Escaping char only)
 // [c-2]=='\' && [c-1]=='u' for [2,1], [3,2] [4,5], [5, 6], skip.
-
+//
 // write conditions. (write to d_buffer)
 // [c-1]!='\' &  [c]!='\' write [c]
-// [c-1]!='\' &  [c]=='\' skip (unnecessary? already covered? in skip conditions)
+// [c-1]!='\' &  [c]=='\' skip (already covered in skip conditions)
 // [c-1]=='\' &  [c]!=NEC && [c]!=UNICODE_SEQ, write [c]
 // [c-1]=='\' &  [c]=='u' & end_idx-curr_idx >= UNICODE_HEX_DIGIT_COUNT && hex, DECODE
 // [c+1:4]=curr_hex_val
@@ -313,11 +311,28 @@ process_string(in_iterator_t in_begin,
 //        // if [c-7]=='\' & [c-6]=='u' & end_idx-curr_idx >= UNICODE_HEX_DIGIT_COUNT &&
 //        hex,DECODE [c-5:4]=prev_hex_val prev_hex_val, curr_hex_val, next_hex_val
 //        // if prev_hex_val in high, curr_hex_val in low, skip.
-//        // if curr_hex_val in high, next_hex_val in low, write u16.
-// if curr_hex_val not in high, write u8.
-// before writing, find size, then intra-warp scan for out_idx
-// propagate offset from 32nd thread to others in warp to carry forward.
-// 1 warp per string or 1 block per string
+//        // if curr_hex_val in high, next_hex_val in low, write [u16]
+// if curr_hex_val not in high, write [u8]
+// before writing, find num of output characters per threads,
+// then do intra-warp/intra-block scan for out_idx
+// propagate offset from next iteration to carry forward.
+// Uses 1 warp per string or 1 block per string
+
+/**
+ * @brief Warp/Block parallel version of string_parse functor
+ *
+ * @tparam is_warp True if 1 warp per string, False if 1 block per string
+ * @tparam num_warps Number of warps per block
+ * @tparam str_tuple_it Iterator type for tuple with string pointer and its length
+ * @param str_tuples iterator of tuple with string pointer and its length
+ * @param total_out_strings Number of string rows to be processed
+ * @param str_counter Counter to keep track of processed number of strings
+ * @param null_mask Null mask
+ * @param null_count_data pointer to store null count
+ * @param options Settings for controlling string processing behavior
+ * @param d_offsets Offsets to identify where to store the results for each string
+ * @param d_chars Character array to store the characters of strings
+ */
 template <bool is_warp, size_type num_warps, typename str_tuple_it>
 __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
                                          size_type total_out_strings,
@@ -401,7 +416,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
       ++in_begin;
       --in_end;
     }
-    // warp-parallelized process_string(in_begin, in_end, d_buffer, options);
+    // warp-parallelized or block-parallelized process_string()
 
     auto is_hex = [](auto ch) {
       return (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F') || (ch >= 'a' && ch <= 'f');
@@ -436,7 +451,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
       // To check current is backslash by checking if previous is backslash.
       // curr = !prev & c=='\\'
       // So, scan is required from beginning of string.
-      // State table approach (intra-warp FST)
+      // State table approach (intra-warp FST) (intra-block FST)
       // 2 states: Not-Slash(NS), Slash(S).
       // prev  /   *
       // NS    S  NS
@@ -528,6 +543,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
             this_num_out = 1;
             write_char   = escaped_char;
           } else {
+            // TODO if prev is not escaping backslash, copy \uXXXX.
             // Unicode
             // \uXXXX
             auto hex_val     = parse_unicode_hex(in_begin + char_index + 1);
@@ -696,8 +712,8 @@ std::unique_ptr<column> parse_data(
 
       constexpr auto warps_per_block  = 8;
       constexpr int threads_per_block = cudf::detail::warp_size * warps_per_block;
-      auto num_blocks                 = min(65535, col_size / warps_per_block + 1);
-      auto str_counter                = cudf::numeric_scalar(size_type{0}, true, stream);
+      auto num_blocks  = min(65535, cudf::util::div_rounding_up_unsafe(col_size, warps_per_block));
+      auto str_counter = cudf::numeric_scalar(size_type{0}, true, stream);
 
       parse_fn_string_parallel<true, warps_per_block>
         <<<num_blocks, threads_per_block, 0, stream.value()>>>(

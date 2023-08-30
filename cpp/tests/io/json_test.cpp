@@ -1397,7 +1397,7 @@ TEST_F(JsonReaderTest, JsonLongString)
     cudf::test::iterators::nulls_at({10, 11})};
 
   cudf::test::fixed_width_column_wrapper<int16_t> repeat_times{
-    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 40, 80, 160, 320, 640, 1280};
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 13, 19, 37, 81, 161, 323, 631, 1279};
   auto d_col2 = cudf::strings::repeat_strings(cudf::strings_column_view{col1}, repeat_times);
   auto col2   = d_col2->view();
   cudf::table_view tbl_view{{col1, col2, repeat_times}};
