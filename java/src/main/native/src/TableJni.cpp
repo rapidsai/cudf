@@ -224,7 +224,7 @@ private:
 
 class jni_arrow_output_stream final : public arrow::io::OutputStream {
 public:
-  explicit jni_arrow_output_stream(JNIEnv *env, jobject callback) {
+  explicit jni_arrow_output_stream(JNIEnv *env, jobject callback, jobject host_memory_allocator) {
     if (env->GetJavaVM(&jvm) < 0) {
       throw std::runtime_error("GetJavaVM failed");
     }
@@ -239,11 +239,8 @@ public:
     if (handle_buffer_method == nullptr) {
       throw cudf::jni::jni_exception("handleBuffer method");
     }
-
-    this->callback = env->NewGlobalRef(callback);
-    if (this->callback == nullptr) {
-      throw cudf::jni::jni_exception("global ref");
-    }
+    this->callback = add_global_ref(env, callback);
+    this->host_memory_allocator = add_global_ref(env, host_memory_allocator);
   }
 
   virtual ~jni_arrow_output_stream() {
@@ -252,13 +249,13 @@ public:
     // already be destroyed and this thread should not try to attach to get an environment.
     JNIEnv *env = nullptr;
     if (jvm->GetEnv(reinterpret_cast<void **>(&env), cudf::jni::MINIMUM_JNI_VERSION) == JNI_OK) {
-      env->DeleteGlobalRef(callback);
-      if (current_buffer != nullptr) {
-        env->DeleteGlobalRef(current_buffer);
-      }
+      callback = del_global_ref(env, callback);
+      current_buffer = del_global_ref(env, current_buffer);
+      host_memory_allocator = del_global_ref(env, host_memory_allocator);
     }
     callback = nullptr;
     current_buffer = nullptr;
+    host_memory_allocator = nullptr;
   }
 
   arrow::Status Write(const std::shared_ptr<arrow::Buffer> &data) override {
@@ -293,10 +290,7 @@ public:
     if (current_buffer_written > 0) {
       JNIEnv *env = cudf::jni::get_jni_env(jvm);
       handle_buffer(env, current_buffer, current_buffer_written);
-      if (current_buffer != nullptr) {
-        env->DeleteGlobalRef(current_buffer);
-      }
-      current_buffer = nullptr;
+      current_buffer = del_global_ref(env, current_buffer);
       current_buffer_len = 0;
       current_buffer_data = nullptr;
       current_buffer_written = 0;
@@ -323,11 +317,10 @@ private:
   void rotate_buffer(JNIEnv *env) {
     if (current_buffer != nullptr) {
       handle_buffer(env, current_buffer, current_buffer_written);
-      env->DeleteGlobalRef(current_buffer);
-      current_buffer = nullptr;
     }
-    jobject tmp_buffer = allocate_host_buffer(env, alloc_size, true);
-    current_buffer = env->NewGlobalRef(tmp_buffer);
+    current_buffer = del_global_ref(env, current_buffer);
+    jobject tmp_buffer = allocate_host_buffer(env, alloc_size, true, host_memory_allocator);
+    current_buffer = add_global_ref(env, tmp_buffer);
     current_buffer_len = get_host_buffer_length(env, current_buffer);
     current_buffer_data = reinterpret_cast<char *>(get_host_buffer_address(env, current_buffer));
     current_buffer_written = 0;
@@ -350,6 +343,7 @@ private:
   int64_t total_written = 0;
   long alloc_size = MINIMUM_WRITE_BUFFER_SIZE;
   bool is_closed = false;
+  jobject host_memory_allocator;
 };
 
 class jni_arrow_input_stream final : public arrow::io::InputStream {
@@ -370,10 +364,7 @@ public:
       throw cudf::jni::jni_exception("readInto method");
     }
 
-    this->callback = env->NewGlobalRef(callback);
-    if (this->callback == nullptr) {
-      throw cudf::jni::jni_exception("global ref");
-    }
+    this->callback = add_global_ref(env, callback);
   }
 
   virtual ~jni_arrow_input_stream() {
@@ -382,7 +373,7 @@ public:
     // already be destroyed and this thread should not try to attach to get an environment.
     JNIEnv *env = nullptr;
     if (jvm->GetEnv(reinterpret_cast<void **>(&env), cudf::jni::MINIMUM_JNI_VERSION) == JNI_OK) {
-      env->DeleteGlobalRef(callback);
+      callback = del_global_ref(env, callback);
     }
     callback = nullptr;
   }
@@ -1269,7 +1260,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToFile(
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_startWriteCSVToBuffer(
     JNIEnv *env, jclass, jobjectArray j_column_names, jboolean include_header,
     jstring j_row_delimiter, jbyte j_field_delimiter, jstring j_null_value, jstring j_true_value,
-    jstring j_false_value, jint j_quote_style, jobject j_buffer) {
+    jstring j_false_value, jint j_quote_style, jobject j_buffer, jobject host_memory_allocator) {
   JNI_NULL_CHECK(env, j_column_names, "column name array cannot be null", 0);
   JNI_NULL_CHECK(env, j_row_delimiter, "row delimiter cannot be null", 0);
   JNI_NULL_CHECK(env, j_field_delimiter, "field delimiter cannot be null", 0);
@@ -1279,7 +1270,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_startWriteCSVToBuffer(
   try {
     cudf::jni::auto_set_device(env);
 
-    auto data_sink = std::make_unique<cudf::jni::jni_writer_data_sink>(env, j_buffer);
+    auto data_sink =
+        std::make_unique<cudf::jni::jni_writer_data_sink>(env, j_buffer, host_memory_allocator);
 
     auto const n_column_names = cudf::jni::native_jstringArray{env, j_column_names};
     auto const column_names = n_column_names.as_cpp_vector();
@@ -1576,7 +1568,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     jbooleanArray j_col_nullability, jobjectArray j_metadata_keys, jobjectArray j_metadata_values,
     jint j_compression, jint j_stats_freq, jbooleanArray j_isInt96, jintArray j_precisions,
     jbooleanArray j_is_map, jbooleanArray j_is_binary, jbooleanArray j_hasParquetFieldIds,
-    jintArray j_parquetFieldIds, jobject consumer) {
+    jintArray j_parquetFieldIds, jobject consumer, jobject host_memory_allocator) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
   JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
@@ -1584,7 +1576,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
   JNI_NULL_CHECK(env, consumer, "null consumer", 0);
   try {
     std::unique_ptr<cudf::jni::jni_writer_data_sink> data_sink(
-        new cudf::jni::jni_writer_data_sink(env, consumer));
+        new cudf::jni::jni_writer_data_sink(env, consumer, host_memory_allocator));
 
     using namespace cudf::io;
     using namespace cudf::jni;
@@ -1755,7 +1747,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readORC(
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCBufferBegin(
     JNIEnv *env, jclass, jobjectArray j_col_names, jint j_num_children, jintArray j_children,
     jbooleanArray j_col_nullability, jobjectArray j_metadata_keys, jobjectArray j_metadata_values,
-    jint j_compression, jintArray j_precisions, jbooleanArray j_is_map, jobject consumer) {
+    jint j_compression, jintArray j_precisions, jbooleanArray j_is_map, jobject consumer,
+    jobject host_memory_allocator) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
   JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
@@ -1787,7 +1780,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCBufferBegin(
                    [](const std::string &k, const std::string &v) { return std::make_pair(k, v); });
 
     std::unique_ptr<cudf::jni::jni_writer_data_sink> data_sink(
-        new cudf::jni::jni_writer_data_sink(env, consumer));
+        new cudf::jni::jni_writer_data_sink(env, consumer, host_memory_allocator));
     sink_info sink{data_sink.get()};
 
     auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
@@ -1918,9 +1911,9 @@ JNIEXPORT jdoubleArray JNICALL Java_ai_rapids_cudf_TableWriter_getWriteStatistic
   CATCH_STD(env, nullptr)
 }
 
-JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCBufferBegin(JNIEnv *env, jclass,
-                                                                          jobjectArray j_col_names,
-                                                                          jobject consumer) {
+JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCBufferBegin(
+    JNIEnv *env, jclass, jobjectArray j_col_names, jobject consumer,
+    jobject host_memory_allocator) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, consumer, "null consumer", 0);
   try {
@@ -1928,7 +1921,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCBufferBegin(JNIEnv
     cudf::jni::native_jstringArray col_names(env, j_col_names);
 
     std::shared_ptr<cudf::jni::jni_arrow_output_stream> data_sink(
-        new cudf::jni::jni_arrow_output_stream(env, consumer));
+        new cudf::jni::jni_arrow_output_stream(env, consumer, host_memory_allocator));
 
     cudf::jni::native_arrow_ipc_writer_handle *ret =
         new cudf::jni::native_arrow_ipc_writer_handle(col_names.as_cpp_vector(), data_sink);
