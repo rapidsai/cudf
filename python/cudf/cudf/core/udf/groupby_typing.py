@@ -174,25 +174,6 @@ def _register_cuda_idx_reduction_caller(funcname, inputty):
     call_cuda_functions[funcname.lower()][type_key] = caller
 
 
-class GroupUnaryOp(AbstractTemplate):
-    def make_error_string(self, args):
-        fname = self.key.__name__
-        return (
-            f"{fname}(Series) is not supported within JIT GroupBy "
-            f"apply. To see what's available, visit\n{docs}"
-        )
-
-    def generic(self, args, kws):
-        if not all(isinstance(arg, GroupType) for arg in args):
-            return None
-        fname = self.key.__name__
-        if fname in call_cuda_functions:
-            for retty, selfty in call_cuda_functions[fname].keys():
-                if self.this.group_scalar_type == selfty:
-                    return nb_signature(retty, recvr=self.this)
-        raise UDFError(self.make_error_string(args))
-
-
 class GroupOpBase(AbstractTemplate):
     def make_error_string(self, args):
         fname = self.key.__name__
@@ -425,8 +406,5 @@ for attr in ("group_data", "index", "size"):
     make_attribute_wrapper(GroupType, attr, attr)
 
 
-for op in unary_ops:
-    cuda_registry.register_global(op)(GroupUnaryOp)
-
-for op in arith_ops + comparison_ops:
+for op in arith_ops + comparison_ops + unary_ops:
     cuda_registry.register_global(op)(GroupOpBase)
