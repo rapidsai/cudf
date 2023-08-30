@@ -527,9 +527,9 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
 std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& input_col,
                                                    cudf::column_view const& values_to_replace,
                                                    cudf::column_view const& replacement_values,
+                                                   rmm::cuda_stream_view stream,
                                                    rmm::mr::device_memory_resource* mr)
 {
-  return detail::find_and_replace_all(
-    input_col, values_to_replace, replacement_values, cudf::get_default_stream(), mr);
+  return detail::find_and_replace_all(input_col, values_to_replace, replacement_values, stream, mr);
 }
 }  // namespace cudf
