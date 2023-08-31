@@ -47,6 +47,14 @@ static void BM_copy_if_else(benchmark::State& state, bool nulls)
     cuda_event_timer raii(state, true, cudf::get_default_stream());
     cudf::copy_if_else(lhs, rhs, decision);
   }
+
+  auto const bytes_read    = n_rows * (sizeof(TypeParam) + sizeof(bool));
+  auto const bytes_written = n_rows * sizeof(TypeParam);
+  auto const null_bytes    = nulls ? 2 * cudf::bitmask_allocation_size_bytes(n_rows) : 0;
+
+  // Use number of bytes read and written.
+  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) *
+                          (bytes_read + bytes_written + null_bytes));
 }
 
 #define COPY_BENCHMARK_DEFINE(name, type, b)                  \
