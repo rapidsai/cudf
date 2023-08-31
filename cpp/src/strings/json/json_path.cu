@@ -907,8 +907,8 @@ __launch_bounds__(block_size) __global__
                               thrust::optional<size_type*> out_valid_count,
                               get_json_object_options options)
 {
-  size_type tid    = threadIdx.x + (blockDim.x * blockIdx.x);
-  size_type stride = blockDim.x * gridDim.x;
+  auto tid          = cudf::detail::grid_1d::global_thread_id();
+  auto const stride = cudf::thread_index_type{blockDim.x} * cudf::thread_index_type{gridDim.x};
 
   size_type warp_valid_count{0};
 
