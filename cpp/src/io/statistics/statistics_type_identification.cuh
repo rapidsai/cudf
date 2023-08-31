@@ -49,15 +49,15 @@ enum class is_int96_timestamp { YES, NO };
 template <io_file_format IO, is_int96_timestamp INT96>
 struct conversion_map;
 
-// Every timestamp or duration type is converted to milliseconds in ORC statistics
+// Every timestamp or duration type is converted to nanoseconds in ORC statistics
 template <is_int96_timestamp INT96>
 struct conversion_map<io_file_format::ORC, INT96> {
-  using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ms>,
-                           std::pair<cudf::timestamp_us, cudf::timestamp_ms>,
-                           std::pair<cudf::timestamp_ns, cudf::timestamp_ms>,
-                           std::pair<cudf::duration_s, cudf::duration_ms>,
-                           std::pair<cudf::duration_us, cudf::duration_ms>,
-                           std::pair<cudf::duration_ns, cudf::duration_ms>>;
+  using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ns>,
+                           std::pair<cudf::timestamp_us, cudf::timestamp_ns>,
+                           std::pair<cudf::timestamp_ns, cudf::timestamp_ns>,
+                           std::pair<cudf::duration_s, cudf::duration_ns>,
+                           std::pair<cudf::duration_us, cudf::duration_ns>,
+                           std::pair<cudf::duration_ns, cudf::duration_ns>>;
 };
 
 // In Parquet timestamps and durations with second resolution are converted to
@@ -108,7 +108,8 @@ class type_conversion {
 };
 
 template <class T>
-struct dependent_false : std::false_type {};
+struct dependent_false : std::false_type {
+};
 
 /**
  * @brief Utility class to convert a leaf column element into its extrema type

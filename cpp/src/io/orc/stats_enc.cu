@@ -246,6 +246,14 @@ __device__ inline uint8_t* pb_put_fixed64(uint8_t* p, uint32_t id, void const* r
   return p + 9;
 }
 
+__device__ std::pair<int64_t, int32_t> split_nanosecond_timestamp(int64_t nano_count)
+{
+  auto const ns           = cuda::std::chrono::nanoseconds(nano_count);
+  auto const ms_floor     = cuda::std::chrono::floor<cuda::std::chrono::milliseconds>(ns);
+  auto const ns_remainder = ns - ms_floor;
+  return {ms_floor.count(), ns_remainder.count()};
+}
+
 /**
  * @brief Encode statistics in ORC protobuf format
  *
@@ -435,15 +443,22 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional sint64 maximum = 2;
         //  optional sint64 minimumUtc = 3; // min,max values saved as milliseconds since UNIX epoch
         //  optional sint64 maximumUtc = 4;
+        //  optional int32 minimumNanos = 5; // lower 6 TS digits for min/max to achieve nanosecond
+        //  precision optional int32 maximumNanos = 6;
         // }
         if (s->chunk.has_minmax) {
           cur[0] = 9 * 8 + ProtofType::FIXEDLEN;
           cur += 2;
+          auto [min_ms, min_ns_remainder] = split_nanosecond_timestamp(s->chunk.min_value.i_val);
+          auto [max_ms, max_ns_remainder] = split_nanosecond_timestamp(s->chunk.max_value.i_val);
+
           // minimum/maximum are the same as minimumUtc/maximumUtc as we always write files in UTC
-          cur          = pb_put_int(cur, 1, s->chunk.min_value.i_val);  // minimum
-          cur          = pb_put_int(cur, 2, s->chunk.max_value.i_val);  // maximum
-          cur          = pb_put_int(cur, 3, s->chunk.min_value.i_val);  // minimumUtc
-          cur          = pb_put_int(cur, 4, s->chunk.max_value.i_val);  // maximumUtc
+          cur          = pb_put_int(cur, 1, min_ms);            // minimum
+          cur          = pb_put_int(cur, 2, max_ms);            // maximum
+          cur          = pb_put_int(cur, 3, min_ms);            // minimumUtc
+          cur          = pb_put_int(cur, 4, max_ms);            // maximumUtc
+          cur          = pb_put_int(cur, 5, min_ns_remainder);  // minimumNanos
+          cur          = pb_put_int(cur, 6, max_ns_remainder);  // maximumNanos
           fld_start[1] = cur - (fld_start + 2);
         }
         break;

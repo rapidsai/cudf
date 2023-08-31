@@ -976,6 +976,8 @@ TEST_F(OrcReaderTest, CombinedSkipRowTest)
 TEST_F(OrcStatisticsTest, Basic)
 {
   auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto ns_sequence =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i - 4) * 1000002; });
   auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
 
   std::vector<char const*> strings{
@@ -987,8 +989,8 @@ TEST_F(OrcStatisticsTest, Basic)
   column_wrapper<float, typename decltype(sequence)::value_type> col2(
     sequence, sequence + num_rows, validity);
   str_col col3{strings.begin(), strings.end()};
-  column_wrapper<cudf::timestamp_s, typename decltype(sequence)::value_type> col4(
-    sequence, sequence + num_rows, validity);
+  column_wrapper<cudf::timestamp_ns, typename decltype(sequence)::value_type> col4(
+    ns_sequence, ns_sequence + num_rows, validity);
   bool_col col5({true, true, true, true, true, false, false, false, false}, validity);
 
   auto data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return i * 1000; });
@@ -1042,10 +1044,12 @@ TEST_F(OrcStatisticsTest, Basic)
     EXPECT_EQ(*s4.number_of_values, 4ul);
     EXPECT_TRUE(*s4.has_null);
     auto& ts4 = std::get<cudf::io::timestamp_statistics>(s4.type_specific_stats);
-    EXPECT_EQ(*ts4.minimum, 1000);
-    EXPECT_EQ(*ts4.maximum, 7000);
-    EXPECT_EQ(*ts4.minimum_utc, 1000);
-    EXPECT_EQ(*ts4.maximum_utc, 7000);
+    EXPECT_EQ(*ts4.minimum, -4);
+    EXPECT_EQ(*ts4.maximum, 3);
+    EXPECT_EQ(*ts4.minimum_utc, -4);
+    EXPECT_EQ(*ts4.maximum_utc, 3);
+    EXPECT_EQ(*ts4.minimum_nanos, 999994);
+    EXPECT_EQ(*ts4.maximum_nanos, 6);
 
     auto& s5 = stats[5];
     EXPECT_EQ(*s5.number_of_values, 4ul);
