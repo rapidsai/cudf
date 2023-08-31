@@ -65,7 +65,7 @@ __global__ void replace_nulls_strings(cudf::column_device_view input,
                                       cudf::size_type* valid_counter)
 {
   cudf::size_type nrows = input.size();
-  auto i                = cudf::detail::grid_1d::global_thread_index();
+  auto i                = cudf::detail::grid_1d::global_thread_id();
   auto const stride     = cudf::detail::grid_1d::grid_stride();
 
   uint32_t active_mask = 0xffff'ffff;
@@ -118,7 +118,7 @@ __global__ void replace_nulls(cudf::column_device_view input,
                               cudf::size_type* output_valid_count)
 {
   cudf::size_type nrows = input.size();
-  auto i                = cudf::detail::grid_1d::global_thread_index();
+  auto i                = cudf::detail::grid_1d::global_thread_id();
   auto const stride     = cudf::detail::grid_1d::grid_stride();
 
   uint32_t active_mask = 0xffff'ffff;

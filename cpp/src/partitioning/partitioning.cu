@@ -134,7 +134,7 @@ __global__ void compute_row_partition_numbers(row_hasher_t the_hasher,
   // Accumulate histogram of the size of each partition in shared memory
   extern __shared__ size_type shared_partition_sizes[];
 
-  auto tid          = cudf::detail::grid_1d::global_thread_index();
+  auto tid          = cudf::detail::grid_1d::global_thread_id();
   auto const stride = cudf::detail::grid_1d::grid_stride();
 
   // Initialize local histogram
@@ -311,7 +311,7 @@ __global__ void copy_block_partitions(InputIter input_iter,
   __syncthreads();
 
   // Fetch the input data to shared memory
-  for (auto tid = cudf::detail::grid_1d::global_thread_index(); tid < num_rows;
+  for (auto tid = cudf::detail::grid_1d::global_thread_id(); tid < num_rows;
        tid += cudf::detail::grid_1d::grid_stride()) {
     auto const row_number      = static_cast<size_type>(tid);
     size_type const ipartition = row_partition_numbers[row_number];
