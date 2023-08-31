@@ -38,6 +38,7 @@
 #include <cub/cub.cuh>
 
 #include <memory>
+#include <type_traits>
 
 namespace cudf::io::json::detail {
 
@@ -282,6 +283,51 @@ process_string(in_iterator_t in_begin,
   return {bytes, data_casting_result::PARSING_SUCCESS};
 }
 
+template <unsigned num_warps>
+struct bitfield_warp {
+  // 5+32 for each warp.
+  bool is_slash[num_warps][5 + 32];
+  __device__ void reset(unsigned warp_id)
+  {
+    is_slash[warp_id][threadIdx.x % 32]     = 0;
+    is_slash[warp_id][threadIdx.x % 32 + 5] = 0;
+  }
+  __device__ void shift(unsigned warp_id)
+  {
+    if (threadIdx.x % 32 < 5)
+      is_slash[warp_id][threadIdx.x % 32] = is_slash[warp_id][32 + threadIdx.x % 32];
+  }
+  __device__ void set_bits(unsigned warp_id, bool is_escaping_backslash)
+  {
+    is_slash[warp_id][5 + threadIdx.x % 32] = is_escaping_backslash;
+  }
+  __device__ bool get_bit(unsigned warp_id, int bit_index)
+  {
+    return is_slash[warp_id][5 + bit_index];
+  }
+};
+
+template <unsigned num_warps>
+struct bitfield_block {
+  // 5 + num_warps*32 for entire block
+  bool is_slash[5 + num_warps * 32];
+
+  __device__ void reset(unsigned warp_id)
+  {
+    is_slash[threadIdx.x]     = 0;
+    is_slash[threadIdx.x + 5] = 0;
+  }
+  __device__ void shift(unsigned warp_id)
+  {
+    if (threadIdx.x < 5) is_slash[threadIdx.x] = is_slash[num_warps * 32 + threadIdx.x];
+  }
+  __device__ void set_bits(unsigned warp_id, bool is_escaping_backslash)
+  {
+    is_slash[5 + threadIdx.x] = is_escaping_backslash;
+  }
+  __device__ bool get_bit(unsigned warp_id, int bit_index) { return is_slash[5 + bit_index]; }
+};
+
 // Algorithm: warp/block parallel version of string_parse and process_string()
 // Decoding character classes (u8, u16, \*, *):
 // character      count: input->output
@@ -423,6 +469,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
     };
 
     // for backslash scan calculation: is_previous_escaping_backslash
+    [[maybe_unused]] auto warp_id = threadIdx.x / cudf::detail::warp_size;
     bool init_state_reg;
     __shared__ bool init_state_shared;
     size_type last_offset_reg;
@@ -433,10 +480,13 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
       init_state  = false;
       last_offset = 0;
     }
-    // if constexpr(!is_warp) { __syncthreads(); }
+    using bitfield =
+      std::conditional_t<is_warp, bitfield_warp<num_warps>, bitfield_block<num_warps>>;
+    __shared__ bitfield is_slash;
+    is_slash.reset(warp_id);
+    __syncthreads();
     // 0-31, 32-63, ... i*32-n.
     // entire warp executes but with mask.
-    // auto MASK = 0xffffffff;
     for (size_type char_index = lane;
          char_index < cudf::util::round_up_safe(in_end - in_begin, static_cast<long>(BLOCK_SIZE));
          char_index += BLOCK_SIZE) {
@@ -448,6 +498,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
       auto escaped_char = get_escape_char(c);
 
       bool is_escaping_backslash{false};
+      [[maybe_unused]] bool is_prev_escaping_backslash{false};
       // To check current is backslash by checking if previous is backslash.
       // curr = !prev & c=='\\'
       // So, scan is required from beginning of string.
@@ -467,7 +518,6 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
         return state_table{op2.state[op1.state[0]], op2.state[op1.state[1]]};
       };
       state_table scanned;
-      [[maybe_unused]] auto warp_id = threadIdx.x / BLOCK_SIZE;
       // inclusive scan of escaping backslashes
       // TODO both inclusive and exclusive available in cub.
       if constexpr (is_warp) {
@@ -476,12 +526,24 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
         SlashScan(temp_slash[warp_id]).InclusiveScan(curr, scanned, composite_op);
         is_escaping_backslash = scanned.state[init_state];
         init_state            = __shfl_sync(MASK, is_escaping_backslash, BLOCK_SIZE - 1);
+        __syncwarp();
+        is_slash.shift(warp_id);
+        __syncwarp();
+        is_slash.set_bits(warp_id, is_escaping_backslash);
+        __syncwarp();
+        is_prev_escaping_backslash = is_slash.get_bit(warp_id, lane - 1);
       } else {
         using SlashScan = cub::BlockScan<state_table, BLOCK_SIZE>;
         __shared__ typename SlashScan::TempStorage temp_slash;
         SlashScan(temp_slash).InclusiveScan(curr, scanned, composite_op);
         is_escaping_backslash = scanned.state[init_state];
         if (threadIdx.x == BLOCK_SIZE - 1) init_state = is_escaping_backslash;
+        __syncthreads();
+        is_slash.shift(warp_id);
+        __syncthreads();
+        is_slash.set_bits(warp_id, is_escaping_backslash);
+        __syncthreads();
+        is_prev_escaping_backslash = is_slash.get_bit(warp_id, lane - 1);
         // There is another __syncthreads() at the end of for-loop.
       }
 
@@ -489,8 +551,8 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
       if (is_within_bounds) {
         // instead of '\\', using is_escaping_backslash, and previous index value also here.
         error |= (is_escaping_backslash /*c == '\\'*/ && char_index == (in_end - in_begin) - 1);
-        error |= (prev_c == '\\' && escaped_char == NON_ESCAPE_CHAR);
-        error |= (prev_c == '\\' && c == 'u' &&
+        error |= (is_prev_escaping_backslash && escaped_char == NON_ESCAPE_CHAR);
+        error |= (is_prev_escaping_backslash && c == 'u' &&
                   // TODO check if following condition is right or off by one error.
                   ((in_begin + char_index + UNICODE_HEX_DIGIT_COUNT >= in_end) |
                    !is_hex(in_begin[char_index + 1]) | !is_hex(in_begin[char_index + 2]) |
@@ -522,20 +584,21 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
       bool skip = !is_within_bounds;  // false;
       skip |= is_escaping_backslash;
       if (is_within_bounds) {
-        skip |= char_index - 2 >= 0 && in_begin[char_index - 2] == '\\' &&
+        // \uXXXX check for "\u" for each X
+        skip |= char_index - 2 >= 0 && is_slash.get_bit(warp_id, lane - 2) &&
                 in_begin[char_index - 1] == 'u';
-        skip |= char_index - 3 >= 0 && in_begin[char_index - 3] == '\\' &&
+        skip |= char_index - 3 >= 0 && is_slash.get_bit(warp_id, lane - 3) &&
                 in_begin[char_index - 2] == 'u';
-        skip |= char_index - 4 >= 0 && in_begin[char_index - 4] == '\\' &&
+        skip |= char_index - 4 >= 0 && is_slash.get_bit(warp_id, lane - 4) &&
                 in_begin[char_index - 3] == 'u';
-        skip |= char_index - 5 >= 0 && in_begin[char_index - 5] == '\\' &&
+        skip |= char_index - 5 >= 0 && is_slash.get_bit(warp_id, lane - 5) &&
                 in_begin[char_index - 4] == 'u';
       }
       int this_num_out = 0;
       cudf::char_utf8 write_char{};
 
       if (!skip) {
-        if (prev_c != '\\') {
+        if (!is_prev_escaping_backslash) {
           this_num_out = 1;
           if (d_chars) write_char = c;
         } else {
@@ -543,7 +606,6 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
             this_num_out = 1;
             write_char   = escaped_char;
           } else {
-            // TODO if prev is not escaping backslash, copy \uXXXX.
             // Unicode
             // \uXXXX
             auto hex_val     = parse_unicode_hex(in_begin + char_index + 1);
