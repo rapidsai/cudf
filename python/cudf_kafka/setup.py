@@ -64,7 +64,9 @@ extensions = [
         include_dirs=[
             os.path.abspath(os.path.join(CUDF_INCLUDE_DIR, "cudf")),
             os.path.abspath(CUDF_INCLUDE_DIR),
-            os.path.abspath(os.path.join(CUDF_KAFKA_INCLUDE_DIR, "cudf_kafka")),
+            os.path.abspath(
+                os.path.join(CUDF_KAFKA_INCLUDE_DIR, "cudf_kafka")
+            ),
             os.path.abspath(CUDF_KAFKA_INCLUDE_DIR),
             os.path.join(CUDF_ROOT, "include"),
             os.path.join(CUDF_ROOT, "_deps/libcudacxx-src/include"),
