@@ -1642,8 +1642,8 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
     std::map<std::string, std::string> kv_metadata;
     std::transform(meta_keys.begin(), meta_keys.end(), meta_values.begin(),
                    std::inserter(kv_metadata, kv_metadata.end()),
-                   [](auto const &key,
-                      auto const &value) { // The metadata value will be ignored if it is empty.
+                   [](auto const &key, auto const &value) {
+                     // The metadata value will be ignored if it is empty.
                      // As such, we modify it into a space character instead.
                      return std::make_pair(key, value.empty() ? std::string(" ") : value);
                    });
