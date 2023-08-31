@@ -149,7 +149,10 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
                                     std::optional<reader_column_schema> const& schema,
                                     rmm::cuda_stream_view stream)
 {
-  if (schema_info != nullptr) { schema_info->name = buffer.name; }
+  if (schema_info != nullptr) {
+    schema_info->name        = buffer.name;
+    schema_info->is_nullable = buffer.is_nullable;
+  }
 
   switch (buffer.type.id()) {
     case type_id::STRING:
