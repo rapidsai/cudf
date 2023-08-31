@@ -45,6 +45,7 @@ requirements:
     - cuda-version ={{ cuda_version }}
     - ninja
     - sysroot_{{ target_platform }} {{ sysroot_version }}
+    - zlib
   host:
     - librmm ={{ minor_version }}
     - libkvikio ={{ minor_version }}
@@ -90,6 +91,7 @@ outputs:
     requirements:
       build:
         - cmake {{ cmake_version }}
+        - zlib
       run:
         {% if cuda_major == "11" %}
         - cudatoolkit
