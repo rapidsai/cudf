@@ -29,8 +29,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <thrust/functional.h>
-
 #include <fstream>
 #include <iostream>
 #include <vector>
@@ -120,7 +118,9 @@ std::unique_ptr<bpe_merge_pairs::bpe_merge_pairs_impl> create_bpe_merge_pairs_im
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  auto pairs   = cudf::strings::split_record(input);  // Fix once 13997 is merged
+  auto pairs =
+    cudf::strings::split_record(input, cudf::string_scalar(" "));  // Fix once 13997 is merged
+  // perhaps check the pairs are valid?
   auto content = pairs->release();
   return create_bpe_merge_pairs_impl(std::move(content.children.back()), stream);
 }
