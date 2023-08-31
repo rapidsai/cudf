@@ -385,6 +385,7 @@ struct PageLocation {
   int32_t compressed_page_size;  // Compressed page size in bytes plus the heeader length
   int64_t first_row_index;  // Index within the column chunk of the first row of the page. reset to
                             // 0 at the beginning of each column chunk
+  std::optional<int64_t> unencoded_variable_width_stored_bytes;
 };
 
 /**
@@ -406,7 +407,7 @@ struct ColumnIndex {
   std::vector<int64_t> null_counts;              // Optional count of null values per page
   // FIXME(ets): this will likely be RepetitionDefinitionLevelHistogram
   // https://github.com/apache/parquet-format/pull/197
-  std::optional<SizeStatistics> size_statistics;
+  std::optional<RepetitionDefinitionLevelHistogram> size_statistics;
 };
 
 // bit space we are reserving in column_buffer::user_data

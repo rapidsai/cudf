@@ -237,16 +237,6 @@ void __device__ gen_hist(uint32_t* hist,
                          uint32_t maxlvl,
                          typename cub::BlockReduce<uint32_t, block_size>::TempStorage& temp_storage)
 {
-// FIXME(ets): for testing. remove later.
-#if 0
-  if (threadIdx.x == 0) {
-    for (uint32_t i = 0; i < nrows; i++) {
-      // TODO this so needs rolling_index
-      auto const lvl = s->vals[(rle_numvals + i) & (rle_buffer_size - 1)];
-      hist[lvl]++;
-    }
-  }
-#else
   using block_reduce = cub::BlockReduce<uint32_t, block_size>;
   auto const t       = threadIdx.x;
 
@@ -258,7 +248,6 @@ void __device__ gen_hist(uint32_t* hist,
     if (t == 0) { hist[lvl] += lvl_sum; }
     __syncthreads();
   }
-#endif
   __syncthreads();
 }
 
@@ -2318,7 +2307,7 @@ __global__ void __launch_bounds__(1)
   auto const ck_rep_hist = ck_g->rep_histogram_data + (num_data_pages) * (cd->max_rep_level + 1);
 
   // SizeStatistics vs RepetitionDefinitionLevelHistogram
-  bool constexpr use_size_stats = true;
+  bool constexpr use_size_stats = false;
   bool constexpr write_hist     = true;
 
   if constexpr (write_hist) {

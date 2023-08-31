@@ -227,6 +227,9 @@ size_t CompactProtocolWriter::write(PageLocation const& s)
   c.field_int(1, s.offset);
   c.field_int(2, s.compressed_page_size);
   c.field_int(3, s.first_row_index);
+  if (s.unencoded_variable_width_stored_bytes.has_value()) {
+    c.field_int(4, s.unencoded_variable_width_stored_bytes.value());
+  }
   return c.value();
 }
 
