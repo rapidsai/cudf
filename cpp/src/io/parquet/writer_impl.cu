@@ -194,6 +194,20 @@ parquet::Compression to_parquet_compression(compression_type compression)
 }
 
 /**
+ * @brief Convert a mask of encodings to a vector.
+ *
+ * @param encodings Vector of `Encoding`s to populate
+ * @param enc_mask Mask of encodings used
+ */
+void update_chunk_encodings(std::vector<Encoding>& encodings, uint32_t enc_mask)
+{
+  for (uint8_t enc = 0; enc < static_cast<uint8_t>(Encoding::NUM_ENCODINGS); enc++) {
+    auto const enc_enum = static_cast<Encoding>(enc);
+    if ((enc_mask & gpu::encoding_to_mask(enc_enum)) != 0) { encodings.push_back(enc_enum); }
+  }
+}
+
+/**
  * @brief Compute size (in bytes) of the data stored in the given column.
  *
  * @param column The input column
@@ -1671,6 +1685,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         ck.start_row         = start_row;
         ck.num_rows          = (uint32_t)row_group.num_rows;
         ck.first_fragment    = c * num_fragments + f;
+        ck.encodings         = 0;
         auto chunk_fragments = row_group_fragments[c].subspan(f, fragments_in_chunk);
         // In fragment struct, add a pointer to the chunk it belongs to
         // In each fragment in chunk_fragments, update the chunk pointer here.
@@ -1687,7 +1702,6 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           });
         auto& column_chunk_meta          = row_group.columns[c].meta_data;
         column_chunk_meta.type           = parquet_columns[c].physical_type();
-        column_chunk_meta.encodings      = {Encoding::PLAIN, Encoding::RLE};
         column_chunk_meta.path_in_schema = parquet_columns[c].get_path_in_schema();
         column_chunk_meta.codec          = UNCOMPRESSED;
         column_chunk_meta.num_values     = ck.num_values;
@@ -1703,17 +1717,6 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   row_group_fragments.host_to_device_async(stream);
   [[maybe_unused]] auto dict_info_owner = build_chunk_dictionaries(
     chunks, col_desc, row_group_fragments, compression, dict_policy, max_dictionary_size, stream);
-  for (size_t p = 0; p < partitions.size(); p++) {
-    for (int rg = 0; rg < num_rg_in_part[p]; rg++) {
-      size_t global_rg = global_rowgroup_base[p] + rg;
-      for (int col = 0; col < num_columns; col++) {
-        if (chunks.host_view()[rg][col].use_dictionary) {
-          agg_meta->file(p).row_groups[global_rg].columns[col].meta_data.encodings.push_back(
-            Encoding::PLAIN_DICTIONARY);
-        }
-      }
-    }
-  }
 
   // The code preceding this used a uniform fragment size for all columns. Now recompute
   // fragments with a (potentially) varying number of fragments per column.
@@ -1948,6 +1951,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           all_device_write = false;
         }
         max_write_size = std::max(max_write_size, ck.compressed_size);
+
+        update_chunk_encodings(column_chunk_meta.encodings, ck.encodings);
 
         if (ck.ck_stat_size != 0) {
           std::vector<uint8_t> const stats_blob = cudf::detail::make_std_vector_sync(

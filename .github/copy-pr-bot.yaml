@@ -1,0 +1,4 @@
+# Configuration file for `copy-pr-bot` GitHub App
+# https://docs.gha-runners.nvidia.com/apps/copy-pr-bot/
+
+enabled: true

@@ -1091,7 +1091,7 @@ struct column_view_printer {
     if (col.is_empty()) return;
     auto h_data = cudf::test::to_host<std::string>(col);
 
-    // explicitly replace '\r' and '\n' characters with "\r" and "\n" strings respectively.
+    // explicitly replace some special whitespace characters with their literal equivalents
     auto cleaned = [](std::string_view in) {
       std::string out(in);
       auto replace_char = [](std::string& out, char c, std::string_view repl) {
@@ -1099,8 +1099,13 @@ struct column_view_printer {
           out.replace(pos, 1, repl);
         }
       };
+      replace_char(out, '\a', "\\a");
+      replace_char(out, '\b', "\\b");
+      replace_char(out, '\f', "\\f");
       replace_char(out, '\r', "\\r");
+      replace_char(out, '\t', "\\t");
       replace_char(out, '\n', "\\n");
+      replace_char(out, '\v', "\\v");
       return out;
     };
 
