@@ -46,7 +46,6 @@ fi
 if [[ $PACKAGE_CUDA_SUFFIX == "-cu12" ]]; then
     sed -i "s/cuda-python[<=>\.,0-9a]*/cuda-python>=12.0,<13.0a0/g" ${pyproject_file}
     sed -i "s/cupy-cuda11x/cupy-cuda12x/g" ${pyproject_file}
-    sed -i "s/numba[<=>\.,0-9]*/numba>=0.57/g" ${pyproject_file}
     sed -i "/ptxcompiler/d" ${pyproject_file}
     sed -i "/cubinlinker/d" ${pyproject_file}
 fi
