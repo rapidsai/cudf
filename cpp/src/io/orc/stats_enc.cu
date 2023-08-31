@@ -19,14 +19,13 @@
 #include <io/utilities/block_utils.cuh>
 
 #include <cudf/io/orc_types.hpp>
-#include <cudf/strings/detail/convert/int_to_string.cuh>
+#include <cudf/strings/detail/convert/fixed_point_to_string.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
-namespace io {
-namespace orc {
-namespace gpu {
+namespace cudf::io::orc::gpu {
+
+using strings::detail::fixed_point_string_size;
 
 constexpr unsigned int init_threads_per_group = 32;
 constexpr unsigned int init_groups_per_block  = 4;
@@ -49,48 +48,6 @@ __global__ void __launch_bounds__(init_threads_per_block)
     group->num_rows                           = rowgroup_bounds[chunk_id][col_id].size();
     groups[col_id * num_rowgroups + chunk_id] = *group;
   }
-}
-
-__device__ int32_t compute_output_size(__int128_t const& value, int32_t scale)
-{
-  if (scale >= 0) return strings::detail::count_digits(value) + scale;
-
-  auto const abs_value = numeric::detail::abs(value);
-  auto const exp_ten   = numeric::detail::exp10<__int128_t>(-scale);
-  auto const fraction  = strings::detail::count_digits(abs_value % exp_ten);
-  auto const num_zeros = std::max(0, (-scale - fraction));
-  return static_cast<int32_t>(value < 0) +                     // sign if negative
-         strings::detail::count_digits(abs_value / exp_ten) +  // integer
-         1 +                                                   // decimal point
-         num_zeros +                                           // zeros padding
-         fraction;                                             // size of fraction
-}
-
-__device__ void decimal_to_string(__int128_t value, int32_t scale, char* out_ptr)
-{
-  if (scale >= 0) {
-    out_ptr += strings::detail::integer_to_string(value, out_ptr);
-    thrust::generate_n(thrust::seq, out_ptr, scale, []() { return '0'; });  // add zeros
-    return;
-  }
-
-  // scale < 0
-  // write format:   [-]integer.fraction
-  // where integer  = abs(value) / (10^abs(scale))
-  //       fraction = abs(value) % (10^abs(scale))
-  if (value < 0) *out_ptr++ = '-';  // add sign
-  auto const abs_value = numeric::detail::abs(value);
-  auto const exp_ten   = numeric::detail::exp10<__int128_t>(-scale);
-  auto const num_zeros = std::max(0, (-scale - strings::detail::count_digits(abs_value % exp_ten)));
-
-  out_ptr +=
-    strings::detail::integer_to_string(abs_value / exp_ten, out_ptr);  // add the integer part
-  *out_ptr++ = '.';                                                    // add decimal point
-
-  thrust::generate_n(thrust::seq, out_ptr, num_zeros, []() { return '0'; });  // add zeros
-  out_ptr += num_zeros;
-
-  strings::detail::integer_to_string(abs_value % exp_ten, out_ptr);  // add the fraction part
 }
 
 /**
@@ -148,9 +105,9 @@ __global__ void __launch_bounds__(block_size, 1)
         case dtype_decimal64:
         case dtype_decimal128: {
           auto const scale    = groups[idx].col_dtype.scale();
-          auto const min_size = compute_output_size(chunks[idx].min_value.d128_val, scale);
-          auto const max_size = compute_output_size(chunks[idx].max_value.d128_val, scale);
-          auto const sum_size = compute_output_size(chunks[idx].sum.d128_val, scale);
+          auto const min_size = fixed_point_string_size(chunks[idx].min_value.d128_val, scale);
+          auto const max_size = fixed_point_string_size(chunks[idx].max_value.d128_val, scale);
+          auto const sum_size = fixed_point_string_size(chunks[idx].sum.d128_val, scale);
           stats_len = pb_fldlen_common + pb_fld_hdrlen16 + 3 * (pb_fld_hdrlen + pb_fld_hdrlen16) +
                       min_size + max_size + sum_size;
         } break;
@@ -234,7 +191,7 @@ __device__ inline uint8_t* pb_put_decimal(
 {
   p[0] = id * 8 + ProtofType::FIXEDLEN;
   p    = pb_encode_uint(p + 1, len);
-  decimal_to_string(value, scale, reinterpret_cast<char*>(p));
+  strings::detail::fixed_point_to_string(value, scale, reinterpret_cast<char*>(p));
   return p + len;
 }
 
@@ -399,15 +356,15 @@ __global__ void __launch_bounds__(encode_threads_per_block)
 
           uint32_t sz = 0;
           auto const min_size =
-            s->chunk.has_minmax ? compute_output_size(s->chunk.min_value.d128_val, scale) : 0;
+            s->chunk.has_minmax ? fixed_point_string_size(s->chunk.min_value.d128_val, scale) : 0;
           auto const max_size =
-            s->chunk.has_minmax ? compute_output_size(s->chunk.max_value.d128_val, scale) : 0;
+            s->chunk.has_minmax ? fixed_point_string_size(s->chunk.max_value.d128_val, scale) : 0;
           if (s->chunk.has_minmax) {
             // two bytes per string for length, plus the strings themselves
             sz += 2 + min_size + 2 + max_size;
           }
           auto const sum_size =
-            s->chunk.has_sum ? compute_output_size(s->chunk.sum.d128_val, scale) : 0;
+            s->chunk.has_sum ? fixed_point_string_size(s->chunk.sum.d128_val, scale) : 0;
           if (s->chunk.has_sum) { sz += 2 + sum_size; }
 
           cur[0] = 6 * 8 + ProtofType::FIXEDLEN;
@@ -518,7 +475,4 @@ void orc_encode_statistics(uint8_t* blob_bfr,
     blob_bfr, groups, chunks, statistics_count);
 }
 
-}  // namespace gpu
-}  // namespace orc
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc::gpu
