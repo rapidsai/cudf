@@ -5494,7 +5494,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             for ``method="table"``.
 
                 * linear: `i + (j - i) * fraction`, where `fraction` is the
-                fractional part of the index surrounded by `i` and `j`.
+                  fractional part of the index surrounded by `i` and `j`.
                 * lower: `i`.
                 * higher: `j`.
                 * nearest: `i` or `j` whichever is nearest.
