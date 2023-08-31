@@ -42,8 +42,8 @@
 
 namespace cudf::io::json::detail {
 
-constexpr auto SINGLE_THREAD_THRESHOLD = 128;
-constexpr auto WARP_THRESHOLD          = 1024;
+constexpr auto SINGLE_THREAD_THRESHOLD = 512;
+constexpr auto WARP_THRESHOLD          = 1024 * 4;
 
 // Unicode code point escape sequence
 static constexpr char UNICODE_SEQ = 0x7F;
@@ -420,6 +420,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
     auto in_end             = in_begin + str_tuples[istring].second;
     auto const num_in_chars = str_tuples[istring].second;
     if constexpr (is_warp) {
+      if (!(num_in_chars > SINGLE_THREAD_THRESHOLD)) continue;
       if (num_in_chars > WARP_THRESHOLD) continue;
     } else {
       if (num_in_chars <= WARP_THRESHOLD) continue;
@@ -685,6 +686,8 @@ struct string_parse {
     auto const in_end       = in_begin + str_tuples[idx].second;
     auto const num_in_chars = str_tuples[idx].second;
 
+    if (num_in_chars > SINGLE_THREAD_THRESHOLD) return;
+
     // Check if the value corresponds to the null literal
     auto const is_null_literal =
       (!d_chars) &&
@@ -749,34 +752,29 @@ std::unique_ptr<column> parse_data(
       size_type{0},
       thrust::maximum<size_type>{});
 
-    if (max_length < SINGLE_THREAD_THRESHOLD) {
-      // this utility calls the functor to build the offsets and chars columns;
-      // the bitmask and null count may be updated by parse failures
-      nvtxRangePush("make_strings_children");
-      auto [offsets, chars] = cudf::strings::detail::make_strings_children(
-        string_parse<decltype(str_tuples)>{
-          str_tuples, static_cast<bitmask_type*>(null_mask.data()), null_count_data, options},
-        col_size,
-        stream,
-        mr);
-      nvtxRangePop();
+    nvtxRangePush("string_parallel");
+    auto offsets = cudf::make_numeric_column(
+      data_type{cudf::type_id::INT32}, col_size + 1, cudf::mask_state::UNALLOCATED, stream, mr);
+    auto d_offsets = offsets->mutable_view().data<size_type>();
 
-      return make_strings_column(col_size,
-                                 std::move(offsets),
-                                 std::move(chars),
-                                 d_null_count.value(stream),
-                                 std::move(null_mask));
-    } else {
-      nvtxRangePush("string_parallel");
-      auto offsets2 = cudf::make_numeric_column(
-        data_type{cudf::type_id::INT32}, col_size + 1, cudf::mask_state::UNALLOCATED, stream, mr);
-      auto d_offsets = offsets2->mutable_view().data<size_type>();
+    auto single_thread_fn =
+      string_parse<decltype(str_tuples)>{str_tuples,
+                                         static_cast<bitmask_type*>(null_mask.data()),
+                                         null_count_data,
+                                         options,
+                                         d_offsets};
+    thrust::for_each_n(rmm::exec_policy(stream),
+                       thrust::make_counting_iterator<size_type>(0),
+                       col_size,
+                       single_thread_fn);
 
-      constexpr auto warps_per_block  = 8;
-      constexpr int threads_per_block = cudf::detail::warp_size * warps_per_block;
-      auto num_blocks  = min(65535, cudf::util::div_rounding_up_unsafe(col_size, warps_per_block));
-      auto str_counter = cudf::numeric_scalar(size_type{0}, true, stream);
+    constexpr auto warps_per_block  = 8;
+    constexpr int threads_per_block = cudf::detail::warp_size * warps_per_block;
+    auto num_blocks  = min(65535, cudf::util::div_rounding_up_unsafe(col_size, warps_per_block));
+    auto str_counter = cudf::numeric_scalar(size_type{0}, true, stream);
 
+    // TODO run these independent kernels in parallel streams.
+    if (max_length > SINGLE_THREAD_THRESHOLD) {
       parse_fn_string_parallel<true, warps_per_block>
         <<<num_blocks, threads_per_block, 0, stream.value()>>>(
           str_tuples,
@@ -787,58 +785,74 @@ std::unique_ptr<column> parse_data(
           options,
           d_offsets,
           nullptr);
-      str_counter.set_value(0, stream);
-      // for strings longer than WARP_THRESHOLD, 1 block per string
-      parse_fn_string_parallel<false, warps_per_block>
-        <<<num_blocks, threads_per_block, 0, stream.value()>>>(
-          str_tuples,
-          col_size,
-          str_counter.data(),
-          static_cast<bitmask_type*>(null_mask.data()),
-          null_count_data,
-          options,
-          d_offsets,
-          nullptr);
-      auto const bytes =
-        cudf::detail::sizes_to_offsets(d_offsets, d_offsets + col_size + 1, d_offsets, stream);
-      str_counter.set_value(0, stream);
-
-      // CHARS column
-      std::unique_ptr<column> chars =
-        strings::detail::create_chars_child_column(static_cast<size_type>(bytes), stream, mr);
-      auto d_chars = chars->mutable_view().data<char>();
-
-      parse_fn_string_parallel<true, warps_per_block>
-        <<<num_blocks, threads_per_block, 0, stream.value()>>>(
-          str_tuples,
-          col_size,
-          str_counter.data(),
-          static_cast<bitmask_type*>(null_mask.data()),
-          null_count_data,
-          options,
-          d_offsets,
-          d_chars);
-      str_counter.set_value(0, stream);
-
-      // for strings longer than WARP_THRESHOLD, 1 block per string
-      parse_fn_string_parallel<false, warps_per_block>
-        <<<num_blocks, threads_per_block, 0, stream.value()>>>(
-          str_tuples,
-          col_size,
-          str_counter.data(),
-          static_cast<bitmask_type*>(null_mask.data()),
-          null_count_data,
-          options,
-          d_offsets,
-          d_chars);
-      nvtxRangePop();
-
-      return make_strings_column(col_size,
-                                 std::move(offsets2),
-                                 std::move(chars),
-                                 d_null_count.value(stream),
-                                 std::move(null_mask));
     }
+
+    if (max_length > WARP_THRESHOLD) {
+      // for strings longer than WARP_THRESHOLD, 1 block per string
+      str_counter.set_value(0, stream);
+      parse_fn_string_parallel<false, warps_per_block>
+        <<<num_blocks, threads_per_block, 0, stream.value()>>>(
+          str_tuples,
+          col_size,
+          str_counter.data(),
+          static_cast<bitmask_type*>(null_mask.data()),
+          null_count_data,
+          options,
+          d_offsets,
+          nullptr);
+    }
+    auto const bytes =
+      cudf::detail::sizes_to_offsets(d_offsets, d_offsets + col_size + 1, d_offsets, stream);
+    CUDF_EXPECTS(bytes <= std::numeric_limits<size_type>::max(),
+                 "Size of output exceeds the column size limit",
+                 std::overflow_error);
+
+    // CHARS column
+    std::unique_ptr<column> chars =
+      strings::detail::create_chars_child_column(static_cast<size_type>(bytes), stream, mr);
+    auto d_chars = chars->mutable_view().data<char>();
+
+    single_thread_fn.d_chars = d_chars;
+    thrust::for_each_n(rmm::exec_policy(stream),
+                       thrust::make_counting_iterator<size_type>(0),
+                       col_size,
+                       single_thread_fn);
+
+    if (max_length > SINGLE_THREAD_THRESHOLD) {
+      str_counter.set_value(0, stream);
+      parse_fn_string_parallel<true, warps_per_block>
+        <<<num_blocks, threads_per_block, 0, stream.value()>>>(
+          str_tuples,
+          col_size,
+          str_counter.data(),
+          static_cast<bitmask_type*>(null_mask.data()),
+          null_count_data,
+          options,
+          d_offsets,
+          d_chars);
+    }
+
+    if (max_length > WARP_THRESHOLD) {
+      str_counter.set_value(0, stream);
+      // for strings longer than WARP_THRESHOLD, 1 block per string
+      parse_fn_string_parallel<false, warps_per_block>
+        <<<num_blocks, threads_per_block, 0, stream.value()>>>(
+          str_tuples,
+          col_size,
+          str_counter.data(),
+          static_cast<bitmask_type*>(null_mask.data()),
+          null_count_data,
+          options,
+          d_offsets,
+          d_chars);
+    }
+    nvtxRangePop();
+
+    return make_strings_column(col_size,
+                               std::move(offsets),
+                               std::move(chars),
+                               d_null_count.value(stream),
+                               std::move(null_mask));
   }
 
   auto out_col =
