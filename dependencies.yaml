@@ -179,7 +179,6 @@ dependencies:
           - c-compiler
           - cxx-compiler
           - dlpack>=0.5,<0.6.0a0
-          - zlib
     specific:
       - output_types: conda
         matrices:
