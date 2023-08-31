@@ -6599,6 +6599,70 @@ TEST_F(ParquetWriterTest, TimestampMicrosINT96NoOverflow)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
+TEST_F(ParquetWriterTest, PreserveNullability)
+{
+  constexpr auto num_rows = 100;
+
+  auto const col0_data = random_values<int32_t>(num_rows);
+  auto const col1_data = random_values<int32_t>(num_rows);
+
+  auto const col0_validity = cudf::test::iterators::no_nulls();
+  auto const col1_validity =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+
+  column_wrapper<int32_t> col0{col0_data.begin(), col0_data.end(), col0_validity};
+  column_wrapper<int32_t> col1{col1_data.begin(), col1_data.end(), col1_validity};
+  auto const col2 = make_parquet_list_list_col<int>(0, num_rows, 5, 8, true);
+
+  auto const expected = table_view{{col0, col1, *col2}};
+
+  cudf::io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].set_name("mandatory");
+  expected_metadata.column_metadata[0].set_nullability(false);
+  expected_metadata.column_metadata[1].set_name("optional");
+  expected_metadata.column_metadata[1].set_nullability(true);
+  expected_metadata.column_metadata[2].set_name("lists");
+  expected_metadata.column_metadata[2].set_nullability(true);
+  // offsets is a cudf thing that's not part of the parquet schema so it won't have nullability set
+  expected_metadata.column_metadata[2].child(0).set_name("offsets");
+  expected_metadata.column_metadata[2].child(1).set_name("element");
+  expected_metadata.column_metadata[2].child(1).set_nullability(false);
+  expected_metadata.column_metadata[2].child(1).child(0).set_name("offsets");
+  expected_metadata.column_metadata[2].child(1).child(1).set_name("element");
+  expected_metadata.column_metadata[2].child(1).child(1).set_nullability(true);
+
+  auto const filepath = temp_env->get_temp_filepath("PreserveNullability.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .metadata(expected_metadata);
+
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options const in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto const result        = cudf::io::read_parquet(in_opts);
+  auto const read_metadata = cudf::io::table_input_metadata{result.metadata};
+
+  // test that expected_metadata matches read_metadata
+  std::function<void(cudf::io::column_in_metadata, cudf::io::column_in_metadata)>
+    compare_names_and_nullability = [&](auto lhs, auto rhs) {
+      EXPECT_EQ(lhs.get_name(), rhs.get_name());
+      ASSERT_EQ(lhs.is_nullability_defined(), rhs.is_nullability_defined());
+      if (lhs.is_nullability_defined()) { EXPECT_EQ(lhs.nullable(), rhs.nullable()); }
+      ASSERT_EQ(lhs.num_children(), rhs.num_children());
+      for (int i = 0; i < lhs.num_children(); ++i) {
+        compare_names_and_nullability(lhs.child(i), rhs.child(i));
+      }
+    };
+
+  ASSERT_EQ(expected_metadata.column_metadata.size(), read_metadata.column_metadata.size());
+
+  for (size_t i = 0; i < expected_metadata.column_metadata.size(); ++i) {
+    compare_names_and_nullability(expected_metadata.column_metadata[i],
+                                  read_metadata.column_metadata[i]);
+  }
+}
+
 TEST_P(ParquetV2Test, CheckEncodings)
 {
   using cudf::io::parquet::Encoding;
