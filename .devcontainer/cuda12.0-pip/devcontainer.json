@@ -23,7 +23,7 @@
     "source=${localWorkspaceFolder}/../.aws,target=/home/coder/.aws,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.cache,target=/home/coder/.cache,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.config,target=/home/coder/.config,type=bind,consistency=consistent",
-    "source=${localWorkspaceFolder}/../.local/${localWorkspaceFolderBasename}/single,target=/home/coder/.local,type=bind,consistency=consistent"
+    "source=${localWorkspaceFolder}/../.local/share/${localWorkspaceFolderBasename}-cuda12.0-venvs,target=/home/coder/.local/share/venvs,type=bind,consistency=consistent"
   ],
   "customizations": {
     "vscode": {
