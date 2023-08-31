@@ -33,7 +33,7 @@ namespace cudf::detail {
  * `LIBCUDF_USE_DEBUG_STREAM_POOL`.
  *
  * Access to the global `cuda_stream_pool` is granted via `cudf::detail::global_cuda_stream_pool()`.
- * 
+ *
  * Example usage:
  * @code{.cpp}
  * auto stream = cudf::get_default_stream();
