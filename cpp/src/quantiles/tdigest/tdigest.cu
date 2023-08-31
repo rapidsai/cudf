@@ -74,7 +74,7 @@ __global__ void compute_percentiles_kernel(device_span<size_type const> tdigest_
                                            double const* cumulative_weight_,
                                            double* output)
 {
-  int const tid = threadIdx.x + blockIdx.x * blockDim.x;
+  auto const tid = cudf::detail::grid_1d::global_thread_id();
 
   auto const num_tdigests  = tdigest_offsets.size() - 1;
   auto const tdigest_index = tid / percentiles.size();
