@@ -804,12 +804,16 @@ def test_index_to_series(data):
     ],
 )
 @pytest.mark.parametrize("sort", [None, False])
-def test_index_difference(data, other, sort):
-    pd_data = pd.Index(data)
-    pd_other = pd.Index(other)
+@pytest.mark.parametrize(
+    "name_data,name_other",
+    [("abc", "c"), (None, "abc"), ("abc", pd.NA), ("abc", "abc")],
+)
+def test_index_difference(data, other, sort, name_data, name_other):
+    pd_data = pd.Index(data, name=name_data)
+    pd_other = pd.Index(other, name=name_other)
 
-    gd_data = cudf.core.index.as_index(data)
-    gd_other = cudf.core.index.as_index(other)
+    gd_data = cudf.from_pandas(pd_data)
+    gd_other = cudf.from_pandas(pd_other)
 
     expected = pd_data.difference(pd_other, sort=sort)
     actual = gd_data.difference(gd_other, sort=sort)
@@ -2066,7 +2070,7 @@ def test_union_index(idx1, idx2, sort):
         (pd.RangeIndex(0, 10), pd.RangeIndex(3, 7)),
         (pd.RangeIndex(0, 10), pd.RangeIndex(-10, 20)),
         (pd.RangeIndex(0, 10, name="a"), pd.RangeIndex(90, 100, name="b")),
-        (pd.Index([0, 1, 2, 30], name="a"), pd.Index([30, 0, 90, 100])),
+        (pd.Index([0, 1, 2, 30], name=pd.NA), pd.Index([30, 0, 90, 100])),
         (pd.Index([0, 1, 2, 30], name="a"), [90, 100]),
         (pd.Index([0, 1, 2, 30]), pd.Index([0, 10, 1.0, 11])),
         (pd.Index(["a", "b", "c", "d", "c"]), pd.Index(["a", "c", "z"])),
