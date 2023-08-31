@@ -165,3 +165,19 @@ def test_interval_index_unique():
     actual = gi.unique()
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("tz", ["US/Eastern", None])
+def test_interval_with_datetime(tz):
+    dti = pd.date_range(
+        start=pd.Timestamp("20180101", tz=tz),
+        end=pd.Timestamp("20181231", tz=tz),
+        freq="M",
+    )
+    pidx = pd.IntervalIndex.from_breaks(dti)
+    if tz is None:
+        gidx = cudf.from_pandas(pidx)
+        assert_eq(pidx, gidx)
+    else:
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(pidx)

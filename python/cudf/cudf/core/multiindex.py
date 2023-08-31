@@ -1637,7 +1637,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def difference(self, other, sort=None):
         if hasattr(other, "to_pandas"):
             other = other.to_pandas()
-        return self.to_pandas().difference(other, sort)
+        return cudf.from_pandas(self.to_pandas().difference(other, sort))
 
     @_cudf_nvtx_annotate
     def append(self, other):
