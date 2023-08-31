@@ -25,10 +25,28 @@ namespace cudf::detail {
 /**
  * @brief A pool of CUDA stream objects
  *
- * Meant to provide efficient on-demand access to CUDA streams.
+ * Provides efficient access to a collection of asynchronous (i.e. non-default) CUDA stream objects.
  *
- * TODO: better docs!
- * if env LIBCUDF_USE_DEBUG_STREAM_POOL is set, then use default stream...
+ * The default implementation uses an underlying `rmm::cuda_stream_pool`. The only other
+ * implementation at present is a debugging version that always returns the stream returned by
+ * `cudf::get_default_stream()`. To use this debugging version, set the environment variable
+ * `LIBCUDF_USE_DEBUG_STREAM_POOL`.
+ *
+ * Access to the global `cuda_stream_pool` is granted via `cudf::detail::global_cuda_stream_pool()`.
+ * 
+ * Example usage:
+ * @code{.cpp}
+ * auto stream = cudf::get_default_stream();
+ * auto const num_streams = 2;
+ * // do work on stream
+ * auto streams = cudf::detail::global_cuda_stream_pool().get_streams(num_streams);
+ * // wait for event on stream before executing on any of streams
+ * cudf::detail::fork_streams(streams, stream);
+ * // invoke kernel on streams[0]
+ * // invoke kernel on streams[1]
+ * // wait for event on streams before executing on stream
+ * cudf::detail::join_streams(streams, stream);
+ * @endcode
  */
 class cuda_stream_pool {
  public:
@@ -46,7 +64,7 @@ class cuda_stream_pool {
   /**
    * @brief Get a `cuda_stream_view` of the stream associated with `stream_id`.
    *
-   * Equivalent values of `stream_id` return a stream_view to the same underlying stream.
+   * Equivalent values of `stream_id` return a `cuda_stream_view` to the same underlying stream.
    * This function is thread safe with respect to other calls to the same function.
    *
    * @param stream_id Unique identifier for the desired stream
@@ -58,7 +76,7 @@ class cuda_stream_pool {
    * @brief Get a set of `cuda_stream_view` objects from the pool.
    *
    * An attempt is made to ensure that the returned vector does not contain duplicate
-   * streams, but this cannot be guaranteed if `count` is greater than
+   * streams, but this cannot be guaranteed if `count` is greater than the value returned by
    * `get_stream_pool_size()`.
    *
    * This function is thread safe with respect to other calls to the same function.
@@ -69,17 +87,17 @@ class cuda_stream_pool {
   virtual std::vector<rmm::cuda_stream_view> get_streams(uint32_t count) = 0;
 
   /**
-   * @brief Get the number of streams in the pool.
+   * @brief Get the number of stream objects in the pool.
    *
    * This function is thread safe with respect to other calls to the same function.
    *
-   * @return the number of streams in the pool
+   * @return the number of stream objects in the pool
    */
   virtual std::size_t get_stream_pool_size() const = 0;
 };
 
 /**
- * @brief Return a reference to the global cuda_stream_pool object.
+ * @brief Return a reference to the global `cuda_stream_pool` object.
  *
  * @return The cuda_stream_pool singleton.
  */
