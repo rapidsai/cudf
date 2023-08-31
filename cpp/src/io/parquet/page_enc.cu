@@ -2309,40 +2309,43 @@ __global__ void __launch_bounds__(1)
   // SizeStatistics vs RepetitionDefinitionLevelHistogram
   bool constexpr use_size_stats = false;
   bool constexpr write_hist     = true;
+  int constexpr hist_cutoff     = 0;
 
   if constexpr (write_hist) {
-    encoder.field_list_begin(6, num_data_pages, ST_FLD_STRUCT);
-    for (uint32_t page = first_data_page; page < num_pages; page++) {
-      auto const& pg = ck_g->pages[page];
+    if (cd->max_rep_level > hist_cutoff || cd->max_def_level > hist_cutoff) {
+      encoder.field_list_begin(6, num_data_pages, ST_FLD_STRUCT);
+      for (uint32_t page = first_data_page; page < num_pages; page++) {
+        auto const& pg = ck_g->pages[page];
 
-      var_bytes += pg.var_bytes_size;
-      if constexpr (use_size_stats) {
-        if (pg.var_bytes_size > 0) { encoder.field_int64(1, pg.var_bytes_size); }
+        var_bytes += pg.var_bytes_size;
+        if constexpr (use_size_stats) {
+          if (pg.var_bytes_size > 0) { encoder.field_int64(1, pg.var_bytes_size); }
 
-        // start the RepetitionDefinitionLevelHistogram struct
-        encoder.field_struct_begin(2);
-      }
-      if (cd->max_rep_level > 0) {
-        encoder.field_list_begin(1, cd->max_rep_level + 1, ST_FLD_I64);
-        for (int i = 0; i < cd->max_rep_level + 1; i++) {
-          encoder.put_int64(pg.rep_histogram[i]);
-          ck_rep_hist[i] += pg.rep_histogram[i];
+          // start the RepetitionDefinitionLevelHistogram struct
+          encoder.field_struct_begin(2);
         }
-        encoder.field_list_end(1);
-      }
-      if (cd->max_def_level > 0) {
-        encoder.field_list_begin(2, cd->max_def_level + 1, ST_FLD_I64);
-        for (int i = 0; i < cd->max_def_level + 1; i++) {
-          encoder.put_int64(pg.def_histogram[i]);
-          ck_def_hist[i] += pg.def_histogram[i];
+        if (cd->max_rep_level > hist_cutoff) {
+          encoder.field_list_begin(1, cd->max_rep_level + 1, ST_FLD_I64);
+          for (int i = 0; i < cd->max_rep_level + 1; i++) {
+            encoder.put_int64(pg.rep_histogram[i]);
+            ck_rep_hist[i] += pg.rep_histogram[i];
+          }
+          encoder.field_list_end(1);
         }
-        encoder.field_list_end(2);
+        if (cd->max_def_level > hist_cutoff) {
+          encoder.field_list_begin(2, cd->max_def_level + 1, ST_FLD_I64);
+          for (int i = 0; i < cd->max_def_level + 1; i++) {
+            encoder.put_int64(pg.def_histogram[i]);
+            ck_def_hist[i] += pg.def_histogram[i];
+          }
+          encoder.field_list_end(2);
+        }
+        encoder.field_struct_end(2);  // end the histogram struct
+        // end the SizeStatistics struct
+        if constexpr (use_size_stats) { encoder.field_struct_end(2); }
       }
-      encoder.field_struct_end(2);  // end the histogram struct
-      // end the SizeStatistics struct
-      if constexpr (use_size_stats) { encoder.field_struct_end(2); }
+      encoder.field_list_end(6);
     }
-    encoder.field_list_end(6);
   }
 
   encoder.end(&col_idx_end, false);
