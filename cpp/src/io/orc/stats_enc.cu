@@ -59,8 +59,7 @@ __global__ void __launch_bounds__(init_threads_per_block)
 constexpr unsigned int buffersize_reduction_dim = 32;
 constexpr unsigned int block_size        = buffersize_reduction_dim * buffersize_reduction_dim;
 constexpr unsigned int pb_fld_hdrlen     = 1;
-constexpr unsigned int pb_fld_hdrlen16   = 2;  // > 127-byte length
-constexpr unsigned int pb_fld_hdrlen32   = 5;  // > 16KB length
+constexpr unsigned int pb_fld_hdrlen32   = 5;
 constexpr unsigned int pb_fldlen_int64   = 10;
 constexpr unsigned int pb_fldlen_float64 = 8;
 constexpr unsigned int pb_fldlen_bucket1 = 1 + pb_fldlen_int64;
@@ -108,7 +107,7 @@ __global__ void __launch_bounds__(block_size, 1)
           auto const min_size = fixed_point_string_size(chunks[idx].min_value.d128_val, scale);
           auto const max_size = fixed_point_string_size(chunks[idx].max_value.d128_val, scale);
           auto const sum_size = fixed_point_string_size(chunks[idx].sum.d128_val, scale);
-          stats_len = pb_fldlen_common + pb_fld_hdrlen16 + 3 * (pb_fld_hdrlen + pb_fld_hdrlen16) +
+          stats_len = pb_fldlen_common + pb_fld_hdrlen32 + 3 * (pb_fld_hdrlen + pb_fld_hdrlen32) +
                       min_size + max_size + sum_size;
         } break;
         case dtype_string:
@@ -360,12 +359,13 @@ __global__ void __launch_bounds__(encode_threads_per_block)
           auto const max_size =
             s->chunk.has_minmax ? fixed_point_string_size(s->chunk.max_value.d128_val, scale) : 0;
           if (s->chunk.has_minmax) {
-            // two bytes per string for length, plus the strings themselves
-            sz += 2 + min_size + 2 + max_size;
+            // encoded string lengths, plus the strings
+            sz += (pb_put_uint(cur, 1, min_size) - cur) + min_size +
+                  (pb_put_uint(cur, 1, max_size) - cur) + max_size;
           }
           auto const sum_size =
             s->chunk.has_sum ? fixed_point_string_size(s->chunk.sum.d128_val, scale) : 0;
-          if (s->chunk.has_sum) { sz += 2 + sum_size; }
+          if (s->chunk.has_sum) { sz += (pb_put_uint(cur, 1, sum_size) - cur) + sum_size; }
 
           cur[0] = 6 * 8 + ProtofType::FIXEDLEN;
           cur    = pb_encode_uint(cur + 1, sz);
