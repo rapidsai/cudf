@@ -23,6 +23,7 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/reduction/detail/segmented_reduction.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/utilities/default_stream.hpp>
@@ -51,7 +52,6 @@ namespace {
  */
 template <typename MapRefType>
 struct byte_pair_encoding_fn {
-  cudf::column_device_view const d_merges;
   cudf::column_device_view const d_strings;
   cudf::string_view const d_separator;
   MapRefType const d_map;
@@ -74,13 +74,16 @@ struct byte_pair_encoding_fn {
    * @return The substring found.
    */
   template <typename Iterator>
-  __device__ cudf::string_view next_substr(Iterator begin,
-                                           Iterator end,
-                                           cudf::string_view const& d_str) const
+  __device__ __inline__ cudf::string_view next_substr(Iterator begin,
+                                                      Iterator end,
+                                                      cudf::string_view const& d_str) const
   {
     auto const next = thrust::find_if(thrust::seq, begin + 1, end, [](auto v) { return v != 0; });
     auto const size = static_cast<cudf::size_type>(thrust::distance(begin, next));
-    return cudf::string_view(d_str.data() + *begin, size);
+    return cudf::string_view(
+      d_strings.child(cudf::strings_column_view::chars_column_index).data<char>() +
+        thrust::distance(d_byte_indices, begin),
+      size);
   }
 
   /**
@@ -116,19 +119,10 @@ struct byte_pair_encoding_fn {
                           .element<cudf::size_type>(idx + d_strings.offset());
     auto const d_indices = d_byte_indices + offset;
 
-    // initialize the byte indices for this string;
-    // set the index value to 0 for any intermediate UTF-8 bytes
-    thrust::transform(thrust::seq,
-                      thrust::make_counting_iterator<cudf::size_type>(0),
-                      thrust::make_counting_iterator<cudf::size_type>(d_str.size_bytes()),
-                      d_indices,
-                      [data = d_str.data()](auto idx) {
-                        auto const byte = static_cast<uint8_t>(data[idx]);
-                        return cudf::strings::detail::is_begin_utf8_char(byte) ? idx : 0;
-                      });
-
     auto const begin = d_indices;
     auto const end   = d_indices + d_str.size_bytes();
+
+    *begin = d_str.size_bytes();  // init first char
 
     // keep processing the string until there are no more adjacent pairs found in d_map
     cudf::size_type min_rank = 0;
@@ -192,13 +186,6 @@ struct byte_pair_encoding_fn {
         }
       }
     }
-
-    // compute and store the output size for this string's encoding
-    auto separators_size =
-      thrust::count_if(
-        thrust::seq, d_indices, d_indices + d_str.size_bytes(), [](auto v) { return v != 0; }) *
-      d_separator.size_bytes();
-    d_sizes[idx] = static_cast<cudf::size_type>(d_str.size_bytes() + separators_size);
   }
 };
 
@@ -265,6 +252,17 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
 
   // build working vector to hold index values per byte
   rmm::device_uvector<cudf::size_type> d_byte_indices(input.chars().size(), stream);
+  // initialize the byte indices for all strings;
+  // set the index value to 0 for any intermediate UTF-8 bytes
+  auto const zero_itr = thrust::counting_iterator<cudf::size_type>(0);
+  thrust::transform(
+    rmm::exec_policy(stream),
+    zero_itr,
+    thrust::counting_iterator<cudf::size_type>(input.chars().size()),
+    d_byte_indices.begin(),
+    [data = input.chars().data<uint8_t>(), d_separator] __device__(auto idx) {
+      return cudf::strings::detail::is_begin_utf8_char(data[idx]) ? d_separator.size_bytes() : 0;
+    });
 
   auto offsets   = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
                                            static_cast<cudf::size_type>(input.size() + 1),
@@ -273,17 +271,20 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
                                            rmm::mr::get_current_device_resource());
   auto d_offsets = offsets->mutable_view().data<cudf::size_type>();
 
-  auto const d_merges = merge_pairs.impl->get_merge_pairs();
-  auto const map_ref  = merge_pairs.impl->get_merge_pairs_ref();
-  auto const bpe_fn   = byte_pair_encoding_fn<decltype(map_ref)>{d_merges,
-                                                                 *d_strings,
-                                                                 d_separator,
-                                                                 map_ref,
-                                                                 d_offsets,
-                                                                 string_hasher_type{},
-                                                                 d_byte_indices.data()};
-  auto const zero_itr = thrust::counting_iterator<cudf::size_type>(0);
+  // auto const d_merges = merge_pairs.impl->get_merge_pairs();
+  auto const map_ref = merge_pairs.impl->get_merge_pairs_ref();
+  auto const bpe_fn  = byte_pair_encoding_fn<decltype(map_ref)>{
+    *d_strings, d_separator, map_ref, d_offsets, string_hasher_type{}, d_byte_indices.data()};
   thrust::for_each_n(rmm::exec_policy(stream), zero_itr, input.size(), bpe_fn);
+
+  // compute and store the output size for this string's encoding
+  cudf::reduction::detail::segmented_reduce(d_byte_indices.begin(),
+                                            input.offsets_begin(),
+                                            input.offsets_end(),
+                                            d_offsets,
+                                            thrust::plus{},
+                                            0,
+                                            stream);
 
   // build the output: add spaces between the remaining pairs in each string
   thrust::exclusive_scan(

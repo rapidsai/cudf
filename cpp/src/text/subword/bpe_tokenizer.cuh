@@ -82,12 +82,7 @@ struct bpe_equal {
   // used by insert
   __device__ bool operator()(cudf::size_type lhs, cudf::size_type rhs) const noexcept
   {
-    lhs *= 2;
-    rhs *= 2;
-    return (d_strings.element<cudf::string_view>(lhs) ==
-            d_strings.element<cudf::string_view>(rhs)) &&
-           (d_strings.element<cudf::string_view>(lhs + 1) ==
-            d_strings.element<cudf::string_view>(rhs + 1));
+    return lhs == rhs;  // all rows are unique
   }
   // used by find
   __device__ bool operator()(cudf::size_type lhs, merge_pair_type const& rhs) const noexcept
