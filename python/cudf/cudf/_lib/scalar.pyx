@@ -20,7 +20,6 @@ from libc.stdint cimport (
 )
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
 
 from rmm._lib.memory_resource cimport get_current_device_resource
 
@@ -41,6 +40,7 @@ from cudf._lib.types cimport dtype_from_column_view, underlying_type_t_type_id
 from cudf._lib.interop import from_arrow, to_arrow
 
 cimport cudf._lib.cpp.types as libcudf_types
+from cudf._lib cimport pylibcudf
 from cudf._lib.cpp.scalar.scalar cimport (
     duration_scalar,
     fixed_point_scalar,
@@ -81,6 +81,7 @@ cdef class DeviceScalar:
 
     def __cinit__(self, *args, **kwargs):
         self.mr = get_current_device_resource()
+        self.c_value = pylibcudf.Scalar()
 
     def __init__(self, value, dtype):
         """
@@ -105,26 +106,26 @@ cdef class DeviceScalar:
 
         if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
             _set_decimal_from_scalar(
-                self.c_value, value, dtype, valid)
+                self.c_value.c_obj, value, dtype, valid)
         elif isinstance(dtype, cudf.ListDtype):
             _set_list_from_pylist(
-                self.c_value, value, dtype, valid)
+                self.c_value.c_obj, value, dtype, valid)
         elif isinstance(dtype, cudf.StructDtype):
-            _set_struct_from_pydict(self.c_value, value, dtype, valid)
+            _set_struct_from_pydict(self.c_value.c_obj, value, dtype, valid)
         elif pd.api.types.is_string_dtype(dtype):
-            _set_string_from_np_string(self.c_value, value, valid)
+            _set_string_from_np_string(self.c_value.c_obj, value, valid)
         elif pd.api.types.is_numeric_dtype(dtype):
-            _set_numeric_from_np_scalar(self.c_value,
+            _set_numeric_from_np_scalar(self.c_value.c_obj,
                                         value,
                                         dtype,
                                         valid)
         elif pd.api.types.is_datetime64_dtype(dtype):
             _set_datetime64_from_np_scalar(
-                self.c_value, value, dtype, valid
+                self.c_value.c_obj, value, dtype, valid
             )
         elif pd.api.types.is_timedelta64_dtype(dtype):
             _set_timedelta64_from_np_scalar(
-                self.c_value, value, dtype, valid
+                self.c_value.c_obj, value, dtype, valid
             )
         else:
             raise ValueError(
@@ -134,19 +135,19 @@ cdef class DeviceScalar:
 
     def _to_host_scalar(self):
         if isinstance(self.dtype, cudf.core.dtypes.DecimalDtype):
-            result = _get_py_decimal_from_fixed_point(self.c_value)
+            result = _get_py_decimal_from_fixed_point(self.c_value.c_obj)
         elif cudf.api.types.is_struct_dtype(self.dtype):
-            result = _get_py_dict_from_struct(self.c_value, self.dtype)
+            result = _get_py_dict_from_struct(self.c_value.c_obj, self.dtype)
         elif cudf.api.types.is_list_dtype(self.dtype):
-            result = _get_py_list_from_list(self.c_value, self.dtype)
+            result = _get_py_list_from_list(self.c_value.c_obj, self.dtype)
         elif pd.api.types.is_string_dtype(self.dtype):
-            result = _get_py_string_from_string(self.c_value)
+            result = _get_py_string_from_string(self.c_value.c_obj)
         elif pd.api.types.is_numeric_dtype(self.dtype):
-            result = _get_np_scalar_from_numeric(self.c_value)
+            result = _get_np_scalar_from_numeric(self.c_value.c_obj)
         elif pd.api.types.is_datetime64_dtype(self.dtype):
-            result = _get_np_scalar_from_timestamp64(self.c_value)
+            result = _get_np_scalar_from_timestamp64(self.c_value.c_obj)
         elif pd.api.types.is_timedelta64_dtype(self.dtype):
-            result = _get_np_scalar_from_timedelta64(self.c_value)
+            result = _get_np_scalar_from_timedelta64(self.c_value.c_obj)
         else:
             raise ValueError(
                 "Could not convert cudf::scalar to a Python value"
@@ -169,7 +170,7 @@ cdef class DeviceScalar:
         return self._to_host_scalar()
 
     cdef const scalar* get_raw_ptr(self) except *:
-        return self.c_value.get()
+        return self.c_value.c_obj.get()
 
     cpdef bool is_valid(self):
         """
@@ -194,7 +195,7 @@ cdef class DeviceScalar:
         cdef DeviceScalar s = DeviceScalar.__new__(DeviceScalar)
         cdef libcudf_types.data_type cdtype
 
-        s.c_value = move(ptr)
+        s.c_value.c_obj.swap(ptr)
         cdtype = s.get_raw_ptr()[0].type()
 
         if dtype is not None:
@@ -601,9 +602,9 @@ def _create_proxy_nat_scalar(dtype):
     if dtype.char in 'mM':
         nat = dtype.type('NaT').astype(dtype)
         if dtype.type == np.datetime64:
-            _set_datetime64_from_np_scalar(result.c_value, nat, dtype, True)
+            _set_datetime64_from_np_scalar(result.c_value.c_obj, nat, dtype, True)
         elif dtype.type == np.timedelta64:
-            _set_timedelta64_from_np_scalar(result.c_value, nat, dtype, True)
+            _set_timedelta64_from_np_scalar(result.c_value.c_obj, nat, dtype, True)
         return result
     else:
         raise TypeError('NAT only valid for datetime and timedelta')
