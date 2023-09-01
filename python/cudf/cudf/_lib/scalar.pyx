@@ -90,34 +90,30 @@ cdef class DeviceScalar:
             A NumPy dtype.
         """
         self._dtype = dtype if dtype.kind != 'U' else cudf.dtype('object')
-        self._set_value(value, self._dtype)
-
-    def _set_value(self, value, dtype):
-        # IMPORTANT: this should only ever be called from __init__
         valid = not _is_null_host_scalar(value)
 
-        if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
+        if isinstance(self._dtype, cudf.core.dtypes.DecimalDtype):
             _set_decimal_from_scalar(
-                self.c_value.c_obj, value, dtype, valid)
-        elif isinstance(dtype, cudf.ListDtype):
+                self.c_value.c_obj, value, self._dtype, valid)
+        elif isinstance(self._dtype, cudf.ListDtype):
             _set_list_from_pylist(
-                self.c_value.c_obj, value, dtype, valid)
-        elif isinstance(dtype, cudf.StructDtype):
-            _set_struct_from_pydict(self.c_value.c_obj, value, dtype, valid)
-        elif pd.api.types.is_string_dtype(dtype):
+                self.c_value.c_obj, value, self._dtype, valid)
+        elif isinstance(self._dtype, cudf.StructDtype):
+            _set_struct_from_pydict(self.c_value.c_obj, value, self._dtype, valid)
+        elif pd.api.types.is_string_dtype(self._dtype):
             _set_string_from_np_string(self.c_value.c_obj, value, valid)
-        elif pd.api.types.is_numeric_dtype(dtype):
+        elif pd.api.types.is_numeric_dtype(self._dtype):
             _set_numeric_from_np_scalar(self.c_value.c_obj,
                                         value,
-                                        dtype,
+                                        self._dtype,
                                         valid)
-        elif pd.api.types.is_datetime64_dtype(dtype):
+        elif pd.api.types.is_datetime64_dtype(self._dtype):
             _set_datetime64_from_np_scalar(
-                self.c_value.c_obj, value, dtype, valid
+                self.c_value.c_obj, value, self._dtype, valid
             )
-        elif pd.api.types.is_timedelta64_dtype(dtype):
+        elif pd.api.types.is_timedelta64_dtype(self._dtype):
             _set_timedelta64_from_np_scalar(
-                self.c_value.c_obj, value, dtype, valid
+                self.c_value.c_obj, value, self._dtype, valid
             )
         else:
             raise ValueError(
