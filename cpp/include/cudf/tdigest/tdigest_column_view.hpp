@@ -107,12 +107,26 @@ class tdigest_column_view : private column_view {
   [[nodiscard]] column_view weights() const;
 
   /**
+   * @brief Returns the internal column of minimum values
+   *
+   * @return The internal column of minimum values
+   */
+  [[nodiscard]] column_view minimums() const;
+
+  /**
    * @brief Returns the first min value for the column. Each row corresponds
    * to the minimum value for the accompanying digest.
    *
    * @return const pointer to the first min value for the column
    */
   [[nodiscard]] double const* min_begin() const;
+
+  /**
+   * @brief Returns the internal column of maximum values
+   *
+   * @return The internal column of maximum values
+   */
+  [[nodiscard]] column_view maximums() const;
 
   /**
    * @brief Returns the first max value for the column. Each row corresponds

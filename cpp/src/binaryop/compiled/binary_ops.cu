@@ -53,6 +53,7 @@ struct scalar_as_column_view {
     auto col_v               = column_view(s.type(),
                              1,
                              h_scalar_type_view.data(),
+                             sizeof(T),
                              reinterpret_cast<bitmask_type const*>(s.validity_data()),
                              !s.is_valid());
     return std::pair{col_v, std::unique_ptr<column>(nullptr)};
@@ -77,12 +78,17 @@ scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::strin
   auto offsets_column = std::get<0>(cudf::detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + 1, stream, mr));
 
-  auto chars_column_v = column_view(
-    data_type{type_id::INT8}, h_scalar_type_view.size(), h_scalar_type_view.data(), nullptr, 0);
+  auto chars_column_v = column_view(data_type{type_id::INT8},
+                                    h_scalar_type_view.size(),
+                                    h_scalar_type_view.data(),
+                                    h_scalar_type_view.size(),
+                                    nullptr,
+                                    0);
   // Construct string column_view
   auto col_v = column_view(s.type(),
                            1,
                            nullptr,
+                           0,
                            reinterpret_cast<bitmask_type const*>(s.validity_data()),
                            static_cast<size_type>(!s.is_valid(stream)),
                            0,

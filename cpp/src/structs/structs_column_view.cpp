@@ -41,6 +41,7 @@ column_view structs_column_view::get_sliced_child(int index, rmm::cuda_stream_vi
     child(index).type(),
     size(),
     child(index).head<uint8_t>(),
+    child(index).size_bytes(),
     child(index).null_mask(),
     child(index).null_count()
       ? cudf::detail::null_count(child(index).null_mask(), offset(), offset() + size(), stream)

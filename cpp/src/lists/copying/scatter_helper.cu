@@ -404,6 +404,7 @@ struct list_child_constructor {
       return lists_column_view(column_view(data_type{type_id::LIST},
                                            structs_list_num_rows,
                                            nullptr,
+                                           0,
                                            structs_list_nullmask,
                                            structs_list_null_count,
                                            0,

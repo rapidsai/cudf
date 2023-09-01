@@ -208,6 +208,7 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::scalar const& lhs,
   auto scatter_map_column_view = cudf::column_view{cudf::data_type{cudf::type_id::INT32},
                                                    static_cast<cudf::size_type>(scatter_map_size),
                                                    scatter_map.begin(),
+                                                   scatter_map.size(),
                                                    nullptr,
                                                    0};
 

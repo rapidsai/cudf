@@ -51,6 +51,7 @@ void bench_case(nvbench::state& state)
     col_view = cudf::column_view(col_view.type(),
                                  col_view.size(),
                                  nullptr,
+                                 0,
                                  col_view.null_mask(),
                                  col_view.null_count(),
                                  0,

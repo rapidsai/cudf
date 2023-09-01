@@ -109,6 +109,7 @@ std::unique_ptr<column> remove_keys_fn(dictionary_column_view const& dictionary_
   column_view indices_view(dictionary_column.indices().type(),
                            dictionary_column.size(),
                            dictionary_column.indices().head(),
+                           dictionary_column.indices().size_bytes(),
                            nullptr,
                            0,
                            dictionary_column.offset());
@@ -178,8 +179,12 @@ std::unique_ptr<column> remove_unused_keys(dictionary_column_view const& diction
     rmm::device_uvector<uint32_t> keys_positions(keys_size, stream);
     thrust::sequence(rmm::exec_policy(stream), keys_positions.begin(), keys_positions.end());
     // wrap the indices for comparison in contains()
-    column_view keys_positions_view(
-      data_type{type_id::UINT32}, keys_size, keys_positions.data(), nullptr, 0);
+    column_view keys_positions_view(data_type{type_id::UINT32},
+                                    keys_size,
+                                    keys_positions.data(),
+                                    keys_size * sizeof(uint32_t),
+                                    nullptr,
+                                    0);
     return cudf::detail::contains(indices_view, keys_positions_view, stream, mr);
   }();
   auto d_matches = matches->view().data<bool>();

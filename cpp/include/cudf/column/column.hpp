@@ -160,6 +160,13 @@ class column {
   [[nodiscard]] size_type size() const noexcept { return _size; }
 
   /**
+   * @brief Returns the number of data bytes
+   *
+   * @return The number of bytes
+   */
+  [[nodiscard]] std::size_t size_bytes() const noexcept;
+
+  /**
    * @brief Returns the count of null elements.
    *
    * @return The number of null elements

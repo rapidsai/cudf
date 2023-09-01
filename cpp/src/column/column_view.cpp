@@ -34,12 +34,14 @@ namespace detail {
 column_view_base::column_view_base(data_type type,
                                    size_type size,
                                    void const* data,
+                                   std::size_t data_size,
                                    bitmask_type const* null_mask,
                                    size_type null_count,
                                    size_type offset)
   : _type{type},
     _size{size},
     _data{data},
+    _data_size{data_size},
     _null_mask{null_mask},
     _null_count{null_count},
     _offset{offset}
@@ -62,6 +64,8 @@ column_view_base::column_view_base(data_type type,
     CUDF_EXPECTS(nullptr != null_mask, "Invalid null mask for non-zero null count.");
   }
 }
+
+std::size_t column_view_base::size_bytes() const noexcept { return _data_size; }
 
 size_type column_view_base::null_count(size_type begin, size_type end) const
 {
@@ -130,32 +134,58 @@ bool is_shallow_equivalent(column_view const& lhs, column_view const& rhs)
 column_view::column_view(data_type type,
                          size_type size,
                          void const* data,
+                         std::size_t data_size,
                          bitmask_type const* null_mask,
                          size_type null_count,
                          size_type offset,
                          std::vector<column_view> const& children)
-  : detail::column_view_base{type, size, data, null_mask, null_count, offset}, _children{children}
+  : detail::column_view_base{type, size, data, data_size, null_mask, null_count, offset},
+    _children{children}
 {
   if (type.id() == type_id::EMPTY) {
     CUDF_EXPECTS(num_children() == 0, "EMPTY column cannot have children.");
   }
 }
 
+// column_view::column_view(data_type type,
+//                          size_type size,
+//                          void const* data,
+//                          bitmask_type const* null_mask,
+//                          size_type null_count,
+//                          size_type offset,
+//                          std::vector<column_view> const& children)
+//   : column_view{type, size, data, size_of(type) * size, null_mask, null_count, offset, children}
+//{
+// }
+
 // Mutable view constructor
 mutable_column_view::mutable_column_view(data_type type,
                                          size_type size,
                                          void* data,
+                                         std::size_t data_size,
                                          bitmask_type* null_mask,
                                          size_type null_count,
                                          size_type offset,
                                          std::vector<mutable_column_view> const& children)
-  : detail::column_view_base{type, size, data, null_mask, null_count, offset},
+  : detail::column_view_base{type, size, data, data_size, null_mask, null_count, offset},
     mutable_children{children}
 {
   if (type.id() == type_id::EMPTY) {
     CUDF_EXPECTS(num_children() == 0, "EMPTY column cannot have children.");
   }
 }
+
+// mutable_column_view::mutable_column_view(data_type type,
+//                                          size_type size,
+//                                          void* data,
+//                                          bitmask_type* null_mask,
+//                                          size_type null_count,
+//                                          size_type offset,
+//                                          std::vector<mutable_column_view> const& children)
+//   : mutable_column_view{
+//       type, size, data, size * size_of(type), null_mask, null_count, offset, children}
+//{
+// }
 
 // Update the null count
 void mutable_column_view::set_null_count(size_type new_null_count)
@@ -170,7 +200,8 @@ mutable_column_view::operator column_view() const
   // Convert children to immutable views
   std::vector<column_view> child_views(num_children());
   std::copy(std::cbegin(mutable_children), std::cend(mutable_children), std::begin(child_views));
-  return column_view{_type, _size, _data, _null_mask, _null_count, _offset, std::move(child_views)};
+  return column_view{
+    _type, _size, _data, _data_size, _null_mask, _null_count, _offset, std::move(child_views)};
 }
 
 size_type count_descendants(column_view parent)
@@ -186,6 +217,7 @@ column_view bit_cast(column_view const& input, data_type type)
   return column_view{type,
                      input._size,
                      input._data,
+                     input._data_size,
                      input._null_mask,
                      input._null_count,
                      input._offset,
@@ -198,6 +230,7 @@ mutable_column_view bit_cast(mutable_column_view const& input, data_type type)
   return mutable_column_view{type,
                              input._size,
                              const_cast<void*>(input._data),
+                             input._data_size,
                              const_cast<cudf::bitmask_type*>(input._null_mask),
                              input._null_count,
                              input._offset,

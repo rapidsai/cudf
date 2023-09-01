@@ -155,6 +155,7 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNullsNonzeroOffset)
   cudf::mutable_column_view target_slice(tmp.type(),
                                          tmp.size() - target_offset,
                                          tmp.head<T>(),
+                                         tmp.size_bytes(),
                                          tmp.null_mask(),
                                          tmp.null_count(),
                                          target_offset);

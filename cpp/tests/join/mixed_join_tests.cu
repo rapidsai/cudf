@@ -219,6 +219,7 @@ struct MixedJoinPairReturnTest : public MixedJoinTest<T> {
       cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
                         actual_counts->size(),
                         actual_counts->data(),
+                        actual_counts->size() * sizeof(cudf::size_type),
                         nullptr,
                         0);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_counts_cw, actual_counts_view);

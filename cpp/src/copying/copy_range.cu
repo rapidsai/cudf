@@ -185,6 +185,7 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
     target_indices->type(),
     dict_target.size(),
     target_indices->mutable_view().head(),
+    target_indices->size_bytes(),
     static_cast<cudf::bitmask_type*>(target_contents.null_mask->data()),
     dict_target.null_count());
   cudf::type_dispatcher(new_indices.type(),

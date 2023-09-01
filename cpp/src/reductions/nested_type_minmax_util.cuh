@@ -134,6 +134,7 @@ class comparison_binop_generator {
             auto const dummy_struct = column_view{data_type{type_id::STRUCT},
                                                   input_.size(),
                                                   nullptr,
+                                                  0,
                                                   input_.null_mask(),
                                                   input_.null_count(),
                                                   0,

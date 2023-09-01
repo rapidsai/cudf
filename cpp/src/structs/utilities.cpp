@@ -333,6 +333,7 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls_no_sanitize(
     return column_view(child.type(),
                        child.size(),
                        child.head(),
+                       child.size_bytes(),
                        new_child_mask,
                        null_count,
                        child.offset(),
@@ -355,6 +356,7 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls_no_sanitize(
   return std::pair{column_view(input.type(),
                                input.size(),
                                nullptr,
+                               0,
                                input.null_mask(),
                                input.null_count(),  // Alternatively, postpone.
                                input.offset(),

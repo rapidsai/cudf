@@ -165,6 +165,13 @@ class alignas(16) column_device_view_base {
   [[nodiscard]] CUDF_HOST_DEVICE size_type size() const noexcept { return _size; }
 
   /**
+   * @brief Returns the number of elements in the column.
+   *
+   * @return The number of elements in the column
+   */
+  [[nodiscard]] CUDF_HOST_DEVICE std::size_t size_bytes() const noexcept { return _data_size; }
+
+  /**
    * @brief Returns the element type
    *
    * @return The element type
@@ -292,6 +299,7 @@ class alignas(16) column_device_view_base {
   data_type _type{type_id::EMPTY};   ///< Element type
   cudf::size_type _size{};           ///< Number of elements
   void const* _data{};               ///< Pointer to device memory containing elements
+  std::size_t _data_size{};          ///< Number of bytes
   bitmask_type const* _null_mask{};  ///< Pointer to device memory containing
                                      ///< bitmask representing null elements.
   size_type _offset{};               ///< Index position of the first element.
@@ -311,7 +319,37 @@ class alignas(16) column_device_view_base {
                                            void const* data,
                                            bitmask_type const* null_mask,
                                            size_type offset)
-    : _type{type}, _size{size}, _data{data}, _null_mask{null_mask}, _offset{offset}
+    : _type{type},
+      _size{size},
+      _data{data},
+      _data_size{size_of(type) * size},
+      _null_mask{null_mask},
+      _offset{offset}
+  {
+  }
+
+  /**
+   * @brief Constructs a column with the specified type, size, data, nullmask and offset.
+   *
+   * @param type The type of the column
+   * @param size The number of elements in the column
+   * @param data Pointer to device memory containing elements
+   * @param data_size The number of bytes pointed to by data
+   * @param null_mask Pointer to device memory containing bitmask representing valid elements
+   * @param offset Index position of the first element
+   */
+  CUDF_HOST_DEVICE column_device_view_base(data_type type,
+                                           size_type size,
+                                           void const* data,
+                                           std::size_t data_size,
+                                           bitmask_type const* null_mask,
+                                           size_type offset)
+    : _type{type},
+      _size{size},
+      _data{data},
+      _data_size{data_size},
+      _null_mask{null_mask},
+      _offset{offset}
   {
   }
 
@@ -398,6 +436,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
     return column_device_view{this->type(),
                               size,
                               this->head(),
+                              this->size_bytes(),
                               this->null_mask(),
                               this->offset() + offset,
                               d_children,
@@ -883,11 +922,12 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   CUDF_HOST_DEVICE column_device_view(data_type type,
                                       size_type size,
                                       void const* data,
+                                      std::size_t data_size,
                                       bitmask_type const* null_mask,
                                       size_type offset,
                                       column_device_view* children,
                                       size_type num_children)
-    : column_device_view_base(type, size, data, null_mask, offset),
+    : column_device_view_base(type, size, data, data_size, null_mask, offset),
       d_children(children),
       _num_children(num_children)
   {

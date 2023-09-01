@@ -133,6 +133,7 @@ TEST_F(ListRankScanTest, ListOfStruct)
   auto list_column = cudf::column_view(cudf::data_type(cudf::type_id::LIST),
                                        17,
                                        nullptr,
+                                       0,
                                        static_cast<cudf::bitmask_type*>(null_mask.data()),
                                        null_count,
                                        0,

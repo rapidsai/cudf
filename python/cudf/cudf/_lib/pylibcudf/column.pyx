@@ -62,6 +62,7 @@ cdef class Column:
         (even direct pylibcudf Cython users).
         """
         cdef const void * data = NULL
+        cdef size_t data_size = 0
         cdef const bitmask_type * null_mask = NULL
 
         if self._data is not None:
@@ -73,6 +74,9 @@ cdef class Column:
         # computed once in the constructor and always be reused.
         cdef vector[column_view] c_children
         with gil:
+            if self._data is not None:
+                data_size = self._data.bytes
+
             if self._children is not None:
                 for child in self._children:
                     # Need to cast to Column here so that Cython knows that
@@ -87,7 +91,7 @@ cdef class Column:
                     c_children.push_back((<Column> child).view())
 
         return column_view(
-            self._data_type.c_obj, self._size, data, null_mask,
+            self._data_type.c_obj, self._size, data, data_size, null_mask,
             self._null_count, self._offset, c_children
         )
 

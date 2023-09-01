@@ -23,6 +23,14 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
             data_type type,
             size_type size,
             const void* data,
+            size_t data_size
+        ) except +
+
+        column_view(
+            data_type type,
+            size_type size,
+            const void* data,
+            size_t data_size,
             const bitmask_type* null_mask
         ) except +
 
@@ -30,6 +38,7 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
             data_type type,
             size_type size,
             const void* data,
+            size_t data_size,
             const bitmask_type* null_mask,
             size_type null_count
         ) except +
@@ -38,6 +47,7 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
             data_type type,
             size_type size,
             const void* data,
+            size_t data_size,
             const bitmask_type* null_mask,
             size_type null_count,
             size_type offset
@@ -47,6 +57,7 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
             data_type type,
             size_type size,
             const void* data,
+            size_t data_size,
             const bitmask_type* null_mask,
             size_type null_count,
             size_type offset,
@@ -57,6 +68,7 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
         const T* head[T]() except +
         const bitmask_type* null_mask() except +
         size_type size() except +
+        size_t size_bytes() except +
         data_type type() except +
         bool nullable() except +
         size_type null_count() except +
@@ -80,6 +92,14 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
             data_type type,
             size_type size,
             const void* data,
+            size_t data_size
+        ) except +
+
+        mutable_column_view(
+            data_type type,
+            size_type size,
+            const void* data,
+            size_t data_size,
             const bitmask_type* null_mask
         ) except +
 
@@ -87,6 +107,7 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
             data_type type,
             size_type size,
             const void* data,
+            size_t data_size,
             const bitmask_type* null_mask,
             size_type null_count
         ) except +
@@ -95,6 +116,7 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
             data_type type,
             size_type size,
             const void* data,
+            size_t data_size,
             const bitmask_type* null_mask,
             size_type null_count,
             size_type offset
@@ -102,6 +124,7 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
 
         mutable_column_view(
             data_type type, size_type size, const void* data,
+            size_t data_size,
             const bitmask_type* null_mask, size_type null_count,
             size_type offset, vector[mutable_column_view] children
         ) except +
@@ -110,6 +133,7 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
         T* head[T]() except +
         bitmask_type* null_mask() except +
         size_type size() except +
+        size_t size_bytes() except +
         data_type type() except +
         bool nullable() except +
         size_type null_count() except +

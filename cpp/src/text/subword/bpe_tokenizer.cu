@@ -510,6 +510,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
   auto const input_view = cudf::column_view(cudf::data_type{cudf::type_id::STRING},
                                             offsets->size() - 1,
                                             nullptr,  // no parent data
+                                            0,
                                             nullptr,  // null-mask
                                             0,        // null-count
                                             0,        // offset
@@ -533,6 +534,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
   auto const list_join = cudf::column_view(cudf::data_type{cudf::type_id::LIST},
                                            input.size(),
                                            nullptr,  // no parent data in list column
+                                           0,
                                            input.null_mask(),
                                            input.null_count(),
                                            0,

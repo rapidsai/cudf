@@ -87,6 +87,7 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
   column_view indices_view(dictionary_column.indices().type(),
                            dictionary_column.size(),
                            dictionary_column.indices().head(),
+                           dictionary_column.indices().size_bytes(),
                            nullptr,
                            0,
                            dictionary_column.offset());
@@ -114,7 +115,12 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
                                       0);
     }
     // otherwise we need to convert the gather result
-    column_view cast_view(gather_result.type(), indices_size, gather_result.head(), nullptr, 0);
+    column_view cast_view(gather_result.type(),
+                          indices_size,
+                          gather_result.head(),
+                          gather_result.size_bytes(),
+                          nullptr,
+                          0);
     return cudf::detail::cast(cast_view, indices_type, stream, mr);
   }();
 

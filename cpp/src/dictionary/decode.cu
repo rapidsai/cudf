@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
   column_view indices{source.indices().type(),
                       source.size(),
                       source.indices().head(),
+                      source.indices().size_bytes(),
                       nullptr,  // no nulls for gather indices
                       0,
                       source.offset()};

@@ -103,6 +103,7 @@ TEST_F(JoinTest, TestSimple)
   auto result_cv = cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
                                      result->size(),
                                      result->data(),
+                                     result->size() * sizeof(cudf::size_type),
                                      nullptr,
                                      0);
   column_wrapper<cudf::size_type> expected{0, 1};

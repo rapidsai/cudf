@@ -345,13 +345,16 @@ cdef class Column:
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[mutable_column_view] children
         cdef void* data
+        cdef size_t data_size
 
         if col.base_data is None:
             data = NULL
+            data_size = 0
         else:
             data = <void*><uintptr_t>(
                 col.base_data.get_ptr(mode="write")
             )
+            data_size = <size_t>(col.base_data.nbytes())
 
         cdef Column child_column
         if col.base_children:
@@ -381,6 +384,7 @@ cdef class Column:
             dtype,
             self.size,
             data,
+            data_size,
             mask,
             c_null_count,
             offset,
@@ -408,11 +412,14 @@ cdef class Column:
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[column_view] children
         cdef void* data
+        cdef size_t data_size
 
         if col.base_data is None:
             data = NULL
+            data_size = 0
         else:
             data = <void*><uintptr_t>(col.base_data.get_ptr(mode="read"))
+            data_size = <size_t>(col.base_data.nbytes())
 
         cdef Column child_column
         if col.base_children:
@@ -433,6 +440,7 @@ cdef class Column:
             dtype,
             self.size,
             data,
+            data_size,
             mask,
             c_null_count,
             offset,

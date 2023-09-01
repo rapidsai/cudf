@@ -375,8 +375,10 @@ TYPED_TEST(DLPackNumericTests, ToDlpack1D)
 
   // Verify that data matches input column
   constexpr cudf::data_type type{cudf::type_to_id<TypeParam>()};
+  auto const elements  = tensor.shape[0];
+  auto const data_size = elements * sizeof(TypeParam);
   cudf::column_view const result_view(
-    type, tensor.shape[0], tensor.data, col_view.null_mask(), col_view.null_count());
+    type, elements, tensor.data, data_size, col_view.null_mask(), col_view.null_count());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(col_view, result_view);
 }
 
@@ -416,7 +418,9 @@ TYPED_TEST(DLPackNumericTests, ToDlpack2D)
   cudf::size_type offset{0};
   for (auto const& col : input) {
     constexpr cudf::data_type type{cudf::type_to_id<TypeParam>()};
-    cudf::column_view const result_view(type, tensor.shape[0], tensor.data, nullptr, 0, offset);
+    auto const elements  = tensor.shape[0];
+    auto const data_size = elements * sizeof(TypeParam);
+    cudf::column_view const result_view(type, elements, tensor.data, data_size, nullptr, 0, offset);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(col, result_view);
     offset += tensor.strides[1];
   }

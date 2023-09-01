@@ -39,6 +39,7 @@ linked_column_view::operator column_view() const
   return column_view(this->type(),
                      this->size(),
                      this->head(),
+                     this->size_bytes(),
                      this->null_mask(),
                      this->null_count(),
                      this->offset(),

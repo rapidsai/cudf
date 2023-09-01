@@ -33,8 +33,13 @@ struct dispatch_create_indices {
                                      rmm::mr::device_memory_resource* mr)
   {
     CUDF_EXPECTS(std::is_unsigned<IndexType>(), "indices must be an unsigned type");
-    column_view indices_view{
-      indices.type(), indices.size(), indices.data<IndexType>(), nullptr, 0, indices.offset()};
+    column_view indices_view{indices.type(),
+                             indices.size(),
+                             indices.data<IndexType>(),
+                             indices.size_bytes(),
+                             nullptr,
+                             0,
+                             indices.offset()};
     return std::make_unique<column>(indices_view, stream, mr);
   }
   template <typename IndexType, std::enable_if_t<!is_index_type<IndexType>()>* = nullptr>
@@ -137,8 +142,12 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys,
         new_type, indices_size, std::move(*(contents.data.release())), rmm::device_buffer{}, 0);
     }
     // If the new type does not match, then convert the data.
-    cudf::column_view cast_view{
-      cudf::data_type{indices_type}, indices_size, contents.data->data(), nullptr, 0};
+    cudf::column_view cast_view{cudf::data_type{indices_type},
+                                indices_size,
+                                contents.data->data(),
+                                contents.data->size(),
+                                nullptr,
+                                0};
     return cudf::detail::cast(cast_view, new_type, stream, mr);
   }();
 

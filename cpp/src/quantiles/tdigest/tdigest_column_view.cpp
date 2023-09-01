@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,15 +64,13 @@ column_view tdigest_column_view::weights() const
   return inner.child(weight_column_index);
 }
 
-double const* tdigest_column_view::min_begin() const
-{
-  return child(min_column_index).begin<double>();
-}
+column_view tdigest_column_view::minimums() const { return child(min_column_index); }
 
-double const* tdigest_column_view::max_begin() const
-{
-  return child(max_column_index).begin<double>();
-}
+double const* tdigest_column_view::min_begin() const { return minimums().begin<double>(); }
+
+column_view tdigest_column_view::maximums() const { return child(max_column_index); }
+
+double const* tdigest_column_view::max_begin() const { return maximums().begin<double>(); }
 
 }  // namespace tdigest
 }  // namespace cudf

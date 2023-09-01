@@ -99,6 +99,7 @@ column_view column::view() const
   return column_view{type(),
                      size(),
                      _data.data(),
+                     _data.size(),
                      static_cast<bitmask_type const*>(_null_mask.data()),
                      null_count(),
                      0,
@@ -120,6 +121,7 @@ mutable_column_view column::mutable_view()
   return mutable_column_view{type(),
                              size(),
                              _data.data(),
+                             _data.size(),
                              static_cast<bitmask_type*>(_null_mask.data()),
                              _null_count,
                              0,
@@ -180,6 +182,7 @@ struct create_column_from_view {
       auto indices_view = column_view(dict_view.indices().type(),
                                       dict_view.size(),
                                       dict_view.indices().head(),
+                                      dict_view.indices().size_bytes(),
                                       nullptr,
                                       0,
                                       dict_view.offset());
@@ -260,5 +263,7 @@ column::column(column_view view, rmm::cuda_stream_view stream, rmm::mr::device_m
     column{std::move(*type_dispatcher(view.type(), create_column_from_view{view, stream, mr}))}
 {
 }
+
+std::size_t column::size_bytes() const noexcept { return _data.size(); }
 
 }  // namespace cudf

@@ -168,6 +168,7 @@ void aggregate_result_functor::operator()<aggregation::MIN>(aggregation const& a
         data_type(type_to_id<size_type>()),
         argmin_result.size(),
         static_cast<void const*>(argmin_result.template data<size_type>()),
+        argmin_result.size_bytes(),
         nullptr,
         0);
       auto transformed_result =
@@ -210,6 +211,7 @@ void aggregate_result_functor::operator()<aggregation::MAX>(aggregation const& a
         data_type(type_to_id<size_type>()),
         argmax_result.size(),
         static_cast<void const*>(argmax_result.template data<size_type>()),
+        argmax_result.size_bytes(),
         nullptr,
         0);
       auto transformed_result =
@@ -549,6 +551,7 @@ auto column_view_with_common_nulls(column_view const& column_0, column_view cons
     return column_view(col.type(),
                        col.size(),
                        col.head(),
+                       col.size_bytes(),
                        static_cast<cudf::bitmask_type const*>(nullmask),
                        null_count,
                        col.offset(),

@@ -90,6 +90,7 @@ column_view deserialize_column(serialized_column serial_column,
   return column_view(serial_column.type,
                      serial_column.size,
                      data_ptr,
+                     0,  // TODO need to store this in serialized_column
                      null_mask_ptr,
                      serial_column.null_count,
                      0,

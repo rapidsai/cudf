@@ -67,6 +67,7 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
   auto one_row_col_view = column_view(data_type{type_id::LIST},
                                       1,
                                       nullptr,
+                                      0,
                                       static_cast<bitmask_type const*>(null_mask.data()),
                                       null_count,
                                       0,

@@ -133,6 +133,13 @@ class column_view_base {
   [[nodiscard]] size_type size() const noexcept { return _size; }
 
   /**
+   * @brief Returns the number of data bytes in the column
+   *
+   * @return The number of bytes
+   */
+  [[nodiscard]] std::size_t size_bytes() const noexcept;
+
+  /**
    * @brief Returns true if `size()` returns zero, or false otherwise
    *
    * @return True if `size()` returns zero, or false otherwise
@@ -228,6 +235,7 @@ class column_view_base {
   data_type _type{type_id::EMPTY};   ///< Element type
   size_type _size{};                 ///< Number of elements
   void const* _data{};               ///< Pointer to device memory containing elements
+  std::size_t _data_size{};          ///< Number of bytes
   bitmask_type const* _null_mask{};  ///< Pointer to device memory containing
                                      ///< bitmask representing null elements.
                                      ///< Optional if `null_count() == 0`
@@ -254,7 +262,7 @@ class column_view_base {
 
   /**
    * @brief Construct a `column_view_base` from pointers to device memory for
-   *the elements and bitmask of the column.
+   * the elements and bitmask of the column.
    *
    * If `null_count()` is zero, `null_mask` is optional.
    *
@@ -264,21 +272,22 @@ class column_view_base {
    * @throws cudf::logic_error if `size < 0`
    * @throws cudf::logic_error if `size > 0` but `data == nullptr`
    * @throws cudf::logic_error if `type.id() == EMPTY` but `data != nullptr`
-   *or `null_mask != nullptr`
+   *                           or `null_mask != nullptr`
    * @throws cudf::logic_error if `null_count > 0`, but `null_mask == nullptr`
    * @throws cudf::logic_error if `offset < 0`
    *
    * @param type The element type
    * @param size The number of elements
    * @param data Pointer to device memory containing the column elements
-   * @param null_mask Pointer to device memory containing the null
-   * indicator bitmask
+   * @param data_size Number of bytes in `data`
+   * @param null_mask Pointer to device memory containing the null indicator bitmask
    * @param null_count The number of null elements.
    * @param offset Optional, index of the first element
    */
   column_view_base(data_type type,
                    size_type size,
                    void const* data,
+                   std::size_t data_size,
                    bitmask_type const* null_mask,
                    size_type null_count,
                    size_type offset = 0);
@@ -354,15 +363,15 @@ class column_view : public detail::column_view_base {
    * @throws cudf::logic_error if `size < 0`
    * @throws cudf::logic_error if `size > 0` but `data == nullptr`
    * @throws cudf::logic_error if `type.id() == EMPTY` but `data != nullptr`
-   *or `null_mask != nullptr`
+   *                           or `null_mask != nullptr`
    * @throws cudf::logic_error if `null_count > 0`, but `null_mask == nullptr`
    * @throws cudf::logic_error if `offset < 0`
    *
    * @param type The element type
    * @param size The number of elements
    * @param data Pointer to device memory containing the column elements
-   * @param null_mask Pointer to device memory containing the null
-   * indicator bitmask
+   * @param data_size Number of bytes in `data`
+   * @param null_mask Pointer to device memory containing the null indicator bitmask
    * @param null_count The number of null elements.
    * @param offset Optional, index of the first element
    * @param children Optional, depending on the element type, child columns may
@@ -371,6 +380,7 @@ class column_view : public detail::column_view_base {
   column_view(data_type type,
               size_type size,
               void const* data,
+              std::size_t data_size,
               bitmask_type const* null_mask,
               size_type null_count,
               size_type offset                         = 0,
@@ -418,8 +428,14 @@ class column_view : public detail::column_view_base {
    */
   template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() or cudf::is_chrono<T>())>
   column_view(device_span<T const> data)
-    : column_view(
-        cudf::data_type{cudf::type_to_id<T>()}, data.size(), data.data(), nullptr, 0, 0, {})
+    : column_view(cudf::data_type{cudf::type_to_id<T>()},
+                  data.size(),
+                  data.data(),
+                  data.size_bytes(),
+                  nullptr,
+                  0,
+                  0,
+                  {})
   {
     CUDF_EXPECTS(
       data.size() <= static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
@@ -512,9 +528,8 @@ class mutable_column_view : public detail::column_view_base {
    * @param type The element type
    * @param size The number of elements
    * @param data Pointer to device memory containing the column elements
-   * @param null_mask Pointer to device memory containing the null
-   indicator
-   * bitmask
+   * @param data_size Number of bytes in `data`
+   * @param null_mask Pointer to device memory containing the null indicator bitmask
    * @param null_count The number of null elements.
    * @param offset Optional, index of the first element
    * @param children Optional, depending on the element type, child columns may
@@ -523,6 +538,7 @@ class mutable_column_view : public detail::column_view_base {
   mutable_column_view(data_type type,
                       size_type size,
                       void* data,
+                      std::size_t data_size,
                       bitmask_type* null_mask,
                       size_type null_count,
                       size_type offset                                 = 0,

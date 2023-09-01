@@ -1130,6 +1130,7 @@ struct column_view_printer {
     std::vector<std::string> indices = to_strings({dictionary.indices().type(),
                                                    dictionary.size(),
                                                    dictionary.indices().head(),
+                                                   dictionary.indices().size_bytes(),
                                                    dictionary.null_mask(),
                                                    dictionary.null_count(),
                                                    dictionary.offset()});

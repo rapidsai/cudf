@@ -144,6 +144,7 @@ std::unique_ptr<column> extract_list_element_impl(lists_column_view lists_column
     column_view{data_type{type_id::LIST},
                 lists_column.size(),
                 nullptr,  // data
+                0,        // data size in bytes
                 nullptr,  // null_mask
                 0,        // null_count
                 lists_column.offset(),

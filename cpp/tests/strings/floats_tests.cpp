@@ -183,18 +183,16 @@ TEST_F(StringsConvertTest, FromFloats64)
 
 TEST_F(StringsConvertTest, ZeroSizeStringsColumnFloat)
 {
-  cudf::column_view zero_size_column(
-    cudf::data_type{cudf::type_id::FLOAT32}, 0, nullptr, nullptr, 0);
-  auto results = cudf::strings::from_floats(zero_size_column);
+  auto const zero_size_column = cudf::make_empty_column(cudf::type_id::FLOAT32)->view();
+  auto results                = cudf::strings::from_floats(zero_size_column);
   cudf::test::expect_column_empty(results->view());
 }
 
 TEST_F(StringsConvertTest, ZeroSizeFloatsColumn)
 {
-  cudf::column_view zero_size_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
   auto results =
-    cudf::strings::to_floats(zero_size_column, cudf::data_type{cudf::type_id::FLOAT32});
+    cudf::strings::to_floats(zero_size_strings_column, cudf::data_type{cudf::type_id::FLOAT32});
   EXPECT_EQ(0, results->size());
 }
 

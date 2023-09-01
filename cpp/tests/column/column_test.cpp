@@ -88,6 +88,9 @@ void verify_column_views(cudf::column col)
   EXPECT_EQ(view.head(), mutable_view.head());
   EXPECT_EQ(view.data<char>(), mutable_view.data<char>());
   EXPECT_EQ(view.offset(), mutable_view.offset());
+
+  EXPECT_EQ(col.size_bytes(), view.size_bytes());
+  EXPECT_EQ(col.size_bytes(), mutable_view.size_bytes());
 }
 
 TYPED_TEST(TypedColumnTest, DefaultNullCountNoMask)

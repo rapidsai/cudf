@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ column_device_view::column_device_view(column_view source)
   : detail::column_device_view_base{source.type(),
                                     source.size(),
                                     source.head(),
+                                    source.size_bytes(),
                                     source.null_mask(),
                                     source.offset()},
     _num_children{source.num_children()}
@@ -96,6 +97,7 @@ column_device_view::column_device_view(column_view source, void* h_ptr, void* d_
   : detail::column_device_view_base{source.type(),
                                     source.size(),
                                     source.head(),
+                                    source.size_bytes(),
                                     source.null_mask(),
                                     source.offset()},
     _num_children{source.num_children()}
@@ -131,6 +133,7 @@ mutable_column_device_view::mutable_column_device_view(mutable_column_view sourc
   : detail::column_device_view_base{source.type(),
                                     source.size(),
                                     source.head(),
+                                    source.size_bytes(),
                                     source.null_mask(),
                                     source.offset()},
     _num_children{source.num_children()}
@@ -143,6 +146,7 @@ mutable_column_device_view::mutable_column_device_view(mutable_column_view sourc
   : detail::column_device_view_base{source.type(),
                                     source.size(),
                                     source.head(),
+                                    source.size_bytes(),
                                     source.null_mask(),
                                     source.offset()},
     _num_children{source.num_children()}

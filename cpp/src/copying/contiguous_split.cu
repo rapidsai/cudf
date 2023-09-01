@@ -768,6 +768,7 @@ BufInfo build_output_columns(InputIter begin,
     uint8_t const* data_ptr = base_ptr != nullptr && data_offset != -1
                                 ? base_ptr + static_cast<uint64_t>(data_offset)
                                 : nullptr;
+    std::size_t data_size   = data_ptr != nullptr && data_offset != -1 ? src.size_bytes() : 0;
 
     // children
     auto children = std::vector<column_view>{};
@@ -777,7 +778,7 @@ BufInfo build_output_columns(InputIter begin,
       src.child_begin(), src.child_end(), current_info, std::back_inserter(children), base_ptr, mb);
 
     return column_view{
-      src.type(), col_size, data_ptr, bitmask_ptr, null_count, 0, std::move(children)};
+      src.type(), col_size, data_ptr, data_size, bitmask_ptr, null_count, 0, std::move(children)};
   });
 
   return current_info;

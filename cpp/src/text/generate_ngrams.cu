@@ -105,6 +105,7 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
     cudf::column_view offsets_view(cudf::data_type{cudf::type_id::INT32},
                                    strings_count + 1,
                                    strings.offsets_begin(),
+                                   strings.offsets().size_bytes(),
                                    nullptr,
                                    0);
     auto table_offsets = cudf::detail::copy_if(
@@ -127,6 +128,7 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
   cudf::column_view strings_view(cudf::data_type{cudf::type_id::STRING},
                                  strings_count,
                                  nullptr,
+                                 0,
                                  nullptr,
                                  0,
                                  0,

@@ -251,6 +251,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
       data_type(type_to_id<size_type>()),
       arg_result->size(),
       static_cast<void const*>(arg_result->view().template data<size_type>()),
+      arg_result->size_bytes(),
       nullptr,
       0);
     auto gather_argminmax =
