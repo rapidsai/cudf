@@ -91,14 +91,14 @@ struct DeviceRolling {
 
   // operations we do support
   template <typename T = InputType, aggregation::Kind O = op>
-  DeviceRolling(size_type _min_periods, std::enable_if_t<is_supported<T, O>()>* = nullptr)
+  explicit DeviceRolling(size_type _min_periods, std::enable_if_t<is_supported<T, O>()>* = nullptr)
     : min_periods(_min_periods)
   {
   }
 
   // operations we don't support
   template <typename T = InputType, aggregation::Kind O = op>
-  DeviceRolling(size_type _min_periods, std::enable_if_t<!is_supported<T, O>()>* = nullptr)
+  explicit DeviceRolling(size_type _min_periods, std::enable_if_t<!is_supported<T, O>()>* = nullptr)
     : min_periods(_min_periods)
   {
     CUDF_FAIL("Invalid aggregation/type pair");
@@ -111,7 +111,7 @@ struct DeviceRolling {
                              mutable_column_device_view& output,
                              size_type start_index,
                              size_type end_index,
-                             size_type current_index)
+                             size_type current_index) const
   {
     using AggOp = typename corresponding_operator<op>::type;
     AggOp agg_op;
@@ -144,7 +144,7 @@ struct DeviceRolling {
 template <typename InputType, aggregation::Kind op>
 struct DeviceRollingArgMinMaxBase {
   size_type min_periods;
-  DeviceRollingArgMinMaxBase(size_type _min_periods) : min_periods(_min_periods) {}
+  explicit DeviceRollingArgMinMaxBase(size_type _min_periods) : min_periods(_min_periods) {}
 
   static constexpr bool is_supported()
   {
@@ -162,7 +162,7 @@ struct DeviceRollingArgMinMaxBase {
  */
 template <aggregation::Kind op>
 struct DeviceRollingArgMinMaxString : DeviceRollingArgMinMaxBase<cudf::string_view, op> {
-  DeviceRollingArgMinMaxString(size_type _min_periods)
+  explicit DeviceRollingArgMinMaxString(size_type _min_periods)
     : DeviceRollingArgMinMaxBase<cudf::string_view, op>(_min_periods)
   {
   }

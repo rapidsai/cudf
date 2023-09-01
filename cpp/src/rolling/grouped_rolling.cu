@@ -111,7 +111,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
   CUDF_EXPECTS((group_keys.num_columns() == 0 || group_keys.num_rows() == input.size()),
                "Size mismatch between group_keys and input vector.");
 
-  CUDF_EXPECTS((min_periods > 0), "min_periods must be positive");
+  CUDF_EXPECTS((min_periods >= 0), "min_periods must be non-negative");
 
   CUDF_EXPECTS((default_outputs.is_empty() || default_outputs.size() == input.size()),
                "Defaults column must be either empty or have as many rows as the input column.");
@@ -126,6 +126,9 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
 
   auto const preceding_window = preceding_window_bounds.value();
   auto const following_window = following_window_bounds.value();
+
+  CUDF_EXPECTS(-(preceding_window - 1) <= following_window,
+               "Preceding window bounds must precede the following window bounds.");
 
   if (group_keys.num_columns() == 0) {
     // No Groupby columns specified. Treat as one big group.

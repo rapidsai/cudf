@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/extrema.h>
-#include <thrust/iterator/constant_iterator.h>
 
 namespace cudf::detail {
 
@@ -42,6 +41,9 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 
   CUDF_EXPECTS((default_outputs.is_empty() || default_outputs.size() == input.size()),
                "Defaults column must be either empty or have as many rows as the input column.");
+
+  CUDF_EXPECTS(-(preceding_window - 1) <= following_window,
+               "Preceding window bounds must precede the following window bounds.");
 
   if (agg.kind == aggregation::CUDA || agg.kind == aggregation::PTX) {
     // TODO: In future, might need to clamp preceding/following to column boundaries.
