@@ -250,10 +250,9 @@ void __device__ gen_hist(uint32_t* hist,
   using block_reduce = cub::BlockReduce<uint32_t, block_size>;
   auto const t       = threadIdx.x;
 
-  // TODO this so needs rolling_index
-  auto const mylvl = s->vals[(rle_numvals + t) & (rle_buffer_size - 1)];
+  auto const mylvl = s->vals[rolling_index<rle_buffer_size>(rle_numvals + t)];
   for (uint32_t lvl = 0; lvl < maxlvl; lvl++) {
-    uint32_t const is_yes = mylvl == lvl;
+    uint32_t const is_yes = t < nrows and mylvl == lvl;
     auto const lvl_sum    = block_reduce(temp_storage).Sum(is_yes);
     if (t == 0) { hist[lvl] += lvl_sum; }
     __syncthreads();
@@ -855,7 +854,8 @@ static __device__ void RleEncode(
     uint32_t pos = rle_pos + t;
     if (rle_run > 0 && !(rle_run & 1)) {
       // Currently in a long repeat run
-      uint32_t mask = ballot(pos < numvals && s->vals[pos & (rle_buffer_size - 1)] == s->run_val);
+      uint32_t mask =
+        ballot(pos < numvals && s->vals[rolling_index<rle_buffer_size>(pos)] == s->run_val);
       uint32_t rle_rpt_count, max_rpt_count;
       if (!(t & 0x1f)) { s->rpt_map[t >> 5] = mask; }
       __syncthreads();
@@ -885,8 +885,8 @@ static __device__ void RleEncode(
       }
     } else {
       // New run or in a literal run
-      uint32_t v0      = s->vals[pos & (rle_buffer_size - 1)];
-      uint32_t v1      = s->vals[(pos + 1) & (rle_buffer_size - 1)];
+      uint32_t v0      = s->vals[rolling_index<rle_buffer_size>(pos)];
+      uint32_t v1      = s->vals[rolling_index<rle_buffer_size>(pos + 1)];
       uint32_t mask    = ballot(pos + 1 < numvals && v0 == v1);
       uint32_t maxvals = min(numvals - rle_pos, 128);
       uint32_t rle_lit_count, rle_rpt_count;
@@ -995,7 +995,7 @@ static __device__ void PlainBoolEncode(page_enc_state_s* s,
 
   while (rle_pos < numvals) {
     uint32_t pos    = rle_pos + t;
-    uint32_t v      = (pos < numvals) ? s->vals[pos & (rle_buffer_size - 1)] : 0;
+    uint32_t v      = (pos < numvals) ? s->vals[rolling_index<rle_buffer_size>(pos)] : 0;
     uint32_t n      = min(numvals - rle_pos, 128);
     uint32_t nbytes = (n + ((flush) ? 7 : 0)) >> 3;
     if (!nbytes) { break; }
@@ -1135,7 +1135,7 @@ __global__ void __launch_bounds__(128, 8)
           } while (is_col_struct);
           return def;
         }();
-        s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = def_lvl;
+        s->vals[rolling_index<rle_buffer_size>(rle_numvals + t)] = def_lvl;
         __syncthreads();
         if (s->page.def_histogram != nullptr) {
           gen_hist<block_size>(s->page.def_histogram,
@@ -1190,7 +1190,7 @@ __global__ void __launch_bounds__(128, 8)
         uint32_t idx         = page_first_val_idx + rle_numvals + t;
         uint32_t lvl_val =
           (rle_numvals + t < s->page.num_values && idx < col_last_val_idx) ? lvl_val_data[idx] : 0;
-        s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = lvl_val;
+        s->vals[rolling_index<rle_buffer_size>(rle_numvals + t)] = lvl_val;
         __syncthreads();
         if (hist != nullptr) {
           gen_hist<block_size>(hist, s, nvals, rle_numvals, max_lvl, temp_storage.reduce_storage);
@@ -1303,7 +1303,7 @@ __global__ void __launch_bounds__(128, 8)
           } else {
             v = s->ck.dict_index[val_idx];
           }
-          s->vals[(rle_numvals + pos) & (rle_buffer_size - 1)] = v;
+          s->vals[rolling_index<rle_buffer_size>(rle_numvals + pos)] = v;
         }
         rle_numvals += rle_numvals_in_block;
         __syncthreads();
