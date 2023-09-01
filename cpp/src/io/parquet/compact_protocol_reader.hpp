@@ -142,24 +142,7 @@ class CompactProtocolReader {
   uint8_t const* m_cur  = nullptr;
   uint8_t const* m_end  = nullptr;
 
-  friend class ParquetFieldBool;
-  friend class ParquetFieldBoolList;
-  friend class ParquetFieldInt8;
-  friend class ParquetFieldInt32;
-  friend class ParquetFieldOptionalInt32;
-  friend class ParquetFieldInt64;
-  friend class ParquetFieldInt64List;
-  template <typename T>
-  friend class ParquetFieldStructListFunctor;
   friend class ParquetFieldString;
-  template <typename T>
-  friend class ParquetFieldStructFunctor;
-  template <typename T, bool>
-  friend class ParquetFieldUnionFunctor;
-  template <typename T>
-  friend class ParquetFieldEnum;
-  template <typename T>
-  friend class ParquetFieldEnumListFunctor;
   friend class ParquetFieldStringList;
   friend class ParquetFieldBinary;
   friend class ParquetFieldBinaryList;
