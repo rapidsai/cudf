@@ -431,19 +431,21 @@ std::unique_ptr<table> rsplit(strings_column_view const& strings_column,
 std::unique_ptr<table> split(strings_column_view const& strings_column,
                              string_scalar const& delimiter,
                              size_type maxsplit,
+                             rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::split(strings_column, delimiter, maxsplit, cudf::get_default_stream(), mr);
+  return detail::split(strings_column, delimiter, maxsplit, stream, mr);
 }
 
 std::unique_ptr<table> rsplit(strings_column_view const& strings_column,
                               string_scalar const& delimiter,
                               size_type maxsplit,
+                              rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rsplit(strings_column, delimiter, maxsplit, cudf::get_default_stream(), mr);
+  return detail::rsplit(strings_column, delimiter, maxsplit, stream, mr);
 }
 
 }  // namespace strings
