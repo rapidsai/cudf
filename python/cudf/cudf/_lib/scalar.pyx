@@ -20,10 +20,12 @@ from libc.stdint cimport (
 )
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport move
 
 from rmm._lib.memory_resource cimport get_current_device_resource
 
 import cudf
+from cudf._lib cimport pylibcudf
 from cudf._lib.types import (
     LIBCUDF_TO_SUPPORTED_NUMPY_TYPES,
     datetime_unit_map,
@@ -178,7 +180,7 @@ cdef class DeviceScalar:
         """
         Returns if the Scalar is valid or not(i.e., <NA>).
         """
-        return self.get_raw_ptr()[0].is_valid()
+        return self.c_value.is_valid()
 
     def __repr__(self):
         if cudf.utils.utils.is_na_like(self.value):
@@ -197,9 +199,8 @@ cdef class DeviceScalar:
         cdef DeviceScalar s = DeviceScalar.__new__(DeviceScalar)
         cdef libcudf_types.data_type cdtype
 
-        s.c_value.c_obj.swap(ptr)
+        s.c_value = pylibcudf.Scalar.from_libcudf(move(ptr))
         cdtype = s.get_raw_ptr()[0].type()
-        s.c_value._data_type = pylibcudf.DataType.from_libcudf(cdtype)
 
         if dtype is not None:
             s._dtype = dtype

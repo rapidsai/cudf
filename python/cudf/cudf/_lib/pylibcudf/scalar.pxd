@@ -23,3 +23,6 @@ cdef class Scalar:
 
     cpdef DataType type(self)
     cpdef bool is_valid(self)
+
+    @staticmethod
+    cdef Scalar from_libcudf(unique_ptr[scalar] libcudf_scalar, dtype=*)
