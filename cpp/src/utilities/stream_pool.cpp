@@ -114,13 +114,18 @@ cuda_stream_pool& global_cuda_stream_pool()
   return *pool;
 }
 
-void fork_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
+std::vector<rmm::cuda_stream_view> fork_streams(rmm::cuda_stream_view stream, uint32_t count)
 {
+  auto streams      = global_cuda_stream_pool().get_streams(count);
   cudaEvent_t event = event_for_thread();
   CUDF_CUDA_TRY(cudaEventRecord(event, stream));
+  std::for_each(streams.begin(), streams.end(), [&](auto& strm) {
+    CUDF_CUDA_TRY(cudaStreamWaitEvent(strm, event, 0));
+  });
   for (auto& strm : streams) {
     CUDF_CUDA_TRY(cudaStreamWaitEvent(strm, event, 0));
   }
+  return streams;
 }
 
 void join_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)

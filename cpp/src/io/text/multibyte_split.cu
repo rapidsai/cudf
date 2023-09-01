@@ -333,8 +333,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   CUDF_EXPECTS(delimiter.size() < multistate::max_segment_value,
                "delimiter contains too many total tokens to produce a deterministic result.");
 
-  auto concurrency = 2;
-  auto streams     = cudf::detail::global_cuda_stream_pool().get_streams(concurrency);
+  auto const concurrency = 2;
 
   // must be at least 32 when using warp-reduce on partials
   // must be at least 1 more than max possible concurrent tiles
@@ -379,7 +378,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   output_builder<byte_offset> row_offset_storage(ITEMS_PER_CHUNK, max_growth, stream);
   output_builder<char> char_storage(ITEMS_PER_CHUNK, max_growth, stream);
 
-  cudf::detail::fork_streams(streams, stream);
+  auto streams = cudf::detail::fork_streams(stream, concurrency);
 
   cudaEvent_t last_launch_event;
   CUDF_CUDA_TRY(cudaEventCreate(&last_launch_event));

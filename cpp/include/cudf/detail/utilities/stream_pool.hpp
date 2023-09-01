@@ -39,12 +39,10 @@ namespace cudf::detail {
  * auto stream = cudf::get_default_stream();
  * auto const num_streams = 2;
  * // do work on stream
- * auto streams = cudf::detail::global_cuda_stream_pool().get_streams(num_streams);
- * // wait for event on stream before executing on any of streams
- * cudf::detail::fork_streams(streams, stream);
- * // invoke kernel on streams[0]
- * // invoke kernel on streams[1]
- * // wait for event on streams before executing on stream
+ * // allocate streams and wait for an event on stream before executing on any of streams
+ * auto streams = cudf::detail::fork_streams(stream, num_streams);
+ * // do work on streams[0] and streams[1]
+ * // wait for event on streams before continuing to do work on stream
  * cudf::detail::join_streams(streams, stream);
  * @endcode
  */
@@ -104,12 +102,14 @@ class cuda_stream_pool {
 cuda_stream_pool& global_cuda_stream_pool();
 
 /**
- * @brief Synchronize a set of streams to an event on another stream.
+ * @brief Acquire a set of `cuda_stream_view` objects and synchronize them to an event on another
+ * stream.
  *
- * @param streams Vector of streams to synchronize.
- * @param stream Stream to synchronize the other streams to, usually the default stream.
+ * @param stream Stream to synchronize the returned streams to, usually the default stream.
+ * @param count The number of stream views to return.
+ * @return Vector containing `count` stream views.
  */
-void fork_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream);
+std::vector<rmm::cuda_stream_view> fork_streams(rmm::cuda_stream_view stream, uint32_t count);
 
 /**
  * @brief Synchronize a stream to an event on a set of streams.

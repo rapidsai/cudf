@@ -164,9 +164,8 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   chunk_nested_data.host_to_device_async(_stream);
 
   // get the number of streams we need from the pool and tell them to wait on the H2D copies
-  int nkernels = std::bitset<32>(kernel_mask).count();
-  auto streams = cudf::detail::global_cuda_stream_pool().get_streams(nkernels);
-  cudf::detail::fork_streams(streams, _stream);
+  int const nkernels = std::bitset<32>(kernel_mask).count();
+  auto streams       = cudf::detail::fork_streams(_stream, nkernels);
 
   auto const level_type_size = _file_itm_data.level_type_size;
 
