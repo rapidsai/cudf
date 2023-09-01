@@ -2568,6 +2568,15 @@ def test_parquet_reader_binary_decimal(datadir):
     assert_eq(expect, got)
 
 
+def test_parquet_reader_fixed_bin(datadir):
+    fname = datadir / "fixed_len_byte_array.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname)
+
+    assert_eq(expect, got)
+
+
 def test_parquet_reader_rle_boolean(datadir):
     fname = datadir / "rle_boolean_encoding.parquet"
 

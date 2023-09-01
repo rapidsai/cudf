@@ -1182,6 +1182,17 @@ def test_multiindex_values_host():
     assert_eq(midx.values_host, pmidx.values)
 
 
+def test_multiindex_to_numpy():
+    midx = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    pmidx = midx.to_pandas()
+
+    assert_eq(midx.to_numpy(), pmidx.to_numpy())
+
+
 @pytest.mark.parametrize(
     "gdi, fill_value, expected",
     [
@@ -1686,6 +1697,7 @@ def test_difference():
 
     expected = midx2.to_pandas().difference(midx.to_pandas())
     actual = midx2.difference(midx)
+    assert isinstance(actual, cudf.MultiIndex)
     assert_eq(expected, actual)
 
 
@@ -1878,3 +1890,10 @@ def test_multiindex_levels():
 
     assert_eq(gidx.levels[0], pidx.levels[0])
     assert_eq(gidx.levels[1], pidx.levels[1])
+
+
+def test_multiindex_empty_slice_pandas_compatibility():
+    expected = pd.MultiIndex.from_tuples([("a", "b")])[:0]
+    with cudf.option_context("mode.pandas_compatible", True):
+        actual = cudf.from_pandas(expected)
+    assert_eq(expected, actual, exact=False)

@@ -1151,6 +1151,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         pdi = pd.MultiIndex.from_tuples(tuples, names=names)
         return cls.from_pandas(pdi)
 
+    @_cudf_nvtx_annotate
+    def to_numpy(self):
+        return self.values_host
+
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def values_host(self):
@@ -1633,7 +1637,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def difference(self, other, sort=None):
         if hasattr(other, "to_pandas"):
             other = other.to_pandas()
-        return self.to_pandas().difference(other, sort)
+        return cudf.from_pandas(self.to_pandas().difference(other, sort))
 
     @_cudf_nvtx_annotate
     def append(self, other):
