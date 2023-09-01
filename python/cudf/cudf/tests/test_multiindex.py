@@ -1697,6 +1697,7 @@ def test_difference():
 
     expected = midx2.to_pandas().difference(midx.to_pandas())
     actual = midx2.difference(midx)
+    assert isinstance(actual, cudf.MultiIndex)
     assert_eq(expected, actual)
 
 
