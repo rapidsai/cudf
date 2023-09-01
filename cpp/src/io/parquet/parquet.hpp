@@ -233,14 +233,14 @@ struct RepetitionDefinitionLevelHistogram {
    *
    * This value should not be written if max_repetition_level is 0.
    */
-  std::optional<std::vector<int64_t>> repetition_level_histogram;
+  std::optional<std::vector<int64_t>> repetition_level_histogram = std::nullopt;
 
   /**
    * Same as repetition_level_histogram except for definition levels.
    *
-   * This value should not be written if max_definition_level is 0.
+   * This value should not be written if max_definition_level is 0 or 1.
    */
-  std::optional<std::vector<int64_t>> definition_level_histogram;
+  std::optional<std::vector<int64_t>> definition_level_histogram = std::nullopt;
 };
 
 /**
@@ -249,8 +249,10 @@ struct RepetitionDefinitionLevelHistogram {
 struct SizeStatistics {
   // number of variable-width bytes stored for the page/chunk. should not be set for anything
   // but the BYTE_ARRAY physical type.
-  std::optional<int64_t> unencoded_variable_width_stored_bytes;
-  std::optional<RepetitionDefinitionLevelHistogram> repetition_definition_level_histogram;
+  std::optional<int64_t> unencoded_byte_array_data_bytes = std::nullopt;
+  // repetitino and definition level histograms at the column chunk and page level
+  std::optional<RepetitionDefinitionLevelHistogram> repetition_definition_level_histogram =
+    std::nullopt;
 };
 
 /**
@@ -272,7 +274,7 @@ struct ColumnChunkMetaData {
   int64_t dictionary_page_offset =
     0;                    // Byte offset from the beginning of file to first (only) dictionary page
   Statistics statistics;  // Encoded chunk-level statistics
-  std::optional<SizeStatistics> size_estimate_statistics;
+  std::optional<SizeStatistics> size_statistics = std::nullopt;  // Size statistics for the chunk
 };
 
 /**
@@ -385,7 +387,6 @@ struct PageLocation {
   int32_t compressed_page_size;  // Compressed page size in bytes plus the heeader length
   int64_t first_row_index;  // Index within the column chunk of the first row of the page. reset to
                             // 0 at the beginning of each column chunk
-  std::optional<int64_t> unencoded_variable_width_stored_bytes;
 };
 
 /**
@@ -393,6 +394,9 @@ struct PageLocation {
  */
 struct OffsetIndex {
   std::vector<PageLocation> page_locations;
+  // per-page size info. see description of the same field in SizeStatistics. only present for
+  // columns with a BYTE_ARRAY physical type.
+  std::optional<std::vector<int64_t>> unencoded_byte_array_data_bytes = std::nullopt;
 };
 
 /**
@@ -405,9 +409,9 @@ struct ColumnIndex {
   BoundaryOrder boundary_order =
     BoundaryOrder::UNORDERED;                    // Indicates if min and max values are ordered
   std::vector<int64_t> null_counts;              // Optional count of null values per page
-  // FIXME(ets): this will likely be RepetitionDefinitionLevelHistogram
-  // https://github.com/apache/parquet-format/pull/197
-  std::optional<RepetitionDefinitionLevelHistogram> size_statistics;
+  // repetition/definition level histograms for the column chunk
+  std::optional<RepetitionDefinitionLevelHistogram> repetition_definition_level_histograms =
+    std::nullopt;
 };
 
 // bit space we are reserving in column_buffer::user_data

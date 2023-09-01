@@ -160,6 +160,8 @@ struct aggregate_writer_metadata {
   auto& file(size_t p) { return files[p]; }
   [[nodiscard]] size_t num_files() const { return files.size(); }
 
+  [[nodiscard]] auto const& get_schema() const { return schema; }
+
  private:
   int32_t version = 0;
   std::vector<SchemaElement> schema;
@@ -169,7 +171,6 @@ struct aggregate_writer_metadata {
     std::vector<KeyValue> key_value_metadata;
     std::vector<OffsetIndex> offset_indexes;
     std::vector<std::vector<uint8_t>> column_indexes;
-    std::vector<SizeStatistics> size_stats;  // temporary to compile...should be in column_indexes
   };
   std::vector<per_file_metadata> files;
   std::string created_by         = "";
@@ -1844,6 +1845,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           auto const& col           = col_desc[ck->col_desc_id];
           auto const num_histograms = ck->num_pages - (ck->use_dictionary ? 1 : 0) + 1;
 
+          // FIXME(ets): def level cutoff may be > 1
           if (col.max_def_level > 0) {
             def_histogram_bfr_size += (col.max_def_level + 1) * num_histograms;
           }
@@ -2049,10 +2051,11 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           SizeStatistics chunk_stats;
           RepetitionDefinitionLevelHistogram hist;
 
-          chunk_stats.unencoded_variable_width_stored_bytes = ck.var_bytes_size;
+          chunk_stats.unencoded_byte_array_data_bytes = ck.var_bytes_size;
 
           auto const num_data_pages = ck.num_pages - (ck.use_dictionary ? 1 : 0);
-          if (col.max_def_level > 0) {
+          // FIXME(ets): cutoff for def level is open to debate
+          if (col.max_def_level > 1) {
             size_t const hist_size        = col.max_def_level + 1;
             uint32_t const* const ck_hist = h_def_ptr + hist_size * num_data_pages;
             host_span<uint32_t const> ck_def_hist{ck_hist, hist_size};
@@ -2077,9 +2080,9 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
             chunk_stats.repetition_definition_level_histogram = hist;
           }
 
-          if (chunk_stats.unencoded_variable_width_stored_bytes.has_value() ||
+          if (chunk_stats.unencoded_byte_array_data_bytes.has_value() ||
               chunk_stats.repetition_definition_level_histogram.has_value()) {
-            column_chunk_meta.size_estimate_statistics = chunk_stats;
+            column_chunk_meta.size_statistics = chunk_stats;
           }
         }
       }
@@ -2310,6 +2313,7 @@ void writer::impl::write_parquet_data_to_sink(
   if (_stats_granularity == statistics_freq::STATISTICS_COLUMN) {
     // need pages on host to create offset_indexes
     auto const h_pages = cudf::detail::make_host_vector_sync(pages, _stream);
+    auto const& schema = _agg_meta->get_schema();
 
     // add column and offset indexes to metadata
     for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
@@ -2336,6 +2340,9 @@ void writer::impl::write_parquet_data_to_sink(
           int64_t curr_pg_offset = column_chunk_meta.data_page_offset;
 
           OffsetIndex offset_idx;
+          std::vector<int64_t> var_bytes;
+          auto const is_byte_arr = column_chunk_meta.type == BYTE_ARRAY;
+
           for (uint32_t pg = 0; pg < ck.num_pages; pg++) {
             auto const& enc_page = h_pages[curr_page_idx++];
 
@@ -2345,12 +2352,12 @@ void writer::impl::write_parquet_data_to_sink(
             int32_t this_page_size = enc_page.hdr_size + enc_page.max_data_size;
             // first_row_idx is relative to start of row group
             PageLocation loc{curr_pg_offset, this_page_size, enc_page.start_row - ck.start_row};
-            if (enc_page.var_bytes_size > 0) {
-              loc.unencoded_variable_width_stored_bytes = enc_page.var_bytes_size;
-            }
+            if (is_byte_arr) { var_bytes.push_back(enc_page.var_bytes_size); }
             offset_idx.page_locations.push_back(loc);
             curr_pg_offset += this_page_size;
           }
+
+          if (is_byte_arr) { offset_idx.unencoded_byte_array_data_bytes = std::move(var_bytes); }
 
           _stream.synchronize();
           _agg_meta->file(p).offset_indexes.emplace_back(std::move(offset_idx));

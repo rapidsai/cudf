@@ -247,7 +247,7 @@ bool CompactProtocolReader::read(ColumnChunkMetaData* c)
                             ParquetFieldInt64(10, c->index_page_offset),
                             ParquetFieldInt64(11, c->dictionary_page_offset),
                             ParquetFieldStruct(12, c->statistics),
-                            OptionalParquetFieldStruct(16, c->size_estimate_statistics));
+                            OptionalParquetFieldStruct(16, c->size_statistics));
   return function_builder(this, op);
 }
 
@@ -300,14 +300,14 @@ bool CompactProtocolReader::read(PageLocation* p)
 {
   auto op = std::make_tuple(ParquetFieldInt64(1, p->offset),
                             ParquetFieldInt32(2, p->compressed_page_size),
-                            ParquetFieldInt64(3, p->first_row_index),
-                            OptionalParquetFieldInt64(4, p->unencoded_variable_width_stored_bytes));
+                            ParquetFieldInt64(3, p->first_row_index));
   return function_builder(this, op);
 }
 
 bool CompactProtocolReader::read(OffsetIndex* o)
 {
-  auto op = std::make_tuple(ParquetFieldStructList(1, o->page_locations));
+  auto op = std::make_tuple(ParquetFieldStructList(1, o->page_locations),
+                            OptionalParquetFieldInt64List(2, o->unencoded_byte_array_data_bytes));
   return function_builder(this, op);
 }
 
@@ -321,21 +321,20 @@ bool CompactProtocolReader::read(RepetitionDefinitionLevelHistogram* r)
 bool CompactProtocolReader::read(SizeStatistics* s)
 {
   auto op =
-    std::make_tuple(OptionalParquetFieldInt64(1, s->unencoded_variable_width_stored_bytes),
+    std::make_tuple(OptionalParquetFieldInt64(1, s->unencoded_byte_array_data_bytes),
                     OptionalParquetFieldStruct(2, s->repetition_definition_level_histogram));
   return function_builder(this, op);
 }
 
 bool CompactProtocolReader::read(ColumnIndex* c)
 {
-  auto op = std::make_tuple(ParquetFieldBoolList(1, c->null_pages),
-                            ParquetFieldBinaryList(2, c->min_values),
-                            ParquetFieldBinaryList(3, c->max_values),
-                            ParquetFieldEnum<BoundaryOrder>(4, c->boundary_order),
-                            ParquetFieldInt64List(5, c->null_counts),
-                            // FIXME(ets): this will likely be RepetitionDefinitionLevelHistogram
-                            // https://github.com/apache/parquet-format/pull/197
-                            OptionalParquetFieldStruct(6, c->size_statistics));
+  auto op =
+    std::make_tuple(ParquetFieldBoolList(1, c->null_pages),
+                    ParquetFieldBinaryList(2, c->min_values),
+                    ParquetFieldBinaryList(3, c->max_values),
+                    ParquetFieldEnum<BoundaryOrder>(4, c->boundary_order),
+                    ParquetFieldInt64List(5, c->null_counts),
+                    OptionalParquetFieldStruct(6, c->repetition_definition_level_histograms));
   return function_builder(this, op);
 }
 

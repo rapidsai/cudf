@@ -203,9 +203,7 @@ size_t CompactProtocolWriter::write(ColumnChunkMetaData const& s)
   if (s.index_page_offset != 0) { c.field_int(10, s.index_page_offset); }
   if (s.dictionary_page_offset != 0) { c.field_int(11, s.dictionary_page_offset); }
   c.field_struct(12, s.statistics);
-  if (s.size_estimate_statistics.has_value()) {
-    c.field_struct(16, s.size_estimate_statistics.value());
-  }
+  if (s.size_statistics.has_value()) { c.field_struct(16, s.size_statistics.value()); }
   return c.value();
 }
 
@@ -227,9 +225,6 @@ size_t CompactProtocolWriter::write(PageLocation const& s)
   c.field_int(1, s.offset);
   c.field_int(2, s.compressed_page_size);
   c.field_int(3, s.first_row_index);
-  if (s.unencoded_variable_width_stored_bytes.has_value()) {
-    c.field_int(4, s.unencoded_variable_width_stored_bytes.value());
-  }
   return c.value();
 }
 
@@ -237,6 +232,9 @@ size_t CompactProtocolWriter::write(OffsetIndex const& s)
 {
   CompactProtocolFieldWriter c(*this);
   c.field_struct_list(1, s.page_locations);
+  if (s.unencoded_byte_array_data_bytes.has_value()) {
+    c.field_int_list(2, s.unencoded_byte_array_data_bytes.value());
+  }
   return c.value();
 }
 
@@ -255,8 +253,8 @@ size_t CompactProtocolWriter::write(RepetitionDefinitionLevelHistogram const& r)
 size_t CompactProtocolWriter::write(SizeStatistics const& s)
 {
   CompactProtocolFieldWriter c(*this);
-  if (s.unencoded_variable_width_stored_bytes.has_value()) {
-    c.field_int(1, s.unencoded_variable_width_stored_bytes.value());
+  if (s.unencoded_byte_array_data_bytes.has_value()) {
+    c.field_int(1, s.unencoded_byte_array_data_bytes.value());
   }
   if (s.repetition_definition_level_histogram.has_value()) {
     c.field_struct(2, s.repetition_definition_level_histogram.value());
