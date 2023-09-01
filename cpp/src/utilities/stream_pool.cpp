@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <mutex>
-
 #include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -46,13 +44,10 @@ class rmm_cuda_stream_pool : public cuda_stream_pool {
 
   std::vector<rmm::cuda_stream_view> get_streams(uint32_t count) override
   {
-    static std::mutex stream_pool_mutex;
-
     if (count > STREAM_POOL_SIZE) {
       CUDF_LOG_WARN("get_streams called with count ({}) > pool size ({})", count, STREAM_POOL_SIZE);
     }
     auto streams = std::vector<rmm::cuda_stream_view>();
-    std::lock_guard<std::mutex> lock(stream_pool_mutex);
     for (uint32_t i = 0; i < count; i++) {
       streams.emplace_back(_pool.get_stream());
     }
