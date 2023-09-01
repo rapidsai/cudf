@@ -60,6 +60,7 @@ constexpr unsigned int buffersize_reduction_dim = 32;
 constexpr unsigned int block_size        = buffersize_reduction_dim * buffersize_reduction_dim;
 constexpr unsigned int pb_fld_hdrlen     = 1;
 constexpr unsigned int pb_fld_hdrlen32   = 5;
+constexpr unsigned int pb_fldlen_int32   = 5;
 constexpr unsigned int pb_fldlen_int64   = 10;
 constexpr unsigned int pb_fldlen_float64 = 8;
 constexpr unsigned int pb_fldlen_bucket1 = 1 + pb_fldlen_int64;
@@ -95,7 +96,8 @@ __global__ void __launch_bounds__(block_size, 1)
           stats_len = pb_fldlen_common + pb_fld_hdrlen + 2 * (pb_fld_hdrlen + pb_fldlen_int64);
           break;
         case dtype_timestamp64:
-          stats_len = pb_fldlen_common + pb_fld_hdrlen + 4 * (pb_fld_hdrlen + pb_fldlen_int64);
+          stats_len = pb_fldlen_common + pb_fld_hdrlen + 4 * (pb_fld_hdrlen + pb_fldlen_int64) +
+                      2 * (pb_fld_hdrlen + pb_fldlen_int32);
           break;
         case dtype_float32:
         case dtype_float64:
@@ -107,6 +109,7 @@ __global__ void __launch_bounds__(block_size, 1)
           auto const min_size = fixed_point_string_size(chunks[idx].min_value.d128_val, scale);
           auto const max_size = fixed_point_string_size(chunks[idx].max_value.d128_val, scale);
           auto const sum_size = fixed_point_string_size(chunks[idx].sum.d128_val, scale);
+          // common + total field length + encoded string lengths + strings
           stats_len = pb_fldlen_common + pb_fld_hdrlen32 + 3 * (pb_fld_hdrlen + pb_fld_hdrlen32) +
                       min_size + max_size + sum_size;
         } break;
@@ -202,6 +205,7 @@ __device__ inline uint8_t* pb_put_fixed64(uint8_t* p, uint32_t id, void const* r
   return p + 9;
 }
 
+// Splits a nanosecond timestamp into milliseconds and nanoseconds
 __device__ std::pair<int64_t, int32_t> split_nanosecond_timestamp(int64_t nano_count)
 {
   auto const ns           = cuda::std::chrono::nanoseconds(nano_count);

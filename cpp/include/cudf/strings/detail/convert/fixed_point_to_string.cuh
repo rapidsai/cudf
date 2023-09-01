@@ -19,6 +19,13 @@
 
 namespace cudf::strings::detail {
 
+/**
+ * @brief Returns the number of digits in the given fixed point number.
+ *
+ * @param value The value of the fixed point number
+ * @param scale The scale of the fixed point number
+ * @return int32_t The number of digits required to represent the fixed point number
+ */
 __device__ inline int32_t fixed_point_string_size(__int128_t const& value, int32_t scale)
 {
   if (scale >= 0) return count_digits(value) + scale;
@@ -34,7 +41,17 @@ __device__ inline int32_t fixed_point_string_size(__int128_t const& value, int32
          fraction;                            // size of fraction
 }
 
-__device__ inline void fixed_point_to_string(__int128_t value, int32_t scale, char* out_ptr)
+/**
+ * @brief Converts the given fixed point number to a string.
+ *
+ * Caller is responsible for ensuring that the output buffer is large enough. The required output
+ * buffer size can be obtained by calling `fixed_point_string_size`.
+ *
+ * @param value The value of the fixed point number
+ * @param scale The scale of the fixed point number
+ * @param out_ptr The pointer to the output string
+ */
+__device__ inline void fixed_point_to_string(__int128_t const& value, int32_t scale, char* out_ptr)
 {
   if (scale >= 0) {
     out_ptr += integer_to_string(value, out_ptr);

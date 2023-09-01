@@ -111,10 +111,10 @@ struct string_statistics : minmax_statistics<std::string>, sum_statistics<int64_
 /**
  * @brief Statistics for boolean columns.
  *
- * The `count` array contains the number of `true` values.
+ * The `count` array contains the count of `true` values.
  */
 struct bucket_statistics {
-  std::vector<uint64_t> count;  ///< number of `true` values
+  std::vector<uint64_t> count;  ///< count of `true` values
 };
 
 /**
