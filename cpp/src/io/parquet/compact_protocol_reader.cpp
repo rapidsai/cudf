@@ -300,7 +300,8 @@ bool CompactProtocolReader::read(PageLocation* p)
 {
   auto op = std::make_tuple(ParquetFieldInt64(1, p->offset),
                             ParquetFieldInt32(2, p->compressed_page_size),
-                            ParquetFieldInt64(3, p->first_row_index));
+                            ParquetFieldInt64(3, p->first_row_index),
+                            OptionalParquetFieldInt64(4, p->unencoded_variable_width_stored_bytes));
   return function_builder(this, op);
 }
 

@@ -2345,6 +2345,9 @@ void writer::impl::write_parquet_data_to_sink(
             int32_t this_page_size = enc_page.hdr_size + enc_page.max_data_size;
             // first_row_idx is relative to start of row group
             PageLocation loc{curr_pg_offset, this_page_size, enc_page.start_row - ck.start_row};
+            if (enc_page.var_bytes_size > 0) {
+              loc.unencoded_variable_width_stored_bytes = enc_page.var_bytes_size;
+            }
             offset_idx.page_locations.push_back(loc);
             curr_pg_offset += this_page_size;
           }
