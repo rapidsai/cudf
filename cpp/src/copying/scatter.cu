@@ -52,8 +52,8 @@ __global__ void marking_bitmask_kernel(mutable_column_device_view destination,
                                        MapIterator scatter_map,
                                        size_type num_scatter_rows)
 {
-  thread_index_type row          = threadIdx.x + blockIdx.x * blockDim.x;
-  thread_index_type const stride = blockDim.x * gridDim.x;
+  auto row          = cudf::detail::grid_1d::global_thread_id();
+  auto const stride = cudf::detail::grid_1d::grid_stride();
 
   while (row < num_scatter_rows) {
     size_type const output_row = scatter_map[row];
