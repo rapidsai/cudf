@@ -1,5 +1,7 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.
 
+cimport cython
+
 from rmm._lib.memory_resource cimport get_current_device_resource
 
 from .types cimport DataType
@@ -9,6 +11,7 @@ from .types cimport DataType
 # by the gc if the DeviceScalar is in a reference cycle. Removing
 # the tp_clear function with the no_gc_clear decoration prevents that.
 # See https://github.com/rapidsai/rmm/pull/931 for details.
+@cython.no_gc_clear
 cdef class Scalar:
 
     def __cinit__(self, *args, **kwargs):
