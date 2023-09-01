@@ -132,6 +132,8 @@ cdef class DeviceScalar:
                 f"Cannot convert value of type "
                 f"{type(value).__name__} to cudf scalar"
             )
+        cdef libcudf_types.data_type cdtype = self.get_raw_ptr()[0].type()
+        self.c_value._data_type = pylibcudf.DataType.from_libcudf(cdtype)
 
     def _to_host_scalar(self):
         if isinstance(self.dtype, cudf.core.dtypes.DecimalDtype):
@@ -197,6 +199,7 @@ cdef class DeviceScalar:
 
         s.c_value.c_obj.swap(ptr)
         cdtype = s.get_raw_ptr()[0].type()
+        s.c_value._data_type = pylibcudf.DataType.from_libcudf(cdtype)
 
         if dtype is not None:
             s._dtype = dtype
