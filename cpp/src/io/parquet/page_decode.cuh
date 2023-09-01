@@ -421,13 +421,15 @@ __device__ size_type gpuInitStringDescriptors(page_state_s volatile* s,
     int k              = s->dict_val;
 
     while (pos < target_pos) {
-      int len;
-      if (k + 4 <= dict_size) {
-        len = (cur[k]) | (cur[k + 1] << 8) | (cur[k + 2] << 16) | (cur[k + 3] << 24);
-        k += 4;
-        if (k + len > dict_size) { len = 0; }
+      int len = 0;
+      if ((s->col.data_type & 7) == FIXED_LEN_BYTE_ARRAY) {
+        if (k < dict_size) { len = s->dtype_len_in; }
       } else {
-        len = 0;
+        if (k + 4 <= dict_size) {
+          len = (cur[k]) | (cur[k + 1] << 8) | (cur[k + 2] << 16) | (cur[k + 3] << 24);
+          k += 4;
+          if (k + len > dict_size) { len = 0; }
+        }
       }
       if constexpr (!sizes_only) {
         sb->dict_idx[rolling_index<state_buf::dict_buf_size>(pos)] = k;
@@ -1154,16 +1156,20 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
       }
       // Special check for downconversions
       s->dtype_len_in = s->dtype_len;
-      if (s->col.converted_type == DECIMAL && data_type == FIXED_LEN_BYTE_ARRAY) {
-        s->dtype_len = [dtype_len = s->dtype_len]() {
-          if (dtype_len <= sizeof(int32_t)) {
-            return sizeof(int32_t);
-          } else if (dtype_len <= sizeof(int64_t)) {
-            return sizeof(int64_t);
-          } else {
-            return sizeof(__int128_t);
-          }
-        }();
+      if (data_type == FIXED_LEN_BYTE_ARRAY) {
+        if (s->col.converted_type == DECIMAL) {
+          s->dtype_len = [dtype_len = s->dtype_len]() {
+            if (dtype_len <= sizeof(int32_t)) {
+              return sizeof(int32_t);
+            } else if (dtype_len <= sizeof(int64_t)) {
+              return sizeof(int64_t);
+            } else {
+              return sizeof(__int128_t);
+            }
+          }();
+        } else {
+          s->dtype_len = sizeof(string_index_pair);
+        }
       } else if (data_type == INT32) {
         if (dtype_len_out == 1) {
           // INT8 output
@@ -1219,7 +1225,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
               uint32_t len = idx < max_depth - 1 ? sizeof(cudf::size_type) : s->dtype_len;
               // if this is a string column, then dtype_len is a lie. data will be offsets rather
               // than (ptr,len) tuples.
-              if (data_type == BYTE_ARRAY && s->dtype_len != 4) { len = sizeof(cudf::size_type); }
+              if (is_string_col(s->col)) { len = sizeof(cudf::size_type); }
               nesting_info->data_out += (output_offset * len);
             }
             if (nesting_info->string_out != nullptr) {

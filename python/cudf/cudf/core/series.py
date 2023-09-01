@@ -2970,6 +2970,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: object
         """
         res = self._column.unique()
+        if cudf.get_option("mode.pandas_compatible"):
+            return res.values
         return Series(res, name=self.name)
 
     @_cudf_nvtx_annotate
@@ -3130,8 +3132,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         interpolation : {'linear', 'lower', 'higher', 'midpoint', 'nearest'}
             This optional parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j:
-        columns : list of str
-            List of column names to include.
+
+                * linear: `i + (j - i) * fraction`, where `fraction` is the
+                  fractional part of the index surrounded by `i` and `j`.
+                * lower: `i`.
+                * higher: `j`.
+                * nearest: `i` or `j` whichever is nearest.
+                * midpoint: (`i` + `j`) / 2.
         exact : boolean
             Whether to use approximate or exact quantile algorithm.
         quant_index : boolean

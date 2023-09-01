@@ -86,7 +86,7 @@ cpdef Table gather(
             cpp_copying.gather(
                 source_table.view(),
                 gather_map.view(),
-                py_policy_to_c_policy(bounds_policy)
+                bounds_policy
             )
         )
     return Table.from_libcudf(move(c_result))
@@ -94,18 +94,62 @@ cpdef Table gather(
 
 There are a couple of notable points from the snippet above:
 - The object returned from libcudf is immediately converted to a pylibcudf type.
-- `cudf::gather` accepts a `cudf::out_of_bounds_policy` enum parameter, which is mirrored by the `cdef `class OutOfBoundsPolicy` as mentioned in [the data structures example above](data-structures).
+- `cudf::gather` accepts a `cudf::out_of_bounds_policy` enum parameter. `OutOfBoundsPolicy` is an alias for this type in pylibcudf that matches our Python naming conventions (CapsCase instead of snake\_case).
 
 ## Miscellaneous Notes
 
-### Cython Scoped Enums and Casting
-Cython does not support scoped enumerations.
-It assumes that enums correspond to their underlying value types and will thus attempt operations that are invalid.
-To fix this, many places in pylibcudf Cython code contain double casts that look like
-```cython
-return <cpp_type> (
-    <underlying_type_t_cpp_type> py_policy
-)
+### Cython Scoped Enums
+Cython 3 introduced support for scoped enumerations.
+However, this support has some bugs as well as some easy pitfalls.
+Our usage of enums is intended to minimize the complexity of our code while also working around Cython's limitations.
+
+```{warning}
+The guidance in this section may change often as Cython is updated and our understanding of best practices evolves.
 ```
-where `cpp_type` is some libcudf enum with a specified underlying type.
-This double-cast will be removed when we migrate to Cython 3, which adds proper support for C++ scoped enumerations.
+
+- All pxd files that declare a C++ enum should use `cpdef enum class` declarations.
+  -  Reason: This declaration makes the C++ enum available in Cython code while also transparently creating a Python enum.
+- Any pxd file containing only C++ declarations must still have a corresponding pyx file if any of the declarations are scoped enums.
+  - Reason: The creation of the Python enum requires that Cython actually generate the necessary Python C API code, which will not happen if only a pxd file is present.
+-  If a C++ enum will be part of a pylibcudf module's public API, then it should be imported (not cimported) directly into the pyx file and aliased with a name that matches our Python class naming conventions (CapsCase) instead of our C++ naming convention (snake\_case).
+  - Reason: We want to expose the enum to both Python and Cython consumers of the module. As a side effect, this aliasing avoids [this Cython bug](https://github.com/cython/cython/issues/5609).
+  - Note: Once the above Cython bug is resolved, the enum should also be aliased into the pylibcudf pxd file when it is cimported so that Python and Cython usage will match.
+
+Here is an example of appropriate enum usage.
+
+
+```cython
+# cpp/copying.pxd
+cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
+    # cpdef here so that we export both a cdef enum class and a Python enum.Enum.
+    cpdef enum class out_of_bounds_policy(bool):
+        NULLIFY
+        DONT_CHECK
+
+
+# cpp/copying.pyx
+# This file is empty, but is required to compile the Python enum in cpp/copying.pxd
+
+
+# pylibcudf/copying.pxd
+
+# cimport the enum using the exact name
+# Once https://github.com/cython/cython/issues/5609 is resolved,
+# this import should instead be
+# from cudf._lib.cpp.copying cimport out_of_bounds_policy as OutOfBoundsPolicy
+from cudf._lib.cpp.copying cimport out_of_bounds_policy
+
+
+# pylibcudf/copying.pyx
+# Access cpp.copying members that aren't part of this module's public API via
+# this module alias
+from cudf._lib.cpp cimport copying as cpp_copying
+from cudf._lib.cpp.copying cimport out_of_bounds_policy
+
+# This import exposes the enum in the public API of this module.
+# It requires a no-cython-lint tag because it will be unused: all typing of
+# parameters etc will need to use the Cython name `out_of_bounds_policy` until
+# the Cython bug is resolved.
+from cudf._lib.cpp.copying import \
+    out_of_bounds_policy as OutOfBoundsPolicy  # no-cython-lint
+```

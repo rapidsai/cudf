@@ -291,7 +291,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def dropna(self, drop_nan: bool = False) -> ColumnBase:
         # The drop_nan argument is only used for numerical columns.
-        return drop_nulls([self])[0]
+        return drop_nulls([self])[0]._with_type_metadata(self.dtype)
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
@@ -1162,7 +1162,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         Get unique values in the data
         """
-        return drop_duplicates([self], keep="first")[0]
+        return drop_duplicates([self], keep="first")[0]._with_type_metadata(
+            self.dtype
+        )
 
     def serialize(self) -> Tuple[dict, list]:
         # data model:
@@ -1994,18 +1996,27 @@ def as_column(
         col = ColumnBase.from_arrow(arbitrary)
 
         if isinstance(arbitrary, pa.NullArray):
-            new_dtype = cudf.dtype(arbitrary.type.to_pandas_dtype())
             if dtype is not None:
                 # Cast the column to the `dtype` if specified.
-                col = col.astype(dtype)
+                new_dtype = dtype
             elif len(arbitrary) == 0:
                 # If the column is empty, it has to be
                 # a `float64` dtype.
-                col = col.astype("float64")
+                new_dtype = cudf.dtype("float64")
             else:
                 # If the null column is not empty, it has to
                 # be of `object` dtype.
-                col = col.astype(new_dtype)
+                new_dtype = cudf.dtype(arbitrary.type.to_pandas_dtype())
+
+            if cudf.get_option(
+                "mode.pandas_compatible"
+            ) and new_dtype == cudf.dtype("O"):
+                # We internally raise if we do `astype("object")`, hence
+                # need to cast to `str` since this is safe to do so because
+                # it is a null-array.
+                new_dtype = "str"
+
+            col = col.astype(new_dtype)
 
         return col
 
@@ -2250,8 +2261,12 @@ def as_column(
         data = ColumnBase.from_scalar(arbitrary, length if length else 1)
     elif isinstance(arbitrary, pd.core.arrays.masked.BaseMaskedArray):
         data = as_column(pa.Array.from_pandas(arbitrary), dtype=dtype)
-    elif isinstance(arbitrary, pd.DatetimeIndex) and isinstance(
-        arbitrary.dtype, pd.DatetimeTZDtype
+    elif (
+        isinstance(arbitrary, pd.DatetimeIndex)
+        and isinstance(arbitrary.dtype, pd.DatetimeTZDtype)
+    ) or (
+        isinstance(arbitrary, pd.IntervalIndex)
+        and is_datetime64tz_dtype(arbitrary.dtype.subtype)
     ):
         raise NotImplementedError(
             "cuDF does not yet support timezone-aware datetimes"
@@ -2452,25 +2467,29 @@ def as_column(
 
 def _construct_array(
     arbitrary: Any, dtype: Optional[Dtype]
-) -> Union[np.ndarray, cupy.ndarray]:
+) -> Union[np.ndarray, cupy.ndarray, pd.api.extensions.ExtensionArray]:
     """
-    Construct a CuPy or NumPy array from `arbitrary`
+    Construct a CuPy/NumPy/Pandas array from `arbitrary`
     """
     try:
         dtype = dtype if dtype is None else cudf.dtype(dtype)
         arbitrary = cupy.asarray(arbitrary, dtype=dtype)
     except (TypeError, ValueError):
         native_dtype = dtype
+        inferred_dtype = None
         if (
             dtype is None
             and not cudf._lib.scalar._is_null_host_scalar(arbitrary)
-            and infer_dtype(arbitrary, skipna=False)
+            and (inferred_dtype := infer_dtype(arbitrary, skipna=False))
             in (
                 "mixed",
                 "mixed-integer",
             )
         ):
             native_dtype = "object"
+        if inferred_dtype == "interval":
+            # Only way to construct an Interval column.
+            return pd.array(arbitrary)
         arbitrary = np.asarray(
             arbitrary,
             dtype=native_dtype
