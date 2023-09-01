@@ -95,6 +95,7 @@ dependencies:
 - tokenizers==0.13.1
 - transformers==4.24.0
 - typing_extensions>=4.0.0
+- zlib>=1.2.13
 - pip:
   - git+https://github.com/python-streamz/streamz.git@master
 name: all_cuda-118_arch-x86_64

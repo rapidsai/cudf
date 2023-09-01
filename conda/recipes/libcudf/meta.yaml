@@ -73,6 +73,7 @@ requirements:
     - benchmark {{ gbench_version }}
     - gtest {{ gtest_version }}
     - gmock {{ gtest_version }}
+    - zlib {{ zlib_version }}
 
 outputs:
   - name: libcudf
