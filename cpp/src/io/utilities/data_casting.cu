@@ -32,6 +32,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/copy.h>
 #include <thrust/functional.h>
 #include <thrust/transform_reduce.h>
 
@@ -180,17 +181,14 @@ process_string(in_iterator_t in_begin,
 
   // Copy literal/numeric value
   if (not is_string_value) {
-    while (in_begin != in_end) {
-      if (d_buffer) *d_buffer++ = *in_begin;
-      ++in_begin;
-      ++bytes;
-    }
+    bytes += (in_end - in_begin);
+    if (d_buffer) d_buffer = thrust::copy(thrust::seq, in_begin, in_end, d_buffer);
     return {bytes, data_casting_result::PARSING_SUCCESS};
   }
-  char const backslash_char = '\\';
+  char constexpr backslash_char = '\\';
 
   // Escape-flag, set after encountering a backslash character
-  bool escape = false;
+  bool is_prev_char_escape = false;
 
   // Exclude beginning and ending quote chars from string range
   if (!options.keepquotes) {
@@ -201,9 +199,9 @@ process_string(in_iterator_t in_begin,
   // Iterate over the input
   while (in_begin != in_end) {
     // Copy single character to output
-    if (!escape) {
-      escape = (*in_begin == backslash_char);
-      if (!escape) {
+    if (!is_prev_char_escape) {
+      is_prev_char_escape = (*in_begin == backslash_char);
+      if (!is_prev_char_escape) {
         if (d_buffer) *d_buffer++ = *in_begin;
         ++bytes;
       }
@@ -213,7 +211,7 @@ process_string(in_iterator_t in_begin,
 
     // Previous char indicated beginning of escape sequence
     // Reset escape flag for next loop iteration
-    escape = false;
+    is_prev_char_escape = false;
 
     // Check the character that is supposed to be escaped
     auto escaped_char = get_escape_char(*in_begin);
@@ -279,53 +277,77 @@ process_string(in_iterator_t in_begin,
   }
 
   // The last character of the input is a backslash -> "fail"/null for this item
-  if (escape) { return {bytes, data_casting_result::PARSING_FAILURE}; }
+  if (is_prev_char_escape) { return {bytes, data_casting_result::PARSING_FAILURE}; }
   return {bytes, data_casting_result::PARSING_SUCCESS};
 }
 
+/**
+ * @brief Datastructure to hold 1 bit per thread with previous `UNICODE_LOOK_BACK` bits stored in a
+ * warp.
+ *
+ * @tparam num_warps number of warps in the block
+ */
 template <unsigned num_warps>
 struct bitfield_warp {
+  static constexpr auto UNICODE_LOOK_BACK{5};
+  // 5 because for skipping unicode hex chars, look back upto 5 chars are needed.
   // 5+32 for each warp.
-  bool is_slash[num_warps][5 + 32];
+  bool is_slash[num_warps][UNICODE_LOOK_BACK + cudf::detail::warp_size];
   __device__ void reset(unsigned warp_id)
   {
-    is_slash[warp_id][threadIdx.x % 32]     = 0;
-    is_slash[warp_id][threadIdx.x % 32 + 5] = 0;
+    if (threadIdx.x < UNICODE_LOOK_BACK) {
+      is_slash[warp_id][threadIdx.x % cudf::detail::warp_size] = 0;
+    }
+    is_slash[warp_id][threadIdx.x % cudf::detail::warp_size + UNICODE_LOOK_BACK] = 0;
   }
   __device__ void shift(unsigned warp_id)
   {
-    if (threadIdx.x % 32 < 5)
-      is_slash[warp_id][threadIdx.x % 32] = is_slash[warp_id][32 + threadIdx.x % 32];
+    if (threadIdx.x % 32 < UNICODE_LOOK_BACK)
+      is_slash[warp_id][threadIdx.x % cudf::detail::warp_size] =
+        is_slash[warp_id][cudf::detail::warp_size + threadIdx.x % cudf::detail::warp_size];
   }
   __device__ void set_bits(unsigned warp_id, bool is_escaping_backslash)
   {
-    is_slash[warp_id][5 + threadIdx.x % 32] = is_escaping_backslash;
+    is_slash[warp_id][UNICODE_LOOK_BACK + threadIdx.x % cudf::detail::warp_size] =
+      is_escaping_backslash;
   }
   __device__ bool get_bit(unsigned warp_id, int bit_index)
   {
-    return is_slash[warp_id][5 + bit_index];
+    return is_slash[warp_id][UNICODE_LOOK_BACK + bit_index];
   }
 };
 
+/**
+ * @brief Datastructure to hold 1 bit per thread with previous `UNICODE_LOOK_BACK` bits stored in a
+ * block.
+ *
+ * @tparam num_warps number of warps in the block
+ */
 template <unsigned num_warps>
 struct bitfield_block {
+  static constexpr auto UNICODE_LOOK_BACK{5};
+  // 5 because for skipping unicode hex chars, look back upto 5 chars are needed.
   // 5 + num_warps*32 for entire block
-  bool is_slash[5 + num_warps * 32];
+  bool is_slash[UNICODE_LOOK_BACK + num_warps * 32];
 
   __device__ void reset(unsigned warp_id)
   {
-    is_slash[threadIdx.x]     = 0;
-    is_slash[threadIdx.x + 5] = 0;
+    if (threadIdx.x < UNICODE_LOOK_BACK) { is_slash[threadIdx.x] = 0; }
+    is_slash[threadIdx.x + UNICODE_LOOK_BACK] = 0;
   }
   __device__ void shift(unsigned warp_id)
   {
-    if (threadIdx.x < 5) is_slash[threadIdx.x] = is_slash[num_warps * 32 + threadIdx.x];
+    if (threadIdx.x < UNICODE_LOOK_BACK)
+      is_slash[threadIdx.x] = is_slash[num_warps * 32 + threadIdx.x];
   }
   __device__ void set_bits(unsigned warp_id, bool is_escaping_backslash)
   {
-    is_slash[5 + threadIdx.x] = is_escaping_backslash;
+    is_slash[UNICODE_LOOK_BACK + threadIdx.x] = is_escaping_backslash;
   }
-  __device__ bool get_bit(unsigned warp_id, int bit_index) { return is_slash[5 + bit_index]; }
+  __device__ bool get_bit(unsigned warp_id, int bit_index)
+  {
+    return is_slash[UNICODE_LOOK_BACK + bit_index];
+  }
 };
 
 // Algorithm: warp/block parallel version of string_parse and process_string()
@@ -420,8 +442,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
     auto in_end             = in_begin + str_tuples[istring].second;
     auto const num_in_chars = str_tuples[istring].second;
     if constexpr (is_warp) {
-      if (!(num_in_chars > SINGLE_THREAD_THRESHOLD)) continue;
-      if (num_in_chars > WARP_THRESHOLD) continue;
+      if (num_in_chars <= SINGLE_THREAD_THRESHOLD or num_in_chars > WARP_THRESHOLD) continue;
     } else {
       if (num_in_chars <= WARP_THRESHOLD) continue;
     }
