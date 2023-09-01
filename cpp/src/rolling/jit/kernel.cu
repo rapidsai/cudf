@@ -51,7 +51,7 @@ __global__ void gpu_rolling_new(cudf::size_type nrows,
                                 FollowingWindowType following_window_begin,
                                 cudf::size_type min_periods)
 {
-  cudf::thread_index_type i = blockIdx.x * blockDim.x + threadIdx.x;
+  cudf::thread_index_type i            = blockIdx.x * blockDim.x + threadIdx.x;
   cudf::thread_index_type const stride = blockDim.x * gridDim.x;
 
   cudf::size_type warp_valid_count{0};
