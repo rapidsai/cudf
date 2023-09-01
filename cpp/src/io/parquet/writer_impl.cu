@@ -1357,9 +1357,9 @@ void encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   EncodePageHeaders(batch_pages, comp_res, batch_pages_stats, chunk_stats, stream);
   GatherPages(d_chunks_in_batch.flat_view(), pages, stream);
 
-  // TODO(ets): by now, the var_bytes has been calculated in InitPages, and the histograms
-  // in EncodePages. EncodeColumnIndexes can encode the SizeStatistics in the ColumnIndex,
-  // and also sum up the histograms and var_bytes for inclusion in the chunk's SizeStats.
+  // by now, the var_bytes has been calculated in InitPages, and the histograms in EncodePages.
+  // EncodeColumnIndexes can encode the histograms in the ColumnIndex, and also sum up var_bytes
+  // and the histograms for inclusion in the chunk's SizeStats.
   if (column_stats != nullptr) {
     EncodeColumnIndexes(d_chunks_in_batch.flat_view(),
                         {column_stats, pages.size()},
