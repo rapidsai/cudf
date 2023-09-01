@@ -822,11 +822,7 @@ class IndexedFrame(Frame):
             ) = _get_replacement_values_for_columns(
                 to_replace=to_replace,
                 value=value,
-                # TODO: This should be replaced with `DataFrame._dtypes` once
-                # that is moved up to `Frame`.
-                columns_dtype_map={
-                    col: self._data[col].dtype for col in self._data
-                },
+                columns_dtype_map=self._dtypes,
             )
 
             for name, col in self._data.items():

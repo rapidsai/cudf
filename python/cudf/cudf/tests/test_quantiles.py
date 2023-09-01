@@ -75,3 +75,18 @@ def test_quantile_q_type():
         ),
     ):
         gs.quantile(cudf.DataFrame())
+
+
+@pytest.mark.parametrize(
+    "interpolation", ["linear", "lower", "higher", "midpoint", "nearest"]
+)
+def test_quantile_type_int_float(interpolation):
+    data = [1, 3, 4]
+    psr = pd.Series(data)
+    gsr = cudf.Series(data)
+
+    expected = psr.quantile(0.5, interpolation=interpolation)
+    actual = gsr.quantile(0.5, interpolation=interpolation)
+
+    assert expected == actual
+    assert type(expected) == type(actual)
