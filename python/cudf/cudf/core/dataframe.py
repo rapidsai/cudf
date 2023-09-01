@@ -5487,16 +5487,23 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         numeric_only : bool, default True
             If False, the quantile of datetime and timedelta data will be
             computed as well.
-        interpolation : {`linear`, `lower`, `higher`, `midpoint`, `nearest`}
+        interpolation : {'linear', 'lower', 'higher', 'midpoint', 'nearest'}
             This parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j.
-            Default is ``linear`` for ``method="single"``, and ``nearest``
+            Default is ``'linear'`` for ``method="single"``, and ``'nearest'``
             for ``method="table"``.
+
+                * linear: `i + (j - i) * fraction`, where `fraction` is the
+                  fractional part of the index surrounded by `i` and `j`.
+                * lower: `i`.
+                * higher: `j`.
+                * nearest: `i` or `j` whichever is nearest.
+                * midpoint: (`i` + `j`) / 2.
         columns : list of str
             List of column names to include.
         exact : boolean
             Whether to use approximate or exact quantile algorithm.
-        method : {`single`, `table`}, default `single`
+        method : {'single', 'table'}, default `'single'`
             Whether to compute quantiles per-column ('single') or over all
             columns ('table'). When 'table', the only allowed interpolation
             methods are 'nearest', 'lower', and 'higher'.
