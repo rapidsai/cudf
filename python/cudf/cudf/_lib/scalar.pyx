@@ -1,7 +1,5 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
-cimport cython
-
 import decimal
 
 import numpy as np
@@ -21,8 +19,6 @@ from libc.stdint cimport (
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
-
-from rmm._lib.memory_resource cimport get_current_device_resource
 
 import cudf
 from cudf._lib cimport pylibcudf
@@ -74,15 +70,9 @@ from cudf._lib.cpp.wrappers.timestamps cimport (
 from cudf._lib.utils cimport columns_from_table_view, table_view_from_columns
 
 
-# The DeviceMemoryResource attribute could be released prematurely
-# by the gc if the DeviceScalar is in a reference cycle. Removing
-# the tp_clear function with the no_gc_clear decoration prevents that.
-# See https://github.com/rapidsai/rmm/pull/931 for details.
-@cython.no_gc_clear
 cdef class DeviceScalar:
 
     def __cinit__(self, *args, **kwargs):
-        self.mr = get_current_device_resource()
         self.c_value = pylibcudf.Scalar()
 
     def __init__(self, value, dtype):

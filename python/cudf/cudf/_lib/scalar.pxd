@@ -12,11 +12,6 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 cdef class DeviceScalar:
     cdef pylibcudf.Scalar c_value
 
-    # Holds a reference to the DeviceMemoryResource used for allocation.
-    # Ensures the MR does not get destroyed before this DeviceBuffer. `mr` is
-    # needed for deallocation
-    cdef DeviceMemoryResource mr
-
     cdef object _dtype
 
     cdef const scalar* get_raw_ptr(self) except *
