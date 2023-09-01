@@ -118,10 +118,9 @@ __global__ void concatenate_masks_kernel(column_device_view const* views,
                                          size_type number_of_mask_bits,
                                          size_type* out_valid_count)
 {
-  auto tidx = cudf::thread_index_type{threadIdx.x} +
-              cudf::thread_index_type{blockIdx.x} * cudf::thread_index_type{blockDim.x};
-
-  auto active_mask = __ballot_sync(0xFFFF'FFFFu, tidx < number_of_mask_bits);
+  auto tidx         = cudf::detail::grid_1d::global_thread_id();
+  auto const stride = cudf::detail::grid_1d::grid_stride();
+  auto active_mask  = __ballot_sync(0xFFFF'FFFFu, tidx < number_of_mask_bits);
 
   size_type warp_valid_count = 0;
 
@@ -143,7 +142,7 @@ __global__ void concatenate_masks_kernel(column_device_view const* views,
       warp_valid_count += __popc(new_word);
     }
 
-    tidx += cudf::thread_index_type{blockDim.x} * cudf::thread_index_type{gridDim.x};
+    tidx += stride;
     active_mask = __ballot_sync(active_mask, tidx < number_of_mask_bits);
   }
 
@@ -197,8 +196,8 @@ __global__ void fused_concatenate_kernel(column_device_view const* input_views,
   auto const output_size = output_view.size();
   auto* output_data      = output_view.data<T>();
 
-  auto output_index = cudf::thread_index_type{threadIdx.x} +
-                      cudf::thread_index_type{blockIdx.x} * cudf::thread_index_type{blockDim.x};
+  auto output_index          = cudf::detail::grid_1d::global_thread_id();
+  auto const stride          = cudf::detail::grid_1d::grid_stride();
   size_type warp_valid_count = 0;
 
   unsigned active_mask;
@@ -227,7 +226,7 @@ __global__ void fused_concatenate_kernel(column_device_view const* input_views,
       warp_valid_count += __popc(new_word);
     }
 
-    output_index += cudf::thread_index_type{blockDim.x} * cudf::thread_index_type{gridDim.x};
+    output_index += stride;
     if (Nullable) { active_mask = __ballot_sync(active_mask, output_index < output_size); }
   }
 
