@@ -33,6 +33,7 @@ namespace {
 // defaults to 16.
 std::size_t constexpr STREAM_POOL_SIZE = 32;
 
+// TODO: if this stays internal, then strip out the unused bits and trim the docs.
 class cuda_stream_pool {
  public:
   virtual ~cuda_stream_pool() = default;
