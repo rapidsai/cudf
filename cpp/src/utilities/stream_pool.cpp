@@ -19,6 +19,8 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_stream_pool.hpp>
+
 namespace cudf::detail {
 
 namespace {
@@ -31,6 +33,57 @@ namespace {
 // defaults to 16.
 std::size_t constexpr STREAM_POOL_SIZE = 32;
 
+class cuda_stream_pool {
+ public:
+  virtual ~cuda_stream_pool() = default;
+
+  /**
+   * @brief Get a `cuda_stream_view` of a stream in the pool.
+   *
+   * This function is thread safe with respect to other calls to the same function.
+   *
+   * @return Stream view.
+   */
+  virtual rmm::cuda_stream_view get_stream() = 0;
+
+  /**
+   * @brief Get a `cuda_stream_view` of the stream associated with `stream_id`.
+   *
+   * Equivalent values of `stream_id` return a `cuda_stream_view` to the same underlying stream.
+   * This function is thread safe with respect to other calls to the same function.
+   *
+   * @param stream_id Unique identifier for the desired stream
+   * @return Requested stream view.
+   */
+  virtual rmm::cuda_stream_view get_stream(std::size_t stream_id) = 0;
+
+  /**
+   * @brief Get a set of `cuda_stream_view` objects from the pool.
+   *
+   * An attempt is made to ensure that the returned vector does not contain duplicate
+   * streams, but this cannot be guaranteed if `count` is greater than the value returned by
+   * `get_stream_pool_size()`.
+   *
+   * This function is thread safe with respect to other calls to the same function.
+   *
+   * @param count The number of stream views to return.
+   * @return Vector containing `count` stream views.
+   */
+  virtual std::vector<rmm::cuda_stream_view> get_streams(uint32_t count) = 0;
+
+  /**
+   * @brief Get the number of stream objects in the pool.
+   *
+   * This function is thread safe with respect to other calls to the same function.
+   *
+   * @return the number of stream objects in the pool
+   */
+  virtual std::size_t get_stream_pool_size() const = 0;
+};
+
+/**
+ * @brief Implementation of `cuda_stream_pool` that wraps an `rmm::cuda_stram_pool`.
+ */
 class rmm_cuda_stream_pool : public cuda_stream_pool {
   rmm::cuda_stream_pool _pool;
 
@@ -106,13 +159,13 @@ cudaEvent_t event_for_thread()
   return thread_event;
 }
 
-}  // anonymous namespace
-
 cuda_stream_pool& global_cuda_stream_pool()
 {
   static cuda_stream_pool* pool = create_global_cuda_stream_pool();
   return *pool;
 }
+
+}  // anonymous namespace
 
 std::vector<rmm::cuda_stream_view> fork_streams(rmm::cuda_stream_view stream, uint32_t count)
 {
