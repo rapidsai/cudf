@@ -108,7 +108,7 @@ __global__ void set_null_mask_kernel(bitmask_type* __restrict__ destination,
   thread_index_type const last_word = word_index(end_bit) - word_index(begin_bit);
   bitmask_type fill_value           = valid ? 0xffff'ffff : 0;
 
-  thread_index_type const stride = blockDim.x * gridDim.x;
+  auto const stride = cudf::detail::grid_1d::grid_stride();
 
   for (thread_index_type destination_word_index = grid_1d::global_thread_id();
        destination_word_index < number_of_mask_words;
@@ -191,7 +191,7 @@ __global__ void copy_offset_bitmask(bitmask_type* __restrict__ destination,
                                     size_type source_end_bit,
                                     size_type number_of_mask_words)
 {
-  thread_index_type const stride = blockDim.x * gridDim.x;
+  auto const stride = cudf::detail::grid_1d::grid_stride();
   for (thread_index_type destination_word_index = grid_1d::global_thread_id();
        destination_word_index < number_of_mask_words;
        destination_word_index += stride) {
@@ -265,7 +265,7 @@ __global__ void count_set_bits_kernel(bitmask_type const* bitmask,
   auto const first_word_index{word_index(first_bit_index)};
   auto const last_word_index{word_index(last_bit_index)};
   thread_index_type const tid         = grid_1d::global_thread_id();
-  thread_index_type const stride      = blockDim.x * gridDim.x;
+  thread_index_type const stride      = grid_1d::grid_stride();
   thread_index_type thread_word_index = tid + first_word_index;
   size_type thread_count{0};
 
