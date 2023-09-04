@@ -47,8 +47,8 @@ TEST_F(StringsColumnTest, Sort)
 
 TEST_F(StringsColumnTest, SortZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
+
   auto results = cudf::sort(cudf::table_view({zero_size_strings_column}));
   cudf::test::expect_column_empty(results->view().column(0));
 }
@@ -117,8 +117,8 @@ INSTANTIATE_TEST_CASE_P(StringsColumnTest,
 
 TEST_F(StringsColumnTest, SliceZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
+
   auto scol    = cudf::slice(zero_size_strings_column, {0, 0});
   auto results = std::make_unique<cudf::column>(scol.front());
   cudf::test::expect_column_empty(results->view());
@@ -141,8 +141,8 @@ TEST_F(StringsColumnTest, Gather)
 
 TEST_F(StringsColumnTest, GatherZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
+
   cudf::column_view map_view(cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0);
   auto results = cudf::gather(cudf::table_view{{zero_size_strings_column}}, map_view)->release();
   cudf::test::expect_column_empty(results.front()->view());
@@ -193,9 +193,9 @@ TEST_F(StringsColumnTest, ScatterScalar)
 
 TEST_F(StringsColumnTest, ScatterZeroSizeStringsColumn)
 {
-  cudf::column_view source(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  cudf::column_view target(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  cudf::column_view scatter_map(cudf::data_type{cudf::type_id::INT8}, 0, nullptr, nullptr, 0);
+  auto const source      = cudf::make_empty_column(cudf::type_id::STRING)->view();
+  auto const target      = cudf::make_empty_column(cudf::type_id::STRING)->view();
+  auto const scatter_map = cudf::make_empty_column(cudf::type_id::INT8)->view();
 
   auto results = cudf::scatter(cudf::table_view({source}), scatter_map, cudf::table_view({target}));
   cudf::test::expect_column_empty(results->view().column(0));
