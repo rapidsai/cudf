@@ -302,14 +302,16 @@ struct bitfield_warp {
   }
   __device__ void shift(unsigned warp_id)
   {
-    if (threadIdx.x % 32 < UNICODE_LOOK_BACK)
+    if (threadIdx.x % cudf::detail::warp_size < UNICODE_LOOK_BACK)
       is_slash[warp_id][threadIdx.x % cudf::detail::warp_size] =
         is_slash[warp_id][cudf::detail::warp_size + threadIdx.x % cudf::detail::warp_size];
+    __syncwarp();
   }
   __device__ void set_bits(unsigned warp_id, bool is_escaping_backslash)
   {
     is_slash[warp_id][UNICODE_LOOK_BACK + threadIdx.x % cudf::detail::warp_size] =
       is_escaping_backslash;
+    __syncwarp();
   }
   __device__ bool get_bit(unsigned warp_id, int bit_index)
   {
@@ -328,7 +330,7 @@ struct bitfield_block {
   static constexpr auto UNICODE_LOOK_BACK{5};
   // 5 because for skipping unicode hex chars, look back upto 5 chars are needed.
   // 5 + num_warps*32 for entire block
-  bool is_slash[UNICODE_LOOK_BACK + num_warps * 32];
+  bool is_slash[UNICODE_LOOK_BACK + num_warps * cudf::detail::warp_size];
 
   __device__ void reset(unsigned warp_id)
   {
@@ -338,11 +340,13 @@ struct bitfield_block {
   __device__ void shift(unsigned warp_id)
   {
     if (threadIdx.x < UNICODE_LOOK_BACK)
-      is_slash[threadIdx.x] = is_slash[num_warps * 32 + threadIdx.x];
+      is_slash[threadIdx.x] = is_slash[num_warps * cudf::detail::warp_size + threadIdx.x];
+    __syncthreads();
   }
   __device__ void set_bits(unsigned warp_id, bool is_escaping_backslash)
   {
     is_slash[UNICODE_LOOK_BACK + threadIdx.x] = is_escaping_backslash;
+    __syncthreads();
   }
   __device__ bool get_bit(unsigned warp_id, int bit_index)
   {
@@ -415,17 +419,19 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
     is_warp ? cudf::detail::warp_size : cudf::detail::warp_size * num_warps;
   size_type lane = is_warp ? (threadIdx.x % BLOCK_SIZE) : threadIdx.x;
 
-  // get 1-string index per warp
+  // get 1-string index per warp/block
   auto get_next_string = [&]() {
     if constexpr (is_warp) {
       size_type istring;
       if (lane == 0) { istring = atomicAdd(str_counter, 1); }
-      __syncwarp();
       return __shfl_sync(0xffffffff, istring, 0);
     } else {
+      // Ensure lane 0 doesn't update istring before all threads have read the previous iteration's
+      // istring value
+      __syncthreads();
       __shared__ size_type istring;
       if (lane == 0) { istring = atomicAdd(str_counter, 1); }
-      __syncthreads();  // memory fence?
+      __syncthreads();
       return istring;
     }
   };
@@ -434,7 +440,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
        istring           = get_next_string()) {
     // skip nulls
     if (null_mask != nullptr && not bit_is_set(null_mask, istring)) {
-      if (!d_chars) d_offsets[istring] = 0;
+      if (!d_chars && lane == 0) d_offsets[istring] = 0;
       continue;  // gride-stride return;
     }
 
@@ -448,16 +454,17 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
     }
 
     // Check if the value corresponds to the null literal
-    auto const is_null_literal =
-      (!d_chars) &&
-      serialized_trie_contains(options.trie_na, {in_begin, static_cast<std::size_t>(num_in_chars)});
-    if (is_null_literal && null_mask != nullptr) {
-      if (lane == 0) {
-        clear_bit(null_mask, istring);
-        atomicAdd(null_count_data, 1);
-        if (!d_chars) d_offsets[istring] = 0;
+    if (!d_chars) {
+      auto const is_null_literal = serialized_trie_contains(
+        options.trie_na, {in_begin, static_cast<std::size_t>(num_in_chars)});
+      if (is_null_literal && null_mask != nullptr) {
+        if (lane == 0) {
+          clear_bit(null_mask, istring);
+          atomicAdd(null_count_data, 1);
+          if (!d_chars) d_offsets[istring] = 0;
+        }
+        continue;  // gride-stride return;
       }
-      continue;  // gride-stride return;
     }
     // String values are indicated by keeping the quote character
     bool const is_string_value =
@@ -512,12 +519,11 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
     for (size_type char_index = lane;
          char_index < cudf::util::round_up_safe(in_end - in_begin, static_cast<long>(BLOCK_SIZE));
          char_index += BLOCK_SIZE) {
-      auto MASK =
-        is_warp ? __ballot_sync(0xffffffff, char_index < (in_end - in_begin)) : 0xffffffff;
-      bool is_within_bounds = char_index < (in_end - in_begin);
-      auto c                = is_within_bounds ? in_begin[char_index] : '\0';
-      auto prev_c       = (char_index > 0 and is_within_bounds) ? in_begin[char_index - 1] : '\0';
-      auto escaped_char = get_escape_char(c);
+      bool const is_within_bounds = char_index < (in_end - in_begin);
+      auto const MASK   = is_warp ? __ballot_sync(0xffffffff, is_within_bounds) : 0xffffffff;
+      auto const c      = is_within_bounds ? in_begin[char_index] : '\0';
+      auto const prev_c = (char_index > 0 and is_within_bounds) ? in_begin[char_index - 1] : '\0';
+      auto const escaped_char = get_escape_char(c);
 
       bool is_escaping_backslash{false};
       [[maybe_unused]] bool is_prev_escaping_backslash{false};
@@ -550,21 +556,18 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
         init_state            = __shfl_sync(MASK, is_escaping_backslash, BLOCK_SIZE - 1);
         __syncwarp();
         is_slash.shift(warp_id);
-        __syncwarp();
         is_slash.set_bits(warp_id, is_escaping_backslash);
-        __syncwarp();
         is_prev_escaping_backslash = is_slash.get_bit(warp_id, lane - 1);
       } else {
         using SlashScan = cub::BlockScan<state_table, BLOCK_SIZE>;
         __shared__ typename SlashScan::TempStorage temp_slash;
         SlashScan(temp_slash).InclusiveScan(curr, scanned, composite_op);
         is_escaping_backslash = scanned.state[init_state];
+        __syncthreads();
         if (threadIdx.x == BLOCK_SIZE - 1) init_state = is_escaping_backslash;
         __syncthreads();
         is_slash.shift(warp_id);
-        __syncthreads();
         is_slash.set_bits(warp_id, is_escaping_backslash);
-        __syncthreads();
         is_prev_escaping_backslash = is_slash.get_bit(warp_id, lane - 1);
         // There is another __syncthreads() at the end of for-loop.
       }
@@ -679,6 +682,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
         if constexpr (is_warp) {
           last_offset = __shfl_sync(0xffffffff, offset, BLOCK_SIZE - 1);
         } else {
+          __syncthreads();
           if (threadIdx.x == BLOCK_SIZE - 1) last_offset = offset;
           __syncthreads();
         }
@@ -710,14 +714,15 @@ struct string_parse {
     if (num_in_chars > SINGLE_THREAD_THRESHOLD) return;
 
     // Check if the value corresponds to the null literal
-    auto const is_null_literal =
-      (!d_chars) &&
-      serialized_trie_contains(options.trie_na, {in_begin, static_cast<std::size_t>(num_in_chars)});
-    if (is_null_literal && null_mask != nullptr) {
-      clear_bit(null_mask, idx);
-      atomicAdd(null_count_data, 1);
-      if (!d_chars) d_offsets[idx] = 0;
-      return;
+    if (!d_chars) {
+      auto const is_null_literal = serialized_trie_contains(
+        options.trie_na, {in_begin, static_cast<std::size_t>(num_in_chars)});
+      if (is_null_literal && null_mask != nullptr) {
+        clear_bit(null_mask, idx);
+        atomicAdd(null_count_data, 1);
+        if (!d_chars) d_offsets[idx] = 0;
+        return;
+      }
     }
 
     char* d_buffer        = d_chars ? d_chars + d_offsets[idx] : nullptr;
