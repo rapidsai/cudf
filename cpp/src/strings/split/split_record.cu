@@ -203,21 +203,22 @@ std::unique_ptr<column> split_record(strings_column_view const& strings,
 std::unique_ptr<column> split_record(strings_column_view const& strings,
                                      string_scalar const& delimiter,
                                      size_type maxsplit,
+                                     rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::split_record<detail::Direction::FORWARD>(
-    strings, delimiter, maxsplit, cudf::get_default_stream(), mr);
+  return detail::split_record<detail::Direction::FORWARD>(strings, delimiter, maxsplit, stream, mr);
 }
 
 std::unique_ptr<column> rsplit_record(strings_column_view const& strings,
                                       string_scalar const& delimiter,
                                       size_type maxsplit,
+                                      rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::split_record<detail::Direction::BACKWARD>(
-    strings, delimiter, maxsplit, cudf::get_default_stream(), mr);
+    strings, delimiter, maxsplit, stream, mr);
 }
 
 }  // namespace strings
