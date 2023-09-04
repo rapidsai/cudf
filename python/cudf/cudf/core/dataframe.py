@@ -36,7 +36,7 @@ from pandas._config import get_option
 from pandas.core.dtypes.common import is_float, is_integer
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
-from typing_extensions import assert_never
+from typing_extensions import Self, assert_never
 
 import cudf
 import cudf.core.common
@@ -1830,13 +1830,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self._get_renderable_dataframe().to_pandas()._repr_latex_()
 
     @_cudf_nvtx_annotate
-    def _get_columns_by_label(self, labels, downcast=False):
+    def _get_columns_by_label(
+        self, labels, *, downcast=False
+    ) -> Self | Series:
         """
         Return columns of dataframe by `labels`
 
         If downcast is True, try and downcast from a DataFrame to a Series
         """
-        new_data = super()._get_columns_by_label(labels, downcast)
+        ca = self._data.select_by_label(labels)
         if downcast:
             if is_scalar(labels):
                 nlevels = 1
@@ -1844,11 +1846,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 nlevels = len(labels)
             if self._data.multiindex is False or nlevels == self._data.nlevels:
                 out = self._constructor_sliced._from_data(
-                    new_data, index=self.index, name=labels
+                    ca, index=self.index, name=labels
                 )
                 return out
         out = self.__class__._from_data(
-            new_data, index=self.index, columns=new_data.to_pandas_index()
+            ca, index=self.index, columns=ca.to_pandas_index()
         )
         return out
 
