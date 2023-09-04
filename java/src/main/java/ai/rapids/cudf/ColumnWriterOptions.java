@@ -523,7 +523,7 @@ public class ColumnWriterOptions {
    * named 'value'. The caller of this method doesn't need to worry about this as this method will
    * take care of this without the knowledge of the caller.
    *
-   * Note: this method always returns a nullabe column, can not return non-nullable column.
+   * Note: This method always returns a nullabe column, cannot return non-nullable column.
    * Do not use this, use the next function with the parameter `isNullable`.
    */
   @Deprecated
