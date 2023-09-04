@@ -2033,9 +2033,19 @@ def as_column(
                     f"{arbitrary.dtype} is not supported. Convert first to "
                     f"{arbitrary.dtype.subtype}."
                 )
-        if is_categorical_dtype(arbitrary):
+        if is_categorical_dtype(arbitrary.dtype):
+            if isinstance(
+                arbitrary.dtype.categories.dtype, pd.DatetimeTZDtype
+            ):
+                raise NotImplementedError(
+                    "cuDF does not yet support timezone-aware datetimes"
+                )
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif is_interval_dtype(arbitrary.dtype):
+            if isinstance(arbitrary.dtype.subtype, pd.DatetimeTZDtype):
+                raise NotImplementedError(
+                    "cuDF does not yet support timezone-aware datetimes"
+                )
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif arbitrary.dtype == np.bool_:
             data = as_column(cupy.asarray(arbitrary), dtype=arbitrary.dtype)
@@ -2262,11 +2272,20 @@ def as_column(
     elif isinstance(arbitrary, pd.core.arrays.masked.BaseMaskedArray):
         data = as_column(pa.Array.from_pandas(arbitrary), dtype=dtype)
     elif (
-        isinstance(arbitrary, pd.DatetimeIndex)
-        and isinstance(arbitrary.dtype, pd.DatetimeTZDtype)
-    ) or (
-        isinstance(arbitrary, pd.IntervalIndex)
-        and is_datetime64tz_dtype(arbitrary.dtype.subtype)
+        (
+            isinstance(arbitrary, pd.DatetimeIndex)
+            and isinstance(arbitrary.dtype, pd.DatetimeTZDtype)
+        )
+        or (
+            isinstance(arbitrary, pd.IntervalIndex)
+            and is_datetime64tz_dtype(arbitrary.dtype.subtype)
+        )
+        or (
+            isinstance(arbitrary, pd.CategoricalIndex)
+            and isinstance(
+                arbitrary.dtype.categories.dtype, pd.DatetimeTZDtype
+            )
+        )
     ):
         raise NotImplementedError(
             "cuDF does not yet support timezone-aware datetimes"
