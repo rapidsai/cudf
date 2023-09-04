@@ -547,7 +547,6 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
       };
       state_table scanned;
       // inclusive scan of escaping backslashes
-      // TODO both inclusive and exclusive available in cub.
       if constexpr (is_warp) {
         using SlashScan = cub::WarpScan<state_table>;
         __shared__ typename SlashScan::TempStorage temp_slash[num_warps];
@@ -578,7 +577,6 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
         error |= (is_escaping_backslash /*c == '\\'*/ && char_index == (in_end - in_begin) - 1);
         error |= (is_prev_escaping_backslash && escaped_char == NON_ESCAPE_CHAR);
         error |= (is_prev_escaping_backslash && c == 'u' &&
-                  // TODO check if following condition is right or off by one error.
                   ((in_begin + char_index + UNICODE_HEX_DIGIT_COUNT >= in_end) |
                    !is_hex(in_begin[char_index + 1]) | !is_hex(in_begin[char_index + 2]) |
                    !is_hex(in_begin[char_index + 3]) | !is_hex(in_begin[char_index + 4])));
@@ -591,7 +589,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
         __shared__ typename ErrorReduce::TempStorage temp_storage_error;
         __shared__ bool error_reduced;
         error_reduced = ErrorReduce(temp_storage_error).Sum(error);  // TODO use cub::LogicalOR.
-        // only valid in thread0.
+        // only valid in thread0, so shared memory is used for broadcast.
         __syncthreads();
         error = error_reduced;
       }
