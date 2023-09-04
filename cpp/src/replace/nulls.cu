@@ -446,26 +446,29 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             cudf::column_view const& replacement,
+                                            rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_nulls(input, replacement, cudf::get_default_stream(), mr);
+  return detail::replace_nulls(input, replacement, stream, mr);
 }
 
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             cudf::scalar const& replacement,
+                                            rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_nulls(input, replacement, cudf::get_default_stream(), mr);
+  return detail::replace_nulls(input, replacement, stream, mr);
 }
 
 std::unique_ptr<cudf::column> replace_nulls(column_view const& input,
                                             replace_policy const& replace_policy,
+                                            rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_nulls(input, replace_policy, cudf::get_default_stream(), mr);
+  return detail::replace_nulls(input, replace_policy, stream, mr);
 }
 
 }  // namespace cudf
