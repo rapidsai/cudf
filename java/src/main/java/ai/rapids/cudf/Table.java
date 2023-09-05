@@ -336,7 +336,9 @@ public final class Table implements AutoCloseable {
                                                      boolean[] isBinaryValues,
                                                      boolean[] hasParquetFieldIds,
                                                      int[] parquetFieldIds,
-                                                     HostBufferConsumer consumer) throws CudfException;
+                                                     HostBufferConsumer consumer,
+                                                     HostMemoryAllocator hostMemoryAllocator
+                                                     ) throws CudfException;
 
   /**
    * Write out a table to an open handle.
@@ -419,7 +421,9 @@ public final class Table implements AutoCloseable {
                                                  int compression,
                                                  int[] precisions,
                                                  boolean[] isMapValues,
-                                                 HostBufferConsumer consumer) throws CudfException;
+                                                 HostBufferConsumer consumer,
+                                                 HostMemoryAllocator hostMemoryAllocator
+                                                 ) throws CudfException;
 
   /**
    * Write out a table to an open handle.
@@ -447,10 +451,12 @@ public final class Table implements AutoCloseable {
    * Setup everything to write Arrow IPC formatted data to a buffer.
    * @param columnNames names that correspond to the table columns
    * @param consumer consumer of host buffers produced.
+   * @param hostMemoryAllocator allocator for host memory buffers.
    * @return a handle that is used in later calls to writeArrowIPCChunk and writeArrowIPCEnd.
    */
   private static native long writeArrowIPCBufferBegin(String[] columnNames,
-                                                      HostBufferConsumer consumer);
+                                                      HostBufferConsumer consumer,
+                                                      HostMemoryAllocator hostMemoryAllocator);
 
   /**
    * Convert a cudf table to an arrow table handle.
@@ -906,7 +912,9 @@ public final class Table implements AutoCloseable {
                                                    String trueValue,
                                                    String falseValue,
                                                    int quoteStyle,
-                                                   HostBufferConsumer buffer) throws CudfException;
+                                                   HostBufferConsumer buffer,
+                                                   HostMemoryAllocator hostMemoryAllocator
+                                                   ) throws CudfException;
 
   private static native void writeCSVChunkToBuffer(long writerHandle, long tableHandle);
 
@@ -915,7 +923,8 @@ public final class Table implements AutoCloseable {
   private static class CSVTableWriter extends TableWriter {
     private HostBufferConsumer consumer;
 
-    private CSVTableWriter(CSVWriterOptions options, HostBufferConsumer consumer) {
+    private CSVTableWriter(CSVWriterOptions options, HostBufferConsumer consumer,
+        HostMemoryAllocator hostMemoryAllocator) {
       super(startWriteCSVToBuffer(options.getColumnNames(),
           options.getIncludeHeader(),
           options.getRowDelimiter(),
@@ -924,7 +933,7 @@ public final class Table implements AutoCloseable {
           options.getTrueValue(),
           options.getFalseValue(),
           options.getQuoteStyle().nativeId,
-          consumer));
+          consumer, hostMemoryAllocator));
       this.consumer = consumer;
     }
 
@@ -949,8 +958,14 @@ public final class Table implements AutoCloseable {
     }
   }
 
-  public static TableWriter getCSVBufferWriter(CSVWriterOptions options, HostBufferConsumer bufferConsumer) {
-    return new CSVTableWriter(options, bufferConsumer);
+  public static TableWriter getCSVBufferWriter(CSVWriterOptions options,
+      HostBufferConsumer bufferConsumer, HostMemoryAllocator hostMemoryAllocator) {
+    return new CSVTableWriter(options, bufferConsumer, hostMemoryAllocator);
+  }
+
+   public static TableWriter getCSVBufferWriter(CSVWriterOptions options,
+      HostBufferConsumer bufferConsumer) {
+    return getCSVBufferWriter(options, bufferConsumer, DefaultHostMemoryAllocator.get());
   }
 
   /**
@@ -1393,7 +1408,8 @@ public final class Table implements AutoCloseable {
       this.consumer = null;
     }
 
-    private ParquetTableWriter(ParquetWriterOptions options, HostBufferConsumer consumer) {
+    private ParquetTableWriter(ParquetWriterOptions options, HostBufferConsumer consumer,
+        HostMemoryAllocator hostMemoryAllocator) {
       super(writeParquetBufferBegin(options.getFlatColumnNames(),
           options.getTopLevelChildren(),
           options.getFlatNumChildren(),
@@ -1408,7 +1424,7 @@ public final class Table implements AutoCloseable {
           options.getFlatIsBinary(),
           options.getFlatHasParquetFieldId(),
           options.getFlatParquetFieldId(),
-          consumer));
+          consumer, hostMemoryAllocator));
       this.consumer = consumer;
     }
 
@@ -1448,11 +1464,18 @@ public final class Table implements AutoCloseable {
    * @param options the parquet writer options.
    * @param consumer a class that will be called when host buffers are ready with parquet
    *                 formatted data in them.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return a table writer to use for writing out multiple tables.
    */
   public static TableWriter writeParquetChunked(ParquetWriterOptions options,
+                                                HostBufferConsumer consumer,
+                                                HostMemoryAllocator hostMemoryAllocator) {
+    return new ParquetTableWriter(options, consumer, hostMemoryAllocator);
+  }
+
+  public static TableWriter writeParquetChunked(ParquetWriterOptions options,
                                                 HostBufferConsumer consumer) {
-    return new ParquetTableWriter(options, consumer);
+    return writeParquetChunked(options, consumer, DefaultHostMemoryAllocator.get());
   }
 
   /**
@@ -1461,10 +1484,12 @@ public final class Table implements AutoCloseable {
    * @param options the Parquet writer options.
    * @param consumer a class that will be called when host buffers are ready with Parquet
    *                 formatted data in them.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @param columnViews ColumnViews to write to Parquet
    */
   public static void writeColumnViewsToParquet(ParquetWriterOptions options,
                                                HostBufferConsumer consumer,
+                                               HostMemoryAllocator hostMemoryAllocator,
                                                ColumnView... columnViews) {
     assert columnViews != null && columnViews.length > 0 : "ColumnViews can't be null or empty";
     long rows = columnViews[0].getRowCount();
@@ -1483,7 +1508,9 @@ public final class Table implements AutoCloseable {
 
     long nativeHandle = createCudfTableView(viewPointers);
     try {
-      try (ParquetTableWriter writer = new ParquetTableWriter(options, consumer)) {
+      try (
+        ParquetTableWriter writer = new ParquetTableWriter(options, consumer, hostMemoryAllocator)
+      ) {
         long total = 0;
         for (ColumnView cv : columnViews) {
           total += cv.getDeviceMemorySize();
@@ -1493,6 +1520,12 @@ public final class Table implements AutoCloseable {
     } finally {
       deleteCudfTable(nativeHandle);
     }
+  }
+
+  public static void writeColumnViewsToParquet(ParquetWriterOptions options,
+                                               HostBufferConsumer consumer,
+                                               ColumnView... columnViews) {
+    writeColumnViewsToParquet(options, consumer, DefaultHostMemoryAllocator.get(), columnViews);
   }
 
   private static class ORCTableWriter extends TableWriter {
@@ -1512,7 +1545,8 @@ public final class Table implements AutoCloseable {
       this.consumer = null;
     }
 
-    private ORCTableWriter(ORCWriterOptions options, HostBufferConsumer consumer) {
+    private ORCTableWriter(ORCWriterOptions options, HostBufferConsumer consumer,
+        HostMemoryAllocator hostMemoryAllocator) {
       super(writeORCBufferBegin(options.getFlatColumnNames(),
           options.getTopLevelChildren(),
           options.getFlatNumChildren(),
@@ -1522,7 +1556,7 @@ public final class Table implements AutoCloseable {
           options.getCompressionType().nativeId,
           options.getFlatPrecision(),
           options.getFlatIsMap(),
-          consumer));
+          consumer, hostMemoryAllocator));
       this.consumer = consumer;
     }
 
@@ -1562,10 +1596,16 @@ public final class Table implements AutoCloseable {
    * @param options the ORC writer options.
    * @param consumer a class that will be called when host buffers are ready with ORC
    *                 formatted data in them.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return a table writer to use for writing out multiple tables.
    */
+  public static TableWriter writeORCChunked(ORCWriterOptions options, HostBufferConsumer consumer,
+      HostMemoryAllocator hostMemoryAllocator) {
+    return new ORCTableWriter(options, consumer, hostMemoryAllocator);
+  }
+
   public static TableWriter writeORCChunked(ORCWriterOptions options, HostBufferConsumer consumer) {
-    return new ORCTableWriter(options, consumer);
+    return writeORCChunked(options, consumer, DefaultHostMemoryAllocator.get());
   }
 
   private static class ArrowIPCTableWriter extends TableWriter {
@@ -1580,8 +1620,9 @@ public final class Table implements AutoCloseable {
       this.maxChunkSize = options.getMaxChunkSize();
     }
 
-    private ArrowIPCTableWriter(ArrowIPCWriterOptions options, HostBufferConsumer consumer) {
-      super(writeArrowIPCBufferBegin(options.getColumnNames(), consumer));
+    private ArrowIPCTableWriter(ArrowIPCWriterOptions options, HostBufferConsumer consumer,
+        HostMemoryAllocator hostMemoryAllocator) {
+      super(writeArrowIPCBufferBegin(options.getColumnNames(), consumer, hostMemoryAllocator));
       this.callback = options.getCallback();
       this.consumer = consumer;
       this.maxChunkSize = options.getMaxChunkSize();
@@ -1629,11 +1670,18 @@ public final class Table implements AutoCloseable {
    * @param options the arrow IPC writer options.
    * @param consumer a class that will be called when host buffers are ready with arrow IPC
    *                 formatted data in them.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return a table writer to use for writing out multiple tables.
    */
   public static TableWriter writeArrowIPCChunked(ArrowIPCWriterOptions options,
+                                                 HostBufferConsumer consumer,
+                                                 HostMemoryAllocator hostMemoryAllocator) {
+    return new ArrowIPCTableWriter(options, consumer, hostMemoryAllocator);
+  }
+
+  public static TableWriter writeArrowIPCChunked(ArrowIPCWriterOptions options,
                                                  HostBufferConsumer consumer) {
-    return new ArrowIPCTableWriter(options, consumer);
+    return writeArrowIPCChunked(options, consumer, DefaultHostMemoryAllocator.get());
   }
 
   private static class ArrowReaderWrapper implements AutoCloseable {
