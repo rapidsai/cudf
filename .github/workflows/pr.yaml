@@ -135,6 +135,7 @@ jobs:
         build-cudf-cpp -DBUILD_BENCHMARKS=ON;
         # build-cudf_kafka-cpp;
         build-cudf-python;
+        build-dask_cudf-python;
 
         # cudf_kafka's setup.py needs all this defined
         # CUDF_ROOT=~/cudf/cpp/build/latest \
