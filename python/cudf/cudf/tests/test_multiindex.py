@@ -1897,3 +1897,26 @@ def test_multiindex_empty_slice_pandas_compatibility():
     with cudf.option_context("mode.pandas_compatible", True):
         actual = cudf.from_pandas(expected)
     assert_eq(expected, actual, exact=False)
+
+
+@pytest.mark.parametrize(
+    "levels",
+    itertools.chain.from_iterable(
+        itertools.permutations(range(3), n) for n in range(1, 4)
+    ),
+    ids=str,
+)
+def test_multiindex_sort_index_partial(levels):
+    df = pd.DataFrame(
+        {
+            "a": [3, 3, 3, 1, 1, 1, 2, 2],
+            "b": [4, 2, 7, -1, 11, -2, 7, 7],
+            "c": [4, 4, 2, 3, 3, 3, 1, 1],
+            "val": [1, 2, 3, 4, 5, 6, 7, 8],
+        }
+    ).set_index(["a", "b", "c"])
+    cdf = cudf.from_pandas(df)
+
+    expect = df.sort_index(level=levels, sort_remaining=True)
+    got = cdf.sort_index(level=levels, sort_remaining=True)
+    assert_eq(expect, got)
