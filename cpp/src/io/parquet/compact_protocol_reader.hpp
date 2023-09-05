@@ -399,6 +399,49 @@ ParquetFieldStructListFunctor<T> ParquetFieldStructList(int f, std::vector<T>& v
 }
 
 /**
+ * @brief Functor to read a vector of structures from CompactProtocolReader
+ *
+ * @return True if field types mismatch or if the process of reading a
+ * struct fails
+ */
+template <typename T>
+class OptionalParquetFieldStructListFunctor {
+  int field_val;
+  std::optional<std::vector<T>>& val;
+
+ public:
+  OptionalParquetFieldStructListFunctor(int f, std::optional<std::vector<T>>& v)
+    : field_val(f), val(v)
+  {
+  }
+
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
+  {
+    if (field_type != ST_FLD_LIST) return true;
+    val              = std::vector<T>();
+    int current_byte = cpr->getb();
+    if ((current_byte & 0xf) != ST_FLD_STRUCT) return true;
+    int n = current_byte >> 4;
+    if (n == 0xf) n = cpr->get_u32();
+    val.value().resize(n);
+    for (int32_t i = 0; i < n; i++) {
+      if (!(cpr->read(&val.value()[i]))) { return true; }
+    }
+
+    return false;
+  }
+
+  int field() { return field_val; }
+};
+
+template <typename T>
+OptionalParquetFieldStructListFunctor<T> OptionalParquetFieldStructList(
+  int f, std::optional<std::vector<T>>& v)
+{
+  return OptionalParquetFieldStructListFunctor<T>(f, v);
+}
+
+/**
  * @brief Functor to read a string from CompactProtocolReader
  *
  * @return True if field type mismatches or if size of string exceeds bounds

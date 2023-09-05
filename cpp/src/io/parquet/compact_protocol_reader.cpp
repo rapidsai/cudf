@@ -334,7 +334,7 @@ bool CompactProtocolReader::read(ColumnIndex* c)
                     ParquetFieldBinaryList(3, c->max_values),
                     ParquetFieldEnum<BoundaryOrder>(4, c->boundary_order),
                     ParquetFieldInt64List(5, c->null_counts),
-                    OptionalParquetFieldStruct(6, c->repetition_definition_level_histograms));
+                    OptionalParquetFieldStructList(6, c->repetition_definition_level_histograms));
   return function_builder(this, op);
 }
 
