@@ -1383,7 +1383,9 @@ void encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
  * @param column_index_truncate_length maximum length of min or max values in column index, in bytes
  * @return Computed buffer size needed to encode the column index
  */
-size_t column_index_buffer_size(gpu::EncColumnChunk* ck, int32_t column_index_truncate_length)
+size_t column_index_buffer_size(gpu::EncColumnChunk* ck,
+                                gpu::parquet_column_device_view const& col,
+                                int32_t column_index_truncate_length)
 {
   // encoding the column index for a given chunk requires:
   //   each list (4 of them) requires 6 bytes of overhead
@@ -1406,15 +1408,31 @@ size_t column_index_buffer_size(gpu::EncColumnChunk* ck, int32_t column_index_tr
   //
   // add on some extra padding at the end (plus extra 7 bytes of alignment padding)
   // for scratch space to do stats truncation.
-  //
-  // FIXME(ets): need to work out how much for SizeStatistics. For now just add 32 bytes per page.
-  // full size is optional i64 unencoded size, then for each histogram it's
-  // (num_data_pages + 1) * (max_level + 1) ints.
-  //
+
+  // additional storage needed for SizeStatistics
+  // don't need stats for dictionary pages
+  auto const num_pages = ck->num_pages - (ck->use_dictionary ? 1 : 0);
+
+  // only need variable length size info for BYTE_ARRAY
+  // 1 byte for marker, 1 byte vec type, 4 bytes length, 5 bytes per page for values
+  auto const var_bytes_size = col.physical_type == BYTE_ARRAY ? 6 + 5 * num_pages : 0;
+
+  // for the histograms, need 1 byte for marker, 1 byte vec type, 4 bytes length,
+  // (max_level + 1) * 5 byte per page
+  auto const has_def       = col.max_def_level > DEF_LVL_HIST_CUTOFF;
+  auto const has_rep       = col.max_def_level > REP_LVL_HIST_CUTOFF;
+  auto const def_hist_size = has_def ? 6 + 5 * num_pages * (col.max_def_level + 1) : 0;
+  auto const rep_hist_size = has_rep ? 6 + 5 * num_pages * (col.max_rep_level + 1) : 0;
+
+  // for optional RepDefHist we need 1 byte of field marker, 1 byte end-of-struct
+  auto const rep_def_struct_size = (has_def or has_rep ? 2 : 0) + def_hist_size + rep_hist_size;
+
+  // total size of SizeStruct is 1 byte marker, 1 byte end-of-struct, plus sizes for components
+  auto const size_struct_size = 2 + rep_def_struct_size + var_bytes_size;
+
   // calculating this per-chunk because the sizes can be wildly different.
   constexpr size_t padding = 7;
-  return ck->ck_stat_size * ck->num_pages + column_index_truncate_length + padding +
-         ck->num_pages * 32;
+  return ck->ck_stat_size * num_pages + column_index_truncate_length + padding + size_struct_size;
 }
 
 /**
@@ -1838,11 +1856,12 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         max_chunk_bfr_size =
           std::max(max_chunk_bfr_size, (size_t)std::max(ck->bfr_size, ck->compressed_size));
         if (stats_granularity == statistics_freq::STATISTICS_COLUMN) {
-          column_index_bfr_size += column_index_buffer_size(ck, column_index_truncate_length);
+          auto const& col = col_desc[ck->col_desc_id];
+          column_index_bfr_size += column_index_buffer_size(ck, col, column_index_truncate_length);
 
           // SizeStatistics are on the ColumnIndex, so only need to allocate the histograms data
           // if we're doing page-level indexes. add 1 to num_pages for per-chunk histograms.
-          auto const& col           = col_desc[ck->col_desc_id];
+
           auto const num_histograms = ck->num_pages - (ck->use_dictionary ? 1 : 0) + 1;
 
           if (col.max_def_level > DEF_LVL_HIST_CUTOFF) {
@@ -1916,10 +1935,10 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         bfr += ck.bfr_size;
         bfr_c += ck.compressed_size;
         if (stats_granularity == statistics_freq::STATISTICS_COLUMN) {
-          ck.column_index_size = column_index_buffer_size(&ck, column_index_truncate_length);
+          auto const& col      = col_desc[ck.col_desc_id];
+          ck.column_index_size = column_index_buffer_size(&ck, col, column_index_truncate_length);
           bfr_i += ck.column_index_size;
 
-          auto const& col           = col_desc[ck.col_desc_id];
           auto const num_histograms = ck.num_pages - (ck.use_dictionary ? 1 : 0) + 1;
           if (col.max_def_level > DEF_LVL_HIST_CUTOFF) {
             ck.def_histogram_data = bfr_d;
