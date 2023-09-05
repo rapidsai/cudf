@@ -78,11 +78,12 @@ __global__ void materialize_merged_bitmask_kernel(
   size_type const num_destination_rows,
   index_type const* const __restrict__ merged_indices)
 {
+  auto const stride = detail::grid_1d::grid_stride();
+
   auto tid = detail::grid_1d::global_thread_id();
 
   auto active_threads = __ballot_sync(0xffff'ffffu, tid < num_destination_rows);
 
-  auto stride = detail::grid_1d::grid_stride();
   while (tid < num_destination_rows) {
     auto const destination_row     = static_cast<size_type>(tid);
     auto const [src_side, src_row] = merged_indices[destination_row];
