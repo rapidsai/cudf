@@ -67,8 +67,9 @@ __global__ void compute_conditional_join_output_size(
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
 
   std::size_t thread_counter{0};
-  auto const start_idx                         = cudf::detail::grid_1d::global_thread_id();
-  cudf::thread_index_type const stride         = thread_index_type{block_size} * gridDim.x;
+  auto const start_idx                 = cudf::detail::grid_1d::global_thread_id();
+  cudf::thread_index_type const stride = cudf::detail::grid_1d::grid_stride();
+  ;
   cudf::thread_index_type const left_num_rows  = left_table.num_rows();
   cudf::thread_index_type const right_num_rows = right_table.num_rows();
   auto const outer_num_rows                    = (swap_tables ? right_num_rows : left_num_rows);
@@ -82,9 +83,9 @@ __global__ void compute_conditional_join_output_size(
     bool found_match = false;
     for (cudf::thread_index_type inner_row_index = 0; inner_row_index < inner_num_rows;
          ++inner_row_index) {
-      auto output_dest           = cudf::ast::detail::value_expression_result<bool, has_nulls>();
-      auto const left_row_index  = swap_tables ? inner_row_index : outer_row_index;
-      auto const right_row_index = swap_tables ? outer_row_index : inner_row_index;
+      auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
+      cudf::size_type const left_row_index  = swap_tables ? inner_row_index : outer_row_index;
+      cudf::size_type const right_row_index = swap_tables ? outer_row_index : inner_row_index;
       evaluator.evaluate(
         output_dest, left_row_index, right_row_index, 0, thread_intermediate_storage);
       if (output_dest.is_valid() && output_dest.value()) {
