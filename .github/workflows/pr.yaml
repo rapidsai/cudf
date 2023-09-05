@@ -131,14 +131,15 @@ jobs:
     uses: rapidsai/shared-action-workflows/.github/workflows/build-in-devcontainer.yaml@fea/devcontainers
     with:
       build_command: |
+        set -e;
         build-cudf-cpp -DBUILD_BENCHMARKS=ON;
-        build-cudf_kafka-cpp;
+        # build-cudf_kafka-cpp;
         build-cudf-python;
 
         # cudf_kafka's setup.py needs all this defined
-        CUDF_ROOT=~/cudf/cpp/build/latest \
-        CUDF_INCLUDE_DIR=~/cudf/cpp/include \
-        CUDF_KAFKA_ROOT=~/cudf/cpp/libcudf_kafka/build/latest \
-        CUDF_KAFKA_INCLUDE_DIR=~/cudf/cpp/libcudf_kafka/include \
-        CUDA_HOME="${CONDA_PREFIX:-${CUDA_HOME:-/usr/local/cuda}}" \
-          build-cudf_kafka-python;
+        # CUDF_ROOT=~/cudf/cpp/build/latest \
+        # CUDF_INCLUDE_DIR=~/cudf/cpp/include \
+        # CUDF_KAFKA_ROOT=~/cudf/cpp/libcudf_kafka/build/latest \
+        # CUDF_KAFKA_INCLUDE_DIR=~/cudf/cpp/libcudf_kafka/include \
+        # CUDA_HOME="${CONDA_PREFIX:-${CUDA_HOME:-/usr/local/cuda}}" \
+        #   build-cudf_kafka-python;
