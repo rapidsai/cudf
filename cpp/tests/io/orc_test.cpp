@@ -998,7 +998,7 @@ TEST_F(OrcStatisticsTest, Basic)
   bool_col col6({true, true, true, true, true, false, false, false, false}, validity);
 
   cudf::test::fixed_point_column_wrapper<int64_t> col7(
-    dec_sequence, dec_sequence + num_rows, numeric::scale_type{120});
+    dec_sequence, dec_sequence + num_rows, numeric::scale_type{-1});
 
   table_view expected({col1, col2, col3, col4, col5, col6, col7});
 
