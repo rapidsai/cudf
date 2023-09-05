@@ -72,6 +72,9 @@ from cudf._lib.utils cimport columns_from_table_view, table_view_from_columns
 
 cdef class DeviceScalar:
 
+    # I think this should be removable, except that currently the way that
+    # from_unique_ptr is implemented is probably dereferencing this in an
+    # invalid state. See what the best way to fix that is.
     def __cinit__(self, *args, **kwargs):
         self.c_value = pylibcudf.Scalar()
 
