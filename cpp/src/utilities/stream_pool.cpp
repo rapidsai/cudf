@@ -33,7 +33,6 @@ namespace {
 // defaults to 16.
 std::size_t constexpr STREAM_POOL_SIZE = 32;
 
-// TODO: if this stays internal, then strip out the unused bits and trim the docs.
 class cuda_stream_pool {
  public:
   virtual ~cuda_stream_pool() = default;
@@ -111,6 +110,9 @@ class rmm_cuda_stream_pool : public cuda_stream_pool {
   std::size_t get_stream_pool_size() const override { return STREAM_POOL_SIZE; }
 };
 
+/**
+ * @brief Implementation of `cuda_stream_pool` that always returns `cudf::get_default_stream()`
+ */
 class debug_cuda_stream_pool : public cuda_stream_pool {
  public:
   rmm::cuda_stream_view get_stream() override { return cudf::get_default_stream(); }
@@ -127,6 +129,9 @@ class debug_cuda_stream_pool : public cuda_stream_pool {
   std::size_t get_stream_pool_size() const override { return 1UL; }
 };
 
+/**
+ * @brief Initialize global stream pool.
+ */
 cuda_stream_pool* create_global_cuda_stream_pool()
 {
   if (getenv("LIBCUDF_USE_DEBUG_STREAM_POOL")) return new debug_cuda_stream_pool();
@@ -134,6 +139,9 @@ cuda_stream_pool* create_global_cuda_stream_pool()
   return new rmm_cuda_stream_pool();
 }
 
+/**
+ * @brief RAII struct to wrap a cuda event and ensure it's proper destruction.
+ */
 struct cuda_event {
   cuda_event()
     : e_{[]() {
@@ -154,12 +162,18 @@ struct cuda_event {
   std::unique_ptr<cudaEvent_t, deleter> e_;
 };
 
+/**
+ * @brief Returns a cudaEvent_t for the current thread.
+ */
 cudaEvent_t event_for_thread()
 {
   thread_local cuda_event thread_event;
   return thread_event;
 }
 
+/**
+ * Returns a reference to the global stream ppol.
+ */
 cuda_stream_pool& global_cuda_stream_pool()
 {
   static cuda_stream_pool* pool = create_global_cuda_stream_pool();
