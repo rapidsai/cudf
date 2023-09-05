@@ -282,7 +282,7 @@ process_string(in_iterator_t in_begin,
 }
 
 /**
- * @brief Datastructure to hold 1 bit per thread with previous `UNICODE_LOOK_BACK` bits stored in a
+ * @brief Data structure to hold 1 bit per thread with previous `UNICODE_LOOK_BACK` bits stored in a
  * warp.
  *
  * @tparam num_warps number of warps in the block
@@ -290,12 +290,12 @@ process_string(in_iterator_t in_begin,
 template <unsigned num_warps>
 struct bitfield_warp {
   static constexpr auto UNICODE_LOOK_BACK{5};
-  // 5 because for skipping unicode hex chars, look back upto 5 chars are needed.
+  // 5 because for skipping unicode hex chars, look back up to 5 chars are needed.
   // 5+32 for each warp.
   bool is_slash[num_warps][UNICODE_LOOK_BACK + cudf::detail::warp_size];
   __device__ void reset(unsigned warp_id)
   {
-    if (threadIdx.x < UNICODE_LOOK_BACK) {
+    if (threadIdx.x % cudf::detail::warp_size < UNICODE_LOOK_BACK) {
       is_slash[warp_id][threadIdx.x % cudf::detail::warp_size] = 0;
     }
     is_slash[warp_id][threadIdx.x % cudf::detail::warp_size + UNICODE_LOOK_BACK] = 0;
@@ -320,7 +320,7 @@ struct bitfield_warp {
 };
 
 /**
- * @brief Datastructure to hold 1 bit per thread with previous `UNICODE_LOOK_BACK` bits stored in a
+ * @brief Data structure to hold 1 bit per thread with previous `UNICODE_LOOK_BACK` bits stored in a
  * block.
  *
  * @tparam num_warps number of warps in the block
@@ -328,7 +328,7 @@ struct bitfield_warp {
 template <unsigned num_warps>
 struct bitfield_block {
   static constexpr auto UNICODE_LOOK_BACK{5};
-  // 5 because for skipping unicode hex chars, look back upto 5 chars are needed.
+  // 5 because for skipping unicode hex chars, look back up to 5 chars are needed.
   // 5 + num_warps*32 for entire block
   bool is_slash[UNICODE_LOOK_BACK + num_warps * cudf::detail::warp_size];
 
@@ -539,11 +539,16 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
       // All escaping backslash should be skipped.
 
       struct state_table {
-        bool state[2];
+        // using bit fields instead of state[2]
+        bool state0 : 1;
+        bool state1 : 1;
+        bool inline __device__ get(bool init_state) const { return init_state ? state1 : state0; }
       };
       state_table curr{is_within_bounds && c == '\\', false};  // state transition vector.
       auto composite_op = [](state_table op1, state_table op2) {
-        return state_table{op2.state[op1.state[0]], op2.state[op1.state[1]]};
+        // equivalent of state_table{op2.state[op1.state[0]], op2.state[op1.state[1]]};
+        return state_table{op1.state0 ? op2.state1 : op2.state0,
+                           op1.state1 ? op2.state1 : op2.state0};
       };
       state_table scanned;
       // inclusive scan of escaping backslashes
@@ -551,7 +556,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
         using SlashScan = cub::WarpScan<state_table>;
         __shared__ typename SlashScan::TempStorage temp_slash[num_warps];
         SlashScan(temp_slash[warp_id]).InclusiveScan(curr, scanned, composite_op);
-        is_escaping_backslash = scanned.state[init_state];
+        is_escaping_backslash = scanned.get(init_state);
         init_state            = __shfl_sync(MASK, is_escaping_backslash, BLOCK_SIZE - 1);
         __syncwarp();
         is_slash.shift(warp_id);
@@ -561,7 +566,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
         using SlashScan = cub::BlockScan<state_table, BLOCK_SIZE>;
         __shared__ typename SlashScan::TempStorage temp_slash;
         SlashScan(temp_slash).InclusiveScan(curr, scanned, composite_op);
-        is_escaping_backslash = scanned.state[init_state];
+        is_escaping_backslash = scanned.get(init_state);
         __syncthreads();
         if (threadIdx.x == BLOCK_SIZE - 1) init_state = is_escaping_backslash;
         __syncthreads();
