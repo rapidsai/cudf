@@ -90,7 +90,7 @@ auto const AGG_MAX          = cudf::make_max_aggregation<cudf::rolling_aggregati
 auto const AGG_SUM          = cudf::make_sum_aggregation<cudf::rolling_aggregation>();
 auto const AGG_COLLECT_LIST = cudf::make_collect_list_aggregation<cudf::rolling_aggregation>();
 
-TEST_F(OffsetRowWindowTest, OffsetRowWindow_3_to_Minus_1)
+TEST_F(OffsetRowWindowTest, OffsetRowWindow_Grouped_3_to_Minus_1)
 {
   auto const preceding = cudf::window_bounds::get(3);
   auto const following = cudf::window_bounds::get(-1);
@@ -130,7 +130,47 @@ TEST_F(OffsetRowWindowTest, OffsetRowWindow_3_to_Minus_1)
     lists_column{{{}, {0}, {0, 1}, {1, 2}, {2, 3}, {3, 4}, {}, {6}, {6, 7}, {7, 8}}, no_nulls()});
 }
 
-TEST_F(OffsetRowWindowTest, OffsetRowWindow_0_to_2)
+TEST_F(OffsetRowWindowTest, OffsetRowWindow_Ungrouped_3_to_Minus_1)
+{
+  auto const preceding = cudf::window_bounds::get(3);
+  auto const following = cudf::window_bounds::get(-1);
+  auto run_rolling     = rolling_runner{preceding, following}.min_periods(1).grouped(false);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*run_rolling(*AGG_COUNT_NON_NULL),
+                                 ints_column{{0, 1, 2, 2, 2, 2, 2, 2, 2, 2}, nulls_at({0})});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*run_rolling(*AGG_COUNT_ALL),
+                                 ints_column{{0, 1, 2, 2, 2, 2, 2, 2, 2, 2}, nulls_at({0})});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*run_rolling(*AGG_MIN),
+                                 ints_column{{null, 0, 0, 1, 2, 3, 4, 5, 6, 7}, nulls_at({0})});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*run_rolling(*AGG_MAX),
+                                 ints_column{{null, 0, 1, 2, 3, 4, 5, 6, 7, 8}, nulls_at({0})});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *run_rolling(*AGG_SUM), bigints_column{{null, 0, 1, 3, 5, 7, 9, 11, 13, 15}, nulls_at({0})});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *run_rolling(*AGG_COLLECT_LIST),
+    lists_column{{{}, {0}, {0, 1}, {1, 2}, {2, 3}, {3, 4}, {4, 5}, {5, 6}, {6, 7}, {7, 8}},
+                 nulls_at({0})});
+
+  run_rolling.min_periods(0);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*run_rolling(*AGG_COUNT_NON_NULL),
+                                 ints_column{{0, 1, 2, 2, 2, 2, 2, 2, 2, 2}, no_nulls()});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*run_rolling(*AGG_COUNT_ALL),
+                                 ints_column{{0, 1, 2, 2, 2, 2, 2, 2, 2, 2}, no_nulls()});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *run_rolling(*AGG_COLLECT_LIST),
+    lists_column{{{}, {0}, {0, 1}, {1, 2}, {2, 3}, {3, 4}, {4, 5}, {5, 6}, {6, 7}, {7, 8}},
+                 no_nulls()});
+}
+
+TEST_F(OffsetRowWindowTest, OffsetRowWindow_Grouped_0_to_2)
 {
   auto const preceding = cudf::window_bounds::get(0);
   auto const following = cudf::window_bounds::get(2);
@@ -170,4 +210,44 @@ TEST_F(OffsetRowWindowTest, OffsetRowWindow_0_to_2)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *run_rolling(*AGG_COLLECT_LIST),
     lists_column{{{1, 2}, {2, 3}, {3, 4}, {4, 5}, {5}, {}, {7, 8}, {8, 9}, {9}, {}}, no_nulls});
+}
+
+TEST_F(OffsetRowWindowTest, OffsetRowWindow_Ungrouped_0_to_2)
+{
+  auto const preceding = cudf::window_bounds::get(0);
+  auto const following = cudf::window_bounds::get(2);
+  auto run_rolling     = rolling_runner{preceding, following}.min_periods(1).grouped(false);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*run_rolling(*AGG_COUNT_NON_NULL),
+                                 ints_column{{2, 2, 2, 2, 2, 2, 2, 2, 1, null}, nulls_at({9})});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*run_rolling(*AGG_COUNT_ALL),
+                                 ints_column{{2, 2, 2, 2, 2, 2, 2, 2, 1, null}, nulls_at({9})});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*run_rolling(*AGG_MIN),
+                                 ints_column{{1, 2, 3, 4, 5, 6, 7, 8, 9, null}, nulls_at({9})});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*run_rolling(*AGG_MAX),
+                                 ints_column{{2, 3, 4, 5, 6, 7, 8, 9, 9, null}, nulls_at({9})});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *run_rolling(*AGG_SUM), bigints_column{{3, 5, 7, 9, 11, 13, 15, 17, 9, null}, nulls_at({9})});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *run_rolling(*AGG_COLLECT_LIST),
+    lists_column{{{1, 2}, {2, 3}, {3, 4}, {4, 5}, {5, 6}, {6, 7}, {7, 8}, {8, 9}, {9}, {}},
+                 nulls_at({9})});
+
+  run_rolling.min_periods(0);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*run_rolling(*AGG_COUNT_NON_NULL),
+                                 ints_column{{2, 2, 2, 2, 2, 2, 2, 2, 1, 0}, no_nulls()});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*run_rolling(*AGG_COUNT_ALL),
+                                 ints_column{{2, 2, 2, 2, 2, 2, 2, 2, 1, 0}, no_nulls()});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *run_rolling(*AGG_COLLECT_LIST),
+    lists_column{{{1, 2}, {2, 3}, {3, 4}, {4, 5}, {5, 6}, {6, 7}, {7, 8}, {8, 9}, {9}, {}},
+                 no_nulls});
 }
