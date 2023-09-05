@@ -786,6 +786,21 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
   }
 }
 
+inline auto add_global_ref(JNIEnv *env, jobject jobj) {
+  auto new_global_ref = env->NewGlobalRef(jobj);
+  if (new_global_ref == nullptr) {
+    throw cudf::jni::jni_exception("global ref");
+  }
+  return new_global_ref;
+}
+
+inline nullptr_t del_global_ref(JNIEnv *env, jobject jobj) {
+  if (jobj != nullptr) {
+    env->DeleteGlobalRef(jobj);
+  }
+  return nullptr;
+}
+
 } // namespace jni
 } // namespace cudf
 

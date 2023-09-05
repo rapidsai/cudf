@@ -69,8 +69,7 @@ TEST_F(StringsFillTest, Fill)
 
 TEST_F(StringsFillTest, ZeroSizeStringsColumns)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
   auto results = cudf::fill(zero_size_strings_column, 0, 0, cudf::string_scalar(""));
   cudf::test::expect_column_empty(results->view());
 }
