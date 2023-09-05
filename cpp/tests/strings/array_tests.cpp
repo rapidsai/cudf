@@ -143,7 +143,7 @@ TEST_F(StringsColumnTest, GatherZeroSizeStringsColumn)
 {
   auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
 
-  cudf::column_view map_view(cudf::data_type{cudf::type_id::INT32}, 0, nullptr, 0, nullptr, 0);
+  auto const map_view = cudf::make_empty_column(cudf::type_id::INT32)->view();
   auto results = cudf::gather(cudf::table_view{{zero_size_strings_column}}, map_view)->release();
   cudf::test::expect_column_empty(results.front()->view());
 }
