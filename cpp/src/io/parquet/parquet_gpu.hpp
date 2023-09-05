@@ -54,6 +54,20 @@ constexpr int rolling_index(int index)
   return index % rolling_size;
 }
 
+// PARQUET-2261 allows for not writing the level histograms in certain cases.
+// The repetition level histogram may be omitted when max_rep_level equals 0. The definition
+// level histogram may be omitted when max_def_level equals 0 or 1. In the case of
+// max_rep_level == 0, the rep histogram would have a single value equal to num_rows. In the
+// case of max_def_level == 0, the def histogram would have a single value equal to num_values,
+// and when max_def_level == 1, the histogram would be {num_nulls, num_values - num_nulls}.
+//
+// These constants control libcudf's behavior. Currently, each histogram will be written when
+// max level is greater than 0. Even though this leads to some redundancy in the max_def_level == 1
+// case, having the histogram data relieves the reader from having to reconstruct it from the
+// OffsetIndex and ColumnMetaData.
+constexpr uint8_t REP_LVL_HIST_CUTOFF = 0;
+constexpr uint8_t DEF_LVL_HIST_CUTOFF = 0;
+
 /**
  * @brief Struct representing an input column in the file.
  */

@@ -62,11 +62,6 @@ namespace parquet {
 using namespace cudf::io::parquet;
 using namespace cudf::io;
 
-// FIXME(ets): cutoff for def level is open to debate
-// these are also in page_enc.cu. need to move to a header.
-uint8_t constexpr rep_level_cutoff = 0;
-uint8_t constexpr def_level_cutoff = 1;
-
 struct aggregate_writer_metadata {
   aggregate_writer_metadata(host_span<partition_info const> partitions,
                             host_span<std::map<std::string, std::string> const> kv_md,
@@ -1850,11 +1845,10 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           auto const& col           = col_desc[ck->col_desc_id];
           auto const num_histograms = ck->num_pages - (ck->use_dictionary ? 1 : 0) + 1;
 
-          // FIXME(ets): def level cutoff may be > 1
-          if (col.max_def_level > def_level_cutoff) {
+          if (col.max_def_level > DEF_LVL_HIST_CUTOFF) {
             def_histogram_bfr_size += (col.max_def_level + 1) * num_histograms;
           }
-          if (col.max_rep_level > rep_level_cutoff) {
+          if (col.max_rep_level > REP_LVL_HIST_CUTOFF) {
             rep_histogram_bfr_size += (col.max_rep_level + 1) * num_histograms;
           }
         }
@@ -1927,11 +1921,11 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
           auto const& col           = col_desc[ck.col_desc_id];
           auto const num_histograms = ck.num_pages - (ck.use_dictionary ? 1 : 0) + 1;
-          if (col.max_def_level > def_level_cutoff) {
+          if (col.max_def_level > DEF_LVL_HIST_CUTOFF) {
             ck.def_histogram_data = bfr_d;
             bfr_d += num_histograms * (col.max_def_level + 1);
           }
-          if (col.max_rep_level > rep_level_cutoff) {
+          if (col.max_rep_level > REP_LVL_HIST_CUTOFF) {
             ck.rep_histogram_data = bfr_r;
             bfr_r += num_histograms * (col.max_rep_level + 1);
           }
@@ -2059,22 +2053,20 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           chunk_stats.unencoded_byte_array_data_bytes = ck.var_bytes_size;
 
           auto const num_data_pages = ck.num_pages - (ck.use_dictionary ? 1 : 0);
-          if (col.max_def_level > def_level_cutoff) {
+          if (col.max_def_level > DEF_LVL_HIST_CUTOFF) {
             size_t const hist_size        = col.max_def_level + 1;
             uint32_t const* const ck_hist = h_def_ptr + hist_size * num_data_pages;
             host_span<uint32_t const> ck_def_hist{ck_hist, hist_size};
 
-            // TODO(ets): kind of sus...does this upconversion work?
             hist.definition_level_histogram = {ck_def_hist.begin(), ck_def_hist.end()};
             h_def_ptr += hist_size * (num_data_pages + 1);
           }
 
-          if (col.max_rep_level > rep_level_cutoff) {
+          if (col.max_rep_level > REP_LVL_HIST_CUTOFF) {
             size_t const hist_size        = col.max_rep_level + 1;
             uint32_t const* const ck_hist = h_rep_ptr + hist_size * num_data_pages;
             host_span<uint32_t const> ck_rep_hist{ck_hist, hist_size};
 
-            // TODO(ets): kind of sus...does this upconversion work?
             hist.repetition_level_histogram = {ck_rep_hist.begin(), ck_rep_hist.end()};
             h_rep_ptr += hist_size * (num_data_pages + 1);
           }
