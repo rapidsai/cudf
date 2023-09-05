@@ -378,7 +378,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   output_builder<byte_offset> row_offset_storage(ITEMS_PER_CHUNK, max_growth, stream);
   output_builder<char> char_storage(ITEMS_PER_CHUNK, max_growth, stream);
 
-  auto streams = cudf::detail::fork_streams(stream, concurrency);
+  auto streams = cudf::detail::fork_stream(stream, concurrency);
 
   cudaEvent_t last_launch_event;
   CUDF_CUDA_TRY(cudaEventCreate(&last_launch_event));
