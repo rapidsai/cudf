@@ -2095,6 +2095,8 @@ def test_construction_from_tz_timestamps(data):
         _ = cudf.Index(data)
     with pytest.raises(NotImplementedError):
         _ = cudf.DatetimeIndex(data)
+    with pytest.raises(NotImplementedError):
+        cudf.CategoricalIndex(data)
 
 
 @pytest.mark.parametrize("op", _cmpops)

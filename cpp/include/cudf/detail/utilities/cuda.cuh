@@ -92,6 +92,29 @@ class grid_1d {
   {
     return global_thread_id(threadIdx.x, blockIdx.x, blockDim.x);
   }
+
+  /**
+   * @brief Returns the stride of a 1D grid.
+   *
+   * The returned stride is the total number of threads in the grid.
+   *
+   * @param thread_id The thread index within the block
+   * @param block_id The block index within the grid
+   * @param num_threads_per_block The number of threads per block
+   * @return thread_index_type The global thread index
+   */
+  static constexpr thread_index_type grid_stride(thread_index_type num_threads_per_block,
+                                                 thread_index_type num_blocks_per_grid)
+  {
+    return num_threads_per_block * num_blocks_per_grid;
+  }
+
+  /**
+   * @brief Returns the stride of the current 1D grid.
+   *
+   * @return thread_index_type The number of threads in the grid.
+   */
+  static __device__ thread_index_type grid_stride() { return grid_stride(blockDim.x, gridDim.x); }
 };
 
 /**
