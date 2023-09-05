@@ -212,16 +212,14 @@ dependencies:
               - nvcc_linux-aarch64=11.8
   build_cpp:
     common:
-      - output_types: [conda, requirements]
-        packages:
-          - librmm==23.10.*
-          - libkvikio==23.10.*
       - output_types: conda
         packages:
           - fmt>=9.1.0,<10
           - &gbench benchmark==1.8.0
           - &gtest gtest>=1.13.0
           - &gmock gmock>=1.13.0
+          - librmm==23.10.*
+          - libkvikio==23.10.*
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
           - libarrow==12.0.1.*
@@ -261,13 +259,33 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - scikit-build>=0.13.1
-          - rmm==23.10.*
       - output_types: conda
         packages:
+          - &rmm_conda rmm==23.10.*
           - &protobuf protobuf>=4.21,<5
       - output_types: [requirements, pyproject]
         packages:
           - protoc-wheel
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          # This index is needed for rmm-cu{11,12}.
+          - --extra-index-url=https://pypi.nvidia.com
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix: {cuda: "12.2"}
+            packages: &build_python_packages_cu12
+              - &rmm_cu12 rmm-cu12==23.10.*
+          - {matrix: {cuda: "12.1"}, packages: *build_python_packages_cu12}
+          - {matrix: {cuda: "12.0"}, packages: *build_python_packages_cu12}
+          - matrix: {cuda: "11.8"}
+            packages: &build_python_packages_cu11
+              - &rmm_cu11 rmm-cu11==23.10.*
+          - {matrix: {cuda: "11.5"}, packages: *build_python_packages_cu11}
+          - {matrix: {cuda: "11.4"}, packages: *build_python_packages_cu11}
+          - {matrix: {cuda: "11.2"}, packages: *build_python_packages_cu11}
+          - {matrix: null, packages: [*rmm_conda] }
   libarrow_run:
     common:
       - output_types: [conda, requirements]
