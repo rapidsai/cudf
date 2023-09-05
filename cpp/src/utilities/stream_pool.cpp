@@ -190,19 +190,16 @@ std::vector<rmm::cuda_stream_view> fork_stream(rmm::cuda_stream_view stream, uin
   std::for_each(streams.begin(), streams.end(), [&](auto& strm) {
     CUDF_CUDA_TRY(cudaStreamWaitEvent(strm, event, 0));
   });
-  for (auto& strm : streams) {
-    CUDF_CUDA_TRY(cudaStreamWaitEvent(strm, event, 0));
-  }
   return streams;
 }
 
 void join_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
 {
   cudaEvent_t event = event_for_thread();
-  for (auto& strm : streams) {
+  std::for_each(streams.begin(), streams.end(), [&](auto& strm) {
     CUDF_CUDA_TRY(cudaEventRecord(event, strm));
     CUDF_CUDA_TRY(cudaStreamWaitEvent(stream, event, 0));
-  }
+  });
 }
 
 }  // namespace cudf::detail
