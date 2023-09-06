@@ -72,7 +72,7 @@ class cuda_stream_pool {
    * @param count The number of stream views to return.
    * @return Vector containing `count` stream views.
    */
-  virtual std::vector<rmm::cuda_stream_view> get_streams(uint32_t count) = 0;
+  virtual std::vector<rmm::cuda_stream_view> get_streams(std::size_t count) = 0;
 
   /**
    * @brief Get the number of stream objects in the pool.
@@ -98,7 +98,7 @@ class rmm_cuda_stream_pool : public cuda_stream_pool {
     return _pool.get_stream(stream_id);
   }
 
-  std::vector<rmm::cuda_stream_view> get_streams(uint32_t count) override
+  std::vector<rmm::cuda_stream_view> get_streams(std::size_t count) override
   {
     if (count > STREAM_POOL_SIZE) {
       CUDF_LOG_WARN("get_streams called with count ({}) > pool size ({})", count, STREAM_POOL_SIZE);
@@ -124,7 +124,7 @@ class debug_cuda_stream_pool : public cuda_stream_pool {
     return cudf::get_default_stream();
   }
 
-  std::vector<rmm::cuda_stream_view> get_streams(uint32_t count) override
+  std::vector<rmm::cuda_stream_view> get_streams(std::size_t count) override
   {
     return std::vector<rmm::cuda_stream_view>(count, cudf::get_default_stream());
   }
