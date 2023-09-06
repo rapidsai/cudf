@@ -161,27 +161,32 @@ cuda_stream_pool* create_global_cuda_stream_pool()
   return new rmm_cuda_stream_pool();
 }
 
+// FIXME: these will be available in rmm soon
+inline int get_num_cuda_devices()
+{
+  rmm::cuda_device_id::value_type num_dev{};
+  CUDF_CUDA_TRY(cudaGetDeviceCount(&num_dev));
+  return num_dev;
+}
+
+rmm::cuda_device_id get_current_cuda_device()
+{
+  int device_id;
+  CUDF_CUDA_TRY(cudaGetDevice(&device_id));
+  return rmm::cuda_device_id{device_id};
+}
+
 /**
  * @brief RAII struct to wrap a cuda event and ensure its proper destruction.
  */
 struct cuda_event {
-  cuda_event()
-    : e_{[]() {
-        cudaEvent_t event;
-        CUDF_CUDA_TRY(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
-        return event;
-      }()}
-  {
-  }
+  cuda_event() { CUDF_CUDA_TRY(cudaEventCreateWithFlags(&e_, cudaEventDisableTiming)); }
+  virtual ~cuda_event() { CUDF_ASSERT_CUDA_SUCCESS(cudaEventDestroy(e_)); }
 
-  operator cudaEvent_t() { return e_.get(); }
+  operator cudaEvent_t() { return e_; }
 
  private:
-  struct deleter {
-    using pointer = cudaEvent_t;
-    auto operator()(cudaEvent_t e) { CUDF_ASSERT_CUDA_SUCCESS(cudaEventDestroy(e)); }
-  };
-  std::unique_ptr<cudaEvent_t, deleter> e_;
+  cudaEvent_t e_;
 };
 
 /**
@@ -189,8 +194,12 @@ struct cuda_event {
  */
 cudaEvent_t event_for_thread()
 {
-  thread_local cuda_event thread_event;
-  return thread_event;
+  thread_local std::vector<std::unique_ptr<cuda_event>> thread_events(get_num_cuda_devices());
+  auto const device_id = get_current_cuda_device();
+  if (not thread_events[device_id.value()]) {
+    thread_events[device_id.value()] = std::make_unique<cuda_event>();
+  }
+  return *thread_events[device_id.value()];
 }
 
 /**
