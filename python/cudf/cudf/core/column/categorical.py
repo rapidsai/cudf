@@ -1272,9 +1272,7 @@ class CategoricalColumn(column.ColumnBase):
                     self.codes.dtype
                 )
 
-        result = super().fillna(value=fill_value, method=method)
-
-        return result
+        return super().fillna(value=fill_value, method=method)
 
     def indices_of(
         self, value: ScalarLike
