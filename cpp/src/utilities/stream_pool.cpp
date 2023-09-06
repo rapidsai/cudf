@@ -191,6 +191,10 @@ struct cuda_event {
 
 /**
  * @brief Returns a cudaEvent_t for the current thread.
+ *
+ * The returned event is valid for the current device.
+ *
+ * @return A cudaEvent_t unique to the current thread and valid on the current device.
  */
 cudaEvent_t event_for_thread()
 {
@@ -203,7 +207,8 @@ cudaEvent_t event_for_thread()
 }
 
 /**
- * Returns a reference to the global stream pool for the current device.
+ * @brief Returns a reference to the global stream pool for the current device.
+ * @return `cuda_stream_pool` valid on the current device.
  */
 cuda_stream_pool& global_cuda_stream_pool()
 {
