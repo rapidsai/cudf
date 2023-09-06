@@ -247,7 +247,7 @@ class GroupUnaryAttrBase(GroupAttrBase):
     pass
 
 
-class GroupBinaryMethodBase(GroupAttrBase):
+class GroupBinaryAttrBase(GroupAttrBase):
     pass
 
 
@@ -298,7 +298,7 @@ class GroupIdxMin(AbstractTemplate):
         return nb_signature(self.this.index_type, recvr=self.this)
 
 
-class GroupCorr(GroupBinaryMethodBase):
+class GroupCorr(GroupBinaryAttrBase):
     key = "GroupType.corr"
 
 
