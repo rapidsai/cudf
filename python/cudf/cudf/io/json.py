@@ -158,11 +158,12 @@ def read_json(
     if dtype is True or isinstance(dtype, abc.Mapping):
         # There exists some dtypes in the result columns that is inferred.
         # Find them and map them to the default dtypes.
-        dtype = {} if dtype is True else dtype
+        specified_dtypes = {} if dtype is True else dtype
+        df_dtypes = df._dtypes
         unspecified_dtypes = {
-            name: df._dtypes[name]
+            name: df_dtypes[name]
             for name in df._column_names
-            if name not in dtype
+            if name not in specified_dtypes
         }
         default_dtypes = {}
 
