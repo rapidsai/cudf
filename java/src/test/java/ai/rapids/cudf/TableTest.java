@@ -8064,7 +8064,8 @@ public class TableTest extends CudfTestBase {
     ParquetWriterOptions options = ParquetWriterOptions.builder()
         .withMapColumn(mapColumn("my_map",
             new ColumnWriterOptions("key0", false),
-            new ColumnWriterOptions("value0"))).build();
+            new ColumnWriterOptions("value0"),
+            true)).build();
     File f = File.createTempFile("test-map", ".parquet");
     List<HostColumnVector.StructData> list1 =
         Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
@@ -8562,7 +8563,8 @@ public class TableTest extends CudfTestBase {
     ORCWriterOptions options = ORCWriterOptions.builder()
             .withMapColumn(mapColumn("my_map",
                     new ColumnWriterOptions("key0", false),
-                    new ColumnWriterOptions("value0"))).build();
+                    new ColumnWriterOptions("value0"),
+                    true)).build();
     File f = File.createTempFile("test-map", ".parquet");
     List<HostColumnVector.StructData> list1 =
             Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
