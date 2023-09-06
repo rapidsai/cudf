@@ -47,7 +47,7 @@ namespace cudf::detail {
  * @param count The number of stream views to return.
  * @return Vector containing `count` stream views.
  */
-std::vector<rmm::cuda_stream_view> fork_stream(rmm::cuda_stream_view stream, uint32_t count);
+std::vector<rmm::cuda_stream_view> fork_stream(rmm::cuda_stream_view stream, std::size_t count);
 
 /**
  * @brief Synchronize a stream to an event on a set of streams.

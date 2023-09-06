@@ -222,7 +222,7 @@ cuda_stream_pool& global_cuda_stream_pool()
 
 }  // anonymous namespace
 
-std::vector<rmm::cuda_stream_view> fork_stream(rmm::cuda_stream_view stream, uint32_t count)
+std::vector<rmm::cuda_stream_view> fork_stream(rmm::cuda_stream_view stream, std::size_t count)
 {
   auto streams      = global_cuda_stream_pool().get_streams(count);
   cudaEvent_t event = event_for_thread();
