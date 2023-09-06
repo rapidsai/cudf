@@ -52,8 +52,8 @@ std::vector<rmm::cuda_stream_view> fork_stream(rmm::cuda_stream_view stream, std
 /**
  * @brief Synchronize a stream to an event on a set of streams.
  *
- * @param streams Vector of streams to synchronize to.
- * @param stream Stream to synchronize, usually the default stream.
+ * @param streams Streams to wait on.
+ * @param stream Joined stream that synchronizes with the waited-on streams.
  */
 void join_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream);
 
