@@ -203,12 +203,21 @@ cudaEvent_t event_for_thread()
 }
 
 /**
- * Returns a reference to the global stream ppol.
+ * Returns a reference to the global stream pool for the current device.
  */
 cuda_stream_pool& global_cuda_stream_pool()
 {
-  static cuda_stream_pool* pool = create_global_cuda_stream_pool();
-  return *pool;
+  // using bare pointers here to deliberately allow them to leak. otherwise we wind up with
+  // seg faults trying to destroy stream objects after the context has shut down.
+  static std::vector<cuda_stream_pool*> pools(get_num_cuda_devices());
+  static std::mutex mutex;
+  auto const device_id = get_current_cuda_device();
+
+  std::lock_guard<std::mutex> lock(mutex);
+  if (pools[device_id.value()] == nullptr) {
+    pools[device_id.value()] = create_global_cuda_stream_pool();
+  }
+  return *pools[device_id.value()];
 }
 
 }  // anonymous namespace
