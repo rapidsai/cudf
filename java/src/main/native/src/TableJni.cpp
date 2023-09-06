@@ -1592,7 +1592,11 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     std::map<std::string, std::string> kv_metadata;
     std::transform(meta_keys.begin(), meta_keys.end(), meta_values.begin(),
                    std::inserter(kv_metadata, kv_metadata.end()),
-                   [](auto const &key, auto const &value) { return std::make_pair(key, value); });
+                   [](auto const &key, auto const &value) {
+                     // The metadata value will be ignored if it is empty.
+                     // We modify it into a space character to workaround such issue.
+                     return std::make_pair(key, value.empty() ? std::string(" ") : value);
+                   });
 
     auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
     chunked_parquet_writer_options opts =
@@ -1638,7 +1642,11 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
     std::map<std::string, std::string> kv_metadata;
     std::transform(meta_keys.begin(), meta_keys.end(), meta_values.begin(),
                    std::inserter(kv_metadata, kv_metadata.end()),
-                   [](auto const &key, auto const &value) { return std::make_pair(key, value); });
+                   [](auto const &key, auto const &value) {
+                     // The metadata value will be ignored if it is empty.
+                     // We modify it into a space character to workaround such issue.
+                     return std::make_pair(key, value.empty() ? std::string(" ") : value);
+                   });
 
     sink_info sink{output_path.get()};
     auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
