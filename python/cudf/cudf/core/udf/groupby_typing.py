@@ -207,13 +207,16 @@ class GroupOpBase(AbstractTemplate):
         raise UDFError(self.make_error_string(args))
 
 
-class GroupUnaryAttrBase(AbstractTemplate):
+class GroupAttrBase(AbstractTemplate):
     def make_error_string(self, args):
         fname = self.key.split(".")[-1]
+        args = (self.this, *args)
+        dtype_err = ", ".join([str(g.group_scalar_type) for g in args])
+        sr_err = ", ".join(["Series" for _ in range(len(args) - 1)])
         return (
-            f"\nSeries.{fname} is not supported for "
-            f"{self.this.group_scalar_type} within JIT GroupBy "
-            f"apply.\n To see what's available, visit {docs}"
+            f"\nSeries.{fname}({sr_err}) is not supported for "
+            f"({dtype_err}) within JIT GroupBy apply.\nTo see "
+            f"what's available, visit {docs}"
         )
 
     def generic(self, args, kws):
@@ -222,21 +225,30 @@ class GroupUnaryAttrBase(AbstractTemplate):
         if not all(isinstance(arg, GroupType) for arg in args):
             return None
         # check if any groups are poisioned for this op
-        if isinstance(self.this.group_scalar_type, types.Poison):
-            raise UDFError(
-                f"Use of a column of {self.this.group_scalar_type.ty} detected"
-                " within UDAF body. \nOnly columns of the following dtypes may"
-                " be used through the \nGroupBy.apply() JIT engine: "
-                f"{[str(x) for x in SUPPORTED_GROUPBY_NUMPY_TYPES]}"
-            )
-        for arg in args:
-            if arg.group_scalar_type in types.Poison:
-                raise TypeError(str(arg.group_scalar_type))
+        for arg in (self.this, *args):
+            if isinstance(arg.group_scalar_type, types.Poison):
+                raise UDFError(
+                    f"Use of a column of {arg.group_scalar_type.ty} detected "
+                    "within UDAF body. \nOnly columns of the following dtypes "
+                    "may be used through the \nGroupBy.apply() JIT engine: "
+                    f"{[str(x) for x in SUPPORTED_GROUPBY_NUMPY_TYPES]}"
+                )
         fname = self.key.split(".")[-1]
-        for retty, selfty in call_cuda_functions[fname].keys():
-            if self.this.group_scalar_type == selfty:
-                return nb_signature(retty, recvr=self.this)
+        for sig in call_cuda_functions[fname].keys():
+            retty, selfty, *argtys = sig
+            if self.this.group_scalar_type == selfty and all(
+                arg.group_scalar_type == ty for arg, ty in zip(args, argtys)
+            ):
+                return nb_signature(retty, *args, recvr=self.this)
         raise UDFError(self.make_error_string(args))
+
+
+class GroupUnaryAttrBase(GroupAttrBase):
+    pass
+
+
+class GroupBinaryMethodBase(GroupAttrBase):
+    pass
 
 
 def _make_unary_attr(funcname):
@@ -284,29 +296,6 @@ class GroupIdxMin(AbstractTemplate):
 
     def generic(self, args, kws):
         return nb_signature(self.this.index_type, recvr=self.this)
-
-
-class GroupBinaryMethodBase(AbstractTemplate):
-    def make_error_string(self, args):
-        fname = self.key.split(".")[-1]
-        return (
-            f"\nSeries.{fname} is not supported between "
-            f"{self.this.group_scalar_type} and {args[0].group_scalar_type} "
-            "within JIT GroupBy apply.\n To see "
-            f"what's available, visit {docs}"
-        )
-
-    def generic(self, args, kws):
-        if not all(isinstance(arg, GroupType) for arg in args):
-            return None
-        fname = self.key.split(".")[-1]
-        for retty, lty, rty in call_cuda_functions[fname].keys():
-            if (
-                self.this.group_scalar_type == lty
-                and args[0].group_scalar_type == rty
-            ):
-                return nb_signature(retty, args[0], recvr=self.this)
-        raise UDFError(self.make_error_string(args))
 
 
 class GroupCorr(GroupBinaryMethodBase):

@@ -458,10 +458,11 @@ def test_groupby_apply_jit_correlation(groupby_jit_data, dtype):
         return group["val3"].corr(group["val4"])
 
     if dtype.kind == "f":
-        with pytest.raises(
-            UDFError,
-            match=f"Series.corr is not supported between {dtype} and {dtype}",
-        ):
+        m = (
+            f"Series.corr\\(Series\\) is not "
+            f"supported for \\({dtype}, {dtype}\\)"
+        )
+        with pytest.raises(UDFError, match=m):
             run_groupby_apply_jit_test(groupby_jit_data, func, keys)
         return
     run_groupby_apply_jit_test(groupby_jit_data, func, keys)
