@@ -147,8 +147,13 @@ def to_datetime(
     if utc:
         raise NotImplementedError("utc is not yet implemented")
 
-    if format is not None and "%f" in format:
-        format = format.replace("%f", "%9f")
+    if format is not None:
+        if "%Z" in format or "%z" in format:
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
+        elif "%f" in format:
+            format = format.replace("%f", "%9f")
 
     try:
         if isinstance(arg, cudf.DataFrame):
