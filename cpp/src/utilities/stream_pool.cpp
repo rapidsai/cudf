@@ -140,7 +140,7 @@ cuda_stream_pool* create_global_cuda_stream_pool()
 }
 
 /**
- * @brief RAII struct to wrap a cuda event and ensure it's proper destruction.
+ * @brief RAII struct to wrap a cuda event and ensure its proper destruction.
  */
 struct cuda_event {
   cuda_event()
