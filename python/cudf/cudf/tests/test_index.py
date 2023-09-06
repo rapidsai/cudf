@@ -2672,10 +2672,11 @@ class TestIndexScalarGetItem:
             12,
             20,
         ],
+        [1, 2, 3, 4],
     ],
 )
 def test_index_mixed_dtype_error(data):
-    pi = pd.Index(data)
+    pi = pd.Index(data, dtype="object")
     with pytest.raises(TypeError):
         cudf.Index(pi)
 
