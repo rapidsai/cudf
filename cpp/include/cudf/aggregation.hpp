@@ -89,7 +89,7 @@ class aggregation {
     MAX,              ///< max reduction
     COUNT_VALID,      ///< count number of valid elements
     COUNT_ALL,        ///< count number of elements
-    COUNT_FREQUENCY,  ///< count frequency of each element
+    HISTOGRAM,        ///< compute frequency of each element
     ANY,              ///< any reduction
     ALL,              ///< all reduction
     SUM_OF_SQUARES,   ///< sum of squares reduction
@@ -114,7 +114,7 @@ class aggregation {
     MERGE_LISTS,      ///< merge multiple lists values into one list
     MERGE_SETS,       ///< merge multiple lists values into one list then drop duplicate entries
     MERGE_M2,         ///< merge partial values of M2 aggregation,
-    MERGE_FREQUENCY,  ///< merge partial values of COUNT_FREQUENCY aggregation,
+    MERGE_HISTOGRAM,  ///< merge partial values of HISTOGRAM aggregation,
     COVARIANCE,       ///< covariance between two sets of elements
     CORRELATION,      ///< correlation between two sets of elements
     TDIGEST,          ///< create a tdigest from a set of input values
