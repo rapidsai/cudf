@@ -788,6 +788,8 @@ def test_index_to_series(data):
         ["5", "6", "2", "a", "b", "c"],
         [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
         [1.0, 5.0, 6.0, 0.0, 1.3],
+        pd.Series(["1", "2", "a", "3", None], dtype="category"),
+        [],
     ],
 )
 @pytest.mark.parametrize(
@@ -800,6 +802,7 @@ def test_index_to_series(data):
         ["5", "6", "2", "a", "b", "c"],
         [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
         [1.0, 5.0, 6.0, 0.0, 1.3],
+        pd.Series(["1", "2", "a", "3", None], dtype="category"),
         [],
     ],
 )
