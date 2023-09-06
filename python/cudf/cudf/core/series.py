@@ -797,17 +797,17 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return obj
 
-    def _get_columns_by_label(self, labels, downcast=False):
+    def _get_columns_by_label(self, labels, *, downcast=False) -> Self:
         """Return the column specified by `labels`
 
         For cudf.Series, either the column, or an empty series is returned.
         Parameter `downcast` does not have effects.
         """
-        new_data = super()._get_columns_by_label(labels, downcast)
+        ca = self._data.select_by_label(labels)
 
         return (
-            self.__class__._from_data(data=new_data, index=self.index)
-            if len(new_data) > 0
+            self.__class__._from_data(data=ca, index=self.index)
+            if len(ca) > 0
             else self.__class__(dtype=self.dtype, name=self.name)
         )
 
@@ -3132,8 +3132,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         interpolation : {'linear', 'lower', 'higher', 'midpoint', 'nearest'}
             This optional parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j:
-        columns : list of str
-            List of column names to include.
+
+                * linear: `i + (j - i) * fraction`, where `fraction` is the
+                  fractional part of the index surrounded by `i` and `j`.
+                * lower: `i`.
+                * higher: `j`.
+                * nearest: `i` or `j` whichever is nearest.
+                * midpoint: (`i` + `j`) / 2.
         exact : boolean
             Whether to use approximate or exact quantile algorithm.
         quant_index : boolean

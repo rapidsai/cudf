@@ -313,9 +313,10 @@ class GroupBy(Serializable, Reducible, Scannable):
         3  object  int64
         """
         index = self.grouping.keys.unique().sort_values().to_pandas()
+        obj_dtypes = self.obj._dtypes
         return pd.DataFrame(
             {
-                name: [self.obj._dtypes[name]] * len(index)
+                name: [obj_dtypes[name]] * len(index)
                 for name in self.grouping.values._column_names
             },
             index=index,
