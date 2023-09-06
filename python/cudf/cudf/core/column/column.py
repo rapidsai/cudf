@@ -2070,7 +2070,7 @@ def as_column(
                     cudf.dtype(pyarrow_array.type.to_pandas_dtype())
                 )
             ):
-                raise TypeError("Cannot create column with mixed types")
+                raise MixedTypeError("Cannot create column with mixed types")
             if isinstance(pyarrow_array.type, pa.Decimal128Type):
                 pyarrow_type = cudf.Decimal128Dtype.from_arrow(
                     pyarrow_array.type
