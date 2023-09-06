@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 import cudf
+from cudf.core.tokenize_vocabulary import TokenizeVocabulary
 from cudf.testing._utils import assert_eq
 
 
@@ -180,7 +181,7 @@ def test_token_count(delimiter, expected_token_counts):
     ],
 )
 def test_tokenize_with_vocabulary(delimiter, input, default_id, results):
-    vocab = cudf.Series(
+    vocabulary = cudf.Series(
         [
             "the",
             "quick",
@@ -196,6 +197,7 @@ def test_tokenize_with_vocabulary(delimiter, input, default_id, results):
             "sofa",
         ]
     )
+    tokenizer = TokenizeVocabulary(vocabulary)
 
     strings = cudf.Series([input, None, "", input])
 
@@ -208,7 +210,7 @@ def test_tokenize_with_vocabulary(delimiter, input, default_id, results):
         ]
     )
 
-    actual = strings.str.tokenize_with_vocabulary(vocab, delimiter, default_id)
+    actual = tokenizer(strings, delimiter, default_id)
     assert type(expected) == type(actual)
     assert_eq(expected, actual, check_dtype=False)
 

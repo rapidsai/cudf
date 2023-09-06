@@ -4748,47 +4748,6 @@ class StringMethods(ColumnMethods):
                 for delimiters, but got {type(delimiter)}"
             )
 
-    def tokenize_with_vocabulary(
-        self,
-        vocabulary: "cudf.Series",
-        delimiter: str = "",
-        default_id: int = -1,
-    ) -> SeriesOrIndex:
-        """
-        Tokenizes the strings using the specified delimiter and returns the
-        corresponding token ids (row index) in the vocabulary.
-        Tokens not found in the vocabulary are assigned the default_id.
-
-        Parameters
-        ----------
-        vocabulary : Series
-            Strings column with unique values for token lookup
-        delimiter : str
-            The string used to delimit and thereby locate tokens within
-            each string. Default of empty indicates whitespace.
-
-        Returns
-        -------
-        Series or Index of object.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> strs = cudf.Series(["example input one", "one more example"])
-        >>> vocab = cudf.Series(["input", "one", "example"])
-        >>> strs.str.tokenize_with_vocabulary(vocab)
-        0     [2, 0, 1]
-        1    [1, -1, 2]
-        dtype: list
-        """
-        delimiter = _massage_string_arg(delimiter, "delimiter")
-        return self._return_or_inplace(
-            libstrings.tokenize_with_vocabulary(
-                self._column, vocabulary._column, delimiter, default_id
-            ),
-            retain_index=True,
-        )
-
     def ngrams(self, n: int = 2, separator: str = "_") -> SeriesOrIndex:
         """
         Generate the n-grams from a set of tokens, each record

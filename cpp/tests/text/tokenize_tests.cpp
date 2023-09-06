@@ -155,6 +155,8 @@ TEST_F(TextTokenizeTest, TokenizeEmptyTest)
   EXPECT_EQ(results->size(), 0);
   results = nvtext::tokenize_with_vocabulary(view, all_empty);
   EXPECT_EQ(results->size(), 0);
+  results = nvtext::tokenize_with_vocabulary(all_null, all_empty);
+  EXPECT_EQ(results->size(), results->null_count());
 }
 
 TEST_F(TextTokenizeTest, Detokenize)
@@ -201,6 +203,10 @@ TEST_F(TextTokenizeTest, DetokenizeErrors)
 
 TEST_F(TextTokenizeTest, Vocabulary)
 {
+  cudf::test::strings_column_wrapper vocabulary(  // leaving out 'cat' on purpose
+    {"ate", "chased", "cheese", "dog", "fox", "jumped", "mouse", "mousé", "over", "the"});
+  auto vocab = nvtext::load_vocabulary(cudf::strings_column_view(vocabulary));
+
   auto validity = cudf::test::iterators::null_at(1);
   cudf::test::strings_column_wrapper input({"the fox jumped over the dog",
                                             "the dog chased the cat",
@@ -209,13 +215,10 @@ TEST_F(TextTokenizeTest, Vocabulary)
                                             "",
                                             ""},
                                            validity);
-  cudf::test::strings_column_wrapper vocabulary(  // leaving out 'cat' on purpose
-    {"ate", "chased", "cheese", "dog", "fox", "jumped", "mouse", "mousé", "over", "the"});
   auto input_view = cudf::strings_column_view(input);
-  auto vocab_view = cudf::strings_column_view(vocabulary);
   auto delimiter  = cudf::string_scalar(" ");
   auto default_id = -7;  // should be the token for the missing 'cat'
-  auto results    = nvtext::tokenize_with_vocabulary(input_view, vocab_view, delimiter, default_id);
+  auto results    = nvtext::tokenize_with_vocabulary(input_view, *vocab, delimiter, default_id);
 
   using LCW = cudf::test::lists_column_wrapper<cudf::size_type>;
   // clang-format off
@@ -233,13 +236,14 @@ TEST_F(TextTokenizeTest, TokenizeErrors)
 {
   cudf::test::strings_column_wrapper empty{};
   cudf::strings_column_view view(empty);
-  cudf::test::strings_column_wrapper some{""};
-  cudf::strings_column_view vocab(some);
+  EXPECT_THROW(nvtext::load_vocabulary(view), cudf::logic_error);
+
   cudf::test::strings_column_wrapper vocab_nulls({""}, {0});
   cudf::strings_column_view nulls(vocab_nulls);
+  EXPECT_THROW(nvtext::load_vocabulary(nulls), cudf::logic_error);
 
-  EXPECT_THROW(nvtext::tokenize_with_vocabulary(view, view), cudf::logic_error);
-  EXPECT_THROW(nvtext::tokenize_with_vocabulary(view, nulls), cudf::logic_error);
-  EXPECT_THROW(nvtext::tokenize_with_vocabulary(view, vocab, cudf::string_scalar("", false)),
+  cudf::test::strings_column_wrapper some{"hello"};
+  auto vocab = nvtext::load_vocabulary(cudf::strings_column_view(some));
+  EXPECT_THROW(nvtext::tokenize_with_vocabulary(view, *vocab, cudf::string_scalar("", false)),
                cudf::logic_error);
 }

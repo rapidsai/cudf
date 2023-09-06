@@ -40,9 +40,16 @@ cdef extern from "nvtext/tokenize.hpp" namespace "nvtext" nogil:
         const string_scalar & separator
     ) except +
 
+    cdef struct tokenize_vocabulary "nvtext::tokenize_vocabulary":
+        pass
+
+    cdef unique_ptr[tokenize_vocabulary] load_vocabulary(
+        const column_view & strings
+    ) except +
+
     cdef unique_ptr[column] tokenize_with_vocabulary(
         const column_view & strings,
-        const column_view & vocabulary,
+        const tokenize_vocabulary & vocabulary,
         const string_scalar & delimiter,
         size_type default_id
     ) except +
