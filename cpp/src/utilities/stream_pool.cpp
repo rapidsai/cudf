@@ -33,6 +33,25 @@ namespace {
 // defaults to 16.
 std::size_t constexpr STREAM_POOL_SIZE = 32;
 
+// FIXME: "borrowed" from rmm...remove when this stream pool is moved there
+#ifdef NDEBUG
+#define CUDF_ASSERT_CUDA_SUCCESS(_call) \
+  do {                                  \
+    (_call);                            \
+  } while (0);
+#else
+#define CUDF_ASSERT_CUDA_SUCCESS(_call)                                         \
+  do {                                                                          \
+    cudaError_t const status__ = (_call);                                       \
+    if (status__ != cudaSuccess) {                                              \
+      std::cerr << "CUDA Error detected. " << cudaGetErrorName(status__) << " " \
+                << cudaGetErrorString(status__) << std::endl;                   \
+    }                                                                           \
+    /* NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-array-to-pointer-decay) */   \
+    assert(status__ == cudaSuccess);                                            \
+  } while (0)
+#endif
+
 class cuda_stream_pool {
  public:
   // matching type used in rmm::cuda_stream_pool::get_stream(stream_id)
@@ -160,7 +179,7 @@ struct cuda_event {
  private:
   struct deleter {
     using pointer = cudaEvent_t;
-    auto operator()(cudaEvent_t e) { cudaEventDestroy(e); }
+    auto operator()(cudaEvent_t e) { CUDF_ASSERT_CUDA_SUCCESS(cudaEventDestroy(e)); }
   };
   std::unique_ptr<cudaEvent_t, deleter> e_;
 };
