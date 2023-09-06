@@ -2154,5 +2154,5 @@ def test_daterange_pandas_compatibility():
 def test_format_timezone_not_implemented(code):
     with pytest.raises(NotImplementedError):
         cudf.to_datetime(
-            ["2020-01-01 00:00:00 UTC"], format=f"%Y-%m-%d %H-%M-%S %{code}"
+            ["2020-01-01 00:00:00 UTC"], format=f"%Y-%m-%d %H:%M:%S %{code}"
         )
