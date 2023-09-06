@@ -37,14 +37,14 @@ namespace cudf::detail {
  * auto const num_streams = 2;
  * // do work on stream
  * // allocate streams and wait for an event on stream before executing on any of streams
- * auto streams = cudf::detail::fork_streams(stream, num_streams);
+ * auto streams = cudf::detail::fork_stream(stream, num_streams);
  * // do work on streams[0] and streams[1]
  * // wait for event on streams before continuing to do work on stream
  * cudf::detail::join_streams(streams, stream);
  * @endcode
  *
- * @param stream Stream to synchronize the returned streams to, usually the default stream.
- * @param count The number of stream views to return.
+ * @param stream Stream that the returned streams will wait on.
+ * @param count The number of `cuda_stream_view` objects to return.
  * @return Vector containing `count` stream views.
  */
 std::vector<rmm::cuda_stream_view> fork_stream(rmm::cuda_stream_view stream, std::size_t count);
