@@ -55,7 +55,7 @@ std::size_t constexpr STREAM_POOL_SIZE = 32;
 class cuda_stream_pool {
  public:
   // matching type used in rmm::cuda_stream_pool::get_stream(stream_id)
-  using stream_id_t = std::size_t;
+  using stream_id_type = std::size_t;
 
   virtual ~cuda_stream_pool() = default;
 
@@ -77,7 +77,7 @@ class cuda_stream_pool {
    * @param stream_id Unique identifier for the desired stream
    * @return Requested stream view.
    */
-  virtual rmm::cuda_stream_view get_stream(stream_id_t stream_id) = 0;
+  virtual rmm::cuda_stream_view get_stream(stream_id_type stream_id) = 0;
 
   /**
    * @brief Get a set of `cuda_stream_view` objects from the pool.
@@ -112,7 +112,7 @@ class rmm_cuda_stream_pool : public cuda_stream_pool {
  public:
   rmm_cuda_stream_pool() : _pool{STREAM_POOL_SIZE} {}
   rmm::cuda_stream_view get_stream() override { return _pool.get_stream(); }
-  rmm::cuda_stream_view get_stream(stream_id_t stream_id) override
+  rmm::cuda_stream_view get_stream(stream_id_type stream_id) override
   {
     return _pool.get_stream(stream_id);
   }
@@ -138,7 +138,7 @@ class rmm_cuda_stream_pool : public cuda_stream_pool {
 class debug_cuda_stream_pool : public cuda_stream_pool {
  public:
   rmm::cuda_stream_view get_stream() override { return cudf::get_default_stream(); }
-  rmm::cuda_stream_view get_stream(stream_id_t stream_id) override
+  rmm::cuda_stream_view get_stream(stream_id_type stream_id) override
   {
     return cudf::get_default_stream();
   }
