@@ -6,4 +6,6 @@ cdef class gpumemoryview:
     # to treat this object as something like a POD struct
     cdef readonly:
         Py_ssize_t ptr
-        object obj
+        object _obj
+
+    cpdef release(self)
