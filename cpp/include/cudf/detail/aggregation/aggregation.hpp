@@ -46,6 +46,8 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class count_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          class histogram_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class any_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class all_aggregation const& agg);
@@ -89,6 +91,8 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
                                                           class merge_sets_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class merge_m2_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(
+    data_type col_type, class merge_histogram_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class covariance_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
@@ -108,6 +112,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class min_aggregation const& agg);
   virtual void visit(class max_aggregation const& agg);
   virtual void visit(class count_aggregation const& agg);
+  virtual void visit(class histogram_aggregation const& agg);
   virtual void visit(class any_aggregation const& agg);
   virtual void visit(class all_aggregation const& agg);
   virtual void visit(class sum_of_squares_aggregation const& agg);
@@ -130,6 +135,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class merge_lists_aggregation const& agg);
   virtual void visit(class merge_sets_aggregation const& agg);
   virtual void visit(class merge_m2_aggregation const& agg);
+  virtual void visit(class merge_histogram_aggregation const& agg);
   virtual void visit(class covariance_aggregation const& agg);
   virtual void visit(class correlation_aggregation const& agg);
   virtual void visit(class tdigest_aggregation const& agg);
@@ -242,6 +248,25 @@ class count_aggregation final : public rolling_aggregation,
   [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<count_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+/**
+ * @brief Derived class for specifying a histogram aggregation
+ */
+class histogram_aggregation final : public groupby_aggregation, public reduce_aggregation {
+ public:
+  histogram_aggregation() : aggregation(HISTOGRAM) {}
+
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<histogram_aggregation>(*this);
   }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
@@ -963,6 +988,25 @@ class merge_m2_aggregation final : public groupby_aggregation {
   [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<merge_m2_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+/**
+ * @brief Derived aggregation class for specifying MERGE_HISTOGRAM aggregation
+ */
+class merge_histogram_aggregation final : public groupby_aggregation, public reduce_aggregation {
+ public:
+  explicit merge_histogram_aggregation() : aggregation{MERGE_HISTOGRAM} {}
+
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<merge_histogram_aggregation>(*this);
   }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
