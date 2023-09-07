@@ -116,6 +116,11 @@ cdef class DeviceScalar:
             pa_scalar = pa.scalar(value, type=pa.from_numpy_dtype(self._dtype))
             self.c_value = pylibcudf.Scalar(pa_scalar)
             set_dtype = False
+        # TODO: For datetime and timedeltas need to find a way to not overflow
+        # for large values. The problem is that numpy supports larger values,
+        # but Python's built-in objects do not, and currently in
+        # pylibcudf.Scalar.__init__ we rely on as_py to toss the scalar into an
+        # array because pa.array doesn't understand pa.Scalar instances.
         elif pd.api.types.is_datetime64_dtype(self._dtype):
             _set_datetime64_from_np_scalar(
                 self.c_value.c_obj, value, self._dtype, valid
