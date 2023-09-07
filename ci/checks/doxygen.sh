@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 ###############################
 # cuDF doxygen warnings check #
 ###############################
@@ -13,7 +13,7 @@ fi
 # Utility to return version as number for comparison
 function version { echo "$@" | awk -F. '{ printf("%d%03d%03d%03d\n", $1,$2,$3,$4); }'; }
 
-# doxygen supported version 1.8.20 to 1.9.1
+# doxygen supported version 1.9.1
 DOXYGEN_VERSION=`doxygen --version`
 if [ ! $(version "$DOXYGEN_VERSION") -eq $(version "1.9.1") ] ; then
   echo -e "warning: Unsupported doxygen version $DOXYGEN_VERSION"
