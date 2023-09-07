@@ -1920,3 +1920,9 @@ def test_multiindex_sort_index_partial(levels):
     expect = df.sort_index(level=levels, sort_remaining=True)
     got = cdf.sort_index(level=levels, sort_remaining=True)
     assert_eq(expect, got)
+
+
+def test_multiindex_to_series_error():
+    midx = cudf.MultiIndex.from_tuples([("a", "b")])
+    with pytest.raises(NotImplementedError):
+        midx.to_series()
