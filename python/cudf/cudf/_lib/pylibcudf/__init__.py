@@ -1,6 +1,6 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.
 
-from . import copying
+from . import copying, interop
 from .column import Column
 from .gpumemoryview import gpumemoryview
 from .scalar import Scalar
@@ -15,4 +15,5 @@ __all__ = [
     "TypeId",
     "copying",
     "gpumemoryview",
+    "interop",
 ]
