@@ -94,6 +94,7 @@ cdef class DeviceScalar:
         """
         self._dtype = dtype if dtype.kind != 'U' else cudf.dtype('object')
         valid = not _is_null_host_scalar(value)
+        set_dtype = True
 
         if isinstance(self._dtype, cudf.core.dtypes.DecimalDtype):
             _set_decimal_from_scalar(
@@ -106,10 +107,10 @@ cdef class DeviceScalar:
         elif pd.api.types.is_string_dtype(self._dtype):
             _set_string_from_np_string(self.c_value.c_obj, value, valid)
         elif pd.api.types.is_numeric_dtype(self._dtype):
-            _set_numeric_from_np_scalar(self.c_value.c_obj,
-                                        value,
-                                        self._dtype,
-                                        valid)
+            if value is NA:
+                value = None
+            pa_scalar = pa.scalar(value, type=pa.from_numpy_dtype(self._dtype))
+            self.c_value = pylibcudf.Scalar(pa_scalar)
         elif pd.api.types.is_datetime64_dtype(self._dtype):
             _set_datetime64_from_np_scalar(
                 self.c_value.c_obj, value, self._dtype, valid
@@ -123,8 +124,10 @@ cdef class DeviceScalar:
                 f"Cannot convert value of type "
                 f"{type(value).__name__} to cudf scalar"
             )
+
         cdef libcudf_types.data_type cdtype = self.get_raw_ptr()[0].type()
-        self.c_value._data_type = pylibcudf.DataType.from_libcudf(cdtype)
+        if set_dtype:
+            self.c_value._data_type = pylibcudf.DataType.from_libcudf(cdtype)
 
     def _to_host_scalar(self):
         if isinstance(self.dtype, cudf.core.dtypes.DecimalDtype):
@@ -233,37 +236,6 @@ cdef class DeviceScalar:
 cdef _set_string_from_np_string(unique_ptr[scalar]& s, value, bool valid=True):
     value = value if valid else ""
     s.reset(new string_scalar(value.encode(), valid))
-
-
-cdef _set_numeric_from_np_scalar(unique_ptr[scalar]& s,
-                                 object value,
-                                 object dtype,
-                                 bool valid=True):
-    value = value if valid else 0
-    if dtype == "int8":
-        s.reset(new numeric_scalar[int8_t](value, valid))
-    elif dtype == "int16":
-        s.reset(new numeric_scalar[int16_t](value, valid))
-    elif dtype == "int32":
-        s.reset(new numeric_scalar[int32_t](value, valid))
-    elif dtype == "int64":
-        s.reset(new numeric_scalar[int64_t](value, valid))
-    elif dtype == "uint8":
-        s.reset(new numeric_scalar[uint8_t](value, valid))
-    elif dtype == "uint16":
-        s.reset(new numeric_scalar[uint16_t](value, valid))
-    elif dtype == "uint32":
-        s.reset(new numeric_scalar[uint32_t](value, valid))
-    elif dtype == "uint64":
-        s.reset(new numeric_scalar[uint64_t](value, valid))
-    elif dtype == "float32":
-        s.reset(new numeric_scalar[float](value, valid))
-    elif dtype == "float64":
-        s.reset(new numeric_scalar[double](value, valid))
-    elif dtype == "bool":
-        s.reset(new numeric_scalar[bool](<bool>value, valid))
-    else:
-        raise ValueError(f"dtype not supported: {dtype}")
 
 
 cdef _set_datetime64_from_np_scalar(unique_ptr[scalar]& s,

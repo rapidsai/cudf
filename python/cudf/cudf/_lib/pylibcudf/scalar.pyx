@@ -34,8 +34,14 @@ cdef class Scalar:
     # than pylibcudf.Column because it can be a true wrapper around a libcudf
     # column
 
-    def __init__(self, pyarrow.lib.Scalar value):
+    def __init__(self, pyarrow.lib.Scalar value=None):
         self.mr = get_current_device_resource()
+
+        if value is None:
+            # TODO: This early return is not something we really want to
+            # support, but it here for now to ease the transition of
+            # DeviceScalar.
+            return
 
         # Convert the value to a cudf object via pyarrow
         arr = pyarrow.lib.array([value.as_py()], type=value.type)
