@@ -2,18 +2,15 @@
 
 cimport pyarrow.lib
 from cython cimport no_gc_clear
-from cython.operator cimport dereference
 from libcpp.utility cimport move
 
 import pyarrow.lib
 
 from rmm._lib.memory_resource cimport get_current_device_resource
 
-from cudf._lib.cpp cimport aggregation
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.reduce cimport cpp_reduce
+from cudf._lib.cpp.copying cimport get_element
 from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.types cimport data_type
 
 from .column cimport Column
 from .interop cimport from_arrow
@@ -43,36 +40,29 @@ cdef class Scalar:
             # DeviceScalar.
             return
 
-        # Convert the value to a cudf object via pyarrow
+        cdef Scalar s = Scalar.from_pyarrow_scalar(value)
+        self._data_type = DataType.from_libcudf(s.get().type())
+        self.c_obj.swap(s.c_obj)
+
+    @staticmethod
+    def from_pyarrow_scalar(self, pyarrow.lib.Scalar value):
+        # Put the scalar into a column so that we can use from_arrow (no scalar
+        # implementation), then extract the zeroth element.
         arr = pyarrow.lib.array([value.as_py()], type=value.type)
         cdef pyarrow.lib.Table pa_tbl = pyarrow.lib.Table.from_arrays(
             [arr], names=["scalar"]
         )
         cdef Table tbl = from_arrow(pa_tbl)
 
-        # TODO: The code below is a pretty hacky way to get a scalar from a
-        # single row of a column, but for now want to see if we can write a
-        # generic solution like this that works. If it does, we can consider
-        # implementing a better approach natively in libcudf.
         cdef Column col = tbl.columns()[0]
         cdef column_view cv = col.view()
 
         cdef unique_ptr[scalar] c_result
-        cdef unique_ptr[aggregation.reduce_aggregation] c_agg = (
-            aggregation.make_min_aggregation[aggregation.reduce_aggregation]()
-        )
-        cdef data_type c_type = col.type().c_obj
 
         with nogil:
-            c_result = move(cpp_reduce(
-                cv,
-                dereference(c_agg),
-                c_type
-            ))
+            c_result = move(get_element(cv, 0))
 
-        cdef Scalar s = Scalar.from_libcudf(move(c_result))
-        self._data_type = DataType.from_libcudf(s.get().type())
-        self.c_obj.swap(s.c_obj)
+        return Scalar.from_libcudf(move(c_result))
 
     cdef const scalar* get(self) except *:
         return self.c_obj.get()
