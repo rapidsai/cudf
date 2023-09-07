@@ -238,26 +238,17 @@ size_t CompactProtocolWriter::write(OffsetIndex const& s)
   return c.value();
 }
 
-size_t CompactProtocolWriter::write(RepetitionDefinitionLevelHistogram const& r)
-{
-  CompactProtocolFieldWriter c(*this);
-  if (r.repetition_level_histogram.has_value()) {
-    c.field_int_list(1, r.repetition_level_histogram.value());
-  }
-  if (r.definition_level_histogram.has_value()) {
-    c.field_int_list(2, r.definition_level_histogram.value());
-  }
-  return c.value();
-}
-
 size_t CompactProtocolWriter::write(SizeStatistics const& s)
 {
   CompactProtocolFieldWriter c(*this);
   if (s.unencoded_byte_array_data_bytes.has_value()) {
     c.field_int(1, s.unencoded_byte_array_data_bytes.value());
   }
-  if (s.repetition_definition_level_histogram.has_value()) {
-    c.field_struct(2, s.repetition_definition_level_histogram.value());
+  if (s.repetition_level_histogram.has_value()) {
+    c.field_int_list(2, s.repetition_level_histogram.value());
+  }
+  if (s.definition_level_histogram.has_value()) {
+    c.field_int_list(3, s.definition_level_histogram.value());
   }
   return c.value();
 }

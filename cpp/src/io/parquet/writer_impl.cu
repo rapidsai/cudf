@@ -2067,9 +2067,11 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           // stats if we're also doing them at the page level. there really isn't much value for
           // us in per-chunk stats since everything we do processing wise is at the page level.
           SizeStatistics chunk_stats;
-          RepetitionDefinitionLevelHistogram hist;
 
-          chunk_stats.unencoded_byte_array_data_bytes = ck.var_bytes_size;
+          // TODO(ets): this should only be set for byte array. for now use size as a proxy.
+          if (ck.var_bytes_size > 0) {
+            chunk_stats.unencoded_byte_array_data_bytes = ck.var_bytes_size;
+          }
 
           auto const num_data_pages = ck.num_pages - (ck.use_dictionary ? 1 : 0);
           if (col.max_def_level > DEF_LVL_HIST_CUTOFF) {
@@ -2077,7 +2079,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
             uint32_t const* const ck_hist = h_def_ptr + hist_size * num_data_pages;
             host_span<uint32_t const> ck_def_hist{ck_hist, hist_size};
 
-            hist.definition_level_histogram = {ck_def_hist.begin(), ck_def_hist.end()};
+            chunk_stats.definition_level_histogram = {ck_def_hist.begin(), ck_def_hist.end()};
             h_def_ptr += hist_size * (num_data_pages + 1);
           }
 
@@ -2086,17 +2088,13 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
             uint32_t const* const ck_hist = h_rep_ptr + hist_size * num_data_pages;
             host_span<uint32_t const> ck_rep_hist{ck_hist, hist_size};
 
-            hist.repetition_level_histogram = {ck_rep_hist.begin(), ck_rep_hist.end()};
+            chunk_stats.repetition_level_histogram = {ck_rep_hist.begin(), ck_rep_hist.end()};
             h_rep_ptr += hist_size * (num_data_pages + 1);
           }
 
-          if (hist.definition_level_histogram.has_value() ||
-              hist.repetition_level_histogram.has_value()) {
-            chunk_stats.repetition_definition_level_histogram = hist;
-          }
-
           if (chunk_stats.unencoded_byte_array_data_bytes.has_value() ||
-              chunk_stats.repetition_definition_level_histogram.has_value()) {
+              chunk_stats.definition_level_histogram.has_value() ||
+              chunk_stats.repetition_level_histogram.has_value()) {
             column_chunk_meta.size_statistics = chunk_stats;
           }
         }

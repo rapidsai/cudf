@@ -118,7 +118,6 @@ class CompactProtocolReader {
   bool read(KeyValue* k);
   bool read(PageLocation* p);
   bool read(OffsetIndex* o);
-  bool read(RepetitionDefinitionLevelHistogram* r);
   bool read(SizeStatistics* s);
   bool read(ColumnIndex* c);
   bool read(Statistics* s);

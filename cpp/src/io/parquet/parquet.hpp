@@ -222,9 +222,12 @@ struct KeyValue {
 };
 
 /**
- * @brief Thrift-derived struct containing repetition and definition level histograms
+ * @brief Thrift-derived struct containing statistics used to estimate page and column chunk sizes
  */
-struct RepetitionDefinitionLevelHistogram {
+struct SizeStatistics {
+  // number of variable-width bytes stored for the page/chunk. should not be set for anything
+  // but the BYTE_ARRAY physical type.
+  std::optional<int64_t> unencoded_byte_array_data_bytes = std::nullopt;
   /**
    * When present, there is expected to be one element corresponding to each
    * repetition (i.e. size=max repetition_level+1) where each element
@@ -241,18 +244,6 @@ struct RepetitionDefinitionLevelHistogram {
    * This value should not be written if max_definition_level is 0 or 1.
    */
   std::optional<std::vector<int64_t>> definition_level_histogram = std::nullopt;
-};
-
-/**
- * @brief Thrift-derived struct containing statistics used to estimate page and column chunk sizes
- */
-struct SizeStatistics {
-  // number of variable-width bytes stored for the page/chunk. should not be set for anything
-  // but the BYTE_ARRAY physical type.
-  std::optional<int64_t> unencoded_byte_array_data_bytes = std::nullopt;
-  // repetitino and definition level histograms at the column chunk and page level
-  std::optional<RepetitionDefinitionLevelHistogram> repetition_definition_level_histogram =
-    std::nullopt;
 };
 
 /**
@@ -287,8 +278,8 @@ struct ColumnIndex {
     BoundaryOrder::UNORDERED;                    // Indicates if min and max values are ordered
   std::vector<int64_t> null_counts;              // Optional count of null values per page
   // repetition/definition level histograms for the column chunk
-  std::optional<std::vector<RepetitionDefinitionLevelHistogram>>
-    repetition_definition_level_histograms = std::nullopt;
+  std::optional<std::vector<int64_t>> repetition_level_histogram = std::nullopt;
+  std::optional<std::vector<int64_t>> definition_level_histogram = std::nullopt;
 };
 
 /**

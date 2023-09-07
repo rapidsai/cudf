@@ -311,30 +311,23 @@ bool CompactProtocolReader::read(OffsetIndex* o)
   return function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(RepetitionDefinitionLevelHistogram* r)
-{
-  auto op = std::make_tuple(OptionalParquetFieldInt64List(1, r->repetition_level_histogram),
-                            OptionalParquetFieldInt64List(2, r->definition_level_histogram));
-  return function_builder(this, op);
-}
-
 bool CompactProtocolReader::read(SizeStatistics* s)
 {
-  auto op =
-    std::make_tuple(OptionalParquetFieldInt64(1, s->unencoded_byte_array_data_bytes),
-                    OptionalParquetFieldStruct(2, s->repetition_definition_level_histogram));
+  auto op = std::make_tuple(OptionalParquetFieldInt64(1, s->unencoded_byte_array_data_bytes),
+                            OptionalParquetFieldInt64List(2, s->repetition_level_histogram),
+                            OptionalParquetFieldInt64List(3, s->definition_level_histogram));
   return function_builder(this, op);
 }
 
 bool CompactProtocolReader::read(ColumnIndex* c)
 {
-  auto op =
-    std::make_tuple(ParquetFieldBoolList(1, c->null_pages),
-                    ParquetFieldBinaryList(2, c->min_values),
-                    ParquetFieldBinaryList(3, c->max_values),
-                    ParquetFieldEnum<BoundaryOrder>(4, c->boundary_order),
-                    ParquetFieldInt64List(5, c->null_counts),
-                    OptionalParquetFieldStructList(6, c->repetition_definition_level_histograms));
+  auto op = std::make_tuple(ParquetFieldBoolList(1, c->null_pages),
+                            ParquetFieldBinaryList(2, c->min_values),
+                            ParquetFieldBinaryList(3, c->max_values),
+                            ParquetFieldEnum<BoundaryOrder>(4, c->boundary_order),
+                            ParquetFieldInt64List(5, c->null_counts),
+                            OptionalParquetFieldInt64List(6, c->repetition_level_histogram),
+                            OptionalParquetFieldInt64List(7, c->definition_level_histogram));
   return function_builder(this, op);
 }
 

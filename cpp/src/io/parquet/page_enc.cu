@@ -2301,37 +2301,38 @@ __global__ void __launch_bounds__(1)
   auto const ck_def_hist = ck_g->def_histogram_data + (num_data_pages) * (cd->max_def_level + 1);
   auto const ck_rep_hist = ck_g->rep_histogram_data + (num_data_pages) * (cd->max_rep_level + 1);
 
-  // optionally encode RepetitionDefinitionLevelHistograms and sum var_bytes.
-  auto const encode_hist =
-    cd->max_rep_level > REP_LVL_HIST_CUTOFF || cd->max_def_level > DEF_LVL_HIST_CUTOFF;
+  // optionally encode histograms and sum var_bytes.
   auto const need_var_bytes = col_g.physical_type == BYTE_ARRAY;
 
-  if (encode_hist or need_var_bytes) {
-    if (encode_hist) { encoder.field_list_begin(6, num_data_pages, ST_FLD_STRUCT); }
+  if (cd->max_rep_level > REP_LVL_HIST_CUTOFF) {
+    encoder.field_list_begin(6, num_data_pages * (cd->max_rep_level + 1), ST_FLD_I64);
     for (uint32_t page = first_data_page; page < num_pages; page++) {
       auto const& pg = ck_g->pages[page];
-
-      if (need_var_bytes) { var_bytes += pg.var_bytes_size; }
-
-      if (cd->max_rep_level > REP_LVL_HIST_CUTOFF) {
-        encoder.field_list_begin(1, cd->max_rep_level + 1, ST_FLD_I64);
-        for (int i = 0; i < cd->max_rep_level + 1; i++) {
-          encoder.put_int64(pg.rep_histogram[i]);
-          ck_rep_hist[i] += pg.rep_histogram[i];
-        }
-        encoder.field_list_end(1);
+      for (int i = 0; i < cd->max_rep_level + 1; i++) {
+        encoder.put_int64(pg.rep_histogram[i]);
+        ck_rep_hist[i] += pg.rep_histogram[i];
       }
-      if (cd->max_def_level > DEF_LVL_HIST_CUTOFF) {
-        encoder.field_list_begin(2, cd->max_def_level + 1, ST_FLD_I64);
-        for (int i = 0; i < cd->max_def_level + 1; i++) {
-          encoder.put_int64(pg.def_histogram[i]);
-          ck_def_hist[i] += pg.def_histogram[i];
-        }
-        encoder.field_list_end(2);
-      }
-      if (encode_hist) { encoder.field_struct_end(2); }  // end the histogram struct
     }
-    if (encode_hist) { encoder.field_list_end(6); }
+    encoder.field_list_end(6);
+  }
+
+  if (cd->max_def_level > DEF_LVL_HIST_CUTOFF) {
+    encoder.field_list_begin(7, num_data_pages * (cd->max_def_level + 1), ST_FLD_I64);
+    for (uint32_t page = first_data_page; page < num_pages; page++) {
+      auto const& pg = ck_g->pages[page];
+      for (int i = 0; i < cd->max_def_level + 1; i++) {
+        encoder.put_int64(pg.def_histogram[i]);
+        ck_def_hist[i] += pg.def_histogram[i];
+      }
+    }
+    encoder.field_list_end(7);
+  }
+
+  if (need_var_bytes) {
+    for (uint32_t page = first_data_page; page < num_pages; page++) {
+      auto const& pg = ck_g->pages[page];
+      var_bytes += pg.var_bytes_size;
+    }
   }
 
   encoder.end(&col_idx_end, false);

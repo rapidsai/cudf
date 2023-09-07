@@ -53,7 +53,6 @@ class CompactProtocolWriter {
   size_t write(Statistics const&);
   size_t write(PageLocation const&);
   size_t write(OffsetIndex const&);
-  size_t write(RepetitionDefinitionLevelHistogram const&);
   size_t write(SizeStatistics const&);
 
  protected:
