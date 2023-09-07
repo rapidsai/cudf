@@ -138,7 +138,7 @@ class csv_reader_options {
    *
    * @param src source information used to read csv file
    */
-  explicit csv_reader_options(source_info const& src) : _source(src) {}
+  explicit csv_reader_options(source_info src) : _source{std::move(src)} {}
 
   friend csv_reader_options_builder;
 
@@ -156,7 +156,7 @@ class csv_reader_options {
    * @param src Source information to read csv file
    * @return Builder to build reader options
    */
-  static csv_reader_options_builder builder(source_info const& src);
+  static csv_reader_options_builder builder(source_info src);
 
   /**
    * @brief Returns source info.
@@ -213,7 +213,7 @@ class csv_reader_options {
 
     auto const max_row_bytes = 16 * 1024;  // 16KB
     auto const column_bytes  = 64;
-    auto const base_padding  = 1024;       // 1KB
+    auto const base_padding  = 1024;  // 1KB
 
     if (num_columns == 0) {
       // Use flat size if the number of columns is not known
@@ -835,7 +835,7 @@ class csv_reader_options_builder {
    *
    * @param src The source information used to read csv file
    */
-  csv_reader_options_builder(source_info const& src) : options(src) {}
+  csv_reader_options_builder(source_info src) : options{std::move(src)} {}
 
   /**
    * @brief Sets compression format of the source.

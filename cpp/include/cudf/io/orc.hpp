@@ -80,7 +80,7 @@ class orc_reader_options {
    *
    * @param src source information used to read orc file
    */
-  explicit orc_reader_options(source_info const& src) : _source(src) {}
+  explicit orc_reader_options(source_info src) : _source{std::move(src)} {}
 
  public:
   /**
@@ -96,7 +96,7 @@ class orc_reader_options {
    * @param src Source information to read orc file
    * @return Builder to build reader options
    */
-  static orc_reader_options_builder builder(source_info const& src);
+  static orc_reader_options_builder builder(source_info src);
 
   /**
    * @brief Returns source info.
@@ -269,7 +269,7 @@ class orc_reader_options_builder {
    *
    * @param src The source information used to read orc file
    */
-  explicit orc_reader_options_builder(source_info const& src) : options{src} {};
+  explicit orc_reader_options_builder(source_info src) : options{std::move(src)} {};
 
   /**
    * @brief Sets names of the column to read.

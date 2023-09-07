@@ -80,7 +80,7 @@ class parquet_reader_options {
    *
    * @param src source information used to read parquet file
    */
-  explicit parquet_reader_options(source_info const& src) : _source(src) {}
+  explicit parquet_reader_options(source_info src) : _source{std::move(src)} {}
 
   friend parquet_reader_options_builder;
 
@@ -98,7 +98,7 @@ class parquet_reader_options {
    * @param src Source information to read parquet file
    * @return Builder to build reader options
    */
-  static parquet_reader_options_builder builder(source_info const& src);
+  static parquet_reader_options_builder builder(source_info src);
 
   /**
    * @brief Returns source info.
@@ -265,7 +265,7 @@ class parquet_reader_options_builder {
    *
    * @param src The source information used to read parquet file
    */
-  explicit parquet_reader_options_builder(source_info const& src) : options(src) {}
+  explicit parquet_reader_options_builder(source_info src) : options{std::move(src)} {}
 
   /**
    * @brief Sets names of the columns to be read.
