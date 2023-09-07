@@ -165,7 +165,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 
   // get the number of streams we need from the pool and tell them to wait on the H2D copies
   int const nkernels = std::bitset<32>(kernel_mask).count();
-  auto streams       = cudf::detail::fork_stream(_stream, nkernels);
+  auto streams       = cudf::detail::fork_streams(_stream, nkernels);
 
   auto const level_type_size = _file_itm_data.level_type_size;
 
