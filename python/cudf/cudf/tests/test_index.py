@@ -788,7 +788,9 @@ def test_index_to_series(data):
         ["5", "6", "2", "a", "b", "c"],
         [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
         [1.0, 5.0, 6.0, 0.0, 1.3],
+        ["ab", "cd", "ef"],
         pd.Series(["1", "2", "a", "3", None], dtype="category"),
+        range(0, 10),
         [],
     ],
 )
@@ -800,8 +802,10 @@ def test_index_to_series(data):
         [10, 20, 30, 40, 50, 60],
         ["1", "2", "3", "4", "5", "6"],
         ["5", "6", "2", "a", "b", "c"],
+        ["ab", "ef", None],
         [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
         [1.0, 5.0, 6.0, 0.0, 1.3],
+        range(2, 4),
         pd.Series(["1", "2", "a", "3", None], dtype="category"),
         [],
     ],
@@ -820,6 +824,7 @@ def test_index_difference(data, other, sort, name_data, name_other):
 
     expected = pd_data.difference(pd_other, sort=sort)
     actual = gd_data.difference(gd_other, sort=sort)
+
     assert_eq(expected, actual)
 
 
