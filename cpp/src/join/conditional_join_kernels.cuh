@@ -68,7 +68,7 @@ __global__ void compute_conditional_join_output_size(
 
   std::size_t thread_counter{0};
   auto const start_idx                 = cudf::detail::grid_1d::global_thread_id();
-  cudf::thread_index_type const stride = cudf::detail::grid_1d::grid_stride();
+  auto const stride = cudf::detail::grid_1d::grid_stride();
   ;
   cudf::thread_index_type const left_num_rows  = left_table.num_rows();
   cudf::thread_index_type const right_num_rows = right_table.num_rows();
