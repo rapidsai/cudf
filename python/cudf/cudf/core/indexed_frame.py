@@ -1526,7 +1526,9 @@ class IndexedFrame(Frame):
         na_position : {'first', 'last'}, default 'last'
             Puts NaNs at the beginning if first; last puts NaNs at the end.
         sort_remaining : bool, default True
-            Not yet supported
+            When sorting a multiindex on a subset of its levels,
+            should entries be lexsorted by the remaining
+            (non-specified) levels as well?
         ignore_index : bool, default False
             if True, index will be replaced with RangeIndex.
         key : callable, optional
@@ -1592,11 +1594,6 @@ class IndexedFrame(Frame):
         if kind is not None:
             raise NotImplementedError("kind is not yet supported")
 
-        if not sort_remaining:
-            raise NotImplementedError(
-                "sort_remaining == False is not yet supported"
-            )
-
         if key is not None:
             raise NotImplementedError("key is not yet supported.")
 
@@ -1609,16 +1606,22 @@ class IndexedFrame(Frame):
                 if level is not None:
                     # Pandas doesn't handle na_position in case of MultiIndex.
                     na_position = "first" if ascending is True else "last"
-                    labels = [
-                        idx._get_level_label(lvl)
-                        for lvl in (level if is_list_like(level) else (level,))
-                    ]
-                    # Explicitly construct a Frame rather than using type(self)
-                    # to avoid constructing a SingleColumnFrame (e.g. Series).
-                    idx = Frame._from_data(idx._data.select_by_label(labels))
+                    if not is_list_like(level):
+                        level = [level]
+                    by = list(map(idx._get_level_label, level))
+                    if sort_remaining:
+                        handled = set(by)
+                        by.extend(
+                            filter(
+                                lambda n: n not in handled,
+                                self.index._data.names,
+                            )
+                        )
+                else:
+                    by = list(idx._data.names)
 
                 inds = idx._get_sorted_inds(
-                    ascending=ascending, na_position=na_position
+                    by=by, ascending=ascending, na_position=na_position
                 )
                 out = self._gather(
                     GatherMap.from_column_unchecked(
