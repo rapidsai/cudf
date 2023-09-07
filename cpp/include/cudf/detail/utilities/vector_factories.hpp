@@ -106,6 +106,31 @@ rmm::device_uvector<T> make_device_uvector_async(host_span<T const> source_data,
 }
 
 /**
+ * @brief Asynchronously construct a `device_uvector` containing a deep copy of data from a
+ * `host_span` containing only bool type
+ *
+ * @note This function does not synchronize `stream`.
+ *
+ * @param source_data The host_span of data to deep copy
+ * @param stream The stream on which to allocate memory and perform the copy
+ * @param mr The memory resource to use for allocating the returned device_uvector
+ * @return A device_uvector containing the copied data
+ */
+template <typename T, std::enable_if_t<std::is_same<T, bool>::value>>
+rmm::device_uvector<T> make_device_uvector_async(host_span<T const> source_data,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::mr::device_memory_resource* mr)
+{
+  rmm::device_uvector<bool> ret(source_data.size(), stream, mr);
+  for (std::size_t index = 0; index < source_data.size(); ++index) {
+    ret.set_element_async(index, 
+                          source_data[index], 
+                          stream);
+  }
+  return ret;
+}
+
+/**
  * @brief Asynchronously construct a `device_uvector` containing a deep copy of data from a host
  * container
  *
