@@ -138,7 +138,6 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
   return std::pair(rmm::device_buffer{0, stream}, nullable_columns.front().null_mask());
 }
 
-}  // namespace
 template <bool haystack_has_nulls, bool has_any_nulls, typename Func>
 void dispatch(
   null_equality compare_nulls, auto self_comp, auto two_table_comp, auto nan_comp, Func func)
@@ -175,6 +174,8 @@ void dispatch_nan_comparator(nan_equality compare_nans,
       compare_nulls, self_comp, two_table_comp, nan_unequal_comparator{}, func);
   }
 }
+
+}  // namespace
 
 /**
  * @brief Check if rows in the given `needles` table exist in the `haystack` table.
@@ -223,7 +224,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
   auto const needles_iter = cudf::detail::make_counting_transform_iterator(
     size_type{0}, [] __device__(auto idx) { return rhs_index_type{idx}; });
 
-  auto const helper_func = [&](auto const& d_self_equal, auto const& d_two_table_equal) {
+  auto helper_func = [&](auto const& d_self_equal, auto const& d_two_table_equal) {
     auto const d_equal = comparator_adapter{d_self_equal, d_two_table_equal};
 
     auto set = cuco::experimental::static_set{
