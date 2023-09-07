@@ -20,13 +20,13 @@ from cudf.core.index import (
     as_index,
 )
 from cudf.testing._utils import (
+    ALL_TYPES,
     FLOAT_TYPES,
     NUMERIC_TYPES,
     OTHER_TYPES,
     SIGNED_INTEGER_TYPES,
     SIGNED_TYPES,
     UNSIGNED_TYPES,
-    ALL_TYPES,
     _create_pandas_series,
     assert_column_memory_eq,
     assert_column_memory_ne,
