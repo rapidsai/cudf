@@ -20,6 +20,7 @@ from cudf.core.index import (
     as_index,
 )
 from cudf.testing._utils import (
+    ALL_TYPES,
     FLOAT_TYPES,
     NUMERIC_TYPES,
     OTHER_TYPES,
@@ -2050,6 +2051,10 @@ def test_range_index_concat(objs):
         (pd.Index([0, 1, 2, 30], name="a"), [90, 100]),
         (pd.Index([0, 1, 2, 30]), pd.Index([0, 10, 1.0, 11])),
         (pd.Index(["a", "b", "c", "d", "c"]), pd.Index(["a", "c", "z"])),
+        (
+            pd.IntervalIndex.from_tuples([(0, 2), (0, 2), (2, 4)]),
+            pd.IntervalIndex.from_tuples([(0, 2), (2, 4)]),
+        ),
     ],
 )
 @pytest.mark.parametrize("sort", [None, False])
@@ -2672,10 +2677,11 @@ class TestIndexScalarGetItem:
             12,
             20,
         ],
+        [1, 2, 3, 4],
     ],
 )
 def test_index_mixed_dtype_error(data):
-    pi = pd.Index(data)
+    pi = pd.Index(data, dtype="object")
     with pytest.raises(TypeError):
         cudf.Index(pi)
 
@@ -2698,3 +2704,26 @@ def test_index_getitem_time_duration(dtype):
                 assert gidx[i] is pidx[i]
             else:
                 assert_eq(gidx[i], pidx[i])
+
+
+@pytest.mark.parametrize("dtype", ALL_TYPES)
+def test_index_empty_from_pandas(request, dtype):
+    request.node.add_marker(
+        pytest.mark.xfail(
+            condition=not PANDAS_GE_200
+            and dtype
+            in {
+                "datetime64[ms]",
+                "datetime64[s]",
+                "datetime64[us]",
+                "timedelta64[ms]",
+                "timedelta64[s]",
+                "timedelta64[us]",
+            },
+            reason="Fixed in pandas-2.0",
+        )
+    )
+    pidx = pd.Index([], dtype=dtype)
+    gidx = cudf.from_pandas(pidx)
+
+    assert_eq(pidx, gidx)
