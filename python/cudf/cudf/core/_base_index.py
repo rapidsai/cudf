@@ -30,7 +30,7 @@ from cudf.core.abc import Serializable
 from cudf.core.column import ColumnBase, column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils import ioutils
-from cudf.utils.dtypes import is_mixed_with_object_dtype
+from cudf.utils.dtypes import can_convert_to_column, is_mixed_with_object_dtype
 from cudf.utils.utils import _is_same_name
 
 
@@ -608,8 +608,11 @@ class BaseIndex(Serializable):
                     (1, 'Blue')],
                 )
         """
+        if not can_convert_to_column(other):
+            raise TypeError("Input must be Index or array-like")
+
         if not isinstance(other, BaseIndex):
-            other = cudf.Index(other, name=self.name)
+            other = cudf.Index(other, name=getattr(other, "name", self.name))
 
         if sort not in {None, False}:
             raise ValueError(
@@ -618,9 +621,19 @@ class BaseIndex(Serializable):
             )
 
         if self.equals(other):
+            dtypes = {self.dtype, other.dtype}
+            common_dtype = cudf.utils.dtypes.find_common_type(dtypes)
             if self.has_duplicates:
-                return self.unique()._get_reconciled_name_object(other)
-            return self._get_reconciled_name_object(other)
+                return (
+                    self.unique()
+                    ._get_reconciled_name_object(other)
+                    .astype(common_dtype)
+                )
+            return self._get_reconciled_name_object(other).astype(common_dtype)
+        elif not len(other):
+            dtypes = {self.dtype, other.dtype}
+            common_dtype = cudf.utils.dtypes.find_common_type(dtypes)
+            return other._get_reconciled_name_object(self).astype(common_dtype)
 
         res_name = _get_result_name(self.name, other.name)
 
