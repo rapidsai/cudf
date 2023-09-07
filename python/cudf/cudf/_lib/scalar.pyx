@@ -105,12 +105,17 @@ cdef class DeviceScalar:
         elif isinstance(self._dtype, cudf.StructDtype):
             _set_struct_from_pydict(self.c_value.c_obj, value, self._dtype, valid)
         elif pd.api.types.is_string_dtype(self._dtype):
-            _set_string_from_np_string(self.c_value.c_obj, value, valid)
+            if value is NA:
+                value = None
+            pa_scalar = pa.scalar(value, type=pa.string())
+            self.c_value = pylibcudf.Scalar(pa_scalar)
+            set_dtype = False
         elif pd.api.types.is_numeric_dtype(self._dtype):
             if value is NA:
                 value = None
             pa_scalar = pa.scalar(value, type=pa.from_numpy_dtype(self._dtype))
             self.c_value = pylibcudf.Scalar(pa_scalar)
+            set_dtype = False
         elif pd.api.types.is_datetime64_dtype(self._dtype):
             _set_datetime64_from_np_scalar(
                 self.c_value.c_obj, value, self._dtype, valid
@@ -231,11 +236,6 @@ cdef class DeviceScalar:
                 <underlying_type_t_type_id>(cdtype.id())
             ]
         return s
-
-
-cdef _set_string_from_np_string(unique_ptr[scalar]& s, value, bool valid=True):
-    value = value if valid else ""
-    s.reset(new string_scalar(value.encode(), valid))
 
 
 cdef _set_datetime64_from_np_scalar(unique_ptr[scalar]& s,
