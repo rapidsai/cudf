@@ -715,7 +715,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         return libcudf.replace.replace_nulls(
             input_col=self, replacement=value, method=method, dtype=dtype
-        )
+        )._with_type_metadata(self.dtype)
 
     def isnull(self) -> ColumnBase:
         """Identify missing values in a Column."""
