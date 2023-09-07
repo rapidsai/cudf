@@ -2187,11 +2187,15 @@ def test_series_init_error():
     )
 
 
-@pytest.mark.parametrize("dtype", ["datetime64[ns]", "timedelta64[ns]"])
+@pytest.mark.parametrize(
+    "dtype", ["datetime64[ns]", "timedelta64[ns]", "object", "str"]
+)
 def test_series_mixed_dtype_error(dtype):
     ps = pd.concat([pd.Series([1, 2, 3], dtype=dtype), pd.Series([10, 11])])
     with pytest.raises(TypeError):
         cudf.Series(ps)
+    with pytest.raises(TypeError):
+        cudf.Series(ps.array)
 
 
 @pytest.mark.parametrize("data", [[True, False, None], [10, 200, 300]])
