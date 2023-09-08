@@ -32,7 +32,7 @@
 
 #include <memory>
 
-namespace cudf::io::json::experimental::detail {
+namespace cudf::io::json::detail {
 
 // Unicode code point escape sequence
 static constexpr char UNICODE_SEQ = 0x7F;
@@ -181,7 +181,7 @@ process_string(in_iterator_t in_begin,
                cudf::io::parse_options_view const& options)
 {
   int32_t bytes           = 0;
-  const auto num_in_chars = thrust::distance(in_begin, in_end);
+  auto const num_in_chars = thrust::distance(in_begin, in_end);
   // String values are indicated by keeping the quote character
   bool const is_string_value =
     num_in_chars >= 2LL &&
@@ -428,4 +428,4 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
   return out_col;
 }
 
-}  // namespace cudf::io::json::experimental::detail
+}  // namespace cudf::io::json::detail

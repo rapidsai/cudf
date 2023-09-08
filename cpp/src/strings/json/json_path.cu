@@ -76,7 +76,7 @@ enum class parse_result {
 class parser {
  protected:
   CUDF_HOST_DEVICE inline parser() {}
-  CUDF_HOST_DEVICE inline parser(const char* _input, int64_t _input_len)
+  CUDF_HOST_DEVICE inline parser(char const* _input, int64_t _input_len)
     : input(_input), input_len(_input_len), pos(_input)
   {
     parse_whitespace();
@@ -87,7 +87,7 @@ class parser {
   {
   }
 
-  CUDF_HOST_DEVICE inline bool eof(const char* p) { return p - input >= input_len; }
+  CUDF_HOST_DEVICE inline bool eof(char const* p) { return p - input >= input_len; }
   CUDF_HOST_DEVICE inline bool eof() { return eof(pos); }
 
   CUDF_HOST_DEVICE inline bool parse_whitespace()
@@ -160,7 +160,7 @@ class parser {
       if ((quote == 0 && (*pos == '\'' || *pos == '\"')) || (quote == *pos)) {
         quote = *pos;
 
-        const char* start = ++pos;
+        char const* start = ++pos;
         while (!eof()) {
           // handle escaped characters
           if (*pos == '\\') {
@@ -206,7 +206,7 @@ struct json_output {
   char* output;
   thrust::optional<size_t> output_len;
 
-  __device__ void add_output(const char* str, size_t len)
+  __device__ void add_output(char const* str, size_t len)
   {
     if (output != nullptr) { memcpy(output + output_len.value_or(0), str, len); }
     output_len = output_len.value_or(0) + len;
@@ -224,7 +224,7 @@ enum json_element_type { NONE, OBJECT, ARRAY, VALUE };
 class json_state : private parser {
  public:
   __device__ json_state() : parser() {}
-  __device__ json_state(const char* _input, int64_t _input_len, get_json_object_options _options)
+  __device__ json_state(char const* _input, int64_t _input_len, get_json_object_options _options)
     : parser(_input, _input_len),
 
       options(_options)
@@ -483,7 +483,7 @@ class json_state : private parser {
     return (c == '\"') || (options.get_allow_single_quotes() && (c == '\''));
   }
 
-  const char* cur_el_start{nullptr};  // pointer to the first character of the -value- of the
+  char const* cur_el_start{nullptr};  // pointer to the first character of the -value- of the
                                       // current element - not the name
   string_view cur_el_name;            // name of the current element (if applicable)
   json_element_type cur_el_type{json_element_type::NONE};     // type of the current element
@@ -524,7 +524,7 @@ struct path_operator {
  */
 class path_state : private parser {
  public:
-  path_state(const char* _path, size_t _path_len) : parser(_path, _path_len) {}
+  path_state(char const* _path, size_t _path_len) : parser(_path, _path_len) {}
 
   // get the next operator in the JSONPath string
   path_operator get_next_operator()
@@ -901,14 +901,14 @@ template <int block_size>
 __launch_bounds__(block_size) __global__
   void get_json_object_kernel(column_device_view col,
                               path_operator const* const commands,
-                              offset_type* output_offsets,
+                              size_type* output_offsets,
                               thrust::optional<char*> out_buf,
                               thrust::optional<bitmask_type*> out_validity,
                               thrust::optional<size_type*> out_valid_count,
                               get_json_object_options options)
 {
-  size_type tid    = threadIdx.x + (blockDim.x * blockIdx.x);
-  size_type stride = blockDim.x * gridDim.x;
+  auto tid          = cudf::detail::grid_1d::global_thread_id();
+  auto const stride = cudf::thread_index_type{blockDim.x} * cudf::thread_index_type{gridDim.x};
 
   size_type warp_valid_count{0};
 
@@ -932,7 +932,7 @@ __launch_bounds__(block_size) __global__
 
     // filled in only during the precompute step. during the compute step, the offsets
     // are fed back in so we do -not- want to write them out
-    if (!out_buf.has_value()) { output_offsets[tid] = static_cast<offset_type>(output_size); }
+    if (!out_buf.has_value()) { output_offsets[tid] = static_cast<size_type>(output_size); }
 
     // validity filled in only during the output step
     if (out_validity.has_value()) {
@@ -995,7 +995,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       *cdv,
       std::get<0>(preprocess).value().data(),
-      offsets_view.head<offset_type>(),
+      offsets_view.head<size_type>(),
       thrust::nullopt,
       thrust::nullopt,
       thrust::nullopt,
@@ -1003,12 +1003,12 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
 
   // convert sizes to offsets
   thrust::exclusive_scan(rmm::exec_policy(stream),
-                         offsets_view.head<offset_type>(),
-                         offsets_view.head<offset_type>() + col.size() + 1,
-                         offsets_view.head<offset_type>(),
+                         offsets_view.head<size_type>(),
+                         offsets_view.head<size_type>() + col.size() + 1,
+                         offsets_view.head<size_type>(),
                          0);
   size_type const output_size =
-    cudf::detail::get_value<offset_type>(offsets_view, col.size(), stream);
+    cudf::detail::get_value<size_type>(offsets_view, col.size(), stream);
 
   // allocate output string column
   auto chars = create_chars_child_column(output_size, stream, mr);
@@ -1026,7 +1026,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       *cdv,
       std::get<0>(preprocess).value().data(),
-      offsets_view.head<offset_type>(),
+      offsets_view.head<size_type>(),
       chars_view.head<char>(),
       static_cast<bitmask_type*>(validity.data()),
       d_valid_count.data(),

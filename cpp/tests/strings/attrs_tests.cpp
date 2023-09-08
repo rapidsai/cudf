@@ -30,7 +30,7 @@ struct StringsAttributesTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsAttributesTest, CodePoints)
 {
-  std::vector<const char*> h_strings{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
+  std::vector<char const*> h_strings{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
@@ -48,8 +48,8 @@ TEST_F(StringsAttributesTest, CodePoints)
 
 TEST_F(StringsAttributesTest, ZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
+
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   cudf::column_view expected_column(cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0);
 
@@ -63,7 +63,7 @@ TEST_F(StringsAttributesTest, ZeroSizeStringsColumn)
 
 TEST_F(StringsAttributesTest, StringsLengths)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "eee", "bb", nullptr, "", "aa", "ééé", "something a bit longer than 32 bytes"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),

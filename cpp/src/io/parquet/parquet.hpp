@@ -226,8 +226,8 @@ struct ColumnChunkMetaData {
   int64_t data_page_offset  = 0;  // Byte offset from beginning of file to first data page
   int64_t index_page_offset = 0;  // Byte offset from beginning of file to root index page
   int64_t dictionary_page_offset =
-    0;  // Byte offset from the beginning of file to first (only) dictionary page
-  std::vector<uint8_t> statistics_blob;  // Encoded chunk-level statistics as binary blob
+    0;                    // Byte offset from the beginning of file to first (only) dictionary page
+  Statistics statistics;  // Encoded chunk-level statistics
 };
 
 /**
@@ -299,6 +299,20 @@ struct DataPageHeader {
 };
 
 /**
+ * @brief Thrift-derived struct describing the header for a V2 data page
+ */
+struct DataPageHeaderV2 {
+  int32_t num_values = 0;  // Number of values, including NULLs, in this data page.
+  int32_t num_nulls  = 0;  // Number of NULL values, in this data page.
+  int32_t num_rows   = 0;  // Number of rows in this data page. which means
+                           // pages change on record boundaries (r = 0)
+  Encoding encoding                     = Encoding::PLAIN;  // Encoding used for this data page
+  int32_t definition_levels_byte_length = 0;                // length of the definition levels
+  int32_t repetition_levels_byte_length = 0;                // length of the repetition levels
+  bool is_compressed                    = true;             // whether the values are compressed.
+};
+
+/**
  * @brief Thrift-derived struct describing the header for a dictionary page
  */
 struct DictionaryPageHeader {
@@ -322,6 +336,7 @@ struct PageHeader {
   int32_t compressed_page_size   = 0;  // Compressed page size in bytes (not including the header)
   DataPageHeader data_page_header;
   DictionaryPageHeader dictionary_page_header;
+  DataPageHeaderV2 data_page_header_v2;
 };
 
 /**

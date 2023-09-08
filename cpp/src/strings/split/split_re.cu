@@ -43,7 +43,7 @@ namespace strings {
 namespace detail {
 namespace {
 
-using string_index_pair = thrust::pair<const char*, size_type>;
+using string_index_pair = thrust::pair<char const*, size_type>;
 
 enum class split_direction {
   FORWARD,  ///< for split logic
@@ -60,26 +60,31 @@ enum class split_direction {
 struct token_reader_fn {
   column_device_view const d_strings;
   split_direction const direction;
-  offset_type const* d_token_offsets;
+  size_type const* d_token_offsets;
   string_index_pair* d_tokens;
 
   __device__ void operator()(size_type const idx, reprog_device const prog, int32_t const prog_idx)
   {
     if (d_strings.is_null(idx)) { return; }
-    auto const d_str = d_strings.element<string_view>(idx);
+    auto const d_str  = d_strings.element<string_view>(idx);
+    auto const nchars = d_str.length();
 
     auto const token_offset = d_token_offsets[idx];
     auto const token_count  = d_token_offsets[idx + 1] - token_offset;
     auto const d_result     = d_tokens + token_offset;  // store tokens here
 
     size_type token_idx = 0;
-    size_type begin     = 0;  // characters
-    size_type end       = -1;
-    size_type last_pos  = 0;  // bytes
-    while (prog.find(prog_idx, d_str, begin, end) > 0) {
+    auto itr            = d_str.begin();
+    auto last_pos       = itr;
+    while (itr.position() <= nchars) {
+      auto const match = prog.find(prog_idx, d_str, itr);
+      if (!match) { break; }
+
+      auto const start_pos = thrust::get<0>(match_positions_to_bytes(*match, d_str, last_pos));
+
       // get the token (characters just before this match)
-      auto const token =
-        string_index_pair{d_str.data() + last_pos, d_str.byte_offset(begin) - last_pos};
+      auto const token = string_index_pair{d_str.data() + last_pos.byte_offset(),
+                                           start_pos - last_pos.byte_offset()};
       // store it if we have space
       if (token_idx < token_count - 1) {
         d_result[token_idx++] = token;
@@ -91,13 +96,13 @@ struct token_reader_fn {
         d_result[token_idx - 1] = token;
       }
       // setup for next match
-      last_pos = d_str.byte_offset(end);
-      begin    = end + (begin == end);
-      end      = -1;
+      last_pos += (match->second - last_pos.position());
+      itr = last_pos + (match->first == match->second);
     }
 
     // set the last token to the remainder of the string
-    d_result[token_idx] = string_index_pair{d_str.data() + last_pos, d_str.size_bytes() - last_pos};
+    d_result[token_idx] = string_index_pair{d_str.data() + last_pos.byte_offset(),
+                                            d_str.size_bytes() - last_pos.byte_offset()};
 
     if (direction == split_direction::BACKWARD) {
       // update first entry -- this happens when max_tokens is hit before the end of the string
@@ -138,17 +143,17 @@ rmm::device_uvector<string_index_pair> generate_tokens(column_device_view const&
 
   auto const begin     = thrust::make_counting_iterator<size_type>(0);
   auto const end       = thrust::make_counting_iterator<size_type>(strings_count);
-  auto const d_offsets = offsets.data<offset_type>();
+  auto const d_offsets = offsets.data<size_type>();
 
   // convert match counts to token offsets
   auto map_fn = [d_strings, d_offsets, max_tokens] __device__(auto idx) {
     return d_strings.is_null(idx) ? 0 : std::min(d_offsets[idx], max_tokens) + 1;
   };
   thrust::transform_exclusive_scan(
-    rmm::exec_policy(stream), begin, end + 1, d_offsets, map_fn, 0, thrust::plus<offset_type>{});
+    rmm::exec_policy(stream), begin, end + 1, d_offsets, map_fn, 0, thrust::plus<size_type>{});
 
   // the last offset entry is the total number of tokens to be generated
-  auto const total_tokens = cudf::detail::get_value<offset_type>(offsets, strings_count, stream);
+  auto const total_tokens = cudf::detail::get_value<size_type>(offsets, strings_count, stream);
 
   rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
   if (total_tokens == 0) { return tokens; }
@@ -171,7 +176,7 @@ rmm::device_uvector<string_index_pair> generate_tokens(column_device_view const&
 struct tokens_transform_fn {
   column_device_view const d_strings;
   string_index_pair const* d_tokens;
-  offset_type const* d_token_offsets;
+  size_type const* d_token_offsets;
   size_type const column_index;
 
   __device__ string_index_pair operator()(size_type idx) const
@@ -210,7 +215,7 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
   auto offsets = count_matches(
     *d_strings, *d_prog, strings_count + 1, stream, rmm::mr::get_current_device_resource());
   auto offsets_view = offsets->mutable_view();
-  auto d_offsets    = offsets_view.data<offset_type>();
+  auto d_offsets    = offsets_view.data<size_type>();
 
   // get the split tokens from the input column; this also converts the counts into offsets
   auto tokens = generate_tokens(*d_strings, *d_prog, direction, maxsplit, offsets_view, stream);

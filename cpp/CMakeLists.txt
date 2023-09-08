@@ -12,7 +12,7 @@
 # the License.
 # =============================================================================
 
-cmake_minimum_required(VERSION 3.23.1 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
 
 include(../fetch_rapids.cmake)
 include(rapids-cmake)
@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 23.06.00
+  VERSION 23.10.00
   LANGUAGES C CXX CUDA
 )
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
@@ -62,11 +62,18 @@ option(
          stream to external libraries."
   OFF
 )
+# Option to add all symbols to the dynamic symbol table in the library file, allowing to retrieve
+# human-readable stacktrace for debugging.
+option(
+  CUDF_BUILD_STACKTRACE_DEBUG
+  "Replace the current optimization flags by the options '-rdynamic -Og -NDEBUG', useful for debugging with stacktrace retrieval"
+  OFF
+)
 option(DISABLE_DEPRECATION_WARNINGS "Disable warnings generated from deprecated declarations." OFF)
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
 # memchecking
 option(CUDA_ENABLE_LINEINFO
-       "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler" OFF
+       "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler)" OFF
 )
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
@@ -96,11 +103,15 @@ message(VERBOSE "CUDF: Build and enable S3 filesystem support for Arrow: ${CUDF_
 message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}")
 message(
   VERBOSE
+  "CUDF: Replace the current optimization flags by the options '-rdynamic -Og' (useful for debugging with stacktrace retrieval): ${CUDF_BUILD_STACKTRACE_DEBUG}"
+)
+message(
+  VERBOSE
   "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNINGS}"
 )
 message(
   VERBOSE
-  "CUDF: Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler: ${CUDA_ENABLE_LINEINFO}"
+  "CUDF: Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler): ${CUDA_ENABLE_LINEINFO}"
 )
 message(VERBOSE "CUDF: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}")
 
@@ -113,6 +124,10 @@ if(BUILD_TESTS AND NOT CUDF_BUILD_TESTUTIL)
     FATAL_ERROR
       "Tests cannot be built without building cudf test utils. Please set CUDF_BUILD_TESTUTIL=ON or BUILD_TESTS=OFF"
   )
+endif()
+
+if(CUDF_BUILD_STACKTRACE_DEBUG AND NOT CMAKE_COMPILER_IS_GNUCXX)
+  message(FATAL_ERROR "CUDF_BUILD_STACKTRACE_DEBUG is only supported with GCC compiler")
 endif()
 
 set(CUDF_CXX_FLAGS "")
@@ -178,8 +193,7 @@ include(cmake/thirdparty/get_arrow.cmake)
 # find dlpack
 include(cmake/thirdparty/get_dlpack.cmake)
 # find libcu++
-include(${rapids-cmake-dir}/cpm/libcudacxx.cmake)
-rapids_cpm_libcudacxx(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
+include(cmake/thirdparty/get_libcudacxx.cmake)
 # find cuCollections Should come after including thrust and libcudacxx
 include(cmake/thirdparty/get_cucollections.cmake)
 # find or install GoogleTest
@@ -330,8 +344,10 @@ add_library(
   src/groupby/sort/sort_helper.cu
   src/hash/hashing.cu
   src/hash/md5_hash.cu
-  src/hash/murmur_hash.cu
-  src/hash/spark_murmur_hash.cu
+  src/hash/murmurhash3_x86_32.cu
+  src/hash/murmurhash3_x64_128.cu
+  src/hash/spark_murmurhash3_x86_32.cu
+  src/hash/xxhash_64.cu
   src/interop/dlpack.cpp
   src/interop/from_arrow.cu
   src/interop/to_arrow.cu
@@ -346,6 +362,7 @@ add_library(
   src/io/comp/nvcomp_adapter.cpp
   src/io/comp/nvcomp_adapter.cu
   src/io/comp/snap.cu
+  src/io/comp/statistics.cu
   src/io/comp/uncomp.cpp
   src/io/comp/unsnap.cu
   src/io/csv/csv_gpu.cu
@@ -353,13 +370,13 @@ add_library(
   src/io/csv/reader_impl.cu
   src/io/csv/writer_impl.cu
   src/io/functions.cpp
+  src/io/json/byte_range_info.cu
   src/io/json/json_column.cu
-  src/io/json/json_gpu.cu
   src/io/json/json_tree.cu
   src/io/json/nested_json_gpu.cu
-  src/io/json/reader_impl.cu
-  src/io/json/experimental/byte_range_info.cu
-  src/io/json/experimental/read_json.cpp
+  src/io/json/read_json.cu
+  src/io/json/legacy/json_gpu.cu
+  src/io/json/legacy/reader_impl.cu
   src/io/json/write_json.cu
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
@@ -373,10 +390,14 @@ add_library(
   src/io/orc/writer_impl.cu
   src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
+  src/io/parquet/decode_preprocess.cu
   src/io/parquet/page_data.cu
   src/io/parquet/chunk_dict.cu
   src/io/parquet/page_enc.cu
   src/io/parquet/page_hdr.cu
+  src/io/parquet/page_delta_decode.cu
+  src/io/parquet/page_string_decode.cu
+  src/io/parquet/predicate_pushdown.cpp
   src/io/parquet/reader.cpp
   src/io/parquet/reader_impl.cpp
   src/io/parquet/reader_impl_helpers.cpp
@@ -389,6 +410,7 @@ add_library(
   src/io/text/bgzip_data_chunk_source.cu
   src/io/text/bgzip_utils.cpp
   src/io/text/multibyte_split.cu
+  src/io/utilities/arrow_io_source.cpp
   src/io/utilities/column_buffer.cpp
   src/io/utilities/config_utils.cpp
   src/io/utilities/data_sink.cpp
@@ -483,6 +505,7 @@ add_library(
   src/reshape/byte_cast.cu
   src/reshape/interleave_columns.cu
   src/reshape/tile.cu
+  src/rolling/detail/optimized_unbounded_window.cpp
   src/rolling/detail/rolling_collect_list.cu
   src/rolling/detail/rolling_fixed_window.cu
   src/rolling/detail/rolling_variable_window.cu
@@ -580,6 +603,7 @@ add_library(
   src/text/detokenize.cu
   src/text/edit_distance.cu
   src/text/generate_ngrams.cu
+  src/text/jaccard.cu
   src/text/minhash.cu
   src/text/ngrams_tokenize.cu
   src/text/normalize.cu
@@ -608,6 +632,7 @@ add_library(
   src/utilities/default_stream.cpp
   src/utilities/linked_column.cpp
   src/utilities/logger.cpp
+  src/utilities/stacktrace.cpp
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
   src/utilities/type_dispatcher.cpp
@@ -645,6 +670,31 @@ target_compile_options(
   cudf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
                "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
 )
+
+if(CUDF_BUILD_STACKTRACE_DEBUG)
+  # Remove any optimization level to avoid nvcc warning "incompatible redefinition for option
+  # 'optimize'".
+  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS}")
+  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CUDA_FLAGS_RELEASE "${CMAKE_CUDA_FLAGS_RELEASE}")
+  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CUDA_FLAGS_MINSIZEREL
+                       "${CMAKE_CUDA_FLAGS_MINSIZEREL}"
+  )
+  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CUDA_FLAGS_RELWITHDEBINFO
+                       "${CMAKE_CUDA_FLAGS_RELWITHDEBINFO}"
+  )
+
+  add_library(cudf_backtrace INTERFACE)
+  target_compile_definitions(cudf_backtrace INTERFACE CUDF_BUILD_STACKTRACE_DEBUG)
+  target_compile_options(
+    cudf_backtrace INTERFACE "$<$<COMPILE_LANGUAGE:CXX>:-Og>"
+                             "$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-Og>"
+  )
+  target_link_options(
+    cudf_backtrace INTERFACE "$<$<LINK_LANGUAGE:CXX>:-rdynamic>"
+    "$<$<LINK_LANGUAGE:CUDA>:-Xlinker=-rdynamic>"
+  )
+  target_link_libraries(cudf PRIVATE cudf_backtrace)
+endif()
 
 # Specify include paths for the current target and dependents
 target_include_directories(
@@ -829,7 +879,9 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
   # depending via ctest and whether it has been updated to expose public stream APIs.
   foreach(_mode cudf testing)
     set(_tgt "cudf_identify_stream_usage_mode_${_mode}")
-    add_library(${_tgt} SHARED tests/utilities/identify_stream_usage.cpp)
+    add_library(
+      ${_tgt} SHARED src/utilities/stacktrace.cpp tests/utilities/identify_stream_usage.cpp
+    )
 
     set_target_properties(
       ${_tgt}
@@ -838,7 +890,14 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
                  CXX_STANDARD_REQUIRED ON
                  POSITION_INDEPENDENT_CODE ON
     )
+    target_compile_options(
+      ${_tgt} PRIVATE "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
+    )
+    target_include_directories(${_tgt} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>")
     target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm)
+    if(CUDF_BUILD_STACKTRACE_DEBUG)
+      target_link_libraries(${_tgt} PRIVATE cudf_backtrace)
+    endif()
     add_library(cudf::${_tgt} ALIAS ${_tgt})
 
     if("${_mode}" STREQUAL "testing")

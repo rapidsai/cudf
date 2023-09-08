@@ -159,12 +159,6 @@ def test_strings(tmpdir):
     read_df = dask_cudf.read_parquet(fn, index=["a"])
     dd.assert_eq(ddf2, read_df.compute().to_pandas())
 
-    read_df_cats = dask_cudf.read_parquet(
-        fn, index=["a"], strings_to_categorical=True
-    )
-    dd.assert_eq(read_df_cats.dtypes, read_df_cats.compute().dtypes)
-    dd.assert_eq(read_df_cats.dtypes[0], "int32")
-
 
 def test_dask_timeseries_from_pandas(tmpdir):
 
@@ -254,6 +248,41 @@ def test_filters(tmpdir):
     assert not len(c)
 
 
+@pytest.mark.parametrize("numeric", [True, False])
+@pytest.mark.parametrize("null", [np.nan, None])
+def test_isna_filters(tmpdir, null, numeric):
+
+    tmp_path = str(tmpdir)
+    df = pd.DataFrame(
+        {
+            "x": range(10),
+            "y": list("aabbccddee"),
+            "i": [0] * 4 + [np.nan] * 2 + [0] * 4,
+            "j": [""] * 4 + [None] * 2 + [""] * 4,
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=5)
+    assert ddf.npartitions == 5
+    ddf.to_parquet(tmp_path, engine="pyarrow")
+
+    # Test "is"
+    col = "i" if numeric else "j"
+    filters = [(col, "is", null)]
+    out = dask_cudf.read_parquet(
+        tmp_path, filters=filters, split_row_groups=True
+    )
+    assert len(out) == 2
+    assert list(out.x.compute().values) == [4, 5]
+
+    # Test "is not"
+    filters = [(col, "is not", null)]
+    out = dask_cudf.read_parquet(
+        tmp_path, filters=filters, split_row_groups=True
+    )
+    assert len(out) == 8
+    assert list(out.x.compute().values) == [0, 1, 2, 3, 6, 7, 8, 9]
+
+
 def test_filters_at_row_group_level(tmpdir):
 
     tmp_path = str(tmpdir)
@@ -267,7 +296,7 @@ def test_filters_at_row_group_level(tmpdir):
         tmp_path, filters=[("x", "==", 1)], split_row_groups=True
     )
     assert a.npartitions == 1
-    assert (a.shape[0] == 2).compute()
+    assert (a.shape[0] == 1).compute()
 
     ddf.to_parquet(tmp_path, engine="pyarrow", row_group_size=1)
 
@@ -539,3 +568,30 @@ def test_nullable_schema_mismatch(tmpdir):
         )
         expect = pd.read_parquet([path0, path1])
     dd.assert_eq(ddf, expect, check_index=False)
+
+
+def test_parquet_read_filter_and_project(tmpdir):
+    # Filter on columns that are not included
+    # in the current column projection
+
+    # Write parquet data
+    path = str(tmpdir.join("test.parquet"))
+    df = cudf.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5] * 10,
+            "b": [0, 1, 2, 3, 4] * 10,
+            "c": range(50),
+            "d": [6, 7] * 25,
+            "e": [8, 9] * 25,
+        }
+    )
+    df.to_parquet(path)
+
+    # Read back with filter and projection
+    columns = ["b"]
+    filters = [[("a", "==", 5), ("c", ">", 20)]]
+    got = dask_cudf.read_parquet(path, columns=columns, filters=filters)
+
+    # Check result
+    expected = df[(df.a == 5) & (df.c > 20)][columns].reset_index(drop=True)
+    dd.assert_eq(got, expected)

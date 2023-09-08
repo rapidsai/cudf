@@ -244,7 +244,7 @@ static sizes_to_offsets_iterator<ScanIterator, LastType> make_sizes_to_offsets_i
  *   auto const bytes = cudf::detail::sizes_to_offsets(
  *     d_offsets, d_offsets + strings_count + 1, d_offsets, stream);
  *   CUDF_EXPECTS(bytes <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
- *               "Size of output exceeds column size limit", std::overflow_error);
+ *               "Size of output exceeds the column size limit", std::overflow_error);
  * @endcode
  *
  * @tparam SizesIterator Iterator type for input of the scan using addition operation
@@ -303,9 +303,9 @@ std::pair<std::unique_ptr<column>, size_type> make_offsets_child_column(
 {
   auto count          = static_cast<size_type>(std::distance(begin, end));
   auto offsets_column = make_numeric_column(
-    data_type{type_to_id<offset_type>()}, count + 1, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, count + 1, mask_state::UNALLOCATED, stream, mr);
   auto offsets_view = offsets_column->mutable_view();
-  auto d_offsets    = offsets_view.template data<offset_type>();
+  auto d_offsets    = offsets_view.template data<size_type>();
 
   // The number of offsets is count+1 so to build the offsets from the sizes
   // using exclusive-scan technically requires count+1 input values even though
@@ -319,7 +319,7 @@ std::pair<std::unique_ptr<column>, size_type> make_offsets_child_column(
   auto const total_elements = sizes_to_offsets(input_itr, input_itr + count + 1, d_offsets, stream);
   CUDF_EXPECTS(
     total_elements <= static_cast<decltype(total_elements)>(std::numeric_limits<size_type>::max()),
-    "Size of output exceeds column size limit",
+    "Size of output exceeds the column size limit",
     std::overflow_error);
 
   offsets_column->set_null_count(0);

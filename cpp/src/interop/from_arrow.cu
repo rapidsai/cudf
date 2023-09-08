@@ -33,6 +33,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 
 #include <thrust/gather.h>
 
@@ -110,7 +111,7 @@ struct dispatch_to_cudf_column {
     auto mask        = std::make_unique<rmm::device_buffer>(allocation_size, stream, mr);
     auto mask_buffer = array.null_bitmap();
     CUDF_CUDA_TRY(cudaMemcpyAsync(mask->data(),
-                                  reinterpret_cast<const uint8_t*>(mask_buffer->address()),
+                                  reinterpret_cast<uint8_t const*>(mask_buffer->address()),
                                   null_bitmap_size,
                                   cudaMemcpyDefault,
                                   stream.value()));
@@ -144,7 +145,7 @@ struct dispatch_to_cudf_column {
     auto mutable_column_view = col->mutable_view();
     CUDF_CUDA_TRY(cudaMemcpyAsync(
       mutable_column_view.data<T>(),
-      reinterpret_cast<const uint8_t*>(data_buffer->address()) + array.offset() * sizeof(T),
+      reinterpret_cast<uint8_t const*>(data_buffer->address()) + array.offset() * sizeof(T),
       sizeof(T) * num_rows,
       cudaMemcpyDefault,
       stream.value()));
@@ -169,7 +170,11 @@ struct dispatch_to_cudf_column {
 
 std::unique_ptr<column> get_empty_type_column(size_type size)
 {
-  return std::make_unique<column>(data_type(type_id::EMPTY), size, rmm::device_buffer{});
+  // this abomination is required by cuDF Python, which needs to handle
+  // [PyArrow null arrays](https://arrow.apache.org/docs/python/generated/pyarrow.NullArray.html)
+  // of finite length
+  return std::make_unique<column>(
+    data_type(type_id::EMPTY), size, rmm::device_buffer{}, rmm::device_buffer{}, size);
 }
 
 /**
@@ -200,7 +205,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal128>
 
   CUDF_CUDA_TRY(cudaMemcpyAsync(
     mutable_column_view.data<DeviceType>(),
-    reinterpret_cast<const uint8_t*>(data_buffer->address()) + array.offset() * sizeof(DeviceType),
+    reinterpret_cast<uint8_t const*>(data_buffer->address()) + array.offset() * sizeof(DeviceType),
     sizeof(DeviceType) * num_rows,
     cudaMemcpyDefault,
     stream.value()));
@@ -233,9 +238,11 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<bool>(
   rmm::mr::device_memory_resource* mr)
 {
   auto data_buffer = array.data()->buffers[1];
-  auto data        = rmm::device_buffer(data_buffer->size(), stream, mr);
+  // mask-to-bools expects the mask to be bitmask_type aligned/padded
+  auto data = rmm::device_buffer(
+    cudf::bitmask_allocation_size_bytes(data_buffer->size() * CHAR_BIT), stream, mr);
   CUDF_CUDA_TRY(cudaMemcpyAsync(data.data(),
-                                reinterpret_cast<const uint8_t*>(data_buffer->address()),
+                                reinterpret_cast<uint8_t const*>(data_buffer->address()),
                                 data_buffer->size(),
                                 cudaMemcpyDefault,
                                 stream.value()));
@@ -319,8 +326,11 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::dictionary32>(
 
   // Child columns shouldn't have masks and we need the mask in main column
   auto column_contents = indices_column->release();
-  indices_column       = std::make_unique<column>(
-    dict_indices_type, static_cast<size_type>(array.length()), std::move(*(column_contents.data)));
+  indices_column       = std::make_unique<column>(dict_indices_type,
+                                            static_cast<size_type>(array.length()),
+                                            std::move(*(column_contents.data)),
+                                            rmm::device_buffer{},
+                                            0);
 
   return make_dictionary_column(std::move(keys_column),
                                 std::move(indices_column),
@@ -435,7 +445,8 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
                                     return get_column(*array_chunk, cudf_type, false, stream, mr);
                                   });
                    if (concat_columns.empty()) {
-                     return std::make_unique<column>(cudf_type, 0, rmm::device_buffer{});
+                     return std::make_unique<column>(
+                       cudf_type, 0, rmm::device_buffer{}, rmm::device_buffer{}, 0);
                    } else if (concat_columns.size() == 1) {
                      return std::move(concat_columns[0]);
                    }

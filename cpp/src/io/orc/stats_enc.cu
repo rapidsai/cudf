@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,13 +32,13 @@ constexpr unsigned int init_threads_per_block = init_threads_per_group * init_gr
 
 __global__ void __launch_bounds__(init_threads_per_block)
   gpu_init_statistics_groups(statistics_group* groups,
-                             const stats_column_desc* cols,
+                             stats_column_desc const* cols,
                              device_2dspan<rowgroup_rows const> rowgroup_bounds)
 {
   __shared__ __align__(4) statistics_group group_g[init_groups_per_block];
-  uint32_t const col_id    = blockIdx.y;
-  uint32_t const chunk_id  = (blockIdx.x * init_groups_per_block) + threadIdx.y;
-  uint32_t const t         = threadIdx.x;
+  auto const col_id        = blockIdx.y;
+  auto const chunk_id      = (blockIdx.x * init_groups_per_block) + threadIdx.y;
+  auto const t             = threadIdx.x;
   auto const num_rowgroups = rowgroup_bounds.size().first;
   statistics_group* group  = &group_g[threadIdx.y];
   if (chunk_id < num_rowgroups and t == 0) {
@@ -69,17 +69,17 @@ constexpr unsigned int pb_fldlen_common  = 2 * pb_fld_hdrlen + pb_fldlen_int64;
 template <unsigned int block_size>
 __global__ void __launch_bounds__(block_size, 1)
   gpu_init_statistics_buffersize(statistics_merge_group* groups,
-                                 const statistics_chunk* chunks,
+                                 statistics_chunk const* chunks,
                                  uint32_t statistics_count)
 {
   using block_scan = cub::BlockScan<uint32_t, block_size, cub::BLOCK_SCAN_WARP_SCANS>;
   __shared__ typename block_scan::TempStorage temp_storage;
   volatile uint32_t stats_size = 0;
-  uint32_t t                   = threadIdx.x;
+  auto t                       = threadIdx.x;
   __syncthreads();
-  for (uint32_t start = 0; start < statistics_count; start += block_size) {
+  for (thread_index_type start = 0; start < statistics_count; start += block_size) {
     uint32_t stats_len = 0, stats_pos;
-    uint32_t idx       = start + t;
+    auto idx           = start + t;
     if (idx < statistics_count) {
       statistics_dtype const dtype = groups[idx].stats_dtype;
       switch (dtype) {
@@ -170,7 +170,7 @@ __device__ inline uint8_t* pb_put_packed_uint(uint8_t* p, uint32_t id, uint64_t 
 }
 
 // Protobuf field encoding for binary/string
-__device__ inline uint8_t* pb_put_binary(uint8_t* p, uint32_t id, const void* bytes, uint32_t len)
+__device__ inline uint8_t* pb_put_binary(uint8_t* p, uint32_t id, void const* bytes, uint32_t len)
 {
   p[0] = id * 8 + ProtofType::FIXEDLEN;
   p    = pb_encode_uint(p + 1, len);
@@ -179,7 +179,7 @@ __device__ inline uint8_t* pb_put_binary(uint8_t* p, uint32_t id, const void* by
 }
 
 // Protobuf field encoding for 64-bit raw encoding (double)
-__device__ inline uint8_t* pb_put_fixed64(uint8_t* p, uint32_t id, const void* raw64)
+__device__ inline uint8_t* pb_put_fixed64(uint8_t* p, uint32_t id, void const* raw64)
 {
   p[0] = id * 8 + ProtofType::FIXED64;
   memcpy(p + 1, raw64, 8);
@@ -218,12 +218,12 @@ constexpr unsigned int encode_threads_per_block =
 __global__ void __launch_bounds__(encode_threads_per_block)
   gpu_encode_statistics(uint8_t* blob_bfr,
                         statistics_merge_group* groups,
-                        const statistics_chunk* chunks,
+                        statistics_chunk const* chunks,
                         uint32_t statistics_count)
 {
   __shared__ __align__(8) stats_state_s state_g[encode_chunks_per_block];
-  uint32_t t             = threadIdx.x;
-  uint32_t idx           = blockIdx.x * encode_chunks_per_block + threadIdx.y;
+  auto t                 = threadIdx.x;
+  auto idx               = blockIdx.x * encode_chunks_per_block + threadIdx.y;
   stats_state_s* const s = &state_g[threadIdx.y];
 
   // Encode and update actual bfr size
@@ -354,7 +354,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
 }
 
 void orc_init_statistics_groups(statistics_group* groups,
-                                const stats_column_desc* cols,
+                                stats_column_desc const* cols,
                                 device_2dspan<rowgroup_rows const> rowgroup_bounds,
                                 rmm::cuda_stream_view stream)
 {
@@ -374,7 +374,7 @@ void orc_init_statistics_groups(statistics_group* groups,
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void orc_init_statistics_buffersize(statistics_merge_group* groups,
-                                    const statistics_chunk* chunks,
+                                    statistics_chunk const* chunks,
                                     uint32_t statistics_count,
                                     rmm::cuda_stream_view stream)
 {
@@ -392,7 +392,7 @@ void orc_init_statistics_buffersize(statistics_merge_group* groups,
  */
 void orc_encode_statistics(uint8_t* blob_bfr,
                            statistics_merge_group* groups,
-                           const statistics_chunk* chunks,
+                           statistics_chunk const* chunks,
                            uint32_t statistics_count,
                            rmm::cuda_stream_view stream)
 {

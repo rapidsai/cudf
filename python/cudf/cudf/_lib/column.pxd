@@ -1,4 +1,6 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+
+from typing import Literal
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -22,10 +24,12 @@ cdef class Column:
         cdef object _data
         cdef object _mask
         cdef object _null_count
+        cdef object _distinct_count
 
     cdef column_view _view(self, size_type null_count) except *
     cdef column_view view(self) except *
     cdef mutable_column_view mutable_view(self) except *
+    cpdef to_pylibcudf(self, mode: Literal["read", "write"])
 
     @staticmethod
     cdef Column from_unique_ptr(

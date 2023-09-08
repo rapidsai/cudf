@@ -332,8 +332,8 @@ size_t compress_max_output_chunk_size(compression_type compression,
 
 // Dispatcher for nvcompBatched<format>CompressAsync
 static void batched_compress_async(compression_type compression,
-                                   const void* const* device_uncompressed_ptrs,
-                                   const size_t* device_uncompressed_bytes,
+                                   void const* const* device_uncompressed_ptrs,
+                                   size_t const* device_uncompressed_bytes,
                                    size_t max_uncompressed_chunk_bytes,
                                    size_t batch_size,
                                    void* device_temp_ptr,

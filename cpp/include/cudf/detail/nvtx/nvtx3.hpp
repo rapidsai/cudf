@@ -1167,7 +1167,7 @@ class registered_message {
    * Registers `msg` with NVTX and associates a handle with the registered
    * message.
    *
-   * A particular message should should only be registered once and the handle
+   * A particular message should only be registered once and the handle
    * reused throughout the rest of the application.
    *
    * @param msg The contents of the message
@@ -1183,7 +1183,7 @@ class registered_message {
    * Registers `msg` with NVTX and associates a handle with the registered
    * message.
    *
-   * A particular message should should only be registered once and the handle
+   * A particular message should only be registered once and the handle
    * reused throughout the rest of the application.
    *
    * @param msg The contents of the message
@@ -1196,7 +1196,7 @@ class registered_message {
    * Registers `msg` with NVTX and associates a handle with the registered
    * message.
    *
-   * A particular message should should only be registered once and the handle
+   * A particular message should only be registered once and the handle
    * reused throughout the rest of the application.
    *
    * @param msg The contents of the message

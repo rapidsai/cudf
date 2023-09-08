@@ -441,3 +441,23 @@ TEST_F(NestedListTest, ListsOfListsOfStructsNoNulls)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, order->view());
   }
 }
+
+TEST_F(NestedListTest, MultipleListsColumnsWithNulls)
+{
+  // A STRUCT<LIST<INT>> column with all nulls.
+  auto const col0 = [] {
+    auto child = int32s_lists{{int32s_lists{}, int32s_lists{}}, all_nulls()};
+    return structs_col{{child}, all_nulls()};
+  }();
+
+  auto const col1 = [] {
+    auto child = int32s_lists{{0, 1, 2}, {10, 11, 12}};
+    return structs_col{{child}};
+  }();
+
+  auto const col2 = int32s_col{1, 0};
+
+  auto const expected_order = int32s_col{0, 1};
+  auto const order          = cudf::sorted_order(cudf::table_view{{col0, col1, col2}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, order->view());
+}

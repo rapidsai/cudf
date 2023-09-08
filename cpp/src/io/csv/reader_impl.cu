@@ -110,9 +110,9 @@ class selected_rows_offsets {
 string removeQuotes(string str, char quotechar)
 {
   // Exclude first and last quotation char
-  const size_t first_quote = str.find(quotechar);
+  size_t const first_quote = str.find(quotechar);
   if (first_quote != string::npos) { str.erase(first_quote, 1); }
-  const size_t last_quote = str.rfind(quotechar);
+  size_t const last_quote = str.rfind(quotechar);
   if (last_quote != string::npos) { str.erase(last_quote, 1); }
 
   return str;
@@ -159,7 +159,7 @@ std::vector<std::string> get_column_names(std::vector<char> const& header,
           --col_name_len;
         }
 
-        const string new_col_name(first_row.data() + prev, col_name_len);
+        string const new_col_name(first_row.data() + prev, col_name_len);
         col_names.push_back(removeQuotes(new_col_name, parse_opts.quotechar));
       } else {
         // This is the first data row, add the automatically generated name
@@ -237,7 +237,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
   size_t buffer_size               = std::min(max_chunk_bytes, data.size());
   size_t max_blocks =
     std::max<size_t>((buffer_size / cudf::io::csv::gpu::rowofs_block_bytes) + 1, 2);
-  hostdevice_vector<uint64_t> row_ctx(max_blocks, stream);
+  cudf::detail::hostdevice_vector<uint64_t> row_ctx(max_blocks, stream);
   size_t buffer_pos  = std::min(range_begin - std::min(range_begin, sizeof(char)), data.size());
   size_t pos         = std::min(range_begin, data.size());
   size_t header_rows = (reader_opts.get_header() >= 0) ? reader_opts.get_header() + 1 : 0;
@@ -366,7 +366,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
   auto row_offsets = selected_rows_offsets{std::move(all_row_offsets), non_blank_row_offsets};
 
   // Remove header rows and extract header
-  const size_t header_row_index = std::max<size_t>(header_rows, 1) - 1;
+  size_t const header_row_index = std::max<size_t>(header_rows, 1) - 1;
   if (header_row_index + 1 < row_offsets.size()) {
     CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
                                   row_offsets.data() + header_row_index,
@@ -375,8 +375,8 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
                                   stream.value()));
     stream.synchronize();
 
-    const auto header_start = buffer_pos + row_ctx[0];
-    const auto header_end   = buffer_pos + row_ctx[1];
+    auto const header_start = buffer_pos + row_ctx[0];
+    auto const header_end   = buffer_pos + row_ctx[1];
     CUDF_EXPECTS(header_start <= header_end && header_end <= data.size(),
                  "Invalid csv header location");
     header.assign(data.begin() + header_start, data.begin() + header_end);
@@ -410,23 +410,29 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
 
   // Transfer source data to GPU
   if (!source->is_empty()) {
-    auto data_size = (range_size_padded != 0) ? range_size_padded : source->size();
-    auto buffer    = source->host_read(range_offset, data_size);
-
-    auto h_data = host_span<char const>(  //
-      reinterpret_cast<const char*>(buffer->data()),
-      buffer->size());
+    auto buffer =
+      source->host_read(range_offset, range_size_padded != 0 ? range_size_padded : source->size());
+    auto h_data =
+      host_span<char const>(reinterpret_cast<char const*>(buffer->data()), buffer->size());
 
     std::vector<uint8_t> h_uncomp_data_owner;
-
     if (reader_opts.get_compression() != compression_type::NONE) {
       h_uncomp_data_owner =
         decompress(reader_opts.get_compression(), {buffer->data(), buffer->size()});
       h_data = {reinterpret_cast<char const*>(h_uncomp_data_owner.data()),
                 h_uncomp_data_owner.size()};
+      buffer.reset();
     }
+
+    // check for and skip UTF-8 BOM
+    uint8_t const UTF8_BOM[] = {0xEF, 0xBB, 0xBF};
+    if (h_data.size() >= sizeof(UTF8_BOM) &&
+        memcmp(h_data.data(), UTF8_BOM, sizeof(UTF8_BOM)) == 0) {
+      h_data = h_data.subspan(sizeof(UTF8_BOM), h_data.size() - sizeof(UTF8_BOM));
+    }
+
     // None of the parameters for row selection is used, we are parsing the entire file
-    const bool load_whole_file = range_offset == 0 && range_size == 0 && skip_rows <= 0 &&
+    bool const load_whole_file = range_offset == 0 && range_size == 0 && skip_rows <= 0 &&
                                  skip_end_rows <= 0 && num_rows == -1;
 
     // With byte range, find the start of the first data row
@@ -627,10 +633,10 @@ std::vector<data_type> determine_column_types(csv_reader_options const& reader_o
   std::vector<data_type> column_types(column_flags.size());
 
   std::visit(cudf::detail::visitor_overload{
-               [&](const std::vector<data_type>& user_dtypes) {
+               [&](std::vector<data_type> const& user_dtypes) {
                  return select_data_types(user_dtypes, column_flags, column_types);
                },
-               [&](const std::map<std::string, data_type>& user_dtypes) {
+               [&](std::map<std::string, data_type> const& user_dtypes) {
                  return get_data_types_from_column_names(
                    user_dtypes, column_names, column_flags, column_types);
                }},
@@ -722,7 +728,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
           CUDF_LOG_WARN("Multiple columns with name {}; only the first appearance is parsed",
                         col_name);
 
-          const auto idx    = &col_name - column_names.data();
+          auto const idx    = &col_name - column_names.data();
           column_flags[idx] = column_parse::disabled;
         }
       }
@@ -804,11 +810,11 @@ table_with_metadata read_csv(cudf::io::datasource* source,
   // User can specify which columns should be read as datetime
   if (!reader_opts.get_parse_dates_indexes().empty() ||
       !reader_opts.get_parse_dates_names().empty()) {
-    for (const auto index : reader_opts.get_parse_dates_indexes()) {
+    for (auto const index : reader_opts.get_parse_dates_indexes()) {
       column_flags[index] |= column_parse::as_datetime;
     }
 
-    for (const auto& name : reader_opts.get_parse_dates_names()) {
+    for (auto const& name : reader_opts.get_parse_dates_names()) {
       auto it = std::find(column_names.begin(), column_names.end(), name);
       if (it != column_names.end()) {
         column_flags[it - column_names.begin()] |= column_parse::as_datetime;
@@ -818,11 +824,11 @@ table_with_metadata read_csv(cudf::io::datasource* source,
 
   // User can specify which columns should be parsed as hexadecimal
   if (!reader_opts.get_parse_hex_indexes().empty() || !reader_opts.get_parse_hex_names().empty()) {
-    for (const auto index : reader_opts.get_parse_hex_indexes()) {
+    for (auto const index : reader_opts.get_parse_hex_indexes()) {
       column_flags[index] |= column_parse::as_hexadecimal;
     }
 
-    for (const auto& name : reader_opts.get_parse_hex_names()) {
+    for (auto const& name : reader_opts.get_parse_hex_names()) {
       auto it = std::find(column_names.begin(), column_names.end(), name);
       if (it != column_names.end()) {
         column_flags[it - column_names.begin()] |= column_parse::as_hexadecimal;
@@ -862,8 +868,8 @@ table_with_metadata read_csv(cudf::io::datasource* source,
         // quotechars in quoted fields results in reduction to a single quotechar
         // TODO: Would be much more efficient to perform this operation in-place
         // during the conversion stage
-        const std::string quotechar(1, parse_opts.quotechar);
-        const std::string dblquotechar(2, parse_opts.quotechar);
+        std::string const quotechar(1, parse_opts.quotechar);
+        std::string const dblquotechar(2, parse_opts.quotechar);
         std::unique_ptr<column> col = cudf::make_strings_column(*out_buffers[i]._strings, stream);
         out_columns.emplace_back(
           cudf::strings::detail::replace(col->view(), dblquotechar, quotechar, -1, stream, mr));
@@ -966,14 +972,14 @@ parse_options make_parse_options(csv_reader_options const& reader_opts,
 
   // Handle user-defined true values, whereby field data is substituted with a
   // boolean true or numeric `1` value
-  if (reader_opts.get_true_values().size() != 0) {
+  if (not reader_opts.get_true_values().empty()) {
     parse_opts.trie_true =
       cudf::detail::create_serialized_trie(reader_opts.get_true_values(), stream);
   }
 
   // Handle user-defined false values, whereby field data is substituted with a
   // boolean false or numeric `0` value
-  if (reader_opts.get_false_values().size() != 0) {
+  if (not reader_opts.get_false_values().empty()) {
     parse_opts.trie_false =
       cudf::detail::create_serialized_trie(reader_opts.get_false_values(), stream);
   }

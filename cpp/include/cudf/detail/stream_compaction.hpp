@@ -86,24 +86,9 @@ std::unique_ptr<table> distinct(table_view const& input,
                                 rmm::mr::device_memory_resource* mr);
 
 /**
- * @brief Create a new table without duplicate rows.
+ * @copydoc cudf::stable_distinct
  *
- * Given an `input` table_view, each row is copied to the output table to create a set of distinct
- * rows. The row order is guaranteed to be preserved as in the input.
- *
- * If there are duplicate rows, which row to be copied depends on the specified value of the `keep`
- * parameter.
- *
- * This API produces exactly the same set of output rows as `cudf::distinct`.
- *
- * @param input The input table
- * @param keys Vector of indices indicating key columns in the `input` table
- * @param keep Copy any, first, last, or none of the found duplicates
- * @param nulls_equal Flag to specify whether null elements should be considered as equal
- * @param nans_equal Flag to specify whether NaN elements should be considered as equal
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned table
- * @return A table containing the resulting distinct rows
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<table> stable_distinct(table_view const& input,
                                        std::vector<size_type> const& keys,

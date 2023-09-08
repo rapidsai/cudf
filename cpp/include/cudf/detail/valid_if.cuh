@@ -49,8 +49,8 @@ __global__ void valid_if_kernel(
 {
   constexpr size_type leader_lane{0};
   auto const lane_id{threadIdx.x % warp_size};
-  thread_index_type i            = threadIdx.x + blockIdx.x * blockDim.x;
-  thread_index_type const stride = blockDim.x * gridDim.x;
+  auto i            = cudf::detail::grid_1d::global_thread_id();
+  auto const stride = cudf::detail::grid_1d::grid_stride();
   size_type warp_valid_count{0};
 
   auto active_mask = __ballot_sync(0xFFFF'FFFFu, i < size);
@@ -119,7 +119,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(InputIterator begin,
 
  * Given a set of bitmasks, `masks`, the state of bit `j` in mask `i` is
  * determined by `p( *(begin1 + i), *(begin2 + j))`. If the predicate evaluates
- * to true, the the bit is set to `1`. If false, set to `0`.
+ * to true, the bit is set to `1`. If false, set to `0`.
  *
  * Example Arguments:
  * begin1:        zero-based counting iterator,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Exception from the cuda language/library.  Be aware that because of how cuda does asynchronous
+ * Exception from the cuda language/library. Be aware that because of how cuda does asynchronous
  * processing exceptions from cuda can be thrown by method calls that did not cause the exception
- * to take place.  These will take place on the same thread that caused the error.
+ * to take place. These will take place on the same thread that caused the error.
  * <p>
  * Please See
  * <a href="https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__ERROR.html">the cuda docs</a>
@@ -32,16 +32,32 @@ import java.util.Map;
  */
 public class CudaException extends RuntimeException {
   CudaException(String message, int errorCode) {
+    this(message, "No native stacktrace is available.", errorCode);
+  }
+
+  CudaException(String message, String nativeStacktrace, int errorCode) {
     super(message);
+    this.nativeStacktrace = nativeStacktrace;
     cudaError = CudaError.parseErrorCode(errorCode);
   }
 
-  CudaException(String message, int errorCode, Throwable cause) {
+  CudaException(String message, String nativeStacktrace, int errorCode, Throwable cause) {
     super(message, cause);
+    this.nativeStacktrace = nativeStacktrace;
     cudaError = CudaError.parseErrorCode(errorCode);
   }
 
-  public final CudaError cudaError;
+  public String getNativeStacktrace() {
+    return nativeStacktrace;
+  }
+
+  public CudaError getCudaError() {
+    return cudaError;
+  }
+
+  private final String nativeStacktrace;
+
+  private final CudaError cudaError;
 
   /**
    * The Java mirror of cudaError, which facilities the tracking of CUDA errors in JVM.

@@ -29,7 +29,7 @@ struct StringsConvertTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsConvertTest, IPv4ToIntegers)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     nullptr, "", "hello", "41.168.0.1", "127.0.0.1", "41.197.0.1", "192.168.0.1"};
   cudf::test::strings_column_wrapper strings(
     h_strings.cbegin(),
@@ -51,7 +51,7 @@ TEST_F(StringsConvertTest, IPv4ToIntegers)
 
 TEST_F(StringsConvertTest, IntegersToIPv4)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "192.168.0.1", "10.0.0.1", nullptr, "0.0.0.0", "41.186.0.1", "41.197.0.1"};
   cudf::test::strings_column_wrapper strings(
     h_strings.cbegin(),
@@ -72,7 +72,8 @@ TEST_F(StringsConvertTest, IntegersToIPv4)
 
 TEST_F(StringsConvertTest, ZeroSizeStringsColumnIPV4)
 {
-  cudf::column_view zero_size_column(cudf::data_type{cudf::type_id::INT64}, 0, nullptr, nullptr, 0);
+  auto const zero_size_column = cudf::make_empty_column(cudf::type_id::INT64)->view();
+
   auto results = cudf::strings::integers_to_ipv4(zero_size_column);
   cudf::test::expect_column_empty(results->view());
   results = cudf::strings::ipv4_to_integers(results->view());
@@ -87,7 +88,7 @@ TEST_F(StringsConvertTest, IPv4Error)
 
 TEST_F(StringsConvertTest, IsIPv4)
 {
-  std::vector<const char*> h_strings{"",
+  std::vector<char const*> h_strings{"",
                                      "123.456.789.10",
                                      nullptr,
                                      "0.0.0.0",

@@ -65,10 +65,10 @@ struct stats_column_desc {
 
 template <typename ReturnType, typename InternalType>
 struct t_array_stats {
-  const InternalType* ptr;  //!< ptr to data
+  InternalType const* ptr;  //!< ptr to data
   size_type length;         //!< length of data
   __host__ __device__ __forceinline__ volatile t_array_stats& operator=(
-    const ReturnType& val) volatile
+    ReturnType const& val) volatile
   {
     ptr    = val.data();
     length = val.size_bytes();
@@ -108,7 +108,7 @@ struct statistics_chunk {
 };
 
 struct statistics_group {
-  const stats_column_desc* col;  //!< Column information
+  stats_column_desc const* col;  //!< Column information
   uint32_t start_row;            //!< Start row of this group
   uint32_t num_rows;             //!< Number of rows in group
   uint32_t non_leaf_nulls;       //!< Number of null non-leaf values in the group
@@ -132,7 +132,7 @@ __device__ T get_element(column_device_view const& col, uint32_t row)
 {
   using et              = typename T::element_type;
   size_type const index = row + col.offset();  // account for this view's _offset
-  auto const* d_offsets = col.child(lists_column_view::offsets_column_index).data<offset_type>();
+  auto const* d_offsets = col.child(lists_column_view::offsets_column_index).data<size_type>();
   auto const* d_data    = col.child(lists_column_view::child_column_index).data<et>();
   auto const offset     = d_offsets[index];
   return T(d_data + offset, d_offsets[index + 1] - offset);

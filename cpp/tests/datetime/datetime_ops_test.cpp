@@ -51,7 +51,7 @@ TYPED_TEST(NonTimestampTest, TestThrowsOnNonTimestamp)
   using namespace cuda::std::chrono;
 
   cudf::data_type dtype{cudf::type_to_id<T>()};
-  cudf::column col{dtype, 0, rmm::device_buffer{}};
+  cudf::column col{dtype, 0, rmm::device_buffer{}, rmm::device_buffer{}, 0};
 
   EXPECT_THROW(extract_year(col), cudf::logic_error);
   EXPECT_THROW(extract_month(col), cudf::logic_error);
@@ -65,8 +65,7 @@ TYPED_TEST(NonTimestampTest, TestThrowsOnNonTimestamp)
   EXPECT_THROW(extract_nanosecond_fraction(col), cudf::logic_error);
   EXPECT_THROW(last_day_of_month(col), cudf::logic_error);
   EXPECT_THROW(day_of_year(col), cudf::logic_error);
-  EXPECT_THROW(add_calendrical_months(
-                 col, cudf::column{cudf::data_type{cudf::type_id::INT16}, 0, rmm::device_buffer{}}),
+  EXPECT_THROW(add_calendrical_months(col, *cudf::make_empty_column(cudf::type_id::INT16)),
                cudf::logic_error);
 }
 
@@ -215,8 +214,8 @@ TYPED_TEST(TypedDatetimeOpsTest, TestEmptyColumns)
   auto int16s_dtype     = cudf::data_type{cudf::type_to_id<int16_t>()};
   auto timestamps_dtype = cudf::data_type{cudf::type_to_id<T>()};
 
-  cudf::column int16s{int16s_dtype, 0, rmm::device_buffer{}};
-  cudf::column timestamps{timestamps_dtype, 0, rmm::device_buffer{}};
+  cudf::column int16s{int16s_dtype, 0, rmm::device_buffer{}, rmm::device_buffer{}, 0};
+  cudf::column timestamps{timestamps_dtype, 0, rmm::device_buffer{}, rmm::device_buffer{}, 0};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_year(timestamps), int16s);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_month(timestamps), int16s);

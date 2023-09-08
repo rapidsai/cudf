@@ -31,9 +31,9 @@ struct StringsCaseTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsCaseTest, ToLower)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "Éxamples aBc", "123 456", nullptr, "ARE THE", "tést strings", ""};
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "éxamples abc", "123 456", nullptr, "are the", "tést strings", ""};
 
   cudf::test::strings_column_wrapper strings(
@@ -53,9 +53,9 @@ TEST_F(StringsCaseTest, ToLower)
 
 TEST_F(StringsCaseTest, ToUpper)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "Éxamples aBc", "123 456", nullptr, "ARE THE", "tést strings", ""};
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "ÉXAMPLES ABC", "123 456", nullptr, "ARE THE", "TÉST STRINGS", ""};
 
   cudf::test::strings_column_wrapper strings(
@@ -75,9 +75,9 @@ TEST_F(StringsCaseTest, ToUpper)
 
 TEST_F(StringsCaseTest, Swapcase)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "Éxamples aBc", "123 456", nullptr, "ARE THE", "tést strings", ""};
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "éXAMPLES AbC", "123 456", nullptr, "are the", "TÉST STRINGS", ""};
 
   cudf::test::strings_column_wrapper strings(
@@ -262,8 +262,8 @@ TEST_F(StringsCaseTest, LongStrings)
 
 TEST_F(StringsCaseTest, EmptyStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
+
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
 
   auto results = cudf::strings::to_lower(strings_view);

@@ -182,7 +182,7 @@ class istream_data_chunk_reader : public data_chunk_reader {
  */
 class host_span_data_chunk_reader : public data_chunk_reader {
  public:
-  host_span_data_chunk_reader(cudf::host_span<const char> data) : _data(data) {}
+  host_span_data_chunk_reader(cudf::host_span<char const> data) : _data(data) {}
 
   void skip_bytes(std::size_t read_size) override
   {
@@ -215,7 +215,7 @@ class host_span_data_chunk_reader : public data_chunk_reader {
 
  private:
   std::size_t _position = 0;
-  cudf::host_span<const char> _data;
+  cudf::host_span<char const> _data;
 };
 
 /**
@@ -288,14 +288,14 @@ class file_data_chunk_source : public data_chunk_source {
  */
 class host_span_data_chunk_source : public data_chunk_source {
  public:
-  host_span_data_chunk_source(host_span<const char> data) : _data(data) {}
+  host_span_data_chunk_source(host_span<char const> data) : _data(data) {}
   [[nodiscard]] std::unique_ptr<data_chunk_reader> create_reader() const override
   {
     return std::make_unique<host_span_data_chunk_reader>(_data);
   }
 
  private:
-  host_span<const char> _data;
+  host_span<char const> _data;
 };
 
 /**
@@ -320,7 +320,7 @@ std::unique_ptr<data_chunk_source> make_source(datasource& data)
   return std::make_unique<datasource_chunk_source>(data);
 }
 
-std::unique_ptr<data_chunk_source> make_source(host_span<const char> data)
+std::unique_ptr<data_chunk_source> make_source(host_span<char const> data)
 {
   return std::make_unique<host_span_data_chunk_source>(data);
 }

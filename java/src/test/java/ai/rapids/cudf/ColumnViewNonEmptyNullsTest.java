@@ -34,16 +34,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class ColumnViewNonEmptyNullsTest extends CudfTestBase {
 
+  private static final HostMemoryAllocator hostMemoryAllocator = DefaultHostMemoryAllocator.get();
+
   @Test
   void testAndNullReconfigureNulls() {
     try (ColumnVector v0 = ColumnVector.fromBoxedInts(0, 100, null, null, Integer.MIN_VALUE, null);
          ColumnVector v1 = ColumnVector.fromBoxedInts(0, 100, 1, 2, Integer.MIN_VALUE, null);
          ColumnVector intResult = v1.mergeAndSetValidity(BinaryOp.BITWISE_AND, v0);
          ColumnVector v2 = ColumnVector.fromStrings("0", "100", "1", "2", "MIN_VALUE", "3");
+         ColumnVector v3 = v0.mergeAndSetValidity(BinaryOp.BITWISE_AND, v1, v2);
          ColumnVector stringResult = v2.mergeAndSetValidity(BinaryOp.BITWISE_AND, v0, v1);
          ColumnVector stringExpected = ColumnVector.fromStrings("0", "100", null, null, "MIN_VALUE", null);
          ColumnVector noMaskResult = v2.mergeAndSetValidity(BinaryOp.BITWISE_AND)) {
       assertColumnsAreEqual(v0, intResult);
+      assertColumnsAreEqual(v0, v3);
       assertColumnsAreEqual(stringExpected, stringResult);
       assertColumnsAreEqual(v2, noMaskResult);
     }
@@ -82,7 +86,7 @@ public class ColumnViewNonEmptyNullsTest extends CudfTestBase {
     ColumnVector input = ColumnVectorTest.makeListsColumn(DType.INT32, list0, list1, list2, list3);
     // Modify the validity buffer
     BaseDeviceMemoryBuffer dmb = input.getDeviceBufferFor(BufferType.VALIDITY);
-    try (HostMemoryBuffer newValidity = HostMemoryBuffer.allocate(64)) {
+    try (HostMemoryBuffer newValidity = hostMemoryAllocator.allocate(64)) {
       newValidity.copyFromDeviceBuffer(dmb);
       BitVectorHelper.setNullAt(newValidity, 1);
       dmb.copyFromHostBuffer(newValidity);

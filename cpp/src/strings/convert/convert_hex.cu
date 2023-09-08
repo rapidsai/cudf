@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,7 +60,7 @@ struct hex_to_integer_fn {
   __device__ int64_t string_to_integer(string_view const& d_str)
   {
     int64_t result = 0, base = 1;
-    const char* str = d_str.data();
+    char const* str = d_str.data();
     size_type index = d_str.size_bytes();
     while (index-- > 0) {
       char ch = str[index];
@@ -129,7 +129,7 @@ void dispatch_hex_to_integers_fn::operator()<bool>(column_device_view const&,
 template <typename IntegerType>
 struct integer_to_hex_fn {
   column_device_view const d_column;
-  offset_type* d_offsets{};
+  size_type* d_offsets{};
   char* d_chars{};
 
   __device__ void byte_to_hex(uint8_t byte, char* hex)
@@ -173,7 +173,7 @@ struct integer_to_hex_fn {
         --byte_index;
       }
     } else {
-      d_offsets[idx] = static_cast<offset_type>(bytes) * 2;  // 2 hex characters per byte
+      d_offsets[idx] = static_cast<size_type>(bytes) * 2;  // 2 hex characters per byte
     }
   }
 };

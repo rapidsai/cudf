@@ -82,7 +82,7 @@ TEST_F(StringsConvertTest, IsIntegerBoundCheckNoNull)
 
 TEST_F(StringsConvertTest, IsIntegerBoundCheckWithNulls)
 {
-  std::vector<const char*> const h_strings{
+  std::vector<char const*> const h_strings{
     "eee", "1234", nullptr, "", "-9832", "93.24", "765é", nullptr};
   auto const strings = cudf::test::strings_column_wrapper(
     h_strings.begin(),
@@ -185,7 +185,7 @@ TEST_F(StringsConvertTest, IsIntegerBoundCheckLargeNumbers)
 
 TEST_F(StringsConvertTest, ToInteger)
 {
-  std::vector<const char*> h_strings{"eee",
+  std::vector<char const*> h_strings{"eee",
                                      "1234",
                                      nullptr,
                                      "",
@@ -241,7 +241,7 @@ TEST_F(StringsConvertTest, FromInteger)
   int32_t minint = std::numeric_limits<int32_t>::min();
   int32_t maxint = std::numeric_limits<int32_t>::max();
   std::vector<int32_t> h_integers{100, 987654321, 0, 0, -12761, 0, 5, -4, maxint, minint};
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "100", "987654321", nullptr, "0", "-12761", "0", "5", "-4", "2147483647", "-2147483648"};
 
   cudf::test::fixed_width_column_wrapper<int32_t> integers(
@@ -261,17 +261,16 @@ TEST_F(StringsConvertTest, FromInteger)
 
 TEST_F(StringsConvertTest, ZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_column(cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0);
-  auto results = cudf::strings::from_integers(zero_size_column);
+  auto const zero_size_column = cudf::make_empty_column(cudf::type_id::INT32)->view();
+  auto results                = cudf::strings::from_integers(zero_size_column);
   cudf::test::expect_column_empty(results->view());
 }
 
 TEST_F(StringsConvertTest, ZeroSizeIntegersColumn)
 {
-  cudf::column_view zero_size_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
   auto results =
-    cudf::strings::to_integers(zero_size_column, cudf::data_type{cudf::type_id::INT32});
+    cudf::strings::to_integers(zero_size_strings_column, cudf::data_type{cudf::type_id::INT32});
   EXPECT_EQ(0, results->size());
 }
 
@@ -344,7 +343,7 @@ TYPED_TEST(StringsFloatConvertTest, FromToIntegerError)
 
 TEST_F(StringsConvertTest, HexToInteger)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "1234", nullptr, "98BEEF", "1a5", "CAFE", "2face", "0xAABBCCDD", "112233445566"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -389,7 +388,7 @@ TEST_F(StringsConvertTest, HexToInteger)
 
 TEST_F(StringsConvertTest, IsHex)
 {
-  std::vector<const char*> h_strings{"",
+  std::vector<char const*> h_strings{"",
                                      "1234",
                                      nullptr,
                                      "98BEEF",

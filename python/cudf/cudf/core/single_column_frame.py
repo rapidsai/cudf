@@ -4,13 +4,14 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, Dict, Optional, Tuple, TypeVar, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import cupy
-import numpy as np
+import numpy
 
 import cudf
 from cudf._typing import Dtype, NotImplementedType, ScalarLike
+from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
@@ -19,8 +20,6 @@ from cudf.api.types import (
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.frame import Frame
 from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
-
-T = TypeVar("T", bound="Frame")
 
 
 class SingleColumnFrame(Frame, NotIterable):
@@ -32,7 +31,6 @@ class SingleColumnFrame(Frame, NotIterable):
 
     _SUPPORT_AXIS_LOOKUP = {
         0: 0,
-        None: 0,
         "index": 0,
     }
 
@@ -40,12 +38,12 @@ class SingleColumnFrame(Frame, NotIterable):
     def _reduce(
         self,
         op,
-        axis=None,
+        axis=no_default,
         level=None,
         numeric_only=None,
         **kwargs,
     ):
-        if axis not in (None, 0):
+        if axis not in (None, 0, no_default):
             raise NotImplementedError("axis parameter is not implemented yet")
 
         if level is not None:
@@ -136,17 +134,8 @@ class SingleColumnFrame(Frame, NotIterable):
         dtype: Union[Dtype, None] = None,
         copy: bool = True,
         na_value=None,
-    ) -> np.ndarray:  # noqa: D102
+    ) -> numpy.ndarray:  # noqa: D102
         return super().to_numpy(dtype, copy, na_value).flatten()
-
-    def tolist(self):  # noqa: D102
-        raise TypeError(
-            "cuDF does not support conversion to host memory "
-            "via the `tolist()` method. Consider using "
-            "`.to_arrow().to_pylist()` to construct a Python list."
-        )
-
-    to_list = tolist
 
     @classmethod
     @_cudf_nvtx_annotate
@@ -213,17 +202,6 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def is_unique(self):
-        """Return boolean if values in the object are unique.
-
-        Returns
-        -------
-        bool
-        """
-        return self._column.is_unique
-
-    @property  # type: ignore
-    @_cudf_nvtx_annotate
     def is_monotonic(self):
         """Return boolean if values in the object are monotonically increasing.
 
@@ -233,6 +211,7 @@ class SingleColumnFrame(Frame, NotIterable):
         -------
         bool
         """
+        # Do not remove until pandas 2.0 support is added.
         warnings.warn(
             "is_monotonic is deprecated and will be removed in a future "
             "version. Use is_monotonic_increasing instead.",
@@ -348,7 +327,9 @@ class SingleColumnFrame(Frame, NotIterable):
         # Get the appropriate name for output operations involving two objects
         # that are Series-like objects. The output shares the lhs's name unless
         # the rhs is a _differently_ named Series-like object.
-        if isinstance(other, SingleColumnFrame) and self.name != other.name:
+        if isinstance(
+            other, SingleColumnFrame
+        ) and not cudf.utils.utils._is_same_name(self.name, other.name):
             result_name = None
         else:
             result_name = self.name
@@ -405,6 +386,10 @@ class SingleColumnFrame(Frame, NotIterable):
             if is_integer_dtype(arg.dtype):
                 return self._column.take(arg)
             if is_bool_dtype(arg.dtype):
+                if (bn := len(arg)) != (n := len(self)):
+                    raise IndexError(
+                        f"Boolean mask has wrong length: {bn} not {n}"
+                    )
                 return self._column.apply_boolean_mask(arg)
             raise NotImplementedError(f"Unknown indexer {type(arg)}")
 

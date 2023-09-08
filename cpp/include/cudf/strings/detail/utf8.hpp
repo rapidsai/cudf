@@ -108,7 +108,7 @@ constexpr size_type bytes_in_utf8_byte(uint8_t byte)
  * @param[out] character Single char_utf8 value.
  * @return The number of bytes in the character
  */
-constexpr size_type to_char_utf8(const char* str, char_utf8& character)
+constexpr size_type to_char_utf8(char const* str, char_utf8& character)
 {
   size_type const chr_width = bytes_in_utf8_byte(static_cast<uint8_t>(*str));
 

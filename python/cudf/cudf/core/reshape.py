@@ -1,9 +1,11 @@
 # Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import itertools
+import warnings
 from collections import abc
 from typing import Dict, Optional
 
+import cupy
 import numpy as np
 import pandas as pd
 
@@ -11,8 +13,10 @@ import cudf
 from cudf._lib.transform import one_hot_encode
 from cudf._lib.types import size_type_dtype
 from cudf._typing import Dtype
+from cudf.api.extensions import no_default
 from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column.categorical import CategoricalColumn
+from cudf.utils.dtypes import min_unsigned_type
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -532,7 +536,8 @@ def melt(
             )
     else:
         # then all remaining columns in frame
-        value_vars = list(set(frame._column_names) - set(id_vars))
+        unique_id = set(id_vars)
+        value_vars = [c for c in frame._column_names if c not in unique_id]
 
     # Error for unimplemented support for datatype
     dtypes = [frame[col].dtype for col in id_vars + value_vars]
@@ -572,11 +577,9 @@ def melt(
     mdata = {col: _tile(frame[col], K) for col in id_vars}
 
     # Step 2: add variable
-    var_cols = [
-        cudf.Series(cudf.core.column.full(N, i, dtype=np.int8))
-        for i in range(len(value_vars))
-    ]
-    temp = cudf.Series._concat(objs=var_cols, index=None)
+    nval = len(value_vars)
+    dtype = min_unsigned_type(nval)
+    temp = cudf.Series(cupy.repeat(cupy.arange(nval, dtype=dtype), N))
 
     if not var_name:
         var_name = "variable"
@@ -609,7 +612,7 @@ def get_dummies(
     cats=None,
     sparse=False,
     drop_first=False,
-    dtype="uint8",
+    dtype=no_default,
 ):
     """Returns a dataframe whose columns are the one hot encodings of all
     columns in `df`
@@ -699,6 +702,16 @@ def get_dummies(
 
     if drop_first:
         raise NotImplementedError("drop_first is not supported yet")
+
+    if dtype is no_default:
+        # Do not remove until pandas 2.0 support is added.
+        warnings.warn(
+            "Default `dtype` value will be changed to 'bool' in a future "
+            "release, please update `dtype='bool'` to adapt for "
+            "future behavior.",
+            FutureWarning,
+        )
+        dtype = "uint8"
 
     if isinstance(df, cudf.DataFrame):
         encode_fallback_dtypes = ["object", "category"]
@@ -1127,7 +1140,7 @@ def _get_unique(column, dummy_na):
     if isinstance(column, cudf.core.column.CategoricalColumn):
         unique = column.categories
     else:
-        unique = column.unique()
+        unique = column.unique().sort_values()
     if not dummy_na:
         if np.issubdtype(unique.dtype, np.floating):
             unique = unique.nans_to_nulls()

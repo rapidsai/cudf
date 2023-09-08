@@ -413,8 +413,8 @@ class RollingTest : public cudf::test::BaseFixture {
  protected:
   // input as column_wrapper
   void run_test_col(cudf::column_view const& input,
-                    const std::vector<cudf::size_type>& preceding_window,
-                    const std::vector<cudf::size_type>& following_window,
+                    std::vector<cudf::size_type> const& preceding_window,
+                    std::vector<cudf::size_type> const& following_window,
                     cudf::size_type min_periods,
                     cudf::rolling_aggregation const& op)
   {
@@ -443,8 +443,8 @@ class RollingTest : public cudf::test::BaseFixture {
 
   // helper function to test all aggregators
   void run_test_col_agg(cudf::column_view const& input,
-                        const std::vector<cudf::size_type>& preceding_window,
-                        const std::vector<cudf::size_type>& following_window,
+                        std::vector<cudf::size_type> const& preceding_window,
+                        std::vector<cudf::size_type> const& following_window,
                         cudf::size_type min_periods)
   {
     // test all supported aggregators

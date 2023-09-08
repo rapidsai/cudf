@@ -55,10 +55,7 @@ bool cache_contiguous_table_jni(JNIEnv *env) {
 }
 
 void release_contiguous_table_jni(JNIEnv *env) {
-  if (Contiguous_table_jclass != nullptr) {
-    env->DeleteGlobalRef(Contiguous_table_jclass);
-    Contiguous_table_jclass = nullptr;
-  }
+  Contiguous_table_jclass = cudf::jni::del_global_ref(env, Contiguous_table_jclass);
 }
 
 bool cache_contig_split_group_by_result_jni(JNIEnv *env) {
@@ -87,10 +84,7 @@ bool cache_contig_split_group_by_result_jni(JNIEnv *env) {
 }
 
 void release_contig_split_group_by_result_jni(JNIEnv *env) {
-  if (Contig_split_group_by_result_jclass != nullptr) {
-    env->DeleteGlobalRef(Contig_split_group_by_result_jclass);
-    Contig_split_group_by_result_jclass = nullptr;
-  }
+  Contig_split_group_by_result_jclass = del_global_ref(env, Contig_split_group_by_result_jclass);
 }
 
 jobject contig_split_group_by_result_from(JNIEnv *env, jobjectArray &groups) {
@@ -147,26 +141,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ContiguousTable_createPackedMetadata
     return reinterpret_cast<jlong>(metadata_ptr);
   }
   CATCH_STD(env, 0);
-}
-
-JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_ContiguousTable_createMetadataDirectBuffer(
-    JNIEnv *env, jclass, jlong j_metadata_ptr) {
-  JNI_NULL_CHECK(env, j_metadata_ptr, "metadata is null", nullptr);
-  try {
-    auto metadata = reinterpret_cast<std::vector<uint8_t> *>(j_metadata_ptr);
-    return env->NewDirectByteBuffer(const_cast<uint8_t *>(metadata->data()), metadata->size());
-  }
-  CATCH_STD(env, nullptr);
-}
-
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_ContiguousTable_closeMetadata(JNIEnv *env, jclass,
-                                                                         jlong j_metadata_ptr) {
-  JNI_NULL_CHECK(env, j_metadata_ptr, "metadata is null", );
-  try {
-    auto metadata = reinterpret_cast<std::vector<uint8_t> *>(j_metadata_ptr);
-    delete metadata;
-  }
-  CATCH_STD(env, );
 }
 
 } // extern "C"

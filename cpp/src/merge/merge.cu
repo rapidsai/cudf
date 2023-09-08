@@ -78,11 +78,14 @@ __global__ void materialize_merged_bitmask_kernel(
   size_type const num_destination_rows,
   index_type const* const __restrict__ merged_indices)
 {
-  size_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
+  auto const stride = detail::grid_1d::grid_stride();
 
-  auto active_threads = __ballot_sync(0xffff'ffffu, destination_row < num_destination_rows);
+  auto tid = detail::grid_1d::global_thread_id();
 
-  while (destination_row < num_destination_rows) {
+  auto active_threads = __ballot_sync(0xffff'ffffu, tid < num_destination_rows);
+
+  while (tid < num_destination_rows) {
+    auto const destination_row     = static_cast<size_type>(tid);
     auto const [src_side, src_row] = merged_indices[destination_row];
     bool const from_left{src_side == side::LEFT};
     bool source_bit_is_valid{true};
@@ -99,8 +102,8 @@ __global__ void materialize_merged_bitmask_kernel(
     // Only one thread writes output
     if (0 == threadIdx.x % warpSize) { out_validity[word_index(destination_row)] = result_mask; }
 
-    destination_row += blockDim.x * gridDim.x;
-    active_threads = __ballot_sync(active_threads, destination_row < num_destination_rows);
+    tid += stride;
+    active_threads = __ballot_sync(active_threads, tid < num_destination_rows);
   }
 }
 
@@ -173,9 +176,9 @@ index_vector generate_merged_indices(table_view const& left_table,
                                      bool nullable,
                                      rmm::cuda_stream_view stream)
 {
-  const size_type left_size  = left_table.num_rows();
-  const size_type right_size = right_table.num_rows();
-  const size_type total_size = left_size + right_size;
+  size_type const left_size  = left_table.num_rows();
+  size_type const right_size = right_table.num_rows();
+  size_type const total_size = left_size + right_size;
 
   auto left_gen    = side_index_generator{side::LEFT};
   auto right_gen   = side_index_generator{side::RIGHT};

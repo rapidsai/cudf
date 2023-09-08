@@ -155,7 +155,7 @@ def test_multiindex_swaplevel():
 
 
 def test_string_index():
-    from cudf.core.index import StringIndex
+    from cudf.core.index import Index
 
     pdf = pd.DataFrame(np.random.rand(5, 5))
     gdf = cudf.from_pandas(pdf)
@@ -167,7 +167,7 @@ def test_string_index():
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = StringIndex(["a", "b", "c", "d", "e"], name="name")
+    stringIndex = Index(["a", "b", "c", "d", "e"], name="name")
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
@@ -338,9 +338,31 @@ def test_multiindex_loc(pdf, gdf, pdfIndex, key_tuple):
     gdf.index = gdfIndex
     # The index is unsorted, which makes things slow but is fine for testing.
     with expect_pandas_performance_warning(key_tuple):
-        expected = pdf.loc[key_tuple].sort_index()
+        expected = pdf.loc[key_tuple]
     got = gdf.loc[key_tuple].sort_index()
+    assert_eq(expected.sort_index(), got)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gdf.loc[key_tuple]
     assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "indexer",
+    [
+        (([1, 1], [0, 1]), slice(None)),
+        (([1, 1], [1, 0]), slice(None)),
+    ],
+)
+def test_multiindex_compatible_ordering(indexer):
+    df = pd.DataFrame(
+        {"a": [1, 1, 2, 3], "b": [1, 0, 1, 1], "c": [1, 2, 3, 4]}
+    ).set_index(["a", "b"])
+    cdf = cudf.from_pandas(df)
+    expect = df.loc[indexer]
+    with cudf.option_context("mode.pandas_compatible", True):
+        actual = cdf.loc[indexer]
+    assert_eq(actual, expect)
 
 
 @pytest.mark.parametrize(
@@ -1160,6 +1182,17 @@ def test_multiindex_values_host():
     assert_eq(midx.values_host, pmidx.values)
 
 
+def test_multiindex_to_numpy():
+    midx = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    pmidx = midx.to_pandas()
+
+    assert_eq(midx.to_numpy(), pmidx.to_numpy())
+
+
 @pytest.mark.parametrize(
     "gdi, fill_value, expected",
     [
@@ -1664,6 +1697,7 @@ def test_difference():
 
     expected = midx2.to_pandas().difference(midx.to_pandas())
     actual = midx2.difference(midx)
+    assert isinstance(actual, cudf.MultiIndex)
     assert_eq(expected, actual)
 
 
@@ -1846,3 +1880,49 @@ def test_multiindex_index_single_row():
     gdf.index = idx
     pdf = gdf.to_pandas()
     assert_eq(pdf.loc[("b", 3)], gdf.loc[("b", 3)])
+
+
+def test_multiindex_levels():
+    gidx = cudf.MultiIndex.from_product(
+        [range(3), ["one", "two"]], names=["first", "second"]
+    )
+    pidx = gidx.to_pandas()
+
+    assert_eq(gidx.levels[0], pidx.levels[0])
+    assert_eq(gidx.levels[1], pidx.levels[1])
+
+
+def test_multiindex_empty_slice_pandas_compatibility():
+    expected = pd.MultiIndex.from_tuples([("a", "b")])[:0]
+    with cudf.option_context("mode.pandas_compatible", True):
+        actual = cudf.from_pandas(expected)
+    assert_eq(expected, actual, exact=False)
+
+
+@pytest.mark.parametrize(
+    "levels",
+    itertools.chain.from_iterable(
+        itertools.permutations(range(3), n) for n in range(1, 4)
+    ),
+    ids=str,
+)
+def test_multiindex_sort_index_partial(levels):
+    df = pd.DataFrame(
+        {
+            "a": [3, 3, 3, 1, 1, 1, 2, 2],
+            "b": [4, 2, 7, -1, 11, -2, 7, 7],
+            "c": [4, 4, 2, 3, 3, 3, 1, 1],
+            "val": [1, 2, 3, 4, 5, 6, 7, 8],
+        }
+    ).set_index(["a", "b", "c"])
+    cdf = cudf.from_pandas(df)
+
+    expect = df.sort_index(level=levels, sort_remaining=True)
+    got = cdf.sort_index(level=levels, sort_remaining=True)
+    assert_eq(expect, got)
+
+
+def test_multiindex_to_series_error():
+    midx = cudf.MultiIndex.from_tuples([("a", "b")])
+    with pytest.raises(NotImplementedError):
+        midx.to_series()

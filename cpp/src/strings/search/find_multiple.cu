@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,8 +70,8 @@ std::unique_ptr<column> find_multiple(strings_column_view const& input,
   results->set_null_count(0);
 
   auto offsets = cudf::detail::sequence(strings_count + 1,
-                                        numeric_scalar<offset_type>(0),
-                                        numeric_scalar<offset_type>(targets_count),
+                                        numeric_scalar<size_type>(0),
+                                        numeric_scalar<size_type>(targets_count),
                                         stream,
                                         mr);
   return make_lists_column(strings_count,

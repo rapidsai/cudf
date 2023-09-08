@@ -126,7 +126,7 @@ TEST_F(DistinctKeepAny, EmptyInputTable)
 {
   int32s_col col(std::initializer_list<int32_t>{});
   cudf::table_view input{{col}};
-  std::vector<cudf::size_type> key_idx{1, 2};
+  std::vector<cudf::size_type> key_idx{0};
 
   auto got = cudf::distinct(input, key_idx, KEEP_ANY);
   CUDF_TEST_EXPECT_TABLES_EQUAL(input, got->view());
@@ -1217,11 +1217,11 @@ TEST_F(DistinctKeepAny, StructsOfStructs)
   // 8 |  { {2, 1}, 5}  |
 
   auto s1 = [&] {
-    auto a  = int32s_col{1, 1, XXX, XXX, 2, 1, 1, XXX, 2};
-    auto b  = int32s_col{1, 2, XXX, XXX, 2, 1, 1, XXX, 1};
+    auto a  = int32s_col{1, 1, XXX, XXX, XXX, XXX, 1, XXX, 2};
+    auto b  = int32s_col{1, 2, XXX, XXX, XXX, XXX, 1, XXX, 1};
     auto s2 = structs_col{{a, b}, nulls_at({2, 3, 7})};
 
-    auto c = int32s_col{5, 4, 6, 4, 3, 3, 5, 4, 5};
+    auto c = int32s_col{5, 4, 6, 4, XXX, XXX, 5, 4, 5};
     std::vector<std::unique_ptr<cudf::column>> s1_children;
     s1_children.emplace_back(s2.release());
     s1_children.emplace_back(c.release());
@@ -1270,11 +1270,11 @@ TEST_F(DistinctKeepAny, SlicedStructsOfStructs)
   // 8 |  { {2, 1}, 5}  |
 
   auto s1 = [&] {
-    auto a  = int32s_col{1, 1, 2, 2, 2, 1, 1, 1, 2};
-    auto b  = int32s_col{1, 2, 1, 2, 2, 1, 1, 1, 1};
+    auto a  = int32s_col{1, 1, XXX, XXX, XXX, XXX, 1, XXX, 2};
+    auto b  = int32s_col{1, 2, XXX, XXX, XXX, XXX, 1, XXX, 1};
     auto s2 = structs_col{{a, b}, nulls_at({2, 3, 7})};
 
-    auto c = int32s_col{5, 4, 6, 4, 3, 3, 5, 4, 5};
+    auto c = int32s_col{5, 4, 6, 4, XXX, XXX, 5, 4, 5};
     std::vector<std::unique_ptr<cudf::column>> s1_children;
     s1_children.emplace_back(s2.release());
     s1_children.emplace_back(c.release());

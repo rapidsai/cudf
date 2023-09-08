@@ -23,7 +23,7 @@
 namespace cudf {
 namespace io {
 namespace parquet {
-const uint8_t CompactProtocolReader::g_list2struct[16] = {0,
+uint8_t const CompactProtocolReader::g_list2struct[16] = {0,
                                                           1,
                                                           2,
                                                           ST_FLD_BYTE,
@@ -90,7 +90,7 @@ struct FunctionSwitchImpl {
   template <typename... Operator>
   static inline bool run(CompactProtocolReader* cpr,
                          int field_type,
-                         const int& field,
+                         int const& field,
                          std::tuple<Operator...>& ops)
   {
     if (field == std::get<index>(ops).field()) {
@@ -106,7 +106,7 @@ struct FunctionSwitchImpl<0> {
   template <typename... Operator>
   static inline bool run(CompactProtocolReader* cpr,
                          int field_type,
-                         const int& field,
+                         int const& field,
                          std::tuple<Operator...>& ops)
   {
     if (field == std::get<0>(ops).field()) {
@@ -245,7 +245,7 @@ bool CompactProtocolReader::read(ColumnChunkMetaData* c)
                             ParquetFieldInt64(9, c->data_page_offset),
                             ParquetFieldInt64(10, c->index_page_offset),
                             ParquetFieldInt64(11, c->dictionary_page_offset),
-                            ParquetFieldStructBlob(12, c->statistics_blob));
+                            ParquetFieldStruct(12, c->statistics));
   return function_builder(this, op);
 }
 
@@ -255,7 +255,8 @@ bool CompactProtocolReader::read(PageHeader* p)
                             ParquetFieldInt32(2, p->uncompressed_page_size),
                             ParquetFieldInt32(3, p->compressed_page_size),
                             ParquetFieldStruct(5, p->data_page_header),
-                            ParquetFieldStruct(7, p->dictionary_page_header));
+                            ParquetFieldStruct(7, p->dictionary_page_header),
+                            ParquetFieldStruct(8, p->data_page_header_v2));
   return function_builder(this, op);
 }
 
@@ -272,6 +273,18 @@ bool CompactProtocolReader::read(DictionaryPageHeader* d)
 {
   auto op = std::make_tuple(ParquetFieldInt32(1, d->num_values),
                             ParquetFieldEnum<Encoding>(2, d->encoding));
+  return function_builder(this, op);
+}
+
+bool CompactProtocolReader::read(DataPageHeaderV2* d)
+{
+  auto op = std::make_tuple(ParquetFieldInt32(1, d->num_values),
+                            ParquetFieldInt32(2, d->num_nulls),
+                            ParquetFieldInt32(3, d->num_rows),
+                            ParquetFieldEnum<Encoding>(4, d->encoding),
+                            ParquetFieldInt32(5, d->definition_levels_byte_length),
+                            ParquetFieldInt32(6, d->repetition_levels_byte_length),
+                            ParquetFieldBool(7, d->is_compressed));
   return function_builder(this, op);
 }
 

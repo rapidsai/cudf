@@ -65,7 +65,7 @@ struct dictionary_wrapper {
    *
    * @return The reference to this dictionary wrapper object
    */
-  dictionary_wrapper& operator=(const dictionary_wrapper&) = default;
+  dictionary_wrapper& operator=(dictionary_wrapper const&) = default;
 
   /**
    * @brief Construct dictionary_wrapper from a value

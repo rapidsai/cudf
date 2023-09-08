@@ -7,7 +7,6 @@ Constructor
 ~~~~~~~~~~~
 .. autosummary::
    :toctree: api/
-   :template: autosummary/class_with_autosummary.rst
 
    DataFrame
 
@@ -41,6 +40,7 @@ Conversion
    :toctree: api/
 
    DataFrame.astype
+   DataFrame.convert_dtypes
    DataFrame.copy
 
 Indexing, iteration
@@ -148,9 +148,9 @@ Computations / descriptive stats
    DataFrame.quantile
    DataFrame.rank
    DataFrame.round
+   DataFrame.scale
    DataFrame.skew
    DataFrame.sum
-   DataFrame.sum_of_squares
    DataFrame.std
    DataFrame.var
    DataFrame.nunique
@@ -218,6 +218,7 @@ Reshaping, sorting, transposing
    DataFrame.sort_index
    DataFrame.nlargest
    DataFrame.nsmallest
+   DataFrame.swaplevel
    DataFrame.stack
    DataFrame.unstack
    DataFrame.melt
@@ -250,11 +251,17 @@ Serialization / IO / conversion
 .. autosummary::
    :toctree: api/
 
+   DataFrame.deserialize
+   DataFrame.device_deserialize
+   DataFrame.device_serialize
    DataFrame.from_arrow
    DataFrame.from_dict
    DataFrame.from_pandas
    DataFrame.from_records
    DataFrame.hash_values
+   DataFrame.host_deserialize
+   DataFrame.host_serialize
+   DataFrame.serialize
    DataFrame.to_arrow
    DataFrame.to_dict
    DataFrame.to_dlpack
@@ -269,3 +276,5 @@ Serialization / IO / conversion
    DataFrame.to_feather
    DataFrame.to_records
    DataFrame.to_string
+   DataFrame.values
+   DataFrame.values_host

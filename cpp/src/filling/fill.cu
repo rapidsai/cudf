@@ -122,6 +122,7 @@ struct out_of_place_fill_range_dispatch {
       auto ret_view    = p_ret->mutable_view();
       using DeviceType = cudf::device_storage_type_t<T>;
       in_place_fill<DeviceType>(ret_view, begin, end, value, stream);
+      p_ret->set_null_count(ret_view.null_count());
     }
 
     return p_ret;
@@ -245,20 +246,22 @@ std::unique_ptr<column> fill(column_view const& input,
 void fill_in_place(mutable_column_view& destination,
                    size_type begin,
                    size_type end,
-                   scalar const& value)
+                   scalar const& value,
+                   rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  return detail::fill_in_place(destination, begin, end, value, cudf::get_default_stream());
+  return detail::fill_in_place(destination, begin, end, value, stream);
 }
 
 std::unique_ptr<column> fill(column_view const& input,
                              size_type begin,
                              size_type end,
                              scalar const& value,
+                             rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::fill(input, begin, end, value, cudf::get_default_stream(), mr);
+  return detail::fill(input, begin, end, value, stream, mr);
 }
 
 }  // namespace cudf

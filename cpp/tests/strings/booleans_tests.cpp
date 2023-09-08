@@ -29,7 +29,7 @@ struct StringsConvertTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsConvertTest, ToBooleans)
 {
-  std::vector<const char*> h_strings{"false", nullptr, "", "true", "True", "False"};
+  std::vector<char const*> h_strings{"false", nullptr, "", "true", "True", "False"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
@@ -48,7 +48,7 @@ TEST_F(StringsConvertTest, ToBooleans)
 
 TEST_F(StringsConvertTest, FromBooleans)
 {
-  std::vector<const char*> h_strings{"true", nullptr, "false", "true", "true", "false"};
+  std::vector<char const*> h_strings{"true", nullptr, "false", "true", "true", "false"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
@@ -66,16 +66,15 @@ TEST_F(StringsConvertTest, FromBooleans)
 
 TEST_F(StringsConvertTest, ZeroSizeStringsColumnBoolean)
 {
-  cudf::column_view zero_size_column(cudf::data_type{cudf::type_id::BOOL8}, 0, nullptr, nullptr, 0);
-  auto results = cudf::strings::from_booleans(zero_size_column);
+  auto const zero_size_column = cudf::make_empty_column(cudf::type_id::BOOL8)->view();
+  auto results                = cudf::strings::from_booleans(zero_size_column);
   cudf::test::expect_column_empty(results->view());
 }
 
 TEST_F(StringsConvertTest, ZeroSizeBooleansColumn)
 {
-  cudf::column_view zero_size_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  auto results = cudf::strings::to_booleans(zero_size_column);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
+  auto results                        = cudf::strings::to_booleans(zero_size_strings_column);
   EXPECT_EQ(0, results->size());
 }
 

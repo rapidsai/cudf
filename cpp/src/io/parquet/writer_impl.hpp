@@ -25,7 +25,6 @@
 #include "parquet_gpu.hpp"
 
 #include <cudf/io/data_sink.hpp>
-#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/detail/parquet.hpp>
@@ -94,6 +93,14 @@ class writer::impl {
   void init_state();
 
   /**
+   * @brief Updates writer-level statistics with data from the current table.
+   *
+   * @param compression_stats Optional compression statistics from the current table
+   */
+  void update_compression_statistics(
+    std::optional<writer_compression_statistics> const& compression_stats);
+
+  /**
    * @brief Writes a single subtable as part of a larger parquet file/table write,
    * normally used for chunked writing.
    *
@@ -154,6 +161,7 @@ class writer::impl {
   size_t const _max_dictionary_size;
   std::optional<size_type> const _max_page_fragment_size;
   bool const _int96_timestamps;
+  bool const _write_v2_headers;
   int32_t const _column_index_truncate_length;
   std::vector<std::map<std::string, std::string>> const _kv_meta;  // Optional user metadata.
   single_write_mode const _single_write_mode;  // Special parameter only used by `write()` to
@@ -167,6 +175,7 @@ class writer::impl {
   std::vector<std::size_t> _current_chunk_offset;  // To track if the last write(table) call
                                                    // completed successfully current write
                                                    // position for rowgroups/chunks.
+  std::shared_ptr<writer_compression_statistics> _compression_statistics;  // Optional output
   bool _last_write_successful = false;
   bool _closed                = false;  // To track if the output has been written to sink.
 };

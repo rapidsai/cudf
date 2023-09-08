@@ -27,6 +27,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/hashing.hpp>
+#include <cudf/lists/combine.hpp>
 #include <cudf/lists/contains.hpp>
 #include <cudf/lists/count_elements.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
@@ -46,6 +47,7 @@
 #include <cudf/round.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/search.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/strings/attributes.hpp>
 #include <cudf/strings/capitalize.hpp>
 #include <cudf/strings/case.hpp>
@@ -89,22 +91,32 @@ using cudf::jni::release_as_jlong;
 
 namespace {
 
-std::size_t calc_device_memory_size(cudf::column_view const &view) {
+std::size_t pad_size(std::size_t size, bool const should_pad_for_cpu) {
+  if (should_pad_for_cpu) {
+    constexpr std::size_t ALIGN = sizeof(std::max_align_t);
+    return (size + (ALIGN - 1)) & ~(ALIGN - 1);
+  } else {
+    return size;
+  }
+}
+
+std::size_t calc_device_memory_size(cudf::column_view const &view, bool const pad_for_cpu) {
   std::size_t total = 0;
   auto row_count = view.size();
 
   if (view.nullable()) {
-    total += cudf::bitmask_allocation_size_bytes(row_count);
+    total += pad_size(cudf::bitmask_allocation_size_bytes(row_count), pad_for_cpu);
   }
 
   auto dtype = view.type();
   if (cudf::is_fixed_width(dtype)) {
-    total += cudf::size_of(dtype) * view.size();
+    total += pad_size(cudf::size_of(dtype) * view.size(), pad_for_cpu);
   }
 
-  return std::accumulate(
-      view.child_begin(), view.child_end(), total,
-      [](std::size_t t, cudf::column_view const &v) { return t + calc_device_memory_size(v); });
+  return std::accumulate(view.child_begin(), view.child_end(), total,
+                         [pad_for_cpu](std::size_t t, cudf::column_view const &v) {
+                           return t + calc_device_memory_size(v, pad_for_cpu);
+                         });
 }
 
 } // anonymous namespace
@@ -174,6 +186,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceNullsPolicy(JNIEnv
     cudf::column_view col = *reinterpret_cast<cudf::column_view *>(j_col);
     return release_as_jlong(cudf::replace_nulls(
         col, is_preceding ? cudf::replace_policy::PRECEDING : cudf::replace_policy::FOLLOWING));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnView_distinctCount(JNIEnv *env, jclass,
+                                                                    jlong j_col,
+                                                                    jboolean nulls_included) {
+  JNI_NULL_CHECK(env, j_col, "column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view col = *reinterpret_cast<cudf::column_view *>(j_col);
+
+    return cudf::distinct_count(
+        col, nulls_included ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE,
+        cudf::nan_policy::NAN_IS_VALID);
   }
   CATCH_STD(env, 0);
 }
@@ -484,6 +511,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicatesWithKey
 
     return release_as_jlong(
         cudf::jni::lists_distinct_by_key(lists_keys_vals, cudf::get_default_stream()));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_flattenLists(JNIEnv *env, jclass,
+                                                                    jlong input_handle,
+                                                                    jboolean ignore_null) {
+  JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const null_policy = ignore_null ? cudf::lists::concatenate_null_policy::IGNORE :
+                                           cudf::lists::concatenate_null_policy::NULLIFY_OUTPUT_ROW;
+    auto const input_cv = reinterpret_cast<cudf::column_view const *>(input_handle);
+    return release_as_jlong(cudf::lists::concatenate_list_elements(*input_cv, null_policy));
   }
   CATCH_STD(env, 0);
 }
@@ -1837,20 +1878,31 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
       return release_as_jlong(copy);
     }
 
-    auto input_table = cudf::table_view{n_cudf_columns.get_dereferenced()};
     cudf::binary_operator op = static_cast<cudf::binary_operator>(bin_op);
     switch (op) {
       case cudf::binary_operator::BITWISE_AND: {
-        auto [new_bitmask, null_count] = cudf::bitmask_and(input_table);
+        auto cols = n_cudf_columns.get_dereferenced();
+        cols.push_back(copy->view());
+        auto table_view = cudf::table_view{cols};
+        auto [new_bitmask, null_count] = cudf::bitmask_and(table_view);
         copy->set_null_mask(std::move(new_bitmask), null_count);
         break;
       }
       case cudf::binary_operator::BITWISE_OR: {
-        auto [new_bitmask, null_count] = cudf::bitmask_or(input_table);
+        auto input_table = cudf::table_view{n_cudf_columns.get_dereferenced()};
+        auto [tmp_new_bitmask, tmp_null_count] = cudf::bitmask_or(input_table);
+        copy->set_null_mask(std::move(tmp_new_bitmask), tmp_null_count);
+        // and the bitmask with the original column
+        cudf::table_view table_view{std::vector<cudf::column_view>{copy->view(), *original_column}};
+        auto [new_bitmask, null_count] = cudf::bitmask_and(table_view);
         copy->set_null_mask(std::move(new_bitmask), null_count);
         break;
       }
       default: JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Unsupported merge operation", 0);
+    }
+    auto const copy_cv = copy->view();
+    if (cudf::has_nonempty_nulls(copy_cv)) {
+      copy = cudf::purge_nonempty_nulls(copy_cv);
     }
 
     return release_as_jlong(copy);
@@ -1893,6 +1945,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeCudfColumnView(
       j_null_count = 0;
     }
 
+    if (j_null_count < 0) { // Check for unknown null count.
+      // Calculate concrete null count.
+      j_null_count = cudf::null_count(valid, 0, size);
+    }
+
     if (n_type == cudf::type_id::STRING) {
       if (size == 0) {
         return ptr_as_jlong(
@@ -1904,8 +1961,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeCudfColumnView(
         // data is the second child
 
         cudf::size_type *offsets = reinterpret_cast<cudf::size_type *>(j_offset);
-        cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, size + 1, offsets);
-        cudf::column_view data_column(cudf::data_type{cudf::type_id::INT8}, j_data_size, data);
+        cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, size + 1, offsets,
+                                         nullptr, 0);
+        cudf::column_view data_column(cudf::data_type{cudf::type_id::INT8}, j_data_size, data,
+                                      nullptr, 0);
         return ptr_as_jlong(new cudf::column_view(cudf::data_type{cudf::type_id::STRING}, size,
                                                   nullptr, valid, j_null_count, 0,
                                                   {offsets_column, data_column}));
@@ -1921,8 +1980,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeCudfColumnView(
         offsets_size = size + 1;
         offsets = reinterpret_cast<cudf::size_type *>(j_offset);
       }
-      cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, offsets_size,
-                                       offsets);
+      cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, offsets_size, offsets,
+                                       nullptr, 0);
       return ptr_as_jlong(new cudf::column_view(cudf::data_type{cudf::type_id::LIST}, size, nullptr,
                                                 valid, j_null_count, 0,
                                                 {offsets_column, *children[0]}));
@@ -2168,14 +2227,19 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeValidityLength(J
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getDeviceMemorySize(JNIEnv *env, jclass,
-                                                                           jlong handle) {
+                                                                           jlong handle,
+                                                                           jboolean pad_for_cpu) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     auto view = reinterpret_cast<cudf::column_view const *>(handle);
-    return calc_device_memory_size(*view);
+    return calc_device_memory_size(*view, pad_for_cpu);
   }
   CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_hostPaddingSizeInBytes(JNIEnv *env, jclass) {
+  return sizeof(std::max_align_t);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_clamper(JNIEnv *env, jobject j_object,

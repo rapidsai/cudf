@@ -69,7 +69,7 @@ struct intrle_enc_state_s {
 struct strdata_enc_state_s {
   uint32_t char_count;
   uint32_t lengths_red[(512 / 32)];
-  const char* str_data[512];
+  char const* str_data[512];
 };
 
 struct orcenc_state_s {
@@ -88,7 +88,7 @@ struct orcenc_state_s {
     byterle_enc_state_s byterle;
     intrle_enc_state_s intrle;
     strdata_enc_state_s strenc;
-    StripeDictionary dict_stripe;
+    stripe_dictionary const* dict_stripe;
   } u;
   union {
     uint8_t u8[scratch_buffer_size];  // gblock_vminscratch buffer
@@ -144,7 +144,7 @@ static inline __device__ uint32_t CountLeadingBytes64(uint64_t v) { return __clz
  */
 template <StreamIndexType cid, uint32_t inmask>
 static __device__ void StoreBytes(
-  orcenc_state_s* s, const uint8_t* inbuf, uint32_t inpos, uint32_t count, int t)
+  orcenc_state_s* s, uint8_t const* inbuf, uint32_t inpos, uint32_t count, int t)
 {
   uint8_t* dst = s->stream.data_ptrs[cid] + s->strm_pos[cid];
   while (count > 0) {
@@ -175,7 +175,7 @@ static __device__ void StoreBytes(
  */
 template <StreamIndexType cid, uint32_t inmask>
 static __device__ uint32_t ByteRLE(
-  orcenc_state_s* s, const uint8_t* inbuf, uint32_t inpos, uint32_t numvals, uint32_t flush, int t)
+  orcenc_state_s* s, uint8_t const* inbuf, uint32_t inpos, uint32_t numvals, uint32_t flush, int t)
 {
   uint8_t* dst     = s->stream.data_ptrs[cid] + s->strm_pos[cid];
   uint32_t out_cnt = 0;
@@ -361,7 +361,7 @@ template <StreamIndexType cid,
           int block_size,
           typename Storage>
 static __device__ uint32_t IntegerRLE(
-  orcenc_state_s* s, const T* inbuf, uint32_t inpos, uint32_t numvals, int t, Storage& temp_storage)
+  orcenc_state_s* s, T const* inbuf, uint32_t inpos, uint32_t numvals, int t, Storage& temp_storage)
 {
   using block_reduce = cub::BlockReduce<T, block_size>;
   uint8_t* dst       = s->stream.data_ptrs[cid] + s->strm_pos[cid];
@@ -996,14 +996,16 @@ __global__ void __launch_bounds__(block_size)
 /**
  * @brief Encode column dictionaries
  *
- * @param[in] stripes Stripe dictionaries device array [stripe][string_column]
+ * @param[in] stripes Stripe dictionaries device array
+ * @param[in] columns Pre-order flattened device array of ORC column views
  * @param[in] chunks EncChunk device array [rowgroup][column]
  * @param[in] num_columns Number of columns
  */
 // blockDim {512,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  gpuEncodeStringDictionaries(StripeDictionary const* stripes,
+  gpuEncodeStringDictionaries(stripe_dictionary const* stripes,
+                              device_span<orc_column_device_view const> columns,
                               device_2dspan<EncChunk const> chunks,
                               device_2dspan<encoder_chunk_streams> streams)
 {
@@ -1015,20 +1017,20 @@ __global__ void __launch_bounds__(block_size)
   uint32_t cid            = (blockIdx.y) ? CI_DICTIONARY : CI_DATA2;
   int t                   = threadIdx.x;
 
-  if (t == 0) s->u.dict_stripe = stripes[stripe_id];
+  if (t == 0) s->u.dict_stripe = &stripes[stripe_id];
 
   __syncthreads();
-  auto const strm_ptr = &streams[s->u.dict_stripe.column_id][s->u.dict_stripe.start_chunk];
+  auto const strm_ptr = &streams[s->u.dict_stripe->column_idx][s->u.dict_stripe->start_rowgroup];
   if (t == 0) {
-    s->chunk         = chunks[s->u.dict_stripe.column_id][s->u.dict_stripe.start_chunk];
+    s->chunk         = chunks[s->u.dict_stripe->column_idx][s->u.dict_stripe->start_rowgroup];
     s->stream        = *strm_ptr;
     s->strm_pos[cid] = 0;
     s->numlengths    = 0;
-    s->nrows         = s->u.dict_stripe.num_strings;
+    s->nrows         = s->u.dict_stripe->entry_count;
     s->cur_row       = 0;
   }
-  auto const string_column = s->u.dict_stripe.leaf_column;
-  auto const dict_data     = s->u.dict_stripe.dict_data;
+  auto const string_column = columns[s->u.dict_stripe->column_idx];
+  auto const dict_data     = s->u.dict_stripe->data;
   __syncthreads();
   if (s->chunk.encoding_kind != DICTIONARY_V2) {
     return;  // This column isn't using dictionary encoding -> bail out
@@ -1039,10 +1041,10 @@ __global__ void __launch_bounds__(block_size)
     uint32_t string_idx = (t < numvals) ? dict_data[s->cur_row + t] : 0;
     if (cid == CI_DICTIONARY) {
       // Encoding string contents
-      const char* ptr = nullptr;
+      char const* ptr = nullptr;
       uint32_t count  = 0;
       if (t < numvals) {
-        auto string_val = string_column->element<string_view>(string_idx);
+        auto string_val = string_column.element<string_view>(string_idx);
         ptr             = string_val.data();
         count           = string_val.size_bytes();
       }
@@ -1056,7 +1058,7 @@ __global__ void __launch_bounds__(block_size)
       // Encoding string lengths
       uint32_t count =
         (t < numvals)
-          ? static_cast<uint32_t>(string_column->element<string_view>(string_idx).size_bytes())
+          ? static_cast<uint32_t>(string_column.element<string_view>(string_idx).size_bytes())
           : 0;
       uint32_t nz_idx = (s->cur_row + t) & 0x3ff;
       if (t < numvals) s->lengths.u32[nz_idx] = count;
@@ -1108,11 +1110,10 @@ __global__ void __launch_bounds__(compact_streams_block_size)
       for (uint32_t i = t; i < len; i += blockDim.x) {
         dst_ptr[i] = src_ptr[i];
       }
-
       __syncthreads();
-      if (t == 0) { streams[ss.column_id][group].data_ptrs[cid] = dst_ptr; }
-      dst_ptr += len;
     }
+    if (t == 0) { streams[ss.column_id][group].data_ptrs[cid] = dst_ptr; }
+    dst_ptr += len;
   }
 }
 
@@ -1136,7 +1137,7 @@ __global__ void __launch_bounds__(256)
                            device_span<device_span<uint8_t const>> inputs,
                            device_span<device_span<uint8_t>> outputs,
                            device_span<compression_result> results,
-                           uint8_t* compressed_bfr,
+                           device_span<uint8_t> compressed_bfr,
                            uint32_t comp_blk_size,
                            uint32_t max_comp_blk_size,
                            uint32_t comp_block_align)
@@ -1159,7 +1160,7 @@ __global__ void __launch_bounds__(256)
   }
   __syncthreads();
   src        = uncomp_base_g;
-  dst        = compressed_bfr + ss.bfr_offset;
+  dst        = compressed_bfr.data() + ss.bfr_offset;
   num_blocks = (ss.stream_size > 0) ? (ss.stream_size - 1) / comp_blk_size + 1 : 1;
   for (uint32_t b = t; b < num_blocks; b += 256) {
     uint32_t blk_size = min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
@@ -1190,26 +1191,26 @@ __global__ void __launch_bounds__(1024)
                              device_span<device_span<uint8_t const> const> inputs,
                              device_span<device_span<uint8_t> const> outputs,
                              device_span<compression_result> results,
-                             uint8_t* compressed_bfr,
+                             device_span<uint8_t> compressed_bfr,
                              uint32_t comp_blk_size,
                              uint32_t max_comp_blk_size)
 {
   __shared__ __align__(16) StripeStream ss;
-  __shared__ const uint8_t* volatile comp_src_g;
+  __shared__ uint8_t const* volatile comp_src_g;
   __shared__ uint32_t volatile comp_len_g;
 
   auto const stripe_id = blockIdx.x;
   auto const stream_id = blockIdx.y;
   uint32_t t           = threadIdx.x;
   uint32_t num_blocks, b, blk_size;
-  const uint8_t* src;
+  uint8_t const* src;
   uint8_t* dst;
 
   if (t == 0) ss = strm_desc[stripe_id][stream_id];
   __syncthreads();
 
   num_blocks = (ss.stream_size > 0) ? (ss.stream_size - 1) / comp_blk_size + 1 : 0;
-  dst        = compressed_bfr + ss.bfr_offset;
+  dst        = compressed_bfr.data() + ss.bfr_offset;
   b          = 0;
   do {
     if (t == 0) {
@@ -1255,7 +1256,7 @@ __global__ void __launch_bounds__(1024)
   // Update stripe stream with the compressed size
   if (t == 0) {
     strm_desc[stripe_id][stream_id].stream_size =
-      static_cast<uint32_t>(dst - (compressed_bfr + ss.bfr_offset));
+      static_cast<uint32_t>(dst - (compressed_bfr.data() + ss.bfr_offset));
   }
 }
 
@@ -1269,7 +1270,8 @@ void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
     <<<dim_grid, dim_block, 0, stream.value()>>>(chunks, streams);
 }
 
-void EncodeStripeDictionaries(StripeDictionary const* stripes,
+void EncodeStripeDictionaries(stripe_dictionary const* stripes,
+                              device_span<orc_column_device_view const> columns,
                               device_2dspan<EncChunk const> chunks,
                               uint32_t num_string_columns,
                               uint32_t num_stripes,
@@ -1279,7 +1281,7 @@ void EncodeStripeDictionaries(StripeDictionary const* stripes,
   dim3 dim_block(512, 1);  // 512 threads per dictionary
   dim3 dim_grid(num_string_columns * num_stripes, 2);
   gpuEncodeStringDictionaries<512>
-    <<<dim_grid, dim_block, 0, stream.value()>>>(stripes, chunks, enc_streams);
+    <<<dim_grid, dim_block, 0, stream.value()>>>(stripes, columns, chunks, enc_streams);
 }
 
 void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
@@ -1291,16 +1293,18 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
   gpuCompactOrcDataStreams<<<dim_grid, dim_block, 0, stream.value()>>>(strm_desc, enc_streams);
 }
 
-void CompressOrcDataStreams(uint8_t* compressed_data,
-                            uint32_t num_compressed_blocks,
-                            CompressionKind compression,
-                            uint32_t comp_blk_size,
-                            uint32_t max_comp_blk_size,
-                            uint32_t comp_block_align,
-                            device_2dspan<StripeStream> strm_desc,
-                            device_2dspan<encoder_chunk_streams> enc_streams,
-                            device_span<compression_result> comp_res,
-                            rmm::cuda_stream_view stream)
+std::optional<writer_compression_statistics> CompressOrcDataStreams(
+  device_span<uint8_t> compressed_data,
+  uint32_t num_compressed_blocks,
+  CompressionKind compression,
+  uint32_t comp_blk_size,
+  uint32_t max_comp_blk_size,
+  uint32_t comp_block_align,
+  bool collect_statistics,
+  device_2dspan<StripeStream> strm_desc,
+  device_2dspan<encoder_chunk_streams> enc_streams,
+  device_span<compression_result> comp_res,
+  rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<device_span<uint8_t const>> comp_in(num_compressed_blocks, stream);
   rmm::device_uvector<device_span<uint8_t>> comp_out(num_compressed_blocks, stream);
@@ -1356,6 +1360,12 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
   dim3 dim_block_compact(1024, 1);
   gpuCompactCompressedBlocks<<<dim_grid, dim_block_compact, 0, stream.value()>>>(
     strm_desc, comp_in, comp_out, comp_res, compressed_data, comp_blk_size, max_comp_blk_size);
+
+  if (collect_statistics) {
+    return cudf::io::collect_compression_statistics(comp_in, comp_res, stream);
+  } else {
+    return std::nullopt;
+  }
 }
 
 }  // namespace gpu

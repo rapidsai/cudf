@@ -40,7 +40,7 @@ namespace cudf {
 namespace strings {
 namespace detail {
 
-using string_index_pair = thrust::pair<const char*, size_type>;
+using string_index_pair = thrust::pair<char const*, size_type>;
 
 namespace {
 
@@ -50,7 +50,7 @@ namespace {
  */
 struct findall_fn {
   column_device_view const d_strings;
-  offset_type const* d_offsets;
+  size_type const* d_offsets;
   string_index_pair* d_indices;
 
   __device__ void operator()(size_type const idx, reprog_device const prog, int32_t const prog_idx)
@@ -62,16 +62,15 @@ struct findall_fn {
     auto d_output        = d_indices + d_offsets[idx];
     size_type output_idx = 0;
 
-    size_type begin = 0;
-    size_type end   = nchars;
-    while ((begin < end) && (prog.find(prog_idx, d_str, begin, end) > 0)) {
-      auto const spos = d_str.byte_offset(begin);  // convert
-      auto const epos = d_str.byte_offset(end);    // to bytes
+    auto itr = d_str.begin();
+    while (itr.position() < nchars) {
+      auto const match = prog.find(prog_idx, d_str, itr);
+      if (!match) { break; }
 
-      d_output[output_idx++] = string_index_pair{d_str.data() + spos, (epos - spos)};
+      auto const d_result    = string_from_match(*match, d_str, itr);
+      d_output[output_idx++] = string_index_pair{d_result.data(), d_result.size_bytes()};
 
-      begin = end + (begin == end);
-      end   = nchars;
+      itr += (match->second - itr.position());
     }
   }
 };
@@ -79,7 +78,7 @@ struct findall_fn {
 std::unique_ptr<column> findall_util(column_device_view const& d_strings,
                                      reprog_device& d_prog,
                                      size_type total_matches,
-                                     offset_type const* d_offsets,
+                                     size_type const* d_offsets,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
@@ -107,7 +106,7 @@ std::unique_ptr<column> findall(strings_column_view const& input,
 
   // Create lists offsets column
   auto offsets   = count_matches(*d_strings, *d_prog, strings_count + 1, stream, mr);
-  auto d_offsets = offsets->mutable_view().data<offset_type>();
+  auto d_offsets = offsets->mutable_view().data<size_type>();
 
   // Convert counts into offsets
   thrust::exclusive_scan(

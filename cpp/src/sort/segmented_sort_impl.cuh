@@ -273,8 +273,8 @@ std::unique_ptr<column> segmented_sorted_order_common(
   // insert segment id before all columns.
   std::vector<column_view> keys_with_segid;
   keys_with_segid.reserve(keys.num_columns() + 1);
-  keys_with_segid.push_back(
-    column_view(data_type(type_to_id<size_type>()), segment_ids.size(), segment_ids.data()));
+  keys_with_segid.push_back(column_view(
+    data_type(type_to_id<size_type>()), segment_ids.size(), segment_ids.data(), nullptr, 0));
   keys_with_segid.insert(keys_with_segid.end(), keys.begin(), keys.end());
   auto segid_keys = table_view(keys_with_segid);
 
