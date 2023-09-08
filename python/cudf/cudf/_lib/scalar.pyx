@@ -123,9 +123,11 @@ cdef class DeviceScalar:
             self.c_value = pylibcudf.Scalar.from_pyarrow_scalar(pa_scalar)
             set_dtype = False
         elif pd.api.types.is_timedelta64_dtype(self._dtype):
-            _set_timedelta64_from_np_scalar(
-                self.c_value.c_obj, value, self._dtype, valid
-            )
+            if value is NA or value is NaT:
+                value = None
+            pa_scalar = pa.scalar(value, type=pa.from_numpy_dtype(self._dtype))
+            self.c_value = pylibcudf.Scalar.from_pyarrow_scalar(pa_scalar)
+            set_dtype = False
         else:
             raise ValueError(
                 f"Cannot convert value of type "

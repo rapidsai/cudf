@@ -504,33 +504,8 @@ constexpr decltype(auto) arrow_type_dispatcher(arrow::DataType const& dtype,
       return f.template operator()<arrow::BooleanType>(std::forward<Ts>(args)...);
     case arrow::Type::TIMESTAMP:
       return f.template operator()<arrow::TimestampType>(std::forward<Ts>(args)...);
-    // case arrow::Type::TIMESTAMP_SECONDS:
-    //   return f.template operator()<arrow::Type::TIMESTAMP_SECONDS>(
-    //     std::forward<Ts>(args)...);
-    // case arrow::Type::TIMESTAMP_MILLISECONDS:
-    //   return f.template operator()<arrow::Type::TIMESTAMP_MILLISECONDS>(
-    //     std::forward<Ts>(args)...);
-    // case arrow::Type::TIMESTAMP_MICROSECONDS:
-    //   return f.template operator()<arrow::Type::TIMESTAMP_MICROSECONDS>(
-    //     std::forward<Ts>(args)...);
-    // case arrow::Type::TIMESTAMP:
-    //   return f.template operator()<arrow::TimestampType>(
-    //     std::forward<Ts>(args)...);
-    // case arrow::Type::DURATION_DAYS:
-    //   return f.template operator()<arrow::Type::DURATION_DAYS>(
-    //     std::forward<Ts>(args)...);
-    // case arrow::Type::DURATION_SECONDS:
-    //   return f.template operator()<arrow::Type::DURATION_SECONDS>(
-    //     std::forward<Ts>(args)...);
-    // case arrow::Type::DURATION_MILLISECONDS:
-    //   return f.template operator()<arrow::Type::DURATION_MILLISECONDS>(
-    //     std::forward<Ts>(args)...);
-    // case arrow::Type::DURATION_MICROSECONDS:
-    //   return f.template operator()<arrow::Type::DURATION_MICROSECONDS>(
-    //     std::forward<Ts>(args)...);
-    // case arrow::Type::DURATION_NANOSECONDS:
-    //   return f.template operator()<arrow::Type::DURATION_NANOSECONDS>(
-    //     std::forward<Ts>(args)...);
+    case arrow::Type::DURATION:
+      return f.template operator()<arrow::DurationType>(std::forward<Ts>(args)...);
     // case arrow::Type::DICTIONARY32:
     //   return f.template operator()<arrow::Type::DICTIONARY32>(
     //     std::forward<Ts>(args)...);
