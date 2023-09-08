@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <arrow/array/array_base.h>
+#include <arrow/type.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/concatenate.hpp>
@@ -470,6 +472,123 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
   CUDF_FUNC_RANGE();
 
   return detail::from_arrow(input_table, cudf::get_default_stream(), mr);
+}
+
+template <typename Functor, typename... Ts>
+constexpr decltype(auto) arrow_type_dispatcher(arrow::DataType const& dtype,
+                                               Functor f,
+                                               Ts&&... args)
+{
+  switch (dtype.id()) {
+    case arrow::Type::INT8:
+      return f.template operator()<arrow::Int8Type>(std::forward<Ts>(args)...);
+    case arrow::Type::INT16:
+      return f.template operator()<arrow::Int16Type>(std::forward<Ts>(args)...);
+    case arrow::Type::INT32:
+      return f.template operator()<arrow::Int32Type>(std::forward<Ts>(args)...);
+    case arrow::Type::INT64:
+      return f.template operator()<arrow::Int64Type>(std::forward<Ts>(args)...);
+    case arrow::Type::UINT8:
+      return f.template operator()<arrow::UInt8Type>(std::forward<Ts>(args)...);
+    case arrow::Type::UINT16:
+      return f.template operator()<arrow::UInt16Type>(std::forward<Ts>(args)...);
+    case arrow::Type::UINT32:
+      return f.template operator()<arrow::UInt32Type>(std::forward<Ts>(args)...);
+    case arrow::Type::UINT64:
+      return f.template operator()<arrow::UInt64Type>(std::forward<Ts>(args)...);
+    case arrow::Type::FLOAT:
+      return f.template operator()<arrow::FloatType>(std::forward<Ts>(args)...);
+    case arrow::Type::DOUBLE:
+      return f.template operator()<arrow::DoubleType>(std::forward<Ts>(args)...);
+    case arrow::Type::BOOL:
+      return f.template operator()<arrow::BooleanType>(std::forward<Ts>(args)...);
+    // case arrow::Type::TIMESTAMP_DAYS:
+    //   return f.template operator()<arrow::Type::TIMESTAMP_DAYS>(
+    //     std::forward<Ts>(args)...);
+    // case arrow::Type::TIMESTAMP_SECONDS:
+    //   return f.template operator()<arrow::Type::TIMESTAMP_SECONDS>(
+    //     std::forward<Ts>(args)...);
+    // case arrow::Type::TIMESTAMP_MILLISECONDS:
+    //   return f.template operator()<arrow::Type::TIMESTAMP_MILLISECONDS>(
+    //     std::forward<Ts>(args)...);
+    // case arrow::Type::TIMESTAMP_MICROSECONDS:
+    //   return f.template operator()<arrow::Type::TIMESTAMP_MICROSECONDS>(
+    //     std::forward<Ts>(args)...);
+    // case arrow::Type::TIMESTAMP:
+    //   return f.template operator()<arrow::TimestampType>(
+    //     std::forward<Ts>(args)...);
+    // case arrow::Type::DURATION_DAYS:
+    //   return f.template operator()<arrow::Type::DURATION_DAYS>(
+    //     std::forward<Ts>(args)...);
+    // case arrow::Type::DURATION_SECONDS:
+    //   return f.template operator()<arrow::Type::DURATION_SECONDS>(
+    //     std::forward<Ts>(args)...);
+    // case arrow::Type::DURATION_MILLISECONDS:
+    //   return f.template operator()<arrow::Type::DURATION_MILLISECONDS>(
+    //     std::forward<Ts>(args)...);
+    // case arrow::Type::DURATION_MICROSECONDS:
+    //   return f.template operator()<arrow::Type::DURATION_MICROSECONDS>(
+    //     std::forward<Ts>(args)...);
+    // case arrow::Type::DURATION_NANOSECONDS:
+    //   return f.template operator()<arrow::Type::DURATION_NANOSECONDS>(
+    //     std::forward<Ts>(args)...);
+    // case arrow::Type::DICTIONARY32:
+    //   return f.template operator()<arrow::Type::DICTIONARY32>(
+    //     std::forward<Ts>(args)...);
+    case arrow::Type::STRING:
+      return f.template operator()<arrow::StringType>(std::forward<Ts>(args)...);
+    // case arrow::Type::LIST:
+    //   return f.template operator()<arrow::Type::LIST>(
+    //     std::forward<Ts>(args)...);
+    // case arrow::Type::DECIMAL32:
+    //   return f.template operator()<arrow::Type::DECIMAL32>(
+    //     std::forward<Ts>(args)...);
+    // case arrow::Type::DECIMAL64:
+    //   return f.template operator()<arrow::Type::DECIMAL64>(
+    //     std::forward<Ts>(args)...);
+    // case arrow::Type::DECIMAL128:
+    //   return f.template operator()<arrow::Type::DECIMAL128>(
+    //     std::forward<Ts>(args)...);
+    // case arrow::Type::STRUCT:
+    //   return f.template operator()<arrow::Type::STRUCT>(
+    //     std::forward<Ts>(args)...);
+    default: {
+      CUDF_FAIL("Invalid type.");
+    }
+  }
+}
+
+struct ArrowArrayGenerator {
+  template <typename T>
+  auto operator()(arrow::Scalar const& scalar)
+  {
+    // Get a builder for the scalar type
+    typename arrow::TypeTraits<T>::BuilderType builder;
+
+    auto status = builder.AppendScalar(scalar);
+    if (status != arrow::Status::OK()) { CUDF_FAIL("Arrow ArrayBuilder::AppendScalar failed"); }
+
+    auto maybe_array = builder.Finish();
+    if (!maybe_array.ok()) { CUDF_FAIL("Arrow ArrayBuilder::Finish failed"); }
+    return *maybe_array;
+  }
+};
+
+std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  auto array = arrow_type_dispatcher(*input.type, ArrowArrayGenerator{}, input);
+
+  auto field = arrow::field("", input.type);
+
+  auto table = arrow::Table::Make(arrow::schema({field}), {array});
+
+  auto cudf_table = from_arrow(*table);
+
+  auto col = cudf_table->get_column(0);
+
+  auto cv = col.view();
+  return get_element(cv, 0);
 }
 
 }  // namespace cudf

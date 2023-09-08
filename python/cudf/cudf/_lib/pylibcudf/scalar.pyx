@@ -2,19 +2,13 @@
 
 cimport pyarrow.lib
 from cython cimport no_gc_clear
-from libcpp.utility cimport move
 
 import pyarrow.lib
 
 from rmm._lib.memory_resource cimport get_current_device_resource
 
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.copying cimport get_element
 from cudf._lib.cpp.scalar.scalar cimport scalar
 
-from .column cimport Column
-from .interop cimport from_arrow
-from .table cimport Table
 from .types cimport DataType
 
 
@@ -43,23 +37,11 @@ cdef class Scalar:
 
     @staticmethod
     def from_pyarrow_scalar(pyarrow.lib.Scalar value):
-        # Put the scalar into a column so that we can use from_arrow (no scalar
-        # implementation), then extract the zeroth element.
-        arr = pyarrow.lib.array([value.as_py()], type=value.type)
-        cdef pyarrow.lib.Table pa_tbl = pyarrow.lib.Table.from_arrays(
-            [arr], names=["scalar"]
-        )
-        cdef Table tbl = from_arrow(pa_tbl)
+        # Need a local import here to avoid a circular dependency because
+        # from_arrow_scalar returns a Scalar.
+        from .interop import from_arrow_scalar
 
-        cdef Column col = tbl.columns()[0]
-        cdef column_view cv = col.view()
-
-        cdef unique_ptr[scalar] c_result
-
-        with nogil:
-            c_result = move(get_element(cv, 0))
-
-        return Scalar.from_libcudf(move(c_result))
+        return from_arrow_scalar(value)
 
     cdef const scalar* get(self) except *:
         return self.c_obj.get()
