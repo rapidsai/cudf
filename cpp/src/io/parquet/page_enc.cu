@@ -2304,6 +2304,11 @@ __global__ void __launch_bounds__(1)
   // optionally encode histograms and sum var_bytes.
   auto const need_var_bytes = col_g.physical_type == BYTE_ARRAY;
 
+  // TODO(ets): if the spec retains the current organization for the histograms, then we should
+  // be able to do a linear scan here across all the histograms of the chunk.
+  // {ck_g->def_histogram_data,ck_def_hist} would be the start/end bounds. this might complicate
+  // the chunk histogram calculation though...would still need nested loop or use mod to get the
+  // level index.
   if (cd->max_rep_level > REP_LVL_HIST_CUTOFF) {
     encoder.field_list_begin(6, num_data_pages * (cd->max_rep_level + 1), ST_FLD_I64);
     for (uint32_t page = first_data_page; page < num_pages; page++) {
