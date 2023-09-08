@@ -181,8 +181,8 @@ def test_ufunc_series(request, ufunc, has_nulls, indexed):
         # Converting nullable integer cudf.Series to pandas will produce a
         # float pd.Series, so instead we replace nulls with an arbitrary
         # integer value, precompute the mask, and then reapply it afterwards.
-        for arg in args:
-            set_random_null_mask_inplace(arg)
+        for idx, arg in enumerate(args):
+            set_random_null_mask_inplace(arg, seed=idx)
         pandas_args = [arg.fillna(0) for arg in args]
 
         # Note: Different indexes must be aligned before the mask is computed.
