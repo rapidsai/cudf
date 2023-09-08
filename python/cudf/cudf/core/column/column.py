@@ -2537,12 +2537,16 @@ def _construct_array(
             inferred_dtype == "string" and getattr(dtype, "kind", None) == "M"
         ):
             # We may have date-like strings with timezones
-            arbitrary = pd.to_datetime(arbitrary)
-            if isinstance(arbitrary.dtype, pd.DatetimeTZDtype):
-                raise NotImplementedError(
-                    "cuDF does not yet support timezone-aware datetimes"
-                )
-            return arbitrary.to_numpy()
+            try:
+                pd_arbitrary = pd.to_datetime(arbitrary).dtype
+            except pd.errors.OutOfBoundsDatetime:
+                # Not an issue in pandas>=2.0
+                pass
+            else:
+                if isinstance(pd_arbitrary.dtype, pd.DatetimeTZDtype):
+                    raise NotImplementedError(
+                        "cuDF does not yet support timezone-aware datetimes"
+                    )
         arbitrary = np.asarray(
             arbitrary,
             dtype=native_dtype
