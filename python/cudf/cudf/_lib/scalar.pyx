@@ -21,7 +21,9 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
 import cudf
+
 from cudf._lib cimport pylibcudf
+
 from cudf._lib.types import (
     LIBCUDF_TO_SUPPORTED_NUMPY_TYPES,
     datetime_unit_map,
@@ -70,6 +72,14 @@ from cudf._lib.cpp.wrappers.timestamps cimport (
 from cudf._lib.utils cimport columns_from_table_view, table_view_from_columns
 
 
+def nestrepl(lst):
+    for i, item in enumerate(lst):
+        if item is NA or item is NaT:
+            lst[i] = None
+        elif isinstance(item, list):
+            nestrepl(item)
+
+
 cdef class DeviceScalar:
 
     # I think this should be removable, except that currently the way that
@@ -100,8 +110,14 @@ cdef class DeviceScalar:
             _set_decimal_from_scalar(
                 self.c_value.c_obj, value, self._dtype, valid)
         elif isinstance(self._dtype, cudf.ListDtype):
-            _set_list_from_pylist(
-                self.c_value.c_obj, value, self._dtype, valid)
+            if value is NA:
+                value = None
+            else:
+                nestrepl(value)
+
+            pa_scalar = pa.scalar(value, type=self._dtype.to_arrow())
+            self.c_value = pylibcudf.Scalar.from_pyarrow_scalar(pa_scalar)
+            set_dtype = False
         elif isinstance(self._dtype, cudf.StructDtype):
             _set_struct_from_pydict(self.c_value.c_obj, value, self._dtype, valid)
         elif pd.api.types.is_string_dtype(self._dtype):
@@ -364,25 +380,6 @@ cdef _get_py_dict_from_struct(unique_ptr[scalar]& s, dtype):
     table = to_arrow([struct_col], [("None", dtype)])
     python_dict = table.to_pydict()["None"][0]
     return {k: _nested_na_replace([python_dict[k]])[0] for k in python_dict}
-
-cdef _set_list_from_pylist(unique_ptr[scalar]& s,
-                           object value,
-                           object dtype,
-                           bool valid=True):
-
-    value = value if valid else [NA]
-    cdef Column col
-    if isinstance(dtype.element_type, ListDtype):
-        pa_type = dtype.element_type.to_arrow()
-    else:
-        pa_type = dtype.to_arrow().value_type
-    col = cudf.core.column.as_column(
-        pa.array(value, from_pandas=True, type=pa_type)
-    )
-    cdef column_view col_view = col.view()
-    s.reset(
-        new list_scalar(col_view, valid)
-    )
 
 
 cdef _get_py_list_from_list(unique_ptr[scalar]& s, dtype):

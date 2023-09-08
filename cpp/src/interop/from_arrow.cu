@@ -511,9 +511,8 @@ constexpr decltype(auto) arrow_type_dispatcher(arrow::DataType const& dtype,
     //     std::forward<Ts>(args)...);
     case arrow::Type::STRING:
       return f.template operator()<arrow::StringType>(std::forward<Ts>(args)...);
-    // case arrow::Type::LIST:
-    //   return f.template operator()<arrow::Type::LIST>(
-    //     std::forward<Ts>(args)...);
+    case arrow::Type::LIST:
+      return f.template operator()<arrow::ListType>(std::forward<Ts>(args)...);
     // case arrow::Type::DECIMAL32:
     //   return f.template operator()<arrow::Type::DECIMAL32>(
     //     std::forward<Ts>(args)...);
@@ -547,6 +546,52 @@ struct ArrowArrayGenerator {
     return *maybe_array;
   }
 };
+
+struct BuilderGenerator {
+  template <typename T>
+  std::shared_ptr<arrow::ArrayBuilder> operator()(std::shared_ptr<arrow::DataType> const& type)
+  {
+    return std::make_shared<typename arrow::TypeTraits<T>::BuilderType>(
+      type, arrow::default_memory_pool());
+  }
+};
+
+template <>
+std::shared_ptr<arrow::ArrayBuilder> BuilderGenerator::operator()<arrow::ListType>(
+  std::shared_ptr<arrow::DataType> const& type)
+{
+  CUDF_FAIL("Not implemented");
+}
+
+template <>
+auto ArrowArrayGenerator::operator()<arrow::ListType>(arrow::Scalar const& scalar)
+{
+  std::shared_ptr<arrow::DataType> vt = scalar.type;
+  std::vector<std::shared_ptr<arrow::DataType>> types;
+
+  // TODO: Consider the possibility of list of structs/struct of lists
+  while (vt->id() == arrow::Type::LIST) {
+    types.push_back(vt);
+    // TODO: Error handling on dynamic_cast
+    vt = dynamic_cast<arrow::ListType&>(*vt).value_type();
+  }
+
+  // Now walk the list backwards and create the builders. Start with the
+  // current vt, which is the innermost one and not a list.
+  auto inner_builder = arrow_type_dispatcher(*vt, BuilderGenerator{}, vt);
+  std::shared_ptr<arrow::ListBuilder> builder;
+  for (auto it = types.rbegin(); it != types.rend(); ++it) {
+    builder = std::make_shared<arrow::ListBuilder>(arrow::default_memory_pool(), inner_builder);
+    inner_builder = builder;
+  }
+
+  auto status = builder->AppendScalar(scalar);
+  if (status != arrow::Status::OK()) { CUDF_FAIL("Arrow ArrayBuilder::AppendScalar failed"); }
+
+  auto maybe_array = builder->Finish();
+  if (!maybe_array.ok()) { CUDF_FAIL("Arrow ArrayBuilder::Finish failed"); }
+  return *maybe_array;
+}
 
 std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
                                          rmm::mr::device_memory_resource* mr)
