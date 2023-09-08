@@ -724,6 +724,28 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
         return new_index
 
+    @_cudf_nvtx_annotate
+    def difference(self, other, sort=None):
+        if isinstance(other, RangeIndex) and self.equals(other):
+            return self[:0]._get_reconciled_name_object(other)
+
+        return self._try_reconstruct_range_index(
+            super().difference(other, sort=sort)
+        )
+
+    def _try_reconstruct_range_index(self, index):
+        if isinstance(index, RangeIndex) or index.dtype.kind == "f":
+            return index
+        # Evenly spaced values can return a
+        # RangeIndex instead of a materialized Index.
+        if not index._column.has_nulls():
+            uniques = cupy.unique(cupy.diff(index.values))
+            if len(uniques) == 1 and uniques[0].get() != 0:
+                diff = uniques[0].get()
+                new_range = range(index[0], index[-1] + diff, diff)
+                return type(self)(new_range, name=index.name)
+        return index
+
     def sort_values(
         self,
         return_indexer=False,
