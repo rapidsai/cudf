@@ -31,21 +31,18 @@ cdef class Scalar:
     # than pylibcudf.Column because it can be a true wrapper around a libcudf
     # column
 
-    def __init__(self, pyarrow.lib.Scalar value=None):
+    def __cinit__(self, *args, **kwargs):
         self.mr = get_current_device_resource()
 
-        if value is None:
-            # TODO: This early return is not something we really want to
-            # support, but it here for now to ease the transition of
-            # DeviceScalar.
-            return
-
-        cdef Scalar s = Scalar.from_pyarrow_scalar(value)
-        self._data_type = DataType.from_libcudf(s.get().type())
-        self.c_obj.swap(s.c_obj)
+    def __init__(self, pyarrow.lib.Scalar value=None):
+        # TODO: This case is not something we really want to
+        # support, but it here for now to ease the transition of
+        # DeviceScalar.
+        if value is not None:
+            raise ValueError("Scalar should be constructed with a factory")
 
     @staticmethod
-    def from_pyarrow_scalar(self, pyarrow.lib.Scalar value):
+    def from_pyarrow_scalar(pyarrow.lib.Scalar value):
         # Put the scalar into a column so that we can use from_arrow (no scalar
         # implementation), then extract the zeroth element.
         arr = pyarrow.lib.array([value.as_py()], type=value.type)

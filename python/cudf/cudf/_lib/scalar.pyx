@@ -108,13 +108,13 @@ cdef class DeviceScalar:
             if value is NA:
                 value = None
             pa_scalar = pa.scalar(value, type=pa.string())
-            self.c_value = pylibcudf.Scalar(pa_scalar)
+            self.c_value = pylibcudf.Scalar.from_pyarrow_scalar(pa_scalar)
             set_dtype = False
         elif pd.api.types.is_numeric_dtype(self._dtype):
             if value is NA:
                 value = None
             pa_scalar = pa.scalar(value, type=pa.from_numpy_dtype(self._dtype))
-            self.c_value = pylibcudf.Scalar(pa_scalar)
+            self.c_value = pylibcudf.Scalar.from_pyarrow_scalar(pa_scalar)
             set_dtype = False
         # TODO: For datetime and timedeltas need to find a way to not overflow
         # for large values. The problem is that numpy supports larger values,
