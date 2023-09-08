@@ -21,6 +21,12 @@
 
 #include <rmm/cuda_stream_pool.hpp>
 
+#include <algorithm>
+#include <cstddef>
+#include <memory>
+#include <mutex>
+#include <vector>
+
 namespace cudf::detail {
 
 namespace {

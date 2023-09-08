@@ -20,6 +20,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cstddef>
+#include <vector>
+
 namespace cudf::detail {
 
 /**
