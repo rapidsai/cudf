@@ -15,24 +15,25 @@ CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 
 # TODO: Remove `--no-test` flag once importing on a CPU
 # node works correctly
-rapids-mamba-retry mambabuild \
+# With boa installed conda build forwards to the boa builder
+rapids-conda-retry mambabuild \
   --no-test \
   --channel "${CPP_CHANNEL}" \
   conda/recipes/cudf
 
-rapids-mamba-retry mambabuild \
+rapids-conda-retry mambabuild \
   --no-test \
   --channel "${CPP_CHANNEL}" \
   --channel "${RAPIDS_CONDA_BLD_OUTPUT_DIR}" \
   conda/recipes/dask-cudf
 
-rapids-mamba-retry mambabuild \
+rapids-conda-retry mambabuild \
   --no-test \
   --channel "${CPP_CHANNEL}" \
   --channel "${RAPIDS_CONDA_BLD_OUTPUT_DIR}" \
   conda/recipes/cudf_kafka
 
-rapids-mamba-retry mambabuild \
+rapids-conda-retry mambabuild \
   --no-test \
   --channel "${CPP_CHANNEL}" \
   --channel "${RAPIDS_CONDA_BLD_OUTPUT_DIR}" \

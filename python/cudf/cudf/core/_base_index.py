@@ -948,13 +948,21 @@ class BaseIndex(Serializable):
         >>> idx1.difference(idx2, sort=False)
         Int64Index([2, 1], dtype='int64')
         """
+        if not can_convert_to_column(other):
+            raise TypeError("Input must be Index or array-like")
+
         if sort not in {None, False}:
             raise ValueError(
                 f"The 'sort' keyword only takes the values "
                 f"of None or False; {sort} was passed."
             )
 
-        other = cudf.Index(other)
+        other = cudf.Index(other, name=getattr(other, "name", self.name))
+
+        if not len(other):
+            return self._get_reconciled_name_object(other)
+        elif self.equals(other):
+            return self[:0]._get_reconciled_name_object(other)
 
         res_name = _get_result_name(self.name, other.name)
 
