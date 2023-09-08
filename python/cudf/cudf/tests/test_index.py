@@ -20,6 +20,7 @@ from cudf.core.index import (
     as_index,
 )
 from cudf.testing._utils import (
+    ALL_TYPES,
     FLOAT_TYPES,
     NUMERIC_TYPES,
     OTHER_TYPES,
@@ -788,6 +789,10 @@ def test_index_to_series(data):
         ["5", "6", "2", "a", "b", "c"],
         [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
         [1.0, 5.0, 6.0, 0.0, 1.3],
+        ["ab", "cd", "ef"],
+        pd.Series(["1", "2", "a", "3", None], dtype="category"),
+        range(0, 10),
+        [],
     ],
 )
 @pytest.mark.parametrize(
@@ -798,8 +803,11 @@ def test_index_to_series(data):
         [10, 20, 30, 40, 50, 60],
         ["1", "2", "3", "4", "5", "6"],
         ["5", "6", "2", "a", "b", "c"],
+        ["ab", "ef", None],
         [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
         [1.0, 5.0, 6.0, 0.0, 1.3],
+        range(2, 4),
+        pd.Series(["1", "a", "3", None], dtype="category"),
         [],
     ],
 )
@@ -817,7 +825,21 @@ def test_index_difference(data, other, sort, name_data, name_other):
 
     expected = pd_data.difference(pd_other, sort=sort)
     actual = gd_data.difference(gd_other, sort=sort)
+
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("other", ["a", 1, None])
+def test_index_difference_invalid_inputs(other):
+    pdi = pd.Index([1, 2, 3])
+    gdi = cudf.Index([1, 2, 3])
+
+    assert_exceptions_equal(
+        pdi.difference,
+        gdi.difference,
+        ([other], {}),
+        ([other], {}),
+    )
 
 
 def test_index_difference_sort_error():
@@ -2676,10 +2698,11 @@ class TestIndexScalarGetItem:
             12,
             20,
         ],
+        [1, 2, 3, 4],
     ],
 )
 def test_index_mixed_dtype_error(data):
-    pi = pd.Index(data)
+    pi = pd.Index(data, dtype="object")
     with pytest.raises(TypeError):
         cudf.Index(pi)
 
@@ -2702,3 +2725,26 @@ def test_index_getitem_time_duration(dtype):
                 assert gidx[i] is pidx[i]
             else:
                 assert_eq(gidx[i], pidx[i])
+
+
+@pytest.mark.parametrize("dtype", ALL_TYPES)
+def test_index_empty_from_pandas(request, dtype):
+    request.node.add_marker(
+        pytest.mark.xfail(
+            condition=not PANDAS_GE_200
+            and dtype
+            in {
+                "datetime64[ms]",
+                "datetime64[s]",
+                "datetime64[us]",
+                "timedelta64[ms]",
+                "timedelta64[s]",
+                "timedelta64[us]",
+            },
+            reason="Fixed in pandas-2.0",
+        )
+    )
+    pidx = pd.Index([], dtype=dtype)
+    gidx = cudf.from_pandas(pidx)
+
+    assert_eq(pidx, gidx)

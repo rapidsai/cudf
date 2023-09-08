@@ -2062,10 +2062,15 @@ def as_column(
             )
         else:
             pyarrow_array = pa.array(arbitrary, from_pandas=nan_as_null)
-            if arbitrary.dtype == cudf.dtype("object") and isinstance(
-                pyarrow_array, (pa.DurationArray, pa.TimestampArray)
+            if (
+                arbitrary.dtype == cudf.dtype("object")
+                and cudf.dtype(pyarrow_array.type.to_pandas_dtype())
+                != cudf.dtype(arbitrary.dtype)
+                and not is_bool_dtype(
+                    cudf.dtype(pyarrow_array.type.to_pandas_dtype())
+                )
             ):
-                raise TypeError("Cannot create column with mixed types")
+                raise MixedTypeError("Cannot create column with mixed types")
             if isinstance(pyarrow_array.type, pa.Decimal128Type):
                 pyarrow_type = cudf.Decimal128Dtype.from_arrow(
                     pyarrow_array.type
@@ -2434,10 +2439,29 @@ def as_column(
                 )
 
                 if (
+                    isinstance(pyarrow_array, pa.NullArray)
+                    and pa_type is None
+                    and dtype is None
+                    and getattr(arbitrary, "dtype", None)
+                    == cudf.dtype("object")
+                ):
+                    # pa.array constructor returns a NullArray
+                    # for empty arrays, instead of a StringArray.
+                    # This issue is only specific to this dtype,
+                    # all other dtypes, result in their corresponding
+                    # arrow array creation.
+                    dtype = cudf.dtype("str")
+                    pyarrow_array = pyarrow_array.cast(np_to_pa_dtype(dtype))
+
+                if (
                     isinstance(arbitrary, pd.Index)
                     and arbitrary.dtype == cudf.dtype("object")
-                    and isinstance(
-                        pyarrow_array, (pa.DurationArray, pa.TimestampArray)
+                    and (
+                        cudf.dtype(pyarrow_array.type.to_pandas_dtype())
+                        != cudf.dtype(arbitrary.dtype)
+                        and not is_bool_dtype(
+                            cudf.dtype(pyarrow_array.type.to_pandas_dtype())
+                        )
                     )
                 ):
                     raise MixedTypeError(
