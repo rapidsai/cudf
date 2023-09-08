@@ -2550,7 +2550,6 @@ def test_groupby_fillna_multi_value(nelem):
         ],
         rows=nelem,
         use_threads=False,
-        seed=0,
     )
     key_col = "0"
     value_cols = ["1", "2", "3", "4", "5", "6"]
@@ -2595,7 +2594,6 @@ def test_groupby_fillna_multi_value_df(nelem):
         ],
         rows=nelem,
         use_threads=False,
-        seed=0,
     )
     key_col = "0"
     value_cols = ["1", "2", "3", "4", "5"]
@@ -2671,7 +2669,6 @@ def test_groupby_fillna_method(nelem, method):
         ],
         rows=nelem,
         use_threads=False,
-        seed=0,
     )
     key_col = "0"
     value_cols = ["1", "2", "3", "4", "5", "6", "7", "8"]

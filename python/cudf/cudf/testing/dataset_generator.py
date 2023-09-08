@@ -71,7 +71,7 @@ class Parameters:
         Number of rows to generate
     column_parameters : List[ColumnParams]
         ColumnParams for each column
-    seed : int or None, default None
+    seed : int, default 1
         Seed for random data generation
     """
 
@@ -79,7 +79,7 @@ class Parameters:
         self,
         num_rows=2048,
         column_parameters=None,
-        seed=None,
+        seed=1,
     ):
         self.num_rows = num_rows
         if column_parameters is None:
@@ -232,8 +232,7 @@ def generate(
 
 def get_dataframe(parameters, use_threads):
     # Initialize seeds
-    if parameters.seed is not None:
-        np.random.seed(parameters.seed)
+    np.random.seed(parameters.seed)
 
     # For each column, use a generic Mimesis producer to create an Iterable
     # for generating data
@@ -312,9 +311,7 @@ def get_dataframe(parameters, use_threads):
     return tbl
 
 
-def rand_dataframe(
-    dtypes_meta, rows, seed=random.randint(0, 2**32 - 1), use_threads=True
-):
+def rand_dataframe(dtypes_meta, rows, seed=1, use_threads=True):
     """
     Generates a random table.
 

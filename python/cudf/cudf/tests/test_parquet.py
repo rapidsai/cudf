@@ -1316,7 +1316,6 @@ def test_delta_binary(nrows, add_nulls, tmpdir):
             },
         ],
         rows=nrows,
-        seed=0,
         use_threads=False,
     )
     # Roundabout conversion to pandas to preserve nulls/data types
@@ -1469,7 +1468,6 @@ def test_parquet_writer_int96_timestamps(tmpdir, pdf, gdf):
 
 
 def test_multifile_parquet_folder(tmpdir):
-
     test_pdf1 = make_pdf(nrows=10, nvalids=10 // 2)
     test_pdf2 = make_pdf(nrows=20)
     expect = pd.concat([test_pdf1, test_pdf2])
