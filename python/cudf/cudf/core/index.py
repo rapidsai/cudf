@@ -734,17 +734,16 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     def _try_reconstruct_range_index(self, index):
-        if index.dtype.kind == "f":
+        if isinstance(index, RangeIndex) or index.dtype.kind == "f":
             return index
         # Evenly spaced values can return a
-        # RangeIndex instead of Int64Index
-        unique_diffs = index.to_frame(name="None").diff()["None"].unique()
-        if len(unique_diffs) == 2 and (
-            unique_diffs[0] is cudf.NA and unique_diffs[1] != 0
-        ):
-            diff = unique_diffs[1]
-            new_range = range(index[0], index[-1] + diff, diff)
-            return type(self)(new_range, name=index.name)
+        # RangeIndex instead of a materialized Index.
+        if not index._column.has_nulls():
+            uniques = cupy.unique(cupy.diff(index.values))
+            if len(uniques) == 1 and uniques[0].get() != 0:
+                diff = uniques[0].get()
+                new_range = range(index[0], index[-1] + diff, diff)
+                return type(self)(new_range, name=index.name)
         return index
 
     def sort_values(
