@@ -829,6 +829,19 @@ def test_index_difference(data, other, sort, name_data, name_other):
     assert_eq(expected, actual)
 
 
+@pytest.mark.parametrize("other", ["a", 1, None])
+def test_index_difference_invalid_inputs(other):
+    pdi = pd.Index([1, 2, 3])
+    gdi = cudf.Index([1, 2, 3])
+
+    assert_exceptions_equal(
+        pdi.difference,
+        gdi.difference,
+        ([other], {}),
+        ([other], {}),
+    )
+
+
 def test_index_difference_sort_error():
     pdi = pd.Index([1, 2, 3])
     gdi = cudf.Index([1, 2, 3])
