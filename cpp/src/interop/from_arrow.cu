@@ -502,9 +502,8 @@ constexpr decltype(auto) arrow_type_dispatcher(arrow::DataType const& dtype,
       return f.template operator()<arrow::DoubleType>(std::forward<Ts>(args)...);
     case arrow::Type::BOOL:
       return f.template operator()<arrow::BooleanType>(std::forward<Ts>(args)...);
-    // case arrow::Type::TIMESTAMP_DAYS:
-    //   return f.template operator()<arrow::Type::TIMESTAMP_DAYS>(
-    //     std::forward<Ts>(args)...);
+    case arrow::Type::TIMESTAMP:
+      return f.template operator()<arrow::TimestampType>(std::forward<Ts>(args)...);
     // case arrow::Type::TIMESTAMP_SECONDS:
     //   return f.template operator()<arrow::Type::TIMESTAMP_SECONDS>(
     //     std::forward<Ts>(args)...);
@@ -563,7 +562,7 @@ struct ArrowArrayGenerator {
   auto operator()(arrow::Scalar const& scalar)
   {
     // Get a builder for the scalar type
-    typename arrow::TypeTraits<T>::BuilderType builder;
+    typename arrow::TypeTraits<T>::BuilderType builder{scalar.type, arrow::default_memory_pool()};
 
     auto status = builder.AppendScalar(scalar);
     if (status != arrow::Status::OK()) { CUDF_FAIL("Arrow ArrayBuilder::AppendScalar failed"); }
