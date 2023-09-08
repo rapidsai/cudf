@@ -11,8 +11,8 @@ rapids-print-env
 
 rapids-logger "Begin cpp build"
 
-# With boa installed mamba build forward to boa
-rapids-mamba-retry build \
+# With boa installed conda build forward to boa
+rapids-conda-retry build \
     conda/recipes/libcudf
 
 rapids-upload-conda-to-s3 cpp
