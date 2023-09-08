@@ -247,7 +247,7 @@ bool CompactProtocolReader::read(ColumnChunkMetaData* c)
                             ParquetFieldInt64(10, c->index_page_offset),
                             ParquetFieldInt64(11, c->dictionary_page_offset),
                             ParquetFieldStruct(12, c->statistics),
-                            OptionalParquetFieldStruct(16, c->size_statistics));
+                            ParquetFieldOptionalStruct(16, c->size_statistics));
   return function_builder(this, op);
 }
 
@@ -307,15 +307,15 @@ bool CompactProtocolReader::read(PageLocation* p)
 bool CompactProtocolReader::read(OffsetIndex* o)
 {
   auto op = std::make_tuple(ParquetFieldStructList(1, o->page_locations),
-                            OptionalParquetFieldInt64List(2, o->unencoded_byte_array_data_bytes));
+                            ParquetFieldOptionalInt64List(2, o->unencoded_byte_array_data_bytes));
   return function_builder(this, op);
 }
 
 bool CompactProtocolReader::read(SizeStatistics* s)
 {
-  auto op = std::make_tuple(OptionalParquetFieldInt64(1, s->unencoded_byte_array_data_bytes),
-                            OptionalParquetFieldInt64List(2, s->repetition_level_histogram),
-                            OptionalParquetFieldInt64List(3, s->definition_level_histogram));
+  auto op = std::make_tuple(ParquetFieldOptionalInt64(1, s->unencoded_byte_array_data_bytes),
+                            ParquetFieldOptionalInt64List(2, s->repetition_level_histogram),
+                            ParquetFieldOptionalInt64List(3, s->definition_level_histogram));
   return function_builder(this, op);
 }
 
@@ -326,8 +326,8 @@ bool CompactProtocolReader::read(ColumnIndex* c)
                             ParquetFieldBinaryList(3, c->max_values),
                             ParquetFieldEnum<BoundaryOrder>(4, c->boundary_order),
                             ParquetFieldInt64List(5, c->null_counts),
-                            OptionalParquetFieldInt64List(6, c->repetition_level_histogram),
-                            OptionalParquetFieldInt64List(7, c->definition_level_histogram));
+                            ParquetFieldOptionalInt64List(6, c->repetition_level_histogram),
+                            ParquetFieldOptionalInt64List(7, c->definition_level_histogram));
   return function_builder(this, op);
 }
 

@@ -288,12 +288,12 @@ class ParquetFieldInt64 {
  *
  * @return True if field type is not int32 or int64
  */
-class OptionalParquetFieldInt64 {
+class ParquetFieldOptionalInt64 {
   int field_val;
   std::optional<int64_t>& val;
 
  public:
-  OptionalParquetFieldInt64(int f, std::optional<int64_t>& v) : field_val(f), val(v) {}
+  ParquetFieldOptionalInt64(int f, std::optional<int64_t>& v) : field_val(f), val(v) {}
 
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
@@ -332,12 +332,12 @@ class ParquetFieldInt64List {
   int field() { return field_val; }
 };
 
-class OptionalParquetFieldInt64List {
+class ParquetFieldOptionalInt64List {
   int field_val;
   std::optional<std::vector<int64_t>>& val;
 
  public:
-  OptionalParquetFieldInt64List(int f, std::optional<std::vector<int64_t>>& v)
+  ParquetFieldOptionalInt64List(int f, std::optional<std::vector<int64_t>>& v)
     : field_val(f), val(v)
   {
   }
@@ -404,12 +404,12 @@ ParquetFieldStructListFunctor<T> ParquetFieldStructList(int f, std::vector<T>& v
  * struct fails
  */
 template <typename T>
-class OptionalParquetFieldStructListFunctor {
+class ParquetFieldOptionalStructListFunctor {
   int field_val;
   std::optional<std::vector<T>>& val;
 
  public:
-  OptionalParquetFieldStructListFunctor(int f, std::optional<std::vector<T>>& v)
+  ParquetFieldOptionalStructListFunctor(int f, std::optional<std::vector<T>>& v)
     : field_val(f), val(v)
   {
   }
@@ -434,10 +434,10 @@ class OptionalParquetFieldStructListFunctor {
 };
 
 template <typename T>
-OptionalParquetFieldStructListFunctor<T> OptionalParquetFieldStructList(
+ParquetFieldOptionalStructListFunctor<T> ParquetFieldOptionalStructList(
   int f, std::optional<std::vector<T>>& v)
 {
-  return OptionalParquetFieldStructListFunctor<T>(f, v);
+  return ParquetFieldOptionalStructListFunctor<T>(f, v);
 }
 
 /**
@@ -498,12 +498,12 @@ ParquetFieldStructFunctor<T> ParquetFieldStruct(int f, T& v)
 }
 
 template <typename T>
-class OptionalParquetFieldStructFunctor {
+class ParquetFieldOptionalStructFunctor {
   int field_val;
   std::optional<T>& val;
 
  public:
-  OptionalParquetFieldStructFunctor(int f, std::optional<T>& v) : field_val(f), val(v) {}
+  ParquetFieldOptionalStructFunctor(int f, std::optional<T>& v) : field_val(f), val(v) {}
 
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
@@ -516,9 +516,9 @@ class OptionalParquetFieldStructFunctor {
 };
 
 template <typename T>
-OptionalParquetFieldStructFunctor<T> OptionalParquetFieldStruct(int f, std::optional<T>& v)
+ParquetFieldOptionalStructFunctor<T> ParquetFieldOptionalStruct(int f, std::optional<T>& v)
 {
-  return OptionalParquetFieldStructFunctor<T>(f, v);
+  return ParquetFieldOptionalStructFunctor<T>(f, v);
 }
 
 /**
