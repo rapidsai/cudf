@@ -18,7 +18,7 @@ def timeseries(
     freq="1s",
     dtypes=None,
     nulls_frequency=0,
-    seed=None,
+    seed=1,
 ):
     """Create timeseries dataframe with random data
 
