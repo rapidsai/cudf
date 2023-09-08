@@ -2519,11 +2519,11 @@ def _construct_array(
         arbitrary = cupy.asarray(arbitrary, dtype=dtype)
     except (TypeError, ValueError):
         native_dtype = dtype
-        inferred_dtype = None
+        inferred_dtype = infer_dtype(arbitrary, skipna=False)
         if (
             dtype is None
             and not cudf._lib.scalar._is_null_host_scalar(arbitrary)
-            and (inferred_dtype := infer_dtype(arbitrary, skipna=False))
+            and inferred_dtype
             in (
                 "mixed",
                 "mixed-integer",
@@ -2538,7 +2538,7 @@ def _construct_array(
         ):
             # We may have date-like strings with timezones
             arbitrary = pd.to_datetime(arbitrary)
-            if isinstance(arbitrary, pd.DatetimeTZDtype):
+            if isinstance(arbitrary.dtype, pd.DatetimeTZDtype):
                 raise NotImplementedError(
                     "cuDF does not yet support timezone-aware datetimes"
                 )
