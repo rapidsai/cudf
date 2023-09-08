@@ -261,8 +261,8 @@ def test_binary_ufunc_series_array(
         # Converting nullable integer cudf.Series to pandas will produce a
         # float pd.Series, so instead we replace nulls with an arbitrary
         # integer value, precompute the mask, and then reapply it afterwards.
-        for arg in args:
-            set_random_null_mask_inplace(arg)
+        for idx, arg in enumerate(args):
+            set_random_null_mask_inplace(arg, seed=idx)
 
         # Cupy doesn't support nulls, so we fill with nans before converting.
         args[1] = args[1].fillna(cp.nan)
@@ -403,8 +403,8 @@ def test_ufunc_dataframe(request, ufunc, has_nulls, indexed):
         # Converting nullable integer cudf.Series to pandas will produce a
         # float pd.Series, so instead we replace nulls with an arbitrary
         # integer value, precompute the mask, and then reapply it afterwards.
-        for arg in args:
-            set_random_null_mask_inplace(arg["foo"])
+        for idx, arg in enumerate(args):
+            set_random_null_mask_inplace(arg["foo"], seed=idx)
         pandas_args = [arg.copy() for arg in args]
         for arg in pandas_args:
             arg["foo"] = arg["foo"].fillna(0)
