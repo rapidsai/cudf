@@ -2533,6 +2533,16 @@ def _construct_array(
         if inferred_dtype == "interval":
             # Only way to construct an Interval column.
             return pd.array(arbitrary)
+        elif (
+            inferred_dtype == "string" and getattr(dtype, "kind", None) == "M"
+        ):
+            # We may have date-like strings with timezones
+            arbitrary = pd.to_datetime(arbitrary)
+            if isinstance(arbitrary, pd.DatetimeTZDtype):
+                raise NotImplementedError(
+                    "cuDF does not yet support timezone-aware datetimes"
+                )
+            return arbitrary.to_numpy()
         arbitrary = np.asarray(
             arbitrary,
             dtype=native_dtype

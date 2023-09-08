@@ -2150,6 +2150,11 @@ def test_daterange_pandas_compatibility():
     assert_eq(expected, actual)
 
 
+def test_strings_with_utc_offset_not_implemented():
+    with pytest.raises(NotImplementedError):
+        DatetimeIndex(["2022-07-22 00:00:00+02:00"])
+
+
 @pytest.mark.parametrize("code", ["z", "Z"])
 def test_format_timezone_not_implemented(code):
     with pytest.raises(NotImplementedError):
