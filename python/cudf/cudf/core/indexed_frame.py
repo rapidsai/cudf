@@ -3346,7 +3346,7 @@ class IndexedFrame(Frame):
         frac=None,
         replace=False,
         weights=None,
-        random_state=None,
+        random_state=1,
         axis=None,
         ignore_index=False,
     ):
@@ -3387,7 +3387,7 @@ class IndexedFrame(Frame):
             equal to the number of rows to sample from, and will be normalized
             to have a sum of 1. Unlike pandas, index alignment is not currently
             not performed.
-        random_state : int, numpy/cupy RandomState, or None, default None
+        random_state : int, numpy/cupy RandomState, or None, default 1
             If None, default cupy random state is chosen.
             If int, the seed for the default cupy random state.
             If RandomState, rows-to-sample are generated from the RandomState.

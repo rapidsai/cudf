@@ -950,7 +950,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         frac: Optional[float] = None,
         replace: bool = False,
         weights: Union[abc.Sequence, "cudf.Series", None] = None,
-        random_state: Union[np.random.RandomState, int, None] = None,
+        random_state: Union[np.random.RandomState, int, None] = 1,
     ):
         """Return a random sample of items in each group.
 
