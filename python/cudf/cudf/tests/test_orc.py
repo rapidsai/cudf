@@ -468,7 +468,7 @@ def test_chunked_orc_writer(
 def test_orc_writer_strings(tmpdir, dtypes):
     gdf_fname = tmpdir.join("gdf_strings.orc")
 
-    expect = cudf.datasets.randomdata(nrows=10, dtypes=dtypes, seed=1)
+    expect = cudf.datasets.randomdata(nrows=10, dtypes=dtypes)
     expect.to_orc(gdf_fname)
     got = pd.read_orc(gdf_fname)
 
@@ -487,7 +487,7 @@ def test_orc_writer_strings(tmpdir, dtypes):
 def test_chunked_orc_writer_strings(tmpdir, dtypes):
     gdf_fname = tmpdir.join("chunked_gdf_strings.orc")
 
-    gdf = cudf.datasets.randomdata(nrows=10, dtypes=dtypes, seed=1)
+    gdf = cudf.datasets.randomdata(nrows=10, dtypes=dtypes)
     pdf = gdf.to_pandas()
     expect = pd.concat([pdf, pdf]).reset_index(drop=True)
     writer = ORCWriter(gdf_fname)
@@ -1661,7 +1661,7 @@ def test_writer_protobuf_large_rowindexentry():
 @pytest.mark.parametrize("compression", ["ZLIB", "ZSTD"])
 def test_orc_writer_nvcomp(compression):
     expected = cudf.datasets.randomdata(
-        nrows=12345, dtypes={"a": int, "b": str, "c": float}, seed=1
+        nrows=12345, dtypes={"a": int, "b": str, "c": float}
     )
 
     buff = BytesIO()
