@@ -2158,6 +2158,12 @@ def test_format_timezone_not_implemented(code):
         )
 
 
+@pytest.mark.parametrize("tz", ["Z", "UTC-3", "+01:00"])
+def test_no_format_timezone_not_implemented(tz):
+    with pytest.raises(NotImplementedError):
+        cudf.to_datetime([f"2020-01-01 00:00:00{tz}"])
+
+
 @pytest.mark.parametrize("arg", [True, False])
 def test_args_not_datetime_typerror(arg):
     with pytest.raises(TypeError):
