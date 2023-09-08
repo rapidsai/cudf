@@ -107,6 +107,10 @@ outputs:
         - dlpack {{ dlpack_version }}
         - gtest {{ gtest_version }}
         - gmock {{ gtest_version }}
+    test:
+      commands:
+        - test -f $PREFIX/lib/libcudf.so
+        - test -f $PREFIX/include/cudf/column/column.hpp
     about:
       home: https://rapids.ai/
       license: Apache-2.0
@@ -132,6 +136,9 @@ outputs:
       run:
         - librdkafka {{ librdkafka_version }}
         - {{ pin_subpackage('libcudf', exact=True) }}
+    test:
+      commands:
+        - test -f $PREFIX/lib/libcudf_kafka.so
     about:
       home: https://rapids.ai/
       license: Apache-2.0
