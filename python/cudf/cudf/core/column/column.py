@@ -2538,7 +2538,7 @@ def _construct_array(
         ):
             # We may have date-like strings with timezones
             try:
-                pd_arbitrary = pd.to_datetime(arbitrary).dtype
+                pd_arbitrary = pd.to_datetime(arbitrary)
             except pd.errors.OutOfBoundsDatetime:
                 # Not an issue in pandas>=2.0
                 pass
