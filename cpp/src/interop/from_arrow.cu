@@ -16,6 +16,7 @@
 #include <arrow/array/array_base.h>
 #include <arrow/array/builder_nested.h>
 #include <arrow/type.h>
+#include <arrow/type_fwd.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/concatenate.hpp>
@@ -554,91 +555,45 @@ std::shared_ptr<arrow::ArrayBuilder> BuilderGenerator::operator()<arrow::StructT
   CUDF_FAIL("Not implemented");
 }
 
-struct ArrowArrayGenerator {
-  template <typename T>
-  auto operator()(arrow::Scalar const& scalar)
-  {
-    // Get a builder for the scalar type
-    auto builder = arrow_type_dispatcher(*scalar.type, BuilderGenerator{}, scalar.type);
-
-    auto status = builder->AppendScalar(scalar);
-    if (status != arrow::Status::OK()) { CUDF_FAIL("Arrow ArrayBuilder::AppendScalar failed"); }
-
-    auto maybe_array = builder->Finish();
-    if (!maybe_array.ok()) { CUDF_FAIL("Arrow ArrayBuilder::Finish failed"); }
-    return *maybe_array;
-  }
-};
-
-std::shared_ptr<arrow::ArrayBuilder> make_list_builder(std::shared_ptr<arrow::DataType> const& type)
+std::shared_ptr<arrow::ArrayBuilder> make_builder(std::shared_ptr<arrow::DataType> const& type)
 {
-  std::vector<std::shared_ptr<arrow::DataType>> types;
+  switch (type->id()) {
+    case arrow::Type::STRUCT: {
+      std::vector<std::shared_ptr<arrow::ArrayBuilder>> field_builders;
 
-  // TODO: Consider the possibility of list of structs/struct of lists
-  std::shared_ptr<arrow::DataType> vt = type;
-  while (vt->id() == arrow::Type::LIST) {
-    types.push_back(vt);
-    // TODO: Error handling on dynamic_cast
-    vt = dynamic_cast<arrow::ListType&>(*vt).value_type();
-  }
-
-  // Now walk the list backwards and create the builders. Start with the
-  // current vt, which is the innermost one and not a list.
-  auto inner_builder = arrow_type_dispatcher(*vt, BuilderGenerator{}, vt);
-  std::shared_ptr<arrow::ListBuilder> builder;
-  for (auto it = types.rbegin(); it != types.rend(); ++it) {
-    builder = std::make_shared<arrow::ListBuilder>(arrow::default_memory_pool(), inner_builder);
-    inner_builder = builder;
-  }
-  return builder;
-}
-
-template <>
-auto ArrowArrayGenerator::operator()<arrow::ListType>(arrow::Scalar const& scalar)
-{
-  std::shared_ptr<arrow::ArrayBuilder> builder = make_list_builder(scalar.type);
-
-  auto status = builder->AppendScalar(scalar);
-  if (status != arrow::Status::OK()) { CUDF_FAIL("Arrow ArrayBuilder::AppendScalar failed"); }
-
-  auto maybe_array = builder->Finish();
-  if (!maybe_array.ok()) { CUDF_FAIL("Arrow ArrayBuilder::Finish failed"); }
-  return *maybe_array;
-}
-
-std::shared_ptr<arrow::ArrayBuilder> make_struct_builder(
-  std::shared_ptr<arrow::DataType> const& type)
-{
-  std::vector<std::shared_ptr<arrow::ArrayBuilder>> field_builders;
-
-  for (auto i = 0; i < type->num_fields(); ++i) {
-    auto const vt = type->field(i)->type();
-    if (vt->id() == arrow::Type::STRUCT) {
-      field_builders.push_back(make_struct_builder(vt));
-    } else {
-      field_builders.push_back(arrow_type_dispatcher(*vt, BuilderGenerator{}, vt));
+      for (auto i = 0; i < type->num_fields(); ++i) {
+        auto const vt = type->field(i)->type();
+        if (vt->id() == arrow::Type::STRUCT || vt->id() == arrow::Type::LIST) {
+          field_builders.push_back(make_builder(vt));
+        } else {
+          field_builders.push_back(arrow_type_dispatcher(*vt, BuilderGenerator{}, vt));
+        }
+      }
+      return std::make_shared<arrow::StructBuilder>(
+        type, arrow::default_memory_pool(), field_builders);
+    }
+    case arrow::Type::LIST: {
+      return std::make_shared<arrow::ListBuilder>(arrow::default_memory_pool(),
+                                                  make_builder(type->field(0)->type()));
+    }
+    default: {
+      return arrow_type_dispatcher(*type, BuilderGenerator{}, type);
     }
   }
-  return std::make_shared<arrow::StructBuilder>(type, arrow::default_memory_pool(), field_builders);
-}
-
-template <>
-auto ArrowArrayGenerator::operator()<arrow::StructType>(arrow::Scalar const& scalar)
-{
-  std::shared_ptr<arrow::ArrayBuilder> builder = make_struct_builder(scalar.type);
-
-  auto status = builder->AppendScalar(scalar);
-  if (status != arrow::Status::OK()) { CUDF_FAIL("Arrow ArrayBuilder::AppendScalar failed"); }
-
-  auto maybe_array = builder->Finish();
-  if (!maybe_array.ok()) { CUDF_FAIL("Arrow ArrayBuilder::Finish failed"); }
-  return *maybe_array;
 }
 
 std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
                                          rmm::mr::device_memory_resource* mr)
 {
-  auto array = arrow_type_dispatcher(*input.type, ArrowArrayGenerator{}, input);
+  // Get a builder for the scalar type
+  auto builder = make_builder(input.type);
+
+  auto status = builder->AppendScalar(input);
+  if (status != arrow::Status::OK()) { CUDF_FAIL("Arrow ArrayBuilder::AppendScalar failed"); }
+
+  auto maybe_array = builder->Finish();
+  if (!maybe_array.ok()) { CUDF_FAIL("Arrow ArrayBuilder::Finish failed"); }
+  auto array = *maybe_array;
 
   auto field = arrow::field("", input.type);
 
