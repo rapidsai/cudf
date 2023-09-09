@@ -515,15 +515,8 @@ constexpr decltype(auto) arrow_type_dispatcher(arrow::DataType const& dtype,
       return f.template operator()<arrow::StringType>(std::forward<Ts>(args)...);
     case arrow::Type::LIST:
       return f.template operator()<arrow::ListType>(std::forward<Ts>(args)...);
-      // case arrow::Type::DECIMAL32:
-      //   return f.template operator()<arrow::Type::DECIMAL32>(
-      //     std::forward<Ts>(args)...);
-      // case arrow::Type::DECIMAL64:
-      //   return f.template operator()<arrow::Type::DECIMAL64>(
-      //     std::forward<Ts>(args)...);
-      // case arrow::Type::DECIMAL128:
-      //   return f.template operator()<arrow::Type::DECIMAL128>(
-      //     std::forward<Ts>(args)...);
+    case arrow::Type::DECIMAL128:
+      return f.template operator()<arrow::Decimal128Type>(std::forward<Ts>(args)...);
     case arrow::Type::STRUCT:
       return f.template operator()<arrow::StructType>(std::forward<Ts>(args)...);
     default: {

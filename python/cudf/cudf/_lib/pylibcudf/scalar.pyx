@@ -2,14 +2,21 @@
 
 cimport pyarrow.lib
 from cython cimport no_gc_clear
+from libcpp.memory cimport unique_ptr
 
 import pyarrow.lib
 
 from rmm._lib.memory_resource cimport get_current_device_resource
 
-from cudf._lib.cpp.scalar.scalar cimport scalar
+from cudf._lib.cpp.scalar.scalar cimport fixed_point_scalar, scalar
+from cudf._lib.cpp.wrappers.decimals cimport (
+    decimal32,
+    decimal64,
+    decimal128,
+    scale_type,
+)
 
-from .types cimport DataType
+from .types cimport DataType, type_id
 
 
 # The DeviceMemoryResource attribute could be released prematurely
@@ -36,12 +43,52 @@ cdef class Scalar:
             raise ValueError("Scalar should be constructed with a factory")
 
     @staticmethod
-    def from_pyarrow_scalar(pyarrow.lib.Scalar value):
+    def from_pyarrow_scalar(pyarrow.lib.Scalar value, DataType data_type=None):
+        # Allow passing a dtype, but only for the purpose of decimals for now
+
         # Need a local import here to avoid a circular dependency because
         # from_arrow_scalar returns a Scalar.
         from .interop import from_arrow_scalar
 
-        return from_arrow_scalar(value)
+        cdef Scalar s = from_arrow_scalar(value)
+        if s.type().id() != type_id.DECIMAL128:
+            if data_type is not None:
+                raise ValueError(
+                    "dtype may not be passed for non-decimal types"
+                )
+            return s
+
+        if data_type is None:
+            raise ValueError(
+                "Decimal scalars must be constructed with a dtype"
+            )
+
+        cdef type_id tid = data_type.id()
+        if tid not in (type_id.DECIMAL32, type_id.DECIMAL64, type_id.DECIMAL128):
+            raise ValueError(
+                "Decimal scalars may only be cast to decimals"
+            )
+
+        if tid == type_id.DECIMAL128:
+            return s
+
+        if tid == type_id.DECIMAL32:
+            s.c_obj.reset(
+                new fixed_point_scalar[decimal32](
+                    (<fixed_point_scalar[decimal128]*> s.c_obj.get()).value(),
+                    scale_type(-value.type.scale),
+                    s.c_obj.get().is_valid()
+                )
+            )
+        elif tid == type_id.DECIMAL64:
+            s.c_obj.reset(
+                new fixed_point_scalar[decimal64](
+                    (<fixed_point_scalar[decimal128]*> s.c_obj.get()).value(),
+                    scale_type(-value.type.scale),
+                    s.c_obj.get().is_valid()
+                )
+            )
+        return s
 
     cdef const scalar* get(self) except *:
         return self.c_obj.get()

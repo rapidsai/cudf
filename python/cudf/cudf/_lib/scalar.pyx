@@ -22,7 +22,7 @@ from libcpp.utility cimport move
 
 import cudf
 
-from cudf._lib cimport pylibcudf
+from cudf._lib.pylibcudf.types cimport type_id
 
 from cudf._lib.types import (
     LIBCUDF_TO_SUPPORTED_NUMPY_TYPES,
@@ -113,12 +113,23 @@ cdef class DeviceScalar:
             A NumPy dtype.
         """
         self._dtype = dtype if dtype.kind != 'U' else cudf.dtype('object')
-        valid = not _is_null_host_scalar(value)
         set_dtype = True
 
+        cdef type_id tid
         if isinstance(self._dtype, cudf.core.dtypes.DecimalDtype):
-            _set_decimal_from_scalar(
-                self.c_value.c_obj, value, self._dtype, valid)
+            if value is NA:
+                value = None
+            pa_scalar = pa.scalar(value, type=self._dtype.to_arrow())
+
+            tid = type_id.DECIMAL128
+            if isinstance(self._dtype, cudf.core.dtypes.Decimal32Dtype):
+                tid = type_id.DECIMAL32
+            elif isinstance(self._dtype, cudf.core.dtypes.Decimal64Dtype):
+                tid = type_id.DECIMAL64
+            dt = pylibcudf.DataType(tid, -self._dtype.scale)
+
+            self.c_value = pylibcudf.Scalar.from_pyarrow_scalar(pa_scalar, dt)
+            set_dtype = False
         elif isinstance(self._dtype, cudf.ListDtype):
             if value is NA:
                 value = None
