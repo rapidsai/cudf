@@ -37,7 +37,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.types cimport dtype_from_column_view, underlying_type_t_type_id
 
-from cudf._lib.interop import from_arrow, to_arrow
+from cudf._lib.interop import to_arrow
 
 cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib cimport pylibcudf
@@ -51,12 +51,7 @@ from cudf._lib.cpp.scalar.scalar cimport (
     struct_scalar,
     timestamp_scalar,
 )
-from cudf._lib.cpp.wrappers.decimals cimport (
-    decimal32,
-    decimal64,
-    decimal128,
-    scale_type,
-)
+from cudf._lib.cpp.wrappers.decimals cimport decimal32, decimal64, decimal128
 from cudf._lib.cpp.wrappers.durations cimport (
     duration_ms,
     duration_ns,
@@ -69,7 +64,7 @@ from cudf._lib.cpp.wrappers.timestamps cimport (
     timestamp_s,
     timestamp_us,
 )
-from cudf._lib.utils cimport columns_from_table_view, table_view_from_columns
+from cudf._lib.utils cimport columns_from_table_view
 
 
 def nestrepl_list(lst):
@@ -337,62 +332,6 @@ cdef _set_timedelta64_from_np_scalar(unique_ptr[scalar]& s,
         )
     else:
         raise ValueError(f"dtype not supported: {dtype}")
-
-cdef _set_decimal_from_scalar(unique_ptr[scalar]& s,
-                              object value,
-                              object dtype,
-                              bool valid=True):
-    value = cudf.utils.dtypes._decimal_to_int64(value) if valid else 0
-    if isinstance(dtype, cudf.Decimal64Dtype):
-        s.reset(
-            new fixed_point_scalar[decimal64](
-                <int64_t>np.int64(value), scale_type(-dtype.scale), valid
-            )
-        )
-    elif isinstance(dtype, cudf.Decimal32Dtype):
-        s.reset(
-            new fixed_point_scalar[decimal32](
-                <int32_t>np.int32(value), scale_type(-dtype.scale), valid
-            )
-        )
-    elif isinstance(dtype, cudf.Decimal128Dtype):
-        s.reset(
-            new fixed_point_scalar[decimal128](
-                <libcudf_types.int128>value, scale_type(-dtype.scale), valid
-            )
-        )
-    else:
-        raise ValueError(f"dtype not supported: {dtype}")
-
-cdef _set_struct_from_pydict(unique_ptr[scalar]& s,
-                             object value,
-                             object dtype,
-                             bool valid=True):
-    arrow_schema = dtype.to_arrow()
-    columns = [str(i) for i in range(len(arrow_schema))]
-    if valid:
-        pyarrow_table = pa.Table.from_arrays(
-            [
-                pa.array([value[f.name]], from_pandas=True, type=f.type)
-                for f in arrow_schema
-            ],
-            names=columns
-        )
-    else:
-        pyarrow_table = pa.Table.from_arrays(
-            [
-                pa.array([NA], from_pandas=True, type=f.type)
-                for f in arrow_schema
-            ],
-            names=columns
-        )
-
-    data = from_arrow(pyarrow_table)
-    cdef table_view struct_view = table_view_from_columns(data)
-
-    s.reset(
-        new struct_scalar(struct_view, valid)
-    )
 
 cdef _get_py_dict_from_struct(unique_ptr[scalar]& s, dtype):
     if not s.get()[0].is_valid():
