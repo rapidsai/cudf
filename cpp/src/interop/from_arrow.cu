@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <arrow/array/array_base.h>
+#include <arrow/array/builder_nested.h>
 #include <arrow/type.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
@@ -513,18 +514,17 @@ constexpr decltype(auto) arrow_type_dispatcher(arrow::DataType const& dtype,
       return f.template operator()<arrow::StringType>(std::forward<Ts>(args)...);
     case arrow::Type::LIST:
       return f.template operator()<arrow::ListType>(std::forward<Ts>(args)...);
-    // case arrow::Type::DECIMAL32:
-    //   return f.template operator()<arrow::Type::DECIMAL32>(
-    //     std::forward<Ts>(args)...);
-    // case arrow::Type::DECIMAL64:
-    //   return f.template operator()<arrow::Type::DECIMAL64>(
-    //     std::forward<Ts>(args)...);
-    // case arrow::Type::DECIMAL128:
-    //   return f.template operator()<arrow::Type::DECIMAL128>(
-    //     std::forward<Ts>(args)...);
-    // case arrow::Type::STRUCT:
-    //   return f.template operator()<arrow::Type::STRUCT>(
-    //     std::forward<Ts>(args)...);
+      // case arrow::Type::DECIMAL32:
+      //   return f.template operator()<arrow::Type::DECIMAL32>(
+      //     std::forward<Ts>(args)...);
+      // case arrow::Type::DECIMAL64:
+      //   return f.template operator()<arrow::Type::DECIMAL64>(
+      //     std::forward<Ts>(args)...);
+      // case arrow::Type::DECIMAL128:
+      //   return f.template operator()<arrow::Type::DECIMAL128>(
+      //     std::forward<Ts>(args)...);
+    case arrow::Type::STRUCT:
+      return f.template operator()<arrow::StructType>(std::forward<Ts>(args)...);
     default: {
       CUDF_FAIL("Invalid type.");
     }
@@ -564,6 +564,13 @@ std::shared_ptr<arrow::ArrayBuilder> BuilderGenerator::operator()<arrow::ListTyp
 }
 
 template <>
+std::shared_ptr<arrow::ArrayBuilder> BuilderGenerator::operator()<arrow::StructType>(
+  std::shared_ptr<arrow::DataType> const& type)
+{
+  CUDF_FAIL("Not implemented");
+}
+
+template <>
 auto ArrowArrayGenerator::operator()<arrow::ListType>(arrow::Scalar const& scalar)
 {
   std::shared_ptr<arrow::DataType> vt = scalar.type;
@@ -584,6 +591,35 @@ auto ArrowArrayGenerator::operator()<arrow::ListType>(arrow::Scalar const& scala
     builder = std::make_shared<arrow::ListBuilder>(arrow::default_memory_pool(), inner_builder);
     inner_builder = builder;
   }
+
+  auto status = builder->AppendScalar(scalar);
+  if (status != arrow::Status::OK()) { CUDF_FAIL("Arrow ArrayBuilder::AppendScalar failed"); }
+
+  auto maybe_array = builder->Finish();
+  if (!maybe_array.ok()) { CUDF_FAIL("Arrow ArrayBuilder::Finish failed"); }
+  return *maybe_array;
+}
+
+std::shared_ptr<arrow::ArrayBuilder> make_struct_builder(
+  std::shared_ptr<arrow::DataType> const& type)
+{
+  std::vector<std::shared_ptr<arrow::ArrayBuilder>> field_builders;
+
+  for (auto i = 0; i < type->num_fields(); ++i) {
+    auto const vt = type->field(i)->type();
+    if (vt->id() == arrow::Type::STRUCT) {
+      field_builders.push_back(make_struct_builder(vt));
+    } else {
+      field_builders.push_back(arrow_type_dispatcher(*vt, BuilderGenerator{}, vt));
+    }
+  }
+  return std::make_shared<arrow::StructBuilder>(type, arrow::default_memory_pool(), field_builders);
+}
+
+template <>
+auto ArrowArrayGenerator::operator()<arrow::StructType>(arrow::Scalar const& scalar)
+{
+  std::shared_ptr<arrow::ArrayBuilder> builder = make_struct_builder(scalar.type);
 
   auto status = builder->AppendScalar(scalar);
   if (status != arrow::Status::OK()) { CUDF_FAIL("Arrow ArrayBuilder::AppendScalar failed"); }

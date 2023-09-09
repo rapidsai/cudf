@@ -72,12 +72,22 @@ from cudf._lib.cpp.wrappers.timestamps cimport (
 from cudf._lib.utils cimport columns_from_table_view, table_view_from_columns
 
 
-def nestrepl(lst):
+def nestrepl_list(lst):
+    # TODO: Account for struct inside list
     for i, item in enumerate(lst):
         if item is NA or item is NaT:
             lst[i] = None
         elif isinstance(item, list):
-            nestrepl(item)
+            nestrepl_list(item)
+
+
+def nestrepl_dict(dct):
+    # TODO: Account for list inside struct
+    for k, v in dct.items():
+        if v is NA or v is NaT:
+            dct[k] = None
+        elif isinstance(v, dict):
+            nestrepl_dict(v)
 
 
 cdef class DeviceScalar:
@@ -113,13 +123,20 @@ cdef class DeviceScalar:
             if value is NA:
                 value = None
             else:
-                nestrepl(value)
+                nestrepl_list(value)
 
             pa_scalar = pa.scalar(value, type=self._dtype.to_arrow())
             self.c_value = pylibcudf.Scalar.from_pyarrow_scalar(pa_scalar)
             set_dtype = False
         elif isinstance(self._dtype, cudf.StructDtype):
-            _set_struct_from_pydict(self.c_value.c_obj, value, self._dtype, valid)
+            if value is NA:
+                value = None
+            else:
+                nestrepl_dict(value)
+
+            pa_scalar = pa.scalar(value, type=self._dtype.to_arrow())
+            self.c_value = pylibcudf.Scalar.from_pyarrow_scalar(pa_scalar)
+            set_dtype = False
         elif pd.api.types.is_string_dtype(self._dtype):
             if value is NA:
                 value = None
