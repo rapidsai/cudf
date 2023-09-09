@@ -67,22 +67,19 @@ from cudf._lib.cpp.wrappers.timestamps cimport (
 from cudf._lib.utils cimport columns_from_table_view
 
 
-def nestrepl_list(lst):
-    # TODO: Account for struct inside list
-    for i, item in enumerate(lst):
-        if item is NA or item is NaT:
-            lst[i] = None
-        elif isinstance(item, list):
-            nestrepl_list(item)
-
-
-def nestrepl_dict(dct):
-    # TODO: Account for list inside struct
-    for k, v in dct.items():
-        if v is NA or v is NaT:
-            dct[k] = None
-        elif isinstance(v, dict):
-            nestrepl_dict(v)
+def nestrepl(obj):
+    if isinstance(obj, list):
+        for i, item in enumerate(obj):
+            if item is NA or item is NaT:
+                obj[i] = None
+            elif isinstance(item, (dict, list)):
+                nestrepl(item)
+    elif isinstance(obj, dict):
+        for k, v in obj.items():
+            if v is NA or v is NaT:
+                obj[k] = None
+            elif isinstance(v, (dict, list)):
+                nestrepl(v)
 
 
 cdef class DeviceScalar:
@@ -129,7 +126,7 @@ cdef class DeviceScalar:
             if value is NA:
                 value = None
             else:
-                nestrepl_list(value)
+                nestrepl(value)
 
             pa_scalar = pa.scalar(value, type=self._dtype.to_arrow())
             self.c_value = pylibcudf.Scalar.from_pyarrow_scalar(pa_scalar)
@@ -138,7 +135,7 @@ cdef class DeviceScalar:
             if value is NA:
                 value = None
             else:
-                nestrepl_dict(value)
+                nestrepl(value)
 
             pa_scalar = pa.scalar(value, type=self._dtype.to_arrow())
             self.c_value = pylibcudf.Scalar.from_pyarrow_scalar(pa_scalar)
