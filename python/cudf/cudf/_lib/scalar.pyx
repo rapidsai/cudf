@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
+import copy
 import decimal
 
 import numpy as np
@@ -111,6 +112,11 @@ cdef class DeviceScalar:
         if cudf.utils.utils.is_na_like(value):
             value = None
         else:
+            # TODO: For now we always deepcopy the input value to avoid
+            # overwriting the input values when replacing nulls. Since it's
+            # just host values it's not that expensive, but we could consider
+            # alternatives.
+            value = copy.deepcopy(value)
             _replace_nested_nulls(value)
 
         if isinstance(dtype, cudf.core.dtypes._BaseDtype):
