@@ -1278,12 +1278,8 @@ def test_datetime_reductions(data, op, dtype):
 @pytest.mark.parametrize("dtype", DATETIME_TYPES)
 def test_datetime_infer_format(data, dtype):
     sr = cudf.Series(data)
-    psr = pd.Series(data)
-
-    expected = psr.astype(dtype)
-    actual = sr.astype(dtype)
-
-    assert_eq(expected, actual)
+    with pytest.raises(NotImplementedError):
+        sr.astype(dtype)
 
 
 def test_dateoffset_instance_subclass_check():

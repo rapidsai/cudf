@@ -631,6 +631,10 @@ def infer_format(element: str, **kwargs) -> str:
     fmt = _guess_datetime_format(element, **kwargs)
 
     if fmt is not None:
+        if "%z" in fmt or "%Z" in fmt:
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
         return fmt
 
     element_parts = element.split(".")
