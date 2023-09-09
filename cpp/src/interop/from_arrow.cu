@@ -531,22 +531,6 @@ constexpr decltype(auto) arrow_type_dispatcher(arrow::DataType const& dtype,
   }
 }
 
-struct ArrowArrayGenerator {
-  template <typename T>
-  auto operator()(arrow::Scalar const& scalar)
-  {
-    // Get a builder for the scalar type
-    typename arrow::TypeTraits<T>::BuilderType builder{scalar.type, arrow::default_memory_pool()};
-
-    auto status = builder.AppendScalar(scalar);
-    if (status != arrow::Status::OK()) { CUDF_FAIL("Arrow ArrayBuilder::AppendScalar failed"); }
-
-    auto maybe_array = builder.Finish();
-    if (!maybe_array.ok()) { CUDF_FAIL("Arrow ArrayBuilder::Finish failed"); }
-    return *maybe_array;
-  }
-};
-
 struct BuilderGenerator {
   template <typename T>
   std::shared_ptr<arrow::ArrayBuilder> operator()(std::shared_ptr<arrow::DataType> const& type)
@@ -570,13 +554,28 @@ std::shared_ptr<arrow::ArrayBuilder> BuilderGenerator::operator()<arrow::StructT
   CUDF_FAIL("Not implemented");
 }
 
-template <>
-auto ArrowArrayGenerator::operator()<arrow::ListType>(arrow::Scalar const& scalar)
+struct ArrowArrayGenerator {
+  template <typename T>
+  auto operator()(arrow::Scalar const& scalar)
+  {
+    // Get a builder for the scalar type
+    auto builder = arrow_type_dispatcher(*scalar.type, BuilderGenerator{}, scalar.type);
+
+    auto status = builder->AppendScalar(scalar);
+    if (status != arrow::Status::OK()) { CUDF_FAIL("Arrow ArrayBuilder::AppendScalar failed"); }
+
+    auto maybe_array = builder->Finish();
+    if (!maybe_array.ok()) { CUDF_FAIL("Arrow ArrayBuilder::Finish failed"); }
+    return *maybe_array;
+  }
+};
+
+std::shared_ptr<arrow::ArrayBuilder> make_list_builder(std::shared_ptr<arrow::DataType> const& type)
 {
-  std::shared_ptr<arrow::DataType> vt = scalar.type;
   std::vector<std::shared_ptr<arrow::DataType>> types;
 
   // TODO: Consider the possibility of list of structs/struct of lists
+  std::shared_ptr<arrow::DataType> vt = type;
   while (vt->id() == arrow::Type::LIST) {
     types.push_back(vt);
     // TODO: Error handling on dynamic_cast
@@ -591,6 +590,13 @@ auto ArrowArrayGenerator::operator()<arrow::ListType>(arrow::Scalar const& scala
     builder = std::make_shared<arrow::ListBuilder>(arrow::default_memory_pool(), inner_builder);
     inner_builder = builder;
   }
+  return builder;
+}
+
+template <>
+auto ArrowArrayGenerator::operator()<arrow::ListType>(arrow::Scalar const& scalar)
+{
+  std::shared_ptr<arrow::ArrayBuilder> builder = make_list_builder(scalar.type);
 
   auto status = builder->AppendScalar(scalar);
   if (status != arrow::Status::OK()) { CUDF_FAIL("Arrow ArrayBuilder::AppendScalar failed"); }
