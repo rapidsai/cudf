@@ -2050,6 +2050,10 @@ def test_range_index_concat(objs):
         (pd.Index([0, 1, 2, 30], name="a"), [90, 100]),
         (pd.Index([0, 1, 2, 30]), pd.Index([0, 10, 1.0, 11])),
         (pd.Index(["a", "b", "c", "d", "c"]), pd.Index(["a", "c", "z"])),
+        (
+            pd.IntervalIndex.from_tuples([(0, 2), (0, 2), (2, 4)]),
+            pd.IntervalIndex.from_tuples([(0, 2), (2, 4)]),
+        ),
     ],
 )
 @pytest.mark.parametrize("sort", [None, False])

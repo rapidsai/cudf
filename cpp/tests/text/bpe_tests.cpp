@@ -78,6 +78,30 @@ TEST_F(TextBPETokenize, BytePairEncodingSeparator)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
+TEST_F(TextBPETokenize, DISABLED_BPEAdjacentPairs)
+{
+  auto mpt         = cudf::test::strings_column_wrapper({
+    "▁ H",    //    157
+    "m m",    //  10742
+    "? !",    //  50675
+    "▁H mm",  // 174381
+    "mm m",   // 262776
+    "?! !",   // 352313
+    "? !?",   // 352314
+    "mm mm",  // 387733
+    "▁H m",   // 471269
+    "?! ?!",  // 506981
+    "?!? !",  // 506982
+  });
+  auto merge_pairs = nvtext::load_merge_pairs(cudf::strings_column_view(mpt));
+
+  cudf::test::strings_column_wrapper input({"▁Hmmmmm", "?!?!?!"});
+
+  auto results  = nvtext::byte_pair_encoding(cudf::strings_column_view(input), *merge_pairs);
+  auto expected = cudf::test::strings_column_wrapper({"▁Hmm mmm", "?!?! ?!"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+}
+
 TEST_F(TextBPETokenize, BPE_Empty)
 {
   auto mpt         = cudf::test::strings_column_wrapper({"i s", "i t"});
