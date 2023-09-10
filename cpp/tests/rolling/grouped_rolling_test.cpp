@@ -33,9 +33,6 @@
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 
-#include <algorithm>
-#include <vector>
-
 const std::string cuda_func{
   R"***(
     template <typename OutType, typename InType>
