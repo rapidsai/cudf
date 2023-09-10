@@ -70,11 +70,13 @@ static void BM_shift(benchmark::State& state)
   }
 
   auto const elems_read    = (size - offset);
-  auto const elems_written = use_validity ? (size - offset) : size;
   auto const bytes_read    = elems_read * sizeof(int);
-  auto const bytes_written = elems_written * sizeof(int);
 
-  // null bytes for input and output
+  // If 'use_validity' is false, the fill value is a number, and the entire column
+  // (excluding the null bitmask) needs to be written. On the other hand, if 'use_validity'
+  // is true, only the elements that can be shifted are written, along with the full null bitmask.
+  auto const elems_written = use_validity ? (size - offset) : size;
+  auto const bytes_written = elems_written * sizeof(int);
   auto const null_bytes = use_validity ? 2 * cudf::bitmask_allocation_size_bytes(size) : 0;
 
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) *
