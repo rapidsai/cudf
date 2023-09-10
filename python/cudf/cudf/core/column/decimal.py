@@ -147,10 +147,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 "integer values"
             )
 
-        result = libcudf.replace.replace_nulls(
-            input_col=self, replacement=value, method=method, dtype=dtype
-        )
-        return result._with_type_metadata(self.dtype)
+        return super().fillna(value=value, method=method)
 
     def normalize_binop_value(self, other):
         if isinstance(other, ColumnBase):
