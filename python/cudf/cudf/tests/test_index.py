@@ -11,8 +11,8 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_133, PANDAS_GE_200
 from cudf.api.types import is_bool_dtype
+from cudf.core._compat import PANDAS_GE_133, PANDAS_GE_200
 from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
