@@ -726,23 +726,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
         return self._try_reconstruct_range_index(new_index)
 
-    def _try_reconstruct_range_index(self, index):
-        if index.dtype.kind == "f":
-            return index
-        # Evenly spaced values can return a
-        # RangeIndex instead of Int64Index
-        unique_diffs = (
-            index.to_frame(name="None").diff()["None"]._column.unique()
-        )
-        if len(unique_diffs) == 2 and (
-            unique_diffs.element_indexing(0) is cudf.NA
-            and unique_diffs.element_indexing(1) != 0
-        ):
-            diff = unique_diffs.element_indexing(1)
-            new_range = range(index[0], index[-1] + diff, diff)
-            return type(self)(new_range, name=index.name)
-        return index
-
     @_cudf_nvtx_annotate
     def difference(self, other, sort=None):
         if isinstance(other, RangeIndex) and self.equals(other):

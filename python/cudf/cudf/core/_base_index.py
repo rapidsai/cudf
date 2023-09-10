@@ -612,7 +612,10 @@ class BaseIndex(Serializable):
             raise TypeError("Input must be Index or array-like")
 
         if not isinstance(other, BaseIndex):
-            other = cudf.Index(other, name=getattr(other, "name", self.name))
+            other = cudf.Index(
+                other,
+                name=getattr(other, "name", self.name),
+            )
 
         if sort not in {None, False}:
             raise ValueError(
@@ -620,9 +623,13 @@ class BaseIndex(Serializable):
                 f"None or False; {sort} was passed."
             )
 
-        if self.equals(other):
-            dtypes = {self.dtype, other.dtype}
+        if self.equals(other) or not len(self):
+            dtypes = [self.dtype, other.dtype]
             common_dtype = cudf.utils.dtypes.find_common_type(dtypes)
+            if cudf.get_option(
+                "mode.pandas_compatible"
+            ) and common_dtype == cudf.dtype("object"):
+                common_dtype = "str"
             if self.has_duplicates:
                 return (
                     self.unique()
@@ -631,8 +638,12 @@ class BaseIndex(Serializable):
                 )
             return self._get_reconciled_name_object(other).astype(common_dtype)
         elif not len(other):
-            dtypes = {self.dtype, other.dtype}
+            dtypes = [self.dtype, other.dtype]
             common_dtype = cudf.utils.dtypes.find_common_type(dtypes)
+            if cudf.get_option(
+                "mode.pandas_compatible"
+            ) and common_dtype == cudf.dtype("object"):
+                common_dtype = "str"
             return other._get_reconciled_name_object(self).astype(common_dtype)
 
         res_name = _get_result_name(self.name, other.name)
