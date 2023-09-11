@@ -254,29 +254,34 @@ TEST_F(OffsetRowWindowTest, OffsetRowWindow_Ungrouped_0_to_2)
 
 TEST_F(OffsetRowWindowTest, Problematic)
 {
-  auto grp_iter = thrust::make_transform_iterator(thrust::make_counting_iterator(0), [](auto const& i) {
-    if (i < 10) return 1;
-    if (i < 20) return 2;
-    return 3;
-  });
+  auto grp_iter =
+    thrust::make_transform_iterator(thrust::make_counting_iterator(0), [](auto const& i) {
+      if (i < 10) return 1;
+      if (i < 20) return 2;
+      return 3;
+    });
   auto const grp = ints_column(grp_iter, grp_iter + 30);
   auto const agg = ints_column(grp_iter, grp_iter + 30);
   {
-    auto const results = cudf::grouped_rolling_window(
-        cudf::table_view{{grp}},
-        agg,
-        -1, 4, 1, *cudf::make_max_aggregation<cudf::rolling_aggregation>()
-    );
+    auto const results =
+      cudf::grouped_rolling_window(cudf::table_view{{grp}},
+                                   agg,
+                                   -1,
+                                   4,
+                                   1,
+                                   *cudf::make_max_aggregation<cudf::rolling_aggregation>());
     std::cout << "Max(-1, 4): " << std::endl;
     cudf::test::print(*results);
     std::cout << std::endl;
   }
   {
-    auto const results = cudf::grouped_rolling_window(
-        cudf::table_view{{grp}},
-        agg,
-        -1, 4, 1, *cudf::make_min_aggregation<cudf::rolling_aggregation>()
-    );
+    auto const results =
+      cudf::grouped_rolling_window(cudf::table_view{{grp}},
+                                   agg,
+                                   -1,
+                                   4,
+                                   1,
+                                   *cudf::make_min_aggregation<cudf::rolling_aggregation>());
 
     std::cout << "Min(-1, 4): " << std::endl;
     cudf::test::print(*results);

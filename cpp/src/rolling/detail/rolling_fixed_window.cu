@@ -64,13 +64,14 @@ std::unique_ptr<column> rolling_window(column_view const& input,
     //      [1, 2, 2, 2, 1]
     // TODO: Handle capping preceding/following for negative values.
 
-    auto const preceding_calc =
-        [preceding_window] __device__(size_type i) { return thrust::min(i + 1, preceding_window); };
+    auto const preceding_calc = [preceding_window] __device__(size_type i) {
+      return thrust::min(i + 1, preceding_window);
+    };
 
-    auto const following_calc =
-        [col_size = input.size(), following_window] __device__(size_type i) {
-          return thrust::min(col_size - i - 1, following_window);
-        };
+    auto const following_calc = [col_size = input.size(),
+                                 following_window] __device__(size_type i) {
+      return thrust::min(col_size - i - 1, following_window);
+    };
 
     auto const preceding_column = expand_to_column(preceding_calc, input.size(), stream);
     auto const following_column = expand_to_column(following_calc, input.size(), stream);

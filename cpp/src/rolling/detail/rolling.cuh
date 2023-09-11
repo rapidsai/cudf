@@ -73,18 +73,18 @@ namespace detail {
 /// Helper function to materialize preceding/following offsets.
 template <typename Calculator>
 std::unique_ptr<column> expand_to_column(Calculator const& calc,
-                                       size_type const& num_rows,
-                                       rmm::cuda_stream_view stream)
+                                         size_type const& num_rows,
+                                         rmm::cuda_stream_view stream)
 {
-    auto window_column = cudf::make_numeric_column(
-        cudf::data_type{type_to_id<size_type>()}, num_rows, cudf::mask_state::UNALLOCATED, stream);
+  auto window_column = cudf::make_numeric_column(
+    cudf::data_type{type_to_id<size_type>()}, num_rows, cudf::mask_state::UNALLOCATED, stream);
 
-    auto begin = cudf::detail::make_counting_transform_iterator(0, calc);
+  auto begin = cudf::detail::make_counting_transform_iterator(0, calc);
 
-    thrust::copy_n(
-        rmm::exec_policy(stream), begin, num_rows, window_column->mutable_view().data<size_type>());
+  thrust::copy_n(
+    rmm::exec_policy(stream), begin, num_rows, window_column->mutable_view().data<size_type>());
 
-    return window_column;
+  return window_column;
 }
 
 /**
@@ -477,7 +477,7 @@ struct agg_specific_empty_output {
 };
 
 static std::unique_ptr<column> empty_output_for_rolling_aggregation(column_view const& input,
-                                                             rolling_aggregation const& agg)
+                                                                    rolling_aggregation const& agg)
 {
   // TODO:
   //  Ideally, for UDF aggregations, the returned column would match
