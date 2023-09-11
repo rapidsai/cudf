@@ -26,3 +26,5 @@ cdef class Scalar:
 
     @staticmethod
     cdef Scalar from_libcudf(unique_ptr[scalar] libcudf_scalar, dtype=*)
+
+    cpdef to_pyarrow_scalar(self)

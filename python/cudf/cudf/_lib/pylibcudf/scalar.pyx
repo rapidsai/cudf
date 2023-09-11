@@ -90,6 +90,10 @@ cdef class Scalar:
             )
         return s
 
+    cpdef to_pyarrow_scalar(self):
+        from interop import to_arrow_scalar
+        return to_arrow_scalar(self)
+
     cdef const scalar* get(self) except *:
         return self.c_obj.get()
 
