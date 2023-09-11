@@ -148,6 +148,11 @@ class CompactProtocolReader {
   friend class ParquetFieldStructBlob;
 };
 
+/**
+ * @brief Base class for parquet field functors.
+ *
+ * Holds the field value used by all of the specialized functors.
+ */
 class ParquetField {
  protected:
   int field_val;
@@ -343,11 +348,11 @@ class ParquetFieldEnum : public ParquetField {
  * enum fails
  */
 template <typename Enum>
-class ParquetFieldEnumListFunctor : public ParquetField {
+class ParquetFieldEnumList : public ParquetField {
   std::vector<Enum>& val;
 
  public:
-  ParquetFieldEnumListFunctor(int f, std::vector<Enum>& v) : ParquetField(f), val(v) {}
+  ParquetFieldEnumList(int f, std::vector<Enum>& v) : ParquetField(f), val(v) {}
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     if (field_type != ST_FLD_LIST) return true;
@@ -361,12 +366,6 @@ class ParquetFieldEnumListFunctor : public ParquetField {
     return false;
   }
 };
-
-template <typename T>
-ParquetFieldEnumListFunctor<T> ParquetFieldEnumList(int field, std::vector<T>& v)
-{
-  return ParquetFieldEnumListFunctor<T>(field, v);
-}
 
 /**
  * @brief Functor to read a structure from CompactProtocolReader
