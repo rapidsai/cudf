@@ -52,9 +52,6 @@
 #include <random>
 #include <type_traits>
 
-// Set this to true to enable printing, for debugging.
-auto constexpr print_enabled = false;
-
 template <typename T, typename SourceElementT = T>
 using column_wrapper =
   typename std::conditional<std::is_same_v<T, cudf::string_view>,
@@ -6537,7 +6534,6 @@ TEST_F(ParquetReaderTest, FilterFloatNAN)
   auto col0 = cudf::test::fixed_width_column_wrapper<float>(elements, elements + num_rows);
   auto col1 = cudf::test::fixed_width_column_wrapper<double>(elements, elements + num_rows);
 
-  if constexpr (print_enabled) { cudf::test::print(col0); }
   auto const written_table = table_view{{col0, col1}};
   auto const filepath      = temp_env->get_temp_filepath("FilterFloatNAN.parquet");
   {
