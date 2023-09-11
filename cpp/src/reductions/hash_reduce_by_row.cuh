@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "stream_compaction_common.cuh"
+#include <stream_compaction/stream_compaction_common.cuh>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/stream_compaction.hpp>
@@ -28,22 +28,6 @@
 #include <memory>
 
 namespace cudf::detail {
-
-/**
- * @brief Return the reduction identity used to initialize results of `hash_reduce_by_row`.
- *
- * @param keep A value of `duplicate_keep_option` type, must not be `KEEP_ANY`.
- * @return The initial reduction value.
- */
-auto constexpr reduction_init_value(duplicate_keep_option keep)
-{
-  switch (keep) {
-    case duplicate_keep_option::KEEP_FIRST: return std::numeric_limits<size_type>::max();
-    case duplicate_keep_option::KEEP_LAST: return std::numeric_limits<size_type>::min();
-    case duplicate_keep_option::KEEP_NONE: return size_type{0};
-    default: CUDF_UNREACHABLE("This function should not be called with KEEP_ANY");
-  }
-}
 
 /**
  * @brief Perform a reduction on groups of rows that are compared equal.
@@ -72,7 +56,7 @@ auto constexpr reduction_init_value(duplicate_keep_option keep)
  * @param mr Device memory resource used to allocate the returned vector
  * @return A device_uvector containing the reduction results
  */
-rmm::device_uvector<size_type> distinct_reduce(
+rmm::device_uvector<size_type> hash_reduce_by_row(
   hash_map_type const& map,
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> const preprocessed_input,
   size_type num_rows,
@@ -83,5 +67,50 @@ rmm::device_uvector<size_type> distinct_reduce(
   nan_equality nans_equal,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief A functor to perform reduce-by-key with keys are rows that compared equal.
+ *
+ * TODO: We need to switch to use `static_reduction_map` when it is ready
+ * (https://github.com/NVIDIA/cuCollections/pull/98).
+ */
+template <typename MapView, typename KeyHasher, typename KeyEqual, typename OutputType>
+struct reduce_by_row_fn {
+  MapView const d_map;
+  KeyHasher const d_hasher;
+  KeyEqual const d_equal;
+  OutputType* const d_output;
+
+  reduce_by_row_fn(MapView const& d_map,
+                   KeyHasher const& d_hasher,
+                   KeyEqual const& d_equal,
+                   OutputType* const d_output)
+    : d_map{d_map}, d_hasher{d_hasher}, d_equal{d_equal}, d_output{d_output}
+  {
+  }
+
+ protected:
+  __device__ OutputType* get_output_ptr(size_type const idx) const
+  {
+    auto const iter = d_map.find(idx, d_hasher, d_equal);
+
+    if (iter != d_map.end()) {
+      // Only one index value of the duplicate rows could be inserted into the map.
+      // As such, looking up for all indices of duplicate rows always returns the same value.
+      auto const inserted_idx = iter->second.load(cuda::std::memory_order_relaxed);
+
+      // All duplicate rows will have concurrent access to this same output slot.
+      return &d_output[inserted_idx];
+    } else {
+      // All input `idx` values have been inserted into the map before.
+      // Thus, searching for an `idx` key resulting in the `end()` iterator only happens if
+      // `d_equal(idx, idx) == false`.
+      // Such situations are due to comparing nulls or NaNs which are considered as always unequal.
+      // In those cases, all rows containing nulls or NaNs are distinct. Just return their direct
+      // output slot.
+      return &d_output[idx];
+    }
+  }
+};
 
 }  // namespace cudf::detail

@@ -14,10 +14,7 @@
  * limitations under the License.
  */
 
-#include "distinct_reduce.cuh"
-
-#include <reductions/hash_reduce_by_row.cuh>
-
+#include "hash_reduce_by_row.cuh"
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -25,45 +22,8 @@
 
 namespace cudf::detail {
 
-namespace {
-/**
- * @brief
- *
- */
-template <typename MapView, typename KeyHasher, typename KeyEqual>
-struct distinct_reduce_fn : reduce_by_row_fn<MapView, KeyHasher, KeyEqual, size_type> {
-  duplicate_keep_option const keep;
-
-  distinct_reduce_fn(MapView const& d_map,
-                     KeyHasher const& d_hasher,
-                     KeyEqual const& d_equal,
-                     duplicate_keep_option const keep,
-                     size_type* const d_output)
-    : reduce_by_row_fn<MapView, KeyHasher, KeyEqual, size_type>(d_map, d_hasher, d_equal, d_output),
-      keep{keep}
-  {
-  }
-
-  __device__ void operator()(size_type const idx) const
-  {
-    auto const out_ptr = this->get_output_ptr(idx);
-
-    if (keep == duplicate_keep_option::KEEP_FIRST) {
-      // Store the smallest index of all rows that are equal.
-      atomicMin(out_ptr, idx);
-    } else if (keep == duplicate_keep_option::KEEP_LAST) {
-      // Store the greatest index of all rows that are equal.
-      atomicMax(out_ptr, idx);
-    } else {
-      // Count the number of rows in each group of rows that are compared equal.
-      atomicAdd(out_ptr, size_type{1});
-    }
-  }
-};
-
-}  // namespace
-
-rmm::device_uvector<size_type> distinct_reduce(
+#if 0
+rmm::device_uvector<size_type> hash_reduce_by_row(
   hash_map_type const& map,
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> const preprocessed_input,
   size_type num_rows,
@@ -97,7 +57,7 @@ rmm::device_uvector<size_type> distinct_reduce(
         rmm::exec_policy(stream),
         thrust::make_counting_iterator(0),
         thrust::make_counting_iterator(num_rows),
-        distinct_reduce_fn{
+        reduce_by_row_fn{
           map.get_device_view(), key_hasher, key_equal, keep, reduction_results.begin()});
     } else {
       auto const key_equal = row_comp.equal_to<false>(has_nulls, nulls_equal, value_comp);
@@ -105,7 +65,7 @@ rmm::device_uvector<size_type> distinct_reduce(
         rmm::exec_policy(stream),
         thrust::make_counting_iterator(0),
         thrust::make_counting_iterator(num_rows),
-        distinct_reduce_fn{
+        reduce_by_row_fn{
           map.get_device_view(), key_hasher, key_equal, keep, reduction_results.begin()});
     }
   };
@@ -121,5 +81,6 @@ rmm::device_uvector<size_type> distinct_reduce(
 
   return reduction_results;
 }
+#endif
 
 }  // namespace cudf::detail

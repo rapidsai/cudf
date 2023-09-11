@@ -138,7 +138,6 @@ std::unique_ptr<scalar> all(column_view const& col,
  */
 std::unique_ptr<scalar> histogram(column_view const& col,
                                   data_type const output_dtype,
-                                  std::optional<std::reference_wrapper<scalar const>> init,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr);
 
@@ -148,8 +147,6 @@ std::unique_ptr<scalar> histogram(column_view const& col,
  * If all elements in input column are null, output scalar is null.
  */
 std::unique_ptr<scalar> merge_histogram(column_view const& col,
-                                        data_type const output_dtype,
-                                        std::optional<std::reference_wrapper<scalar const>> init,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr);
 
