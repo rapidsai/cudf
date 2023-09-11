@@ -362,12 +362,12 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @_cudf_nvtx_annotate
-    def _get_columns_by_label(self, labels, downcast=False):
+    def _get_columns_by_label(self, labels, *, downcast=False) -> Self:
         """
         Returns columns of the Frame specified by `labels`
 
         """
-        return self._data.select_by_label(labels)
+        return self.__class__._from_data(self._data.select_by_label(labels))
 
     @property
     @_cudf_nvtx_annotate

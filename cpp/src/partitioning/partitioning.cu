@@ -134,8 +134,8 @@ __global__ void compute_row_partition_numbers(row_hasher_t the_hasher,
   // Accumulate histogram of the size of each partition in shared memory
   extern __shared__ size_type shared_partition_sizes[];
 
-  auto tid = cudf::thread_index_type{threadIdx.x} +
-             cudf::thread_index_type{blockIdx.x} * cudf::thread_index_type{blockDim.x};
+  auto tid          = cudf::detail::grid_1d::global_thread_id();
+  auto const stride = cudf::detail::grid_1d::grid_stride();
 
   // Initialize local histogram
   size_type partition_number = threadIdx.x;
@@ -160,7 +160,7 @@ __global__ void compute_row_partition_numbers(row_hasher_t the_hasher,
     row_partition_offset[row_number] =
       atomicAdd(&(shared_partition_sizes[partition_number]), size_type(1));
 
-    tid += cudf::thread_index_type{blockDim.x} * cudf::thread_index_type{gridDim.x};
+    tid += stride;
   }
 
   __syncthreads();
@@ -215,8 +215,8 @@ __global__ void compute_row_output_locations(size_type* __restrict__ row_partiti
   }
   __syncthreads();
 
-  auto tid = cudf::thread_index_type{threadIdx.x} +
-             cudf::thread_index_type{blockIdx.x} * cudf::thread_index_type{blockDim.x};
+  auto tid          = cudf::detail::grid_1d::global_thread_id();
+  auto const stride = cudf::detail::grid_1d::grid_stride();
 
   // Get each row's partition number, and get it's output location by
   // incrementing block's offset counter for that partition number
@@ -234,7 +234,7 @@ __global__ void compute_row_output_locations(size_type* __restrict__ row_partiti
     // Store the row's output location in-place
     row_partition_numbers[row_number] = row_output_location;
 
-    tid += cudf::thread_index_type{blockDim.x} * cudf::thread_index_type{gridDim.x};
+    tid += stride;
   }
 }
 
@@ -311,10 +311,8 @@ __global__ void copy_block_partitions(InputIter input_iter,
   __syncthreads();
 
   // Fetch the input data to shared memory
-  for (auto tid = cudf::thread_index_type{threadIdx.x} +
-                  cudf::thread_index_type{blockIdx.x} * cudf::thread_index_type{blockDim.x};
-       tid < num_rows;
-       tid += cudf::thread_index_type{blockDim.x} * cudf::thread_index_type{gridDim.x}) {
+  for (auto tid = cudf::detail::grid_1d::global_thread_id(); tid < num_rows;
+       tid += cudf::detail::grid_1d::grid_stride()) {
     auto const row_number      = static_cast<size_type>(tid);
     size_type const ipartition = row_partition_numbers[row_number];
 
