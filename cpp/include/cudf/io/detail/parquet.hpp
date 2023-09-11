@@ -91,7 +91,8 @@ class reader {
 class chunked_reader : private reader {
  public:
   /**
-   * @brief Constructor from a read size limit and an array of data sources with reader options.
+   * @brief Constructor from an output size memory limit and an input size memory limit and an array
+   * of data sources with reader options.
    *
    * The typical usage should be similar to this:
    * ```
@@ -102,17 +103,21 @@ class chunked_reader : private reader {
    *
    * ```
    *
-   * If `chunk_read_limit == 0` (i.e., no reading limit), a call to `read_chunk()` will read the
-   * whole file and return a table containing all rows.
+   * If `chunk_read_limit == 0` (i.e., no output limit), and `pass_read_limit == 0` (no input
+   * temporary memory size limit) a call to `read_chunk()` will read the whole file and return a
+   * table containing all rows.
    *
    * @param chunk_read_limit Limit on total number of bytes to be returned per read,
    *        or `0` if there is no limit
+   * @param pass_read_limit Limit on total amount of memory used for temporary computations during
+   * loading, or `0` if there is no limit.
    * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit chunked_reader(std::size_t chunk_read_limit,
+                          std::size_t pass_read_limit,
                           std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                           parquet_reader_options const& options,
                           rmm::cuda_stream_view stream,
