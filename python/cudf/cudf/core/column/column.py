@@ -2540,7 +2540,7 @@ def _construct_array(
             try:
                 pd_arbitrary = pd.to_datetime(arbitrary)
             except pd.errors.OutOfBoundsDatetime:
-                # Not an issue in pandas>=2.0
+                # https://github.com/pandas-dev/pandas/issues/55096
                 pass
             else:
                 if isinstance(pd_arbitrary.dtype, pd.DatetimeTZDtype):
