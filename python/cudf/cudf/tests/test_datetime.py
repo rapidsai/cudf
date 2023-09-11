@@ -2150,10 +2150,10 @@ def test_daterange_pandas_compatibility():
     assert_eq(expected, actual)
 
 
-@pytest.mark.filterwarnings("ignore:parsing timezone:DeprecationWarning")
 def test_strings_with_utc_offset_not_implemented():
-    with pytest.raises(NotImplementedError):
-        DatetimeIndex(["2022-07-22 00:00:00+02:00"])
+    with pytest.warns(DeprecationWarning, match="parsing timezone"):
+        with pytest.raises(NotImplementedError):
+            DatetimeIndex(["2022-07-22 00:00:00+02:00"])
 
 
 @pytest.mark.parametrize("code", ["z", "Z"])
