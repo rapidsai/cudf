@@ -30,7 +30,7 @@ SUPPORTED_GROUPBY_NUMPY_TYPES = [
     numpy_support.as_dtype(dt) for dt in SUPPORTED_GROUPBY_NUMBA_TYPES
 ]
 
-docs = "https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs/"
+_UDF_DOC_URL = "https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs/"
 
 
 class Group:
@@ -56,10 +56,10 @@ class GroupType(numba.types.Type):
             group_scalar_type not in SUPPORTED_GROUPBY_NUMBA_TYPES
             and not isinstance(group_scalar_type, types.Poison)
         ):
-            # an frame containing an column with an unsupported dtype
+            # A frame containing an column with an unsupported dtype
             # is calling groupby apply. Construct a GroupType with
             # a poisoned type so we can later error if this group is
-            # used in the UDAF body
+            # used in the UDF body
             group_scalar_type = types.Poison(group_scalar_type)
         self.group_scalar_type = group_scalar_type
         self.index_type = index_type
@@ -179,21 +179,21 @@ class GroupOpBase(AbstractTemplate):
         fname = self.key.__name__
         sr_err = ", ".join(["Series" for _ in range(len(args))])
         return (
-            f"{fname}({sr_err}) is not supported within JIT GroupBy "
-            f"apply. To see what's available, visit\n{docs}"
+            f"{fname}({sr_err}) is not supported by JIT GroupBy "
+            f"apply. Supported features are listed at:\n{_UDF_DOC_URL}"
         )
 
     def generic(self, args, kws):
-        # earlystop to make sure typing doesn't fail for normal
+        # early exit to make sure typing doesn't fail for normal
         # non-group ops
         if not all(isinstance(arg, GroupType) for arg in args):
             return None
-        # check if any groups are poisioned for this op
+        # check if any groups are poisoned for this op
         for arg in args:
             if isinstance(arg.group_scalar_type, types.Poison):
                 raise UDFError(
                     f"Use of a column of {arg.group_scalar_type.ty} detected "
-                    "within UDAF body. \nOnly columns of the following dtypes "
+                    "within UDF body. \nOnly columns of the following dtypes "
                     "may be used through the \nGroupBy.apply() JIT engine: "
                     f"{[str(x) for x in SUPPORTED_GROUPBY_NUMPY_TYPES]}"
                 )
