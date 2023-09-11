@@ -642,8 +642,10 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
             // \uXXXX\uXXXX
             // Note: no need for scanned_backslash below because we already know that
             // only '\u' check is enough.
-            if ((in_begin + char_index + 4 + 6) < in_end && in_begin[char_index + 1 + 4] == '\\' &&
-                in_begin[char_index + 1 + 5] == 'u') {
+            if ((in_begin + char_index + UNICODE_HEX_DIGIT_COUNT + NUM_UNICODE_ESC_SEQ_CHARS) <
+                  in_end &&
+                in_begin[char_index + NUM_UNICODE_ESC_SEQ_CHARS - 1] == '\\' &&
+                in_begin[char_index + NUM_UNICODE_ESC_SEQ_CHARS] == 'u') {
               hex_low_val = parse_unicode_hex(in_begin + char_index + 1 + 6);
             }
             if (hex_val >= UTF16_HIGH_SURROGATE_BEGIN && hex_val < UTF16_HIGH_SURROGATE_END &&
@@ -767,6 +769,7 @@ std::unique_ptr<column> parse_data(
 {
   CUDF_FUNC_RANGE();
 
+  if (col_size == 0) { return make_empty_column(col_type); }
   auto d_null_count    = rmm::device_scalar<size_type>(null_count, stream);
   auto null_count_data = d_null_count.data();
 
@@ -800,8 +803,8 @@ std::unique_ptr<column> parse_data(
 
     constexpr auto warps_per_block  = 8;
     constexpr int threads_per_block = cudf::detail::warp_size * warps_per_block;
-    auto num_blocks  = min(65535, cudf::util::div_rounding_up_unsafe(col_size, warps_per_block));
-    auto str_counter = cudf::numeric_scalar(size_type{0}, true, stream);
+    auto num_blocks                 = cudf::util::div_rounding_up_safe(col_size, warps_per_block);
+    auto str_counter                = cudf::numeric_scalar(size_type{0}, true, stream);
 
     // TODO run these independent kernels in parallel streams.
     if (max_length > SINGLE_THREAD_THRESHOLD) {
