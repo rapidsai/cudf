@@ -2439,6 +2439,21 @@ def as_column(
                 )
 
                 if (
+                    isinstance(pyarrow_array, pa.NullArray)
+                    and pa_type is None
+                    and dtype is None
+                    and getattr(arbitrary, "dtype", None)
+                    == cudf.dtype("object")
+                ):
+                    # pa.array constructor returns a NullArray
+                    # for empty arrays, instead of a StringArray.
+                    # This issue is only specific to this dtype,
+                    # all other dtypes, result in their corresponding
+                    # arrow array creation.
+                    dtype = cudf.dtype("str")
+                    pyarrow_array = pyarrow_array.cast(np_to_pa_dtype(dtype))
+
+                if (
                     isinstance(arbitrary, pd.Index)
                     and arbitrary.dtype == cudf.dtype("object")
                     and (
