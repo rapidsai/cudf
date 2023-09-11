@@ -13,3 +13,7 @@ cpdef Table from_arrow(
 cpdef Scalar from_arrow_scalar(
     pa_Scalar pyarrow_scalar,
 )
+
+cpdef pa_Table to_arrow(Table tbl)
+
+cpdef pa_Scalar to_arrow_scalar(Scalar slr)
