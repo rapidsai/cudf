@@ -39,6 +39,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
+#include <stdexcept>
 #include <thrust/gather.h>
 
 namespace cudf {
@@ -582,7 +583,14 @@ std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
   auto builder = make_builder(input.type);
 
   auto status = builder->AppendScalar(input);
-  if (status != arrow::Status::OK()) { CUDF_FAIL("Arrow ArrayBuilder::AppendScalar failed"); }
+  if (status != arrow::Status::OK()) {
+    if (status == arrow::Status::NotImplemented()) {
+      // The only known failure case here is for nulls
+      CUDF_FAIL("Cannot create untyped null scalars or nested types with untyped null leaf nodes",
+                std::invalid_argument);
+    }
+    CUDF_FAIL("Arrow ArrayBuilder::AppendScalar failed");
+  }
 
   auto maybe_array = builder->Finish();
   if (!maybe_array.ok()) { CUDF_FAIL("Arrow ArrayBuilder::Finish failed"); }
