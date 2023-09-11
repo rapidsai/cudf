@@ -634,6 +634,19 @@ def find_common_type(dtypes):
     return cudf.dtype(common_dtype)
 
 
+def common_dtype_compatible(dtypes):
+    """
+    A utility function, that wraps around `find_common_type`
+    and return `str` when pandas comptibility mode is enabled.
+    """
+    common_dtype = find_common_type(dtypes)
+    if cudf.get_option(
+        "mode.pandas_compatible"
+    ) and common_dtype == cudf.dtype("O"):
+        return "str"
+    return common_dtype
+
+
 def _can_cast(from_dtype, to_dtype):
     """
     Utility function to determine if we can cast
