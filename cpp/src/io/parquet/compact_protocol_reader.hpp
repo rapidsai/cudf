@@ -264,7 +264,7 @@ using ParquetFieldInt64 = ParquetFieldInt<int64_t, ST_FLD_I64>;
  */
 template <typename T, int EXPECTED_TYPE>
 class ParquetFieldIntList : public ParquetFieldList {
-  std::vector<int64_t>& val;
+  std::vector<T>& val;
 
  public:
   ParquetFieldIntList(int f, std::vector<int64_t>& v) : ParquetFieldList(f), val(v) {}
