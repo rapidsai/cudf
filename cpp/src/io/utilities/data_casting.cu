@@ -629,11 +629,11 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
       if (!skip) {
         if (!is_prev_escaping_backslash) {
           this_num_out = 1;
-          if (d_chars) write_char = c;
+          // writes char directly
         } else {
           if (escaped_char != UNICODE_SEQ) {
             this_num_out = 1;
-            write_char   = escaped_char;
+            // writes char directly
           } else {
             // Unicode
             // \uXXXX
@@ -683,7 +683,14 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
           __syncthreads();
         }
         offset += last_offset;
-        if (d_chars && !skip) { strings::detail::from_char_utf8(write_char, d_buffer + offset); }
+        if (d_chars && !skip) {
+          auto const is_not_unicode = (!is_prev_escaping_backslash) || escaped_char != UNICODE_SEQ;
+          if (is_not_unicode) {
+            *(d_buffer + offset) = (!is_prev_escaping_backslash) ? c : escaped_char;
+          } else {
+            strings::detail::from_char_utf8(write_char, d_buffer + offset);
+          }
+        }
         offset += this_num_out;
         if constexpr (is_warp) {
           last_offset = __shfl_sync(0xffffffff, offset, BLOCK_SIZE - 1);
