@@ -80,6 +80,7 @@ class CompactProtocolReader {
     return static_cast<T>((u >> 1u) ^ -static_cast<T>(u & 1));
   }
 
+  // thrift spec says to use zigzag i32 for i16 types
   int32_t get_i16() noexcept { return get_zigzag<int32_t>(); }
   int32_t get_i32() noexcept { return get_zigzag<int32_t>(); }
   int64_t get_i64() noexcept { return get_zigzag<int64_t>(); }
@@ -296,7 +297,6 @@ class ParquetFieldString : public ParquetField {
  * string fails
  */
 class ParquetFieldStringList : public ParquetField {
-  int field_val;
   std::vector<std::string>& val;
 
  public:
@@ -318,8 +318,6 @@ class ParquetFieldStringList : public ParquetField {
     }
     return false;
   }
-
-  int field() { return field_val; }
 };
 
 /**
