@@ -241,6 +241,9 @@ dependencies:
               cuda: "11.8"
             packages:
               - *nvcomp
+          # Fallback matrix for aarch64 CUDA 12
+          - matrix:
+            packages:
   build_wheels:
     common:
       - output_types: pyproject
