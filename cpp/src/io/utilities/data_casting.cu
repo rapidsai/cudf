@@ -43,8 +43,8 @@
 
 namespace cudf::io::json::detail {
 
-constexpr auto SINGLE_THREAD_THRESHOLD = 512;
-constexpr auto WARP_THRESHOLD          = 1024 * 4;
+constexpr auto SINGLE_THREAD_THRESHOLD = 128;
+constexpr auto WARP_THRESHOLD          = 128 * 128;  // 16K
 
 // Unicode code point escape sequence
 static constexpr char UNICODE_SEQ = 0x7F;
