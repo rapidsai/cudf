@@ -42,6 +42,7 @@ import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 
 import java.io.*;
 import java.math.BigDecimal;
@@ -86,6 +87,7 @@ public class TableTest extends CudfTestBase {
   private static final File TEST_ALL_TYPES_PLAIN_AVRO_FILE = TestUtils.getResourceAsFile("alltypes_plain.avro");
   private static final File TEST_SIMPLE_CSV_FILE = TestUtils.getResourceAsFile("simple.csv");
   private static final File TEST_SIMPLE_JSON_FILE = TestUtils.getResourceAsFile("people.json");
+  private static final File TEST_JSON_ERROR_FILE = TestUtils.getResourceAsFile("people_with_invalid_lines.json");
 
   private static final Schema CSV_DATA_BUFFER_SCHEMA = Schema.builder()
       .column(DType.INT32, "A")
@@ -323,6 +325,39 @@ public class TableTest extends CudfTestBase {
         .build();
         Table table = Table.readJSON(schema, opts, TEST_SIMPLE_JSON_FILE)) {
       assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadJSONFileWithInvalidLines() {
+    Schema schema = Schema.builder()
+            .column(DType.STRING, "name")
+            .column(DType.INT32, "age")
+            .build();
+
+    // test with recoverWithNulls=true
+    {
+      JSONOptions opts = JSONOptions.builder()
+              .withLines(true)
+              .withRecoverWithNull(true)
+              .build();
+      try (Table expected = new Table.TestBuilder()
+              .column("Michael", "Andy", null, "Justin")
+              .column(null, 30, null, 19)
+              .build();
+           Table table = Table.readJSON(schema, opts, TEST_JSON_ERROR_FILE)) {
+        assertTablesAreEqual(expected, table);
+      }
+    }
+
+    // test with recoverWithNulls=false
+    {
+      JSONOptions opts = JSONOptions.builder()
+              .withLines(true)
+              .withRecoverWithNull(false)
+              .build();
+      assertThrows(CudfException.class, () ->
+        Table.readJSON(schema, opts, TEST_JSON_ERROR_FILE));
     }
   }
 
