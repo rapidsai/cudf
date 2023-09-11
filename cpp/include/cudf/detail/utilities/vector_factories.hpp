@@ -106,26 +106,29 @@ rmm::device_uvector<T> make_device_uvector_async(host_span<T const> source_data,
 }
 
 /**
- * @brief Asynchronously construct a `device_uvector` containing a deep copy of data from a
- * `host_span` containing only bool type
+ * @brief Asynchronously construct a `device_uvector` containing a deep copy of data from a host
+ * container that cannot be implicitly converted to a `host_span`.
  *
  * @note This function does not synchronize `stream`.
  *
- * @param source_data The host_span of data to deep copy
+ * @tparam Container The type of the container to copy from
+ * @tparam T The type of the data to copy
+ * @param c The input host container from which to copy
  * @param stream The stream on which to allocate memory and perform the copy
  * @param mr The memory resource to use for allocating the returned device_uvector
  * @return A device_uvector containing the copied data
  */
-template <typename T, std::enable_if_t<std::is_same<T, bool>::value>>
-rmm::device_uvector<T> make_device_uvector_async(host_span<T const> source_data,
-                                                 rmm::cuda_stream_view stream,
-                                                 rmm::mr::device_memory_resource* mr)
+template <
+  typename Container,
+  std::enable_if_t<
+    !std::is_convertible_v<Container, host_span<typename Container::value_type const>>>* = nullptr>
+rmm::device_uvector<typename Container::value_type> make_device_uvector_async(
+  Container const& c, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
-  rmm::device_uvector<bool> ret(source_data.size(), stream, mr);
-  for (std::size_t index = 0; index < source_data.size(); ++index) {
-    ret.set_element_async(index, 
-                          source_data[index], 
-                          stream);
+  rmm::device_uvector<typename Container::value_type> ret(c.size(), stream, mr);
+  for (std::size_t index = 0; index < c.size(); ++index) {
+    typename Container::value_type element{c[index]};
+    ret.set_element_async(index, element, stream);
   }
   return ret;
 }
