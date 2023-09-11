@@ -29,6 +29,8 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <cudf_test/column_utilities.hpp>
+
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
@@ -90,6 +92,24 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                 min_periods,
                                 aggr,
                                 mr);
+}
+
+namespace {
+template <typename Calculator>
+std::unique_ptr<column> expand_to_column(Calculator const& calc,
+                                       size_type const& num_rows,
+                                       rmm::cuda_stream_view stream)
+{
+    auto window_column = cudf::make_numeric_column(
+        cudf::data_type{type_to_id<size_type>()}, num_rows, cudf::mask_state::UNALLOCATED, stream);
+
+    auto begin = cudf::detail::make_counting_transform_iterator(0, calc);
+
+    thrust::copy_n(
+        rmm::exec_policy(stream), begin, num_rows, window_column->mutable_view().data<size_type>());
+
+    return window_column;
+}
 }
 
 namespace detail {
@@ -164,19 +184,41 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                d_group_labels  = group_labels.data(),
                                preceding_window] __device__(size_type idx) {
     auto group_label = d_group_labels[idx];
-    auto group_start = d_group_offsets[group_label];
-    return thrust::minimum{}(preceding_window,
-                             idx - group_start + 1);  // Preceding includes current row.
+    if (preceding_window < 1) { // where 1 indicates only the current row.
+      // 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,   10
+      auto group_end = d_group_offsets[group_label + 1];
+      return thrust::maximum{}(preceding_window,
+//                               -(group_end - 1 - idx) + 1);
+                               -(group_end - 1 - idx));
+    }
+    else {
+      auto group_start = d_group_offsets[group_label];
+      return thrust::minimum{}(preceding_window,
+                               idx - group_start + 1);  // Preceding includes current row.
+    }
   };
+
+  std::cout << "Preceding column: " << std::endl;
+  auto const tmp_preceding = expand_to_column(preceding_calculator, input.size(), stream);
+  cudf::test::print(*tmp_preceding);
 
   auto following_calculator = [d_group_offsets = group_offsets.data(),
                                d_group_labels  = group_labels.data(),
                                following_window] __device__(size_type idx) {
     auto group_label = d_group_labels[idx];
-    auto group_end   = d_group_offsets[group_label + 1];  // Cannot fall off the end, since offsets
-                                                          // is capped with `input.size()`.
-    return thrust::minimum{}(following_window, (group_end - 1) - idx);
+    if (following_window < 0) {
+      auto group_start = d_group_offsets[group_label];
+      return thrust::maximum{}(following_window, -(idx - group_start)-1);
+    }
+    else {
+      auto group_end = d_group_offsets[group_label + 1];  // Cannot fall off the end, since offsets
+                                                            // is capped with `input.size()`.
+      return thrust::minimum{}(following_window, (group_end - 1) - idx);
+    }
   };
+  std::cout << "Following column: " << std::endl;
+  auto const tmp_following = expand_to_column(following_calculator, input.size(), stream);
+  cudf::test::print(*tmp_following);
 
   if (aggr.kind == aggregation::CUDA || aggr.kind == aggregation::PTX) {
     cudf::detail::preceding_window_wrapper grouped_preceding_window{
@@ -324,21 +366,6 @@ std::tuple<size_type, size_type> get_null_bounds_for_orderby_column(
                            : std::make_tuple(num_rows - num_nulls, num_rows);
 }
 
-template <typename Calculator>
-std::unique_ptr<column> expand_to_column(Calculator const& calc,
-                                         size_type const& num_rows,
-                                         rmm::cuda_stream_view stream)
-{
-  auto window_column = cudf::make_numeric_column(
-    cudf::data_type{type_to_id<size_type>()}, num_rows, cudf::mask_state::UNALLOCATED, stream);
-
-  auto begin = cudf::detail::make_counting_transform_iterator(0, calc);
-
-  thrust::copy_n(
-    rmm::exec_policy(stream), begin, num_rows, window_column->mutable_view().data<size_type>());
-
-  return window_column;
-}
 
 /// Range window computation, with
 ///   1. no grouping keys specified
