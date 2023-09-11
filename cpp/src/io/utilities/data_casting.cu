@@ -576,9 +576,11 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
         // There is another __syncthreads() at the end of for-loop.
       }
 
+      // String with parsing errors are made as null
       bool error = false;
       if (is_within_bounds) {
-        // instead of '\\', using is_escaping_backslash, and previous index value also here.
+        // curr=='\' and end, or prev=='\' and curr=='u' and end-curr < UNICODE_HEX_DIGIT_COUNT
+        // or prev=='\' and curr=='u' and end-curr >= UNICODE_HEX_DIGIT_COUNT and any non-hex
         error |= (is_escaping_backslash /*c == '\\'*/ && char_index == (in_end - in_begin) - 1);
         error |= (is_prev_escaping_backslash && escaped_char == NON_ESCAPE_CHAR);
         error |= (is_prev_escaping_backslash && c == 'u' &&
@@ -586,7 +588,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
                    !is_hex(in_begin[char_index + 1]) | !is_hex(in_begin[char_index + 2]) |
                    !is_hex(in_begin[char_index + 3]) | !is_hex(in_begin[char_index + 4])));
       }
-      // propagate error using warp shuffle.
+      // Make sure all threads have no errors before continuing
       if constexpr (is_warp) {
         error = __any_sync(MASK, error);
       } else {
@@ -598,6 +600,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
         __syncthreads();
         error = error_reduced;
       }
+      // If any thread has an error, skip the rest of the string and make this string as null
       if (error) {
         if (!d_chars && lane == 0) {
           if (null_mask != nullptr) {
@@ -608,12 +611,15 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
           d_offsets[istring] = 0;
         }
         if constexpr (!is_warp) { __syncthreads(); }
-        break;                        // gride-stride return;
+        break;  // gride-stride return;
       }
+
+      // Skipping non-copied escaped characters
       bool skip = !is_within_bounds;  // false;
+      // skip \ for \" \\ \/ \b \f \n \r \t \uXXXX
       skip |= is_escaping_backslash;
       if (is_within_bounds) {
-        // \uXXXX check for "\u" for each X
+        // skip X for each X in \uXXXX
         skip |= char_index - 2 >= 0 && is_slash.get_bit(warp_id, lane - 2) &&
                 in_begin[char_index - 1] == 'u';
         skip |= char_index - 3 >= 0 && is_slash.get_bit(warp_id, lane - 3) &&
@@ -627,19 +633,21 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
       cudf::char_utf8 write_char{};
 
       if (!skip) {
+        // 1. Unescaped character
         if (!is_prev_escaping_backslash) {
           this_num_out = 1;
-          // writes char directly
+          // writes char directly for non-unicode
         } else {
+          // 2. Escaped character
           if (escaped_char != UNICODE_SEQ) {
             this_num_out = 1;
-            // writes char directly
+            // writes char directly for non-unicode
           } else {
-            // Unicode
-            // \uXXXX
+            // 3. Unicode
+            // UTF8 \uXXXX
             auto hex_val     = parse_unicode_hex(in_begin + char_index + 1);
             auto hex_low_val = 0;
-            // \uXXXX\uXXXX
+            // UTF16 \uXXXX\uXXXX
             // Note: no need for scanned_backslash below because we already know that
             // only '\u' check is enough.
             if ((in_begin + char_index + UNICODE_HEX_DIGIT_COUNT + NUM_UNICODE_ESC_SEQ_CHARS) <
@@ -662,7 +670,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
                 this_num_out = 0;
                 write_char   = 0;
               } else {
-                // if u8
+                // if UTF8
                 write_char   = strings::detail::codepoint_to_utf8(hex_val);
                 this_num_out = strings::detail::bytes_in_char_utf8(write_char);
               }
@@ -671,6 +679,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
         }
       }  // !skip end.
       {
+        // compute offset to write output for each thread
         size_type offset;
         if constexpr (is_warp) {
           using OffsetScan = cub::WarpScan<size_type>;
@@ -683,6 +692,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
           __syncthreads();
         }
         offset += last_offset;
+        // Write output
         if (d_chars && !skip) {
           auto const is_not_unicode = (!is_prev_escaping_backslash) || escaped_char != UNICODE_SEQ;
           if (is_not_unicode) {
