@@ -47,17 +47,7 @@ namespace test {
  * class MyTestFixture : public cudf::test::BaseFixture {};
  * ```
  */
-class BaseFixture : public ::testing::Test {
-  rmm::mr::device_memory_resource* _mr{rmm::mr::get_current_device_resource()};
-
- public:
-  /**
-   * @brief Returns pointer to `device_memory_resource` that should be used for
-   * all tests inheriting from this fixture
-   * @return pointer to memory resource
-   */
-  rmm::mr::device_memory_resource* mr() { return _mr; }
-};
+class BaseFixture : public ::testing::Test {};
 
 /**
  * @brief Base test fixture that takes a parameter.
@@ -68,17 +58,7 @@ class BaseFixture : public ::testing::Test {
  * ```
  */
 template <typename T>
-class BaseFixtureWithParam : public ::testing::TestWithParam<T> {
-  rmm::mr::device_memory_resource* _mr{rmm::mr::get_current_device_resource()};
-
- public:
-  /**
-   * @brief Returns pointer to `device_memory_resource` that should be used for
-   * all tests inheriting from this fixture
-   * @return pointer to memory resource
-   */
-  rmm::mr::device_memory_resource* mr() const { return _mr; }
-};
+class BaseFixtureWithParam : public ::testing::TestWithParam<T> {};
 
 template <typename T, typename Enable = void>
 struct uniform_distribution_impl {};
