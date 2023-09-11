@@ -1441,6 +1441,52 @@ TEST_F(JsonReaderTest, JsonLongString)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, table.tbl->view());
 }
 
+TEST_F(JsonReaderTest, ErrorStrings)
+{
+  // cases of invalid escape characters, invalid unicode encodings.
+  auto const buffer = std::string{R"(
+    {"col0": "\"\a"}
+    {"col0": "\u"}
+    {"col0": "\u0"}
+    {"col0": "\u0b"}
+    {"col0": "\u00b"}
+    {"col0": "\u00bz"}
+    {"col0": "\t34567890123456\t9012345678901\ug0bc"}
+    {"col0": "\t34567890123456\t90123456789012\u0hbc"}
+    {"col0": "\t34567890123456\t90123456789012\u00ic"}
+    {"col0": "\u0b95\u0bbe\u0bb0\u0bcd\u0ba4\u0bcd\u0ba4\u0bbfகார்த்தி"}
+)"};
+  // Last one is not an error case, but shows that unicode in json is copied string column output.
+
+  cudf::io::json_reader_options const in_opts =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
+      .dtypes({data_type{cudf::type_id::STRING}})
+      .lines(true)
+      .legacy(false);
+
+  auto const result      = cudf::io::read_json(in_opts);
+  auto const result_view = result.tbl->view().column(0);
+
+  EXPECT_EQ(result.metadata.schema_info[0].name, "col0");
+  EXPECT_EQ(result_view.null_count(), 9);
+  cudf::test::strings_column_wrapper expected{
+    {"",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "கார்த்தி\xe0\xae\x95\xe0\xae\xbe\xe0\xae\xb0\xe0\xaf\x8d\xe0\xae\xa4\xe0\xaf\x8d\xe0\xae\xa4"
+     "\xe0\xae\xbf"},
+    // unicode hex 0xe0 0xae 0x95 0xe0 0xae 0xbe 0xe0 0xae 0xb0 0xe0 0xaf 0x8d
+    //             0xe0 0xae 0xa4 0xe0 0xaf 0x8d 0xe0 0xae 0xa4 0xe0 0xae 0xbf
+    cudf::test::iterators::nulls_at({0, 1, 2, 3, 4, 5, 6, 7, 8})};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_view, expected);
+}
+
 TEST_F(JsonReaderTest, TokenAllocation)
 {
   std::array<std::string const, 3> const json_inputs{
