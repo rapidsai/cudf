@@ -599,14 +599,16 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
         error = error_reduced;
       }
       if (error) {
-        if (lane == 0) {
+        if (!d_chars && lane == 0) {
           if (null_mask != nullptr) {
             clear_bit(null_mask, istring);
             atomicAdd(null_count_data, 1);
           }
           last_offset = 0;
-          if (!d_chars) d_offsets[istring] = 0;
+          d_offsets[istring] = 0;
         }
+        if constexpr (!is_warp)
+          __syncthreads();
         break;                        // gride-stride return;
       }
       bool skip = !is_within_bounds;  // false;
