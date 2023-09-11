@@ -156,7 +156,7 @@ bool CompactProtocolReader::read(SchemaElement* s)
                             ParquetFieldEnum<ConvertedType>(6, s->converted_type),
                             ParquetFieldInt32(7, s->decimal_scale),
                             ParquetFieldInt32(8, s->decimal_precision),
-                            ParquetFieldOptionalInt32(9, s->field_id),
+                            ParquetFieldOptional<int32_t, ParquetFieldInt32>(9, s->field_id),
                             ParquetFieldStruct(10, s->logical_type));
   return function_builder(this, op);
 }
@@ -235,6 +235,8 @@ bool CompactProtocolReader::read(ColumnChunk* c)
 
 bool CompactProtocolReader::read(ColumnChunkMetaData* c)
 {
+  using OptionalSizeStatistics =
+    ParquetFieldOptional<SizeStatistics, ParquetFieldStruct<SizeStatistics>>;
   auto op = std::make_tuple(ParquetFieldEnum<Type>(1, c->type),
                             ParquetFieldEnumList(2, c->encodings),
                             ParquetFieldStringList(3, c->path_in_schema),
@@ -247,7 +249,7 @@ bool CompactProtocolReader::read(ColumnChunkMetaData* c)
                             ParquetFieldInt64(10, c->index_page_offset),
                             ParquetFieldInt64(11, c->dictionary_page_offset),
                             ParquetFieldStruct(12, c->statistics),
-                            ParquetFieldOptionalStruct(16, c->size_statistics));
+                            OptionalSizeStatistics(16, c->size_statistics));
   return function_builder(this, op);
 }
 
@@ -306,28 +308,35 @@ bool CompactProtocolReader::read(PageLocation* p)
 
 bool CompactProtocolReader::read(OffsetIndex* o)
 {
+  using OptionalListI64 = ParquetFieldOptional<std::vector<int64_t>, ParquetFieldInt64List>;
+
   auto op = std::make_tuple(ParquetFieldStructList(1, o->page_locations),
-                            ParquetFieldOptionalInt64List(2, o->unencoded_byte_array_data_bytes));
+                            OptionalListI64(2, o->unencoded_byte_array_data_bytes));
   return function_builder(this, op);
 }
 
 bool CompactProtocolReader::read(SizeStatistics* s)
 {
-  auto op = std::make_tuple(ParquetFieldOptionalInt64(1, s->unencoded_byte_array_data_bytes),
-                            ParquetFieldOptionalInt64List(2, s->repetition_level_histogram),
-                            ParquetFieldOptionalInt64List(3, s->definition_level_histogram));
+  using OptionalI64     = ParquetFieldOptional<int64_t, ParquetFieldInt64>;
+  using OptionalListI64 = ParquetFieldOptional<std::vector<int64_t>, ParquetFieldInt64List>;
+
+  auto op = std::make_tuple(OptionalI64(1, s->unencoded_byte_array_data_bytes),
+                            OptionalListI64(2, s->repetition_level_histogram),
+                            OptionalListI64(3, s->definition_level_histogram));
   return function_builder(this, op);
 }
 
 bool CompactProtocolReader::read(ColumnIndex* c)
 {
+  using OptionalListI64 = ParquetFieldOptional<std::vector<int64_t>, ParquetFieldInt64List>;
+
   auto op = std::make_tuple(ParquetFieldBoolList(1, c->null_pages),
                             ParquetFieldBinaryList(2, c->min_values),
                             ParquetFieldBinaryList(3, c->max_values),
                             ParquetFieldEnum<BoundaryOrder>(4, c->boundary_order),
                             ParquetFieldInt64List(5, c->null_counts),
-                            ParquetFieldOptionalInt64List(6, c->repetition_level_histogram),
-                            ParquetFieldOptionalInt64List(7, c->definition_level_histogram));
+                            OptionalListI64(6, c->repetition_level_histogram),
+                            OptionalListI64(7, c->definition_level_histogram));
   return function_builder(this, op);
 }
 
