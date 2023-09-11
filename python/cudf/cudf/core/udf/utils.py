@@ -363,5 +363,5 @@ def column_to_string_view_array_init_heap(col):
     return column_to_string_view_array(col)
 
 
-class UDFError(Exception):
+class UDFError(RuntimeError):
     pass

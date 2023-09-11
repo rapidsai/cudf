@@ -30,7 +30,9 @@ SUPPORTED_GROUPBY_NUMPY_TYPES = [
     numpy_support.as_dtype(dt) for dt in SUPPORTED_GROUPBY_NUMBA_TYPES
 ]
 
-_UDF_DOC_URL = "https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs/"
+_UDF_DOC_URL = (
+    "https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs/"
+)
 
 
 class Group:
@@ -216,7 +218,7 @@ class GroupAttrBase(AbstractTemplate):
         return (
             f"\nSeries.{fname}({sr_err}) is not supported for "
             f"({dtype_err}) within JIT GroupBy apply.\nTo see "
-            f"what's available, visit {docs}"
+            f"what's available, visit {_UDF_DOC_URL}"
         )
 
     def generic(self, args, kws):
@@ -306,7 +308,7 @@ def _make_unsupported_dataframe_attr(attrname):
     def _attr(self, mod):
         raise UDFError(
             f"JIT GroupBy.apply() does not support DataFrame.{attrname}(). "
-            f"To see what's available, visit {docs}"
+            f"To see what's available, visit {_UDF_DOC_URL}"
         )
 
     return _attr

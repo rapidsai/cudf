@@ -477,7 +477,7 @@ def test_groupby_apply_jit_invalid_unary_ops_error(groupby_jit_data, op):
 
     with pytest.raises(
         UDFError,
-        match=f"{op.__name__}\\(Series\\) is not supported within JIT GroupBy",
+        match=f"{op.__name__}\\(Series\\) is not supported by JIT GroupBy",
     ):
         run_groupby_apply_jit_test(groupby_jit_data, func, keys)
 

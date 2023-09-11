@@ -1162,6 +1162,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def __array_function__(self, func, types, args, kwargs):
+        # breakpoint()
         if "out" in kwargs or not all(issubclass(t, Series) for t in types):
             return NotImplemented
 
