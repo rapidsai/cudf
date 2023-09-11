@@ -18,15 +18,21 @@
 
 #include <cudf/column/column.hpp>
 
-
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 namespace cudf::reduction::detail {
 
-std::unique_ptr<cudf::column> histogram(column_view const& col,
-                                          rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr)
+std::unique_ptr<cudf::column> histogram(column_view const& input,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
+{
+  return nullptr;
+}
+
+std::unique_ptr<cudf::column> merge_histogram(column_view const& input,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr)
 {
   return nullptr;
 }

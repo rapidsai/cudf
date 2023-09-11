@@ -59,6 +59,9 @@ struct reduce_dispatch_functor {
       case aggregation::MAX: return max(col, output_dtype, init, stream, mr);
       case aggregation::ANY: return any(col, output_dtype, init, stream, mr);
       case aggregation::ALL: return all(col, output_dtype, init, stream, mr);
+      case aggregation::HISTOGRAM: return histogram(col, output_dtype, init, stream, mr);
+      case aggregation::MERGE_HISTOGRAM:
+        return merge_histogram(col, output_dtype, init, stream, mr);
       case aggregation::SUM_OF_SQUARES: return sum_of_squares(col, output_dtype, stream, mr);
       case aggregation::MEAN: return mean(col, output_dtype, stream, mr);
       case aggregation::VARIANCE: {
