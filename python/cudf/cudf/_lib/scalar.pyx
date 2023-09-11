@@ -164,6 +164,10 @@ cdef class DeviceScalar:
             )
         return result
 
+    # TODO: This is just here for testing and should be removed.
+    def get(self):
+        return self.c_value
+
     @property
     def dtype(self):
         """

@@ -420,13 +420,14 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
 
 std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input, arrow::MemoryPool* ar_mr)
 {
-  auto stream = cudf::get_default_stream();
-  auto column = cudf::empty_like(input);
+  auto stream     = cudf::get_default_stream();
+  auto tmp_column = cudf::empty_like(input);
+  auto column     = cudf::allocate_like(tmp_column->view(), 1);
 
   auto view = column->mutable_view();
   cudf::fill_in_place(view, 0, 1, input);
   cudf::table_view tv{{column->view()}};
-  auto arrow_table  = cudf::to_arrow(tv);
+  auto arrow_table  = cudf::to_arrow(tv, {column_metadata{""}});
   auto ac           = arrow_table->column(0);
   auto maybe_scalar = ac->GetScalar(0);
   if (!maybe_scalar.ok()) { CUDF_FAIL("Failed to produce a scalar"); }
