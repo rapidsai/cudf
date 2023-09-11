@@ -134,6 +134,17 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
                                        arrow::MemoryPool* ar_mr = arrow::default_memory_pool());
 
 /**
+ * @brief Create `arrow::Scalar` from cudf scalar `input`
+ *
+ * Converts the `cudf::scalar` to `arrow::Scalar`.
+ *
+ * @param input scalar that needs to be converted to arrow Scalar
+ * @param ar_mr arrow memory pool to allocate memory for arrow Scalar
+ * @return arrow Scalar generated from `input`
+ */
+std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
+                                        arrow::MemoryPool* ar_mr = arrow::default_memory_pool());
+/**
  * @brief Create `cudf::table` from given arrow Table input
  *
  * @param input arrow:Table that needs to be converted to `cudf::table`

@@ -584,7 +584,7 @@ std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
 
   auto status = builder->AppendScalar(input);
   if (status != arrow::Status::OK()) {
-    if (status == arrow::Status::NotImplemented()) {
+    if (status.IsNotImplemented()) {
       // The only known failure case here is for nulls
       CUDF_FAIL("Cannot create untyped null scalars or nested types with untyped null leaf nodes",
                 std::invalid_argument);
