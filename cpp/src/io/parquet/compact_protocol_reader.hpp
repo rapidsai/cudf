@@ -228,8 +228,6 @@ class ParquetFieldInt : public ParquetField {
     }
     return (field_type != EXPECTED_TYPE);
   }
-
-  int field() { return field_val; }
 };
 
 using ParquetFieldInt8  = ParquetFieldInt<int8_t, ST_FLD_BYTE>;
@@ -443,8 +441,6 @@ class ParquetFieldUnionFunctor : public ParquetField {
       return !cpr->read(&val);
     }
   }
-
-  int field() { return field_val; }
 };
 
 template <typename T>
