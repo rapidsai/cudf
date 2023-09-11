@@ -115,6 +115,16 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             result = self._numeric_quantile(q, interpolation, exact)
         if return_scalar:
             scalar_result = result.element_indexing(0)
+            if interpolation in {"lower", "higher", "nearest"}:
+                try:
+                    new_scalar = self.dtype.type(scalar_result)
+                    scalar_result = (
+                        new_scalar
+                        if new_scalar == scalar_result
+                        else scalar_result
+                    )
+                except (TypeError, ValueError):
+                    pass
             return (
                 cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
                 if scalar_result is NA

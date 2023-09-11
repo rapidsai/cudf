@@ -179,6 +179,7 @@ dependencies:
           - c-compiler
           - cxx-compiler
           - dlpack>=0.5,<0.6.0a0
+          - zlib>=1.2.13
     specific:
       - output_types: conda
         matrices:
@@ -374,13 +375,13 @@ dependencies:
           - identify>=2.5.20
       - output_types: conda
         packages:
-          - doxygen=1.8.20 # pre-commit hook needs a specific version.
+          - &doxygen doxygen=1.9.1 # pre-commit hook needs a specific version.
   docs:
     common:
       - output_types: [conda]
         packages:
           - dask-cuda==23.10.*
-          - doxygen=1.8.20
+          - *doxygen
           - make
           - myst-nb
           - nbsphinx

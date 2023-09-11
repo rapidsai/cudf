@@ -100,7 +100,8 @@ jobject contig_split_group_by_result_from(JNIEnv *env, jobjectArray &groups,
 /**
  * Allocate a HostMemoryBuffer
  */
-jobject allocate_host_buffer(JNIEnv *env, jlong amount, jboolean prefer_pinned);
+jobject allocate_host_buffer(JNIEnv *env, jlong amount, jboolean prefer_pinned,
+                             jobject host_memory_allocator);
 
 /**
  * Get the address of a HostMemoryBuffer
