@@ -1444,6 +1444,7 @@ TEST_F(JsonReaderTest, JsonLongString)
 TEST_F(JsonReaderTest, ErrorStrings)
 {
   // cases of invalid escape characters, invalid unicode encodings.
+  // Error strings will decode to nulls
   auto const buffer = std::string{R"(
     {"col0": "\"\a"}
     {"col0": "\u"}
