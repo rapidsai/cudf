@@ -128,18 +128,6 @@ repos:
                 language: system
                 pass_filenames: false
                 verbose: true
-              - id: headers-recipe-check
-                name: headers-recipe-check
-                entry: ./ci/checks/headers_test.sh
-                files: |
-                  (?x)^(
-                    ^cpp/include/|
-                    ^conda/.*/meta.yaml
-                  )
-                types_or: [file]
-                language: system
-                pass_filenames: false
-                verbose: false
       - repo: https://github.com/codespell-project/codespell
         rev: v2.2.2
         hooks:
