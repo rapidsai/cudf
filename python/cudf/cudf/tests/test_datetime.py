@@ -620,7 +620,11 @@ def test_cudf_to_datetime(data, dayfirst, infer_datetime_format):
     is_string_data = False
     if isinstance(pd_data, (pd.Series, pd.DataFrame, pd.Index)):
         gd_data = cudf.from_pandas(pd_data)
-        is_string_data = gd_data.ndim == 1 and gd_data.dtype.kind == "O"
+        is_string_data = (
+            gd_data.ndim == 1
+            and not gd_data.empty
+            and gd_data.dtype.kind == "O"
+        )
     else:
         if type(pd_data).__module__ == np.__name__:
             gd_data = cp.array(pd_data)
