@@ -164,6 +164,25 @@ class ParquetField {
 };
 
 /**
+ * @brief Base class for list functors.
+ *
+ * Child class should call `init_list` and check the first element of the returned pair to decide
+ * whether to proceed. Second element of the returned pair is the size of the array in elements.
+ */
+class ParquetFieldList : public ParquetField {
+ protected:
+  ParquetFieldList(int f) : ParquetField(f) {}
+  std::pair<bool, uint32_t> init_list(CompactProtocolReader* cpr, int field_type, int expected_type)
+  {
+    if (field_type != ST_FLD_LIST) return {true, 0};
+    uint8_t t;
+    uint32_t n = cpr->get_listh(&t);
+    if (t != expected_type) return {true, 0};
+    return {false, n};
+  }
+};
+
+/**
  * @brief Functor to set value to bool read from CompactProtocolReader
  *
  * @return True if field type is not bool
@@ -187,21 +206,19 @@ class ParquetFieldBool : public ParquetField {
  * @return True if field types mismatch or if the process of reading a
  * bool fails
  */
-class ParquetFieldBoolList : public ParquetField {
+class ParquetFieldBoolList : public ParquetFieldList {
   std::vector<bool>& val;
 
  public:
-  ParquetFieldBoolList(int f, std::vector<bool>& v) : ParquetField(f), val(v) {}
+  ParquetFieldBoolList(int f, std::vector<bool>& v) : ParquetFieldList(f), val(v) {}
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
-    if (field_type != ST_FLD_LIST) return true;
-    uint8_t t;
-    uint32_t n = cpr->get_listh(&t);
-    if (t != ST_FLD_TRUE) return true;
+    auto [should_exit, n] = init_list(cpr, field_type, ST_FLD_TRUE);
+    if (should_exit) { return true; }
     val.resize(n);
     for (uint32_t i = 0; i < n; i++) {
       unsigned int current_byte = cpr->getb();
-      if (current_byte != ST_FLD_TRUE && current_byte != ST_FLD_FALSE) return true;
+      if (current_byte != ST_FLD_TRUE && current_byte != ST_FLD_FALSE) { return true; }
       val[i] = current_byte == ST_FLD_TRUE;
     }
     return false;
@@ -246,17 +263,15 @@ using ParquetFieldInt64 = ParquetFieldInt<int64_t, ST_FLD_I64>;
  * integer fails
  */
 template <typename T, int EXPECTED_TYPE>
-class ParquetFieldIntList : public ParquetField {
+class ParquetFieldIntList : public ParquetFieldList {
   std::vector<int64_t>& val;
 
  public:
-  ParquetFieldIntList(int f, std::vector<int64_t>& v) : ParquetField(f), val(v) {}
+  ParquetFieldIntList(int f, std::vector<int64_t>& v) : ParquetFieldList(f), val(v) {}
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
-    if (field_type != ST_FLD_LIST) return true;
-    uint8_t t;
-    uint32_t n = cpr->get_listh(&t);
-    if (t != EXPECTED_TYPE) return true;
+    auto [should_exit, n] = init_list(cpr, field_type, EXPECTED_TYPE);
+    if (should_exit) { return true; }
     val.resize(n);
     for (uint32_t i = 0; i < n; i++) {
       val[i] = cpr->get_zigzag<T>();
@@ -299,17 +314,15 @@ class ParquetFieldString : public ParquetField {
  * @return True if field types mismatch or if the process of reading a
  * string fails
  */
-class ParquetFieldStringList : public ParquetField {
+class ParquetFieldStringList : public ParquetFieldList {
   std::vector<std::string>& val;
 
  public:
-  ParquetFieldStringList(int f, std::vector<std::string>& v) : ParquetField(f), val(v) {}
+  ParquetFieldStringList(int f, std::vector<std::string>& v) : ParquetFieldList(f), val(v) {}
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
-    if (field_type != ST_FLD_LIST) return true;
-    uint8_t t;
-    uint32_t n = cpr->get_listh(&t);
-    if (t != ST_FLD_BINARY) return true;
+    auto [should_exit, n] = init_list(cpr, field_type, ST_FLD_BINARY);
+    if (should_exit) { return true; }
     val.resize(n);
     for (uint32_t i = 0; i < n; i++) {
       uint32_t l = cpr->get_u32();
@@ -348,17 +361,15 @@ class ParquetFieldEnum : public ParquetField {
  * enum fails
  */
 template <typename Enum>
-class ParquetFieldEnumList : public ParquetField {
+class ParquetFieldEnumList : public ParquetFieldList {
   std::vector<Enum>& val;
 
  public:
-  ParquetFieldEnumList(int f, std::vector<Enum>& v) : ParquetField(f), val(v) {}
+  ParquetFieldEnumList(int f, std::vector<Enum>& v) : ParquetFieldList(f), val(v) {}
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
-    if (field_type != ST_FLD_LIST) return true;
-    uint8_t t;
-    uint32_t n = cpr->get_listh(&t);
-    if (t != ST_FLD_I32) return true;
+    auto [should_exit, n] = init_list(cpr, field_type, ST_FLD_I32);
+    if (should_exit) { return true; }
     val.resize(n);
     for (uint32_t i = 0; i < n; i++) {
       val[i] = static_cast<Enum>(cpr->get_i32());
@@ -393,19 +404,16 @@ class ParquetFieldStruct : public ParquetField {
  * struct fails
  */
 template <typename T>
-class ParquetFieldStructList : public ParquetField {
+class ParquetFieldStructList : public ParquetFieldList {
   std::vector<T>& val;
 
  public:
-  ParquetFieldStructList(int f, std::vector<T>& v) : ParquetField(f), val(v) {}
+  ParquetFieldStructList(int f, std::vector<T>& v) : ParquetFieldList(f), val(v) {}
 
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
-    if (field_type != ST_FLD_LIST) return true;
-
-    uint8_t t;
-    uint32_t n = cpr->get_listh(&t);
-    if (t != ST_FLD_STRUCT) return true;
+    auto [should_exit, n] = init_list(cpr, field_type, ST_FLD_STRUCT);
+    if (should_exit) { return true; }
     val.resize(n);
     for (uint32_t i = 0; i < n; i++) {
       if (!(cpr->read(&val[i]))) { return true; }
@@ -501,17 +509,17 @@ class ParquetFieldBinary : public ParquetField {
  * @return True if field types mismatch or if the process of reading a
  * binary fails
  */
-class ParquetFieldBinaryList : public ParquetField {
+class ParquetFieldBinaryList : public ParquetFieldList {
   std::vector<std::vector<uint8_t>>& val;
 
  public:
-  ParquetFieldBinaryList(int f, std::vector<std::vector<uint8_t>>& v) : ParquetField(f), val(v) {}
+  ParquetFieldBinaryList(int f, std::vector<std::vector<uint8_t>>& v) : ParquetFieldList(f), val(v)
+  {
+  }
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
-    if (field_type != ST_FLD_LIST) return true;
-    uint8_t t;
-    uint32_t n = cpr->get_listh(&t);
-    if (t != ST_FLD_BINARY) return true;
+    auto [should_exit, n] = init_list(cpr, field_type, ST_FLD_BINARY);
+    if (should_exit) { return true; }
     val.resize(n);
     for (uint32_t i = 0; i < n; i++) {
       uint32_t l = cpr->get_u32();
