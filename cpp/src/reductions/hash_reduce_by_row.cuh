@@ -75,16 +75,16 @@ rmm::device_uvector<size_type> hash_reduce_by_row(
  * (https://github.com/NVIDIA/cuCollections/pull/98).
  */
 template <typename MapView, typename KeyHasher, typename KeyEqual, typename OutputType>
-struct reduce_by_row_fn {
+struct reduce_by_row_fn_base {
   MapView const d_map;
   KeyHasher const d_hasher;
   KeyEqual const d_equal;
   OutputType* const d_output;
 
-  reduce_by_row_fn(MapView const& d_map,
-                   KeyHasher const& d_hasher,
-                   KeyEqual const& d_equal,
-                   OutputType* const d_output)
+  reduce_by_row_fn_base(MapView const& d_map,
+                        KeyHasher const& d_hasher,
+                        KeyEqual const& d_equal,
+                        OutputType* const d_output)
     : d_map{d_map}, d_hasher{d_hasher}, d_equal{d_equal}, d_output{d_output}
   {
   }
