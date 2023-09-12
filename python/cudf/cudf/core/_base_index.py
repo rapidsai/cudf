@@ -623,22 +623,17 @@ class BaseIndex(Serializable):
                 f"None or False; {sort} was passed."
             )
 
-        if not len(self) or self.equals(other):
-            dtypes = [self.dtype, other.dtype]
-            common_dtype = cudf.utils.dtypes.common_dtype_compatible(dtypes)
+        if not len(self) or not len(other) or self.equals(other):
+            common_dtype = cudf.utils.dtypes._dtype_pandas_compatible(
+                cudf.utils.dtypes.find_common_type([self.dtype, other.dtype])
+            )
 
-            if self.has_duplicates:
-                return (
-                    self.unique()
-                    ._get_reconciled_name_object(other)
-                    .astype(common_dtype)
-                )
-            return self._get_reconciled_name_object(other).astype(common_dtype)
-        elif not len(other):
-            dtypes = [self.dtype, other.dtype]
-            common_dtype = cudf.utils.dtypes.common_dtype_compatible(dtypes)
+            lhs = self.unique() if self.has_duplicates else self
+            rhs = other
+            if not len(other):
+                lhs, rhs = rhs, lhs
 
-            return other._get_reconciled_name_object(self).astype(common_dtype)
+            return lhs._get_reconciled_name_object(rhs).astype(common_dtype)
 
         res_name = _get_result_name(self.name, other.name)
 
