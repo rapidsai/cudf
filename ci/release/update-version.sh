@@ -125,5 +125,7 @@ sed_runner "s/branch-.*/branch-${NEXT_SHORT_TAG}/g" java/ci/README.md
 sed_runner "s/cudf-.*-SNAPSHOT/cudf-${NEXT_FULL_JAVA_TAG}/g" java/ci/README.md
 
 # .devcontainer files
-sed_runner "s/ARG RAPIDS=${CURRENT_SHORT_TAG}/ARG RAPIDS=${NEXT_SHORT_TAG}/g" .devcontainer/Dockerfile
-find .devcontainer/ -type f -name devcontainer.json -exec sed -i "s/${CURRENT_SHORT_TAG}/${NEXT_SHORT_TAG}/g" {} \;
+find .devcontainer/ -type f -name devcontainer.json -print0 | while IFS= read -r -d '' filename; do
+    sed_runner "s@rapidsai/devcontainers:[0-9.]*@rapidsai/devcontainers:${NEXT_FULL_TAG}@g" "${filename}";
+    sed_runner "s@rapidsai/devcontainers/features/rapids-build-utils:[0-9.]*@rapidsai/devcontainers/features/rapids-build-utils:${NEXT_SHORT_TAG_PEP440}@"
+done
