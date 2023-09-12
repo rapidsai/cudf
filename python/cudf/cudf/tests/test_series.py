@@ -16,6 +16,7 @@ import cudf
 from cudf.core._compat import PANDAS_LT_140
 from cudf.testing._utils import (
     NUMERIC_TYPES,
+    SERIES_OR_INDEX_NAMES,
     TIMEDELTA_TYPES,
     _create_pandas_series,
     assert_eq,
@@ -2266,4 +2267,18 @@ def test_series_unique_pandas_compatibility():
     with cudf.option_context("mode.pandas_compatible", True):
         actual = gs.unique()
     expected = ps.unique()
+    assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize("initial_name", SERIES_OR_INDEX_NAMES)
+@pytest.mark.parametrize("name", SERIES_OR_INDEX_NAMES)
+def test_series_rename(initial_name, name):
+    gsr = cudf.Series([1, 2, 3], name=initial_name)
+    psr = pd.Series([1, 2, 3], name=initial_name)
+
+    assert_eq(gsr, psr)
+
+    actual = gsr.rename(name)
+    expected = psr.rename(name)
+
     assert_eq(actual, expected)
