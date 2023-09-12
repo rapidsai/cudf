@@ -62,7 +62,7 @@ class ParquetFieldList : public ParquetField {
  public:
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
-    if (field_type != ST_FLD_LIST) return true;
+    if (field_type != ST_FLD_LIST) { return true; }
     uint8_t t;
     uint32_t n = cpr->get_listh(&t);
     if (t != expected_type) { return true; }
@@ -176,7 +176,7 @@ class ParquetFieldString : public ParquetField {
 
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
-    if (field_type != ST_FLD_BINARY) return true;
+    if (field_type != ST_FLD_BINARY) { return true; }
     uint32_t n = cpr->get_u32();
     if (n < static_cast<size_t>(cpr->m_end - cpr->m_cur)) {
       val.assign(reinterpret_cast<char const*>(cpr->m_cur), n);
@@ -373,7 +373,7 @@ class ParquetFieldBinary : public ParquetField {
 
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
-    if (field_type != ST_FLD_BINARY) return true;
+    if (field_type != ST_FLD_BINARY) { return true; }
     uint32_t n = cpr->get_u32();
     if (n <= static_cast<size_t>(cpr->m_end - cpr->m_cur)) {
       val.resize(n);
@@ -423,7 +423,7 @@ class ParquetFieldStructBlob : public ParquetField {
   ParquetFieldStructBlob(int f, std::vector<uint8_t>& v) : ParquetField(f), val(v) {}
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
-    if (field_type != ST_FLD_STRUCT) return true;
+    if (field_type != ST_FLD_STRUCT) { return true; }
     uint8_t const* start = cpr->m_cur;
     cpr->skip_struct_field(field_type);
     if (cpr->m_cur > start) { val.assign(start, cpr->m_cur - 1); }
@@ -490,9 +490,9 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
     case ST_FLD_SET: {
       int c = getb();
       int n = c >> 4;
-      if (n == 0xf) n = get_i32();
+      if (n == 0xf) { n = get_i32(); }
       t = g_list2struct[c & 0xf];
-      if (depth > 10) return false;
+      if (depth > 10) { return false; }
       for (int32_t i = 0; i < n; i++)
         skip_struct_field(t, depth + 1);
     } break;
@@ -500,8 +500,8 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
       for (;;) {
         int c = getb();
         t     = c & 0xf;
-        if (!c) break;
-        if (depth > 10) return false;
+        if (!c) { break; }
+        if (depth > 10) { return false; }
         skip_struct_field(t, depth + 1);
       }
       break;
@@ -552,7 +552,7 @@ inline bool function_builder(CompactProtocolReader* cpr, std::tuple<Operator...>
   int field           = 0;
   while (true) {
     int const current_byte = cpr->getb();
-    if (!current_byte) break;
+    if (!current_byte) { break; }
     int const field_delta = current_byte >> 4;
     int const field_type  = current_byte & 0xf;
     field                 = field_delta ? field + field_delta : cpr->get_i16();
@@ -798,7 +798,7 @@ bool CompactProtocolReader::read(ColumnOrder* c)
  */
 bool CompactProtocolReader::InitSchema(FileMetaData* md)
 {
-  if (static_cast<std::size_t>(WalkSchema(md)) != md->schema.size()) return false;
+  if (static_cast<std::size_t>(WalkSchema(md)) != md->schema.size()) { return false; }
 
   /* Inside FileMetaData, there is a std::vector of RowGroups and each RowGroup contains a
    * a std::vector of ColumnChunks. Each ColumnChunk has a member ColumnMetaData, which contains
@@ -819,7 +819,7 @@ bool CompactProtocolReader::InitSchema(FileMetaData* md)
           if (it != md->schema.cend()) return it;
           return std::find_if(md->schema.cbegin(), mid, schema);
         }();
-        if (it == md->schema.cend()) return false;
+        if (it == md->schema.cend()) { return false; }
         current_schema_index = std::distance(md->schema.cbegin(), it);
         column.schema_idx    = current_schema_index;
         parent               = current_schema_index;
@@ -863,7 +863,7 @@ int CompactProtocolReader::WalkSchema(
         e->children_idx.push_back(idx);
         int idx_old = idx;
         idx         = WalkSchema(md, idx, parent_idx, max_def_level, max_rep_level);
-        if (idx <= idx_old) break;  // Error
+        if (idx <= idx_old) { break; }  // Error
       }
     }
     return idx;
