@@ -85,8 +85,8 @@ class CompactProtocolReader {
   int32_t get_i32() noexcept { return get_zigzag<int32_t>(); }
   int64_t get_i64() noexcept { return get_zigzag<int64_t>(); }
 
-  uint32_t get_u32() noexcept { return get_varint<int32_t>(); }
-  uint64_t get_u64() noexcept { return get_varint<int64_t>(); }
+  uint32_t get_u32() noexcept { return get_varint<uint32_t>(); }
+  uint64_t get_u64() noexcept { return get_varint<uint64_t>(); }
 
   uint32_t get_listh(uint8_t* el_type) noexcept
   {
@@ -121,6 +121,7 @@ class CompactProtocolReader {
   bool read(SizeStatistics* s);
   bool read(ColumnIndex* c);
   bool read(Statistics* s);
+  bool read(ColumnOrder* c);
 
  public:
   static int NumRequiredBits(uint32_t max_level) noexcept

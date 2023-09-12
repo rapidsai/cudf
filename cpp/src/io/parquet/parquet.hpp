@@ -121,6 +121,16 @@ struct LogicalType {
   BsonType BSON;
 };
 
+/** Empty struct to signal the order defined by the physical or logical type */
+struct TypeDefinedOrder {};
+
+/**
+ * Union to specify the order used for the min_value and max_value fields for a column.
+ */
+struct ColumnOrder {
+  std::optional<TypeDefinedOrder> TYPE_ORDER;
+};
+
 /**
  * @brief Struct for describing an element/field in the Parquet format schema
  *
@@ -353,8 +363,8 @@ struct FileMetaData {
   int64_t num_rows = 0;
   std::vector<RowGroup> row_groups;
   std::vector<KeyValue> key_value_metadata;
-  std::string created_by         = "";
-  uint32_t column_order_listsize = 0;
+  std::string created_by = "";
+  std::optional<std::vector<ColumnOrder>> column_orders;
 };
 
 /**

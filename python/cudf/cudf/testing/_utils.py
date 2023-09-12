@@ -48,6 +48,33 @@ TIMEDELTA_TYPES = sorted(list(dtypeutils.TIMEDELTA_TYPES))
 OTHER_TYPES = sorted(list(dtypeutils.OTHER_TYPES))
 ALL_TYPES = sorted(list(dtypeutils.ALL_TYPES))
 
+SERIES_OR_INDEX_NAMES = [
+    None,
+    pd.NA,
+    cudf.NA,
+    np.nan,
+    float("NaN"),
+    "abc",
+    1,
+    pd.NaT,
+    np.datetime64("nat"),
+    np.timedelta64("NaT"),
+    np.timedelta64(10, "D"),
+    np.timedelta64(5, "D"),
+    np.datetime64("1970-01-01 00:00:00.000000001"),
+    np.datetime64("1970-01-01 00:00:00.000000002"),
+    pd.Timestamp(1),
+    pd.Timestamp(2),
+    pd.Timedelta(1),
+    pd.Timedelta(2),
+    Decimal("NaN"),
+    Decimal("1.2"),
+    np.int64(1),
+    np.int32(1),
+    np.float32(1),
+    pd.Timestamp(1),
+]
+
 
 def set_random_null_mask_inplace(series, null_probability=0.5, seed=None):
     """Randomly nullify elements in series with the provided probability."""
