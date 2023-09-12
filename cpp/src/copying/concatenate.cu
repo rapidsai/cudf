@@ -118,13 +118,14 @@ __global__ void concatenate_masks_kernel(column_device_view const* views,
                                          size_type number_of_mask_bits,
                                          size_type* out_valid_count)
 {
-  size_type mask_index = threadIdx.x + blockIdx.x * blockDim.x;
-
-  auto active_mask = __ballot_sync(0xFFFF'FFFFu, mask_index < number_of_mask_bits);
+  auto tidx         = cudf::detail::grid_1d::global_thread_id();
+  auto const stride = cudf::detail::grid_1d::grid_stride();
+  auto active_mask  = __ballot_sync(0xFFFF'FFFFu, tidx < number_of_mask_bits);
 
   size_type warp_valid_count = 0;
 
-  while (mask_index < number_of_mask_bits) {
+  while (tidx < number_of_mask_bits) {
+    auto const mask_index = static_cast<cudf::size_type>(tidx);
     size_type const source_view_index =
       thrust::upper_bound(
         thrust::seq, output_offsets, output_offsets + number_of_views, mask_index) -
@@ -141,8 +142,8 @@ __global__ void concatenate_masks_kernel(column_device_view const* views,
       warp_valid_count += __popc(new_word);
     }
 
-    mask_index += blockDim.x * gridDim.x;
-    active_mask = __ballot_sync(active_mask, mask_index < number_of_mask_bits);
+    tidx += stride;
+    active_mask = __ballot_sync(active_mask, tidx < number_of_mask_bits);
   }
 
   using detail::single_lane_block_sum_reduce;
@@ -195,7 +196,8 @@ __global__ void fused_concatenate_kernel(column_device_view const* input_views,
   auto const output_size = output_view.size();
   auto* output_data      = output_view.data<T>();
 
-  int64_t output_index       = threadIdx.x + blockIdx.x * blockDim.x;
+  auto output_index          = cudf::detail::grid_1d::global_thread_id();
+  auto const stride          = cudf::detail::grid_1d::grid_stride();
   size_type warp_valid_count = 0;
 
   unsigned active_mask;
@@ -224,7 +226,7 @@ __global__ void fused_concatenate_kernel(column_device_view const* input_views,
       warp_valid_count += __popc(new_word);
     }
 
-    output_index += blockDim.x * gridDim.x;
+    output_index += stride;
     if (Nullable) { active_mask = __ballot_sync(active_mask, output_index < output_size); }
   }
 

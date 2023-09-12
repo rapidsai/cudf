@@ -7256,10 +7256,7 @@ def test_dataframe_keys(df):
 def test_series_keys(ps):
     gds = cudf.from_pandas(ps)
 
-    if len(ps) == 0 and not isinstance(ps.index, pd.RangeIndex):
-        assert_eq(ps.keys().astype("float64"), gds.keys())
-    else:
-        assert_eq(ps.keys(), gds.keys())
+    assert_eq(ps.keys(), gds.keys())
 
 
 @pytest_unmark_spilling
