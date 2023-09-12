@@ -682,7 +682,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_cudf_nvtx_annotate
     def _intersection(self, other, sort=False):
         if not isinstance(other, RangeIndex):
-            return super()._intersection(other, sort=sort)
+            return self._try_reconstruct_range_index(
+                super()._intersection(other, sort=sort)
+            )
 
         if not len(self) or not len(other):
             return RangeIndex(0)
@@ -723,7 +725,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         if sort is None:
             new_index = new_index.sort_values()
 
-        return new_index
+        return self._try_reconstruct_range_index(new_index)
 
     @_cudf_nvtx_annotate
     def difference(self, other, sort=None):
