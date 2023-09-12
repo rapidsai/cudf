@@ -66,7 +66,7 @@ class CompactProtocolReader {
     for (uint32_t l = 0;; l += 7) {
       T c = getb();
       v |= (c & 0x7f) << l;
-      if (c < 0x80) break;
+      if (c < 0x80) { break; }
     }
     return v;
   }
@@ -75,8 +75,8 @@ class CompactProtocolReader {
   template <typename T>
   T get_zigzag() noexcept
   {
-    using U = std::make_unsigned_t<T>;
-    U u     = get_varint<U>();
+    using U   = std::make_unsigned_t<T>;
+    U const u = get_varint<U>();
     return static_cast<T>((u >> 1u) ^ -static_cast<T>(u & 1));
   }
 
@@ -90,10 +90,10 @@ class CompactProtocolReader {
 
   uint32_t get_listh(uint8_t* el_type) noexcept
   {
-    uint32_t c  = getb();
-    uint32_t sz = c >> 4;
-    *el_type    = c & 0xf;
-    if (sz == 0xf) sz = get_u32();
+    uint32_t const c = getb();
+    uint32_t sz      = c >> 4;
+    *el_type         = c & 0xf;
+    if (sz == 0xf) { sz = get_u32(); }
     return sz;
   }
   bool skip_struct_field(int t, int depth = 0);
