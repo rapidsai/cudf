@@ -16,6 +16,8 @@
 
 #include "distinct_reduce.cuh"
 
+#include <reductions/hash_reduce_by_row.cuh>
+
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/uninitialized_fill.h>
@@ -24,31 +26,27 @@ namespace cudf::detail {
 
 namespace {
 /**
- * @brief A functor to perform reduce-by-key with keys are rows that compared equal.
+ * @brief
  *
- * TODO: We need to switch to use `static_reduction_map` when it is ready
- * (https://github.com/NVIDIA/cuCollections/pull/98).
  */
 template <typename MapView, typename KeyHasher, typename KeyEqual>
-struct reduce_by_row_fn {
-  MapView const d_map;
-  KeyHasher const d_hasher;
-  KeyEqual const d_equal;
+struct distinct_reduce_fn : reduce_by_row_fn_base<MapView, KeyHasher, KeyEqual, size_type> {
   duplicate_keep_option const keep;
-  size_type* const d_output;
 
-  reduce_by_row_fn(MapView const& d_map,
-                   KeyHasher const& d_hasher,
-                   KeyEqual const& d_equal,
-                   duplicate_keep_option const keep,
-                   size_type* const d_output)
-    : d_map{d_map}, d_hasher{d_hasher}, d_equal{d_equal}, keep{keep}, d_output{d_output}
+  distinct_reduce_fn(MapView const& d_map,
+                     KeyHasher const& d_hasher,
+                     KeyEqual const& d_equal,
+                     duplicate_keep_option const keep,
+                     size_type* const d_output)
+    : reduce_by_row_fn_base<MapView, KeyHasher, KeyEqual, size_type>(
+        d_map, d_hasher, d_equal, d_output),
+      keep{keep}
   {
   }
 
   __device__ void operator()(size_type const idx) const
   {
-    auto const out_ptr = get_output_ptr(idx);
+    auto const out_ptr = this->get_output_ptr(idx);
 
     if (keep == duplicate_keep_option::KEEP_FIRST) {
       // Store the smallest index of all rows that are equal.
@@ -61,34 +59,25 @@ struct reduce_by_row_fn {
       atomicAdd(out_ptr, size_type{1});
     }
   }
+};
 
- private:
-  __device__ size_type* get_output_ptr(size_type const idx) const
+struct reduce_func_builder {
+  duplicate_keep_option keep;
+
+  template <typename MapView, typename KeyHasher, typename KeyEqual>
+  auto build(MapView const& d_map,
+             KeyHasher const& d_hasher,
+             KeyEqual const& d_equal,
+             size_type* const d_output)
   {
-    auto const iter = d_map.find(idx, d_hasher, d_equal);
-
-    if (iter != d_map.end()) {
-      // Only one index value of the duplicate rows could be inserted into the map.
-      // As such, looking up for all indices of duplicate rows always returns the same value.
-      auto const inserted_idx = iter->second.load(cuda::std::memory_order_relaxed);
-
-      // All duplicate rows will have concurrent access to this same output slot.
-      return &d_output[inserted_idx];
-    } else {
-      // All input `idx` values have been inserted into the map before.
-      // Thus, searching for an `idx` key resulting in the `end()` iterator only happens if
-      // `d_equal(idx, idx) == false`.
-      // Such situations are due to comparing nulls or NaNs which are considered as always unequal.
-      // In those cases, all rows containing nulls or NaNs are distinct. Just return their direct
-      // output slot.
-      return &d_output[idx];
-    }
+    return distinct_reduce_fn<MapView, KeyHasher, KeyEqual>{
+      d_map, d_hasher, d_equal, keep, d_output};
   }
 };
 
 }  // namespace
 
-rmm::device_uvector<size_type> hash_reduce_by_row(
+rmm::device_uvector<size_type> distinct_reduce(
   hash_map_type const& map,
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> const preprocessed_input,
   size_type num_rows,
@@ -103,48 +92,17 @@ rmm::device_uvector<size_type> hash_reduce_by_row(
   CUDF_EXPECTS(keep != duplicate_keep_option::KEEP_ANY,
                "This function should not be called with KEEP_ANY");
 
-  auto reduction_results = rmm::device_uvector<size_type>(num_rows, stream, mr);
-
-  thrust::uninitialized_fill(rmm::exec_policy(stream),
-                             reduction_results.begin(),
-                             reduction_results.end(),
-                             reduction_init_value(keep));
-
-  auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
-  auto const key_hasher = experimental::compaction_hash(row_hasher.device_hasher(has_nulls));
-
-  auto const row_comp = cudf::experimental::row::equality::self_comparator(preprocessed_input);
-
-  auto const reduce_by_row = [&](auto const value_comp) {
-    if (has_nested_columns) {
-      auto const key_equal = row_comp.equal_to<true>(has_nulls, nulls_equal, value_comp);
-      thrust::for_each(
-        rmm::exec_policy(stream),
-        thrust::make_counting_iterator(0),
-        thrust::make_counting_iterator(num_rows),
-        reduce_by_row_fn{
-          map.get_device_view(), key_hasher, key_equal, keep, reduction_results.begin()});
-    } else {
-      auto const key_equal = row_comp.equal_to<false>(has_nulls, nulls_equal, value_comp);
-      thrust::for_each(
-        rmm::exec_policy(stream),
-        thrust::make_counting_iterator(0),
-        thrust::make_counting_iterator(num_rows),
-        reduce_by_row_fn{
-          map.get_device_view(), key_hasher, key_equal, keep, reduction_results.begin()});
-    }
-  };
-
-  if (nans_equal == nan_equality::ALL_EQUAL) {
-    using nan_equal_comparator =
-      cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
-    reduce_by_row(nan_equal_comparator{});
-  } else {
-    using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
-    reduce_by_row(nan_unequal_comparator{});
-  }
-
-  return reduction_results;
+  return hash_reduce_by_row(map,
+                            preprocessed_input,
+                            num_rows,
+                            has_nulls,
+                            has_nested_columns,
+                            nulls_equal,
+                            nans_equal,
+                            reduce_func_builder{keep},
+                            reduction_init_value(keep),
+                            stream,
+                            mr);
 }
 
 }  // namespace cudf::detail
