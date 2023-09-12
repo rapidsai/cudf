@@ -32,18 +32,18 @@ TEST_F(StringsFindTest, Find)
   auto input = cudf::test::strings_column_wrapper({"Héllo", "thesé", "tést strings", ""});
   auto view  = cudf::strings_column_view(input);
 
-  auto const target = cudf::string_scalar("é");
-  cudf::strings::find(view, target, 0, -1, cudf::get_default_stream());
-  cudf::strings::rfind(view, target, 0, -1, cudf::get_default_stream());
-  cudf::strings::find(view, view, 0, cudf::get_default_stream());
-  cudf::strings::find_multiple(view, view, cudf::get_default_stream());
-  cudf::strings::contains(view, target, cudf::get_default_stream());
-  cudf::strings::starts_with(view, target, cudf::get_default_stream());
-  cudf::strings::starts_with(view, view, cudf::get_default_stream());
-  cudf::strings::ends_with(view, view, cudf::get_default_stream());
-  cudf::strings::ends_with(view, target, cudf::get_default_stream());
+  auto const target = cudf::string_scalar("é", true, cudf::test::get_default_stream());
+  cudf::strings::find(view, target, 0, -1, cudf::test::get_default_stream());
+  cudf::strings::rfind(view, target, 0, -1, cudf::test::get_default_stream());
+  cudf::strings::find(view, view, 0, cudf::test::get_default_stream());
+  cudf::strings::find_multiple(view, view, cudf::test::get_default_stream());
+  cudf::strings::contains(view, target, cudf::test::get_default_stream());
+  cudf::strings::starts_with(view, target, cudf::test::get_default_stream());
+  cudf::strings::starts_with(view, view, cudf::test::get_default_stream());
+  cudf::strings::ends_with(view, target, cudf::test::get_default_stream());
+  cudf::strings::ends_with(view, view, cudf::test::get_default_stream());
 
   auto const pattern = std::string("[a-z]");
   auto const prog    = cudf::strings::regex_program::create(pattern);
-  cudf::strings::findall(view, *prog, cudf::get_default_stream());
+  cudf::strings::findall(view, *prog, cudf::test::get_default_stream());
 }
