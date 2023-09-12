@@ -471,7 +471,6 @@ add_library(
   src/reductions/any.cu
   src/reductions/collect_ops.cu
   src/reductions/histogram.cu
-  src/reductions/hash_reduce_by_row.cu
   src/reductions/max.cu
   src/reductions/mean.cu
   src/reductions/min.cu

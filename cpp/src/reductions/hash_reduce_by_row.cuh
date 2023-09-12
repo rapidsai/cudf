@@ -113,4 +113,59 @@ struct reduce_by_row_fn {
   }
 };
 
+template <typename ReduceFuncBuilder, typename OutputType>
+rmm::device_uvector<size_type> hash_reduce_by_row(
+  hash_map_type const& map,
+  std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> const preprocessed_input,
+  size_type num_rows,
+  cudf::nullate::DYNAMIC has_nulls,
+  bool has_nested_columns,
+  null_equality nulls_equal,
+  nan_equality nans_equal,
+  ReduceFuncBuilder func_builder,
+  OutputType init,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
+{
+  auto reduction_results = rmm::device_uvector<OutputType>(num_rows, stream, mr);
+
+  thrust::uninitialized_fill(
+    rmm::exec_policy(stream), reduction_results.begin(), reduction_results.end(), init);
+
+  auto const map_dview  = map.get_device_view();
+  auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
+  auto const key_hasher = experimental::compaction_hash(row_hasher.device_hasher(has_nulls));
+
+  auto const row_comp = cudf::experimental::row::equality::self_comparator(preprocessed_input);
+
+  auto const reduce_by_row = [&](auto const value_comp) {
+    if (has_nested_columns) {
+      auto const key_equal = row_comp.equal_to<true>(has_nulls, nulls_equal, value_comp);
+      thrust::for_each(
+        rmm::exec_policy(stream),
+        thrust::make_counting_iterator(0),
+        thrust::make_counting_iterator(num_rows),
+        func_builder.build(map_dview, key_hasher, key_equal, reduction_results.begin()));
+    } else {
+      auto const key_equal = row_comp.equal_to<false>(has_nulls, nulls_equal, value_comp);
+      thrust::for_each(
+        rmm::exec_policy(stream),
+        thrust::make_counting_iterator(0),
+        thrust::make_counting_iterator(num_rows),
+        func_builder.build(map_dview, key_hasher, key_equal, reduction_results.begin()));
+    }
+  };
+
+  if (nans_equal == nan_equality::ALL_EQUAL) {
+    using nan_equal_comparator =
+      cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
+    reduce_by_row(nan_equal_comparator{});
+  } else {
+    using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
+    reduce_by_row(nan_unequal_comparator{});
+  }
+
+  return reduction_results;
+}
+
 }  // namespace cudf::detail
