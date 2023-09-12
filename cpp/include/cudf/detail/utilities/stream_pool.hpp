@@ -59,6 +59,6 @@ namespace cudf::detail {
  * @param streams Streams to wait on.
  * @param stream Joined stream that synchronizes with the waited-on streams.
  */
-void join_streams(host_span<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream);
+void join_streams(host_span<rmm::cuda_stream_view const> streams, rmm::cuda_stream_view stream);
 
 }  // namespace cudf::detail
