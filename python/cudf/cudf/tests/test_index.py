@@ -11,6 +11,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.api.types import is_bool_dtype
 from cudf.core._compat import PANDAS_GE_133, PANDAS_GE_200
 from cudf.core.index import (
     CategoricalIndex,
@@ -20,9 +21,11 @@ from cudf.core.index import (
     as_index,
 )
 from cudf.testing._utils import (
+    ALL_TYPES,
     FLOAT_TYPES,
     NUMERIC_TYPES,
     OTHER_TYPES,
+    SERIES_OR_INDEX_NAMES,
     SIGNED_INTEGER_TYPES,
     SIGNED_TYPES,
     UNSIGNED_TYPES,
@@ -226,12 +229,16 @@ def test_pandas_as_index():
     )
 
 
-def test_index_rename():
-    pds = pd.Index([1, 2, 3], name="asdf")
+@pytest.mark.parametrize("initial_name", SERIES_OR_INDEX_NAMES)
+@pytest.mark.parametrize("name", SERIES_OR_INDEX_NAMES)
+def test_index_rename(initial_name, name):
+    pds = pd.Index([1, 2, 3], name=initial_name)
     gds = as_index(pds)
 
-    expect = pds.rename("new_name")
-    got = gds.rename("new_name")
+    assert_eq(pds, gds)
+
+    expect = pds.rename(name)
+    got = gds.rename(name)
 
     assert_eq(expect, got)
     """
@@ -788,6 +795,10 @@ def test_index_to_series(data):
         ["5", "6", "2", "a", "b", "c"],
         [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
         [1.0, 5.0, 6.0, 0.0, 1.3],
+        ["ab", "cd", "ef"],
+        pd.Series(["1", "2", "a", "3", None], dtype="category"),
+        range(0, 10),
+        [],
     ],
 )
 @pytest.mark.parametrize(
@@ -798,8 +809,11 @@ def test_index_to_series(data):
         [10, 20, 30, 40, 50, 60],
         ["1", "2", "3", "4", "5", "6"],
         ["5", "6", "2", "a", "b", "c"],
+        ["ab", "ef", None],
         [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
         [1.0, 5.0, 6.0, 0.0, 1.3],
+        range(2, 4),
+        pd.Series(["1", "a", "3", None], dtype="category"),
         [],
     ],
 )
@@ -817,7 +831,21 @@ def test_index_difference(data, other, sort, name_data, name_other):
 
     expected = pd_data.difference(pd_other, sort=sort)
     actual = gd_data.difference(gd_other, sort=sort)
+
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("other", ["a", 1, None])
+def test_index_difference_invalid_inputs(other):
+    pdi = pd.Index([1, 2, 3])
+    gdi = cudf.Index([1, 2, 3])
+
+    assert_exceptions_equal(
+        pdi.difference,
+        gdi.difference,
+        ([other], {}),
+        ([other], {}),
+    )
 
 
 def test_index_difference_sort_error():
@@ -2077,25 +2105,48 @@ def test_union_index(idx1, idx2, sort):
         (pd.Index([0, 1, 2, 30], name=pd.NA), pd.Index([30, 0, 90, 100])),
         (pd.Index([0, 1, 2, 30], name="a"), [90, 100]),
         (pd.Index([0, 1, 2, 30]), pd.Index([0, 10, 1.0, 11])),
-        (pd.Index(["a", "b", "c", "d", "c"]), pd.Index(["a", "c", "z"])),
+        (
+            pd.Index(["a", "b", "c", "d", "c"]),
+            pd.Index(["a", "c", "z"], name="abc"),
+        ),
         (
             pd.Index(["a", "b", "c", "d", "c"]),
             pd.Index(["a", "b", "c", "d", "c"]),
         ),
         (pd.Index([True, False, True, True]), pd.Index([10, 11, 12, 0, 1, 2])),
         (pd.Index([True, False, True, True]), pd.Index([True, True])),
+        (pd.RangeIndex(0, 10, name="a"), pd.Index([5, 6, 7], name="b")),
+        (pd.Index(["a", "b", "c"], dtype="category"), pd.Index(["a", "b"])),
+        (pd.Index(["a", "b", "c"], dtype="category"), pd.Index([1, 2, 3])),
+        (pd.Index([0, 1, 2], dtype="category"), pd.RangeIndex(0, 10)),
+        (pd.Index(["a", "b", "c"], name="abc"), []),
+        (pd.Index([], name="abc"), pd.RangeIndex(0, 4)),
+        (pd.Index([1, 2, 3]), pd.Index([1, 2], dtype="category")),
+        (pd.Index([]), pd.Index([1, 2], dtype="category")),
     ],
 )
 @pytest.mark.parametrize("sort", [None, False])
-def test_intersection_index(idx1, idx2, sort):
+@pytest.mark.parametrize("pandas_compatible", [True, False])
+def test_intersection_index(idx1, idx2, sort, pandas_compatible):
     expected = idx1.intersection(idx2, sort=sort)
 
-    idx1 = cudf.from_pandas(idx1) if isinstance(idx1, pd.Index) else idx1
-    idx2 = cudf.from_pandas(idx2) if isinstance(idx2, pd.Index) else idx2
+    with cudf.option_context("mode.pandas_compatible", pandas_compatible):
+        idx1 = cudf.from_pandas(idx1) if isinstance(idx1, pd.Index) else idx1
+        idx2 = cudf.from_pandas(idx2) if isinstance(idx2, pd.Index) else idx2
 
-    actual = idx1.intersection(idx2, sort=sort)
+        actual = idx1.intersection(idx2, sort=sort)
 
-    assert_eq(expected, actual, exact=False)
+        # TODO: Resolve the bool vs ints mixed issue
+        # once pandas has a direction on this issue
+        # https://github.com/pandas-dev/pandas/issues/44000
+        assert_eq(
+            expected,
+            actual,
+            exact=False
+            if (is_bool_dtype(idx1.dtype) and not is_bool_dtype(idx2.dtype))
+            or (not is_bool_dtype(idx1.dtype) or is_bool_dtype(idx2.dtype))
+            else True,
+        )
 
 
 @pytest.mark.parametrize(
@@ -2676,10 +2727,11 @@ class TestIndexScalarGetItem:
             12,
             20,
         ],
+        [1, 2, 3, 4],
     ],
 )
 def test_index_mixed_dtype_error(data):
-    pi = pd.Index(data)
+    pi = pd.Index(data, dtype="object")
     with pytest.raises(TypeError):
         cudf.Index(pi)
 
@@ -2702,3 +2754,26 @@ def test_index_getitem_time_duration(dtype):
                 assert gidx[i] is pidx[i]
             else:
                 assert_eq(gidx[i], pidx[i])
+
+
+@pytest.mark.parametrize("dtype", ALL_TYPES)
+def test_index_empty_from_pandas(request, dtype):
+    request.node.add_marker(
+        pytest.mark.xfail(
+            condition=not PANDAS_GE_200
+            and dtype
+            in {
+                "datetime64[ms]",
+                "datetime64[s]",
+                "datetime64[us]",
+                "timedelta64[ms]",
+                "timedelta64[s]",
+                "timedelta64[us]",
+            },
+            reason="Fixed in pandas-2.0",
+        )
+    )
+    pidx = pd.Index([], dtype=dtype)
+    gidx = cudf.from_pandas(pidx)
+
+    assert_eq(pidx, gidx)
