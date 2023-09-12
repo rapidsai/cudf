@@ -1331,7 +1331,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_endWriteCSVToBuffer(JNIEnv *env
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readAndInferJSON(
-    JNIEnv *env, jclass, jlong buffer, jlong buffer_length, jboolean day_first, jboolean lines) {
+    JNIEnv *env, jclass, jlong buffer, jlong buffer_length, jboolean day_first, jboolean lines,
+    jboolean recover_with_null) {
 
   JNI_NULL_CHECK(env, buffer, "buffer cannot be null", 0);
   if (buffer_length <= 0) {
@@ -1344,9 +1345,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readAndInferJSON(
     auto source = cudf::io::source_info{reinterpret_cast<char *>(buffer),
                                         static_cast<std::size_t>(buffer_length)};
 
+    auto const recovery_mode = recover_with_null ?
+                                   cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL :
+                                   cudf::io::json_recovery_mode_t::FAIL;
     cudf::io::json_reader_options_builder opts = cudf::io::json_reader_options::builder(source)
                                                      .dayfirst(static_cast<bool>(day_first))
-                                                     .lines(static_cast<bool>(lines));
+                                                     .lines(static_cast<bool>(lines))
+                                                     .recovery_mode(recovery_mode);
 
     auto result =
         std::make_unique<cudf::io::table_with_metadata>(cudf::io::read_json(opts.build()));
@@ -1404,7 +1409,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_TableWithMeta_releaseTable(JNIE
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(
     JNIEnv *env, jclass, jobjectArray col_names, jintArray j_types, jintArray j_scales,
-    jstring inputfilepath, jlong buffer, jlong buffer_length, jboolean day_first, jboolean lines) {
+    jstring inputfilepath, jlong buffer, jlong buffer_length, jboolean day_first, jboolean lines,
+    jboolean recover_with_null) {
 
   bool read_buffer = true;
   if (buffer == 0) {
@@ -1448,9 +1454,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(
                                                       static_cast<std::size_t>(buffer_length)} :
                                 cudf::io::source_info{filename.get()};
 
+    cudf::io::json_recovery_mode_t recovery_mode =
+        recover_with_null ? cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL :
+                            cudf::io::json_recovery_mode_t::FAIL;
     cudf::io::json_reader_options_builder opts = cudf::io::json_reader_options::builder(source)
                                                      .dayfirst(static_cast<bool>(day_first))
-                                                     .lines(static_cast<bool>(lines));
+                                                     .lines(static_cast<bool>(lines))
+                                                     .recovery_mode(recovery_mode);
 
     if (!n_col_names.is_null() && data_types.size() > 0) {
       if (n_col_names.size() != n_types.size()) {
