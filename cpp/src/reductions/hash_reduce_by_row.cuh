@@ -91,6 +91,9 @@ struct reduce_by_row_fn_base {
  * the `init` parameter. Then, the reduction result for each row group is written into the output
  * array at the index of an unspecified row in the group.
  *
+ * @tparam ReduceFuncBuilder The builder class that must have a `build()` method returning a
+ *         reduction functor derived from `reduce_by_row_fn_base`
+ * @tparam OutputType Type of the reduction results
  * @param map The auxiliary map to perform reduction
  * @param preprocessed_input The preprocessed of the input rows for computing row hashing and row
  *        comparisons
@@ -100,6 +103,7 @@ struct reduce_by_row_fn_base {
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param nans_equal Flag to specify whether NaN values in floating point column should be
  *        considered equal.
+ * @param init The initial value for reduction of each row group
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned vector
  * @return A device_uvector containing the reduction results
