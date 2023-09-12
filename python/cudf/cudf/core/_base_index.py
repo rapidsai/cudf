@@ -30,7 +30,7 @@ from cudf.core.abc import Serializable
 from cudf.core.column import ColumnBase, column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils import ioutils
-from cudf.utils.dtypes import is_mixed_with_object_dtype
+from cudf.utils.dtypes import can_convert_to_column, is_mixed_with_object_dtype
 from cudf.utils.utils import _is_same_name
 
 
@@ -608,8 +608,14 @@ class BaseIndex(Serializable):
                     (1, 'Blue')],
                 )
         """
+        if not can_convert_to_column(other):
+            raise TypeError("Input must be Index or array-like")
+
         if not isinstance(other, BaseIndex):
-            other = cudf.Index(other, name=self.name)
+            other = cudf.Index(
+                other,
+                name=getattr(other, "name", self.name),
+            )
 
         if sort not in {None, False}:
             raise ValueError(
@@ -617,10 +623,17 @@ class BaseIndex(Serializable):
                 f"None or False; {sort} was passed."
             )
 
-        if self.equals(other):
-            if self.has_duplicates:
-                return self.unique()._get_reconciled_name_object(other)
-            return self._get_reconciled_name_object(other)
+        if not len(self) or not len(other) or self.equals(other):
+            common_dtype = cudf.utils.dtypes._dtype_pandas_compatible(
+                cudf.utils.dtypes.find_common_type([self.dtype, other.dtype])
+            )
+
+            lhs = self.unique() if self.has_duplicates else self
+            rhs = other
+            if not len(other):
+                lhs, rhs = rhs, lhs
+
+            return lhs._get_reconciled_name_object(rhs).astype(common_dtype)
 
         res_name = _get_result_name(self.name, other.name)
 
@@ -935,13 +948,21 @@ class BaseIndex(Serializable):
         >>> idx1.difference(idx2, sort=False)
         Int64Index([2, 1], dtype='int64')
         """
+        if not can_convert_to_column(other):
+            raise TypeError("Input must be Index or array-like")
+
         if sort not in {None, False}:
             raise ValueError(
                 f"The 'sort' keyword only takes the values "
                 f"of None or False; {sort} was passed."
             )
 
-        other = cudf.Index(other)
+        other = cudf.Index(other, name=getattr(other, "name", self.name))
+
+        if not len(other):
+            return self._get_reconciled_name_object(other)
+        elif self.equals(other):
+            return self[:0]._get_reconciled_name_object(other)
 
         res_name = _get_result_name(self.name, other.name)
 
