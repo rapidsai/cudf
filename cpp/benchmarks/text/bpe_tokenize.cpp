@@ -40,16 +40,16 @@ static void bench_bpe(nvbench::state& state)
     state.skip("Skip benchmarks greater than size_type limit");
   }
 
-  auto raw_data = cudf::test::strings_column_wrapper({"test sentence ",
-                                                      "thisis test ",
-                                                      "this is sentence ",
-                                                      "this istest ",
-                                                      "thisistest ",
-                                                      "sentence is test ",
-                                                      "this sentence is test ",
-                                                      "test test test ",
-                                                      "this this test this ",
-                                                      "sentence "})
+  auto raw_data = cudf::test::strings_column_wrapper({"test sentence",
+                                                      "thisis it",
+                                                      "this is sentence",
+                                                      "this isit",
+                                                      "thisisit",
+                                                      "sentenceisit",
+                                                      "this sentence is test",
+                                                      "isitthis",
+                                                      "this this it this",
+                                                      "sentence"})
                     .release();
 
   if (row_width / 20 > 1) {
