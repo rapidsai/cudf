@@ -488,8 +488,8 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
     case ST_FLD_BINARY: skip_bytes(get_u32()); break;
     case ST_FLD_LIST:
     case ST_FLD_SET: {
-      int c = getb();
-      int n = c >> 4;
+      int const c = getb();
+      int n       = c >> 4;
       if (n == 0xf) { n = get_i32(); }
       t = g_list2struct[c & 0xf];
       if (depth > 10) { return false; }
@@ -498,8 +498,8 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
     } break;
     case ST_FLD_STRUCT:
       for (;;) {
-        int c = getb();
-        t     = c & 0xf;
+        int const c = getb();
+        t           = c & 0xf;
         if (!c) { break; }
         if (depth > 10) { return false; }
         skip_struct_field(t, depth + 1);
@@ -553,10 +553,10 @@ inline bool function_builder(CompactProtocolReader* cpr, std::tuple<Operator...>
   while (true) {
     int const current_byte = cpr->getb();
     if (!current_byte) { break; }
-    int const field_delta = current_byte >> 4;
-    int const field_type  = current_byte & 0xf;
-    field                 = field_delta ? field + field_delta : cpr->get_i16();
-    bool exit_function    = FunctionSwitchImpl<index>::run(cpr, field_type, field, op);
+    int const field_delta    = current_byte >> 4;
+    int const field_type     = current_byte & 0xf;
+    field                    = field_delta ? field + field_delta : cpr->get_i16();
+    bool const exit_function = FunctionSwitchImpl<index>::run(cpr, field_type, field, op);
     if (exit_function) { return false; }
   }
   return true;
@@ -791,10 +791,12 @@ bool CompactProtocolReader::InitSchema(FileMetaData* md)
       for (auto const& path : column.meta_data.path_in_schema) {
         auto const it = [&] {
           // find_if starting at (current_schema_index + 1) and then wrapping
-          auto schema = [&](auto const& e) { return e.parent_idx == parent && e.name == path; };
-          auto mid    = md->schema.cbegin() + current_schema_index + 1;
-          auto it     = std::find_if(mid, md->schema.cend(), schema);
-          if (it != md->schema.cend()) return it;
+          auto const schema = [&](auto const& e) {
+            return e.parent_idx == parent && e.name == path;
+          };
+          auto const mid = md->schema.cbegin() + current_schema_index + 1;
+          auto const it  = std::find_if(mid, md->schema.cend(), schema);
+          if (it != md->schema.cend()) { return it; }
           return std::find_if(md->schema.cbegin(), mid, schema);
         }();
         if (it == md->schema.cend()) { return false; }
@@ -839,8 +841,8 @@ int CompactProtocolReader::WalkSchema(
     if (e->num_children > 0) {
       for (int i = 0; i < e->num_children; i++) {
         e->children_idx.push_back(idx);
-        int idx_old = idx;
-        idx         = WalkSchema(md, idx, parent_idx, max_def_level, max_rep_level);
+        int const idx_old = idx;
+        idx               = WalkSchema(md, idx, parent_idx, max_def_level, max_rep_level);
         if (idx <= idx_old) { break; }  // Error
       }
     }
