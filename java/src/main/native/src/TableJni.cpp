@@ -1346,7 +1346,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readAndInferJSON(
                                         static_cast<std::size_t>(buffer_length)};
 
     auto const recovery_mode = recover_with_null ?
-        cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL : cudf::io::json_recovery_mode_t::FAIL;
+                                   cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL :
+                                   cudf::io::json_recovery_mode_t::FAIL;
     cudf::io::json_reader_options_builder opts = cudf::io::json_reader_options::builder(source)
                                                      .dayfirst(static_cast<bool>(day_first))
                                                      .lines(static_cast<bool>(lines))
@@ -1453,8 +1454,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(
                                                       static_cast<std::size_t>(buffer_length)} :
                                 cudf::io::source_info{filename.get()};
 
-    cudf::io::json_recovery_mode_t recovery_mode = recover_with_null ?
-        cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL : cudf::io::json_recovery_mode_t::FAIL;
+    cudf::io::json_recovery_mode_t recovery_mode =
+        recover_with_null ? cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL :
+                            cudf::io::json_recovery_mode_t::FAIL;
     cudf::io::json_reader_options_builder opts = cudf::io::json_reader_options::builder(source)
                                                      .dayfirst(static_cast<bool>(day_first))
                                                      .lines(static_cast<bool>(lines))
