@@ -121,8 +121,6 @@ class CompactProtocolReader {
   bool read(ColumnIndex* c);
   bool read(Statistics* s);
   bool read(ColumnOrder* c);
-  // empty struct...need to modify the struct functor to be like the union functor
-  bool read(TypeDefinedOrder* t);
 
  public:
   static int NumRequiredBits(uint32_t max_level) noexcept
