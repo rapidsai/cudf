@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include "distinct_reduce.hpp"
+#include "distinct_helpers.hpp"
 
-#include <reductions/hash_reduce_by_row.cuh>
+#include <cudf/detail/hash_reduce_by_row.cuh>
 
 namespace cudf::detail {
 
@@ -25,14 +25,14 @@ namespace {
  * @brief The functor to find the first/last/all duplicate row for rows that compared equal.
  */
 template <typename MapView, typename KeyHasher, typename KeyEqual>
-struct distinct_reduce_fn : reduce_by_row_fn_base<MapView, KeyHasher, KeyEqual, size_type> {
+struct reduce_fn : reduce_by_row_fn_base<MapView, KeyHasher, KeyEqual, size_type> {
   duplicate_keep_option const keep;
 
-  distinct_reduce_fn(MapView const& d_map,
-                     KeyHasher const& d_hasher,
-                     KeyEqual const& d_equal,
-                     duplicate_keep_option const keep,
-                     size_type* const d_output)
+  reduce_fn(MapView const& d_map,
+            KeyHasher const& d_hasher,
+            KeyEqual const& d_equal,
+            duplicate_keep_option const keep,
+            size_type* const d_output)
     : reduce_by_row_fn_base<MapView, KeyHasher, KeyEqual, size_type>{d_map,
                                                                      d_hasher,
                                                                      d_equal,
@@ -59,7 +59,7 @@ struct distinct_reduce_fn : reduce_by_row_fn_base<MapView, KeyHasher, KeyEqual, 
 };
 
 /**
- * @brief The builder to construct an instance of `distinct_reduce_fn` functor base on the given
+ * @brief The builder to construct an instance of `reduce_fn` functor base on the given
  * value of the `duplicate_keep_option` member variable.
  */
 struct reduce_func_builder {
@@ -71,14 +71,14 @@ struct reduce_func_builder {
              KeyEqual const& d_equal,
              size_type* const d_output)
   {
-    return distinct_reduce_fn<MapView, KeyHasher, KeyEqual>{
-      d_map, d_hasher, d_equal, keep, d_output};
+    return reduce_fn<MapView, KeyHasher, KeyEqual>{d_map, d_hasher, d_equal, keep, d_output};
   }
 };
 
 }  // namespace
 
-rmm::device_uvector<size_type> distinct_reduce(
+// This function is split from `distinct.cu` to improve compile time.
+rmm::device_uvector<size_type> indices_reduce_by_row(
   hash_map_type const& map,
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> const preprocessed_input,
   size_type num_rows,
