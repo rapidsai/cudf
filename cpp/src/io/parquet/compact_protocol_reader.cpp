@@ -32,7 +32,7 @@ namespace parquet {
  */
 class ParquetField {
  protected:
-  int field_val;
+  int const field_val;
 
   ParquetField(int f) : field_val(f) {}
 
@@ -64,7 +64,7 @@ class ParquetFieldList : public ParquetField {
   {
     if (field_type != ST_FLD_LIST) { return true; }
     uint8_t t;
-    uint32_t n = cpr->get_listh(&t);
+    uint32_t const n = cpr->get_listh(&t);
     if (t != expected_type) { return true; }
     val.resize(n);
     for (uint32_t i = 0; i < n; i++) {
@@ -102,7 +102,7 @@ struct ParquetFieldBoolList : public ParquetFieldList<bool> {
   ParquetFieldBoolList(int f, std::vector<bool>& v) : ParquetFieldList(f, v, ST_FLD_TRUE)
   {
     auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
-      unsigned int current_byte = cpr->getb();
+      auto const current_byte = cpr->getb();
       if (current_byte != ST_FLD_TRUE && current_byte != ST_FLD_FALSE) { return true; }
       this->val[i] = current_byte == ST_FLD_TRUE;
       return false;
@@ -177,7 +177,7 @@ class ParquetFieldString : public ParquetField {
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     if (field_type != ST_FLD_BINARY) { return true; }
-    uint32_t n = cpr->get_u32();
+    auto const n = cpr->get_u32();
     if (n < static_cast<size_t>(cpr->m_end - cpr->m_cur)) {
       val.assign(reinterpret_cast<char const*>(cpr->m_cur), n);
       cpr->m_cur += n;
@@ -198,7 +198,7 @@ struct ParquetFieldStringList : public ParquetFieldList<std::string> {
   ParquetFieldStringList(int f, std::vector<std::string>& v) : ParquetFieldList(f, v, ST_FLD_BINARY)
   {
     auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
-      uint32_t l = cpr->get_u32();
+      auto const l = cpr->get_u32();
       if (l < static_cast<size_t>(cpr->m_end - cpr->m_cur)) {
         this->val[i].assign(reinterpret_cast<char const*>(cpr->m_cur), l);
         cpr->m_cur += l;
@@ -374,7 +374,7 @@ class ParquetFieldBinary : public ParquetField {
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     if (field_type != ST_FLD_BINARY) { return true; }
-    uint32_t n = cpr->get_u32();
+    auto const n = cpr->get_u32();
     if (n <= static_cast<size_t>(cpr->m_end - cpr->m_cur)) {
       val.resize(n);
       val.assign(cpr->m_cur, cpr->m_cur + n);
@@ -397,7 +397,7 @@ struct ParquetFieldBinaryList : public ParquetFieldList<std::vector<uint8_t>> {
     : ParquetFieldList(f, v, ST_FLD_BINARY)
   {
     auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
-      uint32_t l = cpr->get_u32();
+      auto const l = cpr->get_u32();
       if (l <= static_cast<size_t>(cpr->m_end - cpr->m_cur)) {
         val[i].resize(l);
         val[i].assign(cpr->m_cur, cpr->m_cur + l);
@@ -424,7 +424,7 @@ class ParquetFieldStructBlob : public ParquetField {
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     if (field_type != ST_FLD_STRUCT) { return true; }
-    uint8_t const* start = cpr->m_cur;
+    uint8_t const* const start = cpr->m_cur;
     cpr->skip_struct_field(field_type);
     if (cpr->m_cur > start) { val.assign(start, cpr->m_cur - 1); }
     return false;
@@ -444,7 +444,7 @@ class ParquetFieldOptional : public ParquetField {
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     T v;
-    bool res = FieldFunctor(field_val, v).operator()(cpr, field_type);
+    bool const res = FieldFunctor(field_val, v).operator()(cpr, field_type);
     if (!res) { val = v; }
     return res;
   }
