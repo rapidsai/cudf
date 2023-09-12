@@ -46,6 +46,7 @@ public final class JSONOptions extends ColumnFilterOptions {
     return lines;
   }
 
+  /** Return the value of the recoverWithNull option */
   public boolean isRecoverWithNull() {
     return recoverWithNull;
   }
@@ -86,6 +87,15 @@ public final class JSONOptions extends ColumnFilterOptions {
       return this;
     }
 
+    /**
+     * Specify how to handle invalid lines when parsing json. Setting
+     * recoverWithNull to true will cause null values to be returned
+     * for invalid lines. Setting recoverWithNull to false will cause
+     * the parsing to fail with an exception.
+     *
+     * @param recoverWithNull true: return nulls, false: throw exception
+     * @return builder for chaining
+     */
     public Builder withRecoverWithNull(boolean recoverWithNull) {
       this.recoverWithNull = recoverWithNull;
       return this;
