@@ -43,13 +43,11 @@ class ParquetField {
 /**
  * @brief Abstract base class for list functors.
  */
-template <typename T, int EXPECTED_TYPE>
+template <typename T, int EXPECTED_TYPE, class Derived>
 class ParquetFieldList : public ParquetField {
  protected:
   std::vector<T>& val;
   ParquetFieldList(int f, std::vector<T>& v) : ParquetField(f), val(v) {}
-
-  virtual bool read_value(uint32_t i, CompactProtocolReader* cpr) = 0;
 
  public:
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
@@ -59,8 +57,9 @@ class ParquetFieldList : public ParquetField {
     uint32_t n = cpr->get_listh(&t);
     if (t != EXPECTED_TYPE) { return true; }
     val.resize(n);
+    auto const d = static_cast<Derived*>(this);
     for (uint32_t i = 0; i < n; i++) {
-      if (read_value(i, cpr)) { return true; }
+      if (d->read_value(i, cpr)) { return true; }
     }
     return false;
   }
@@ -90,10 +89,10 @@ class ParquetFieldBool : public ParquetField {
  * @return True if field types mismatch or if the process of reading a
  * bool fails
  */
-class ParquetFieldBoolList : public ParquetFieldList<bool, ST_FLD_TRUE> {
+class ParquetFieldBoolList : public ParquetFieldList<bool, ST_FLD_TRUE, ParquetFieldBoolList> {
  public:
   ParquetFieldBoolList(int f, std::vector<bool>& v) : ParquetFieldList(f, v) {}
-  bool read_value(uint32_t i, CompactProtocolReader* cpr) override
+  bool read_value(uint32_t i, CompactProtocolReader* cpr)
   {
     unsigned int current_byte = cpr->getb();
     if (current_byte != ST_FLD_TRUE && current_byte != ST_FLD_FALSE) { return true; }
@@ -140,10 +139,14 @@ using ParquetFieldInt64 = ParquetFieldInt<int64_t, ST_FLD_I64>;
  * integer fails
  */
 template <typename T, int EXPECTED_TYPE>
-class ParquetFieldIntList : public ParquetFieldList<T, EXPECTED_TYPE> {
+class ParquetFieldIntList
+  : public ParquetFieldList<T, EXPECTED_TYPE, ParquetFieldIntList<T, EXPECTED_TYPE>> {
  public:
-  ParquetFieldIntList(int f, std::vector<T>& v) : ParquetFieldList<T, EXPECTED_TYPE>(f, v) {}
-  bool read_value(uint32_t i, CompactProtocolReader* cpr) override
+  ParquetFieldIntList(int f, std::vector<T>& v)
+    : ParquetFieldList<T, EXPECTED_TYPE, ParquetFieldIntList<T, EXPECTED_TYPE>>(f, v)
+  {
+  }
+  bool read_value(uint32_t i, CompactProtocolReader* cpr)
   {
     this->val[i] = cpr->get_zigzag<T>();
     return false;
@@ -184,10 +187,11 @@ class ParquetFieldString : public ParquetField {
  * @return True if field types mismatch or if the process of reading a
  * string fails
  */
-class ParquetFieldStringList : public ParquetFieldList<std::string, ST_FLD_BINARY> {
+class ParquetFieldStringList
+  : public ParquetFieldList<std::string, ST_FLD_BINARY, ParquetFieldStringList> {
  public:
   ParquetFieldStringList(int f, std::vector<std::string>& v) : ParquetFieldList(f, v) {}
-  bool read_value(uint32_t i, CompactProtocolReader* cpr) override
+  bool read_value(uint32_t i, CompactProtocolReader* cpr)
   {
     uint32_t l = cpr->get_u32();
     if (l < static_cast<size_t>(cpr->m_end - cpr->m_cur)) {
@@ -225,10 +229,13 @@ class ParquetFieldEnum : public ParquetField {
  * enum fails
  */
 template <typename Enum>
-class ParquetFieldEnumList : public ParquetFieldList<Enum, ST_FLD_I32> {
+class ParquetFieldEnumList : public ParquetFieldList<Enum, ST_FLD_I32, ParquetFieldEnumList<Enum>> {
  public:
-  ParquetFieldEnumList(int f, std::vector<Enum>& v) : ParquetFieldList<Enum, ST_FLD_I32>(f, v) {}
-  bool read_value(uint32_t i, CompactProtocolReader* cpr) override
+  ParquetFieldEnumList(int f, std::vector<Enum>& v)
+    : ParquetFieldList<Enum, ST_FLD_I32, ParquetFieldEnumList<Enum>>(f, v)
+  {
+  }
+  bool read_value(uint32_t i, CompactProtocolReader* cpr)
   {
     this->val[i] = static_cast<Enum>(cpr->get_i32());
     return false;
@@ -261,10 +268,14 @@ class ParquetFieldStruct : public ParquetField {
  * struct fails
  */
 template <typename T>
-class ParquetFieldStructList : public ParquetFieldList<T, ST_FLD_STRUCT> {
+class ParquetFieldStructList
+  : public ParquetFieldList<T, ST_FLD_STRUCT, ParquetFieldStructList<T>> {
  public:
-  ParquetFieldStructList(int f, std::vector<T>& v) : ParquetFieldList<T, ST_FLD_STRUCT>(f, v) {}
-  bool read_value(uint32_t i, CompactProtocolReader* cpr) override
+  ParquetFieldStructList(int f, std::vector<T>& v)
+    : ParquetFieldList<T, ST_FLD_STRUCT, ParquetFieldStructList>(f, v)
+  {
+  }
+  bool read_value(uint32_t i, CompactProtocolReader* cpr)
   {
     if (not cpr->read(&this->val[i])) { return true; }
     return false;
@@ -357,10 +368,11 @@ class ParquetFieldBinary : public ParquetField {
  * @return True if field types mismatch or if the process of reading a
  * binary fails
  */
-class ParquetFieldBinaryList : public ParquetFieldList<std::vector<uint8_t>, ST_FLD_BINARY> {
+class ParquetFieldBinaryList
+  : public ParquetFieldList<std::vector<uint8_t>, ST_FLD_BINARY, ParquetFieldBinaryList> {
  public:
   ParquetFieldBinaryList(int f, std::vector<std::vector<uint8_t>>& v) : ParquetFieldList(f, v) {}
-  bool read_value(uint32_t i, CompactProtocolReader* cpr) override
+  bool read_value(uint32_t i, CompactProtocolReader* cpr)
   {
     uint32_t l = cpr->get_u32();
     if (l <= static_cast<size_t>(cpr->m_end - cpr->m_cur)) {
