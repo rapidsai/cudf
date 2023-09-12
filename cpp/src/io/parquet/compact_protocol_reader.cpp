@@ -267,6 +267,26 @@ class ParquetFieldStruct : public ParquetField {
 };
 
 /**
+ * @brief Functor to read empty structures in unions
+ *
+ * @return True if field types mismatch
+ */
+template <typename T>
+class ParquetFieldEmptyStruct : public ParquetField {
+  T& val;
+
+ public:
+  ParquetFieldEmptyStruct(int f, T& v) : ParquetField(f), val(v) {}
+
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
+  {
+    if (field_type != ST_FLD_STRUCT) { return true; }
+    cpr->skip_struct_field(field_type);
+    return false;
+  }
+};
+
+/**
  * @brief Functor to read a vector of structures from CompactProtocolReader
  *
  * @return True if field types mismatch or if the process of reading a
@@ -284,6 +304,8 @@ struct ParquetFieldStructList : public ParquetFieldList<T> {
   }
 };
 
+// TODO(ets): replace current union handling (which mirrors thrift) to use std::optional fields
+// in a struct
 /**
  * @brief Functor to read a union member from CompactProtocolReader
  *
@@ -542,12 +564,15 @@ inline bool function_builder(CompactProtocolReader* cpr, std::tuple<Operator...>
 
 bool CompactProtocolReader::read(FileMetaData* f)
 {
+  using OptionalListColumnOrder =
+    ParquetFieldOptional<std::vector<ColumnOrder>, ParquetFieldStructList<ColumnOrder>>;
   auto op = std::make_tuple(ParquetFieldInt32(1, f->version),
                             ParquetFieldStructList(2, f->schema),
                             ParquetFieldInt64(3, f->num_rows),
                             ParquetFieldStructList(4, f->row_groups),
                             ParquetFieldStructList(5, f->key_value_metadata),
-                            ParquetFieldString(6, f->created_by));
+                            ParquetFieldString(6, f->created_by),
+                            OptionalListColumnOrder(7, f->column_orders));
   return function_builder(this, op);
 }
 
@@ -731,6 +756,14 @@ bool CompactProtocolReader::read(Statistics* s)
                             ParquetFieldInt64(4, s->distinct_count),
                             ParquetFieldBinary(5, s->max_value),
                             ParquetFieldBinary(6, s->min_value));
+  return function_builder(this, op);
+}
+
+bool CompactProtocolReader::read(ColumnOrder* c)
+{
+  using OptionalTypeDefined =
+    ParquetFieldOptional<TypeDefinedOrder, ParquetFieldEmptyStruct<TypeDefinedOrder>>;
+  auto op = std::make_tuple(OptionalTypeDefined(1, c->TYPE_ORDER));
   return function_builder(this, op);
 }
 
