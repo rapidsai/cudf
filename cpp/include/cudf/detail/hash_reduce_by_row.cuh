@@ -109,7 +109,7 @@ struct reduce_by_row_fn_base {
  * @return A device_uvector containing the reduction results
  */
 template <typename ReduceFuncBuilder, typename OutputType>
-rmm::device_uvector<size_type> hash_reduce_by_row(
+rmm::device_uvector<OutputType> hash_reduce_by_row(
   hash_map_type const& map,
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> const preprocessed_input,
   size_type num_rows,
