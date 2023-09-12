@@ -42,6 +42,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
   endif()
 
   add_executable(${CMAKE_TEST_NAME} ${_CUDF_TEST_UNPARSED_ARGUMENTS})
+  target_compile_options(${CMAKE_TEST_NAME} PRIVATE "-O0")
   set_target_properties(
     ${CMAKE_TEST_NAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>"
