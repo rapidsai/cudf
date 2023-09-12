@@ -33,8 +33,10 @@ struct distinct_reduce_fn : reduce_by_row_fn_base<MapView, KeyHasher, KeyEqual, 
                      KeyEqual const& d_equal,
                      duplicate_keep_option const keep,
                      size_type* const d_output)
-    : reduce_by_row_fn_base<MapView, KeyHasher, KeyEqual, size_type>{
-        d_map, d_hasher, d_equal, d_output},
+    : reduce_by_row_fn_base<MapView, KeyHasher, KeyEqual, size_type>{d_map,
+                                                                     d_hasher,
+                                                                     d_equal,
+                                                                     d_output},
       keep{keep}
   {
   }
