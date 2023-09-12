@@ -24,6 +24,7 @@ from cudf.testing._utils import (
     FLOAT_TYPES,
     NUMERIC_TYPES,
     OTHER_TYPES,
+    SERIES_OR_INDEX_NAMES,
     SIGNED_INTEGER_TYPES,
     SIGNED_TYPES,
     UNSIGNED_TYPES,
@@ -227,12 +228,16 @@ def test_pandas_as_index():
     )
 
 
-def test_index_rename():
-    pds = pd.Index([1, 2, 3], name="asdf")
+@pytest.mark.parametrize("initial_name", SERIES_OR_INDEX_NAMES)
+@pytest.mark.parametrize("name", SERIES_OR_INDEX_NAMES)
+def test_index_rename(initial_name, name):
+    pds = pd.Index([1, 2, 3], name=initial_name)
     gds = as_index(pds)
 
-    expect = pds.rename("new_name")
-    got = gds.rename("new_name")
+    assert_eq(pds, gds)
+
+    expect = pds.rename(name)
+    got = gds.rename(name)
 
     assert_eq(expect, got)
     """
