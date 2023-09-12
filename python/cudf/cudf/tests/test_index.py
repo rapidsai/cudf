@@ -11,6 +11,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.api.types import is_bool_dtype
 from cudf.core._compat import PANDAS_GE_133, PANDAS_GE_200
 from cudf.core.index import (
     CategoricalIndex,
@@ -24,6 +25,7 @@ from cudf.testing._utils import (
     FLOAT_TYPES,
     NUMERIC_TYPES,
     OTHER_TYPES,
+    SERIES_OR_INDEX_NAMES,
     SIGNED_INTEGER_TYPES,
     SIGNED_TYPES,
     UNSIGNED_TYPES,
@@ -227,12 +229,16 @@ def test_pandas_as_index():
     )
 
 
-def test_index_rename():
-    pds = pd.Index([1, 2, 3], name="asdf")
+@pytest.mark.parametrize("initial_name", SERIES_OR_INDEX_NAMES)
+@pytest.mark.parametrize("name", SERIES_OR_INDEX_NAMES)
+def test_index_rename(initial_name, name):
+    pds = pd.Index([1, 2, 3], name=initial_name)
     gds = as_index(pds)
 
-    expect = pds.rename("new_name")
-    got = gds.rename("new_name")
+    assert_eq(pds, gds)
+
+    expect = pds.rename(name)
+    got = gds.rename(name)
 
     assert_eq(expect, got)
     """
@@ -2099,25 +2105,48 @@ def test_union_index(idx1, idx2, sort):
         (pd.Index([0, 1, 2, 30], name=pd.NA), pd.Index([30, 0, 90, 100])),
         (pd.Index([0, 1, 2, 30], name="a"), [90, 100]),
         (pd.Index([0, 1, 2, 30]), pd.Index([0, 10, 1.0, 11])),
-        (pd.Index(["a", "b", "c", "d", "c"]), pd.Index(["a", "c", "z"])),
+        (
+            pd.Index(["a", "b", "c", "d", "c"]),
+            pd.Index(["a", "c", "z"], name="abc"),
+        ),
         (
             pd.Index(["a", "b", "c", "d", "c"]),
             pd.Index(["a", "b", "c", "d", "c"]),
         ),
         (pd.Index([True, False, True, True]), pd.Index([10, 11, 12, 0, 1, 2])),
         (pd.Index([True, False, True, True]), pd.Index([True, True])),
+        (pd.RangeIndex(0, 10, name="a"), pd.Index([5, 6, 7], name="b")),
+        (pd.Index(["a", "b", "c"], dtype="category"), pd.Index(["a", "b"])),
+        (pd.Index(["a", "b", "c"], dtype="category"), pd.Index([1, 2, 3])),
+        (pd.Index([0, 1, 2], dtype="category"), pd.RangeIndex(0, 10)),
+        (pd.Index(["a", "b", "c"], name="abc"), []),
+        (pd.Index([], name="abc"), pd.RangeIndex(0, 4)),
+        (pd.Index([1, 2, 3]), pd.Index([1, 2], dtype="category")),
+        (pd.Index([]), pd.Index([1, 2], dtype="category")),
     ],
 )
 @pytest.mark.parametrize("sort", [None, False])
-def test_intersection_index(idx1, idx2, sort):
+@pytest.mark.parametrize("pandas_compatible", [True, False])
+def test_intersection_index(idx1, idx2, sort, pandas_compatible):
     expected = idx1.intersection(idx2, sort=sort)
 
-    idx1 = cudf.from_pandas(idx1) if isinstance(idx1, pd.Index) else idx1
-    idx2 = cudf.from_pandas(idx2) if isinstance(idx2, pd.Index) else idx2
+    with cudf.option_context("mode.pandas_compatible", pandas_compatible):
+        idx1 = cudf.from_pandas(idx1) if isinstance(idx1, pd.Index) else idx1
+        idx2 = cudf.from_pandas(idx2) if isinstance(idx2, pd.Index) else idx2
 
-    actual = idx1.intersection(idx2, sort=sort)
+        actual = idx1.intersection(idx2, sort=sort)
 
-    assert_eq(expected, actual, exact=False)
+        # TODO: Resolve the bool vs ints mixed issue
+        # once pandas has a direction on this issue
+        # https://github.com/pandas-dev/pandas/issues/44000
+        assert_eq(
+            expected,
+            actual,
+            exact=False
+            if (is_bool_dtype(idx1.dtype) and not is_bool_dtype(idx2.dtype))
+            or (not is_bool_dtype(idx1.dtype) or is_bool_dtype(idx2.dtype))
+            else True,
+        )
 
 
 @pytest.mark.parametrize(
