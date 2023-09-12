@@ -16,8 +16,6 @@
 
 #include <stream_compaction/stream_compaction_common.cuh>
 
-#include <cudf/column/column_device_view.cuh>
-#include <cudf/stream_compaction.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/types.hpp>
 
@@ -25,57 +23,22 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <memory>
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/uninitialized_fill.h>
 
 namespace cudf::detail {
 
 /**
- * @brief Perform a reduction on groups of rows that are compared equal.
- *
- * This is essentially a reduce-by-key operation with keys are non-contiguous rows and are compared
- * equal. A hash table is used to find groups of equal rows.
- *
- * Depending on the `keep` parameter, the reduction operation for each row group is:
- * - If `keep == KEEP_FIRST`: min of row indices in the group.
- * - If `keep == KEEP_LAST`: max of row indices in the group.
- * - If `keep == KEEP_NONE`: count of equivalent rows (group size).
- *
- * At the beginning of the operation, the entire output array is filled with a value given by
- * the `reduction_init_value()` function. Then, the reduction result for each row group is written
- * into the output array at the index of an unspecified row in the group.
- *
- * @param map The auxiliary map to perform reduction
- * @param preprocessed_input The preprocessed of the input rows for computing row hashing and row
- *        comparisons
- * @param num_rows The number of all input rows
- * @param has_nulls Indicate whether the input rows has any nulls at any nested levels
- * @param has_nested_columns Indicates whether the input table has any nested columns
- * @param keep The parameter to determine what type of reduction to perform
- * @param nulls_equal Flag to specify whether null elements should be considered as equal
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned vector
- * @return A device_uvector containing the reduction results
- */
-rmm::device_uvector<size_type> hash_reduce_by_row(
-  hash_map_type const& map,
-  std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> const preprocessed_input,
-  size_type num_rows,
-  cudf::nullate::DYNAMIC has_nulls,
-  bool has_nested_columns,
-  duplicate_keep_option keep,
-  null_equality nulls_equal,
-  nan_equality nans_equal,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr);
-
-/**
- * @brief A functor to perform reduce-by-key with keys are rows that compared equal.
+ * @brief The base struct for customized reduction functor to perform reduce-by-key with keys are
+ * rows that compared equal.
  *
  * TODO: We need to switch to use `static_reduction_map` when it is ready
  * (https://github.com/NVIDIA/cuCollections/pull/98).
  */
 template <typename MapView, typename KeyHasher, typename KeyEqual, typename OutputType>
 struct reduce_by_row_fn_base {
+ protected:
   MapView const d_map;
   KeyHasher const d_hasher;
   KeyEqual const d_equal;
@@ -89,13 +52,18 @@ struct reduce_by_row_fn_base {
   {
   }
 
- protected:
+  /**
+   * @brief Return a pointer to the output array at the given index.
+   *
+   * @param idx The access index
+   * @return A pointer to the given index in the output array
+   */
   __device__ OutputType* get_output_ptr(size_type const idx) const
   {
     auto const iter = d_map.find(idx, d_hasher, d_equal);
 
     if (iter != d_map.end()) {
-      // Only one index value of the duplicate rows could be inserted into the map.
+      // Only one (undetermined) index value of the duplicate rows could be inserted into the map.
       // As such, looking up for all indices of duplicate rows always returns the same value.
       auto const inserted_idx = iter->second.load(cuda::std::memory_order_relaxed);
 
@@ -113,6 +81,33 @@ struct reduce_by_row_fn_base {
   }
 };
 
+/**
+ * @brief Perform a reduction on groups of rows that are compared equal.
+ *
+ * This is essentially a reduce-by-key operation with keys are non-contiguous rows and are compared
+ * equal. A hash table is used to find groups of equal rows.
+ *
+ * At the beginning of the operation, the entire output array is filled with a value given by
+ * the `init` parameter. Then, the reduction result for each row group is written into the output
+ * array at the index of an unspecified row in the group.
+ *
+ * @tparam ReduceFuncBuilder The builder class that must have a `build()` method returning a
+ *         reduction functor derived from `reduce_by_row_fn_base`
+ * @tparam OutputType Type of the reduction results
+ * @param map The auxiliary map to perform reduction
+ * @param preprocessed_input The preprocessed of the input rows for computing row hashing and row
+ *        comparisons
+ * @param num_rows The number of all input rows
+ * @param has_nulls Indicate whether the input rows has any nulls at any nested levels
+ * @param has_nested_columns Indicates whether the input table has any nested columns
+ * @param nulls_equal Flag to specify whether null elements should be considered as equal
+ * @param nans_equal Flag to specify whether NaN values in floating point column should be
+ *        considered equal.
+ * @param init The initial value for reduction of each row group
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned vector
+ * @return A device_uvector containing the reduction results
+ */
 template <typename ReduceFuncBuilder, typename OutputType>
 rmm::device_uvector<size_type> hash_reduce_by_row(
   hash_map_type const& map,
@@ -127,16 +122,14 @@ rmm::device_uvector<size_type> hash_reduce_by_row(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  auto reduction_results = rmm::device_uvector<OutputType>(num_rows, stream, mr);
-
-  thrust::uninitialized_fill(
-    rmm::exec_policy(stream), reduction_results.begin(), reduction_results.end(), init);
-
   auto const map_dview  = map.get_device_view();
   auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
   auto const key_hasher = experimental::compaction_hash(row_hasher.device_hasher(has_nulls));
+  auto const row_comp   = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
-  auto const row_comp = cudf::experimental::row::equality::self_comparator(preprocessed_input);
+  auto reduction_results = rmm::device_uvector<OutputType>(num_rows, stream, mr);
+  thrust::uninitialized_fill(
+    rmm::exec_policy(stream), reduction_results.begin(), reduction_results.end(), init);
 
   auto const reduce_by_row = [&](auto const value_comp) {
     if (has_nested_columns) {

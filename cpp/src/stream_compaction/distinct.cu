@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-#include "distinct_reduce.cuh"
+#include "distinct_reduce.hpp"
+#include "stream_compaction_common.cuh"
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/gather.hpp>

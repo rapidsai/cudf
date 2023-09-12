@@ -14,20 +14,15 @@
  * limitations under the License.
  */
 
-#include "distinct_reduce.cuh"
+#include "distinct_reduce.hpp"
 
 #include <reductions/hash_reduce_by_row.cuh>
-
-#include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/uninitialized_fill.h>
 
 namespace cudf::detail {
 
 namespace {
 /**
- * @brief
- *
+ * @brief The functor to find the first/last/none duplicate row for rows that compared equal.
  */
 template <typename MapView, typename KeyHasher, typename KeyEqual>
 struct distinct_reduce_fn : reduce_by_row_fn_base<MapView, KeyHasher, KeyEqual, size_type> {
@@ -38,8 +33,10 @@ struct distinct_reduce_fn : reduce_by_row_fn_base<MapView, KeyHasher, KeyEqual, 
                      KeyEqual const& d_equal,
                      duplicate_keep_option const keep,
                      size_type* const d_output)
-    : reduce_by_row_fn_base<MapView, KeyHasher, KeyEqual, size_type>(
-        d_map, d_hasher, d_equal, d_output),
+    : reduce_by_row_fn_base<MapView, KeyHasher, KeyEqual, size_type>{d_map,
+                                                                     d_hasher,
+                                                                     d_equal,
+                                                                     d_output},
       keep{keep}
   {
   }
@@ -61,8 +58,12 @@ struct distinct_reduce_fn : reduce_by_row_fn_base<MapView, KeyHasher, KeyEqual, 
   }
 };
 
+/**
+ * @brief The builder to construct an instance of `distinct_reduce_fn` functor base on the given
+ * value of the `duplicate_keep_option` member variable.
+ */
 struct reduce_func_builder {
-  duplicate_keep_option keep;
+  duplicate_keep_option const keep;
 
   template <typename MapView, typename KeyHasher, typename KeyEqual>
   auto build(MapView const& d_map,
