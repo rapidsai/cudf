@@ -22,7 +22,7 @@ namespace cudf::detail {
 
 namespace {
 /**
- * @brief The functor to find the first/last/none duplicate row for rows that compared equal.
+ * @brief The functor to find the first/last/all duplicate row for rows that compared equal.
  */
 template <typename MapView, typename KeyHasher, typename KeyEqual>
 struct distinct_reduce_fn : reduce_by_row_fn_base<MapView, KeyHasher, KeyEqual, size_type> {
