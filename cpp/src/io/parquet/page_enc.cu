@@ -266,11 +266,11 @@ struct BitwiseOr {
 // F is a function that computes validity and the src index for a given input position
 template <typename T, typename W, typename I, typename F>
 struct delta_enc {
-  page_enc_state_s<0>* s;
-  uint32_t valid_count;
+  page_enc_state_s<0>* const s;
+  uint32_t const valid_count;
   F& f;
-  uint64_t* buffer;
-  void* temp_space;
+  uint64_t* const buffer;
+  void* const temp_space;
 
   __device__ uint8_t const* encode()
   {
@@ -281,7 +281,7 @@ struct delta_enc {
     if (t == 0) { packer.init(s->cur, valid_count, reinterpret_cast<T*>(buffer), temp_space); }
     __syncthreads();
 
-    // FIXME int the plain encoder the scaling is a little different for INT32 than INT64.
+    // FIXME(ets): in the plain encoder the scaling is a little different for INT32 than INT64.
     // might need to patch this up some.
     int32_t const scale = s->col.ts_scale == 0 ? 1 : s->col.ts_scale;
     for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
@@ -1115,7 +1115,7 @@ __device__ auto julian_days_with_time(int64_t v)
 // this has been split out into its own kernel because of the amount of shared memory required
 // for the state buffer. encode kernels that don't use the RLE buffer can get started while
 // the level data is encoded.
-// FIXME: what should the args to launch_bounds be now?
+// FIXME(ets): what should the args to launch_bounds be now?
 // blockDim(128, 1, 1)
 template <int block_size, EncodeKernelMask kernel_mask>
 __global__ void __launch_bounds__(block_size, 8)
@@ -1302,15 +1302,15 @@ __device__ void finish_page_encode(state_buf* s,
 
   // copy uncompressed bytes over
   if (skip_comp_size != 0 && not comp_in.empty()) {
-    uint8_t* src = s->page.page_data + s->page.max_hdr_size;
-    uint8_t* dst = s->page.compressed_data + s->page.max_hdr_size;
+    uint8_t* const src = s->page.page_data + s->page.max_hdr_size;
+    uint8_t* const dst = s->page.compressed_data + s->page.max_hdr_size;
     for (int i = t; i < skip_comp_size; i += block_size) {
       dst[i] = src[i];
     }
   }
 }
 
-// FIXME: what should the args to launch_bounds be now?
+// FIXME(ets): what should the args to launch_bounds be now?
 // blockDim(128, 1, 1)
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 8)
@@ -1552,7 +1552,7 @@ __global__ void __launch_bounds__(block_size, 8)
     s, valid_count, s->cur, pages, comp_in, comp_out, comp_results, write_v2_headers);
 }
 
-// FIXME: what should the args to launch_bounds be now?
+// FIXME(ets): what should the args to launch_bounds be now?
 // blockDim(128, 1, 1)
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 8)
@@ -1790,7 +1790,6 @@ __global__ void __launch_bounds__(block_size, 8)
   uint8_t const* delta_ptr = nullptr;  // this will be the end of delta block pointer
 
   if (physical_type == INT32) {
-    // FIXME need to handle all the time scaling stuff here too
     if (dtype_len_in == 4) {
       delta_enc<uint32_t, uint64_t, uint32_t, decltype(calc_idx_and_validity)> encoder{
         s, valid_count, calc_idx_and_validity, delta_shared, &temp_storage};
