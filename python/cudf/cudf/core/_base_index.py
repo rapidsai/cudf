@@ -19,6 +19,7 @@ from cudf._lib.stream_compaction import (
     drop_nulls,
 )
 from cudf._lib.types import size_type_dtype
+from cudf.api.extensions import no_default
 from cudf.api.types import (
     is_bool_dtype,
     is_integer,
@@ -26,7 +27,6 @@ from cudf.api.types import (
     is_list_like,
     is_scalar,
 )
-from cudf.api.extensions import no_default
 from cudf.core.abc import Serializable
 from cudf.core.column import ColumnBase, column
 from cudf.core.column_accessor import ColumnAccessor
