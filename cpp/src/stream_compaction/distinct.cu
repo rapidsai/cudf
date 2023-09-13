@@ -15,7 +15,6 @@
  */
 
 #include "distinct_helpers.hpp"
-#include "stream_compaction_common.cuh"
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/gather.hpp>
