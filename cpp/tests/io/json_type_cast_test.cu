@@ -46,6 +46,21 @@ struct offsets_to_length {
     return thrust::get<1>(p) - thrust::get<0>(p);
   }
 };
+
+/// Returns length of each string in the column
+auto string_offset_to_length(cudf::strings_column_view const& column, rmm::cuda_stream_view stream)
+{
+  auto offsets_begin = column.offsets_begin();
+  auto offsets_pair =
+    thrust::make_zip_iterator(thrust::make_tuple(offsets_begin, thrust::next(offsets_begin)));
+  rmm::device_uvector<cudf::size_type> svs_length(column.size(), stream);
+  thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
+                    offsets_pair,
+                    offsets_pair + column.size(),
+                    svs_length.begin(),
+                    offsets_to_length{});
+  return svs_length;
+}
 }  // namespace
 
 auto default_json_options()
@@ -69,16 +84,8 @@ TEST_F(JSONTypeCastTest, String)
   std::vector<char const*> input_values{"this", "is", "null", "of", "", "strings", R"("null")"};
   cudf::test::strings_column_wrapper input(input_values.begin(), input_values.end(), in_valids);
 
-  auto column        = cudf::strings_column_view(input);
-  auto offsets_begin = column.offsets_begin();
-  auto offsets_pair =
-    thrust::make_zip_iterator(thrust::make_tuple(offsets_begin, thrust::next(offsets_begin)));
-  rmm::device_uvector<cudf::size_type> svs_length(column.size(), stream);
-  thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
-                    offsets_pair,
-                    offsets_pair + column.size(),
-                    svs_length.begin(),
-                    offsets_to_length{});
+  auto column                                     = cudf::strings_column_view(input);
+  rmm::device_uvector<cudf::size_type> svs_length = string_offset_to_length(column, stream);
 
   auto null_mask_it = no_nulls();
   auto null_mask =
@@ -110,16 +117,8 @@ TEST_F(JSONTypeCastTest, Int)
   auto const type   = cudf::data_type{cudf::type_id::INT64};
 
   cudf::test::strings_column_wrapper data({"1", "null", "3", "true", "5", "false"});
-  auto column        = cudf::strings_column_view(data);
-  auto offsets_begin = column.offsets_begin();
-  auto offsets_pair =
-    thrust::make_zip_iterator(thrust::make_tuple(offsets_begin, thrust::next(offsets_begin)));
-  rmm::device_uvector<cudf::size_type> svs_length(column.size(), stream);
-  thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
-                    offsets_pair,
-                    offsets_pair + column.size(),
-                    svs_length.begin(),
-                    offsets_to_length{});
+  auto column                                     = cudf::strings_column_view(data);
+  rmm::device_uvector<cudf::size_type> svs_length = string_offset_to_length(column, stream);
 
   auto null_mask_it = no_nulls();
   auto null_mask =
@@ -158,16 +157,8 @@ TEST_F(JSONTypeCastTest, StringEscapes)
     R"("escape with nothing to escape \")",
     R"("\"\\\/\b\f\n\r\t")",
   });
-  auto column        = cudf::strings_column_view(data);
-  auto offsets_begin = column.offsets_begin();
-  auto offsets_pair =
-    thrust::make_zip_iterator(thrust::make_tuple(offsets_begin, thrust::next(offsets_begin)));
-  rmm::device_uvector<cudf::size_type> svs_length(column.size(), stream);
-  thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
-                    offsets_pair,
-                    offsets_pair + column.size(),
-                    svs_length.begin(),
-                    offsets_to_length{});
+  auto column                                     = cudf::strings_column_view(data);
+  rmm::device_uvector<cudf::size_type> svs_length = string_offset_to_length(column, stream);
 
   auto null_mask_it = no_nulls();
   auto null_mask =
