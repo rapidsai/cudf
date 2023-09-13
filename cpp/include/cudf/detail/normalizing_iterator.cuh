@@ -35,7 +35,7 @@ namespace detail {
 template <class Derived, typename Integer>
 struct base_normalator {
   static_assert(std::is_integral_v<Integer>);
-  using difference_type   = ptrdiff_t;
+  using difference_type   = std::ptrdiff_t;
   using value_type        = Integer;
   using pointer           = Integer*;
   using iterator_category = std::random_access_iterator_tag;
@@ -161,6 +161,7 @@ struct base_normalator {
   {
     return rhs.p_ == static_cast<Derived const&>(*this).p_;
   }
+
   /**
    * @brief Not equals to operator.
    */
@@ -168,6 +169,7 @@ struct base_normalator {
   {
     return rhs.p_ != static_cast<Derived const&>(*this).p_;
   }
+
   /**
    * @brief Less than operator.
    */
@@ -175,6 +177,7 @@ struct base_normalator {
   {
     return static_cast<Derived const&>(*this).p_ < rhs.p_;
   }
+
   /**
    * @brief Greater than operator.
    */
@@ -182,6 +185,7 @@ struct base_normalator {
   {
     return static_cast<Derived const&>(*this).p_ > rhs.p_;
   }
+
   /**
    * @brief Less than or equals to operator.
    */
@@ -189,6 +193,7 @@ struct base_normalator {
   {
     return static_cast<Derived const&>(*this).p_ <= rhs.p_;
   }
+
   /**
    * @brief Greater than or equals to operator.
    */
@@ -239,12 +244,12 @@ struct input_normalator : base_normalator<input_normalator<Integer>, Integer> {
    * @brief Dispatch functor for resolving a Integer value from any integer type
    */
   struct normalize_type {
-    template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+    template <typename T, std::enable_if_t<cuda::std::is_integral_v<T>>* = nullptr>
     __device__ Integer operator()(void const* tp)
     {
       return static_cast<Integer>(*static_cast<T const*>(tp));
     }
-    template <typename T, std::enable_if_t<not std::is_integral_v<T>>* = nullptr>
+    template <typename T, std::enable_if_t<not cuda::std::is_integral_v<T>>* = nullptr>
     __device__ Integer operator()(void const*)
     {
       CUDF_UNREACHABLE("only integral types are supported");

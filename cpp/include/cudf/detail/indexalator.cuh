@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "normalizing_iterator.cuh"
+#include <cudf/detail/normalizing_iterator.cuh>
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
