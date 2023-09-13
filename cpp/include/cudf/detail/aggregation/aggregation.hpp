@@ -1461,6 +1461,8 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
       return f.template operator()<aggregation::COUNT_VALID>(std::forward<Ts>(args)...);
     case aggregation::COUNT_ALL:
       return f.template operator()<aggregation::COUNT_ALL>(std::forward<Ts>(args)...);
+    case aggregation::HISTOGRAM:
+      return f.template operator()<aggregation::HISTOGRAM>(std::forward<Ts>(args)...);
     case aggregation::ANY:
       return f.template operator()<aggregation::ANY>(std::forward<Ts>(args)...);
     case aggregation::ALL:
@@ -1504,6 +1506,8 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
       return f.template operator()<aggregation::MERGE_SETS>(std::forward<Ts>(args)...);
     case aggregation::MERGE_M2:
       return f.template operator()<aggregation::MERGE_M2>(std::forward<Ts>(args)...);
+    case aggregation::MERGE_HISTOGRAM:
+      return f.template operator()<aggregation::MERGE_HISTOGRAM>(std::forward<Ts>(args)...);
     case aggregation::COVARIANCE:
       return f.template operator()<aggregation::COVARIANCE>(std::forward<Ts>(args)...);
     case aggregation::CORRELATION:
