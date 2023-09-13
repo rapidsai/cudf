@@ -2151,7 +2151,7 @@ def test_daterange_pandas_compatibility():
 
 
 def test_strings_with_utc_offset_not_implemented():
-    with pytest.warns(DeprecationWarning, match="parsing timezone"):
+    with pytest.warns(DeprecationWarning, match="parsing timezone"):  # cupy
         with pytest.raises(NotImplementedError):
             DatetimeIndex(["2022-07-22 00:00:00+02:00"])
 

@@ -2539,14 +2539,14 @@ def _construct_array(
             # We may have date-like strings with timezones
             try:
                 pd_arbitrary = pd.to_datetime(arbitrary)
-            except pd.errors.OutOfBoundsDatetime:
-                # https://github.com/pandas-dev/pandas/issues/55096
-                pass
-            else:
                 if isinstance(pd_arbitrary.dtype, pd.DatetimeTZDtype):
                     raise NotImplementedError(
                         "cuDF does not yet support timezone-aware datetimes"
                     )
+            except pd.errors.OutOfBoundsDatetime:
+                # https://github.com/pandas-dev/pandas/issues/55096
+                pass
+
         arbitrary = np.asarray(
             arbitrary,
             dtype=native_dtype
