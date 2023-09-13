@@ -2304,13 +2304,14 @@ TEST_F(ContiguousSplitTableCornerCases, OutBufferToSmall)
 {
   // internally, contiguous split chunks GPU work in 1MB contiguous copies
   // so the output buffer must be 1MB or larger.
-  EXPECT_THROW(cudf::chunked_pack::create({}, 1 * 1024, mr()), cudf::logic_error);
+  EXPECT_THROW(cudf::chunked_pack::create({}, 1 * 1024), cudf::logic_error);
 }
 
 TEST_F(ContiguousSplitTableCornerCases, ChunkSpanTooSmall)
 {
-  auto chunked_pack = cudf::chunked_pack::create({}, 1 * 1024 * 1024, mr());
-  rmm::device_buffer buff(1 * 1024, cudf::get_default_stream(), mr());
+  auto chunked_pack = cudf::chunked_pack::create({}, 1 * 1024 * 1024);
+  rmm::device_buffer buff(
+    1 * 1024, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
   cudf::device_span<uint8_t> too_small(static_cast<uint8_t*>(buff.data()), buff.size());
   std::size_t copied = 0;
   // throws because we created chunked_contig_split with 1MB, but we are giving
@@ -2321,8 +2322,9 @@ TEST_F(ContiguousSplitTableCornerCases, ChunkSpanTooSmall)
 
 TEST_F(ContiguousSplitTableCornerCases, EmptyTableHasNextFalse)
 {
-  auto chunked_pack = cudf::chunked_pack::create({}, 1 * 1024 * 1024, mr());
-  rmm::device_buffer buff(1 * 1024 * 1024, cudf::get_default_stream(), mr());
+  auto chunked_pack = cudf::chunked_pack::create({}, 1 * 1024 * 1024);
+  rmm::device_buffer buff(
+    1 * 1024 * 1024, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
   cudf::device_span<uint8_t> bounce_buff(static_cast<uint8_t*>(buff.data()), buff.size());
   EXPECT_EQ(chunked_pack->has_next(), false);  // empty input table
   std::size_t copied = 0;
@@ -2334,9 +2336,10 @@ TEST_F(ContiguousSplitTableCornerCases, ExhaustedHasNextFalse)
 {
   cudf::test::strings_column_wrapper a{"abc", "def", "ghi", "jkl", "mno", "", "st", "uvwx"};
   cudf::table_view t({a});
-  rmm::device_buffer buff(1 * 1024 * 1024, cudf::get_default_stream(), mr());
+  rmm::device_buffer buff(
+    1 * 1024 * 1024, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
   cudf::device_span<uint8_t> bounce_buff(static_cast<uint8_t*>(buff.data()), buff.size());
-  auto chunked_pack = cudf::chunked_pack::create(t, buff.size(), mr());
+  auto chunked_pack = cudf::chunked_pack::create(t, buff.size());
   EXPECT_EQ(chunked_pack->has_next(), true);
   std::size_t copied = chunked_pack->next(bounce_buff);
   EXPECT_EQ(copied, chunked_pack->get_total_contiguous_size());
