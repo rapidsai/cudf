@@ -72,7 +72,7 @@ auto constexpr reduction_init_value(duplicate_keep_option keep)
  * @param mr Device memory resource used to allocate the returned vector
  * @return A device_uvector containing the reduction results
  */
-rmm::device_uvector<size_type> indices_reduce_by_row(
+rmm::device_uvector<size_type> reduce_by_row(
   hash_map_type const& map,
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> const preprocessed_input,
   size_type num_rows,
