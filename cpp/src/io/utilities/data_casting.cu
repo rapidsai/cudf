@@ -909,7 +909,7 @@ std::unique_ptr<column> parse_data(
     make_fixed_width_column(col_type, col_size, std::move(null_mask), null_count, stream, mr);
   auto output_dv_ptr = mutable_column_device_view::create(*out_col, stream);
 
-  // use existing code (`ConvertFunctor`) to convert values
+  // use `ConvertFunctor` to convert non-string values
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),

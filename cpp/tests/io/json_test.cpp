@@ -1438,7 +1438,7 @@ TEST_F(JsonReaderTest, JsonLongString)
 
   // Read test data via nested JSON reader
   auto const table = cudf::io::read_json(json_lines_options);
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, table.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, table.tbl->view());
 }
 
 TEST_F(JsonReaderTest, ErrorStrings)
