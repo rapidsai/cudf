@@ -281,8 +281,8 @@ struct delta_enc {
     if (t == 0) { packer.init(s->cur, valid_count, reinterpret_cast<T*>(buffer), temp_space); }
     __syncthreads();
 
-    // FIXME(ets): in the plain encoder the scaling is a little different for INT32 than INT64.
-    // might need to patch this up some.
+    // TODO(ets): in the plain encoder the scaling is a little different for INT32 than INT64.
+    // might need to modify this if there's a big performance hit in the 32-bit case.
     int32_t const scale = s->col.ts_scale == 0 ? 1 : s->col.ts_scale;
     for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
       uint32_t nvals = min(s->page.num_leaf_values - cur_val_idx, delta::block_size);
