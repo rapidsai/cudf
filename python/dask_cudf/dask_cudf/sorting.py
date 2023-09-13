@@ -6,12 +6,13 @@ import cupy
 import numpy as np
 import tlz as toolz
 
+from dask import config
 from dask.base import tokenize
 from dask.dataframe import methods
 from dask.dataframe.core import DataFrame, Index, Series
 from dask.dataframe.shuffle import rearrange_by_column
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import M, get_default_shuffle_method
+from dask.utils import M
 
 import cudf as gd
 from cudf.api.types import is_categorical_dtype
@@ -308,10 +309,12 @@ def sort_values(
     return df4
 
 
-def _get_default_shuffle_method():
-    # Wraps `dask.utils.get_default_shuffle_method`
-    # to avoid a "disk" shuffle default
-    default = get_default_shuffle_method()
+def get_default_shuffle_method():
+    # Note that `dask.utils.get_default_shuffle_method`
+    # will return "p2p" by default when a distributed
+    # client is present. Dask-cudf supports "p2p", but
+    # will not use it by default (yet)
+    default = config.get("dataframe.shuffle.method", "tasks")
     if default not in _SHUFFLE_SUPPORT:
         default = "tasks"
     return default
@@ -320,7 +323,7 @@ def _get_default_shuffle_method():
 def _get_shuffle_type(shuffle):
     # Utility to set the shuffle-kwarg default
     # and to validate user-specified options
-    shuffle = shuffle or _get_default_shuffle_method()
+    shuffle = shuffle or get_default_shuffle_method()
     if shuffle not in _SHUFFLE_SUPPORT:
         raise ValueError(
             "Dask-cudf only supports the following shuffle "
