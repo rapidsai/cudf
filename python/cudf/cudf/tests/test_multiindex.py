@@ -1987,7 +1987,7 @@ def test_multiindex_to_frame_allow_duplicates(
         if (
             len(pidx.names) != len(set(pidx.names))
             and not all(x is None for x in pidx.names)
-            and (name is None or name is no_default)
+            and not isinstance(name, list)
         ) or (isinstance(name, list) and len(name) != len(set(name))):
             # cudf doesn't have the ability to construct dataframes
             # with duplicate column names

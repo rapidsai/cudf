@@ -1046,10 +1046,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         ----------
         index : bool, default True
             Set the index of the returned DataFrame as the original MultiIndex.
-
         name : list / sequence of str, optional
             The passed names should substitute index level names.
-
         allow_duplicates : bool, optional default False
             Allow duplicate column labels to be created. Note
             that this parameter is non-functional because
@@ -1110,7 +1108,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             column_names = self.names
         all_none_names = None
         if not (
-            all_none_names := (all(x is None for x in column_names))
+            all_none_names := all(x is None for x in column_names)
         ) and len(column_names) != len(set(column_names)):
             raise ValueError("Duplicate column names are not allowed")
         df = cudf.DataFrame._from_data(
@@ -1584,7 +1582,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     @_cudf_nvtx_annotate
     def to_pandas(self, nullable=False, **kwargs):
         result = self.to_frame(
-            index=False, name=list(range(0, self.nlevels))
+            index=False, name=list(range(self.nlevels))
         ).to_pandas(nullable=nullable)
         return pd.MultiIndex.from_frame(result, names=self.names)
 
@@ -1705,7 +1703,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         to `<NA>` as a preprocessing step to `__repr__` methods.
         """
         index_df = self.to_frame(
-            index=False, name=list(range(0, self.nlevels))
+            index=False, name=list(range(self.nlevels))
         )
         return MultiIndex.from_frame(
             index_df._clean_nulls_from_dataframe(index_df), names=self.names
