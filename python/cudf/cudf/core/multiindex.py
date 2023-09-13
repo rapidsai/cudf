@@ -1017,9 +1017,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             start, stop, step = index.indices(len(self))
             index = column.arange(start, stop, step)
         result = MultiIndex.from_frame(
-            self.to_frame(index=False, name=list(range(0, self.nlevels))).take(
+            self.to_frame(index=False, name=range(0, self.nlevels)).take(
                 index
-            )
+            ),
+            names=self.names,
         )
 
         # we are indexing into a single row of the MultiIndex,
@@ -1031,7 +1032,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             result._codes = self._codes.take(index)
         if self._levels is not None:
             result._levels = self._levels
-        result.names = self.names
         return result
 
     @_cudf_nvtx_annotate
