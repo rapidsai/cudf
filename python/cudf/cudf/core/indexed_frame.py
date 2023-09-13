@@ -359,6 +359,9 @@ class IndexedFrame(Frame):
         )
 
     def __round__(self, digits=0):
+        # Shouldn't be added to BinaryOperand
+        # because pandas Index doesn't implement
+        # this method.
         return self.round(decimals=digits)
 
     def _mimic_inplace(
