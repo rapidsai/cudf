@@ -10326,3 +10326,26 @@ def test_dataframe_nlargest_nsmallest_str_error(attr):
         ([], {"n": 1, "columns": ["a", "b"]}),
         ([], {"n": 1, "columns": ["a", "b"]}),
     )
+
+
+@pytest.mark.parametrize("digits", [0, 1, 3, 4, 10])
+def test_dataframe_round_builtin(digits):
+    pdf = pd.DataFrame(
+        {
+            "a": [1.2234242333234, 323432.3243423, np.nan],
+            "b": ["a", "b", "c"],
+            "c": pd.Series([34224, 324324, 324342], dtype="datetime64[ns]"),
+            "d": pd.Series([224.242, None, 2424.234324], dtype="category"),
+            "e": [
+                decimal.Decimal("342.3243234234242"),
+                decimal.Decimal("89.32432497687622"),
+                None,
+            ],
+        }
+    )
+    gdf = cudf.from_pandas(pdf, nan_as_null=False)
+
+    expected = round(pdf, digits)
+    actual = round(gdf, digits)
+
+    assert_eq(expected, actual)
