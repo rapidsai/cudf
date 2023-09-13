@@ -2303,7 +2303,9 @@ def test_series_round_builtin(data, digits):
     ps = pd.Series(data)
     gs = cudf.from_pandas(ps, nan_as_null=False)
 
-    # round(Series) seems buggy.
+    # TODO: Remove `to_frame` workaround
+    # after following issue is fixed:
+    # https://github.com/pandas-dev/pandas/issues/55114
     expected = round(ps.to_frame(), digits)[0]
     expected.name = None
     actual = round(gs, digits)
