@@ -75,19 +75,6 @@ constexpr uint32_t MAX_GRID_Y_SIZE = (1 << 16) - 1;
 // space needed for RLE length field
 constexpr int RLE_LENGTH_FIELD_LEN = 4;
 
-// helpers to do bit operations on enums
-template <class Enum, typename std::enable_if_t<std::is_enum_v<Enum>, bool> = true>
-constexpr uint32_t operator&(Enum a, Enum b)
-{
-  return static_cast<uint32_t>(a) & static_cast<uint32_t>(b);
-}
-
-template <class Enum, typename std::enable_if_t<std::is_enum_v<Enum>, bool> = true>
-constexpr uint32_t operator&(uint32_t a, Enum b)
-{
-  return a & static_cast<uint32_t>(b);
-}
-
 struct frag_init_state_s {
   parquet_column_device_view col;
   PageFragment frag;
@@ -1139,7 +1126,7 @@ __global__ void __launch_bounds__(block_size, 8)
   }
   __syncthreads();
 
-  if ((s->page.kernel_mask & kernel_mask) == 0) { return; }
+  if (BitAnd(s->page.kernel_mask, kernel_mask) == 0) { return; }
 
   auto const is_v2 = s->page.page_type == PageType::DATA_PAGE_V2;
 
@@ -1351,7 +1338,7 @@ __global__ void __launch_bounds__(block_size, 8)
   }
   __syncthreads();
 
-  if ((s->page.kernel_mask & EncodeKernelMask::PLAIN) == 0) { return; }
+  if (BitAnd(s->page.kernel_mask, EncodeKernelMask::PLAIN) == 0) { return; }
 
   // Encode data values
   __syncthreads();
@@ -1594,7 +1581,7 @@ __global__ void __launch_bounds__(block_size, 8)
   }
   __syncthreads();
 
-  if ((s->page.kernel_mask & EncodeKernelMask::DICTIONARY) == 0) { return; }
+  if (BitAnd(s->page.kernel_mask, EncodeKernelMask::DICTIONARY) == 0) { return; }
 
   // Encode data values
   __syncthreads();
@@ -1733,7 +1720,7 @@ __global__ void __launch_bounds__(block_size, 8)
   }
   __syncthreads();
 
-  if ((s->page.kernel_mask & EncodeKernelMask::DELTA_BINARY) == 0) { return; }
+  if (BitAnd(s->page.kernel_mask, EncodeKernelMask::DELTA_BINARY) == 0) { return; }
 
   // Encode data values
   __syncthreads();
@@ -2727,21 +2714,21 @@ void EncodePages(device_span<gpu::EncPage> pages,
   // deal with one datatype.
 
   int s_idx = 0;
-  if ((kernel_mask & EncodeKernelMask::PLAIN) != 0) {
+  if (BitAnd(kernel_mask, EncodeKernelMask::PLAIN) != 0) {
     auto const strm = streams[s_idx++];
     gpuEncodePageLevels<encode_block_size, EncodeKernelMask::PLAIN>
       <<<num_pages, encode_block_size, 0, strm.value()>>>(pages, write_v2_headers);
     gpuEncodePages<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
       pages, comp_in, comp_out, comp_results, write_v2_headers);
   }
-  if ((kernel_mask & EncodeKernelMask::DELTA_BINARY) != 0) {
+  if (BitAnd(kernel_mask, EncodeKernelMask::DELTA_BINARY) != 0) {
     auto const strm = streams[s_idx++];
     gpuEncodePageLevels<encode_block_size, EncodeKernelMask::DELTA_BINARY>
       <<<num_pages, encode_block_size, 0, strm.value()>>>(pages, write_v2_headers);
     gpuEncodeDeltaBinaryPages<encode_block_size>
       <<<num_pages, encode_block_size, 0, strm.value()>>>(pages, comp_in, comp_out, comp_results);
   }
-  if ((kernel_mask & EncodeKernelMask::DICTIONARY) != 0) {
+  if (BitAnd(kernel_mask, EncodeKernelMask::DICTIONARY) != 0) {
     auto const strm = streams[s_idx++];
     gpuEncodePageLevels<encode_block_size, EncodeKernelMask::DICTIONARY>
       <<<num_pages, encode_block_size, 0, strm.value()>>>(pages, write_v2_headers);
