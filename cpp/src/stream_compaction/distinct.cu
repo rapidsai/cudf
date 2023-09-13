@@ -51,8 +51,8 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   }
 
   auto map = hash_map_type{compute_hash_table_size(input.num_rows()),
-                           cuco::empty_key{COMPACTION_EMPTY_KEY_SENTINEL},
-                           cuco::empty_value{COMPACTION_EMPTY_VALUE_SENTINEL},
+                           cuco::empty_key{-1},
+                           cuco::empty_value{std::numeric_limits<size_type>::min()},
                            detail::hash_table_allocator_type{default_allocator<char>{}, stream},
                            stream.value()};
 
@@ -62,7 +62,7 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   auto const has_nested_columns = cudf::detail::has_nested_columns(input);
 
   auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
-  auto const key_hasher = experimental::compaction_hash(row_hasher.device_hasher(has_nulls));
+  auto const key_hasher = row_hasher.device_hasher(has_nulls);
 
   auto const row_comp = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
