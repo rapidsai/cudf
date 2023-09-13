@@ -75,6 +75,12 @@ struct input_column_info {
 
 namespace gpu {
 
+// TODO: The delta encodings use ULEB128 integers, but for now we're only
+// using max 64 bits. Need to see what the performance impact is of using
+// __int128_t rather than int64_t.
+using uleb128_t   = uint64_t;
+using zigzag128_t = int64_t;
+
 /**
  * @brief Enums for the flags in the page header
  */
@@ -391,6 +397,17 @@ constexpr uint32_t encoding_to_mask(Encoding encoding)
 }
 
 /**
+ * @brief Enum of mask bits for the EncPage kernel_mask
+ *
+ * Used to control which encode kernels to run.
+ */
+enum encoder_kernel_mask_bits {
+  ENC_MASK_PLAIN        = (1 << 0),  // Run plain encoding kernel
+  ENC_MASK_DICTIONARY   = (1 << 1),  // Run dictionary encoding kernel
+  ENC_MASK_DELTA_BINARY = (1 << 2)   // Run DELTA_BINARY_PACKED encoding kernel
+};
+
+/**
  * @brief Struct describing an encoder column chunk
  */
 struct EncColumnChunk {
@@ -452,6 +469,7 @@ struct EncPage {
   uint32_t rep_lvl_bytes;        //!< Number of bytes of encoded repetition level data (V2 only)
   compression_result* comp_res;  //!< Ptr to compression result
   uint32_t num_nulls;            //!< Number of null values (V2 only) (down here for alignment)
+  uint32_t kernel_mask;          //!< Mask used to control which encoding kernels to run
 };
 
 /**

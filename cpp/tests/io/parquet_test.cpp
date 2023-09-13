@@ -540,7 +540,9 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps)
 
   auto filepath = temp_env->get_temp_filepath("Timestamps.parquet");
   cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .write_v2_headers(true)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
   cudf::io::write_parquet(out_opts);
 
   cudf::io::parquet_reader_options in_opts =
@@ -566,7 +568,9 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampsWithNulls)
 
   auto filepath = temp_env->get_temp_filepath("TimestampsWithNulls.parquet");
   cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .write_v2_headers(true)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
   cudf::io::write_parquet(out_opts);
 
   cudf::io::parquet_reader_options in_opts =
@@ -590,7 +594,9 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampOverflow)
 
   auto filepath = temp_env->get_temp_filepath("ParquetTimestampOverflow.parquet");
   cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .write_v2_headers(true)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
   cudf::io::write_parquet(out_opts);
 
   cudf::io::parquet_reader_options in_opts =
@@ -6672,7 +6678,7 @@ TEST_P(ParquetV2Test, CheckEncodings)
   // data should be PLAIN for v1, RLE for V2
   auto col0_data =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) -> bool { return i % 2 == 0; });
-  // data should be PLAIN for both
+  // data should be PLAIN for v1, DELTA_BINARY_PACKED for v2
   auto col1_data = random_values<int32_t>(num_rows);
   // data should be PLAIN_DICTIONARY for v1, PLAIN and RLE_DICTIONARY for v2
   auto col2_data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return 1; });
@@ -6707,10 +6713,10 @@ TEST_P(ParquetV2Test, CheckEncodings)
     // col0 should have RLE for rep/def and data
     EXPECT_TRUE(chunk0_enc.size() == 1);
     EXPECT_TRUE(contains(chunk0_enc, Encoding::RLE));
-    // col1 should have RLE for rep/def and PLAIN for data
+    // col1 should have RLE for rep/def and DELTA_BINARY_PACKED for data
     EXPECT_TRUE(chunk1_enc.size() == 2);
     EXPECT_TRUE(contains(chunk1_enc, Encoding::RLE));
-    EXPECT_TRUE(contains(chunk1_enc, Encoding::PLAIN));
+    EXPECT_TRUE(contains(chunk1_enc, Encoding::DELTA_BINARY_PACKED));
     // col2 should have RLE for rep/def, PLAIN for dict, and RLE_DICTIONARY for data
     EXPECT_TRUE(chunk2_enc.size() == 3);
     EXPECT_TRUE(contains(chunk2_enc, Encoding::RLE));
