@@ -5,6 +5,11 @@ ARG PYTHON_PACKAGE_MANAGER=conda
 
 FROM ${BASE} as pip-base
 
+RUN apt update -y \
+ && DEBIAN_FRONTEND=noninteractive apt install -y \
+    librdkafka-dev \
+ && rm -rf /tmp/* /var/tmp/* /var/cache/apt/* /var/lib/apt/lists/*;
+
 ENV DEFAULT_VIRTUAL_ENV=rapids
 
 FROM ${BASE} as conda-base
