@@ -1961,6 +1961,11 @@ class IndexedFrame(Frame):
         ignore_index: bool, default False
             If True, the resulting axis will be labeled 0, 1, ..., n - 1.
         """
+        if not isinstance(ignore_index, (np.bool_, bool)):
+            raise ValueError(
+                f"{ignore_index=} must be bool, "
+                f"not {type(ignore_index).__name__}"
+            )
         subset = self._preprocess_subset(subset)
         subset_cols = [name for name in self._column_names if name in subset]
         if len(subset_cols) == 0:
