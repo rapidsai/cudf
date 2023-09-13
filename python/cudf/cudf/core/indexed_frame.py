@@ -358,6 +358,9 @@ class IndexedFrame(Frame):
             override_dtypes=override_dtypes,
         )
 
+    def __round__(self, digits=0):
+        return self.round(decimals=digits)
+
     def _mimic_inplace(
         self, result: Self, inplace: bool = False
     ) -> Optional[Self]:
