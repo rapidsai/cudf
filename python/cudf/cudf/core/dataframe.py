@@ -5390,7 +5390,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             df._index = as_index(index)
         if isinstance(columns, pd.Index):
-            df._data._level_names = list(columns.names)
+            df._data._level_names = tuple(columns.names)
         return df
 
     @classmethod
@@ -5448,7 +5448,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 data, nan_as_null=nan_as_null
             )
         if isinstance(columns, pd.Index):
-            df._data._level_names = list(columns.names)
+            df._data._level_names = tuple(columns.names)
 
         if index is None:
             df._index = RangeIndex(start=0, stop=len(data))
