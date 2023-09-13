@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <cudf_test/column_utilities.hpp>
+
 #include <reductions/hash_reduce_by_row.cuh>
 #include <stream_compaction/stream_compaction_common.cuh>
 
@@ -77,10 +79,12 @@ struct reduce_func_builder {
   }
 };
 
-template <typename T>
 struct is_none_zero {
-  T const* data;
-  __device__ bool operator()(size_type const idx) const { return data[idx] != T{0}; }
+  template<typename Pair>
+  __device__ bool operator()(Pair const inp_pair) const
+  {
+    return thrust::get<1>(inp_pair) != 0;
+  }
 };
 
 struct histogram_dispatcher {
@@ -105,7 +109,8 @@ struct histogram_dispatcher {
     size_type num_rows,
     cudf::nullate::DYNAMIC has_nulls,
     bool has_nested_columns,
-    mutable_column_view const& output,
+    size_type* output_indices,
+    mutable_column_view const& output_count,
     rmm::cuda_stream_view stream) const
   {
     auto const reduction_results =
@@ -121,13 +126,28 @@ struct histogram_dispatcher {
                                        stream,
                                        rmm::mr::get_current_device_resource());
 
+    column_view cv = column_view(data_type{type_id::INT64},
+                                 (int)reduction_results.size(),
+                                 reduction_results.data(),
+                                 nullptr,
+                                 0);
+    printf("reduction result, num rows = %d\n", num_rows);
+    cudf::test::print(cv);
+
+    auto const input_it = thrust::make_zip_iterator(
+      thrust::make_tuple(thrust::make_counting_iterator(0), reduction_results.begin()));
+
+    auto const output_it = thrust::make_zip_iterator(
+      thrust::make_tuple(output_indices, output_count.begin<OutputType>()));
+
+    thrust::copy_if(rmm::exec_policy(stream),
+                    input_it,
+                    input_it + num_rows,
+                    output_it,
+                    is_none_zero{});
+
     // Reduction results are either group sizes of equal rows, or `0`.
     // Thus, we only needs to extract the non-zero group sizes.
-    thrust::copy_if(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(num_rows),
-                    output.begin<OutputType>(),
-                    is_none_zero<OutputType>{reduction_results.begin()});
   }
 };
 
@@ -177,7 +197,22 @@ std::unique_ptr<cudf::scalar> histogram(column_view const& input,
   // Gather the indices of distinct rows and distinct rows.
   auto distinct_indices = rmm::device_uvector<size_type>(
     static_cast<size_type>(map.get_size()), stream, rmm::mr::get_current_device_resource());
-  map.retrieve_all(distinct_indices.begin(), thrust::make_discard_iterator(), stream.value());
+  //  map.retrieve_all(distinct_indices.begin(), thrust::make_discard_iterator(), stream.value());
+
+  // Count the number of occurences of each unique row.
+  auto distinct_counts = make_numeric_column(
+    output_dtype, static_cast<size_type>(map.get_size()), mask_state::UNALLOCATED, stream, mr);
+  type_dispatcher(output_dtype,
+                  histogram_dispatcher{},
+                  map,
+                  std::move(preprocessed_input),
+                  input.size(),
+                  has_nulls,
+                  has_nested_columns,
+                  distinct_indices.begin(),
+                  distinct_counts->mutable_view(),
+                  stream);
+
   auto distinct_rows =
     std::move(cudf::detail::gather(input_tview,
                                    distinct_indices,
@@ -187,23 +222,12 @@ std::unique_ptr<cudf::scalar> histogram(column_view const& input,
                                    mr)
                 ->release()
                 .front());
-
-  // Count the number of occurences of each unique row.
-  auto unique_counts = make_numeric_column(
-    output_dtype, static_cast<size_type>(map.get_size()), mask_state::UNALLOCATED, stream, mr);
-  type_dispatcher(output_dtype,
-                  histogram_dispatcher{},
-                  map,
-                  std::move(preprocessed_input),
-                  input.size(),
-                  has_nulls,
-                  has_nested_columns,
-                  unique_counts->mutable_view(),
-                  stream);
+  printf("reduction result 2\n");
+  cudf::test::print(distinct_counts->view());
 
   std::vector<std::unique_ptr<column>> struct_children;
   struct_children.emplace_back(std::move(distinct_rows));
-  struct_children.emplace_back(std::move(unique_counts));
+  struct_children.emplace_back(std::move(distinct_counts));
   auto output_structs = make_structs_column(
     static_cast<size_type>(map.get_size()), std::move(struct_children), 0, {}, stream, mr);
 
