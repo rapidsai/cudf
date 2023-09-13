@@ -10349,3 +10349,10 @@ def test_dataframe_round_builtin(digits):
     actual = round(gdf, digits)
 
     assert_eq(expected, actual)
+
+
+def test_dataframe_empty_columns():
+    pdf = pd.DataFrame(columns=pd.Index(["a", "b", "c"], name="NAME"))
+    gdf = cudf.DataFrame(columns=pd.Index(["a", "b", "c"], name="NAME"))
+
+    assert_eq(pdf, gdf, check_index_type=False)
