@@ -34,12 +34,18 @@ namespace {
  */
 template <typename MapView, typename KeyHasher, typename KeyEqual, typename OutputType>
 struct reduce_fn : cudf::detail::reduce_by_row_fn_base<MapView, KeyHasher, KeyEqual, OutputType> {
+  OutputType const* d_partial_output;
+
   reduce_fn(MapView const& d_map,
             KeyHasher const& d_hasher,
             KeyEqual const& d_equal,
-            OutputType* const d_output)
-    : cudf::detail::reduce_by_row_fn_base<MapView, KeyHasher, KeyEqual, OutputType>{
-        d_map, d_hasher, d_equal, d_output}
+            OutputType* const d_output,
+            OutputType const* const d_partial_output = nullptr)
+    : cudf::detail::reduce_by_row_fn_base<MapView, KeyHasher, KeyEqual, OutputType>{d_map,
+                                                                                    d_hasher,
+                                                                                    d_equal,
+                                                                                    d_output},
+      d_partial_output{d_partial_output}
   {
   }
 
@@ -47,7 +53,11 @@ struct reduce_fn : cudf::detail::reduce_by_row_fn_base<MapView, KeyHasher, KeyEq
   __device__ void operator()(size_type const idx) const
   {
     cuda::atomic_ref<OutputType, cuda::thread_scope_device> count(*this->get_output_ptr(idx));
-    count.fetch_add(OutputType{1}, cuda::std::memory_order_relaxed);
+    if (d_partial_output) {
+      count.fetch_add(d_partial_output[idx], cuda::std::memory_order_relaxed);
+    } else {
+      count.fetch_add(OutputType{1}, cuda::std::memory_order_relaxed);
+    }
   }
 };
 
