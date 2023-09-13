@@ -38,20 +38,7 @@ using cudf::experimental::row::lhs_index_type;
 using cudf::experimental::row::rhs_index_type;
 
 /**
- * @brief Check if the given type `T` is a strong index type (i.e., `lhs_index_type` or
- * `rhs_index_type`).
- *
- * @return A boolean value indicating if `T` is a strong index type
- */
-template <typename T>
-constexpr auto is_strong_index_type()
-{
-  return std::is_same_v<T, lhs_index_type> || std::is_same_v<T, rhs_index_type>;
-}
-
-/**
- * @brief An adapter functor to support strong index types for row hasher that must be operating on
- * `cudf::size_type`.
+ * @brief An hasher adapter wrapping both haystack hasher and needles hasher
  */
 template <typename HaystackHasher, typename NeedleHasher>
 struct hasher_adapter {
@@ -76,14 +63,12 @@ struct hasher_adapter {
 };
 
 /**
- * @brief An adapter functor to support strong index type for table row comparator that must be
- * operating on `cudf::size_type`.
+ * @brief An comparator adapter wrapping both self comparator and two table comparator
  */
-template <typename SelfComparator, typename TwoTableComparator>
+template <typename SelfEqual, typename TwoTableEqual>
 struct comparator_adapter {
-  comparator_adapter(SelfComparator const& self_comparator,
-                     TwoTableComparator const& two_table_comparator)
-    : _self_comparator{self_comparator}, _two_table_comparator{two_table_comparator}
+  comparator_adapter(SelfEqual const& self_equal, TwoTableEqual const& two_table_equal)
+    : _self_equal{self_equal}, _two_table_equal{two_table_equal}
   {
   }
 
@@ -93,18 +78,18 @@ struct comparator_adapter {
     auto const lhs = static_cast<size_type>(lhs_index);
     auto const rhs = static_cast<size_type>(rhs_index);
 
-    return _self_comparator(lhs, rhs);
+    return _self_equal(lhs, rhs);
   }
 
   __device__ constexpr auto operator()(lhs_index_type lhs_index,
                                        rhs_index_type rhs_index) const noexcept
   {
-    return _two_table_comparator(lhs_index, rhs_index);
+    return _two_table_equal(lhs_index, rhs_index);
   }
 
  private:
-  SelfComparator const _self_comparator;
-  TwoTableComparator const _two_table_comparator;
+  SelfEqual const _self_equal;
+  TwoTableEqual const _two_table_equal;
 };
 
 /**
@@ -138,40 +123,50 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
   return std::pair(rmm::device_buffer{0, stream}, nullable_columns.front().null_mask());
 }
 
-template <bool haystack_has_nulls, bool has_any_nulls, typename Func>
-void dispatch(
-  null_equality compare_nulls, auto self_comp, auto two_table_comp, auto nan_comp, Func func)
-{
-  auto const d_self_eq = self_comp.equal_to<haystack_has_nulls>(
-    nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, nan_comp);
-  auto const d_two_table_eq = two_table_comp.equal_to<has_any_nulls>(
-    nullate::DYNAMIC{has_any_nulls}, compare_nulls, nan_comp);
-  func(d_self_eq, d_two_table_eq);
-}
-
 /**
- * @brief Invoke an `operator()` template with a row equality comparator based on the specified
- * `compare_nans` parameter.
+ * @brief Invokes the given `func` with desired comparators based on the specified `compare_nans`
+ parameter.
  *
- * @param compare_nans The flag to specify whether NaNs should be compared equal or not
+ * @tparam HaystackHasNested Flag indicating whether there are nested columns in haystack
+ * @tparam HasAnyNested Flag indicating whether there are nested columns in either haystack or
+ needles
+ * @tparam Func Type of the helper function doing `contains` check
+
+ * @tparam haystack_has_nulls Flag indicating whether haystack has nulls or not
+ *
+ * @param compare_nulls Control whether nulls should be compared as equal or not
+ * @param compare_nans Control whether floating-point NaNs values should be compared as equal or not
+ * @param haystack_has_nulls Flag indicating whether haystack has nulls or not
+ * @param has_any_nulls Flag indicating whether there are nested nulls is either haystack or needles
+ * @param self_equal Self table comparator
+ * @param two_table_equal Two table comparator
  * @param func The input functor to invoke
  */
-template <bool haystack_has_nulls, bool has_any_nulls, typename Func>
-void dispatch_nan_comparator(nan_equality compare_nans,
-                             null_equality compare_nulls,
-                             auto self_comp,
-                             auto two_table_comp,
-                             Func func)
+template <bool HaystackHasNested, bool HasAnyNested, typename Func>
+void dispatch_nan_comparator(
+  null_equality compare_nulls,
+  nan_equality compare_nans,
+  bool haystack_has_nulls,
+  bool has_any_nulls,
+  cudf::experimental::row::equality::self_comparator self_equal,
+  cudf::experimental::row::equality::two_table_comparator two_table_equal,
+  Func&& func)
 {
   if (compare_nans == nan_equality::ALL_EQUAL) {
     using nan_equal_comparator =
       cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
-    dispatch<haystack_has_nulls, has_any_nulls>(
-      compare_nulls, self_comp, two_table_comp, nan_equal_comparator{}, func);
+    auto const d_self_equal = self_equal.equal_to<HaystackHasNested>(
+      nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, nan_equal_comparator{});
+    auto const d_two_table_equal = two_table_equal.equal_to<HasAnyNested>(
+      nullate::DYNAMIC{has_any_nulls}, compare_nulls, nan_equal_comparator{});
+    func(d_self_equal, d_two_table_equal);
   } else {
     using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
-    dispatch<haystack_has_nulls, has_any_nulls>(
-      compare_nulls, self_comp, two_table_comp, nan_unequal_comparator{}, func);
+    auto const d_self_equal      = self_equal.equal_to<HaystackHasNested>(
+      nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, nan_unequal_comparator{});
+    auto const d_two_table_equal = two_table_equal.equal_to<HasAnyNested>(
+      nullate::DYNAMIC{has_any_nulls}, compare_nulls, nan_unequal_comparator{});
+    func(d_self_equal, d_two_table_equal);
   }
 }
 
@@ -211,9 +206,8 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
   auto const d_hasher          = hasher_adapter{d_haystack_hasher, d_needle_hasher};
   using hasher_type            = decltype(d_hasher);
 
-  auto const self_comparator =
-    cudf::experimental::row::equality::self_comparator(preprocessed_haystack);
-  auto const two_table_comparator = cudf::experimental::row::equality::two_table_comparator(
+  auto const self_equal = cudf::experimental::row::equality::self_comparator(preprocessed_haystack);
+  auto const two_table_equal = cudf::experimental::row::equality::two_table_comparator(
     preprocessed_haystack, preprocessed_needles);
 
   // The output vector.
@@ -224,7 +218,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
   auto const needles_iter = cudf::detail::make_counting_transform_iterator(
     size_type{0}, [] __device__(auto idx) { return rhs_index_type{idx}; });
 
-  auto helper_func = [&](auto const& d_self_equal, auto const& d_two_table_equal) {
+  auto const helper_func = [&](auto const& d_self_equal, auto const& d_two_table_equal) {
     auto const d_equal = comparator_adapter{d_self_equal, d_two_table_equal};
 
     auto set = cuco::experimental::static_set{
@@ -247,18 +241,44 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
     }
 
     if (needles_has_nulls && compare_nulls == null_equality::UNEQUAL) {
-      set.contains_if_async(
-        needles_iter, needles_iter + needles.num_rows(), contained.begin(), stream.value());
+      auto const row_bitmask = build_row_bitmask(needles, stream).second;
+      set.contains_if_async(needles_iter,
+                            needles_iter + needles.num_rows(),
+                            thrust::counting_iterator<size_type>(0),  // stencil
+                            row_is_valid{row_bitmask},
+                            contained.begin(),
+                            stream.value());
     } else {
       set.contains_async(
         needles_iter, needles_iter + needles.num_rows(), contained.begin(), stream.value());
     }
   };
 
-  if (haystack_has_nulls) {
-    if (has_any_nulls) {
-      dispatch_nan_comparator<true, true>(
-        compare_nans, compare_nulls, self_comparator, two_table_comparator, helper_func);
+  if (cudf::detail::has_nested_columns(haystack)) {
+    dispatch_nan_comparator<true, true>(compare_nulls,
+                                        compare_nans,
+                                        haystack_has_nulls,
+                                        has_any_nulls,
+                                        self_equal,
+                                        two_table_equal,
+                                        helper_func);
+  } else {
+    if (cudf::detail::has_nested_columns(needles)) {
+      dispatch_nan_comparator<false, true>(compare_nulls,
+                                           compare_nans,
+                                           haystack_has_nulls,
+                                           has_any_nulls,
+                                           self_equal,
+                                           two_table_equal,
+                                           helper_func);
+    } else {
+      dispatch_nan_comparator<false, false>(compare_nulls,
+                                            compare_nans,
+                                            haystack_has_nulls,
+                                            has_any_nulls,
+                                            self_equal,
+                                            two_table_equal,
+                                            helper_func);
     }
   }
 
