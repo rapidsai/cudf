@@ -74,6 +74,7 @@ def _match_join_keys(
             common_type = ltype.categories.dtype
         else:
             common_type = rtype.categories.dtype
+        common_type = cudf.utils.dtypes._dtype_pandas_compatible(common_type)
         return lcol.astype(common_type), rcol.astype(common_type)
 
     if is_dtype_equal(ltype, rtype):
