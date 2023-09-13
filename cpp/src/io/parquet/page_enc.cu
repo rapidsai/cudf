@@ -75,6 +75,19 @@ constexpr uint32_t MAX_GRID_Y_SIZE = (1 << 16) - 1;
 // space needed for RLE length field
 constexpr int RLE_LENGTH_FIELD_LEN = 4;
 
+// helpers to do bit operations on enums
+template <class Enum, typename std::enable_if_t<std::is_enum_v<Enum>, bool> = true>
+constexpr uint32_t operator&(Enum a, Enum b)
+{
+  return static_cast<uint32_t>(a) & static_cast<uint32_t>(b);
+}
+
+template <class Enum, typename std::enable_if_t<std::is_enum_v<Enum>, bool> = true>
+constexpr uint32_t operator&(uint32_t a, Enum b)
+{
+  return a & static_cast<uint32_t>(b);
+}
+
 struct frag_init_state_s {
   parquet_column_device_view col;
   PageFragment frag;
@@ -491,7 +504,7 @@ __global__ void __launch_bounds__(128)
       __syncwarp();
       if (t == 0) {
         if (not pages.empty()) {
-          page_g.kernel_mask     = ENC_MASK_PLAIN;
+          page_g.kernel_mask     = EncodeKernelMask::PLAIN;
           pages[ck_g.first_page] = page_g;
         }
         if (not page_sizes.empty()) { page_sizes[ck_g.first_page] = page_g.max_data_size; }
@@ -622,11 +635,11 @@ __global__ void __launch_bounds__(128)
         if (t == 0) {
           if (not pages.empty()) {
             if (is_use_delta) {
-              page_g.kernel_mask = ENC_MASK_DELTA_BINARY;
+              page_g.kernel_mask = EncodeKernelMask::DELTA_BINARY;
             } else if (ck_g.use_dictionary || physical_type == BOOLEAN) {
-              page_g.kernel_mask = ENC_MASK_DICTIONARY;
+              page_g.kernel_mask = EncodeKernelMask::DICTIONARY;
             } else {
-              page_g.kernel_mask = ENC_MASK_PLAIN;
+              page_g.kernel_mask = EncodeKernelMask::PLAIN;
             }
             pages[ck_g.first_page + num_pages] = page_g;
           }
@@ -1104,7 +1117,7 @@ __device__ auto julian_days_with_time(int64_t v)
 // the level data is encoded.
 // FIXME: what should the args to launch_bounds be now?
 // blockDim(128, 1, 1)
-template <int block_size, int kernel_mask>
+template <int block_size, EncodeKernelMask kernel_mask>
 __global__ void __launch_bounds__(block_size, 8)
   gpuEncodePageLevels(device_span<gpu::EncPage> pages, bool write_v2_headers)
 {
@@ -1334,7 +1347,7 @@ __global__ void __launch_bounds__(block_size, 8)
   }
   __syncthreads();
 
-  if ((s->page.kernel_mask & ENC_MASK_PLAIN) == 0) { return; }
+  if ((s->page.kernel_mask & EncodeKernelMask::PLAIN) == 0) { return; }
 
   // Encode data values
   __syncthreads();
@@ -1576,7 +1589,7 @@ __global__ void __launch_bounds__(block_size, 8)
   }
   __syncthreads();
 
-  if ((s->page.kernel_mask & ENC_MASK_DICTIONARY) == 0) { return; }
+  if ((s->page.kernel_mask & EncodeKernelMask::DICTIONARY) == 0) { return; }
 
   // Encode data values
   __syncthreads();
@@ -1715,7 +1728,7 @@ __global__ void __launch_bounds__(block_size, 8)
   }
   __syncthreads();
 
-  if ((s->page.kernel_mask & ENC_MASK_DELTA_BINARY) == 0) { return; }
+  if ((s->page.kernel_mask & EncodeKernelMask::DELTA_BINARY) == 0) { return; }
 
   // Encode data values
   __syncthreads();
@@ -2538,7 +2551,7 @@ constexpr __device__ void* align8(void* ptr)
 }
 
 struct mask_tform {
-  __device__ uint32_t operator()(EncPage const& p) { return p.kernel_mask; }
+  __device__ uint32_t operator()(EncPage const& p) { return static_cast<uint32_t>(p.kernel_mask); }
 };
 
 }  // namespace
@@ -2688,8 +2701,8 @@ void EncodePages(device_span<gpu::EncPage> pages,
   auto num_pages = pages.size();
 
   // determine which kernels to invoke
-  auto mask_iter  = thrust::make_transform_iterator(pages.begin(), mask_tform{});
-  int kernel_mask = thrust::reduce(
+  auto mask_iter       = thrust::make_transform_iterator(pages.begin(), mask_tform{});
+  uint32_t kernel_mask = thrust::reduce(
     rmm::exec_policy(stream), mask_iter, mask_iter + pages.size(), 0U, thrust::bit_or<uint32_t>{});
 
   // get the number of streams we need from the pool
@@ -2700,23 +2713,23 @@ void EncodePages(device_span<gpu::EncPage> pages,
   // deal with one datatype.
 
   int s_idx = 0;
-  if ((kernel_mask & ENC_MASK_PLAIN) != 0) {
+  if ((kernel_mask & EncodeKernelMask::PLAIN) != 0) {
     auto const strm = streams[s_idx++];
-    gpuEncodePageLevels<encode_block_size, ENC_MASK_PLAIN>
+    gpuEncodePageLevels<encode_block_size, EncodeKernelMask::PLAIN>
       <<<num_pages, encode_block_size, 0, strm.value()>>>(pages, write_v2_headers);
     gpuEncodePages<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
       pages, comp_in, comp_out, comp_results, write_v2_headers);
   }
-  if ((kernel_mask & ENC_MASK_DELTA_BINARY) != 0) {
+  if ((kernel_mask & EncodeKernelMask::DELTA_BINARY) != 0) {
     auto const strm = streams[s_idx++];
-    gpuEncodePageLevels<encode_block_size, ENC_MASK_DELTA_BINARY>
+    gpuEncodePageLevels<encode_block_size, EncodeKernelMask::DELTA_BINARY>
       <<<num_pages, encode_block_size, 0, strm.value()>>>(pages, write_v2_headers);
     gpuEncodeDeltaBinaryPages<encode_block_size>
       <<<num_pages, encode_block_size, 0, strm.value()>>>(pages, comp_in, comp_out, comp_results);
   }
-  if ((kernel_mask & ENC_MASK_DICTIONARY) != 0) {
+  if ((kernel_mask & EncodeKernelMask::DICTIONARY) != 0) {
     auto const strm = streams[s_idx++];
-    gpuEncodePageLevels<encode_block_size, ENC_MASK_DICTIONARY>
+    gpuEncodePageLevels<encode_block_size, EncodeKernelMask::DICTIONARY>
       <<<num_pages, encode_block_size, 0, strm.value()>>>(pages, write_v2_headers);
     gpuEncodeDictPages<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
       pages, comp_in, comp_out, comp_results, write_v2_headers);

@@ -401,10 +401,10 @@ constexpr uint32_t encoding_to_mask(Encoding encoding)
  *
  * Used to control which encode kernels to run.
  */
-enum encoder_kernel_mask_bits {
-  ENC_MASK_PLAIN        = (1 << 0),  // Run plain encoding kernel
-  ENC_MASK_DICTIONARY   = (1 << 1),  // Run dictionary encoding kernel
-  ENC_MASK_DELTA_BINARY = (1 << 2)   // Run DELTA_BINARY_PACKED encoding kernel
+enum class EncodeKernelMask {
+  PLAIN        = (1 << 0),  // Run plain encoding kernel
+  DICTIONARY   = (1 << 1),  // Run dictionary encoding kernel
+  DELTA_BINARY = (1 << 2)   // Run DELTA_BINARY_PACKED encoding kernel
 };
 
 /**
@@ -469,7 +469,7 @@ struct EncPage {
   uint32_t rep_lvl_bytes;        //!< Number of bytes of encoded repetition level data (V2 only)
   compression_result* comp_res;  //!< Ptr to compression result
   uint32_t num_nulls;            //!< Number of null values (V2 only) (down here for alignment)
-  uint32_t kernel_mask;          //!< Mask used to control which encoding kernels to run
+  EncodeKernelMask kernel_mask;  //!< Mask used to control which encoding kernels to run
 };
 
 /**

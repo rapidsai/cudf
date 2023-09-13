@@ -19,6 +19,7 @@
 #include "parquet_gpu.hpp"
 
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <cub/cub.cuh>
 
@@ -59,7 +60,7 @@ template <typename T, typename WideType>
 inline __device__ void bitpack_mini_block(
   uint8_t* dst, T val, uint32_t count, uint8_t nbits, void* temp_space)
 {
-  // typing for atomicOr is annoying
+  // typing for atomicOr is annoying. uint64_t doesn't work, need unsigned long long.
   using scratch_type =
     std::conditional_t<std::is_same_v<T, uint64_t>, unsigned long long, uint32_t>;
   using cudf::detail::warp_size;
@@ -69,7 +70,7 @@ inline __device__ void bitpack_mini_block(
   auto const lane_id = threadIdx.x % warp_size;
   auto const warp_id = threadIdx.x / warp_size;
 
-  scratch_type* scratch = reinterpret_cast<scratch_type*>(temp_space) + warp_id * warp_size;
+  auto const scratch = reinterpret_cast<scratch_type*>(temp_space) + warp_id * warp_size;
 
   // zero out scratch
   scratch[lane_id] = 0;
@@ -103,9 +104,9 @@ inline __device__ void bitpack_mini_block(
   __syncwarp();
 
   // Copy scratch data to final destination
-  auto available_bytes = (count * nbits + 7) / 8;
+  auto const available_bytes = util::div_rounding_up_safe(count * nbits, 8U);
+  auto const scratch_bytes   = reinterpret_cast<char*>(scratch);
 
-  auto scratch_bytes = reinterpret_cast<char*>(scratch);
   for (uint32_t i = lane_id; i < available_bytes; i += warp_size) {
     dst[i] = scratch_bytes[i];
   }
@@ -254,7 +255,7 @@ class DeltaBinaryPacker {
         mb_ptr, norm_delta, num_enc, _mb_bits[warp_id], _bitpack_tmp);
     }
 
-    // last lane updates global delta ptr
+    // last warp updates global delta ptr
     if (warp_id == delta::num_mini_blocks - 1 && lane_id == 0) {
       _dst              = mb_ptr + _mb_bits[warp_id] * delta::values_per_mini_block / 8;
       _current_idx      = min(warp_idx + delta::values_per_mini_block, _num_values);
