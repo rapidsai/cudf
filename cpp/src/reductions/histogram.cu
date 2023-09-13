@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-//#include <cudf_test/column_utilities.hpp>
+// #include <cudf_test/column_utilities.hpp>
 
 #include <reductions/hash_reduce_by_row.cuh>
 #include <stream_compaction/stream_compaction_common.cuh>
@@ -143,8 +143,8 @@ struct histogram_dispatcher {
                                  reduction_results.data(),
                                  nullptr,
                                  0);
-//    printf("reduction result, num rows = %d\n", num_rows);
-//    cudf::test::print(cv);
+    //    printf("reduction result, num rows = %d\n", num_rows);
+    //    cudf::test::print(cv);
 
     auto const input_it = thrust::make_zip_iterator(
       thrust::make_tuple(thrust::make_counting_iterator(0), reduction_results.begin()));
@@ -232,8 +232,8 @@ std::unique_ptr<cudf::scalar> histogram(table_view const& input,
                                    mr)
                 ->release()
                 .front());
-//  printf("reduction result 2\n");
-//  cudf::test::print(distinct_counts->view());
+  //  printf("reduction result 2\n");
+  //  cudf::test::print(distinct_counts->view());
 
   std::vector<std::unique_ptr<column>> struct_children;
   struct_children.emplace_back(std::move(distinct_rows));
@@ -260,8 +260,9 @@ std::unique_ptr<cudf::scalar> merge_histogram(column_view const& input,
   CUDF_EXPECTS(
     input.type().id() == type_id::STRUCT && input.num_children() == 2,
     "The input of merge_histogram aggregation must be a struct column having two children.");
-  CUDF_EXPECTS(input.child(1).type().id() == type_id::INT64,
-               "The second child of the input column must be INT64 type.");
+  CUDF_EXPECTS(input.child(1).type().id() == type_id::INT64 && !input.child(1).has_nulls(),
+               "The second child of the input column must be INT64 type and has no nulls.");
+  CUDF_EXPECTS(!input.has_nulls(), "The input column must not have nulls.");
 
   return histogram(
     table_view{{input.child(0)}}, input.child(1), data_type{type_id::INT64}, stream, mr);
