@@ -290,6 +290,11 @@ std::unique_ptr<Base> make_any_aggregation();
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_all_aggregation();
 
+/// Factory to create a HISTOGRAM aggregation
+/// @return A HISTOGRAM aggregation object
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_histogram_aggregation();
+
 /// Factory to create a SUM_OF_SQUARES aggregation
 /// @return A SUM_OF_SQUARES aggregation object
 template <typename Base = aggregation>
@@ -611,6 +616,13 @@ std::unique_ptr<Base> make_merge_sets_aggregation(
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_merge_m2_aggregation();
+
+/**
+ * @brief make_merge_m2_aggregation
+ * @return
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_merge_histogram_aggregation();
 
 /**
  * @brief Factory to create a COVARIANCE aggregation
