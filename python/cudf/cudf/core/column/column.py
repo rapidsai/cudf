@@ -715,7 +715,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         return libcudf.replace.replace_nulls(
             input_col=self, replacement=value, method=method, dtype=dtype
-        )
+        )._with_type_metadata(self.dtype)
 
     def isnull(self) -> ColumnBase:
         """Identify missing values in a Column."""
@@ -1996,18 +1996,27 @@ def as_column(
         col = ColumnBase.from_arrow(arbitrary)
 
         if isinstance(arbitrary, pa.NullArray):
-            new_dtype = cudf.dtype(arbitrary.type.to_pandas_dtype())
             if dtype is not None:
                 # Cast the column to the `dtype` if specified.
-                col = col.astype(dtype)
+                new_dtype = dtype
             elif len(arbitrary) == 0:
                 # If the column is empty, it has to be
                 # a `float64` dtype.
-                col = col.astype("float64")
+                new_dtype = cudf.dtype("float64")
             else:
                 # If the null column is not empty, it has to
                 # be of `object` dtype.
-                col = col.astype(new_dtype)
+                new_dtype = cudf.dtype(arbitrary.type.to_pandas_dtype())
+
+            if cudf.get_option(
+                "mode.pandas_compatible"
+            ) and new_dtype == cudf.dtype("O"):
+                # We internally raise if we do `astype("object")`, hence
+                # need to cast to `str` since this is safe to do so because
+                # it is a null-array.
+                new_dtype = "str"
+
+            col = col.astype(new_dtype)
 
         return col
 
@@ -2024,9 +2033,19 @@ def as_column(
                     f"{arbitrary.dtype} is not supported. Convert first to "
                     f"{arbitrary.dtype.subtype}."
                 )
-        if is_categorical_dtype(arbitrary):
+        if is_categorical_dtype(arbitrary.dtype):
+            if isinstance(
+                arbitrary.dtype.categories.dtype, pd.DatetimeTZDtype
+            ):
+                raise NotImplementedError(
+                    "cuDF does not yet support timezone-aware datetimes"
+                )
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif is_interval_dtype(arbitrary.dtype):
+            if isinstance(arbitrary.dtype.subtype, pd.DatetimeTZDtype):
+                raise NotImplementedError(
+                    "cuDF does not yet support timezone-aware datetimes"
+                )
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif arbitrary.dtype == np.bool_:
             data = as_column(cupy.asarray(arbitrary), dtype=arbitrary.dtype)
@@ -2043,10 +2062,15 @@ def as_column(
             )
         else:
             pyarrow_array = pa.array(arbitrary, from_pandas=nan_as_null)
-            if arbitrary.dtype == cudf.dtype("object") and isinstance(
-                pyarrow_array, (pa.DurationArray, pa.TimestampArray)
+            if (
+                arbitrary.dtype == cudf.dtype("object")
+                and cudf.dtype(pyarrow_array.type.to_pandas_dtype())
+                != cudf.dtype(arbitrary.dtype)
+                and not is_bool_dtype(
+                    cudf.dtype(pyarrow_array.type.to_pandas_dtype())
+                )
             ):
-                raise TypeError("Cannot create column with mixed types")
+                raise MixedTypeError("Cannot create column with mixed types")
             if isinstance(pyarrow_array.type, pa.Decimal128Type):
                 pyarrow_type = cudf.Decimal128Dtype.from_arrow(
                     pyarrow_array.type
@@ -2252,8 +2276,21 @@ def as_column(
         data = ColumnBase.from_scalar(arbitrary, length if length else 1)
     elif isinstance(arbitrary, pd.core.arrays.masked.BaseMaskedArray):
         data = as_column(pa.Array.from_pandas(arbitrary), dtype=dtype)
-    elif isinstance(arbitrary, pd.DatetimeIndex) and isinstance(
-        arbitrary.dtype, pd.DatetimeTZDtype
+    elif (
+        (
+            isinstance(arbitrary, pd.DatetimeIndex)
+            and isinstance(arbitrary.dtype, pd.DatetimeTZDtype)
+        )
+        or (
+            isinstance(arbitrary, pd.IntervalIndex)
+            and is_datetime64tz_dtype(arbitrary.dtype.subtype)
+        )
+        or (
+            isinstance(arbitrary, pd.CategoricalIndex)
+            and isinstance(
+                arbitrary.dtype.categories.dtype, pd.DatetimeTZDtype
+            )
+        )
     ):
         raise NotImplementedError(
             "cuDF does not yet support timezone-aware datetimes"
@@ -2402,10 +2439,29 @@ def as_column(
                 )
 
                 if (
+                    isinstance(pyarrow_array, pa.NullArray)
+                    and pa_type is None
+                    and dtype is None
+                    and getattr(arbitrary, "dtype", None)
+                    == cudf.dtype("object")
+                ):
+                    # pa.array constructor returns a NullArray
+                    # for empty arrays, instead of a StringArray.
+                    # This issue is only specific to this dtype,
+                    # all other dtypes, result in their corresponding
+                    # arrow array creation.
+                    dtype = cudf.dtype("str")
+                    pyarrow_array = pyarrow_array.cast(np_to_pa_dtype(dtype))
+
+                if (
                     isinstance(arbitrary, pd.Index)
                     and arbitrary.dtype == cudf.dtype("object")
-                    and isinstance(
-                        pyarrow_array, (pa.DurationArray, pa.TimestampArray)
+                    and (
+                        cudf.dtype(pyarrow_array.type.to_pandas_dtype())
+                        != cudf.dtype(arbitrary.dtype)
+                        and not is_bool_dtype(
+                            cudf.dtype(pyarrow_array.type.to_pandas_dtype())
+                        )
                     )
                 ):
                     raise MixedTypeError(

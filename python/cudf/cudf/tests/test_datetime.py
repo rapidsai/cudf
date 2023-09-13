@@ -2095,6 +2095,8 @@ def test_construction_from_tz_timestamps(data):
         _ = cudf.Index(data)
     with pytest.raises(NotImplementedError):
         _ = cudf.DatetimeIndex(data)
+    with pytest.raises(NotImplementedError):
+        cudf.CategoricalIndex(data)
 
 
 @pytest.mark.parametrize("op", _cmpops)
@@ -2146,3 +2148,17 @@ def test_daterange_pandas_compatibility():
             "2010-01-01", "2010-02-01", periods=10, name="times"
         )
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("code", ["z", "Z"])
+def test_format_timezone_not_implemented(code):
+    with pytest.raises(NotImplementedError):
+        cudf.to_datetime(
+            ["2020-01-01 00:00:00 UTC"], format=f"%Y-%m-%d %H:%M:%S %{code}"
+        )
+
+
+@pytest.mark.parametrize("arg", [True, False])
+def test_args_not_datetime_typerror(arg):
+    with pytest.raises(TypeError):
+        cudf.to_datetime([arg])

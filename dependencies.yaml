@@ -179,6 +179,7 @@ dependencies:
           - c-compiler
           - cxx-compiler
           - dlpack>=0.5,<0.6.0a0
+          - zlib>=1.2.13
     specific:
       - output_types: conda
         matrices:
@@ -240,6 +241,10 @@ dependencies:
               cuda: "11.8"
             packages:
               - *nvcomp
+          # TODO: Fallback matrix for aarch64 CUDA 12. After migrating to nvcomp 3,
+          # all CUDA/arch combinations should be supported by existing packages.
+          - matrix:
+            packages:
   build_wheels:
     common:
       - output_types: pyproject
@@ -374,13 +379,13 @@ dependencies:
           - identify>=2.5.20
       - output_types: conda
         packages:
-          - doxygen=1.8.20 # pre-commit hook needs a specific version.
+          - &doxygen doxygen=1.9.1 # pre-commit hook needs a specific version.
   docs:
     common:
       - output_types: [conda]
         packages:
           - dask-cuda==23.10.*
-          - doxygen=1.8.20
+          - *doxygen
           - make
           - myst-nb
           - nbsphinx

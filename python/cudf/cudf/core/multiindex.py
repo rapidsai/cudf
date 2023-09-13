@@ -220,6 +220,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         self._names = pd.core.indexes.frozen.FrozenList(value)
 
     @_cudf_nvtx_annotate
+    def to_series(self, index=None, name=None):
+        raise NotImplementedError(
+            "MultiIndex.to_series isn't implemented yet."
+        )
+
+    @_cudf_nvtx_annotate
     def astype(self, dtype, copy: bool = True):
         if not is_object_dtype(dtype):
             raise TypeError(
@@ -1637,7 +1643,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def difference(self, other, sort=None):
         if hasattr(other, "to_pandas"):
             other = other.to_pandas()
-        return self.to_pandas().difference(other, sort)
+        return cudf.from_pandas(self.to_pandas().difference(other, sort))
 
     @_cudf_nvtx_annotate
     def append(self, other):
