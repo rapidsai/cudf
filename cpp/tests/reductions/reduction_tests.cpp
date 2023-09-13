@@ -387,7 +387,7 @@ TYPED_TEST(ReductionTest, SumOfSquare)
 
 TYPED_TEST(ReductionTest, Histogram)
 {
-  using col_data    = cudf::test::fixed_width_column_wrapper<TypeParam>;
+  using col_data    = cudf::test::fixed_width_column_wrapper<TypeParam, int>;
   using int64_data  = cudf::test::fixed_width_column_wrapper<int64_t>;
   using structs_col = cudf::test::structs_column_wrapper;
 
@@ -399,6 +399,29 @@ TYPED_TEST(ReductionTest, Histogram)
     auto const expected = [] {
       auto child1 = col_data{-3, -2, 0, 1, 2, 5};
       auto child2 = int64_data{2, 1, 1, 2, 4, 1};
+      return structs_col{{child1, child2}};
+    }();
+    auto const result     = cudf::reduce(input, *agg, cudf::data_type{cudf::type_id::INT64});
+    auto const result_col = dynamic_cast<cudf::list_scalar*>(result.get())->view();
+    //    cudf::test::print(result_col);
+
+    auto const sort_order    = cudf::sorted_order(cudf::table_view{{result_col.child(0)}}, {}, {});
+    auto const sorted_result = cudf::gather(cudf::table_view{{result_col}}, *sort_order);
+    //    cudf::test::print(sorted_result->get_column(0).view());
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, sorted_result->get_column(0).view());
+  }
+
+  // Test with nulls.
+  {
+    using namespace cudf::test::iterators;
+    auto constexpr null{0};
+
+    auto const input    = col_data{{null, -3, 2, 1, 2, 0, null, 5, 2, null, -3, -2, null, 2, 1},
+                                nulls_at({0, 6, 9, 12})};
+    auto const expected = [] {
+      auto child1 = col_data{{null, -3, -2, 0, 1, 2, 5}, null_at(0)};
+      auto child2 = int64_data{4, 2, 1, 1, 2, 4, 1};
       return structs_col{{child1, child2}};
     }();
     auto const result     = cudf::reduce(input, *agg, cudf::data_type{cudf::type_id::INT64});
@@ -432,6 +455,34 @@ TYPED_TEST(ReductionTest, MergeHistogram)
     auto const expected = [] {
       auto child1 = col_data{-3, -2, 0, 1, 2, 5};
       auto child2 = int64_data{5, 5, 4, 5, 8, 1};
+      return structs_col{{child1, child2}};
+    }();
+    auto const result     = cudf::reduce(input, *agg, cudf::data_type{cudf::type_id::INT64});
+    auto const result_col = dynamic_cast<cudf::list_scalar*>(result.get())->view();
+    //    cudf::test::print(result_col);
+
+    auto const sort_order    = cudf::sorted_order(cudf::table_view{{result_col.child(0)}}, {}, {});
+    auto const sorted_result = cudf::gather(cudf::table_view{{result_col}}, *sort_order);
+    //    cudf::test::print(sorted_result->get_column(0).view());
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, sorted_result->get_column(0).view());
+  }
+
+  // Test with nulls.
+  {
+    using namespace cudf::test::iterators;
+    auto constexpr null{0};
+
+    auto const input = [] {
+      auto child1 = col_data{{-3, 2, null, 1, 2, null, 0, 5, null, 2, -3, null, -2, 2, 1, null},
+                             nulls_at({2, 5, 8, 11, 15})};
+      auto child2 = int64_data{2, 1, 12, 1, 2, 11, 4, 1, 10, 2, 3, 15, 5, 3, 4, 19};
+      return structs_col{{child1, child2}};
+    }();
+
+    auto const expected = [] {
+      auto child1 = col_data{{null, -3, -2, 0, 1, 2, 5}, null_at(0)};
+      auto child2 = int64_data{67, 5, 5, 4, 5, 8, 1};
       return structs_col{{child1, child2}};
     }();
     auto const result     = cudf::reduce(input, *agg, cudf::data_type{cudf::type_id::INT64});
