@@ -210,8 +210,8 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
   auto const d_hasher          = hasher_adapter{d_haystack_hasher, d_needle_hasher};
   using hasher_type            = decltype(d_hasher);
 
-  auto const self_comp = cudf::experimental::row::equality::self_comparator(preprocessed_haystack);
-  auto const two_table_comp = cudf::experimental::row::equality::two_table_comparator(
+  auto const self_equal = cudf::experimental::row::equality::self_comparator(preprocessed_haystack);
+  auto const two_table_equal = cudf::experimental::row::equality::two_table_comparator(
     preprocessed_haystack, preprocessed_needles);
 
   // The output vector.
@@ -265,8 +265,8 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
                                         compare_nans,
                                         haystack_has_nulls,
                                         has_any_nulls,
-                                        self_comp,
-                                        two_table_comp,
+                                        self_equal,
+                                        two_table_equal,
                                         helper_func);
   } else {
     if (cudf::detail::has_nested_columns(needles)) {
@@ -274,16 +274,16 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
                                            compare_nans,
                                            haystack_has_nulls,
                                            has_any_nulls,
-                                           self_comp,
-                                           two_table_comp,
+                                           self_equal,
+                                           two_table_equal,
                                            helper_func);
     } else {
       dispatch_nan_comparator<false, false>(compare_nulls,
                                             compare_nans,
                                             haystack_has_nulls,
                                             has_any_nulls,
-                                            self_comp,
-                                            two_table_comp,
+                                            self_equal,
+                                            two_table_equal,
                                             helper_func);
     }
   }
