@@ -1051,7 +1051,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             The passed names should substitute index level names.
 
         allow_duplicates : bool, optional default False
-            Allow duplicate column labels to be created.
+            Allow duplicate column labels to be created. Note
+            that this parameter is non-functional because
+            duplicates column labels aren't supported in cudf.
 
         Returns
         -------
