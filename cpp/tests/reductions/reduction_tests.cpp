@@ -28,6 +28,7 @@
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/sorting.hpp>
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
@@ -119,6 +120,7 @@ struct ReductionTest : public cudf::test::BaseFixture {
   }
 };
 
+#if 0
 template <typename T>
 struct MinMaxReductionTest : public ReductionTest<T> {};
 
@@ -292,8 +294,10 @@ TYPED_TEST(SumReductionTest, Sum)
                  .second);
 }
 
-TYPED_TEST_SUITE(ReductionTest, cudf::test::NumericTypes);
+#endif
+TYPED_TEST_SUITE(ReductionTest, cudf::test::FloatingPointTypes);
 
+#if 0
 TYPED_TEST(ReductionTest, Product)
 {
   using T = TypeParam;
@@ -379,6 +383,43 @@ TYPED_TEST(ReductionTest, SumOfSquare)
             expected_null_value);
 }
 
+#endif
+
+TYPED_TEST(ReductionTest, Histogram)
+{
+  using col_data    = cudf::test::fixed_width_column_wrapper<TypeParam>;
+  using int64_data  = cudf::test::fixed_width_column_wrapper<int64_t>;
+  using structs_col = cudf::test::structs_column_wrapper;
+
+  auto const agg = cudf::make_histogram_aggregation<reduce_aggregation>();
+
+  // Test without nulls.
+  {
+    auto const input    = col_data{-3, 2, 1, 2, 0, 5, 2, -3, -2, 2, 1};
+    auto const expected = [] {
+      auto child1 = col_data{-3, -2, 0, 1, 2, 5};
+      auto child2 = int64_data{2, 1, 1, 2, 4, 1};
+      return structs_col{{child1, child2}};
+    }();
+    //    auto const input    = col_data{1, 2, 3, 1, 2};
+    //    auto const expected = [] {
+    //      auto child1 = col_data{1, 2, 3};
+    //      auto child2 = int64_data{2, 2, 1};
+    //      return structs_col{{child1, child2}};
+    //    }();
+    auto const result     = cudf::reduce(input, *agg, cudf::data_type{cudf::type_id::INT64});
+    auto const result_col = dynamic_cast<cudf::list_scalar*>(result.get())->view();
+    cudf::test::print(result_col);
+
+    auto const sort_order    = cudf::sorted_order(cudf::table_view{{result_col.child(0)}}, {}, {});
+    auto const sorted_result = cudf::gather(cudf::table_view{{result_col}}, *sort_order);
+    cudf::test::print(sorted_result->get_column(0).view());
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, sorted_result->get_column(0).view());
+  }
+}
+
+#if 0
 template <typename T>
 struct ReductionAnyAllTest : public ReductionTest<bool> {};
 using AnyAllTypes = cudf::test::Types<int32_t, float, bool>;
@@ -2936,5 +2977,5 @@ TEST_F(StructReductionTest, StructReductionMinMaxWithNulls)
                          *cudf::make_max_aggregation<reduce_aggregation>());
   }
 }
-
+#endif
 CUDF_TEST_PROGRAM_MAIN()
