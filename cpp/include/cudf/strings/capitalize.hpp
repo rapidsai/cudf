@@ -60,7 +60,7 @@ namespace strings {
  */
 std::unique_ptr<column> capitalize(
   strings_column_view const& input,
-  string_scalar const& delimiters     = string_scalar(""),
+  string_scalar const& delimiters     = string_scalar("", true, cudf::get_default_stream()),
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
