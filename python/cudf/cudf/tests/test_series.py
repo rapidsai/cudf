@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
+import decimal
 import hashlib
 import operator
 import re
@@ -2282,3 +2283,31 @@ def test_series_rename(initial_name, name):
     expected = psr.rename(name)
 
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1.2234242333234, 323432.3243423, np.nan],
+        pd.Series([34224, 324324, 324342], dtype="datetime64[ns]"),
+        pd.Series([224.242, None, 2424.234324], dtype="category"),
+        [
+            decimal.Decimal("342.3243234234242"),
+            decimal.Decimal("89.32432497687622"),
+            None,
+        ],
+    ],
+)
+@pytest.mark.parametrize("digits", [0, 1, 3, 4, 10])
+def test_series_round_builtin(data, digits):
+    ps = pd.Series(data)
+    gs = cudf.from_pandas(ps, nan_as_null=False)
+
+    # TODO: Remove `to_frame` workaround
+    # after following issue is fixed:
+    # https://github.com/pandas-dev/pandas/issues/55114
+    expected = round(ps.to_frame(), digits)[0]
+    expected.name = None
+    actual = round(gs, digits)
+
+    assert_eq(expected, actual)
