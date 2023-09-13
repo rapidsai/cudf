@@ -22,6 +22,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/text/data_chunk_source.hpp>
 #include <cudf/io/text/detail/multistate.hpp>
@@ -32,7 +33,6 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/cuda_stream_pool.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
@@ -301,44 +301,12 @@ namespace io {
 namespace text {
 namespace detail {
 
-void fork_stream(std::vector<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
-{
-  cudaEvent_t event;
-  CUDF_CUDA_TRY(cudaEventCreate(&event));
-  CUDF_CUDA_TRY(cudaEventRecord(event, stream));
-  for (uint32_t i = 0; i < streams.size(); i++) {
-    CUDF_CUDA_TRY(cudaStreamWaitEvent(streams[i], event, 0));
-  }
-  CUDF_CUDA_TRY(cudaEventDestroy(event));
-}
-
-void join_stream(std::vector<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
-{
-  cudaEvent_t event;
-  CUDF_CUDA_TRY(cudaEventCreate(&event));
-  for (uint32_t i = 0; i < streams.size(); i++) {
-    CUDF_CUDA_TRY(cudaEventRecord(event, streams[i]));
-    CUDF_CUDA_TRY(cudaStreamWaitEvent(stream, event, 0));
-  }
-  CUDF_CUDA_TRY(cudaEventDestroy(event));
-}
-
-std::vector<rmm::cuda_stream_view> get_streams(int32_t count, rmm::cuda_stream_pool& stream_pool)
-{
-  auto streams = std::vector<rmm::cuda_stream_view>();
-  for (int32_t i = 0; i < count; i++) {
-    streams.emplace_back(stream_pool.get_stream());
-  }
-  return streams;
-}
-
 std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source const& source,
                                               std::string const& delimiter,
                                               byte_range_info byte_range,
                                               bool strip_delimiters,
                                               rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr,
-                                              rmm::cuda_stream_pool& stream_pool)
+                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -365,8 +333,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   CUDF_EXPECTS(delimiter.size() < multistate::max_segment_value,
                "delimiter contains too many total tokens to produce a deterministic result.");
 
-  auto concurrency = 2;
-  auto streams     = get_streams(concurrency, stream_pool);
+  auto const concurrency = 2;
 
   // must be at least 32 when using warp-reduce on partials
   // must be at least 1 more than max possible concurrent tiles
@@ -411,7 +378,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   output_builder<byte_offset> row_offset_storage(ITEMS_PER_CHUNK, max_growth, stream);
   output_builder<char> char_storage(ITEMS_PER_CHUNK, max_growth, stream);
 
-  fork_stream(streams, stream);
+  auto streams = cudf::detail::fork_streams(stream, concurrency);
 
   cudaEvent_t last_launch_event;
   CUDF_CUDA_TRY(cudaEventCreate(&last_launch_event));
@@ -532,7 +499,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
 
   CUDF_CUDA_TRY(cudaEventDestroy(last_launch_event));
 
-  join_stream(streams, stream);
+  cudf::detail::join_streams(streams, stream);
 
   // if the input was empty, we didn't find a delimiter at all,
   // or the first delimiter was also the last: empty output
@@ -602,11 +569,10 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                                               parse_options options,
                                               rmm::mr::device_memory_resource* mr)
 {
-  auto stream      = cudf::get_default_stream();
-  auto stream_pool = rmm::cuda_stream_pool(2);
+  auto stream = cudf::get_default_stream();
 
   auto result = detail::multibyte_split(
-    source, delimiter, options.byte_range, options.strip_delimiters, stream, mr, stream_pool);
+    source, delimiter, options.byte_range, options.strip_delimiters, stream, mr);
 
   return result;
 }
