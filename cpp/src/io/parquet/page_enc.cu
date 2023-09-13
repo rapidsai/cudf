@@ -1200,10 +1200,12 @@ __global__ void __launch_bounds__(block_size, 8)
         __syncthreads();
       }
       if (t < 32) {
-        uint8_t* const cur       = s->cur;
-        uint8_t* const rle_out   = s->rle_out;
-        uint32_t const rle_bytes = static_cast<uint32_t>(rle_out - cur) - (is_v2 ? 0 : 4);
-        if (not is_v2 && t < 4) { cur[t] = rle_bytes >> (t * 8); }
+        uint8_t* const cur     = s->cur;
+        uint8_t* const rle_out = s->rle_out;
+        // V2 does not write the RLE length field
+        uint32_t const rle_bytes =
+          static_cast<uint32_t>(rle_out - cur) - (is_v2 ? 0 : RLE_LENGTH_FIELD_LEN);
+        if (not is_v2 && t < RLE_LENGTH_FIELD_LEN) { cur[t] = rle_bytes >> (t * 8); }
         __syncwarp();
         if (t == 0) {
           s->cur                = rle_out;
@@ -1242,10 +1244,12 @@ __global__ void __launch_bounds__(block_size, 8)
         __syncthreads();
       }
       if (t < 32) {
-        uint8_t* const cur       = s->cur;
-        uint8_t* const rle_out   = s->rle_out;
-        uint32_t const rle_bytes = static_cast<uint32_t>(rle_out - cur) - (is_v2 ? 0 : 4);
-        if (not is_v2 && t < 4) { cur[t] = rle_bytes >> (t * 8); }
+        uint8_t* const cur     = s->cur;
+        uint8_t* const rle_out = s->rle_out;
+        // V2 does not write the RLE length field
+        uint32_t const rle_bytes =
+          static_cast<uint32_t>(rle_out - cur) - (is_v2 ? 0 : RLE_LENGTH_FIELD_LEN);
+        if (not is_v2 && t < RLE_LENGTH_FIELD_LEN) { cur[t] = rle_bytes >> (t * 8); }
         __syncwarp();
         if (t == 0) {
           s->cur    = rle_out;
@@ -1339,9 +1343,10 @@ __global__ void __launch_bounds__(block_size, 8)
     // get s->cur back to where it was at the end of encoding the rep and def level data
     s->cur =
       s->page.page_data + s->page.max_hdr_size + s->page.def_lvl_bytes + s->page.rep_lvl_bytes;
+    // if V1 data page, need space for the RLE length fields
     if (s->page.page_type == PageType::DATA_PAGE) {
-      if (s->col.num_def_level_bits() != 0) { s->cur += 4; }
-      if (s->col.num_rep_level_bits() != 0) { s->cur += 4; }
+      if (s->col.num_def_level_bits() != 0) { s->cur += RLE_LENGTH_FIELD_LEN; }
+      if (s->col.num_rep_level_bits() != 0) { s->cur += RLE_LENGTH_FIELD_LEN; }
     }
   }
   __syncthreads();
@@ -1581,9 +1586,10 @@ __global__ void __launch_bounds__(block_size, 8)
     // get s->cur back to where it was at the end of encoding the rep and def level data
     s->cur =
       s->page.page_data + s->page.max_hdr_size + s->page.def_lvl_bytes + s->page.rep_lvl_bytes;
+    // if V1 data page, need space for the RLE length fields
     if (s->page.page_type == PageType::DATA_PAGE) {
-      if (s->col.num_def_level_bits() != 0) { s->cur += 4; }
-      if (s->col.num_rep_level_bits() != 0) { s->cur += 4; }
+      if (s->col.num_def_level_bits() != 0) { s->cur += RLE_LENGTH_FIELD_LEN; }
+      if (s->col.num_rep_level_bits() != 0) { s->cur += RLE_LENGTH_FIELD_LEN; }
     }
   }
   __syncthreads();
