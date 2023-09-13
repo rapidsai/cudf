@@ -379,7 +379,7 @@ def _get_pyarrow_schema_cudf(obj, preserve_index=True, **kwargs):
             "Ignoring the following arguments to "
             f"`pyarrow_schema_dispatch`: {list(kwargs)}"
         )
-    return obj.to_arrow(preserve_index=preserve_index).schema
+    return meta_nonempty(obj).to_arrow(preserve_index=preserve_index).schema
 
 
 @to_pyarrow_table_dispatch.register(cudf.DataFrame)
