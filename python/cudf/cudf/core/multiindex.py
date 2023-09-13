@@ -1702,9 +1702,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         Convert all na values(if any) in MultiIndex object
         to `<NA>` as a preprocessing step to `__repr__` methods.
         """
-        index_df = self.to_frame(
-            index=False, name=list(range(self.nlevels))
-        )
+        index_df = self.to_frame(index=False, name=list(range(self.nlevels)))
         return MultiIndex.from_frame(
             index_df._clean_nulls_from_dataframe(index_df), names=self.names
         )
