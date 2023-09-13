@@ -44,18 +44,19 @@ __launch_bounds__(block_size) __global__
                            mutable_column_device_view out,
                            size_type* __restrict__ const valid_count)
 {
-  size_type const tid            = threadIdx.x + blockIdx.x * block_size;
-  int const warp_id              = tid / warp_size;
+  auto tidx                      = cudf::detail::grid_1d::global_thread_id();
+  auto const stride              = cudf::detail::grid_1d::grid_stride();
+  int const warp_id              = tidx / warp_size;
   size_type const warps_per_grid = gridDim.x * block_size / warp_size;
 
   // begin/end indices for the column data
-  size_type begin = 0;
-  size_type end   = out.size();
+  size_type const begin = 0;
+  size_type const end   = out.size();
   // warp indices.  since 1 warp == 32 threads == sizeof(bitmask_type) * 8,
   // each warp will process one (32 bit) of the validity mask via
   // __ballot_sync()
-  size_type warp_begin = cudf::word_index(begin);
-  size_type warp_end   = cudf::word_index(end - 1);
+  size_type const warp_begin = cudf::word_index(begin);
+  size_type const warp_end   = cudf::word_index(end - 1);
 
   // lane id within the current warp
   constexpr size_type leader_lane{0};
@@ -65,8 +66,8 @@ __launch_bounds__(block_size) __global__
 
   // current warp.
   size_type warp_cur = warp_begin + warp_id;
-  size_type index    = tid;
   while (warp_cur <= warp_end) {
+    auto const index = static_cast<size_type>(tidx);
     auto const opt_value =
       (index < end) ? (filter(index) ? lhs[index] : rhs[index]) : thrust::nullopt;
     if (opt_value) { out.element<T>(index) = static_cast<T>(*opt_value); }
@@ -84,7 +85,7 @@ __launch_bounds__(block_size) __global__
 
     // next grid
     warp_cur += warps_per_grid;
-    index += block_size * gridDim.x;
+    tidx += stride;
   }
 
   if (has_nulls) {
