@@ -78,7 +78,7 @@ struct reduce_func_builder {
 }  // namespace
 
 // This function is split from `distinct.cu` to improve compile time.
-rmm::device_uvector<size_type> indices_reduce_by_row(
+rmm::device_uvector<size_type> reduce_by_row(
   hash_map_type const& map,
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> const preprocessed_input,
   size_type num_rows,
