@@ -16,7 +16,7 @@
 
 #include "distinct_helpers.hpp"
 
-#include <cudf/detail/hash_reduce_by_row.cuh>
+#include <reductions/hash_reduce_by_row.cuh>
 
 namespace cudf::detail {
 
