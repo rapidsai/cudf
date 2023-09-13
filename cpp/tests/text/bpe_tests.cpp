@@ -29,23 +29,37 @@ struct TextBPETokenize : public cudf::test::BaseFixture {};
 TEST_F(TextBPETokenize, BytePairEncoding)
 {
   // partial table based on values from https://huggingface.co/gpt2/raw/main/merges.txt
-  auto mpt = cudf::test::strings_column_wrapper(
-    {"e n", "i t", "i s", "e s", "en t", "c e", "es t", "en ce", "T h", "Th is", "t est", "s ent"});
+  auto mpt = cudf::test::strings_column_wrapper({
+    "e n",    // 14
+    "i t",    // 16
+    "i s",    // 17
+    "e s",    // 20
+    "en t",   // 44
+    "c e",    // 90
+    "es t",   // 141
+    "en ce",  // 340
+    "t h",    // 146
+    "h i",    // 5049
+    "th is",  // 5407
+    "t est",  // 9034
+    "s i",    // 13142
+    "s ent"   // 33832
+  });
 
   auto merge_pairs = nvtext::load_merge_pairs(cudf::strings_column_view(mpt));
 
   auto validity = cudf::test::iterators::null_at(4);
   cudf::test::strings_column_wrapper input(
-    {"Thisisit", "Thisis test-sentence-1", "Thisistestsentence-2", "This-istestsentence 3", "", ""},
+    {"thisisit", "thisis test-sentence-1", "thisistestsentence-2", "this-istestsentence 3", "", ""},
     validity);
   auto sv = cudf::strings_column_view(input);
 
   auto results = nvtext::byte_pair_encoding(sv, *merge_pairs);
 
-  auto expected = cudf::test::strings_column_wrapper({"This is it",
-                                                      "This is   test - sent ence - 1",
-                                                      "This is test sent ence - 2",
-                                                      "This - is test sent ence   3",
+  auto expected = cudf::test::strings_column_wrapper({"this is it",
+                                                      "this is   test - sent ence - 1",
+                                                      "this is test sent ence - 2",
+                                                      "this - is test sent ence   3",
                                                       "",
                                                       ""},
                                                      validity);
@@ -63,6 +77,7 @@ TEST_F(TextBPETokenize, BytePairEncodingSeparator)
 {
   auto mpt = cudf::test::strings_column_wrapper(
     {"Ġ t", "Ġt he", "h e", "e n", "i t", "e s", "en t", "c e", "es t", "en ce", "t est", "s ent"});
+
   auto merge_pairs = nvtext::load_merge_pairs(cudf::strings_column_view(mpt));
 
   cudf::test::strings_column_wrapper input(
@@ -78,7 +93,7 @@ TEST_F(TextBPETokenize, BytePairEncodingSeparator)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
-TEST_F(TextBPETokenize, DISABLED_BPEAdjacentPairs)
+TEST_F(TextBPETokenize, BPEAdjacentPairs)
 {
   auto mpt         = cudf::test::strings_column_wrapper({
     "▁ H",    //    157
