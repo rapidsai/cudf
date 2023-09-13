@@ -1789,22 +1789,32 @@ __global__ void __launch_bounds__(block_size, 8)
   uint8_t const* delta_ptr = nullptr;  // this will be the end of delta block pointer
 
   if (physical_type == INT32) {
-    if (dtype_len_in == 4) {
-      delta_enc<uint32_t, uint64_t, uint32_t, decltype(calc_idx_and_validity)> encoder{
-        s, valid_count, calc_idx_and_validity, delta_shared, &temp_storage};
-      delta_ptr = encoder.encode();
-    } else if (dtype_len_in == 2) {
-      delta_enc<uint16_t, uint32_t, uint16_t, decltype(calc_idx_and_validity)> encoder{
-        s, valid_count, calc_idx_and_validity, delta_shared, &temp_storage};
-      delta_ptr = encoder.encode();
-    } else if (dtype_len_in == 8) {
-      delta_enc<uint32_t, uint64_t, uint64_t, decltype(calc_idx_and_validity)> encoder{
-        s, valid_count, calc_idx_and_validity, delta_shared, &temp_storage};
-      delta_ptr = encoder.encode();
-    } else {
-      delta_enc<uint8_t, uint16_t, uint8_t, decltype(calc_idx_and_validity)> encoder{
-        s, valid_count, calc_idx_and_validity, delta_shared, &temp_storage};
-      delta_ptr = encoder.encode();
+    switch (dtype_len_in) {
+      case 8: {
+        delta_enc<uint32_t, uint64_t, uint64_t, decltype(calc_idx_and_validity)> encoder{
+          s, valid_count, calc_idx_and_validity, delta_shared, &temp_storage};
+        delta_ptr = encoder.encode();
+        break;
+      }
+      case 4: {
+        delta_enc<uint32_t, uint64_t, uint32_t, decltype(calc_idx_and_validity)> encoder{
+          s, valid_count, calc_idx_and_validity, delta_shared, &temp_storage};
+        delta_ptr = encoder.encode();
+        break;
+      }
+      case 2: {
+        delta_enc<uint16_t, uint32_t, uint16_t, decltype(calc_idx_and_validity)> encoder{
+          s, valid_count, calc_idx_and_validity, delta_shared, &temp_storage};
+        delta_ptr = encoder.encode();
+        break;
+      }
+      case 1: {
+        delta_enc<uint8_t, uint16_t, uint8_t, decltype(calc_idx_and_validity)> encoder{
+          s, valid_count, calc_idx_and_validity, delta_shared, &temp_storage};
+        delta_ptr = encoder.encode();
+        break;
+      }
+      default: CUDF_UNREACHABLE("invalid dtype_len_in when encoding DELTA_BINARY_PACKED");
     }
   } else {
     delta_enc<uint64_t, __uint128_t, uint64_t, decltype(calc_idx_and_validity)> encoder{
