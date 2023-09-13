@@ -34,6 +34,7 @@
 
 #include <cuda_runtime.h>
 
+#include <type_traits>
 #include <vector>
 
 namespace cudf::io::parquet {
@@ -76,6 +77,38 @@ struct input_column_info {
 
 namespace gpu {
 
+// TODO this is in C++23
+template <typename Enum>
+struct is_scoped_enum {
+  static const bool value =
+    std::is_enum_v<Enum> and not std::is_convertible_v<Enum, std::underlying_type_t<Enum>>;
+};
+
+// helpers to do bit operations on scoped enums
+template <class Enum, typename std::enable_if_t<is_scoped_enum<Enum>::value, bool> = true>
+constexpr uint32_t BitAnd(Enum a, Enum b)
+{
+  return static_cast<uint32_t>(a) & static_cast<uint32_t>(b);
+}
+
+template <class Enum, typename std::enable_if_t<is_scoped_enum<Enum>::value, bool> = true>
+constexpr uint32_t BitAnd(uint32_t a, Enum b)
+{
+  return a & static_cast<uint32_t>(b);
+}
+
+template <class Enum, typename std::enable_if_t<is_scoped_enum<Enum>::value, bool> = true>
+constexpr uint32_t BitOr(Enum a, Enum b)
+{
+  return static_cast<uint32_t>(a) | static_cast<uint32_t>(b);
+}
+
+template <class Enum, typename std::enable_if_t<is_scoped_enum<Enum>::value, bool> = true>
+constexpr uint32_t BitOr(uint32_t a, Enum b)
+{
+  return a | static_cast<uint32_t>(b);
+}
+
 /**
  * @brief Enums for the flags in the page header
  */
@@ -99,11 +132,12 @@ enum level_type {
  *
  * Used to control which decode kernels to run.
  */
-enum kernel_mask_bits {
-  KERNEL_MASK_GENERAL          = (1 << 0),  // Run catch-all decode kernel
-  KERNEL_MASK_STRING           = (1 << 1),  // Run decode kernel for string data
-  KERNEL_MASK_DELTA_BINARY     = (1 << 2),  // Run decode kernel for DELTA_BINARY_PACKED data
-  KERNEL_MASK_DELTA_BYTE_ARRAY = (1 << 3)   // Run decode kernel for DELTA_BYTE_ARRAY encoded data
+enum class DecodeKernelMask {
+  NONE             = 0,
+  GENERAL          = (1 << 0),  // Run catch-all decode kernel
+  STRING           = (1 << 1),  // Run decode kernel for string data
+  DELTA_BINARY     = (1 << 2),  // Run decode kernel for DELTA_BINARY_PACKED data
+  DELTA_BYTE_ARRAY = (1 << 3)   // Run decode kernel for DELTA_BYTE_ARRAY encoded data
 };
 
 /**
@@ -229,7 +263,7 @@ struct PageInfo {
   int64_t temp_string_size;
   uint8_t* temp_string_buf;
 
-  uint32_t kernel_mask;
+  DecodeKernelMask kernel_mask;
 };
 
 /**

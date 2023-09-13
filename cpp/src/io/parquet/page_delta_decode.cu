@@ -322,7 +322,7 @@ __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
                           chunks,
                           min_row,
                           num_rows,
-                          mask_filter{KERNEL_MASK_DELTA_BINARY},
+                          mask_filter{DecodeKernelMask::DELTA_BINARY},
                           true)) {
     return;
   }
@@ -447,7 +447,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeDeltaByteArray(
                           chunks,
                           min_row,
                           num_rows,
-                          mask_filter{KERNEL_MASK_DELTA_BYTE_ARRAY},
+                          mask_filter{DecodeKernelMask::DELTA_BYTE_ARRAY},
                           true)) {
     return;
   }

@@ -447,8 +447,13 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   int out_thread0;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  if (!setupLocalPageInfo(
-        s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{KERNEL_MASK_GENERAL}, true)) {
+  if (!setupLocalPageInfo(s,
+                          &pages[page_idx],
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{DecodeKernelMask::GENERAL},
+                          true)) {
     return;
   }
 
@@ -599,7 +604,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
 }
 
 struct mask_tform {
-  __device__ uint32_t operator()(PageInfo const& p) { return p.kernel_mask; }
+  __device__ uint32_t operator()(PageInfo const& p) { return static_cast<uint32_t>(p.kernel_mask); }
 };
 
 }  // anonymous namespace

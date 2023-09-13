@@ -55,8 +55,8 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   // doing a gather operation later on.
   // TODO: This step is somewhat redundant if size info has already been calculated (nested schema,
   // chunked reader).
-  auto const has_strings =
-    (kernel_mask & (gpu::KERNEL_MASK_STRING | gpu::KERNEL_MASK_DELTA_BYTE_ARRAY)) != 0;
+  auto const has_strings = (kernel_mask & BitOr(gpu::DecodeKernelMask::STRING,
+                                                gpu::DecodeKernelMask::DELTA_BYTE_ARRAY)) != 0;
   std::vector<size_t> col_sizes(_input_columns.size(), 0L);
   if (has_strings) {
     gpu::ComputePageStringSizes(
@@ -174,25 +174,25 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 
   // launch string decoder
   int s_idx = 0;
-  if (has_strings) {
+  if (BitAnd(kernel_mask, gpu::DecodeKernelMask::STRING) != 0) {
     auto& stream = streams[s_idx++];
     chunk_nested_str_data.host_to_device_async(stream);
     gpu::DecodeStringPageData(pages, chunks, num_rows, skip_rows, level_type_size, stream);
   }
 
   // launch delta byte array decoder
-  if ((kernel_mask & gpu::KERNEL_MASK_DELTA_BYTE_ARRAY) != 0) {
+  if (BitAnd(kernel_mask, gpu::DecodeKernelMask::DELTA_BYTE_ARRAY) != 0) {
     gpu::DecodeDeltaByteArray(
       pages, chunks, num_rows, skip_rows, level_type_size, streams[s_idx++]);
   }
 
   // launch delta binary decoder
-  if ((kernel_mask & gpu::KERNEL_MASK_DELTA_BINARY) != 0) {
+  if (BitAnd(kernel_mask, gpu::DecodeKernelMask::DELTA_BINARY) != 0) {
     gpu::DecodeDeltaBinary(pages, chunks, num_rows, skip_rows, level_type_size, streams[s_idx++]);
   }
 
   // launch the catch-all page decoder
-  if ((kernel_mask & gpu::KERNEL_MASK_GENERAL) != 0) {
+  if (BitAnd(kernel_mask, gpu::DecodeKernelMask::GENERAL) != 0) {
     gpu::DecodePageData(pages, chunks, num_rows, skip_rows, level_type_size, streams[s_idx++]);
   }
 

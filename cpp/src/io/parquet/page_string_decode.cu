@@ -594,13 +594,14 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBou
   rle_stream<level_t, preprocess_block_size> decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs},
                                                                                       {rep_runs}};
   // setup page info
-  if (!setupLocalPageInfo(s,
-                          pp,
-                          chunks,
-                          min_row,
-                          num_rows,
-                          mask_filter{KERNEL_MASK_STRING | KERNEL_MASK_DELTA_BYTE_ARRAY},
-                          true)) {
+  if (!setupLocalPageInfo(
+        s,
+        pp,
+        chunks,
+        min_row,
+        num_rows,
+        mask_filter{BitOr(DecodeKernelMask::STRING, DecodeKernelMask::DELTA_BYTE_ARRAY)},
+        true)) {
     return;
   }
 
@@ -647,7 +648,7 @@ __global__ void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageS
 
   // setup page info
   if (!setupLocalPageInfo(
-        s, pp, chunks, min_row, num_rows, mask_filter{KERNEL_MASK_DELTA_BYTE_ARRAY}, true)) {
+        s, pp, chunks, min_row, num_rows, mask_filter{DecodeKernelMask::DELTA_BYTE_ARRAY}, true)) {
     return;
   }
 
@@ -714,7 +715,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
 
   // setup page info
   if (!setupLocalPageInfo(
-        s, pp, chunks, min_row, num_rows, mask_filter{KERNEL_MASK_STRING}, true)) {
+        s, pp, chunks, min_row, num_rows, mask_filter{DecodeKernelMask::STRING}, true)) {
     return;
   }
 
@@ -803,8 +804,13 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
   int const lane_id     = t % warp_size;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  if (!setupLocalPageInfo(
-        s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{KERNEL_MASK_STRING}, true)) {
+  if (!setupLocalPageInfo(s,
+                          &pages[page_idx],
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{DecodeKernelMask::STRING},
+                          true)) {
     return;
   }
 
@@ -985,17 +991,18 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
   }
 
   // kernel mask may contain other kernels we don't need to count
-  int count_mask = kernel_mask & (KERNEL_MASK_DELTA_BYTE_ARRAY | KERNEL_MASK_STRING);
-  int nkernels   = std::bitset<32>(count_mask).count();
-  auto streams   = cudf::detail::fork_streams(stream, nkernels);
+  int count_mask =
+    kernel_mask & BitOr(DecodeKernelMask::DELTA_BYTE_ARRAY, DecodeKernelMask::STRING);
+  int nkernels = std::bitset<32>(count_mask).count();
+  auto streams = cudf::detail::fork_streams(stream, nkernels);
 
   int s_idx = 0;
-  if ((kernel_mask & KERNEL_MASK_DELTA_BYTE_ARRAY) != 0) {
+  if (BitAnd(kernel_mask, DecodeKernelMask::DELTA_BYTE_ARRAY) != 0) {
     dim3 dim_delta(delta_preproc_block_size, 1);
     gpuComputeDeltaPageStringSizes<<<dim_grid, dim_delta, 0, streams[s_idx++].value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows);
   }
-  if ((kernel_mask & KERNEL_MASK_STRING) != 0) {
+  if (BitAnd(kernel_mask, DecodeKernelMask::STRING) != 0) {
     gpuComputePageStringSizes<<<dim_grid, dim_block, 0, streams[s_idx++].value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows);
   }

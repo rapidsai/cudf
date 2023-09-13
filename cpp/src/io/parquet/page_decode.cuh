@@ -970,8 +970,15 @@ struct all_types_filter {
  * @brief Functor for setupLocalPageInfo that takes a mask of allowed types.
  */
 struct mask_filter {
-  int mask;
-  __device__ inline bool operator()(PageInfo const& page) { return (page.kernel_mask & mask) != 0; }
+  uint32_t mask;
+
+  __device__ mask_filter(uint32_t m) : mask(m) {}
+  __device__ mask_filter(DecodeKernelMask m) : mask(static_cast<uint32_t>(m)) {}
+
+  __device__ inline bool operator()(PageInfo const& page)
+  {
+    return BitAnd(mask, page.kernel_mask) != 0;
+  }
 };
 
 /**
