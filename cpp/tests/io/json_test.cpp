@@ -1407,7 +1407,8 @@ TEST_F(JsonReaderTest, JsonLongString)
     cudf::test::iterators::nulls_at({10, 11})};
 
   cudf::test::fixed_width_column_wrapper<int16_t> repeat_times{
-    1, 2, 3, 4, 5, 6, 7, 8, 9, 13, 19, 37, 81, 161, 323, 631, 1279, 10, 1, 2, 1, 100, 1000, 1, 3};
+    {1, 2, 3, 4, 5, 6, 7, 8, 9, 13, 19, 37, 81, 161, 323, 631, 1279, 10, 1, 2, 1, 100, 1000, 1, 3},
+    cudf::test::iterators::no_nulls()};
   auto d_col2 = cudf::strings::repeat_strings(cudf::strings_column_view{col1}, repeat_times);
   auto col2   = d_col2->view();
   cudf::table_view const tbl_view{{col1, col2, repeat_times}};
@@ -1438,7 +1439,7 @@ TEST_F(JsonReaderTest, JsonLongString)
 
   // Read test data via nested JSON reader
   auto const table = cudf::io::read_json(json_lines_options);
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, table.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, table.tbl->view());
 }
 
 TEST_F(JsonReaderTest, ErrorStrings)
