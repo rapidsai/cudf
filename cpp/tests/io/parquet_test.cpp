@@ -6534,7 +6534,6 @@ TEST_F(ParquetReaderTest, FilterFloatNAN)
   auto col0 = cudf::test::fixed_width_column_wrapper<float>(elements, elements + num_rows);
   auto col1 = cudf::test::fixed_width_column_wrapper<double>(elements, elements + num_rows);
 
-  cudf::test::print(col0);
   auto const written_table = table_view{{col0, col1}};
   auto const filepath      = temp_env->get_temp_filepath("FilterFloatNAN.parquet");
   {

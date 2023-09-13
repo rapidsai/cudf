@@ -28,6 +28,7 @@ from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
 from cudf._lib.types import size_type_dtype
+from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_categorical_dtype,
@@ -95,7 +96,7 @@ def _lexsorted_equal_range(
     return lower_bound, upper_bound, sort_inds
 
 
-def _index_from_data(data: MutableMapping, name: Any = None):
+def _index_from_data(data: MutableMapping, name: Any = no_default):
     """Construct an index of the appropriate type from some data."""
 
     if len(data) == 0:
@@ -131,7 +132,7 @@ def _index_from_data(data: MutableMapping, name: Any = None):
 
 
 def _index_from_columns(
-    columns: List[cudf.core.column.ColumnBase], name: Any = None
+    columns: List[cudf.core.column.ColumnBase], name: Any = no_default
 ):
     """Construct an index from ``columns``, with levels named 0, 1, 2..."""
     return _index_from_data(dict(zip(range(len(columns)), columns)), name=name)
@@ -681,7 +682,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_cudf_nvtx_annotate
     def _intersection(self, other, sort=False):
         if not isinstance(other, RangeIndex):
-            return super()._intersection(other, sort=sort)
+            return self._try_reconstruct_range_index(
+                super()._intersection(other, sort=sort)
+            )
 
         if not len(self) or not len(other):
             return RangeIndex(0)
@@ -722,7 +725,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         if sort is None:
             new_index = new_index.sort_values()
 
-        return new_index
+        return self._try_reconstruct_range_index(new_index)
 
     @_cudf_nvtx_annotate
     def difference(self, other, sort=None):
@@ -1032,10 +1035,10 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     @classmethod
     @_cudf_nvtx_annotate
     def _from_data(
-        cls, data: MutableMapping, name: Any = None
+        cls, data: MutableMapping, name: Any = no_default
     ) -> GenericIndex:
         out = super()._from_data(data=data)
-        if name is not None:
+        if name is not no_default:
             out.name = name
         return out
 
@@ -3334,6 +3337,7 @@ def as_index(arbitrary, nan_as_null=None, **kwargs) -> BaseIndex:
         - DatetimeIndex for Datetime input.
         - GenericIndex for all other inputs.
     """
+
     kwargs = _setdefault_name(arbitrary, **kwargs)
     if isinstance(arbitrary, cudf.MultiIndex):
         return arbitrary
