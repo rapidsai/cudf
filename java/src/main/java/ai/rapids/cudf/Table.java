@@ -241,10 +241,11 @@ public final class Table implements AutoCloseable {
   private static native long readJSON(String[] columnNames,
                                         int[] dTypeIds, int[] dTypeScales,
                                         String filePath, long address, long length,
-                                        boolean dayFirst, boolean lines) throws CudfException;
+                                        boolean dayFirst, boolean lines,
+                                        boolean recoverWithNulls) throws CudfException;
 
   private static native long readAndInferJSON(long address, long length,
-      boolean dayFirst, boolean lines) throws CudfException;
+      boolean dayFirst, boolean lines, boolean recoverWithNulls) throws CudfException;
 
   /**
    * Read in Parquet formatted data.
@@ -1047,7 +1048,7 @@ public final class Table implements AutoCloseable {
             readJSON(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
                     path.getAbsolutePath(),
                     0, 0,
-                    opts.isDayFirst(), opts.isLines()))) {
+                    opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull()))) {
 
       return gatherJSONColumns(schema, twm);
     }
@@ -1099,7 +1100,7 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
     return new TableWithMeta(readAndInferJSON(buffer.getAddress() + offset, len,
-        opts.isDayFirst(), opts.isLines()));
+        opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull()));
   }
 
   /**
@@ -1121,7 +1122,8 @@ public final class Table implements AutoCloseable {
     assert offset >= 0 && offset < buffer.length;
     try (TableWithMeta twm = new TableWithMeta(readJSON(schema.getColumnNames(),
             schema.getTypeIds(), schema.getTypeScales(), null,
-            buffer.getAddress() + offset, len, opts.isDayFirst(), opts.isLines()))) {
+            buffer.getAddress() + offset, len, opts.isDayFirst(), opts.isLines(),
+            opts.isRecoverWithNull()))) {
       return gatherJSONColumns(schema, twm);
     }
   }
