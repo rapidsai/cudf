@@ -25,7 +25,7 @@ jobs:
       - wheel-tests-cudf
       - wheel-build-dask-cudf
       - wheel-tests-dask-cudf
-      - build-in-devcontainer
+      - devcontainer
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/pr-builder.yaml@branch-23.10
   checks:
@@ -126,7 +126,7 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
       script: ci/test_wheel_dask_cudf.sh
-  build-in-devcontainer:
+  devcontainer:
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/build-in-devcontainer.yaml@fea/devcontainers
     with:
