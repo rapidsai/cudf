@@ -20,7 +20,6 @@
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <rmm/cuda_stream_pool.hpp>
 
 #include <bitset>
 #include <numeric>
@@ -29,10 +28,15 @@ namespace cudf::io::detail::parquet {
 
 void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 {
-  auto& chunks              = _file_itm_data.chunks;
-  auto& pages               = _file_itm_data.pages_info;
-  auto& page_nesting        = _file_itm_data.page_nesting_info;
-  auto& page_nesting_decode = _file_itm_data.page_nesting_decode_info;
+  auto& chunks               = _file_itm_data.chunks;
+  auto& pages                = _file_itm_data.pages_info;
+  auto& page_nesting         = _file_itm_data.page_nesting_info;
+  auto& page_nesting_decode  = _file_itm_data.page_nesting_decode_info;
+  auto const level_type_size = _file_itm_data.level_type_size;
+
+  // temporary space for DELTA_BYTE_ARRAY decoding. this only needs to live until
+  // gpu::DecodeDeltaByteArray returns.
+  rmm::device_buffer delta_temp_buf;
 
   // Should not reach here if there is no page data.
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
@@ -51,11 +55,12 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   // doing a gather operation later on.
   // TODO: This step is somewhat redundant if size info has already been calculated (nested schema,
   // chunked reader).
-  auto const has_strings = (kernel_mask & gpu::KERNEL_MASK_STRING) != 0;
+  auto const has_strings =
+    (kernel_mask & (gpu::KERNEL_MASK_STRING | gpu::KERNEL_MASK_DELTA_BYTE_ARRAY)) != 0;
   std::vector<size_t> col_sizes(_input_columns.size(), 0L);
   if (has_strings) {
     gpu::ComputePageStringSizes(
-      pages, chunks, skip_rows, num_rows, _file_itm_data.level_type_size, _stream);
+      pages, chunks, delta_temp_buf, skip_rows, num_rows, level_type_size, kernel_mask, _stream);
 
     col_sizes = calculate_page_string_offsets();
 
@@ -167,14 +172,18 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   int const nkernels = std::bitset<32>(kernel_mask).count();
   auto streams       = cudf::detail::fork_streams(_stream, nkernels);
 
-  auto const level_type_size = _file_itm_data.level_type_size;
-
   // launch string decoder
   int s_idx = 0;
   if (has_strings) {
     auto& stream = streams[s_idx++];
     chunk_nested_str_data.host_to_device_async(stream);
     gpu::DecodeStringPageData(pages, chunks, num_rows, skip_rows, level_type_size, stream);
+  }
+
+  // launch delta byte array decoder
+  if ((kernel_mask & gpu::KERNEL_MASK_DELTA_BYTE_ARRAY) != 0) {
+    gpu::DecodeDeltaByteArray(
+      pages, chunks, num_rows, skip_rows, level_type_size, streams[s_idx++]);
   }
 
   // launch delta binary decoder

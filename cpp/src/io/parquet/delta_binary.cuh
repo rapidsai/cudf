@@ -185,6 +185,28 @@ struct delta_binary_decoder {
     }
   }
 
+  // given start/end pointers in the data, find the end of the binary encoded block. when done,
+  // `this` will be initialized with the correct start and end positions. returns the end, which is
+  // start of data/next block. should only be called from thread 0.
+  inline __device__ uint8_t const* find_end_of_block(uint8_t const* start, uint8_t const* end)
+  {
+    // read block header
+    init_binary_block(start, end);
+
+    // test for no encoded values. a single value will be in the block header.
+    if (value_count <= 1) { return block_start; }
+
+    // read mini-block headers and skip over data
+    while (current_value_idx < num_encoded_values(false)) {
+      setup_next_mini_block(false);
+    }
+    // calculate the correct end of the block
+    auto const* const new_end = cur_mb == 0 ? block_start : cur_mb_start;
+    // re-init block with correct end
+    init_binary_block(start, new_end);
+    return new_end;
+  }
+
   // decode the current mini-batch of deltas, and convert to values.
   // called by all threads in a warp, currently only one warp supported.
   inline __device__ void calc_mini_block_values(int lane_id)

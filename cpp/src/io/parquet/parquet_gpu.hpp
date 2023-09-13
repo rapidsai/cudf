@@ -27,6 +27,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/cuda_stream_pool.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
@@ -99,9 +100,10 @@ enum level_type {
  * Used to control which decode kernels to run.
  */
 enum kernel_mask_bits {
-  KERNEL_MASK_GENERAL      = (1 << 0),  // Run catch-all decode kernel
-  KERNEL_MASK_STRING       = (1 << 1),  // Run decode kernel for string data
-  KERNEL_MASK_DELTA_BINARY = (1 << 2)   // Run decode kernel for DELTA_BINARY_PACKED data
+  KERNEL_MASK_GENERAL          = (1 << 0),  // Run catch-all decode kernel
+  KERNEL_MASK_STRING           = (1 << 1),  // Run decode kernel for string data
+  KERNEL_MASK_DELTA_BINARY     = (1 << 2),  // Run decode kernel for DELTA_BINARY_PACKED data
+  KERNEL_MASK_DELTA_BYTE_ARRAY = (1 << 3)   // Run decode kernel for DELTA_BYTE_ARRAY encoded data
 };
 
 /**
@@ -182,9 +184,11 @@ struct PageInfo {
   int32_t num_input_values;
   int32_t chunk_row;  // starting row of this page relative to the start of the chunk
   int32_t num_rows;   // number of rows in this page
-  // the next two are calculated in gpuComputePageStringSizes
+  // the next four are calculated in gpuComputePageStringSizes
   int32_t num_nulls;       // number of null values (V2 header), but recalculated for string cols
   int32_t num_valids;      // number of non-null values, taking into account skip_rows/num_rows
+  int32_t start_val;       // index of first value of the string data stream to use
+  int32_t end_val;         // index of last value in string data stream
   int32_t chunk_idx;       // column chunk this page belongs to
   int32_t src_col_schema;  // schema index of this column
   uint8_t flags;           // PAGEINFO_FLAGS_XXX
@@ -220,6 +224,10 @@ struct PageInfo {
 
   // level decode buffers
   uint8_t* lvl_decode_buf[level_type::NUM_LEVEL_TYPES];
+
+  // temporary space for decoding DELTA_BYTE_ARRAY encoded strings
+  int64_t temp_string_size;
+  uint8_t* temp_string_buf;
 
   uint32_t kernel_mask;
 };
@@ -543,16 +551,20 @@ void ComputePageSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
  *
  * @param[in,out] pages All pages to be decoded
  * @param[in] chunks All chunks to be decoded
+ * @param[out] temp_string_buf Temporary space needed for decoding DELTA_BYTE_ARRAY strings
  * @param[in] min_rows crop all rows below min_row
  * @param[in] num_rows Maximum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[in] kernel_mask Mask of kernels to run
  * @param[in] stream CUDA stream to use
  */
 void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
                             cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+                            rmm::device_buffer& temp_string_buf,
                             size_t min_row,
                             size_t num_rows,
                             int level_type_size,
+                            uint32_t kernel_mask,
                             rmm::cuda_stream_view stream);
 
 /**
@@ -606,7 +618,7 @@ void DecodeStringPageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use
  */
 void DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages,
                        cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
@@ -614,6 +626,26 @@ void DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages,
                        size_t min_row,
                        int level_type_size,
                        rmm::cuda_stream_view stream);
+
+/**
+ * @brief Launches kernel for reading the DELTA_BYTE_ARRAY column data stored in the pages
+ *
+ * The page data will be written to the output pointed to in the page's
+ * associated column chunk.
+ *
+ * @param[in,out] pages All pages to be decoded
+ * @param[in] chunks All chunks to be decoded
+ * @param[in] num_rows Total number of rows to read
+ * @param[in] min_row Minimum number of rows to read
+ * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[in] stream CUDA stream to use
+ */
+void DecodeDeltaByteArray(cudf::detail::hostdevice_vector<PageInfo>& pages,
+                          cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+                          size_t num_rows,
+                          size_t min_row,
+                          int level_type_size,
+                          rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing encoder row group fragments

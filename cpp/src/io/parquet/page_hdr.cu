@@ -168,6 +168,8 @@ __device__ uint32_t kernel_mask_for_page(gpu::PageInfo const& page,
 
   if (page.encoding == Encoding::DELTA_BINARY_PACKED) {
     return KERNEL_MASK_DELTA_BINARY;
+  } else if (page.encoding == Encoding::DELTA_BYTE_ARRAY) {
+    return KERNEL_MASK_DELTA_BYTE_ARRAY;
   } else if (is_string_col(chunk)) {
     return KERNEL_MASK_STRING;
   }
@@ -392,6 +394,8 @@ __global__ void __launch_bounds__(128)
       bs->page.skipped_values      = -1;
       bs->page.skipped_leaf_values = 0;
       bs->page.str_bytes           = 0;
+      bs->page.temp_string_size    = 0;
+      bs->page.temp_string_buf     = nullptr;
       bs->page.kernel_mask         = 0;
     }
     num_values     = bs->ck.num_values;
