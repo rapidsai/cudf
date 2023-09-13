@@ -52,6 +52,8 @@ struct unsnap_batch_s {
  * @brief Queue structure used to exchange data between warps
  */
 struct unsnap_queue_s {
+  unsnap_queue_s() = default;      // required to compile on ctk-12.2 + aarch64
+
   uint32_t prefetch_wrpos;         ///< Prefetcher write position
   uint32_t prefetch_rdpos;         ///< Prefetch consumer read position
   int32_t prefetch_end;            ///< Prefetch enable flag (nonzero stops prefetcher)
@@ -64,15 +66,17 @@ struct unsnap_queue_s {
  * @brief snappy decompression state
  */
 struct unsnap_state_s {
-  uint8_t const* base;             ///< base ptr of compressed stream
-  uint8_t const* end;              ///< end of compressed stream
-  uint32_t uncompressed_size;      ///< uncompressed stream size
-  uint32_t bytes_left;             ///< remaining bytes to decompress
-  int32_t error;                   ///< current error status
-  uint32_t tstart;                 ///< start time for perf logging
-  volatile unsnap_queue_s q;       ///< queue for cross-warp communication
-  device_span<uint8_t const> src;  ///< input for current block
-  device_span<uint8_t> dst;        ///< output for current block
+  constexpr unsnap_state_s() noexcept {}  // required to compile on ctk-12.2 + aarch64
+
+  uint8_t const* base        = nullptr;   ///< base ptr of compressed stream
+  uint8_t const* end         = nullptr;   ///< end of compressed stream
+  uint32_t uncompressed_size = 0;         ///< uncompressed stream size
+  uint32_t bytes_left        = 0;         ///< remaining bytes to decompress
+  int32_t error              = 0;         ///< current error status
+  uint32_t tstart            = 0;         ///< start time for perf logging
+  volatile unsnap_queue_s q{};            ///< queue for cross-warp communication
+  device_span<uint8_t const> src;         ///< input for current block
+  device_span<uint8_t> dst;               ///< output for current block
 };
 
 inline __device__ volatile uint8_t& byte_access(unsnap_state_s* s, uint32_t pos)
