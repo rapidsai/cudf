@@ -2311,3 +2311,9 @@ def test_series_round_builtin(data, digits):
     actual = round(gs, digits)
 
     assert_eq(expected, actual)
+
+
+def test_series_count_invalid_param():
+    s = cudf.Series([])
+    with pytest.raises(TypeError):
+        s.count(skipna=True)
