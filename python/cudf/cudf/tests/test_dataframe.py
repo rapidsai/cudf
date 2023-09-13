@@ -10227,7 +10227,7 @@ def test_dataframe_binop_with_datetime_index():
         ["c", "a"],
         ["a", "d", "b", "e", "c"],
         ["a", "b", "c"],
-        pd.Index(["b", "a"], name="custom_name"),
+        pd.Index(["b", "a", "c"], name="custom_name"),
     ),
 )
 @pytest.mark.parametrize("index", (None, [4, 5, 6]))
@@ -10235,7 +10235,7 @@ def test_dataframe_dict_like_with_columns(columns, index):
     data = {"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}
     expect = pd.DataFrame(data, columns=columns, index=index)
     actual = cudf.DataFrame(data, columns=columns, index=index)
-    if index is None and columns == []:
+    if index is None and len(columns) == 0:
         # We make an empty range index, pandas makes an empty index
         expect = expect.reset_index(drop=True)
     assert_eq(expect, actual)
