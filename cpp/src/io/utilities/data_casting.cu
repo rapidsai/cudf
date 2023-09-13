@@ -802,7 +802,6 @@ std::unique_ptr<column> parse_data(
       size_type{0},
       thrust::maximum<size_type>{});
 
-    nvtxRangePush("string_parallel");
     auto offsets = cudf::make_numeric_column(
       data_type{cudf::type_id::INT32}, col_size + 1, cudf::mask_state::UNALLOCATED, stream, mr);
     auto d_offsets = offsets->mutable_view().data<size_type>();
@@ -896,7 +895,6 @@ std::unique_ptr<column> parse_data(
           d_offsets,
           d_chars);
     }
-    nvtxRangePop();
 
     return make_strings_column(col_size,
                                std::move(offsets),
