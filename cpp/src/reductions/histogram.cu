@@ -18,7 +18,9 @@
 #include <stream_compaction/stream_compaction_common.cuh>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
@@ -131,7 +133,7 @@ struct histogram_dispatcher {
 
 }  // namespace
 
-std::unique_ptr<cudf::column> histogram(table_view const& input,
+std::unique_ptr<cudf::scalar> histogram(column_view const& input,
                                         data_type const output_dtype,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
@@ -141,16 +143,17 @@ std::unique_ptr<cudf::column> histogram(table_view const& input,
                "The output type of histogram aggregation must be an 32/64bit integral type.");
 
   auto map = cudf::detail::hash_map_type{
-    compute_hash_table_size(input.num_rows()),
+    compute_hash_table_size(input.size()),
     cuco::empty_key{cudf::detail::COMPACTION_EMPTY_KEY_SENTINEL},
     cuco::empty_value{cudf::detail::COMPACTION_EMPTY_VALUE_SENTINEL},
     cudf::detail::hash_table_allocator_type{default_allocator<char>{}, stream},
     stream.value()};
 
+  auto const input_tview = table_view{{input}};
   auto const preprocessed_input =
-    cudf::experimental::row::hash::preprocessed_table::create(input, stream);
-  auto const has_nulls          = nullate::DYNAMIC{cudf::has_nested_nulls(input)};
-  auto const has_nested_columns = cudf::detail::has_nested_columns(input);
+    cudf::experimental::row::hash::preprocessed_table::create(input_tview, stream);
+  auto const has_nulls          = nullate::DYNAMIC{cudf::has_nested_nulls(input_tview)};
+  auto const has_nested_columns = cudf::detail::has_nested_columns(input_tview);
 
   auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
   auto const key_hasher =
@@ -165,21 +168,25 @@ std::unique_ptr<cudf::column> histogram(table_view const& input,
   auto const value_comp = nan_equal_comparator{};
   if (has_nested_columns) {
     auto const key_equal = row_comp.equal_to<true>(has_nulls, null_equality::EQUAL, value_comp);
-    map.insert(pair_iter, pair_iter + input.num_rows(), key_hasher, key_equal, stream.value());
+    map.insert(pair_iter, pair_iter + input.size(), key_hasher, key_equal, stream.value());
   } else {
     auto const key_equal = row_comp.equal_to<false>(has_nulls, null_equality::EQUAL, value_comp);
-    map.insert(pair_iter, pair_iter + input.num_rows(), key_hasher, key_equal, stream.value());
+    map.insert(pair_iter, pair_iter + input.size(), key_hasher, key_equal, stream.value());
   }
 
-  // Gather the indices of distinct rows.
-  auto distinct_indices = cudf::make_numeric_column(data_type{type_to_id<size_type>()},
-                                                    static_cast<size_type>(map.get_size()),
-                                                    mask_state::UNALLOCATED,
-                                                    stream,
-                                                    mr);
-  map.retrieve_all(distinct_indices->mutable_view().begin<size_type>(),
-                   thrust::make_discard_iterator(),
-                   stream.value());
+  // Gather the indices of distinct rows and distinct rows.
+  auto distinct_indices = rmm::device_uvector<size_type>(
+    static_cast<size_type>(map.get_size()), stream, rmm::mr::get_current_device_resource());
+  map.retrieve_all(distinct_indices.begin(), thrust::make_discard_iterator(), stream.value());
+  auto distinct_rows =
+    std::move(cudf::detail::gather(input_tview,
+                                   distinct_indices,
+                                   out_of_bounds_policy::DONT_CHECK,
+                                   cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                   stream,
+                                   mr)
+                ->release()
+                .front());
 
   // Count the number of occurences of each unique row.
   auto unique_counts = make_numeric_column(
@@ -188,37 +195,31 @@ std::unique_ptr<cudf::column> histogram(table_view const& input,
                   histogram_dispatcher{},
                   map,
                   std::move(preprocessed_input),
-                  input.num_rows(),
+                  input.size(),
                   has_nulls,
                   has_nested_columns,
                   unique_counts->mutable_view(),
                   stream);
 
-  std::vector<std::unique_ptr<column>> output_children;
-  output_children.emplace_back(std::move(distinct_indices));
-  output_children.emplace_back(std::move(unique_counts));
+  std::vector<std::unique_ptr<column>> struct_children;
+  struct_children.emplace_back(std::move(distinct_rows));
+  struct_children.emplace_back(std::move(unique_counts));
+  auto output_structs = make_structs_column(
+    static_cast<size_type>(map.get_size()), std::move(struct_children), 0, {}, stream, mr);
 
-  return make_structs_column(
-    static_cast<size_type>(map.get_size()), std::move(output_children), 0, {}, stream, mr);
+  return std::make_unique<cudf::list_scalar>(
+    std::move(*output_structs.release()), true, stream, mr);
 }
 
-std::unique_ptr<cudf::column> histogram(column_view const& input,
-                                        data_type const output_dtype,
-                                        rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
-{
-  return histogram(table_view{{input}}, output_dtype, stream, mr);
-}
-
-std::unique_ptr<cudf::column> merge_histogram(column_view const& input,
+std::unique_ptr<cudf::scalar> merge_histogram(column_view const& input,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(
     input.type().id() == type_id::STRUCT && input.num_children() == 2,
     "The input of merge_histogram aggregation must be a struct column having two children.");
-  CUDF_EXPECTS(cudf::is_integral(input.child(1).type()),
-               "The second child of the input column must be an integer type.");
+  CUDF_EXPECTS(input.child(1).type().id() == type_id::INT64,
+               "The second child of the input column must be INT64 type.");
 
   return nullptr;
 }
