@@ -264,8 +264,12 @@ std::unique_ptr<cudf::scalar> merge_histogram(column_view const& input,
                "The second child of the input column must be INT64 type and has no nulls.");
   CUDF_EXPECTS(!input.has_nulls(), "The input column must not have nulls.");
 
-  return histogram(
-    table_view{{input.child(0)}}, input.child(1), data_type{type_id::INT64}, stream, mr);
+  auto const structs_cv = structs_column_view{input};
+  return histogram(table_view{{structs_cv.get_sliced_child(0, stream)}},
+                   structs_cv.get_sliced_child(1, stream),
+                   data_type{type_id::INT64},
+                   stream,
+                   mr);
 }
 
 }  // namespace cudf::reduction::detail
