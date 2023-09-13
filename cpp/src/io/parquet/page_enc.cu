@@ -1115,7 +1115,6 @@ __device__ auto julian_days_with_time(int64_t v)
 // this has been split out into its own kernel because of the amount of shared memory required
 // for the state buffer. encode kernels that don't use the RLE buffer can get started while
 // the level data is encoded.
-// FIXME(ets): what should the args to launch_bounds be now?
 // blockDim(128, 1, 1)
 template <int block_size, EncodeKernelMask kernel_mask>
 __global__ void __launch_bounds__(block_size, 8)
@@ -1310,7 +1309,7 @@ __device__ void finish_page_encode(state_buf* s,
   }
 }
 
-// FIXME(ets): what should the args to launch_bounds be now?
+// PLAIN page data encoder
 // blockDim(128, 1, 1)
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 8)
@@ -1552,7 +1551,7 @@ __global__ void __launch_bounds__(block_size, 8)
     s, valid_count, s->cur, pages, comp_in, comp_out, comp_results, write_v2_headers);
 }
 
-// FIXME(ets): what should the args to launch_bounds be now?
+// DICTIONARY page data encoder
 // blockDim(128, 1, 1)
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 8)
@@ -1692,7 +1691,7 @@ __global__ void __launch_bounds__(block_size, 8)
     s, valid_count, s->cur, pages, comp_in, comp_out, comp_results, write_v2_headers);
 }
 
-// FIXME: what should the args to launch_bounds be now?
+// DELTA_BINARY_PACKED page data encoder
 // blockDim(128, 1, 1)
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 8)
