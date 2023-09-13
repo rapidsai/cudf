@@ -401,12 +401,39 @@ TYPED_TEST(ReductionTest, Histogram)
       auto child2 = int64_data{2, 1, 1, 2, 4, 1};
       return structs_col{{child1, child2}};
     }();
-    //    auto const input    = col_data{1, 2, 3, 1, 2};
-    //    auto const expected = [] {
-    //      auto child1 = col_data{1, 2, 3};
-    //      auto child2 = int64_data{2, 2, 1};
-    //      return structs_col{{child1, child2}};
-    //    }();
+    auto const result     = cudf::reduce(input, *agg, cudf::data_type{cudf::type_id::INT64});
+    auto const result_col = dynamic_cast<cudf::list_scalar*>(result.get())->view();
+    cudf::test::print(result_col);
+
+    auto const sort_order    = cudf::sorted_order(cudf::table_view{{result_col.child(0)}}, {}, {});
+    auto const sorted_result = cudf::gather(cudf::table_view{{result_col}}, *sort_order);
+    cudf::test::print(sorted_result->get_column(0).view());
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, sorted_result->get_column(0).view());
+  }
+}
+
+TYPED_TEST(ReductionTest, MergeHistogram)
+{
+  using col_data    = cudf::test::fixed_width_column_wrapper<TypeParam>;
+  using int64_data  = cudf::test::fixed_width_column_wrapper<int64_t>;
+  using structs_col = cudf::test::structs_column_wrapper;
+
+  auto const agg = cudf::make_merge_histogram_aggregation<reduce_aggregation>();
+
+  // Test without nulls.
+  {
+    auto const input = [] {
+      auto child1 = col_data{-3, 2, 1, 2, 0, 5, 2, -3, -2, 2, 1};
+      auto child2 = int64_data{2, 1, 1, 2, 4, 1, 2, 3, 5, 3, 4};
+      return structs_col{{child1, child2}};
+    }();
+
+    auto const expected = [] {
+      auto child1 = col_data{-3, -2, 0, 1, 2, 5};
+      auto child2 = int64_data{5, 5, 4, 5, 8, 1};
+      return structs_col{{child1, child2}};
+    }();
     auto const result     = cudf::reduce(input, *agg, cudf::data_type{cudf::type_id::INT64});
     auto const result_col = dynamic_cast<cudf::list_scalar*>(result.get())->view();
     cudf::test::print(result_col);
