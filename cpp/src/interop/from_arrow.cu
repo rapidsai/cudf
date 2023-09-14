@@ -549,18 +549,20 @@ std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
 }  // namespace detail
 
 std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
+                                  rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 
-  return detail::from_arrow(input_table, cudf::get_default_stream(), mr);
+  return detail::from_arrow(input_table, stream, mr);
 }
 
 std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
+                                         rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 
-  return detail::from_arrow(input, cudf::get_default_stream(), mr);
+  return detail::from_arrow(input, stream, mr);
 }
 }  // namespace cudf

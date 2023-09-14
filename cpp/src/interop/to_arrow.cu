@@ -466,18 +466,19 @@ std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
 
 std::shared_ptr<arrow::Table> to_arrow(table_view input,
                                        std::vector<column_metadata> const& metadata,
+                                       rmm::cuda_stream_view stream,
                                        arrow::MemoryPool* ar_mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_arrow(input, metadata, cudf::get_default_stream(), ar_mr);
+  return detail::to_arrow(input, metadata, stream, ar_mr);
 }
 
 std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
                                         column_metadata const& metadata,
-
+                                        rmm::cuda_stream_view stream,
                                         arrow::MemoryPool* ar_mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_arrow(input, metadata, cudf::get_default_stream(), ar_mr);
+  return detail::to_arrow(input, metadata, stream, ar_mr);
 }
 }  // namespace cudf

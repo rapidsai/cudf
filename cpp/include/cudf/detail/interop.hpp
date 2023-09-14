@@ -164,9 +164,7 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type);
 
 /**
  * @copydoc cudf::to_arrow(table_view input, std::vector<column_metadata> const& metadata,
- * arrow::MemoryPool* ar_mr)
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * rmm::cuda_stream_view stream, arrow::MemoryPool* ar_mr)
  */
 std::shared_ptr<arrow::Table> to_arrow(table_view input,
                                        std::vector<column_metadata> const& metadata,
@@ -175,9 +173,7 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
 
 /**
  * @copydoc cudf::to_arrow(cudf::scalar const& input, column_metadata const& metadata,
- * arrow::MemoryPool* ar_mr)
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * rmm::cuda_stream_view stream, arrow::MemoryPool* ar_mr)
  */
 std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
                                         column_metadata const& metadata,
@@ -185,18 +181,16 @@ std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
                                         rmm::cuda_stream_view stream,
                                         arrow::MemoryPool* ar_mr);
 /**
- * @copydoc cudf::from_arrow(arrow::Table const& input_table, rmm::mr::device_memory_resource* mr)
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @copydoc cudf::from_arrow(arrow::Table const& input_table, rmm::cuda_stream_view stream,
+ * rmm::mr::device_memory_resource* mr)
  */
 std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr);
 
 /**
- * @copydoc cudf::from_arrow(arrow::Scalar const& input, rmm::mr::device_memory_resource* mr)
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @copydoc cudf::from_arrow(arrow::Scalar const& input, rmm::cuda_stream_view stream,
+ * rmm::mr::device_memory_resource* mr)
  */
 std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
                                          rmm::cuda_stream_view stream,
