@@ -102,7 +102,6 @@ struct comparator_adapter {
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A pair of pointer to the output bitmask and the buffer containing the bitmask
  */
-/*
 std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view const& input,
                                                                      rmm::cuda_stream_view stream)
 {
@@ -123,9 +122,6 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
 
   return std::pair(rmm::device_buffer{0, stream}, nullable_columns.front().null_mask());
 }
-// TODO: To doublecheck, under no situation but here we do nested checks with
-// `get_nullable_columns`. This seems wrong
-*/
 
 /**
  * @brief Invokes the given `func` with desired comparators based on the specified `compare_nans`
@@ -234,24 +230,24 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
       stream.value()};
 
     if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
-      auto const row_bitmask =
-        cudf::detail::bitmask_and(haystack, stream, rmm::mr::get_current_device_resource()).first;
+      auto const bitmask_buffer_and_ptr = build_row_bitmask(haystack, stream);
+      ￼ auto const row_bitmask_ptr      = bitmask_buffer_and_ptr.second;
       set.insert_if_async(haystack_iter,
                           haystack_iter + haystack.num_rows(),
                           thrust::counting_iterator<size_type>(0),  // stencil
-                          row_is_valid{reinterpret_cast<bitmask_type const*>(row_bitmask.data())},
+                          row_is_valid{row_bitmask_ptr},
                           stream.value());
     } else {
       set.insert_async(haystack_iter, haystack_iter + haystack.num_rows(), stream.value());
     }
 
     if (needles_has_nulls && compare_nulls == null_equality::UNEQUAL) {
-      auto const row_bitmask =
-        cudf::detail::bitmask_and(needles, stream, rmm::mr::get_current_device_resource()).first;
+      auto const bitmask_buffer_and_ptr = build_row_bitmask(needles, stream);
+      ￼ auto const row_bitmask_ptr      = bitmask_buffer_and_ptr.second;
       set.contains_if_async(needles_iter,
                             needles_iter + needles.num_rows(),
                             thrust::counting_iterator<size_type>(0),  // stencil
-                            row_is_valid{reinterpret_cast<bitmask_type const*>(row_bitmask.data())},
+                            row_is_valid{row_bitmask_ptr},
                             contained.begin(),
                             stream.value());
     } else {
