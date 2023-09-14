@@ -16,9 +16,9 @@
 
 // #include <cudf_test/column_utilities.hpp>
 
-#include <reductions/hash_reduce_by_row.cuh>
 #include <stream_compaction/stream_compaction_common.cuh>
 
+#include <cudf/detail/hash_reduce_by_row.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
