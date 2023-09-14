@@ -63,8 +63,7 @@ class ParquetFieldList : public ParquetField {
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     if (field_type != ST_FLD_LIST) { return true; }
-    uint8_t t;
-    uint32_t const n = cpr->get_listh(&t);
+    auto const [t, n] = cpr->get_listh();
     if (t != expected_type) { return true; }
     val.resize(n);
     for (uint32_t i = 0; i < n; i++) {
@@ -452,24 +451,6 @@ class ParquetFieldOptional : public ParquetField {
   }
 };
 
-// mapping of binary protocol field types to compact protocol field types
-uint8_t const CompactProtocolReader::g_list2struct[16] = {0,
-                                                          1,
-                                                          2,
-                                                          ST_FLD_BYTE,
-                                                          ST_FLD_DOUBLE,
-                                                          5,
-                                                          ST_FLD_I16,
-                                                          7,
-                                                          ST_FLD_I32,
-                                                          9,
-                                                          ST_FLD_I64,
-                                                          ST_FLD_BINARY,
-                                                          ST_FLD_STRUCT,
-                                                          ST_FLD_MAP,
-                                                          ST_FLD_SET,
-                                                          ST_FLD_LIST};
-
 /**
  * @brief Skips the number of bytes according to the specified struct type
  *
@@ -489,16 +470,11 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
     case ST_FLD_BYTE: skip_bytes(1); break;
     case ST_FLD_DOUBLE: skip_bytes(8); break;
     case ST_FLD_BINARY: skip_bytes(get_u32()); break;
-    // FIXME: this likely won't work, it's using the binary protocol not the compact. n should
-    // be get_u32() (varint) and t should not be translated.
     case ST_FLD_LIST: [[fallthrough]];
     case ST_FLD_SET: {
-      int const c = getb();
-      int n       = c >> 4;
-      if (n == 0xf) { n = get_i32(); }
-      t = g_list2struct[c & 0xf];
+      auto const [t, n] = get_listh();
       if (depth > 10) { return false; }
-      for (int32_t i = 0; i < n; i++) {
+      for (uint32_t i = 0; i < n; i++) {
         skip_struct_field(t, depth + 1);
       }
     } break;
@@ -506,7 +482,8 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
       for (;;) {
         int const c = getb();
         t           = c & 0xf;
-        if (!c) { break; }
+        if (c == 0) { break; }               // end of struct
+        if ((c & 0xf0) == 0) { get_i16(); }  // field id is not a delta
         if (depth > 10) { return false; }
         skip_struct_field(t, depth + 1);
       }

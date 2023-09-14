@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace cudf {
@@ -40,9 +41,6 @@ namespace parquet {
  * compression codecs are supported yet.
  */
 class CompactProtocolReader {
- protected:
-  static const uint8_t g_list2struct[16];
-
  public:
   explicit CompactProtocolReader(uint8_t const* base = nullptr, size_t len = 0) { init(base, len); }
   void init(uint8_t const* base, size_t len)
@@ -88,14 +86,15 @@ class CompactProtocolReader {
   uint32_t get_u32() noexcept { return get_varint<uint32_t>(); }
   uint64_t get_u64() noexcept { return get_varint<uint64_t>(); }
 
-  uint32_t get_listh(uint8_t* el_type) noexcept
+  [[nodiscard]] std::pair<uint8_t, uint32_t> get_listh() noexcept
   {
     uint32_t const c = getb();
     uint32_t sz      = c >> 4;
-    *el_type         = c & 0xf;
+    uint8_t t        = c & 0xf;
     if (sz == 0xf) { sz = get_u32(); }
-    return sz;
+    return {t, sz};
   }
+
   bool skip_struct_field(int t, int depth = 0);
 
  public:
