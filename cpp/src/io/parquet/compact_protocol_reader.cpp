@@ -269,6 +269,8 @@ class ParquetFieldStruct : public ParquetField {
 /**
  * @brief Functor to read empty structures in unions
  *
+ * Added to avoid having to define read() functions for empty structs contained in unions.
+ *
  * @return True if field types mismatch
  */
 template <typename T>
