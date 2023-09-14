@@ -159,7 +159,7 @@ std::unique_ptr<table> from_arrow(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Create `cudf::table` from given arrow Scalar input
+ * @brief Create `cudf::scalar` from given arrow Scalar input
  *
  * @param input arrow:Scalar that needs to be converted to `cudf::scalar`
  * @param mr    Device memory resource used to allocate `cudf::scalar`

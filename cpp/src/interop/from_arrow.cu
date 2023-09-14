@@ -424,6 +424,52 @@ std::unique_ptr<column> get_column(arrow::Array const& array,
            : get_empty_type_column(array.length());
 }
 
+struct BuilderGenerator {
+  template <typename T,
+            CUDF_ENABLE_IF(!std::is_same_v<T, arrow::ListType> &&
+                           !std::is_same_v<T, arrow::StructType>)>
+  std::shared_ptr<arrow::ArrayBuilder> operator()(std::shared_ptr<arrow::DataType> const& type)
+  {
+    return std::make_shared<typename arrow::TypeTraits<T>::BuilderType>(
+      type, arrow::default_memory_pool());
+  }
+
+  template <typename T,
+            CUDF_ENABLE_IF(std::is_same_v<T, arrow::ListType> ||
+                           std::is_same_v<T, arrow::StructType>)>
+  std::shared_ptr<arrow::ArrayBuilder> operator()(std::shared_ptr<arrow::DataType> const& type)
+  {
+    CUDF_FAIL("Type not support for BuilderGenerator");
+  }
+};
+
+std::shared_ptr<arrow::ArrayBuilder> make_builder(std::shared_ptr<arrow::DataType> const& type)
+{
+  switch (type->id()) {
+    case arrow::Type::STRUCT: {
+      std::vector<std::shared_ptr<arrow::ArrayBuilder>> field_builders;
+
+      for (auto i = 0; i < type->num_fields(); ++i) {
+        auto const vt = type->field(i)->type();
+        if (vt->id() == arrow::Type::STRUCT || vt->id() == arrow::Type::LIST) {
+          field_builders.push_back(make_builder(vt));
+        } else {
+          field_builders.push_back(arrow_type_dispatcher(*vt, BuilderGenerator{}, vt));
+        }
+      }
+      return std::make_shared<arrow::StructBuilder>(
+        type, arrow::default_memory_pool(), field_builders);
+    }
+    case arrow::Type::LIST: {
+      return std::make_shared<arrow::ListBuilder>(arrow::default_memory_pool(),
+                                                  make_builder(type->field(0)->type()));
+    }
+    default: {
+      return arrow_type_dispatcher(*type, BuilderGenerator{}, type);
+    }
+  }
+}
+
 }  // namespace
 
 std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
@@ -467,120 +513,12 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
   return std::make_unique<table>(std::move(columns));
 }
 
-}  // namespace detail
-
-std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
-                                  rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-
-  return detail::from_arrow(input_table, cudf::get_default_stream(), mr);
-}
-
-template <typename Functor, typename... Ts>
-constexpr decltype(auto) arrow_type_dispatcher(arrow::DataType const& dtype,
-                                               Functor f,
-                                               Ts&&... args)
-{
-  switch (dtype.id()) {
-    case arrow::Type::INT8:
-      return f.template operator()<arrow::Int8Type>(std::forward<Ts>(args)...);
-    case arrow::Type::INT16:
-      return f.template operator()<arrow::Int16Type>(std::forward<Ts>(args)...);
-    case arrow::Type::INT32:
-      return f.template operator()<arrow::Int32Type>(std::forward<Ts>(args)...);
-    case arrow::Type::INT64:
-      return f.template operator()<arrow::Int64Type>(std::forward<Ts>(args)...);
-    case arrow::Type::UINT8:
-      return f.template operator()<arrow::UInt8Type>(std::forward<Ts>(args)...);
-    case arrow::Type::UINT16:
-      return f.template operator()<arrow::UInt16Type>(std::forward<Ts>(args)...);
-    case arrow::Type::UINT32:
-      return f.template operator()<arrow::UInt32Type>(std::forward<Ts>(args)...);
-    case arrow::Type::UINT64:
-      return f.template operator()<arrow::UInt64Type>(std::forward<Ts>(args)...);
-    case arrow::Type::FLOAT:
-      return f.template operator()<arrow::FloatType>(std::forward<Ts>(args)...);
-    case arrow::Type::DOUBLE:
-      return f.template operator()<arrow::DoubleType>(std::forward<Ts>(args)...);
-    case arrow::Type::BOOL:
-      return f.template operator()<arrow::BooleanType>(std::forward<Ts>(args)...);
-    case arrow::Type::TIMESTAMP:
-      return f.template operator()<arrow::TimestampType>(std::forward<Ts>(args)...);
-    case arrow::Type::DURATION:
-      return f.template operator()<arrow::DurationType>(std::forward<Ts>(args)...);
-    // case arrow::Type::DICTIONARY32:
-    //   return f.template operator()<arrow::Type::DICTIONARY32>(
-    //     std::forward<Ts>(args)...);
-    case arrow::Type::STRING:
-      return f.template operator()<arrow::StringType>(std::forward<Ts>(args)...);
-    case arrow::Type::LIST:
-      return f.template operator()<arrow::ListType>(std::forward<Ts>(args)...);
-    case arrow::Type::DECIMAL128:
-      return f.template operator()<arrow::Decimal128Type>(std::forward<Ts>(args)...);
-    case arrow::Type::STRUCT:
-      return f.template operator()<arrow::StructType>(std::forward<Ts>(args)...);
-    default: {
-      CUDF_FAIL("Invalid type.");
-    }
-  }
-}
-
-struct BuilderGenerator {
-  template <typename T>
-  std::shared_ptr<arrow::ArrayBuilder> operator()(std::shared_ptr<arrow::DataType> const& type)
-  {
-    return std::make_shared<typename arrow::TypeTraits<T>::BuilderType>(
-      type, arrow::default_memory_pool());
-  }
-};
-
-template <>
-std::shared_ptr<arrow::ArrayBuilder> BuilderGenerator::operator()<arrow::ListType>(
-  std::shared_ptr<arrow::DataType> const& type)
-{
-  CUDF_FAIL("Not implemented");
-}
-
-template <>
-std::shared_ptr<arrow::ArrayBuilder> BuilderGenerator::operator()<arrow::StructType>(
-  std::shared_ptr<arrow::DataType> const& type)
-{
-  CUDF_FAIL("Not implemented");
-}
-
-std::shared_ptr<arrow::ArrayBuilder> make_builder(std::shared_ptr<arrow::DataType> const& type)
-{
-  switch (type->id()) {
-    case arrow::Type::STRUCT: {
-      std::vector<std::shared_ptr<arrow::ArrayBuilder>> field_builders;
-
-      for (auto i = 0; i < type->num_fields(); ++i) {
-        auto const vt = type->field(i)->type();
-        if (vt->id() == arrow::Type::STRUCT || vt->id() == arrow::Type::LIST) {
-          field_builders.push_back(make_builder(vt));
-        } else {
-          field_builders.push_back(arrow_type_dispatcher(*vt, BuilderGenerator{}, vt));
-        }
-      }
-      return std::make_shared<arrow::StructBuilder>(
-        type, arrow::default_memory_pool(), field_builders);
-    }
-    case arrow::Type::LIST: {
-      return std::make_shared<arrow::ListBuilder>(arrow::default_memory_pool(),
-                                                  make_builder(type->field(0)->type()));
-    }
-    default: {
-      return arrow_type_dispatcher(*type, BuilderGenerator{}, type);
-    }
-  }
-}
-
 std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
+                                         rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   // Get a builder for the scalar type
-  auto builder = make_builder(input.type);
+  auto builder = detail::make_builder(input.type);
 
   auto status = builder->AppendScalar(input);
   if (status != arrow::Status::OK()) {
@@ -600,7 +538,7 @@ std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
 
   auto table = arrow::Table::Make(arrow::schema({field}), {array});
 
-  auto cudf_table = from_arrow(*table);
+  auto cudf_table = detail::from_arrow(*table, stream, mr);
 
   auto col = cudf_table->get_column(0);
 
@@ -608,4 +546,21 @@ std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
   return get_element(cv, 0);
 }
 
+}  // namespace detail
+
+std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
+                                  rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+
+  return detail::from_arrow(input_table, cudf::get_default_stream(), mr);
+}
+
+std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+
+  return detail::from_arrow(input, cudf::get_default_stream(), mr);
+}
 }  // namespace cudf

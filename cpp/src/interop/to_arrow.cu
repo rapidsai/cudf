@@ -447,6 +447,21 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
 
   return result;
 }
+
+std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
+                                        column_metadata const& metadata,
+
+                                        rmm::cuda_stream_view stream,
+                                        arrow::MemoryPool* ar_mr)
+{
+  auto column = cudf::make_column_from_scalar(input, 1);
+  cudf::table_view tv{{column->view()}};
+  auto arrow_table  = cudf::to_arrow(tv, {metadata});
+  auto ac           = arrow_table->column(0);
+  auto maybe_scalar = ac->GetScalar(0);
+  if (!maybe_scalar.ok()) { CUDF_FAIL("Failed to produce a scalar"); }
+  return maybe_scalar.ValueOrDie();
+}
 }  // namespace detail
 
 std::shared_ptr<arrow::Table> to_arrow(table_view input,
@@ -462,13 +477,7 @@ std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
 
                                         arrow::MemoryPool* ar_mr)
 {
-  auto stream = cudf::get_default_stream();
-  auto column = cudf::make_column_from_scalar(input, 1);
-  cudf::table_view tv{{column->view()}};
-  auto arrow_table  = cudf::to_arrow(tv, {metadata});
-  auto ac           = arrow_table->column(0);
-  auto maybe_scalar = ac->GetScalar(0);
-  if (!maybe_scalar.ok()) { CUDF_FAIL("Failed to produce a scalar"); }
-  return maybe_scalar.ValueOrDie();
+  CUDF_FUNC_RANGE();
+  return detail::to_arrow(input, metadata, cudf::get_default_stream(), ar_mr);
 }
 }  // namespace cudf
