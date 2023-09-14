@@ -174,8 +174,8 @@ std::unique_ptr<cudf::scalar> histogram(table_view const& input,
 
   auto map = cudf::detail::hash_map_type{
     compute_hash_table_size(input.num_rows()),
-    cuco::empty_key{cudf::detail::COMPACTION_EMPTY_KEY_SENTINEL},
-    cuco::empty_value{cudf::detail::COMPACTION_EMPTY_VALUE_SENTINEL},
+    cuco::empty_key{-1},
+    cuco::empty_value{std::numeric_limits<size_type>::min()},
     cudf::detail::hash_table_allocator_type{default_allocator<char>{}, stream},
     stream.value()};
 
@@ -185,9 +185,8 @@ std::unique_ptr<cudf::scalar> histogram(table_view const& input,
   auto const has_nested_columns = cudf::detail::has_nested_columns(input);
 
   auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
-  auto const key_hasher =
-    cudf::detail::experimental::compaction_hash(row_hasher.device_hasher(has_nulls));
-  auto const row_comp = cudf::experimental::row::equality::self_comparator(preprocessed_input);
+  auto const key_hasher = row_hasher.device_hasher(has_nulls);
+  auto const row_comp   = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
   auto const pair_iter = cudf::detail::make_counting_transform_iterator(
     size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
