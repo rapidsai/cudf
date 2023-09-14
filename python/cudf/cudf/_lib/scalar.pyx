@@ -85,6 +85,21 @@ def _replace_nested_nulls(obj):
                 _replace_nested_nulls(v)
 
 
+def _replace_nested_none(obj):
+    if isinstance(obj, list):
+        for i, item in enumerate(obj):
+            if item is None:
+                obj[i] = NA
+            elif isinstance(item, (dict, list)):
+                _replace_nested_none(item)
+    elif isinstance(obj, dict):
+        for k, v in obj.items():
+            if v is None:
+                obj[k] = NA
+            elif isinstance(v, (dict, list)):
+                _replace_nested_none(v)
+
+
 cdef class DeviceScalar:
 
     # I think this should be removable, except that currently the way that
@@ -145,19 +160,53 @@ cdef class DeviceScalar:
 
     def _to_host_scalar(self):
         if isinstance(self.dtype, cudf.core.dtypes.DecimalDtype):
-            result = _get_py_decimal_from_fixed_point(self.c_value.c_obj)
+            ps = self.c_value.to_pyarrow_scalar()
+            if not ps.is_valid:
+                return NA
+            return ps.as_py()
+        # For nested types we should eventually account for the special cases
+        # that we handle for other types, e.g. numerics being casted to numpy
+        # types or datetime/timedelta needing to be cast to int64 to handle
+        # overflow. However, the old implementation didn't handle these cases
+        # either, so we can leave that for a follow-up PR.
         elif cudf.api.types.is_struct_dtype(self.dtype):
-            result = _get_py_dict_from_struct(self.c_value.c_obj, self.dtype)
+            ps = self.c_value.to_pyarrow_scalar()
+            if not ps.is_valid:
+                return NA
+            ret = ps.as_py()
+            _replace_nested_none(ret)
+            return ret
         elif cudf.api.types.is_list_dtype(self.dtype):
-            result = _get_py_list_from_list(self.c_value.c_obj, self.dtype)
+            ps = self.c_value.to_pyarrow_scalar()
+            if not ps.is_valid:
+                return NA
+            ret = ps.as_py()
+            _replace_nested_none(ret)
+            return ret
         elif pd.api.types.is_string_dtype(self.dtype):
-            result = _get_py_string_from_string(self.c_value.c_obj)
+            ps = self.c_value.to_pyarrow_scalar()
+            if not ps.is_valid:
+                return NA
+            return ps.as_py()
         elif pd.api.types.is_numeric_dtype(self.dtype):
-            result = _get_np_scalar_from_numeric(self.c_value.c_obj)
+            ps = self.c_value.to_pyarrow_scalar()
+            if not ps.is_valid:
+                return NA
+            return ps.type.to_pandas_dtype()(ps.as_py())
         elif pd.api.types.is_datetime64_dtype(self.dtype):
-            result = _get_np_scalar_from_timestamp64(self.c_value.c_obj)
+            ps = self.c_value.to_pyarrow_scalar()
+            if not ps.is_valid:
+                return NaT
+            time_unit, _ = np.datetime_data(self.dtype)
+            # Cast to int64 to avoid overflow
+            return np.datetime64(ps.cast('int64').as_py(), time_unit)
         elif pd.api.types.is_timedelta64_dtype(self.dtype):
-            result = _get_np_scalar_from_timedelta64(self.c_value.c_obj)
+            ps = self.c_value.to_pyarrow_scalar()
+            if not ps.is_valid:
+                return NaT
+            time_unit, _ = np.datetime_data(self.dtype)
+            # Cast to int64 to avoid overflow
+            return np.timedelta64(ps.cast('int64').as_py(), time_unit)
         else:
             raise ValueError(
                 "Could not convert cudf::scalar to a Python value"
