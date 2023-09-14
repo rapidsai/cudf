@@ -623,3 +623,9 @@ def test_drop_duplicates_multi_index():
             gdf[col].drop_duplicates().to_pandas(),
             pdf[col].drop_duplicates(),
         )
+
+
+def test_drop_duplicates_ignore_index_wrong_type():
+    gdf = cudf.DataFrame([1, 1, 2])
+    with pytest.raises(ValueError):
+        gdf.drop_duplicates(ignore_index="True")
