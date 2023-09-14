@@ -11,6 +11,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.api.extensions import no_default
 from cudf.api.types import is_bool_dtype
 from cudf.core._compat import PANDAS_GE_133, PANDAS_GE_200
 from cudf.core.index import (
@@ -2777,3 +2778,21 @@ def test_index_empty_from_pandas(request, dtype):
     gidx = cudf.from_pandas(pidx)
 
     assert_eq(pidx, gidx)
+
+
+@pytest.mark.parametrize(
+    "data", [[1, 2, 3], ["ab", "cd", "e", None], range(0, 10)]
+)
+@pytest.mark.parametrize("data_name", [None, 1, "abc"])
+@pytest.mark.parametrize("index", [True, False])
+@pytest.mark.parametrize("name", [None, no_default, 1, "abc"])
+def test_index_to_frame(data, data_name, index, name):
+    pidx = pd.Index(data, name=data_name)
+    gidx = cudf.from_pandas(pidx)
+
+    with expect_warning_if(name is None):
+        expected = pidx.to_frame(index=index, name=name)
+    with expect_warning_if(name is None):
+        actual = gidx.to_frame(index=index, name=name)
+
+    assert_eq(expected, actual)
