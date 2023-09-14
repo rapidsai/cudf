@@ -540,10 +540,10 @@ std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
 
   auto cudf_table = detail::from_arrow(*table, stream, mr);
 
-  auto col = cudf_table->get_column(0);
+  auto& col = cudf_table->get_column(0);
 
   auto cv = col.view();
-  return get_element(cv, 0);
+  return get_element(cv, 0, stream);
 }
 
 }  // namespace detail
