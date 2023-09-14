@@ -27,4 +27,6 @@ cdef class Scalar:
     @staticmethod
     cdef Scalar from_libcudf(unique_ptr[scalar] libcudf_scalar, dtype=*)
 
-    cpdef to_pyarrow_scalar(self)
+    # TODO: Make sure I'm correct to avoid typing the metadata as
+    # ColumnMetadata, I assume that will cause circular cimport problems
+    cpdef to_pyarrow_scalar(self, metadata)

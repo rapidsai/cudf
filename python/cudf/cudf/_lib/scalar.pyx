@@ -22,6 +22,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
 import cudf
+from cudf._lib.pylibcudf.interop import ColumnMetadata
 
 from cudf._lib.pylibcudf.types cimport type_id
 
@@ -30,6 +31,7 @@ from cudf._lib.types import (
     datetime_unit_map,
     duration_unit_map,
 )
+from cudf.api.types import is_list_dtype, is_struct_dtype
 from cudf.core.dtypes import ListDtype, StructDtype
 from cudf.core.missing import NA, NaT
 
@@ -100,6 +102,25 @@ def _replace_nested_none(obj):
                 _replace_nested_none(v)
 
 
+def gather_metadata(dtypes):
+    # dtypes is a dict mapping names to column dtypes
+    # This interface is a bit clunky, but it matches libcudf. May want to
+    # consider better approaches to building up the metadata eventually.
+    out = []
+    for name, dtype in dtypes.items():
+        v = ColumnMetadata(name)
+        if is_struct_dtype(dtype):
+            v.children_meta = gather_metadata(dtype.fields)
+        elif is_list_dtype(dtype):
+            # Offsets column is unnamed and has no children
+            v.children_meta.append(ColumnMetadata(""))
+            v.children_meta.extend(
+                gather_metadata({"": dtype.element_type})
+            )
+        out.append(v)
+    return out
+
+
 cdef class DeviceScalar:
 
     # I think this should be removable, except that currently the way that
@@ -159,8 +180,9 @@ cdef class DeviceScalar:
         self._dtype = dtype
 
     def _to_host_scalar(self):
+        metadata = gather_metadata({"": self.dtype})[0]
         if isinstance(self.dtype, cudf.core.dtypes.DecimalDtype):
-            ps = self.c_value.to_pyarrow_scalar()
+            ps = self.c_value.to_pyarrow_scalar(metadata)
             if not ps.is_valid:
                 return NA
             return ps.as_py()
@@ -170,38 +192,38 @@ cdef class DeviceScalar:
         # overflow. However, the old implementation didn't handle these cases
         # either, so we can leave that for a follow-up PR.
         elif cudf.api.types.is_struct_dtype(self.dtype):
-            ps = self.c_value.to_pyarrow_scalar()
+            ps = self.c_value.to_pyarrow_scalar(metadata)
             if not ps.is_valid:
                 return NA
             ret = ps.as_py()
             _replace_nested_none(ret)
             return ret
         elif cudf.api.types.is_list_dtype(self.dtype):
-            ps = self.c_value.to_pyarrow_scalar()
+            ps = self.c_value.to_pyarrow_scalar(metadata)
             if not ps.is_valid:
                 return NA
             ret = ps.as_py()
             _replace_nested_none(ret)
             return ret
         elif pd.api.types.is_string_dtype(self.dtype):
-            ps = self.c_value.to_pyarrow_scalar()
+            ps = self.c_value.to_pyarrow_scalar(metadata)
             if not ps.is_valid:
                 return NA
             return ps.as_py()
         elif pd.api.types.is_numeric_dtype(self.dtype):
-            ps = self.c_value.to_pyarrow_scalar()
+            ps = self.c_value.to_pyarrow_scalar(metadata)
             if not ps.is_valid:
                 return NA
             return ps.type.to_pandas_dtype()(ps.as_py())
         elif pd.api.types.is_datetime64_dtype(self.dtype):
-            ps = self.c_value.to_pyarrow_scalar()
+            ps = self.c_value.to_pyarrow_scalar(metadata)
             if not ps.is_valid:
                 return NaT
             time_unit, _ = np.datetime_data(self.dtype)
             # Cast to int64 to avoid overflow
             return np.datetime64(ps.cast('int64').as_py(), time_unit)
         elif pd.api.types.is_timedelta64_dtype(self.dtype):
-            ps = self.c_value.to_pyarrow_scalar()
+            ps = self.c_value.to_pyarrow_scalar(metadata)
             if not ps.is_valid:
                 return NaT
             time_unit, _ = np.datetime_data(self.dtype)

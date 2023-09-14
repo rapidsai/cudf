@@ -33,13 +33,6 @@ cdef extern from "cudf/interop.hpp" namespace "cudf" \
         string name
         vector[column_metadata] children_meta
 
-    # TODO: Adding this for pylibcudf because in pylibcudf we don't have column
-    # names. However we need to figure out how this will propagate up when cudf
-    # starts using pylibcudf for interop functionality.
-    cdef shared_ptr[CTable] to_arrow(
-        table_view input,
-    ) except +
-
     cdef shared_ptr[CTable] to_arrow(
         table_view input,
         vector[column_metadata] metadata,
@@ -47,4 +40,5 @@ cdef extern from "cudf/interop.hpp" namespace "cudf" \
 
     cdef shared_ptr[CScalar] to_arrow(
         const scalar& input,
+        column_metadata metadata,
     ) except +
