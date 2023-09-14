@@ -231,7 +231,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
 
     if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
       auto const bitmask_buffer_and_ptr = build_row_bitmask(haystack, stream);
-      ￼ auto const row_bitmask_ptr      = bitmask_buffer_and_ptr.second;
+      auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
       set.insert_if_async(haystack_iter,
                           haystack_iter + haystack.num_rows(),
                           thrust::counting_iterator<size_type>(0),  // stencil
@@ -243,7 +243,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
 
     if (needles_has_nulls && compare_nulls == null_equality::UNEQUAL) {
       auto const bitmask_buffer_and_ptr = build_row_bitmask(needles, stream);
-      ￼ auto const row_bitmask_ptr      = bitmask_buffer_and_ptr.second;
+      auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
       set.contains_if_async(needles_iter,
                             needles_iter + needles.num_rows(),
                             thrust::counting_iterator<size_type>(0),  // stencil
