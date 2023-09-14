@@ -460,13 +460,15 @@ INSTANTIATE_TEST_CASE_P(FromArrowTest,
 template <typename T>
 struct FromArrowNumericScalarTest : public cudf::test::BaseFixture {};
 
-TYPED_TEST_SUITE(FromArrowNumericScalarTest, cudf::test::NumericTypes);
+using NumericTypesNotBool =
+  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
+TYPED_TEST_SUITE(FromArrowNumericScalarTest, NumericTypesNotBool);
 
 TYPED_TEST(FromArrowNumericScalarTest, Basic)
 {
-  auto const value         = TypeParam(42);
+  TypeParam const value{42};
   auto arrow_scalar        = arrow::MakeScalar(value);
-  auto cudf_scalar         = cudf::from_arrow(*arrow_scalar.get());
+  auto cudf_scalar         = cudf::from_arrow(*arrow_scalar);
   auto cudf_numeric_scalar = dynamic_cast<cudf::numeric_scalar<TypeParam>*>(cudf_scalar.get());
   if (cudf_numeric_scalar == nullptr) { CUDF_FAIL("Attempted to test with a non-numeric type."); }
   EXPECT_EQ(cudf_numeric_scalar->type(), cudf::data_type(cudf::type_to_id<TypeParam>()));
@@ -478,11 +480,11 @@ struct FromArrowDecimalScalarTest : public cudf::test::BaseFixture {};
 // Only testing Decimal128 because that's the only size cudf and arrow have in common.
 TEST_F(FromArrowDecimalScalarTest, Basic)
 {
-  auto const value     = 42;
-  auto const precision = 8;
-  auto const scale     = 4;
-  auto arrow_scalar    = arrow::Decimal128Scalar(value, arrow::decimal128(precision, -scale));
-  auto cudf_scalar     = cudf::from_arrow(arrow_scalar);
+  auto const value{42};
+  auto const precision{8};
+  auto const scale{4};
+  auto arrow_scalar = arrow::Decimal128Scalar(value, arrow::decimal128(precision, -scale));
+  auto cudf_scalar  = cudf::from_arrow(arrow_scalar);
 
   // Arrow offers a minimum of 128 bits for the Decimal type.
   auto cudf_decimal_scalar =
@@ -532,7 +534,7 @@ struct FromArrowStructScalarTest : public cudf::test::BaseFixture {};
 
 TEST_F(FromArrowStructScalarTest, Basic)
 {
-  int64_t const value          = 42;
+  int64_t const value{42};
   auto underlying_arrow_scalar = arrow::MakeScalar(value);
 
   auto field        = arrow::field("", underlying_arrow_scalar->type);
