@@ -47,12 +47,12 @@ class ParquetField {
 template <typename T>
 class ParquetFieldList : public ParquetField {
  protected:
-  using read_func = std::function<bool(uint32_t, CompactProtocolReader*)>;
+  using read_func_type = std::function<bool(uint32_t, CompactProtocolReader*)>;
   std::vector<T>& val;
   FieldType const expected_type;
-  read_func read_value;
+  read_func_type read_value;
 
-  void bind_func(read_func fn) { read_value = fn; }
+  void bind_func(read_func_type fn) { read_value = fn; }
 
   ParquetFieldList(int f, std::vector<T>& v, FieldType t)
     : ParquetField(f), val(v), expected_type(t)
@@ -450,6 +450,7 @@ class ParquetFieldOptional : public ParquetField {
   }
 };
 
+// mapping of binary protocol field types to compact protocol field types
 uint8_t const CompactProtocolReader::g_list2struct[16] = {0,
                                                           1,
                                                           2,
@@ -486,15 +487,18 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
     case ST_FLD_BYTE: skip_bytes(1); break;
     case ST_FLD_DOUBLE: skip_bytes(8); break;
     case ST_FLD_BINARY: skip_bytes(get_u32()); break;
-    case ST_FLD_LIST:
+    // FIXME: this likely won't work, it's using the binary protocol not the compact. n should
+    // be get_u32() (varint) and t should not be translated.
+    case ST_FLD_LIST: [[fallthrough]];
     case ST_FLD_SET: {
       int const c = getb();
       int n       = c >> 4;
       if (n == 0xf) { n = get_i32(); }
       t = g_list2struct[c & 0xf];
       if (depth > 10) { return false; }
-      for (int32_t i = 0; i < n; i++)
+      for (int32_t i = 0; i < n; i++) {
         skip_struct_field(t, depth + 1);
+      }
     } break;
     case ST_FLD_STRUCT:
       for (;;) {
