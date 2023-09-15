@@ -530,7 +530,7 @@ add_library(
   src/stream_compaction/apply_boolean_mask.cu
   src/stream_compaction/distinct.cu
   src/stream_compaction/distinct_count.cu
-  src/stream_compaction/distinct_reduce.cu
+  src/stream_compaction/distinct_helpers.cu
   src/stream_compaction/drop_nans.cu
   src/stream_compaction/drop_nulls.cu
   src/stream_compaction/stable_distinct.cu
@@ -633,6 +633,7 @@ add_library(
   src/utilities/linked_column.cpp
   src/utilities/logger.cpp
   src/utilities/stacktrace.cpp
+  src/utilities/stream_pool.cpp
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
   src/utilities/type_dispatcher.cpp
