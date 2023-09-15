@@ -6747,7 +6747,7 @@ TYPED_TEST(ParquetWriterDeltaTest, SupportedDeltaTestTypes)
 {
   using T   = TypeParam;
   auto col0 = testdata::ascending<T>();
-  auto col1 = testdata::descending<T>();
+  auto col1 = testdata::unordered<T>();
 
   auto const expected = table_view{{col0, col1}};
 
