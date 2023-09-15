@@ -295,7 +295,12 @@ TYPED_TEST(SumReductionTest, Sum)
 }
 
 #endif
-TYPED_TEST_SUITE(ReductionTest, cudf::test::FloatingPointTypes);
+
+using TestTypes = cudf::test::Concat<cudf::test::Types<int8_t, int16_t, int32_t, int64_t>,
+                                     cudf::test::FloatingPointTypes,
+                                     cudf::test::FixedPointTypes,
+                                     cudf::test::ChronoTypes>;
+TYPED_TEST_SUITE(ReductionTest, TestTypes);
 
 #if 0
 TYPED_TEST(ReductionTest, Product)
