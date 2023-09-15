@@ -247,25 +247,38 @@ struct BitwiseOr {
   }
 };
 
-// T is the parquet physical type
-// W is double the bitwidth of T
 // I is the column type from the input table
-// F is a function that computes validity and the src index for a given input position
-template <typename T, typename W, typename I, typename F>
+template <typename I>
 struct delta_enc {
+  using output_type = std::conditional_t<std::is_signed_v<I>, zigzag128_t, uleb128_t>;
+
   page_enc_state_s<0>* const s;
   uint32_t const valid_count;
-  F& f;
   uint64_t* const buffer;
   void* const temp_space;
 
+  __device__ thrust::pair<bool, size_type> calc_idx_and_validity(uint32_t cur_val_idx)
+  {
+    size_type const val_idx_in_block    = cur_val_idx + threadIdx.x;
+    size_type const val_idx_in_leaf_col = s->page_start_val + val_idx_in_block;
+
+    uint32_t const is_valid = (val_idx_in_leaf_col < s->col.leaf_column->size() &&
+                               val_idx_in_block < s->page.num_leaf_values)
+                                ? s->col.leaf_column->is_valid(val_idx_in_leaf_col)
+                                : 0;
+
+    return {is_valid, val_idx_in_leaf_col};
+  }
+
   __device__ uint8_t const* encode()
   {
-    __shared__ DeltaBinaryPacker<T, W> packer;
+    __shared__ DeltaBinaryPacker<output_type> packer;
 
     auto const t = threadIdx.x;
 
-    if (t == 0) { packer.init(s->cur, valid_count, reinterpret_cast<T*>(buffer), temp_space); }
+    if (t == 0) {
+      packer.init(s->cur, valid_count, reinterpret_cast<output_type*>(buffer), temp_space);
+    }
     __syncthreads();
 
     // TODO(ets): in the plain encoder the scaling is a little different for INT32 than INT64.
@@ -274,10 +287,10 @@ struct delta_enc {
     for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
       uint32_t nvals = min(s->page.num_leaf_values - cur_val_idx, delta::block_size);
 
-      auto [is_valid, val_idx] = f(cur_val_idx);
+      auto [is_valid, val_idx] = calc_idx_and_validity(cur_val_idx);
       cur_val_idx += nvals;
 
-      T v = s->col.leaf_column->element<I>(val_idx);
+      output_type v = s->col.leaf_column->element<I>(val_idx);
       if (scale < 0) {
         v /= -scale;
       } else {
@@ -1424,8 +1437,8 @@ __global__ void __launch_bounds__(block_size, 8)
             switch (dtype_len) {
               case 8: return col->element<int64_t>(idx) * scale;
               case 4: return col->element<int32_t>(idx) * scale;
-              case 2: return col->element<int16_t>(idx) * scale;
-              default: return col->element<int8_t>(idx) * scale;
+              case 2: return (col->element<int16_t>(idx) * scale) & 0xffff;
+              default: return (col->element<int8_t>(idx) * scale) & 0xff;
             }
           }();
 
@@ -1694,8 +1707,7 @@ __global__ void __launch_bounds__(block_size, 8)
                             device_span<compression_result> comp_results)
 {
   // block of shared memory for value storage and bit packing
-  // TODO add constant that's the sum of buffer_size and block_size
-  __shared__ uint64_t delta_shared[delta::buffer_size + delta::block_size];
+  __shared__ uleb128_t delta_shared[delta::buffer_size + delta::block_size];
   __shared__ __align__(8) page_enc_state_s<0> state_g;
   using block_reduce = cub::BlockReduce<uint32_t, block_size>;
   __shared__ union {
@@ -1767,52 +1779,56 @@ __global__ void __launch_bounds__(block_size, 8)
     valid_count = block_reduce(temp_storage.reduce_storage).Sum(num_valid);
   }
 
-  auto calc_idx_and_validity = [&](uint32_t cur_val_idx) {
-    size_type const val_idx_in_block    = cur_val_idx + t;
-    size_type const val_idx_in_leaf_col = s->page_start_val + val_idx_in_block;
-
-    uint32_t const is_valid = (val_idx_in_leaf_col < s->col.leaf_column->size() &&
-                               val_idx_in_block < s->page.num_leaf_values)
-                                ? s->col.leaf_column->is_valid(val_idx_in_leaf_col)
-                                : 0;
-
-    return std::make_tuple(is_valid, val_idx_in_leaf_col);
-  };
-
   uint8_t const* delta_ptr = nullptr;  // this will be the end of delta block pointer
 
   if (physical_type == INT32) {
     switch (dtype_len_in) {
       case 8: {
-        delta_enc<uint32_t, uint64_t, uint64_t, decltype(calc_idx_and_validity)> encoder{
-          s, valid_count, calc_idx_and_validity, delta_shared, &temp_storage};
+        // only DURATIONS map to 8 bytes, so safe to just use signed here?
+        delta_enc<int64_t> encoder{s, valid_count, delta_shared, &temp_storage};
         delta_ptr = encoder.encode();
         break;
       }
       case 4: {
-        delta_enc<uint32_t, uint64_t, uint32_t, decltype(calc_idx_and_validity)> encoder{
-          s, valid_count, calc_idx_and_validity, delta_shared, &temp_storage};
-        delta_ptr = encoder.encode();
+        if (type_id == type_id::UINT32) {
+          delta_enc<uint32_t> encoder{s, valid_count, delta_shared, &temp_storage};
+          delta_ptr = encoder.encode();
+        } else {
+          delta_enc<int32_t> encoder{s, valid_count, delta_shared, &temp_storage};
+          delta_ptr = encoder.encode();
+        }
         break;
       }
       case 2: {
-        delta_enc<uint16_t, uint32_t, uint16_t, decltype(calc_idx_and_validity)> encoder{
-          s, valid_count, calc_idx_and_validity, delta_shared, &temp_storage};
-        delta_ptr = encoder.encode();
+        if (type_id == type_id::UINT16) {
+          delta_enc<uint16_t> encoder{s, valid_count, delta_shared, &temp_storage};
+          delta_ptr = encoder.encode();
+        } else {
+          delta_enc<int16_t> encoder{s, valid_count, delta_shared, &temp_storage};
+          delta_ptr = encoder.encode();
+        }
         break;
       }
       case 1: {
-        delta_enc<uint8_t, uint16_t, uint8_t, decltype(calc_idx_and_validity)> encoder{
-          s, valid_count, calc_idx_and_validity, delta_shared, &temp_storage};
-        delta_ptr = encoder.encode();
+        if (type_id == type_id::UINT8) {
+          delta_enc<uint8_t> encoder{s, valid_count, delta_shared, &temp_storage};
+          delta_ptr = encoder.encode();
+        } else {
+          delta_enc<int8_t> encoder{s, valid_count, delta_shared, &temp_storage};
+          delta_ptr = encoder.encode();
+        }
         break;
       }
       default: CUDF_UNREACHABLE("invalid dtype_len_in when encoding DELTA_BINARY_PACKED");
     }
   } else {
-    delta_enc<uint64_t, __uint128_t, uint64_t, decltype(calc_idx_and_validity)> encoder{
-      s, valid_count, calc_idx_and_validity, delta_shared, &temp_storage};
-    delta_ptr = encoder.encode();
+    if (type_id == type_id::UINT64) {
+      delta_enc<uint64_t> encoder{s, valid_count, delta_shared, &temp_storage};
+      delta_ptr = encoder.encode();
+    } else {
+      delta_enc<int64_t> encoder{s, valid_count, delta_shared, &temp_storage};
+      delta_ptr = encoder.encode();
+    }
   }
 
   finish_page_encode<block_size>(

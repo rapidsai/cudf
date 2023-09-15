@@ -56,16 +56,18 @@ using index_scan   = cub::BlockScan<size_type, block_size>;
 constexpr int rolling_idx(int index) { return rolling_index<buffer_size>(index); }
 
 // version of bit packer that can handle up to 64 bits values.
-template <typename T, typename WideType>
+// T is the type to use for processing. if nbits <= 32 use uint32_t, otherwise unsigned long long
+// (not uint64_t because of atomicOr's typing). allowing this to be selectable since there's a
+// measurable impact to using the wider types.
+template <typename scratch_type>
 inline __device__ void bitpack_mini_block(
-  uint8_t* dst, T val, uint32_t count, uint8_t nbits, void* temp_space)
+  uint8_t* dst, uleb128_t val, uint32_t count, uint8_t nbits, void* temp_space)
 {
-  // typing for atomicOr is annoying. uint64_t doesn't work, need unsigned long long.
-  using scratch_type =
-    std::conditional_t<std::is_same_v<T, uint64_t>, unsigned long long, uint32_t>;
+  using wide_type =
+    std::conditional_t<std::is_same_v<scratch_type, unsigned long long>, __uint128_t, uint64_t>;
   using cudf::detail::warp_size;
-  T constexpr mask   = sizeof(T) * 8 - 1;
-  auto constexpr div = sizeof(T) * 8;
+  scratch_type constexpr mask = sizeof(scratch_type) * 8 - 1;
+  auto constexpr div          = sizeof(scratch_type) * 8;
 
   auto const lane_id = threadIdx.x % warp_size;
   auto const warp_id = threadIdx.x / warp_size;
@@ -76,12 +78,13 @@ inline __device__ void bitpack_mini_block(
   scratch[lane_id] = 0;
   __syncwarp();
 
-  // why use bit packing when there's no savings???
+  // TODO: see if there is any savings using special packing for easy bitwidths (1,2,4,8,16...)
+  // like what's done for the RLE encoder.
   if (nbits == div) {
     if (lane_id < count) {
-      for (int i = 0; i < sizeof(T); i++) {
-        dst[lane_id * sizeof(T) + i] = val & 0xff;
-        if constexpr (sizeof(T) > 1) { val >>= 8; }
+      for (int i = 0; i < sizeof(scratch_type); i++) {
+        dst[lane_id * sizeof(scratch_type) + i] = val & 0xff;
+        val >>= 8;
       }
     }
     __syncwarp();
@@ -90,12 +93,12 @@ inline __device__ void bitpack_mini_block(
 
   if (lane_id <= count) {
     // shift symbol left by up to mask bits
-    WideType v2 = val;
+    wide_type v2 = val;
     v2 <<= (lane_id * nbits) & mask;
 
     // Copy N bit word into two N/2 bit words while following C++ strict aliasing rules.
-    T v1[2];
-    memcpy(&v1, &v2, sizeof(WideType));
+    scratch_type v1[2];
+    memcpy(&v1, &v2, sizeof(wide_type));
 
     // Atomically write result to scratch
     if (v1[0]) { atomicOr(scratch + ((lane_id * nbits) / div), v1[0]); }
@@ -118,14 +121,10 @@ inline __device__ void bitpack_mini_block(
 // Object used to turn a stream of integers into a DELTA_BINARY_PACKED stream. This takes as input
 // 128 values with validity at a time, saving them until there are enough values for a block
 // to be written.
-//
-// T can only be uint32_t or uint64_t since the DELTA_BINARY_PACKED encoding is only defined for
-// INT32 and INT64 physical types
-template <typename T, typename WideType>
+// T is the input data type (either zigzag128_t or uleb128_t)
+template <typename T>
 class DeltaBinaryPacker {
  private:
-  // static_assert(std::is_same_v<T, uint32_t> || std::is_same_v<T, uint64_t>);
-
   uint8_t* _dst;                             // sink to dump encoded values to
   size_type _current_idx;                    // index of first value in buffer
   uint32_t _num_values;                      // total number of values to encode
@@ -231,6 +230,7 @@ class DeltaBinaryPacker {
     // for the bitpacking of this warp
     zigzag128_t const warp_max =
       delta::warp_reduce(_warp_tmp[warp_id]).Reduce(norm_delta, cub::Max());
+    __syncthreads();
 
     if (lane_id == 0) { _mb_bits[warp_id] = sizeof(zigzag128_t) * 8 - __clzll(warp_max); }
     __syncthreads();
@@ -251,9 +251,15 @@ class DeltaBinaryPacker {
     auto const warp_idx = _current_idx + warp_id * delta::values_per_mini_block;
     if (warp_idx < _num_values) {
       auto const num_enc = min(delta::values_per_mini_block, _num_values - warp_idx);
-      delta::bitpack_mini_block<T, WideType>(
-        mb_ptr, norm_delta, num_enc, _mb_bits[warp_id], _bitpack_tmp);
+      if (_mb_bits[warp_id] > 32) {
+        delta::bitpack_mini_block<unsigned long long>(
+          mb_ptr, norm_delta, num_enc, _mb_bits[warp_id], _bitpack_tmp);
+      } else {
+        delta::bitpack_mini_block<uint32_t>(
+          mb_ptr, norm_delta, num_enc, _mb_bits[warp_id], _bitpack_tmp);
+      }
     }
+    __syncthreads();
 
     // last warp updates global delta ptr
     if (warp_id == delta::num_mini_blocks - 1 && lane_id == 0) {
