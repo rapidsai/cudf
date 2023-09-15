@@ -365,10 +365,6 @@ TYPED_TEST_SUITE(ParquetWriterTimestampTypeTest, SupportedTimestampTypes);
 TYPED_TEST_SUITE(ParquetWriterSchemaTest, cudf::test::AllTypes);
 using ByteLikeTypes = cudf::test::Types<int8_t, char, uint8_t, unsigned char, std::byte>;
 TYPED_TEST_SUITE(ParquetReaderSourceTest, ByteLikeTypes);
-using DeltaDecimalTypes = cudf::test::Types<numeric::decimal32, numeric::decimal64>;
-using DeltaBinaryTypes =
-  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::ChronoTypes, DeltaDecimalTypes>;
-TYPED_TEST_SUITE(ParquetWriterDeltaTest, DeltaBinaryTypes);
 
 // Base test fixture for chunked writer tests
 struct ParquetChunkedWriterTest : public cudf::test::BaseFixture {};
@@ -6738,7 +6734,16 @@ TEST_P(ParquetV2Test, CheckEncodings)
   }
 }
 
-TYPED_TEST(ParquetWriterDeltaTest, WriteDeltaBinaryPacked)
+// removing duration_D, duration_s, and timestamp_s as they don't appear to be supported properly.
+// see definition of UnsupportedChronoTypes above.
+using DeltaDecimalTypes = cudf::test::Types<numeric::decimal32, numeric::decimal64>;
+using DeltaBinaryTypes =
+  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::ChronoTypes, DeltaDecimalTypes>;
+using SupportedDeltaTestTypes =
+  cudf::test::RemoveIf<cudf::test::ContainedIn<UnsupportedChronoTypes>, DeltaBinaryTypes>;
+TYPED_TEST_SUITE(ParquetWriterDeltaTest, SupportedDeltaTestTypes);
+
+TYPED_TEST(ParquetWriterDeltaTest, SupportedDeltaTestTypes)
 {
   using T   = TypeParam;
   auto col0 = testdata::ascending<T>();
@@ -6753,19 +6758,10 @@ TYPED_TEST(ParquetWriterDeltaTest, WriteDeltaBinaryPacked)
       .dictionary_policy(cudf::io::dictionary_policy::NEVER);
   cudf::io::write_parquet(out_opts);
 
-  // FIXME: these three types fail whether delta encoding is used or not. Is this a problem
-  // with the test or is there something wrong in libcudf when writing these types. All three
-  // of them use ts_scale > 1
-  bool constexpr is_failing = std::is_same_v<T, cudf::duration_D> or
-                              std::is_same_v<T, cudf::duration_s> or
-                              std::is_same_v<T, cudf::timestamp_s>;
-
-  if constexpr (not is_failing) {
-    cudf::io::parquet_reader_options in_opts =
-      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
-    auto result = cudf::io::read_parquet(in_opts);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
-  }
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(in_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
