@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
-import copy
+cimport cython
+
 import decimal
 
 import numpy as np
@@ -21,17 +22,14 @@ from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
+from rmm._lib.memory_resource cimport get_current_device_resource
+
 import cudf
-from cudf._lib.pylibcudf.interop import ColumnMetadata
-
-from cudf._lib.pylibcudf.types cimport type_id
-
 from cudf._lib.types import (
     LIBCUDF_TO_SUPPORTED_NUMPY_TYPES,
     datetime_unit_map,
     duration_unit_map,
 )
-from cudf.api.types import is_list_dtype, is_struct_dtype
 from cudf.core.dtypes import ListDtype, StructDtype
 from cudf.core.missing import NA, NaT
 
@@ -40,10 +38,9 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.types cimport dtype_from_column_view, underlying_type_t_type_id
 
-from cudf._lib.interop import to_arrow
+from cudf._lib.interop import from_arrow, to_arrow
 
 cimport cudf._lib.cpp.types as libcudf_types
-from cudf._lib cimport pylibcudf
 from cudf._lib.cpp.scalar.scalar cimport (
     duration_scalar,
     fixed_point_scalar,
@@ -54,7 +51,12 @@ from cudf._lib.cpp.scalar.scalar cimport (
     struct_scalar,
     timestamp_scalar,
 )
-from cudf._lib.cpp.wrappers.decimals cimport decimal32, decimal64, decimal128
+from cudf._lib.cpp.wrappers.decimals cimport (
+    decimal32,
+    decimal64,
+    decimal128,
+    scale_type,
+)
 from cudf._lib.cpp.wrappers.durations cimport (
     duration_ms,
     duration_ns,
@@ -67,67 +69,18 @@ from cudf._lib.cpp.wrappers.timestamps cimport (
     timestamp_s,
     timestamp_us,
 )
-from cudf._lib.utils cimport columns_from_table_view
+from cudf._lib.utils cimport columns_from_table_view, table_view_from_columns
 
 
-# TODO: Check if this could replace _nested_na_replace
-def _replace_nested_nulls(obj):
-    if isinstance(obj, list):
-        for i, item in enumerate(obj):
-            # TODO: Check if this should use _is_null_host_scalar
-            if cudf.utils.utils.is_na_like(item):
-                obj[i] = None
-            elif isinstance(item, (dict, list)):
-                _replace_nested_nulls(item)
-    elif isinstance(obj, dict):
-        for k, v in obj.items():
-            if cudf.utils.utils.is_na_like(v):
-                obj[k] = None
-            elif isinstance(v, (dict, list)):
-                _replace_nested_nulls(v)
-
-
-def _replace_nested_none(obj):
-    if isinstance(obj, list):
-        for i, item in enumerate(obj):
-            if item is None:
-                obj[i] = NA
-            elif isinstance(item, (dict, list)):
-                _replace_nested_none(item)
-    elif isinstance(obj, dict):
-        for k, v in obj.items():
-            if v is None:
-                obj[k] = NA
-            elif isinstance(v, (dict, list)):
-                _replace_nested_none(v)
-
-
-def gather_metadata(dtypes):
-    # dtypes is a dict mapping names to column dtypes
-    # This interface is a bit clunky, but it matches libcudf. May want to
-    # consider better approaches to building up the metadata eventually.
-    out = []
-    for name, dtype in dtypes.items():
-        v = ColumnMetadata(name)
-        if is_struct_dtype(dtype):
-            v.children_meta = gather_metadata(dtype.fields)
-        elif is_list_dtype(dtype):
-            # Offsets column is unnamed and has no children
-            v.children_meta.append(ColumnMetadata(""))
-            v.children_meta.extend(
-                gather_metadata({"": dtype.element_type})
-            )
-        out.append(v)
-    return out
-
-
+# The DeviceMemoryResource attribute could be released prematurely
+# by the gc if the DeviceScalar is in a reference cycle. Removing
+# the tp_clear function with the no_gc_clear decoration prevents that.
+# See https://github.com/rapidsai/rmm/pull/931 for details.
+@cython.no_gc_clear
 cdef class DeviceScalar:
 
-    # I think this should be removable, except that currently the way that
-    # from_unique_ptr is implemented is probably dereferencing this in an
-    # invalid state. See what the best way to fix that is.
     def __cinit__(self, *args, **kwargs):
-        self.c_value = pylibcudf.Scalar()
+        self.mr = get_current_device_resource()
 
     def __init__(self, value, dtype):
         """
@@ -143,101 +96,62 @@ cdef class DeviceScalar:
         dtype : dtype
             A NumPy dtype.
         """
-        dtype = dtype if dtype.kind != 'U' else cudf.dtype('object')
+        self._dtype = dtype if dtype.kind != 'U' else cudf.dtype('object')
+        self._set_value(value, self._dtype)
 
-        if cudf.utils.utils.is_na_like(value):
-            value = None
-        else:
-            # TODO: For now we always deepcopy the input value to avoid
-            # overwriting the input values when replacing nulls. Since it's
-            # just host values it's not that expensive, but we could consider
-            # alternatives.
-            value = copy.deepcopy(value)
-            _replace_nested_nulls(value)
+    def _set_value(self, value, dtype):
+        # IMPORTANT: this should only ever be called from __init__
+        valid = not _is_null_host_scalar(value)
 
-        if isinstance(dtype, cudf.core.dtypes._BaseDtype):
-            pa_type = dtype.to_arrow()
-        elif pd.api.types.is_string_dtype(dtype):
-            # Have to manually convert object types, which we use internally
-            # for strings but pyarrow only supports as unicode 'U'
-            pa_type = pa.string()
-        else:
-            pa_type = pa.from_numpy_dtype(dtype)
-
-        pa_scalar = pa.scalar(value, type=pa_type)
-
-        cdef type_id tid
-        data_type = None
         if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
-            tid = type_id.DECIMAL128
-            if isinstance(dtype, cudf.core.dtypes.Decimal32Dtype):
-                tid = type_id.DECIMAL32
-            elif isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
-                tid = type_id.DECIMAL64
-            data_type = pylibcudf.DataType(tid, -dtype.scale)
-
-        self.c_value = pylibcudf.Scalar.from_pyarrow_scalar(pa_scalar, data_type)
-        self._dtype = dtype
+            _set_decimal_from_scalar(
+                self.c_value, value, dtype, valid)
+        elif isinstance(dtype, cudf.ListDtype):
+            _set_list_from_pylist(
+                self.c_value, value, dtype, valid)
+        elif isinstance(dtype, cudf.StructDtype):
+            _set_struct_from_pydict(self.c_value, value, dtype, valid)
+        elif pd.api.types.is_string_dtype(dtype):
+            _set_string_from_np_string(self.c_value, value, valid)
+        elif pd.api.types.is_numeric_dtype(dtype):
+            _set_numeric_from_np_scalar(self.c_value,
+                                        value,
+                                        dtype,
+                                        valid)
+        elif pd.api.types.is_datetime64_dtype(dtype):
+            _set_datetime64_from_np_scalar(
+                self.c_value, value, dtype, valid
+            )
+        elif pd.api.types.is_timedelta64_dtype(dtype):
+            _set_timedelta64_from_np_scalar(
+                self.c_value, value, dtype, valid
+            )
+        else:
+            raise ValueError(
+                f"Cannot convert value of type "
+                f"{type(value).__name__} to cudf scalar"
+            )
 
     def _to_host_scalar(self):
-        metadata = gather_metadata({"": self.dtype})[0]
         if isinstance(self.dtype, cudf.core.dtypes.DecimalDtype):
-            ps = self.c_value.to_pyarrow_scalar(metadata)
-            if not ps.is_valid:
-                return NA
-            return ps.as_py()
-        # For nested types we should eventually account for the special cases
-        # that we handle for other types, e.g. numerics being casted to numpy
-        # types or datetime/timedelta needing to be cast to int64 to handle
-        # overflow. However, the old implementation didn't handle these cases
-        # either, so we can leave that for a follow-up PR.
+            result = _get_py_decimal_from_fixed_point(self.c_value)
         elif cudf.api.types.is_struct_dtype(self.dtype):
-            ps = self.c_value.to_pyarrow_scalar(metadata)
-            if not ps.is_valid:
-                return NA
-            ret = ps.as_py()
-            _replace_nested_none(ret)
-            return ret
+            result = _get_py_dict_from_struct(self.c_value, self.dtype)
         elif cudf.api.types.is_list_dtype(self.dtype):
-            ps = self.c_value.to_pyarrow_scalar(metadata)
-            if not ps.is_valid:
-                return NA
-            ret = ps.as_py()
-            _replace_nested_none(ret)
-            return ret
+            result = _get_py_list_from_list(self.c_value, self.dtype)
         elif pd.api.types.is_string_dtype(self.dtype):
-            ps = self.c_value.to_pyarrow_scalar(metadata)
-            if not ps.is_valid:
-                return NA
-            return ps.as_py()
+            result = _get_py_string_from_string(self.c_value)
         elif pd.api.types.is_numeric_dtype(self.dtype):
-            ps = self.c_value.to_pyarrow_scalar(metadata)
-            if not ps.is_valid:
-                return NA
-            return ps.type.to_pandas_dtype()(ps.as_py())
+            result = _get_np_scalar_from_numeric(self.c_value)
         elif pd.api.types.is_datetime64_dtype(self.dtype):
-            ps = self.c_value.to_pyarrow_scalar(metadata)
-            if not ps.is_valid:
-                return NaT
-            time_unit, _ = np.datetime_data(self.dtype)
-            # Cast to int64 to avoid overflow
-            return np.datetime64(ps.cast('int64').as_py(), time_unit)
+            result = _get_np_scalar_from_timestamp64(self.c_value)
         elif pd.api.types.is_timedelta64_dtype(self.dtype):
-            ps = self.c_value.to_pyarrow_scalar(metadata)
-            if not ps.is_valid:
-                return NaT
-            time_unit, _ = np.datetime_data(self.dtype)
-            # Cast to int64 to avoid overflow
-            return np.timedelta64(ps.cast('int64').as_py(), time_unit)
+            result = _get_np_scalar_from_timedelta64(self.c_value)
         else:
             raise ValueError(
                 "Could not convert cudf::scalar to a Python value"
             )
         return result
-
-    # TODO: This is just here for testing and should be removed.
-    def get(self):
-        return self.c_value
 
     @property
     def dtype(self):
@@ -255,13 +169,13 @@ cdef class DeviceScalar:
         return self._to_host_scalar()
 
     cdef const scalar* get_raw_ptr(self) except *:
-        return self.c_value.c_obj.get()
+        return self.c_value.get()
 
     cpdef bool is_valid(self):
         """
         Returns if the Scalar is valid or not(i.e., <NA>).
         """
-        return self.c_value.is_valid()
+        return self.get_raw_ptr()[0].is_valid()
 
     def __repr__(self):
         if cudf.utils.utils.is_na_like(self.value):
@@ -280,7 +194,7 @@ cdef class DeviceScalar:
         cdef DeviceScalar s = DeviceScalar.__new__(DeviceScalar)
         cdef libcudf_types.data_type cdtype
 
-        s.c_value = pylibcudf.Scalar.from_libcudf(move(ptr))
+        s.c_value = move(ptr)
         cdtype = s.get_raw_ptr()[0].type()
 
         if dtype is not None:
@@ -320,6 +234,42 @@ cdef class DeviceScalar:
                 <underlying_type_t_type_id>(cdtype.id())
             ]
         return s
+
+
+cdef _set_string_from_np_string(unique_ptr[scalar]& s, value, bool valid=True):
+    value = value if valid else ""
+    s.reset(new string_scalar(value.encode(), valid))
+
+
+cdef _set_numeric_from_np_scalar(unique_ptr[scalar]& s,
+                                 object value,
+                                 object dtype,
+                                 bool valid=True):
+    value = value if valid else 0
+    if dtype == "int8":
+        s.reset(new numeric_scalar[int8_t](value, valid))
+    elif dtype == "int16":
+        s.reset(new numeric_scalar[int16_t](value, valid))
+    elif dtype == "int32":
+        s.reset(new numeric_scalar[int32_t](value, valid))
+    elif dtype == "int64":
+        s.reset(new numeric_scalar[int64_t](value, valid))
+    elif dtype == "uint8":
+        s.reset(new numeric_scalar[uint8_t](value, valid))
+    elif dtype == "uint16":
+        s.reset(new numeric_scalar[uint16_t](value, valid))
+    elif dtype == "uint32":
+        s.reset(new numeric_scalar[uint32_t](value, valid))
+    elif dtype == "uint64":
+        s.reset(new numeric_scalar[uint64_t](value, valid))
+    elif dtype == "float32":
+        s.reset(new numeric_scalar[float](value, valid))
+    elif dtype == "float64":
+        s.reset(new numeric_scalar[double](value, valid))
+    elif dtype == "bool":
+        s.reset(new numeric_scalar[bool](<bool>value, valid))
+    else:
+        raise ValueError(f"dtype not supported: {dtype}")
 
 
 cdef _set_datetime64_from_np_scalar(unique_ptr[scalar]& s,
@@ -374,6 +324,62 @@ cdef _set_timedelta64_from_np_scalar(unique_ptr[scalar]& s,
     else:
         raise ValueError(f"dtype not supported: {dtype}")
 
+cdef _set_decimal_from_scalar(unique_ptr[scalar]& s,
+                              object value,
+                              object dtype,
+                              bool valid=True):
+    value = cudf.utils.dtypes._decimal_to_int64(value) if valid else 0
+    if isinstance(dtype, cudf.Decimal64Dtype):
+        s.reset(
+            new fixed_point_scalar[decimal64](
+                <int64_t>np.int64(value), scale_type(-dtype.scale), valid
+            )
+        )
+    elif isinstance(dtype, cudf.Decimal32Dtype):
+        s.reset(
+            new fixed_point_scalar[decimal32](
+                <int32_t>np.int32(value), scale_type(-dtype.scale), valid
+            )
+        )
+    elif isinstance(dtype, cudf.Decimal128Dtype):
+        s.reset(
+            new fixed_point_scalar[decimal128](
+                <libcudf_types.int128>value, scale_type(-dtype.scale), valid
+            )
+        )
+    else:
+        raise ValueError(f"dtype not supported: {dtype}")
+
+cdef _set_struct_from_pydict(unique_ptr[scalar]& s,
+                             object value,
+                             object dtype,
+                             bool valid=True):
+    arrow_schema = dtype.to_arrow()
+    columns = [str(i) for i in range(len(arrow_schema))]
+    if valid:
+        pyarrow_table = pa.Table.from_arrays(
+            [
+                pa.array([value[f.name]], from_pandas=True, type=f.type)
+                for f in arrow_schema
+            ],
+            names=columns
+        )
+    else:
+        pyarrow_table = pa.Table.from_arrays(
+            [
+                pa.array([NA], from_pandas=True, type=f.type)
+                for f in arrow_schema
+            ],
+            names=columns
+        )
+
+    data = from_arrow(pyarrow_table)
+    cdef table_view struct_view = table_view_from_columns(data)
+
+    s.reset(
+        new struct_scalar(struct_view, valid)
+    )
+
 cdef _get_py_dict_from_struct(unique_ptr[scalar]& s, dtype):
     if not s.get()[0].is_valid():
         return NA
@@ -388,6 +394,25 @@ cdef _get_py_dict_from_struct(unique_ptr[scalar]& s, dtype):
     table = to_arrow([struct_col], [("None", dtype)])
     python_dict = table.to_pydict()["None"][0]
     return {k: _nested_na_replace([python_dict[k]])[0] for k in python_dict}
+
+cdef _set_list_from_pylist(unique_ptr[scalar]& s,
+                           object value,
+                           object dtype,
+                           bool valid=True):
+
+    value = value if valid else [NA]
+    cdef Column col
+    if isinstance(dtype.element_type, ListDtype):
+        pa_type = dtype.element_type.to_arrow()
+    else:
+        pa_type = dtype.to_arrow().value_type
+    col = cudf.core.column.as_column(
+        pa.array(value, from_pandas=True, type=pa_type)
+    )
+    cdef column_view col_view = col.view()
+    s.reset(
+        new list_scalar(col_view, valid)
+    )
 
 
 cdef _get_py_list_from_list(unique_ptr[scalar]& s, dtype):
@@ -576,9 +601,9 @@ def _create_proxy_nat_scalar(dtype):
     if dtype.char in 'mM':
         nat = dtype.type('NaT').astype(dtype)
         if dtype.type == np.datetime64:
-            _set_datetime64_from_np_scalar(result.c_value.c_obj, nat, dtype, True)
+            _set_datetime64_from_np_scalar(result.c_value, nat, dtype, True)
         elif dtype.type == np.timedelta64:
-            _set_timedelta64_from_np_scalar(result.c_value.c_obj, nat, dtype, True)
+            _set_timedelta64_from_np_scalar(result.c_value, nat, dtype, True)
         return result
     else:
         raise TypeError('NAT only valid for datetime and timedelta')

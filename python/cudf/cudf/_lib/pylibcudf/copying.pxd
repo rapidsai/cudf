@@ -13,9 +13,3 @@ cpdef Table gather(
     Column gather_map,
     out_of_bounds_policy bounds_policy
 )
-
-cpdef Table scatter (
-    list source_scalars,
-    Column indices,
-    Table target,
-)

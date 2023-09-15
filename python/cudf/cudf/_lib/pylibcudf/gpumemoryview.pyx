@@ -19,21 +19,9 @@ cdef class gpumemoryview:
                 "gpumemoryview must be constructed from an object supporting "
                 "the CUDA array interface"
             )
-        self._obj = obj
-        self._released = False
+        self.obj = obj
         # TODO: Need to respect readonly
         self.ptr = cai["data"][0]
 
     def __cuda_array_interface__(self):
         return self.obj.__cuda_array_interface__
-
-    @property
-    def obj(self):
-        if not self._released:
-            return self._obj
-        else:
-            raise ValueError("operation forbidden on released gpumemoryview object")
-
-    cpdef release(self):
-        self._obj = None
-        self._released = True

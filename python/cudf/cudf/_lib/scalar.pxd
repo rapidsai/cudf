@@ -1,16 +1,20 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 
 from rmm._lib.memory_resource cimport DeviceMemoryResource
 
-from cudf._lib cimport pylibcudf
 from cudf._lib.cpp.scalar.scalar cimport scalar
 
 
 cdef class DeviceScalar:
-    cdef pylibcudf.Scalar c_value
+    cdef unique_ptr[scalar] c_value
+
+    # Holds a reference to the DeviceMemoryResource used for allocation.
+    # Ensures the MR does not get destroyed before this DeviceBuffer. `mr` is
+    # needed for deallocation
+    cdef DeviceMemoryResource mr
 
     cdef object _dtype
 
