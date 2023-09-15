@@ -617,22 +617,44 @@ def test_datetime_dataframe():
 @pytest.mark.parametrize("infer_datetime_format", [True, False])
 def test_cudf_to_datetime(data, dayfirst, infer_datetime_format):
     pd_data = data
+    is_string_data = False
     if isinstance(pd_data, (pd.Series, pd.DataFrame, pd.Index)):
         gd_data = cudf.from_pandas(pd_data)
+        is_string_data = (
+            gd_data.ndim == 1
+            and not gd_data.empty
+            and gd_data.dtype.kind == "O"
+        )
     else:
         if type(pd_data).__module__ == np.__name__:
             gd_data = cp.array(pd_data)
         else:
             gd_data = pd_data
+            is_string_data = isinstance(gd_data, list) and isinstance(
+                next(iter(gd_data), None), str
+            )
 
-    expected = pd.to_datetime(
-        pd_data, dayfirst=dayfirst, infer_datetime_format=infer_datetime_format
-    )
-    actual = cudf.to_datetime(
-        gd_data, dayfirst=dayfirst, infer_datetime_format=infer_datetime_format
-    )
-
-    assert_eq(actual, expected)
+    if dayfirst and not infer_datetime_format and is_string_data:
+        # Note: pandas<2.0 also does not respect dayfirst=True correctly
+        # for object data
+        with pytest.raises(NotImplementedError):
+            cudf.to_datetime(
+                gd_data,
+                dayfirst=dayfirst,
+                infer_datetime_format=infer_datetime_format,
+            )
+    else:
+        expected = pd.to_datetime(
+            pd_data,
+            dayfirst=dayfirst,
+            infer_datetime_format=infer_datetime_format,
+        )
+        actual = cudf.to_datetime(
+            gd_data,
+            dayfirst=dayfirst,
+            infer_datetime_format=infer_datetime_format,
+        )
+        assert_eq(actual, expected)
 
 
 @pytest.mark.parametrize(
