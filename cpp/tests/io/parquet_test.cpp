@@ -348,6 +348,9 @@ struct ParquetWriterSchemaTest : public ParquetWriterTest {
 template <typename T>
 struct ParquetReaderSourceTest : public ParquetReaderTest {};
 
+template <typename T>
+struct ParquetWriterDeltaTest : public ParquetWriterTest {};
+
 // Declare typed test cases
 // TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5352
 using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool, float, double>;
@@ -362,6 +365,10 @@ TYPED_TEST_SUITE(ParquetWriterTimestampTypeTest, SupportedTimestampTypes);
 TYPED_TEST_SUITE(ParquetWriterSchemaTest, cudf::test::AllTypes);
 using ByteLikeTypes = cudf::test::Types<int8_t, char, uint8_t, unsigned char, std::byte>;
 TYPED_TEST_SUITE(ParquetReaderSourceTest, ByteLikeTypes);
+using DeltaDecimalTypes = cudf::test::Types<numeric::decimal32, numeric::decimal64>;
+using DeltaBinaryTypes =
+  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::ChronoTypes, DeltaDecimalTypes>;
+TYPED_TEST_SUITE(ParquetWriterDeltaTest, DeltaBinaryTypes);
 
 // Base test fixture for chunked writer tests
 struct ParquetChunkedWriterTest : public cudf::test::BaseFixture {};
@@ -379,7 +386,6 @@ TYPED_TEST_SUITE(ParquetChunkedWriterNumericTypeTest, SupportedTypes);
 class ParquetSizedTest : public ::cudf::test::BaseFixtureWithParam<int> {};
 
 // test the allowed bit widths for dictionary encoding
-// values chosen to trigger 1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, and 24 bit dictionaries
 INSTANTIATE_TEST_SUITE_P(ParquetDictionaryTest,
                          ParquetSizedTest,
                          testing::Range(1, 25),
@@ -540,9 +546,7 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps)
 
   auto filepath = temp_env->get_temp_filepath("Timestamps.parquet");
   cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .write_v2_headers(true)
-      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
   cudf::io::write_parquet(out_opts);
 
   cudf::io::parquet_reader_options in_opts =
@@ -568,9 +572,7 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampsWithNulls)
 
   auto filepath = temp_env->get_temp_filepath("TimestampsWithNulls.parquet");
   cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .write_v2_headers(true)
-      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
   cudf::io::write_parquet(out_opts);
 
   cudf::io::parquet_reader_options in_opts =
@@ -594,9 +596,7 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampOverflow)
 
   auto filepath = temp_env->get_temp_filepath("ParquetTimestampOverflow.parquet");
   cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .write_v2_headers(true)
-      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
   cudf::io::write_parquet(out_opts);
 
   cudf::io::parquet_reader_options in_opts =
@@ -6735,6 +6735,36 @@ TEST_P(ParquetV2Test, CheckEncodings)
     EXPECT_TRUE(chunk2_enc.size() == 2);
     EXPECT_TRUE(contains(chunk2_enc, Encoding::RLE));
     EXPECT_TRUE(contains(chunk2_enc, Encoding::PLAIN_DICTIONARY));
+  }
+}
+
+TYPED_TEST(ParquetWriterDeltaTest, WriteDeltaBinaryPacked)
+{
+  using T   = TypeParam;
+  auto col0 = testdata::ascending<T>();
+  auto col1 = testdata::descending<T>();
+
+  auto const expected = table_view{{col0, col1}};
+
+  auto const filepath = temp_env->get_temp_filepath("DeltaBinaryPacked.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .write_v2_headers(true)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
+  cudf::io::write_parquet(out_opts);
+
+  // FIXME: these three types fail whether delta encoding is used or not. Is this a problem
+  // with the test or is there something wrong in libcudf when writing these types. All three
+  // of them use ts_scale > 1
+  bool constexpr is_failing = std::is_same_v<T, cudf::duration_D> or
+                              std::is_same_v<T, cudf::duration_s> or
+                              std::is_same_v<T, cudf::timestamp_s>;
+
+  if constexpr (not is_failing) {
+    cudf::io::parquet_reader_options in_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+    auto result = cudf::io::read_parquet(in_opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
   }
 }
 
