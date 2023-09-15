@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace cudf {
@@ -40,9 +41,6 @@ namespace parquet {
  * compression codecs are supported yet.
  */
 class CompactProtocolReader {
- protected:
-  static const uint8_t g_list2struct[16];
-
  public:
   explicit CompactProtocolReader(uint8_t const* base = nullptr, size_t len = 0) { init(base, len); }
   void init(uint8_t const* base, size_t len)
@@ -66,7 +64,7 @@ class CompactProtocolReader {
     for (uint32_t l = 0;; l += 7) {
       T c = getb();
       v |= (c & 0x7f) << l;
-      if (c < 0x80) break;
+      if (c < 0x80) { break; }
     }
     return v;
   }
@@ -75,8 +73,8 @@ class CompactProtocolReader {
   template <typename T>
   T get_zigzag() noexcept
   {
-    using U = std::make_unsigned_t<T>;
-    U u     = get_varint<U>();
+    using U   = std::make_unsigned_t<T>;
+    U const u = get_varint<U>();
     return static_cast<T>((u >> 1u) ^ -static_cast<T>(u & 1));
   }
 
@@ -88,14 +86,15 @@ class CompactProtocolReader {
   uint32_t get_u32() noexcept { return get_varint<uint32_t>(); }
   uint64_t get_u64() noexcept { return get_varint<uint64_t>(); }
 
-  uint32_t get_listh(uint8_t* el_type) noexcept
+  [[nodiscard]] std::pair<uint8_t, uint32_t> get_listh() noexcept
   {
-    uint32_t c  = getb();
-    uint32_t sz = c >> 4;
-    *el_type    = c & 0xf;
-    if (sz == 0xf) sz = get_u32();
-    return sz;
+    uint32_t const c = getb();
+    uint32_t sz      = c >> 4;
+    uint8_t t        = c & 0xf;
+    if (sz == 0xf) { sz = get_u32(); }
+    return {t, sz};
   }
+
   bool skip_struct_field(int t, int depth = 0);
 
  public:

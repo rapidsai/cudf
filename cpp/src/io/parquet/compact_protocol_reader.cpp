@@ -32,7 +32,7 @@ namespace parquet {
  */
 class ParquetField {
  protected:
-  int field_val;
+  int const field_val;
 
   ParquetField(int f) : field_val(f) {}
 
@@ -47,12 +47,12 @@ class ParquetField {
 template <typename T>
 class ParquetFieldList : public ParquetField {
  protected:
-  using read_func = std::function<bool(uint32_t, CompactProtocolReader*)>;
+  using read_func_type = std::function<bool(uint32_t, CompactProtocolReader*)>;
   std::vector<T>& val;
   FieldType const expected_type;
-  read_func read_value;
+  read_func_type read_value;
 
-  void bind_func(read_func fn) { read_value = fn; }
+  void bind_func(read_func_type fn) { read_value = fn; }
 
   ParquetFieldList(int f, std::vector<T>& v, FieldType t)
     : ParquetField(f), val(v), expected_type(t)
@@ -63,8 +63,7 @@ class ParquetFieldList : public ParquetField {
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     if (field_type != ST_FLD_LIST) { return true; }
-    uint8_t t;
-    uint32_t n = cpr->get_listh(&t);
+    auto const [t, n] = cpr->get_listh();
     if (t != expected_type) { return true; }
     val.resize(n);
     for (uint32_t i = 0; i < n; i++) {
@@ -102,7 +101,7 @@ struct ParquetFieldBoolList : public ParquetFieldList<bool> {
   ParquetFieldBoolList(int f, std::vector<bool>& v) : ParquetFieldList(f, v, ST_FLD_TRUE)
   {
     auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
-      unsigned int current_byte = cpr->getb();
+      auto const current_byte = cpr->getb();
       if (current_byte != ST_FLD_TRUE && current_byte != ST_FLD_FALSE) { return true; }
       this->val[i] = current_byte == ST_FLD_TRUE;
       return false;
@@ -177,7 +176,7 @@ class ParquetFieldString : public ParquetField {
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     if (field_type != ST_FLD_BINARY) { return true; }
-    uint32_t n = cpr->get_u32();
+    auto const n = cpr->get_u32();
     if (n < static_cast<size_t>(cpr->m_end - cpr->m_cur)) {
       val.assign(reinterpret_cast<char const*>(cpr->m_cur), n);
       cpr->m_cur += n;
@@ -198,7 +197,7 @@ struct ParquetFieldStringList : public ParquetFieldList<std::string> {
   ParquetFieldStringList(int f, std::vector<std::string>& v) : ParquetFieldList(f, v, ST_FLD_BINARY)
   {
     auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
-      uint32_t l = cpr->get_u32();
+      auto const l = cpr->get_u32();
       if (l < static_cast<size_t>(cpr->m_end - cpr->m_cur)) {
         this->val[i].assign(reinterpret_cast<char const*>(cpr->m_cur), l);
         cpr->m_cur += l;
@@ -268,6 +267,8 @@ class ParquetFieldStruct : public ParquetField {
 
 /**
  * @brief Functor to read empty structures in unions
+ *
+ * Added to avoid having to define read() functions for empty structs contained in unions.
  *
  * @return True if field types mismatch
  */
@@ -374,7 +375,7 @@ class ParquetFieldBinary : public ParquetField {
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     if (field_type != ST_FLD_BINARY) { return true; }
-    uint32_t n = cpr->get_u32();
+    auto const n = cpr->get_u32();
     if (n <= static_cast<size_t>(cpr->m_end - cpr->m_cur)) {
       val.resize(n);
       val.assign(cpr->m_cur, cpr->m_cur + n);
@@ -397,7 +398,7 @@ struct ParquetFieldBinaryList : public ParquetFieldList<std::vector<uint8_t>> {
     : ParquetFieldList(f, v, ST_FLD_BINARY)
   {
     auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
-      uint32_t l = cpr->get_u32();
+      auto const l = cpr->get_u32();
       if (l <= static_cast<size_t>(cpr->m_end - cpr->m_cur)) {
         val[i].resize(l);
         val[i].assign(cpr->m_cur, cpr->m_cur + l);
@@ -424,7 +425,7 @@ class ParquetFieldStructBlob : public ParquetField {
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     if (field_type != ST_FLD_STRUCT) { return true; }
-    uint8_t const* start = cpr->m_cur;
+    uint8_t const* const start = cpr->m_cur;
     cpr->skip_struct_field(field_type);
     if (cpr->m_cur > start) { val.assign(start, cpr->m_cur - 1); }
     return false;
@@ -444,28 +445,11 @@ class ParquetFieldOptional : public ParquetField {
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     T v;
-    bool res = FieldFunctor(field_val, v).operator()(cpr, field_type);
+    bool const res = FieldFunctor(field_val, v).operator()(cpr, field_type);
     if (!res) { val = v; }
     return res;
   }
 };
-
-uint8_t const CompactProtocolReader::g_list2struct[16] = {0,
-                                                          1,
-                                                          2,
-                                                          ST_FLD_BYTE,
-                                                          ST_FLD_DOUBLE,
-                                                          5,
-                                                          ST_FLD_I16,
-                                                          7,
-                                                          ST_FLD_I32,
-                                                          9,
-                                                          ST_FLD_I64,
-                                                          ST_FLD_BINARY,
-                                                          ST_FLD_STRUCT,
-                                                          ST_FLD_MAP,
-                                                          ST_FLD_SET,
-                                                          ST_FLD_LIST};
 
 /**
  * @brief Skips the number of bytes according to the specified struct type
@@ -486,21 +470,20 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
     case ST_FLD_BYTE: skip_bytes(1); break;
     case ST_FLD_DOUBLE: skip_bytes(8); break;
     case ST_FLD_BINARY: skip_bytes(get_u32()); break;
-    case ST_FLD_LIST:
+    case ST_FLD_LIST: [[fallthrough]];
     case ST_FLD_SET: {
-      int c = getb();
-      int n = c >> 4;
-      if (n == 0xf) { n = get_i32(); }
-      t = g_list2struct[c & 0xf];
+      auto const [t, n] = get_listh();
       if (depth > 10) { return false; }
-      for (int32_t i = 0; i < n; i++)
+      for (uint32_t i = 0; i < n; i++) {
         skip_struct_field(t, depth + 1);
+      }
     } break;
     case ST_FLD_STRUCT:
       for (;;) {
-        int c = getb();
-        t     = c & 0xf;
-        if (!c) { break; }
+        int const c = getb();
+        t           = c & 0xf;
+        if (c == 0) { break; }               // end of struct
+        if ((c & 0xf0) == 0) { get_i16(); }  // field id is not a delta
         if (depth > 10) { return false; }
         skip_struct_field(t, depth + 1);
       }
@@ -553,10 +536,10 @@ inline bool function_builder(CompactProtocolReader* cpr, std::tuple<Operator...>
   while (true) {
     int const current_byte = cpr->getb();
     if (!current_byte) { break; }
-    int const field_delta = current_byte >> 4;
-    int const field_type  = current_byte & 0xf;
-    field                 = field_delta ? field + field_delta : cpr->get_i16();
-    bool exit_function    = FunctionSwitchImpl<index>::run(cpr, field_type, field, op);
+    int const field_delta    = current_byte >> 4;
+    int const field_type     = current_byte & 0xf;
+    field                    = field_delta ? field + field_delta : cpr->get_i16();
+    bool const exit_function = FunctionSwitchImpl<index>::run(cpr, field_type, field, op);
     if (exit_function) { return false; }
   }
   return true;
@@ -813,10 +796,12 @@ bool CompactProtocolReader::InitSchema(FileMetaData* md)
       for (auto const& path : column.meta_data.path_in_schema) {
         auto const it = [&] {
           // find_if starting at (current_schema_index + 1) and then wrapping
-          auto schema = [&](auto const& e) { return e.parent_idx == parent && e.name == path; };
-          auto mid    = md->schema.cbegin() + current_schema_index + 1;
-          auto it     = std::find_if(mid, md->schema.cend(), schema);
-          if (it != md->schema.cend()) return it;
+          auto const schema = [&](auto const& e) {
+            return e.parent_idx == parent && e.name == path;
+          };
+          auto const mid = md->schema.cbegin() + current_schema_index + 1;
+          auto const it  = std::find_if(mid, md->schema.cend(), schema);
+          if (it != md->schema.cend()) { return it; }
           return std::find_if(md->schema.cbegin(), mid, schema);
         }();
         if (it == md->schema.cend()) { return false; }
@@ -861,8 +846,8 @@ int CompactProtocolReader::WalkSchema(
     if (e->num_children > 0) {
       for (int i = 0; i < e->num_children; i++) {
         e->children_idx.push_back(idx);
-        int idx_old = idx;
-        idx         = WalkSchema(md, idx, parent_idx, max_def_level, max_rep_level);
+        int const idx_old = idx;
+        idx               = WalkSchema(md, idx, parent_idx, max_def_level, max_rep_level);
         if (idx <= idx_old) { break; }  // Error
       }
     }
