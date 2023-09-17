@@ -3473,3 +3473,48 @@ def test_categorical_grouping_pandas_compatibility():
     expected = pdf.groupby("key", sort=False).sum()
 
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize("normalize", [True, False])
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize("ascending", [True, False])
+@pytest.mark.parametrize("dropna", [True, False])
+@pytest.mark.parametrize("as_index", [True, False])
+def test_group_by_value_counts(normalize, sort, ascending, dropna, as_index):
+    # From Issue#12789
+    df = cudf.DataFrame(
+        {
+            "gender": ["male", "male", "female", "male", "female", "male"],
+            "education": ["low", "medium", np.nan, "low", "high", "low"],
+            "country": ["US", "FR", "US", "FR", "FR", "FR"],
+        }
+    )
+    pdf = df.to_pandas()
+
+    actual = df.groupby("gender", as_index=as_index).value_counts(
+        normalize=normalize, sort=sort, ascending=ascending, dropna=dropna
+    )
+    expected = pdf.groupby("gender", as_index=as_index).value_counts(
+        normalize=normalize, sort=sort, ascending=ascending, dropna=dropna
+    )
+
+    # TODO: Remove `check_names=False` once testing against `pandas>=2.0.0`
+    assert_eq(actual, expected, check_names=False)
+
+
+def test_group_by_value_counts_subset():
+    # From Issue#12789
+    df = cudf.DataFrame(
+        {
+            "gender": ["male", "male", "female", "male", "female", "male"],
+            "education": ["low", "medium", "high", "low", "high", "low"],
+            "country": ["US", "FR", "US", "FR", "FR", "FR"],
+        }
+    )
+    pdf = df.to_pandas()
+
+    actual = df.groupby("gender").value_counts(["education"])
+    expected = pdf.groupby("gender").value_counts(["education"])
+
+    # TODO: Remove `check_names=False` once testing against `pandas>=2.0.0`
+    assert_eq(actual, expected, check_names=False)
