@@ -293,11 +293,7 @@ TYPED_TEST(SumReductionTest, Sum)
                  .second);
 }
 
-using TestTypes = cudf::test::Concat<cudf::test::Types<int8_t, int16_t, int32_t, int64_t>,
-                                     cudf::test::FloatingPointTypes,
-                                     cudf::test::FixedPointTypes,
-                                     cudf::test::ChronoTypes>;
-TYPED_TEST_SUITE(ReductionTest, TestTypes);
+TYPED_TEST_SUITE(ReductionTest, cudf::test::NumericTypes);
 
 TYPED_TEST(ReductionTest, Product)
 {
