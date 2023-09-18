@@ -132,5 +132,5 @@ jobs:
     with:
       build_command: |
         sccache -z;
-        build-all -DBUILD_BENCHMARKS=ON;
+        build-all -DBUILD_BENCHMARKS=ON --verbose;
         sccache -s;
