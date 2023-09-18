@@ -852,12 +852,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         elif len(data) > 0 and isinstance(data[0], pd._libs.interval.Interval):
             data = DataFrame.from_pandas(pd.DataFrame(data))
             self._data = data._data
+        elif any(
+            not isinstance(col, (abc.Iterable, abc.Sequence)) for col in data
+        ):
+            raise TypeError("Inputs should be an iterable or sequence.")
+        elif len(data) > 0 and not can_convert_to_column(data[0]):
+            raise ValueError("Must pass 2-d input.")
         else:
-            if any(
-                not isinstance(col, (abc.Iterable, abc.Sequence))
-                for col in data
-            ):
-                raise TypeError("Inputs should be an iterable or sequence.")
             if (
                 len(data) > 0
                 and columns is None
