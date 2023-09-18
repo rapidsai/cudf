@@ -148,15 +148,11 @@ struct dispatch_to_arrow {
 // smallest decimal resolution supported by Arrow.
 template <typename DeviceType>
 std::shared_ptr<arrow::Array> unsupported_decimals_to_arrow(column_view input,
+                                                            int32_t precision,
                                                             arrow::MemoryPool* ar_mr,
                                                             rmm::cuda_stream_view stream)
 {
-  constexpr size_type BIT_WIDTH_RATIO = size_type{128} / sizeof(DeviceType);
-
-  // libcudf decimals are always converted to the highest Arrow precision
-  // because libcudf does not support precision.
-  constexpr auto decimal128_max_precision = int32_t{38};
-  constexpr auto precision                = decimal128_max_precision / BIT_WIDTH_RATIO;
+  constexpr size_type BIT_WIDTH_RATIO = sizeof(__int128_t) / sizeof(DeviceType);
 
   rmm::device_uvector<DeviceType> buf(input.size() * BIT_WIDTH_RATIO, stream);
 
@@ -200,7 +196,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal32>(
   arrow::MemoryPool* ar_mr,
   rmm::cuda_stream_view stream)
 {
-  return unsupported_decimals_to_arrow<int32_t>(input, ar_mr, stream);
+  return unsupported_decimals_to_arrow<int32_t>(input, 9, ar_mr, stream);
 }
 
 template <>
@@ -211,7 +207,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
   arrow::MemoryPool* ar_mr,
   rmm::cuda_stream_view stream)
 {
-  return unsupported_decimals_to_arrow<int64_t>(input, ar_mr, stream);
+  return unsupported_decimals_to_arrow<int64_t>(input, 18, ar_mr, stream);
 }
 
 template <>
