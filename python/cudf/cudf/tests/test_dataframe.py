@@ -10349,3 +10349,22 @@ def test_dataframe_round_builtin(digits):
     actual = round(gdf, digits)
 
     assert_eq(expected, actual)
+
+
+def test_dataframe_init_from_nested_dict():
+    ordered_dict = OrderedDict(
+        [
+            ("one", OrderedDict([("col_a", "foo1"), ("col_b", "bar1")])),
+            ("two", OrderedDict([("col_a", "foo2"), ("col_b", "bar2")])),
+            ("three", OrderedDict([("col_a", "foo3"), ("col_b", "bar3")])),
+        ]
+    )
+    pdf = pd.DataFrame(ordered_dict)
+    gdf = cudf.DataFrame(ordered_dict)
+
+    assert_eq(pdf, gdf)
+    regular_dict = {key: dict(value) for key, value in ordered_dict.items()}
+
+    pdf = pd.DataFrame(regular_dict)
+    gdf = cudf.DataFrame(regular_dict)
+    assert_eq(pdf, gdf)

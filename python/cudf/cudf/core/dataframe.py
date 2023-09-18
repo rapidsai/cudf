@@ -977,7 +977,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         input_series = [
             Series(val)
             for val in data.values()
-            if isinstance(val, (pd.Series, Series))
+            if isinstance(val, (pd.Series, Series, dict))
         ]
 
         if input_series:
@@ -994,7 +994,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 index = aligned_input_series[0].index
 
             for name, val in data.items():
-                if isinstance(val, (pd.Series, Series)):
+                if isinstance(val, (pd.Series, Series, dict)):
                     data[name] = aligned_input_series.pop(0)
 
         return data, index
