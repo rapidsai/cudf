@@ -2320,3 +2320,9 @@ def test_series_empty_warning():
     with pytest.warns(FutureWarning):
         actual = cudf.Series([])
     assert_eq(expected, actual)
+
+
+def test_series_count_invalid_param():
+    s = cudf.Series([], dtype="float64")
+    with pytest.raises(TypeError):
+        s.count(skipna=True)
