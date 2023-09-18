@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
+import decimal
 import hashlib
 import operator
 import re
@@ -16,6 +17,7 @@ import cudf
 from cudf.core._compat import PANDAS_LT_140
 from cudf.testing._utils import (
     NUMERIC_TYPES,
+    SERIES_OR_INDEX_NAMES,
     TIMEDELTA_TYPES,
     _create_pandas_series,
     assert_eq,
@@ -2187,11 +2189,15 @@ def test_series_init_error():
     )
 
 
-@pytest.mark.parametrize("dtype", ["datetime64[ns]", "timedelta64[ns]"])
+@pytest.mark.parametrize(
+    "dtype", ["datetime64[ns]", "timedelta64[ns]", "object", "str"]
+)
 def test_series_mixed_dtype_error(dtype):
     ps = pd.concat([pd.Series([1, 2, 3], dtype=dtype), pd.Series([10, 11])])
     with pytest.raises(TypeError):
         cudf.Series(ps)
+    with pytest.raises(TypeError):
+        cudf.Series(ps.array)
 
 
 @pytest.mark.parametrize("data", [[True, False, None], [10, 200, 300]])
@@ -2263,3 +2269,51 @@ def test_series_unique_pandas_compatibility():
         actual = gs.unique()
     expected = ps.unique()
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize("initial_name", SERIES_OR_INDEX_NAMES)
+@pytest.mark.parametrize("name", SERIES_OR_INDEX_NAMES)
+def test_series_rename(initial_name, name):
+    gsr = cudf.Series([1, 2, 3], name=initial_name)
+    psr = pd.Series([1, 2, 3], name=initial_name)
+
+    assert_eq(gsr, psr)
+
+    actual = gsr.rename(name)
+    expected = psr.rename(name)
+
+    assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1.2234242333234, 323432.3243423, np.nan],
+        pd.Series([34224, 324324, 324342], dtype="datetime64[ns]"),
+        pd.Series([224.242, None, 2424.234324], dtype="category"),
+        [
+            decimal.Decimal("342.3243234234242"),
+            decimal.Decimal("89.32432497687622"),
+            None,
+        ],
+    ],
+)
+@pytest.mark.parametrize("digits", [0, 1, 3, 4, 10])
+def test_series_round_builtin(data, digits):
+    ps = pd.Series(data)
+    gs = cudf.from_pandas(ps, nan_as_null=False)
+
+    # TODO: Remove `to_frame` workaround
+    # after following issue is fixed:
+    # https://github.com/pandas-dev/pandas/issues/55114
+    expected = round(ps.to_frame(), digits)[0]
+    expected.name = None
+    actual = round(gs, digits)
+
+    assert_eq(expected, actual)
+
+
+def test_series_count_invalid_param():
+    s = cudf.Series([])
+    with pytest.raises(TypeError):
+        s.count(skipna=True)
