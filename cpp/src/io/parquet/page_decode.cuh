@@ -27,48 +27,48 @@ namespace cudf::io::parquet::gpu {
 
 struct page_state_s {
   constexpr page_state_s() noexcept {}
-  uint8_t const* data_start  = nullptr;
-  uint8_t const* data_end    = nullptr;
-  uint8_t const* lvl_end     = nullptr;
-  uint8_t const* dict_base   = nullptr;  // ptr to dictionary page data
-  int32_t dict_size          = 0;        // size of dictionary data
-  int32_t first_row          = 0;        // First row in page to output
-  int32_t num_rows           = 0;        // Rows in page to decode (including rows to be skipped)
-  int32_t first_output_value = 0;        // First value in page to output
-  int32_t num_input_values   = 0;        // total # of input/level values in the page
-  int32_t dtype_len          = 0;        // Output data type length
-  int32_t dtype_len_in       = 0;  // Can be larger than dtype_len if truncating 32-bit into 8-bit
-  int32_t dict_bits          = 0;  // # of bits to store dictionary indices
-  uint32_t dict_run          = 0;
-  int32_t dict_val           = 0;
+  uint8_t const* data_start{};
+  uint8_t const* data_end{};
+  uint8_t const* lvl_end{};
+  uint8_t const* dict_base{};    // ptr to dictionary page data
+  int32_t dict_size{};           // size of dictionary data
+  int32_t first_row{};           // First row in page to output
+  int32_t num_rows{};            // Rows in page to decode (including rows to be skipped)
+  int32_t first_output_value{};  // First value in page to output
+  int32_t num_input_values{};    // total # of input/level values in the page
+  int32_t dtype_len{};           // Output data type length
+  int32_t dtype_len_in{};        // Can be larger than dtype_len if truncating 32-bit into 8-bit
+  int32_t dict_bits{};           // # of bits to store dictionary indices
+  uint32_t dict_run{};
+  int32_t dict_val{};
   uint32_t initial_rle_run[NUM_LEVEL_TYPES]{};   // [def,rep]
   int32_t initial_rle_value[NUM_LEVEL_TYPES]{};  // [def,rep]
-  int32_t error = 0;
+  int32_t error{};
   PageInfo page{};
   ColumnChunkDesc col{};
 
   // (leaf) value decoding
-  int32_t nz_count = 0;  // number of valid entries in nz_idx (write position in circular buffer)
-  int32_t dict_pos = 0;  // write position of dictionary indices
-  int32_t src_pos  = 0;  // input read position of final output value
-  int32_t ts_scale = 0;  // timestamp scale: <0: divide by -ts_scale, >0: multiply by ts_scale
+  int32_t nz_count{};  // number of valid entries in nz_idx (write position in circular buffer)
+  int32_t dict_pos{};  // write position of dictionary indices
+  int32_t src_pos{};   // input read position of final output value
+  int32_t ts_scale{};  // timestamp scale: <0: divide by -ts_scale, >0: multiply by ts_scale
 
   // repetition/definition level decoding
-  int32_t input_value_count = 0;                // how many values of the input we've processed
-  int32_t input_row_count   = 0;                // how many rows of the input we've processed
-  int32_t input_leaf_count  = 0;                // how many leaf values of the input we've processed
+  int32_t input_value_count{};                  // how many values of the input we've processed
+  int32_t input_row_count{};                    // how many rows of the input we've processed
+  int32_t input_leaf_count{};                   // how many leaf values of the input we've processed
   uint8_t const* lvl_start[NUM_LEVEL_TYPES]{};  // [def,rep]
   uint8_t const* abs_lvl_start[NUM_LEVEL_TYPES]{};  // [def,rep]
   uint8_t const* abs_lvl_end[NUM_LEVEL_TYPES]{};    // [def,rep]
   int32_t lvl_count[NUM_LEVEL_TYPES]{};             // how many of each of the streams we've decoded
-  int32_t row_index_lower_bound = 0;                // lower bound of row indices we should process
+  int32_t row_index_lower_bound{};                  // lower bound of row indices we should process
 
   // a shared-memory cache of frequently used data when decoding. The source of this data is
   // normally stored in global memory which can yield poor performance. So, when possible
   // we copy that info here prior to decoding
   PageNestingDecodeInfo nesting_decode_cache[max_cacheable_nesting_decode_info]{};
   // points to either nesting_decode_cache above when possible, or to the global source otherwise
-  PageNestingDecodeInfo* nesting_info = nullptr;
+  PageNestingDecodeInfo* nesting_info{};
 };
 
 // buffers only used in the decode kernel.  separated from page_state_s to keep
