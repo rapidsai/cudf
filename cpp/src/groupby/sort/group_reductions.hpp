@@ -217,12 +217,20 @@ std::unique_ptr<column> group_count_all(cudf::device_span<size_type const> group
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr);
 /**
- * @brief
+ * @brief Internal API to compute histogram for each group in @p values.
+ *
+ * The returned column is a lists column, each list corresponds to one input group and stores the
+ * histogram of the distinct elements in that group in the form of `STRUCT<value, count>`.
  *
  * @code{.pseudo}
+ * values       = [2, 1, 1, 3, 5, 2, 2, 3, 1, 4]
+ * group_labels = [0, 0, 0, 1, 1, 1, 1, 1, 2, 2]
+ * num_groups   = 3
+ *
+ * output = [[<1, 2>, <2, 1>], [<2, 2>, <3, 2>, <5, 1>], [<1, 1>, <4, 1>]]
  * @endcode
  *
- * @param values Grouped values to get valid count of
+ * @param values Grouped values to compute histogram
  * @param group_labels ID of group that the corresponding value belongs to
  * @param num_groups Number of groups ( unique values in @p group_labels )
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -460,9 +468,17 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
                                        rmm::mr::device_memory_resource* mr);
 
 /**
- * @brief
+ * @brief Internal API to merge multiple output of HISTOGRAM aggregation.
+ *
+ * The input values column should be given as a structs column in the form of
+ * `STRUCT<value, count>`.
  *
  * @code{.pseudo}
+ * values       = [<1, 2>, <2, 1>, <2, 2>, <3, 2>, <2, 1>, <1, 1>, <2, 1>]
+ * group_labels = [0,      0,      0,      1,      1,      1,      1]
+ * num_groups = 2
+ *
+ * output = [[<1, 2>, <2, 3>], [<1, 1>, <2, 2>, <3, 3>]]]
  * @endcode
  *
  * @param values Grouped values to get valid count of
