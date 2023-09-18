@@ -247,30 +247,37 @@ def test_misc_quantiles(data, q):
     ],
 )
 @pytest.mark.parametrize("null_flag", [False, True])
-def test_kurtosis_series(data, null_flag):
+@pytest.mark.parametrize("numeric_only", [False, True])
+def test_kurtosis_series(data, null_flag, numeric_only):
     pdata = data.to_pandas()
 
     if null_flag and len(data) > 2:
         data.iloc[[0, 2]] = None
         pdata.iloc[[0, 2]] = None
 
-    got = data.kurtosis()
+    got = data.kurtosis(numeric_only=numeric_only)
     got = got if np.isscalar(got) else got.to_numpy()
-    expected = pdata.kurtosis()
+    expected = pdata.kurtosis(numeric_only=numeric_only)
     np.testing.assert_array_almost_equal(got, expected)
 
-    got = data.kurt()
+    got = data.kurt(numeric_only=numeric_only)
     got = got if np.isscalar(got) else got.to_numpy()
-    expected = pdata.kurt()
+    expected = pdata.kurt(numeric_only=numeric_only)
     np.testing.assert_array_almost_equal(got, expected)
 
-    got = data.kurt(numeric_only=False)
-    got = got if np.isscalar(got) else got.to_numpy()
-    expected = pdata.kurt(numeric_only=False)
-    np.testing.assert_array_almost_equal(got, expected)
 
-    with pytest.raises(NotImplementedError):
-        data.kurt(numeric_only=True)
+@pytest.mark.parametrize("op", ["skew", "kurt"])
+def test_kurt_skew_error(op):
+    gs = cudf.Series(["ab", "cd"])
+    ps = gs.to_pandas()
+
+    with pytest.raises(FutureWarning):
+        assert_exceptions_equal(
+            getattr(gs, op),
+            getattr(ps, op),
+            lfunc_args_and_kwargs=([], {"numeric_only": True}),
+            rfunc_args_and_kwargs=([], {"numeric_only": True}),
+        )
 
 
 @pytest.mark.parametrize(
@@ -290,25 +297,18 @@ def test_kurtosis_series(data, null_flag):
     ],
 )
 @pytest.mark.parametrize("null_flag", [False, True])
-def test_skew_series(data, null_flag):
+@pytest.mark.parametrize("numeric_only", [False, True])
+def test_skew_series(data, null_flag, numeric_only):
     pdata = data.to_pandas()
 
     if null_flag and len(data) > 2:
         data.iloc[[0, 2]] = None
         pdata.iloc[[0, 2]] = None
 
-    got = data.skew()
-    expected = pdata.skew()
+    got = data.skew(numeric_only=numeric_only)
+    expected = pdata.skew(numeric_only=numeric_only)
     got = got if np.isscalar(got) else got.to_numpy()
     np.testing.assert_array_almost_equal(got, expected)
-
-    got = data.skew(numeric_only=False)
-    expected = pdata.skew(numeric_only=False)
-    got = got if np.isscalar(got) else got.to_numpy()
-    np.testing.assert_array_almost_equal(got, expected)
-
-    with pytest.raises(NotImplementedError):
-        data.skew(numeric_only=True)
 
 
 @pytest.mark.parametrize("dtype", params_dtypes)
