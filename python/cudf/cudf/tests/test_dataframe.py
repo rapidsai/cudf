@@ -10260,6 +10260,12 @@ def test_dataframe_constructor_unbounded_sequence():
         cudf.DataFrame({"a": A()})
 
 
+def test_dataframe_constructor_dataframe_list():
+    df = cudf.DataFrame(range(2))
+    with pytest.raises(ValueError):
+        cudf.DataFrame([df])
+
+
 def test_dataframe_constructor_from_namedtuple():
     Point1 = namedtuple("Point1", ["a", "b", "c"])
     Point2 = namedtuple("Point1", ["x", "y"])
