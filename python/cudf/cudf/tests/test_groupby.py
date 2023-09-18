@@ -3522,3 +3522,21 @@ def test_group_by_value_counts_subset():
     assert_groupby_results_equal(
         actual, expected, check_names=False, check_index_type=False
     )
+
+
+def test_group_by_value_counts_clash_with_subset():
+    df = cudf.DataFrame({"a": [1, 5, 3], "b": [2, 5, 2]})
+    with pytest.raises(ValueError):
+        df.groupby("a").value_counts(["a"])
+
+
+def test_group_by_value_counts_subset_not_exists():
+    df = cudf.DataFrame({"a": [1, 5, 3], "b": [2, 5, 2]})
+    with pytest.raises(ValueError):
+        df.groupby("a").value_counts(["c"])
+
+
+def test_group_by_value_counts_with_count_column():
+    df = cudf.DataFrame({"a": [1, 5, 3], "count": [2, 5, 2]})
+    with pytest.raises(ValueError):
+        df.groupby("a", as_index=False).value_counts()
