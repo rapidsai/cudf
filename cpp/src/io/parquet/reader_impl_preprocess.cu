@@ -1673,7 +1673,7 @@ void reader::impl::preprocess_pages(size_t skip_rows,
     // - we will be doing a chunked read
     gpu::ComputePageSizes(pages,
                           chunks,
-                          0,                     // 0-max size_t. process all possible rows
+                          0,  // 0-max size_t. process all possible rows
                           std::numeric_limits<size_t>::max(),
                           true,                  // compute num_rows
                           chunk_read_limit > 0,  // compute string sizes

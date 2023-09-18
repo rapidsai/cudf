@@ -44,7 +44,7 @@ struct hashed_vocabulary {
   std::unique_ptr<cudf::column> bin_offsets;  ///< uint16 column, containing the start index of each
                                               ///< bin in the flattened hash table
   std::unique_ptr<cudf::column>
-    cp_metadata;   ///< uint32 column, The code point metadata table to use for normalization
+    cp_metadata;  ///< uint32 column, The code point metadata table to use for normalization
   std::unique_ptr<cudf::column>
     aux_cp_table;  ///< uint64 column, The auxiliary code point table to use for normalization
 };
