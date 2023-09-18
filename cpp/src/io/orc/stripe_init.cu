@@ -30,10 +30,10 @@ namespace orc {
 namespace gpu {
 
 struct comp_in_out {
-  uint8_t const* in_ptr = nullptr;
-  size_t in_size        = 0;
-  uint8_t* out_ptr      = nullptr;
-  size_t out_size       = 0;
+  uint8_t const* in_ptr{};
+  size_t in_size{};
+  uint8_t* out_ptr{};
+  size_t out_size{};
 };
 struct compressed_stream_s {
   CompressedStreamInfo info{};
@@ -209,9 +209,9 @@ __global__ void __launch_bounds__(128, 8)
  */
 struct rowindex_state_s {
   ColumnDesc chunk{};
-  uint32_t rowgroup_start = 0;
-  uint32_t rowgroup_end   = 0;
-  int is_compressed       = 0;
+  uint32_t rowgroup_start{};
+  uint32_t rowgroup_end{};
+  int is_compressed{};
   uint32_t row_index_entry[3]
                           [CI_PRESENT]{};  // NOTE: Assumes CI_PRESENT follows CI_DATA and CI_DATA2
   CompressedStreamInfo strm_info[2]{};
