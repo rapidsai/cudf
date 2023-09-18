@@ -35,6 +35,7 @@ using bigints_column  = fwcw<int64_t>;
 using strings_column  = cudf::test::strings_column_wrapper;
 using lists_column    = cudf::test::lists_column_wrapper<int32_t>;
 using column_ptr      = std::unique_ptr<cudf::column>;
+using cudf::test::iterators::all_nulls;
 using cudf::test::iterators::no_nulls;
 using cudf::test::iterators::nulls_at;
 
@@ -252,7 +253,7 @@ TEST_F(OffsetRowWindowTest, OffsetRowWindow_Ungrouped_0_to_2)
                  no_nulls});
 }
 
-TEST_F(OffsetRowWindowTest, Problematic)
+TEST_F(OffsetRowWindowTest, CheckGroupBoundaries)
 {
   auto grp_iter =
     thrust::make_transform_iterator(thrust::make_counting_iterator(0), [](auto const& i) {
@@ -266,13 +267,14 @@ TEST_F(OffsetRowWindowTest, Problematic)
     auto const results =
       cudf::grouped_rolling_window(cudf::table_view{{grp}},
                                    agg,
-                                   -1,
-                                   4,
+                                   -80,
+                                   100,
                                    1,
                                    *cudf::make_max_aggregation<cudf::rolling_aggregation>());
-    std::cout << "Max(-1, 4): " << std::endl;
-    cudf::test::print(*results);
-    std::cout << std::endl;
+    auto const null_iter = thrust::make_constant_iterator<int32_t>(null);
+    auto const expected  = ints_column(null_iter, null_iter + 30, all_nulls());
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
   }
   {
     auto const results =
@@ -282,9 +284,11 @@ TEST_F(OffsetRowWindowTest, Problematic)
                                    4,
                                    1,
                                    *cudf::make_min_aggregation<cudf::rolling_aggregation>());
+    auto const expected =
+      ints_column{{1, 1, 1, 1,    1,    1, 1, 1, null, null, 2, 2, 2, 2,    2,
+                   2, 2, 2, null, null, 3, 3, 3, 3,    3,    3, 3, 3, null, null},
+                  nulls_at({8, 9, 18, 19, 28, 29})};
 
-    std::cout << "Min(-1, 4): " << std::endl;
-    cudf::test::print(*results);
-    std::cout << std::endl;
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
   }
 }
