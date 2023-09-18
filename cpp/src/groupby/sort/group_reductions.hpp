@@ -222,6 +222,8 @@ std::unique_ptr<column> group_count_all(cudf::device_span<size_type const> group
  * The returned column is a lists column, each list corresponds to one input group and stores the
  * histogram of the distinct elements in that group in the form of `STRUCT<value, count>`.
  *
+ * Note that the order of distinct elements in each output list is not specified.
+ *
  * @code{.pseudo}
  * values       = [2, 1, 1, 3, 5, 2, 2, 3, 1, 4]
  * group_labels = [0, 0, 0, 1, 1, 1, 1, 1, 2, 2]
@@ -472,6 +474,7 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
  *
  * The input values column should be given as a structs column in the form of
  * `STRUCT<value, count>`.
+ * After merging, the order of distinct elements in each output list is not specified.
  *
  * @code{.pseudo}
  * values       = [<1, 2>, <2, 1>, <2, 2>, <3, 2>, <2, 1>, <1, 1>, <2, 1>]
