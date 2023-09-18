@@ -46,35 +46,19 @@ from cudf._lib.cpp.wrappers.timestamps cimport (
 )
 
 
-def _replace_nested_nulls(obj):
+def _replace_nested(obj, check, replacement):
     if isinstance(obj, list):
         for i, item in enumerate(obj):
-            # TODO: Check if this should use _is_null_host_scalar
-            if cudf.utils.utils.is_na_like(item):
-                obj[i] = None
+            if check(item):
+                obj[i] = replacement
             elif isinstance(item, (dict, list)):
-                _replace_nested_nulls(item)
+                _replace_nested(item, check, replacement)
     elif isinstance(obj, dict):
         for k, v in obj.items():
-            if cudf.utils.utils.is_na_like(v):
-                obj[k] = None
+            if check(v):
+                obj[k] = replacement
             elif isinstance(v, (dict, list)):
-                _replace_nested_nulls(v)
-
-
-def _replace_nested_none(obj):
-    if isinstance(obj, list):
-        for i, item in enumerate(obj):
-            if item is None:
-                obj[i] = NA
-            elif isinstance(item, (dict, list)):
-                _replace_nested_none(item)
-    elif isinstance(obj, dict):
-        for k, v in obj.items():
-            if v is None:
-                obj[k] = NA
-            elif isinstance(v, (dict, list)):
-                _replace_nested_none(v)
+                _replace_nested(v, check, replacement)
 
 
 # The DeviceMemoryResource attribute could be released prematurely
@@ -111,7 +95,7 @@ cdef class DeviceScalar:
             # just host values it's not that expensive, but we could consider
             # alternatives.
             value = copy.deepcopy(value)
-            _replace_nested_nulls(value)
+            _replace_nested(value, cudf.utils.utils.is_na_like, None)
 
         if isinstance(dtype, cudf.core.dtypes._BaseDtype):
             pa_type = dtype.to_arrow()
@@ -124,8 +108,8 @@ cdef class DeviceScalar:
 
         pa_scalar = pa.scalar(value, type=pa_type)
 
-        # This factory-like behavior in __init__ will be removed when migrating
-        # to pylibcudf.
+        # Note: This factory-like behavior in __init__ will be removed when
+        # migrating to pylibcudf.
         cdef DeviceScalar obj = from_arrow_scalar(pa_scalar, self._dtype)
         self.c_value.swap(obj.c_value)
 
@@ -155,7 +139,7 @@ cdef class DeviceScalar:
         else:
             ret = ps.as_py()
 
-        _replace_nested_none(ret)
+        _replace_nested(ret, lambda item: item is None, NA)
         return ret
 
     @property
