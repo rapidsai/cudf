@@ -62,7 +62,6 @@ std::unique_ptr<column> rolling_window(column_view const& input,
     // Clamp preceding/following to column boundaries.
     // E.g. If preceding_window == 2, then for a column of 5 elements, preceding_window will be:
     //      [1, 2, 2, 2, 1]
-    // TODO: Handle capping preceding/following for negative values.
 
     auto const preceding_calc = [preceding_window] __device__(size_type i) {
       return thrust::min(i + 1, preceding_window);
