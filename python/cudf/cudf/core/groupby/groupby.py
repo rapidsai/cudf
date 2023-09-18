@@ -2450,14 +2450,29 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         df = cudf.DataFrame.copy(self.obj)
         groupings = self.grouping.names
+        name = "proportion" if normalize else "count"
 
         if subset is None:
             subset = [i for i in df.columns if i not in groupings]
+        # Check subset exists in dataframe
+        elif set(subset) - set(df.columns):
+            raise ValueError(
+                f"Keys {set(subset) - set(df.columns)} in subset "
+                f"do not exist in the DataFrame."
+            )
+        # Catch case where groupby and subset share an element
+        elif set(subset) & set(groupings):
+            raise ValueError(
+                f"Keys {set(subset) & set(groupings)} in subset "
+                "cannot be in the groupby column keys."
+            )
 
-        df["placeholder"] = 1
+        df["__placeholder"] = 1
         result = (
-            df.groupby(groupings + subset, dropna=dropna)
-            .placeholder.count()
+            df.groupby(groupings + list(subset), dropna=dropna)[
+                "__placeholder"
+            ]
+            .count()
             .sort_index()
             .astype(np.int64)
         )
@@ -2473,9 +2488,15 @@ class GroupBy(Serializable, Reducible, Scannable):
                 level=range(len(groupings)), sort_remaining=False
             )
 
-        result.name = "proportion" if normalize else "count"
         if not self._as_index:
+            if name in df.columns:
+                raise ValueError(
+                    f"Column label '{name}' is duplicate of result column"
+                )
+            result.name = name
             result = result.to_frame().reset_index()
+        else:
+            result.name = name
 
         return result
 
