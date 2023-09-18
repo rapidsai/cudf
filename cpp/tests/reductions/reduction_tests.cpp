@@ -445,10 +445,9 @@ TYPED_TEST(ReductionHistogramTest, Histogram)
   }
 
   // Test with nulls.
+  using namespace cudf::test::iterators;
+  auto constexpr null{0};
   {
-    using namespace cudf::test::iterators;
-    auto constexpr null{0};
-
     auto const input    = col_data{{null, -3, 2, 1, 2, 0, null, 5, 2, null, -3, -2, null, 2, 1},
                                 nulls_at({0, 6, 9, 12})};
     auto const expected = [] {
@@ -462,9 +461,6 @@ TYPED_TEST(ReductionHistogramTest, Histogram)
 
   // Test with nulls, sliced input.
   {
-    using namespace cudf::test::iterators;
-    auto constexpr null{0};
-
     auto const input_original = col_data{
       {null, -3, 2, 1, 2, 0, null, 5, 2, null, -3, -2, null, 2, 1}, nulls_at({0, 6, 9, 12})};
     auto const input    = cudf::slice(input_original, {0, 9})[0];
@@ -522,10 +518,9 @@ TYPED_TEST(ReductionHistogramTest, MergeHistogram)
   }
 
   // Test with nulls.
+  using namespace cudf::test::iterators;
+  auto constexpr null{0};
   {
-    using namespace cudf::test::iterators;
-    auto constexpr null{0};
-
     auto const input = [] {
       auto child1 = col_data{{-3, 2, null, 1, 2, null, 0, 5, null, 2, -3, null, -2, 2, 1, null},
                              nulls_at({2, 5, 8, 11, 15})};
@@ -544,9 +539,6 @@ TYPED_TEST(ReductionHistogramTest, MergeHistogram)
 
   // Test with nulls, sliced input.
   {
-    using namespace cudf::test::iterators;
-    auto constexpr null{0};
-
     auto const input_original = [] {
       auto child1 = col_data{{-3, 2, null, 1, 2, null, 0, 5, null, 2, -3, null, -2, 2, 1, null},
                              nulls_at({2, 5, 8, 11, 15})};
