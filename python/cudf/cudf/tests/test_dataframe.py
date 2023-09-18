@@ -10281,6 +10281,12 @@ def test_dataframe_constructor_unbounded_sequence():
         cudf.DataFrame({"a": A()})
 
 
+def test_dataframe_constructor_dataframe_list():
+    df = cudf.DataFrame(range(2))
+    with pytest.raises(ValueError):
+        cudf.DataFrame([df])
+
+
 def test_dataframe_constructor_from_namedtuple():
     Point1 = namedtuple("Point1", ["a", "b", "c"])
     Point2 = namedtuple("Point1", ["x", "y"])
@@ -10370,3 +10376,22 @@ def test_dataframe_round_builtin(digits):
     actual = round(gdf, digits)
 
     assert_eq(expected, actual)
+
+
+def test_dataframe_init_from_nested_dict():
+    ordered_dict = OrderedDict(
+        [
+            ("one", OrderedDict([("col_a", "foo1"), ("col_b", "bar1")])),
+            ("two", OrderedDict([("col_a", "foo2"), ("col_b", "bar2")])),
+            ("three", OrderedDict([("col_a", "foo3"), ("col_b", "bar3")])),
+        ]
+    )
+    pdf = pd.DataFrame(ordered_dict)
+    gdf = cudf.DataFrame(ordered_dict)
+
+    assert_eq(pdf, gdf)
+    regular_dict = {key: dict(value) for key, value in ordered_dict.items()}
+
+    pdf = pd.DataFrame(regular_dict)
+    gdf = cudf.DataFrame(regular_dict)
+    assert_eq(pdf, gdf)

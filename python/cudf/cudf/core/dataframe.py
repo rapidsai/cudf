@@ -865,12 +865,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         elif len(data) > 0 and isinstance(data[0], pd._libs.interval.Interval):
             data = DataFrame.from_pandas(pd.DataFrame(data))
             self._data = data._data
+        elif any(
+            not isinstance(col, (abc.Iterable, abc.Sequence)) for col in data
+        ):
+            raise TypeError("Inputs should be an iterable or sequence.")
+        elif len(data) > 0 and not can_convert_to_column(data[0]):
+            raise ValueError("Must pass 2-d input.")
         else:
-            if any(
-                not isinstance(col, (abc.Iterable, abc.Sequence))
-                for col in data
-            ):
-                raise TypeError("Inputs should be an iterable or sequence.")
             if (
                 len(data) > 0
                 and columns is None
@@ -995,7 +996,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         input_series = [
             Series(val)
             for val in data.values()
-            if isinstance(val, (pd.Series, Series))
+            if isinstance(val, (pd.Series, Series, dict))
         ]
 
         if input_series:
@@ -1012,7 +1013,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 index = aligned_input_series[0].index
 
             for name, val in data.items():
-                if isinstance(val, (pd.Series, Series)):
+                if isinstance(val, (pd.Series, Series, dict)):
                     data[name] = aligned_input_series.pop(0)
 
         return data, index
