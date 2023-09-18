@@ -143,18 +143,22 @@ struct dispatch_to_arrow {
   }
 };
 
-template <>
-std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal32>(
-  column_view input,
-  cudf::type_id,
-  column_metadata const&,
-  arrow::MemoryPool* ar_mr,
-  rmm::cuda_stream_view stream)
+// Convert decimal types from libcudf to arrow where those types are not
+// directly supported by Arrow. These types must be fit into 128 bits, the
+// smallest decimal resolution supported by Arrow.
+template <typename DeviceType>
+std::shared_ptr<arrow::Array> unsupported_decimals_to_arrow(column_view input,
+                                                            arrow::MemoryPool* ar_mr,
+                                                            rmm::cuda_stream_view stream)
 {
-  using DeviceType                = int32_t;
-  size_type const BIT_WIDTH_RATIO = 4;  // Array::Type:type::DECIMAL (128) / int32_t
+  constexpr size_type BIT_WIDTH_RATIO = size_type{128} / sizeof(DeviceType);
 
-  rmm::device_uvector<__int128_t> buf(input.size() * BIT_WIDTH_RATIO, stream);
+  // libcudf decimals are always converted to the highest Arrow precision
+  // because libcudf does not support precision.
+  constexpr auto decimal128_max_precision = int32_t{38};
+  constexpr auto precision                = decimal128_max_precision / BIT_WIDTH_RATIO;
+
+  rmm::device_uvector<DeviceType> buf(input.size() * BIT_WIDTH_RATIO, stream);
 
   auto count = thrust::make_counting_iterator(0);
 
@@ -162,11 +166,15 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal32>(
                    count,
                    count + input.size(),
                    [in = input.begin<DeviceType>(), out = buf.data()] __device__(auto in_idx) {
-                     auto const out_idx   = in_idx;
-                     auto unsigned_value  = in[in_idx] < 0 ? -in[in_idx] : in[in_idx];
-                     auto unsigned_128bit = static_cast<__int128_t>(unsigned_value);
-                     auto signed_128bit   = in[in_idx] < 0 ? -unsigned_128bit : unsigned_128bit;
-                     out[out_idx]         = signed_128bit;
+                     auto const out_idx = in_idx * BIT_WIDTH_RATIO;
+                     // The lowest order bits are the value, the remainder
+                     // simply match the sign bit to satisfy the two's
+                     // complement integer representation of negative numbers.
+                     out[out_idx] = in[in_idx];
+#pragma unroll
+                     for (auto i = 1; i < BIT_WIDTH_RATIO; ++i) {
+                       out[out_idx + i] = in[in_idx] < 0 ? -1 : 0;
+                     }
                    });
 
   auto const buf_size_in_bytes = buf.size() * sizeof(DeviceType);
@@ -175,12 +183,23 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal32>(
   CUDF_CUDA_TRY(cudaMemcpyAsync(
     data_buffer->mutable_data(), buf.data(), buf_size_in_bytes, cudaMemcpyDefault, stream.value()));
 
-  auto type    = arrow::decimal(9, -input.type().scale());
+  auto type    = arrow::decimal(precision, -input.type().scale());
   auto mask    = fetch_mask_buffer(input, ar_mr, stream);
   auto buffers = std::vector<std::shared_ptr<arrow::Buffer>>{mask, std::move(data_buffer)};
   auto data    = std::make_shared<arrow::ArrayData>(type, input.size(), buffers);
 
   return std::make_shared<arrow::Decimal128Array>(data);
+}
+
+template <>
+std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal32>(
+  column_view input,
+  cudf::type_id,
+  column_metadata const&,
+  arrow::MemoryPool* ar_mr,
+  rmm::cuda_stream_view stream)
+{
+  return unsupported_decimals_to_arrow<int32_t>(input, ar_mr, stream);
 }
 
 template <>
@@ -191,34 +210,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
   arrow::MemoryPool* ar_mr,
   rmm::cuda_stream_view stream)
 {
-  using DeviceType                = int64_t;
-  size_type const BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
-
-  rmm::device_uvector<DeviceType> buf(input.size() * BIT_WIDTH_RATIO, stream);
-
-  auto count = thrust::make_counting_iterator(0);
-
-  thrust::for_each(rmm::exec_policy(cudf::get_default_stream()),
-                   count,
-                   count + input.size(),
-                   [in = input.begin<DeviceType>(), out = buf.data()] __device__(auto in_idx) {
-                     auto const out_idx = in_idx * 2;
-                     out[out_idx]       = in[in_idx];
-                     out[out_idx + 1]   = in[in_idx] < 0 ? -1 : 0;
-                   });
-
-  auto const buf_size_in_bytes = buf.size() * sizeof(DeviceType);
-  auto data_buffer             = allocate_arrow_buffer(buf_size_in_bytes, ar_mr);
-
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
-    data_buffer->mutable_data(), buf.data(), buf_size_in_bytes, cudaMemcpyDefault, stream.value()));
-
-  auto type    = arrow::decimal(18, -input.type().scale());
-  auto mask    = fetch_mask_buffer(input, ar_mr, stream);
-  auto buffers = std::vector<std::shared_ptr<arrow::Buffer>>{mask, std::move(data_buffer)};
-  auto data    = std::make_shared<arrow::ArrayData>(type, input.size(), buffers);
-
-  return std::make_shared<arrow::Decimal128Array>(data);
+  return unsupported_decimals_to_arrow<int64_t>(input, ar_mr, stream);
 }
 
 template <>
