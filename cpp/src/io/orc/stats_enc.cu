@@ -410,8 +410,10 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         if (s->chunk.has_minmax) {
           cur[0] = 9 * 8 + ProtofType::FIXEDLEN;
           cur += 2;
-          auto [min_ms, min_ns_remainder] = split_nanosecond_timestamp(s->chunk.min_value.i_val);
-          auto [max_ms, max_ns_remainder] = split_nanosecond_timestamp(s->chunk.max_value.i_val);
+          auto const [min_ms, min_ns_remainder] =
+            split_nanosecond_timestamp(s->chunk.min_value.i_val);
+          auto const [max_ms, max_ns_remainder] =
+            split_nanosecond_timestamp(s->chunk.max_value.i_val);
 
           // minimum/maximum are the same as minimumUtc/maximumUtc as we always write files in UTC
           cur          = pb_put_int(cur, 1, min_ms);            // minimum
