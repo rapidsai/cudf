@@ -397,8 +397,12 @@ def assert_column_memory_ne(
     raise AssertionError("lhs and rhs holds the same memory.")
 
 
-def _create_pandas_series(data=None, index=None, dtype=None, *args, **kwargs):
-    # Wrapper around pd.Series using a float64 default dtype for empty data.
+def _create_pandas_series_float64_default(
+    data=None, index=None, dtype=None, *args, **kwargs
+):
+    # Wrapper around pd.Series using a float64
+    # default dtype for empty data to silence warnings.
+    # TODO: Remove this in pandas-2.0 upgrade
     if dtype is None and (
         data is None or (not is_scalar(data) and len(data) == 0)
     ):
@@ -406,8 +410,12 @@ def _create_pandas_series(data=None, index=None, dtype=None, *args, **kwargs):
     return pd.Series(data=data, index=index, dtype=dtype, *args, **kwargs)
 
 
-def _create_cudf_series(data=None, index=None, dtype=None, *args, **kwargs):
-    # Wrapper around cudf.Series using a float64 default dtype for empty data.
+def _create_cudf_series_float64_default(
+    data=None, index=None, dtype=None, *args, **kwargs
+):
+    # Wrapper around cudf.Series using a float64
+    # default dtype for empty data to silence warnings.
+    # TODO: Remove this in pandas-2.0 upgrade
     if dtype is None and (
         data is None or (not is_scalar(data) and len(data) == 0)
     ):

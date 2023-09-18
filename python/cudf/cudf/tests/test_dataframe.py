@@ -30,7 +30,7 @@ from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
-    _create_cudf_series,
+    _create_cudf_series_float64_default,
     assert_eq,
     assert_exceptions_equal,
     assert_neq,
@@ -2001,8 +2001,8 @@ def test_series_shape():
 
 
 def test_series_shape_empty():
-    ps = pd.Series(dtype="float64")
-    cs = _create_cudf_series([])
+    ps = pd.Series([], dtype="float64")
+    cs = cudf.Series([], dtype="float64")
 
     assert ps.shape == cs.shape
 
@@ -2841,7 +2841,7 @@ def test_series_all_null(num_elements, null_type):
 @pytest.mark.parametrize("num_elements", [0, 2, 10, 100])
 def test_series_all_valid_nan(num_elements):
     data = [np.nan] * num_elements
-    sr = _create_cudf_series(data, nan_as_null=False)
+    sr = _create_cudf_series_float64_default(data, nan_as_null=False)
     np.testing.assert_equal(sr.null_count, 0)
 
 
@@ -4074,28 +4074,28 @@ def test_empty_dataframe_describe():
 
 
 def test_as_column_types():
-    col = column.as_column(_create_cudf_series([]))
+    col = column.as_column(cudf.Series([], dtype="float64"))
     assert_eq(col.dtype, np.dtype("float64"))
     gds = cudf.Series(col)
     pds = pd.Series(pd.Series([], dtype="float64"))
 
     assert_eq(pds, gds)
 
-    col = column.as_column(_create_cudf_series([]), dtype="float32")
+    col = column.as_column(cudf.Series([], dtype="float64"), dtype="float32")
     assert_eq(col.dtype, np.dtype("float32"))
     gds = cudf.Series(col)
     pds = pd.Series(pd.Series([], dtype="float32"))
 
     assert_eq(pds, gds)
 
-    col = column.as_column(_create_cudf_series([]), dtype="str")
+    col = column.as_column(cudf.Series([], dtype="float64"), dtype="str")
     assert_eq(col.dtype, np.dtype("object"))
     gds = cudf.Series(col)
     pds = pd.Series(pd.Series([], dtype="str"))
 
     assert_eq(pds, gds)
 
-    col = column.as_column(_create_cudf_series([]), dtype="object")
+    col = column.as_column(cudf.Series([], dtype="float64"), dtype="object")
     assert_eq(col.dtype, np.dtype("object"))
     gds = cudf.Series(col)
     pds = pd.Series(pd.Series([], dtype="object"))
@@ -4470,7 +4470,7 @@ def test_create_dataframe_column():
 )
 def test_series_values_host_property(data):
     pds = pd.Series(data=data, dtype=None if data else float)
-    gds = _create_cudf_series(data)
+    gds = _create_cudf_series_float64_default(data)
 
     np.testing.assert_array_equal(pds.values, gds.values_host)
 
@@ -4493,7 +4493,7 @@ def test_series_values_host_property(data):
 )
 def test_series_values_property(data):
     pds = pd.Series(data=data, dtype=None if data else float)
-    gds = _create_cudf_series(data)
+    gds = _create_cudf_series_float64_default(data)
     gds_vals = gds.values
     assert isinstance(gds_vals, cupy.ndarray)
     np.testing.assert_array_equal(gds_vals.get(), pds.values)

@@ -19,8 +19,8 @@ from cudf.testing._utils import (
     NUMERIC_TYPES,
     SERIES_OR_INDEX_NAMES,
     TIMEDELTA_TYPES,
-    _create_cudf_series,
-    _create_pandas_series,
+    _create_cudf_series_float64_default,
+    _create_pandas_series_float64_default,
     assert_eq,
     assert_exceptions_equal,
     expect_warning_if,
@@ -401,8 +401,8 @@ def test_series_tolist(data):
     [[], [None, None], ["a"], ["a", "b", "c"] * 500, [1.0, 2.0, 0.3] * 57],
 )
 def test_series_size(data):
-    psr = _create_pandas_series(data)
-    gsr = cudf.Series(data, dtype="float64" if len(data) == 0 else None)
+    psr = _create_pandas_series_float64_default(data)
+    gsr = _create_cudf_series_float64_default(data)
 
     assert_eq(psr.size, gsr.size)
 
@@ -488,7 +488,7 @@ def test_series_describe_other_types(ps):
 )
 @pytest.mark.parametrize("na_sentinel", [99999, 11, -1, 0])
 def test_series_factorize(data, na_sentinel):
-    gsr = _create_cudf_series(data)
+    gsr = _create_cudf_series_float64_default(data)
     psr = gsr.to_pandas()
 
     with pytest.warns(FutureWarning):
@@ -511,7 +511,7 @@ def test_series_factorize(data, na_sentinel):
 )
 @pytest.mark.parametrize("use_na_sentinel", [True, False])
 def test_series_factorize_use_na_sentinel(data, use_na_sentinel):
-    gsr = _create_cudf_series(data)
+    gsr = _create_cudf_series_float64_default(data)
     psr = gsr.to_pandas(nullable=True)
 
     expected_labels, expected_cats = psr.factorize(
@@ -535,7 +535,7 @@ def test_series_factorize_use_na_sentinel(data, use_na_sentinel):
 )
 @pytest.mark.parametrize("sort", [True, False])
 def test_series_factorize_sort(data, sort):
-    gsr = _create_cudf_series(data)
+    gsr = _create_cudf_series_float64_default(data)
     psr = gsr.to_pandas(nullable=True)
 
     expected_labels, expected_cats = psr.factorize(sort=sort)
@@ -1683,7 +1683,7 @@ def test_series_nunique_index(data):
     ],
 )
 def test_axes(data):
-    csr = _create_cudf_series(data)
+    csr = _create_cudf_series_float64_default(data)
     psr = csr.to_pandas()
 
     expected = psr.axes
@@ -1761,7 +1761,7 @@ def test_series_truncate_datetimeindex():
 )
 def test_isin_numeric(data, values):
     index = np.random.randint(0, 100, len(data))
-    psr = _create_pandas_series(data, index=index)
+    psr = _create_pandas_series_float64_default(data, index=index)
     gsr = cudf.Series.from_pandas(psr, nan_as_null=False)
 
     expected = psr.isin(values)
@@ -1821,7 +1821,7 @@ def test_fill_new_category():
     ],
 )
 def test_isin_datetime(data, values):
-    psr = _create_pandas_series(data)
+    psr = _create_pandas_series_float64_default(data)
     gsr = cudf.Series.from_pandas(psr)
 
     got = gsr.isin(values)
@@ -1850,7 +1850,7 @@ def test_isin_datetime(data, values):
     ],
 )
 def test_isin_string(data, values):
-    psr = _create_pandas_series(data)
+    psr = _create_pandas_series_float64_default(data)
     gsr = cudf.Series.from_pandas(psr)
 
     got = gsr.isin(values)
@@ -1879,7 +1879,7 @@ def test_isin_string(data, values):
     ],
 )
 def test_isin_categorical(data, values):
-    psr = _create_pandas_series(data)
+    psr = _create_pandas_series_float64_default(data)
     gsr = cudf.Series.from_pandas(psr)
 
     got = gsr.isin(values)
@@ -2100,7 +2100,7 @@ def test_series_to_dict(into):
     ],
 )
 def test_series_hasnans(data):
-    gs = _create_cudf_series(data, nan_as_null=False)
+    gs = _create_cudf_series_float64_default(data, nan_as_null=False)
     ps = gs.to_pandas(nullable=True)
 
     assert_eq(gs.hasnans, ps.hasnans)
@@ -2171,8 +2171,8 @@ def test_series_init_dict_with_index(data, index):
     "index", [None, ["b", "c"], ["d", "a", "c", "b"], ["a"]]
 )
 def test_series_init_scalar_with_index(data, index):
-    pandas_series = _create_pandas_series(data, index=index)
-    cudf_series = _create_cudf_series(data, index=index)
+    pandas_series = _create_pandas_series_float64_default(data, index=index)
+    cudf_series = _create_cudf_series_float64_default(data, index=index)
 
     assert_eq(
         pandas_series,
