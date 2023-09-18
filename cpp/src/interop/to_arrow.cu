@@ -162,20 +162,21 @@ std::shared_ptr<arrow::Array> unsupported_decimals_to_arrow(column_view input,
 
   auto count = thrust::make_counting_iterator(0);
 
-  thrust::for_each(rmm::exec_policy(cudf::get_default_stream()),
-                   count,
-                   count + input.size(),
-                   [in = input.begin<DeviceType>(), out = buf.data()] __device__(auto in_idx) {
-                     auto const out_idx = in_idx * BIT_WIDTH_RATIO;
-                     // The lowest order bits are the value, the remainder
-                     // simply match the sign bit to satisfy the two's
-                     // complement integer representation of negative numbers.
-                     out[out_idx] = in[in_idx];
-#pragma unroll
-                     for (auto i = 1; i < BIT_WIDTH_RATIO; ++i) {
-                       out[out_idx + i] = in[in_idx] < 0 ? -1 : 0;
-                     }
-                   });
+  thrust::for_each(
+    rmm::exec_policy(cudf::get_default_stream()),
+    count,
+    count + input.size(),
+    [in = input.begin<DeviceType>(), out = buf.data(), BIT_WIDTH_RATIO] __device__(auto in_idx) {
+      auto const out_idx = in_idx * BIT_WIDTH_RATIO;
+      // The lowest order bits are the value, the remainder
+      // simply match the sign bit to satisfy the two's
+      // complement integer representation of negative numbers.
+      out[out_idx] = in[in_idx];
+#pragma unroll BIT_WIDTH_RATIO - 1
+      for (auto i = 1; i < BIT_WIDTH_RATIO; ++i) {
+        out[out_idx + i] = in[in_idx] < 0 ? -1 : 0;
+      }
+    });
 
   auto const buf_size_in_bytes = buf.size() * sizeof(DeviceType);
   auto data_buffer             = allocate_arrow_buffer(buf_size_in_bytes, ar_mr);
