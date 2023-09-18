@@ -752,8 +752,8 @@ def test_multiindex_copy_sem(data, levels, codes, names):
 
     for glv, plv in zip(gmi_copy.levels, pmi_copy.levels):
         assert all(glv.values_host == plv.values)
-    for (_, gval), pval in zip(gmi.codes._data._data.items(), pmi.codes):
-        assert all(gval.values_host == pval.astype(np.int64))
+    for gval, pval in zip(gmi.codes, pmi.codes):
+        assert_eq(gval, pval.astype(np.int64))
     assert_eq(gmi_copy.names, pmi_copy.names)
 
     # Test same behavior when used on DataFrame
