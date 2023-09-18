@@ -2549,7 +2549,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     # Stats
     #
     @_cudf_nvtx_annotate
-    def count(self, level=None, **kwargs):
+    def count(self, level=None):
         """
         Return number of non-NA/null observations in the Series
 
