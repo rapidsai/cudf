@@ -14,18 +14,14 @@
  * limitations under the License.
  */
 
-#include "stream_compaction_common.cuh"
+#include "stream_compaction_common.hpp"
 
-#include <cudf/column/column_device_view.cuh>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/exec_policy.hpp>
-
-#include <memory>
 
 namespace cudf::detail {
 
@@ -56,6 +52,8 @@ auto constexpr reduction_init_value(duplicate_keep_option keep)
  * - If `keep == KEEP_LAST`: max of row indices in the group.
  * - If `keep == KEEP_NONE`: count of equivalent rows (group size).
  *
+ * Note that this function is not needed when `keep == KEEP_NONE`.
+ *
  * At the beginning of the operation, the entire output array is filled with a value given by
  * the `reduction_init_value()` function. Then, the reduction result for each row group is written
  * into the output array at the index of an unspecified row in the group.
@@ -68,11 +66,13 @@ auto constexpr reduction_init_value(duplicate_keep_option keep)
  * @param has_nested_columns Indicates whether the input table has any nested columns
  * @param keep The parameter to determine what type of reduction to perform
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
+ * @param nans_equal Flag to specify whether NaN values in floating point column should be
+ *        considered equal.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned vector
  * @return A device_uvector containing the reduction results
  */
-rmm::device_uvector<size_type> hash_reduce_by_row(
+rmm::device_uvector<size_type> reduce_by_row(
   hash_map_type const& map,
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> const preprocessed_input,
   size_type num_rows,
