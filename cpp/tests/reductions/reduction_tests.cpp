@@ -120,7 +120,6 @@ struct ReductionTest : public cudf::test::BaseFixture {
   }
 };
 
-#if 0
 template <typename T>
 struct MinMaxReductionTest : public ReductionTest<T> {};
 
@@ -294,15 +293,12 @@ TYPED_TEST(SumReductionTest, Sum)
                  .second);
 }
 
-#endif
-
 using TestTypes = cudf::test::Concat<cudf::test::Types<int8_t, int16_t, int32_t, int64_t>,
                                      cudf::test::FloatingPointTypes,
                                      cudf::test::FixedPointTypes,
                                      cudf::test::ChronoTypes>;
 TYPED_TEST_SUITE(ReductionTest, TestTypes);
 
-#if 0
 TYPED_TEST(ReductionTest, Product)
 {
   using T = TypeParam;
@@ -387,8 +383,6 @@ TYPED_TEST(ReductionTest, SumOfSquare)
               .first,
             expected_null_value);
 }
-
-#endif
 
 template <typename T>
 struct ReductionHistogramTest : public cudf::test::BaseFixture {};
@@ -569,7 +563,6 @@ TYPED_TEST(ReductionHistogramTest, MergeHistogram)
   }
 }
 
-#if 0
 template <typename T>
 struct ReductionAnyAllTest : public ReductionTest<bool> {};
 using AnyAllTypes = cudf::test::Types<int32_t, float, bool>;
@@ -3127,5 +3120,5 @@ TEST_F(StructReductionTest, StructReductionMinMaxWithNulls)
                          *cudf::make_max_aggregation<reduce_aggregation>());
   }
 }
-#endif
+
 CUDF_TEST_PROGRAM_MAIN()
