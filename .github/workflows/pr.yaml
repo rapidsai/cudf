@@ -137,6 +137,6 @@ jobs:
         CUDF_INCLUDE_DIR=~/cudf/cpp/include \
         CUDF_KAFKA_ROOT=~/cudf/cpp/libcudf_kafka/build/latest \
         CUDF_KAFKA_INCLUDE_DIR=~/cudf/cpp/libcudf_kafka/include \
-        CUDA_HOME="${CONDA_PREFIX:-${CUDA_HOME:-/usr/local/cuda}}" \
+        CUDA_HOME="${CUDA_HOME:-${CUDA_PATH:-"/usr/local/cuda"}}" \
           build-all -DBUILD_BENCHMARKS=ON;
         sccache -s;
