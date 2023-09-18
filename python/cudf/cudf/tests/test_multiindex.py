@@ -2009,3 +2009,12 @@ def test_multiindex_to_frame_allow_duplicates(
                 )
 
             assert_eq(expected, actual)
+
+
+def test_multiIndex_codes():
+    midx = cudf.MultiIndex.from_tuples(
+        [("a", "b"), ("a", "c"), ("b", "c")], names=["A", "Z"]
+    )
+
+    for p_array, g_array in zip(midx.to_pandas().codes, midx.codes):
+        assert_eq(p_array, g_array)
