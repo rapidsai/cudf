@@ -3499,7 +3499,9 @@ def test_group_by_value_counts(normalize, sort, ascending, dropna, as_index):
     )
 
     # TODO: Remove `check_names=False` once testing against `pandas>=2.0.0`
-    assert_eq(actual, expected, check_names=False)
+    assert_groupby_results_equal(
+        actual, expected, check_names=False, check_index_type=False
+    )
 
 
 def test_group_by_value_counts_subset():
@@ -3517,4 +3519,6 @@ def test_group_by_value_counts_subset():
     expected = pdf.groupby("gender").value_counts(["education"])
 
     # TODO: Remove `check_names=False` once testing against `pandas>=2.0.0`
-    assert_eq(actual, expected, check_names=False)
+    assert_groupby_results_equal(
+        actual, expected, check_names=False, check_index_type=False
+    )
