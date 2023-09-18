@@ -4,11 +4,11 @@ import warnings
 import cupy as cp
 import numpy as np
 
+from cudf.core.column import as_column
 from cudf.core.copy_types import BooleanMask
 from cudf.core.index import RangeIndex, as_index
 from cudf.core.indexed_frame import IndexedFrame
 from cudf.core.scalar import Scalar
-from cudf.core.column import as_column
 from cudf.options import get_option
 from cudf.utils.dtypes import can_convert_to_column
 
