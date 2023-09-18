@@ -392,6 +392,7 @@ inline auto parse_cudf_test_opts(int argc, char** argv)
       auto adaptor                       = make_stream_checking_resource_adaptor(             \
         resource.get(), error_on_invalid_stream, check_default_stream); \
       rmm::mr::set_current_device_resource(&adaptor);                                         \
+      return RUN_ALL_TESTS();                                                                 \
     }                                                                                         \
                                                                                               \
     return RUN_ALL_TESTS();                                                                   \
