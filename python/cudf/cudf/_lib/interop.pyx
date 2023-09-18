@@ -21,14 +21,22 @@ from cudf._lib.cpp.interop cimport (
     to_arrow as cpp_to_arrow,
     to_dlpack as cpp_to_dlpack,
 )
-from cudf._lib.cpp.scalar.scalar cimport scalar
+from cudf._lib.cpp.scalar.scalar cimport fixed_point_scalar, scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.cpp.types cimport type_id
+from cudf._lib.cpp.wrappers.decimals cimport (
+    decimal32,
+    decimal64,
+    decimal128,
+    scale_type,
+)
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 from cudf.api.types import is_list_dtype, is_struct_dtype
 from cudf.core.buffer import acquire_spill_lock
+from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype
 
 
 def from_dlpack(dlpack_capsule):
@@ -220,12 +228,13 @@ def to_arrow_scalar(DeviceScalar source_scalar):
 
 
 @acquire_spill_lock()
-def from_arrow_scalar(object input_scalar):
+def from_arrow_scalar(object input_scalar, output_dtype=None):
     """Convert from PyArrow scalar to a cudf scalar.
 
     Parameters
     ----------
     input_scalar : PyArrow scalar
+    output_dtype : output type to cast to, ignored except for decimals
 
     Returns
     -------
@@ -239,4 +248,30 @@ def from_arrow_scalar(object input_scalar):
     with nogil:
         c_result = move(cpp_from_arrow(cpp_arrow_scalar.get()[0]))
 
-    return DeviceScalar.from_unique_ptr(move(c_result))
+    cdef type_id ctype = c_result.get().type().id()
+    if ctype == type_id.DECIMAL128:
+        if output_dtype is None:
+            # Decimals must be cast to the cudf dtype of the right width
+            raise ValueError(
+                "Decimal scalars must be constructed with a dtype"
+            )
+
+        if isinstance(output_dtype, Decimal32Dtype):
+            c_result.reset(
+                new fixed_point_scalar[decimal32](
+                    (<fixed_point_scalar[decimal128]*> c_result.get()).value(),
+                    scale_type(-input_scalar.type.scale),
+                    c_result.get().is_valid()
+                )
+            )
+        elif isinstance(output_dtype, Decimal64Dtype):
+            c_result.reset(
+                new fixed_point_scalar[decimal64](
+                    (<fixed_point_scalar[decimal128]*> c_result.get()).value(),
+                    scale_type(-input_scalar.type.scale),
+                    c_result.get().is_valid()
+                )
+            )
+        # Decimal128Dtype is a no-op, no conversion needed.
+
+    return DeviceScalar.from_unique_ptr(move(c_result), output_dtype)
