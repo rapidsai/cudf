@@ -13,10 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <arrow/array/array_base.h>
-#include <arrow/array/builder_nested.h>
-#include <arrow/type.h>
-#include <arrow/type_fwd.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/concatenate.hpp>
@@ -39,7 +35,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
-#include <stdexcept>
 #include <thrust/gather.h>
 
 namespace cudf {
