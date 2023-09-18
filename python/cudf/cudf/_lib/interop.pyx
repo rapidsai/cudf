@@ -4,7 +4,14 @@ from cpython cimport pycapsule
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
-from pyarrow.lib cimport CTable, pyarrow_unwrap_table, pyarrow_wrap_table
+from pyarrow.lib cimport (
+    CScalar,
+    CTable,
+    pyarrow_unwrap_scalar,
+    pyarrow_unwrap_table,
+    pyarrow_wrap_scalar,
+    pyarrow_wrap_table,
+)
 
 from cudf._lib.cpp.interop cimport (
     DLManagedTensor,
@@ -14,8 +21,10 @@ from cudf._lib.cpp.interop cimport (
     to_arrow as cpp_to_arrow,
     to_dlpack as cpp_to_dlpack,
 )
+from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 from cudf.api.types import is_list_dtype, is_struct_dtype
@@ -182,3 +191,52 @@ def from_arrow(object input_table):
         c_result = move(cpp_from_arrow(cpp_arrow_table.get()[0]))
 
     return columns_from_unique_ptr(move(c_result))
+
+
+@acquire_spill_lock()
+def to_arrow_scalar(DeviceScalar source_scalar, scalar_dtype):
+    """Convert a list of columns from
+    cudf Frame to a PyArrow Table.
+
+    Parameters
+    ----------
+    source_columns : a list of columns to convert
+    column_dtypes : The scalar dtype
+
+    Returns
+    -------
+    pyarrow table
+    """
+    cdef vector[column_metadata] cpp_metadata = gather_metadata({"": scalar_dtype})
+    cdef const scalar* source_scalar_ptr = source_scalar.get_raw_ptr()
+
+    cdef shared_ptr[CScalar] cpp_arrow_scalar
+    with nogil:
+        cpp_arrow_scalar = cpp_to_arrow(
+            source_scalar_ptr[0], cpp_metadata[0]
+        )
+
+    return pyarrow_wrap_scalar(cpp_arrow_scalar)
+
+
+@acquire_spill_lock()
+def from_arrow_scalar(object input_scalar):
+    """Convert from PyArrow Table to a list of columns.
+
+    Parameters
+    ----------
+    input_scalar : PyArrow scalar
+
+    Returns
+    -------
+    A list of columns to construct Frame object
+    """
+    cdef shared_ptr[CScalar] cpp_arrow_scalar = (
+        pyarrow_unwrap_scalar(input_scalar)
+    )
+    cdef unique_ptr[scalar] c_result
+
+    with nogil:
+        c_result = move(cpp_from_arrow(cpp_arrow_scalar.get()[0]))
+
+    return DeviceScalar.from_unique_ptr(move(c_result))
