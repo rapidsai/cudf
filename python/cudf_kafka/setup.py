@@ -69,6 +69,7 @@ extensions = [
             ),
             os.path.abspath(CUDF_KAFKA_INCLUDE_DIR),
             os.path.join(CUDF_ROOT, "include"),
+            os.path.join(CUDF_ROOT, "_deps/rmm-src/include"),
             os.path.join(CUDF_ROOT, "_deps/libcudacxx-src/include"),
             os.path.join(
                 os.path.dirname(sysconfig.get_path("include")),
