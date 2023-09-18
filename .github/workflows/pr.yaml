@@ -132,11 +132,5 @@ jobs:
     with:
       build_command: |
         sccache -z;
-        # cudf_kafka's setup.py needs all this defined
-        CUDF_ROOT=~/cudf/cpp/build/latest \
-        CUDF_INCLUDE_DIR=~/cudf/cpp/include \
-        CUDF_KAFKA_ROOT=~/cudf/cpp/libcudf_kafka/build/latest \
-        CUDF_KAFKA_INCLUDE_DIR=~/cudf/cpp/libcudf_kafka/include \
-        CUDA_HOME="${CUDA_HOME:-${CUDA_PATH:-"/usr/local/cuda"}}" \
-          build-all -DBUILD_BENCHMARKS=ON;
+        build-all -DBUILD_BENCHMARKS=ON;
         sccache -s;

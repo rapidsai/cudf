@@ -12,9 +12,18 @@ RUN apt update -y \
 
 ENV DEFAULT_VIRTUAL_ENV=rapids
 
+# cudf_kafka's setup.py needs this defined when building in a pip venv
+ENV CUDF_ROOT="/home/coder/cudf/cpp/build/latest"
+ENV CUDF_INCLUDE_DIR="/home/coder/cudf/cpp/include"
+ENV CUDF_KAFKA_ROOT="/home/coder/cudf/cpp/libcudf_kafka/build/latest"
+ENV CUDF_KAFKA_INCLUDE_DIR="/home/coder/cudf/cpp/libcudf_kafka/include"
+
 FROM ${BASE} as conda-base
 
 ENV DEFAULT_CONDA_ENV=rapids
+
+# cudf_kafka's setup.py needs this defined when building in a conda env
+ENV CUDA_HOME="${CUDA_HOME:-/home/coder/.conda/envs/rapids}"
 
 FROM ${PYTHON_PACKAGE_MANAGER}-base
 
