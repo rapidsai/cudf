@@ -118,14 +118,14 @@ struct LogicalType {
   BsonType BSON;
 };
 
-/** Empty struct to signal the order defined by the physical or logical type */
-struct TypeDefinedOrder {};
-
 /**
  * Union to specify the order used for the min_value and max_value fields for a column.
  */
 struct ColumnOrder {
-  std::optional<TypeDefinedOrder> TYPE_ORDER;
+  enum Type { UNDEFINED, TYPE_ORDER };
+  Type type;
+
+  operator Type() const { return type; }
 };
 
 /**

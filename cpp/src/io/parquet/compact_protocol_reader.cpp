@@ -266,23 +266,52 @@ class ParquetFieldStruct : public ParquetField {
 };
 
 /**
+ * @brief Functor to read optional structures in unions
+ *
+ * @return True if field types mismatch
+ */
+template <typename E, typename T>
+class ParquetFieldUnionEnumeratorStruct : public ParquetField {
+  E& enum_val;
+  std::optional<T>& val;  // union structs are always wrapped in std::optional
+
+ public:
+  ParquetFieldUnionEnumeratorStruct(int f, E& ev, std::optional<T>& v)
+    : ParquetField(f), enum_val(ev), val(v)
+  {
+  }
+
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
+  {
+    T v;
+    bool const res = ParquetFieldStruct<T>(field_val, v).operator()(cpr, field_type);
+    if (!res) {
+      val      = v;
+      enum_val = static_cast<E>(field_val);
+    }
+    return res;
+  }
+};
+
+/**
  * @brief Functor to read empty structures in unions
  *
  * Added to avoid having to define read() functions for empty structs contained in unions.
  *
  * @return True if field types mismatch
  */
-template <typename T>
-class ParquetFieldEmptyStruct : public ParquetField {
-  T& val;
+template <typename E>
+class ParquetFieldUnionEnumerator : public ParquetField {
+  E& val;
 
  public:
-  ParquetFieldEmptyStruct(int f, T& v) : ParquetField(f), val(v) {}
+  ParquetFieldUnionEnumerator(int f, E& v) : ParquetField(f), val(v) {}
 
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     if (field_type != ST_FLD_STRUCT) { return true; }
     cpr->skip_struct_field(field_type);
+    val = static_cast<E>(field_val);
     return false;
   }
 };
@@ -744,9 +773,7 @@ bool CompactProtocolReader::read(Statistics* s)
 
 bool CompactProtocolReader::read(ColumnOrder* c)
 {
-  using OptionalTypeDefined =
-    ParquetFieldOptional<TypeDefinedOrder, ParquetFieldEmptyStruct<TypeDefinedOrder>>;
-  auto op = std::make_tuple(OptionalTypeDefined(1, c->TYPE_ORDER));
+  auto op = std::make_tuple(ParquetFieldUnionEnumerator<ColumnOrder::Type>(1, c->type));
   return function_builder(this, op);
 }
 

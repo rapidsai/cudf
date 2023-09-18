@@ -76,7 +76,7 @@ struct aggregate_writer_metadata {
     }
 
     if (stats_granularity != statistics_freq::STATISTICS_NONE) {
-      ColumnOrder default_order = {TypeDefinedOrder{}};
+      ColumnOrder default_order = {ColumnOrder::TYPE_ORDER};
       this->column_orders       = std::vector<ColumnOrder>(num_columns, default_order);
     }
 

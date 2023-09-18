@@ -225,7 +225,10 @@ size_t CompactProtocolWriter::write(OffsetIndex const& s)
 size_t CompactProtocolWriter::write(ColumnOrder const& co)
 {
   CompactProtocolFieldWriter c(*this);
-  if (co.TYPE_ORDER.has_value()) { c.field_struct(1, co.TYPE_ORDER.value()); }
+  switch (co) {
+    case ColumnOrder::TYPE_ORDER: c.field_empty_struct(1); break;
+    default: break;
+  }
   return c.value();
 }
 
@@ -313,6 +316,13 @@ inline void CompactProtocolFieldWriter::field_struct(int field, T const& val)
   } else {
     put_byte(0);        // otherwise, add a stop field
   }
+  current_field_value = field;
+}
+
+inline void CompactProtocolFieldWriter::field_empty_struct(int field)
+{
+  put_field_header(field, current_field_value, ST_FLD_STRUCT);
+  put_byte(0);  // add a stop field
   current_field_value = field;
 }
 
