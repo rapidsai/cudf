@@ -2519,11 +2519,11 @@ def _construct_array(
         arbitrary = cupy.asarray(arbitrary, dtype=dtype)
     except (TypeError, ValueError):
         native_dtype = dtype
-        inferred_dtype = None
+        inferred_dtype = infer_dtype(arbitrary, skipna=False)
         if (
             dtype is None
             and not cudf._lib.scalar._is_null_host_scalar(arbitrary)
-            and (inferred_dtype := infer_dtype(arbitrary, skipna=False))
+            and inferred_dtype
             in (
                 "mixed",
                 "mixed-integer",
@@ -2533,6 +2533,20 @@ def _construct_array(
         if inferred_dtype == "interval":
             # Only way to construct an Interval column.
             return pd.array(arbitrary)
+        elif (
+            inferred_dtype == "string" and getattr(dtype, "kind", None) == "M"
+        ):
+            # We may have date-like strings with timezones
+            try:
+                pd_arbitrary = pd.to_datetime(arbitrary)
+                if isinstance(pd_arbitrary.dtype, pd.DatetimeTZDtype):
+                    raise NotImplementedError(
+                        "cuDF does not yet support timezone-aware datetimes"
+                    )
+            except pd.errors.OutOfBoundsDatetime:
+                # https://github.com/pandas-dev/pandas/issues/55096
+                pass
+
         arbitrary = np.asarray(
             arbitrary,
             dtype=native_dtype
