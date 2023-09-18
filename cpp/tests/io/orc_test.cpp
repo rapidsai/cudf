@@ -1011,10 +1011,10 @@ TEST_F(OrcStatisticsTest, Basic)
   auto const stats = cudf::io::read_parsed_orc_statistics(cudf::io::source_info{filepath});
 
   auto expected_column_names = std::vector<std::string>{""};
-  std::generate_n(std::back_inserter(expected_column_names), expected.num_columns(), []() mutable {
-    static int starting_index = 0;
-    return "_col" + std::to_string(starting_index++);
-  });
+  std::generate_n(
+    std::back_inserter(expected_column_names),
+    expected.num_columns(),
+    [starting_index = 0]() mutable { return "_col" + std::to_string(starting_index++); });
   EXPECT_EQ(stats.column_names, expected_column_names);
 
   auto validate_statistics = [&](std::vector<cudf::io::column_statistics> const& stats) {
