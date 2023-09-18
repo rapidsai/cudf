@@ -393,6 +393,7 @@ TYPED_TEST(ReductionTest, SumOfSquare)
 template <typename T>
 struct ReductionHistogramTest : public cudf::test::BaseFixture {};
 
+// Avoid unsigned types, as the tests below have negative values in their input.
 using HistogramTestTypes = cudf::test::Concat<cudf::test::Types<int8_t, int16_t, int32_t, int64_t>,
                                               cudf::test::FloatingPointTypes,
                                               cudf::test::FixedPointTypes,
@@ -408,7 +409,9 @@ auto histogram_reduction(cudf::column_view const& input,
 
   auto const result_scalar = cudf::reduce(input, *agg, cudf::data_type{cudf::type_id::INT64});
   auto const result_col    = dynamic_cast<cudf::list_scalar*>(result_scalar.get())->view();
-  auto const sort_order    = cudf::sorted_order(cudf::table_view{{result_col.child(0)}}, {}, {});
+
+  // Sort the histogram based on the first column (unique input values).
+  auto const sort_order = cudf::sorted_order(cudf::table_view{{result_col.child(0)}}, {}, {});
   return std::move(cudf::gather(cudf::table_view{{result_col}}, *sort_order)->release().front());
 }
 
