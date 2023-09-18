@@ -546,6 +546,12 @@ void aggregate_result_functor::operator()<aggregation::MERGE_M2>(aggregation con
       get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), stream, mr));
 }
 
+/**
+ * @brief Perform merging for multiple histograms that correspond to the same key value.
+ *
+ * The partial results input to this aggregation is a structs column that is (vertically)
+ * concatenated from multiple outputs of HISTOGRAM aggregations.
+ */
 template <>
 void aggregate_result_functor::operator()<aggregation::MERGE_HISTOGRAM>(aggregation const& agg)
 {
