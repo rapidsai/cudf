@@ -121,14 +121,14 @@ __global__ void __launch_bounds__(block_size, 1)
 }
 
 struct stats_state_s {
-  uint8_t* base = nullptr;  ///< Output buffer start
-  uint8_t* end  = nullptr;  ///< Output buffer end
+  uint8_t* base{};  ///< Output buffer start
+  uint8_t* end{};   ///< Output buffer end
   statistics_chunk chunk{};
   statistics_merge_group group{};
   statistics_dtype stats_dtype{};  //!< Statistics data type for this column
   // ORC stats
-  uint64_t numberOfValues = 0;
-  uint8_t hasNull         = 0;
+  uint64_t numberOfValues{};
+  uint8_t hasNull{};
 };
 
 /*
