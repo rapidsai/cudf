@@ -406,6 +406,15 @@ def _create_pandas_series(data=None, index=None, dtype=None, *args, **kwargs):
     return pd.Series(data=data, index=index, dtype=dtype, *args, **kwargs)
 
 
+def _create_cudf_series(data=None, index=None, dtype=None, *args, **kwargs):
+    # Wrapper around cudf.Series using a float64 default dtype for empty data.
+    if dtype is None and (
+        data is None or (not is_scalar(data) and len(data) == 0)
+    ):
+        dtype = "float64"
+    return cudf.Series(data=data, index=index, dtype=dtype, *args, **kwargs)
+
+
 parametrize_numeric_dtypes_pairwise = pytest.mark.parametrize(
     "left_dtype,right_dtype",
     list(itertools.combinations_with_replacement(NUMERIC_TYPES, 2)),

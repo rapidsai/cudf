@@ -29,6 +29,7 @@ from cudf.testing._utils import (
     SIGNED_INTEGER_TYPES,
     SIGNED_TYPES,
     UNSIGNED_TYPES,
+    _create_cudf_series,
     _create_pandas_series,
     assert_column_memory_eq,
     assert_column_memory_ne,
@@ -1006,7 +1007,7 @@ def test_index_equal_misc(data, other):
     assert_eq(expected, actual)
 
     expected = pd_data.equals(_create_pandas_series(pd_other))
-    actual = gd_data.equals(cudf.Series(gd_other))
+    actual = gd_data.equals(_create_cudf_series(gd_other))
     assert_eq(expected, actual)
 
     expected = pd_data.astype("category").equals(pd_other)
@@ -2775,5 +2776,12 @@ def test_index_empty_from_pandas(request, dtype):
     )
     pidx = pd.Index([], dtype=dtype)
     gidx = cudf.from_pandas(pidx)
+
+    assert_eq(pidx, gidx)
+
+
+def test_empty_index_init():
+    pidx = pd.Index([])
+    gidx = cudf.Index([])
 
     assert_eq(pidx, gidx)

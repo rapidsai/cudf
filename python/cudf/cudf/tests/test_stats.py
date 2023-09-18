@@ -10,6 +10,7 @@ import pytest
 import cudf
 from cudf.datasets import randomdata
 from cudf.testing._utils import (
+    _create_cudf_series,
     _create_pandas_series,
     assert_eq,
     assert_exceptions_equal,
@@ -223,7 +224,7 @@ def test_approx_quantiles_int():
 def test_misc_quantiles(data, q):
 
     pdf_series = _create_pandas_series(data)
-    gdf_series = cudf.Series(data)
+    gdf_series = _create_cudf_series(data)
 
     expected = pdf_series.quantile(q.get() if isinstance(q, cp.ndarray) else q)
     actual = gdf_series.quantile(q)
@@ -233,17 +234,19 @@ def test_misc_quantiles(data, q):
 @pytest.mark.parametrize(
     "data",
     [
-        cudf.Series(np.random.normal(-100, 100, 1000)),
-        cudf.Series(np.random.randint(-50, 50, 1000)),
-        cudf.Series(np.zeros(100)),
-        cudf.Series(np.repeat(np.nan, 100)),
-        cudf.Series(np.array([1.123, 2.343, np.nan, 0.0])),
-        cudf.Series(
+        _create_cudf_series(np.random.normal(-100, 100, 1000)),
+        _create_cudf_series(np.random.randint(-50, 50, 1000)),
+        _create_cudf_series(np.zeros(100)),
+        _create_cudf_series(np.repeat(np.nan, 100)),
+        _create_cudf_series(np.array([1.123, 2.343, np.nan, 0.0])),
+        _create_cudf_series(
             [5, 10, 53, None, np.nan, None, 12, 43, -423], nan_as_null=False
         ),
-        cudf.Series([1.1032, 2.32, 43.4, 13, -312.0], index=[0, 4, 3, 19, 6]),
-        cudf.Series([]),
-        cudf.Series([-3]),
+        _create_cudf_series(
+            [1.1032, 2.32, 43.4, 13, -312.0], index=[0, 4, 3, 19, 6]
+        ),
+        _create_cudf_series([]),
+        _create_cudf_series([-3]),
     ],
 )
 @pytest.mark.parametrize("null_flag", [False, True])
@@ -276,17 +279,19 @@ def test_kurtosis_series(data, null_flag):
 @pytest.mark.parametrize(
     "data",
     [
-        cudf.Series(np.random.normal(-100, 100, 1000)),
-        cudf.Series(np.random.randint(-50, 50, 1000)),
-        cudf.Series(np.zeros(100)),
-        cudf.Series(np.repeat(np.nan, 100)),
-        cudf.Series(np.array([1.123, 2.343, np.nan, 0.0])),
-        cudf.Series(
+        _create_cudf_series(np.random.normal(-100, 100, 1000)),
+        _create_cudf_series(np.random.randint(-50, 50, 1000)),
+        _create_cudf_series(np.zeros(100)),
+        _create_cudf_series(np.repeat(np.nan, 100)),
+        _create_cudf_series(np.array([1.123, 2.343, np.nan, 0.0])),
+        _create_cudf_series(
             [5, 10, 53, None, np.nan, None, 12, 43, -423], nan_as_null=False
         ),
-        cudf.Series([1.1032, 2.32, 43.4, 13, -312.0], index=[0, 4, 3, 19, 6]),
-        cudf.Series([]),
-        cudf.Series([-3]),
+        _create_cudf_series(
+            [1.1032, 2.32, 43.4, 13, -312.0], index=[0, 4, 3, 19, 6]
+        ),
+        _create_cudf_series([]),
+        _create_cudf_series([-3]),
     ],
 )
 @pytest.mark.parametrize("null_flag", [False, True])
@@ -348,8 +353,8 @@ def test_series_median(dtype, num_na):
         np.zeros(100),
         np.array([1.123, 2.343, np.nan, 0.0]),
         np.array([-2, 3.75, 6, None, None, None, -8.5, None, 4.2]),
-        cudf.Series([]),
-        cudf.Series([-3]),
+        _create_cudf_series([]),
+        _create_cudf_series([-3]),
     ],
 )
 @pytest.mark.parametrize("periods", range(-5, 5))
@@ -374,10 +379,12 @@ def test_series_pct_change(data, periods, fill_method):
         np.zeros(100),
         np.repeat(np.nan, 100),
         np.array([1.123, 2.343, np.nan, 0.0]),
-        cudf.Series([5, 10, 53, None, np.nan, None], nan_as_null=False),
-        cudf.Series([1.1, 2.32, 43.4], index=[0, 4, 3]),
-        cudf.Series([]),
-        cudf.Series([-3]),
+        _create_cudf_series(
+            [5, 10, 53, None, np.nan, None], nan_as_null=False
+        ),
+        _create_cudf_series([1.1, 2.32, 43.4], index=[0, 4, 3]),
+        _create_cudf_series([]),
+        _create_cudf_series([-3]),
     ],
 )
 @pytest.mark.parametrize(
@@ -418,10 +425,12 @@ def test_cov1d(data1, data2):
         np.zeros(100),
         np.repeat(np.nan, 100),
         np.array([1.123, 2.343, np.nan, 0.0]),
-        cudf.Series([5, 10, 53, None, np.nan, None], nan_as_null=False),
-        cudf.Series([1.1032, 2.32, 43.4], index=[0, 4, 3]),
-        cudf.Series([]),
-        cudf.Series([-3]),
+        _create_cudf_series(
+            [5, 10, 53, None, np.nan, None], nan_as_null=False
+        ),
+        _create_cudf_series([1.1032, 2.32, 43.4], index=[0, 4, 3]),
+        _create_cudf_series([]),
+        _create_cudf_series([-3]),
     ],
 )
 @pytest.mark.parametrize(
@@ -525,13 +534,13 @@ def test_df_corr(method):
 @pytest.mark.parametrize("skipna", [True, False])
 def test_nans_stats(data, ops, skipna):
     psr = _create_pandas_series(data)
-    gsr = cudf.Series(data, nan_as_null=False)
+    gsr = _create_cudf_series(data, nan_as_null=False)
 
     assert_eq(
         getattr(psr, ops)(skipna=skipna), getattr(gsr, ops)(skipna=skipna)
     )
 
-    gsr = cudf.Series(data, nan_as_null=False)
+    gsr = _create_cudf_series(data, nan_as_null=False)
     # Since there is no concept of `nan_as_null` in pandas,
     # nulls will be returned in the operations. So only
     # testing for `skipna=True` when `nan_as_null=False`
