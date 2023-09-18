@@ -20,6 +20,7 @@ from pandas._config import get_option
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
+from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_list_like, is_object_dtype
 from cudf.core import column
 from cudf.core._compat import PANDAS_GE_150
@@ -1015,7 +1016,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         elif isinstance(index, slice):
             start, stop, step = index.indices(len(self))
             index = column.arange(start, stop, step)
-        result = MultiIndex.from_frame(self.to_frame(index=False).take(index))
+        result = MultiIndex.from_frame(
+            self.to_frame(index=False, name=range(0, self.nlevels)).take(
+                index
+            ),
+            names=self.names,
+        )
 
         # we are indexing into a single row of the MultiIndex,
         # return that row as a tuple:
@@ -1026,24 +1032,95 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             result._codes = self._codes.take(index)
         if self._levels is not None:
             result._levels = self._levels
-        result.names = self.names
         return result
 
     @_cudf_nvtx_annotate
-    def to_frame(self, index=True, name=None):
+    def to_frame(self, index=True, name=no_default, allow_duplicates=False):
+        """
+        Create a DataFrame with the levels of the MultiIndex as columns.
+
+        Column ordering is determined by the DataFrame constructor with data as
+        a dict.
+
+        Parameters
+        ----------
+        index : bool, default True
+            Set the index of the returned DataFrame as the original MultiIndex.
+        name : list / sequence of str, optional
+            The passed names should substitute index level names.
+        allow_duplicates : bool, optional default False
+            Allow duplicate column labels to be created. Note
+            that this parameter is non-functional because
+            duplicates column labels aren't supported in cudf.
+
+        Returns
+        -------
+        DataFrame
+
+        Examples
+        --------
+        >>> import cudf
+        >>> mi = cudf.MultiIndex.from_tuples([('a', 'c'), ('b', 'd')])
+        >>> mi
+        MultiIndex([('a', 'c'),
+                    ('b', 'd')],
+                   )
+
+        >>> df = mi.to_frame()
+        >>> df
+             0  1
+        a c  a  c
+        b d  b  d
+
+        >>> df = mi.to_frame(index=False)
+        >>> df
+           0  1
+        0  a  c
+        1  b  d
+
+        >>> df = mi.to_frame(name=['x', 'y'])
+        >>> df
+             x  y
+        a c  a  c
+        b d  b  d
+        """
         # TODO: Currently this function makes a shallow copy, which is
         # incorrect. We want to make a deep copy, otherwise further
         # modifications of the resulting DataFrame will affect the MultiIndex.
-        df = cudf.DataFrame._from_data(data=self._data)
-        if index:
-            df = df.set_index(self)
-        if name is not None:
+        if name is None:
+            warnings.warn(
+                "Explicitly passing `name=None` currently preserves the "
+                "Index's name or uses a default name of 0. This behaviour "
+                "is deprecated, and in the future `None` will be used "
+                "as the name of the resulting DataFrame column.",
+                FutureWarning,
+            )
+            name = no_default
+
+        if name is not no_default:
             if len(name) != len(self.levels):
                 raise ValueError(
                     "'name' should have the same length as "
                     "number of levels on index."
                 )
-            df.columns = name
+            column_names = name
+        else:
+            column_names = self.names
+        all_none_names = None
+        if not (
+            all_none_names := all(x is None for x in column_names)
+        ) and len(column_names) != len(set(column_names)):
+            raise ValueError("Duplicate column names are not allowed")
+        df = cudf.DataFrame._from_data(
+            data=self._data,
+            columns=column_names
+            if name is not no_default and not all_none_names
+            else None,
+        )
+
+        if index:
+            df = df.set_index(self)
+
         return df
 
     @_cudf_nvtx_annotate
@@ -1504,7 +1581,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @_cudf_nvtx_annotate
     def to_pandas(self, nullable=False, **kwargs):
-        result = self.to_frame(index=False).to_pandas(nullable=nullable)
+        result = self.to_frame(
+            index=False, name=list(range(self.nlevels))
+        ).to_pandas(nullable=nullable)
         return pd.MultiIndex.from_frame(result, names=self.names)
 
     @classmethod
@@ -1623,7 +1702,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         Convert all na values(if any) in MultiIndex object
         to `<NA>` as a preprocessing step to `__repr__` methods.
         """
-        index_df = self.to_frame(index=False)
+        index_df = self.to_frame(index=False, name=list(range(self.nlevels)))
         return MultiIndex.from_frame(
             index_df._clean_nulls_from_dataframe(index_df), names=self.names
         )
