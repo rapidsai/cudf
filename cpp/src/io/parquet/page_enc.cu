@@ -1437,8 +1437,8 @@ __global__ void __launch_bounds__(block_size, 8)
             switch (dtype_len) {
               case 8: return col->element<int64_t>(idx) * scale;
               case 4: return col->element<int32_t>(idx) * scale;
-              case 2: return (col->element<int16_t>(idx) * scale) & 0xffff;
-              default: return (col->element<int8_t>(idx) * scale) & 0xff;
+              case 2: return col->element<int16_t>(idx) * scale;
+              default: return col->element<int8_t>(idx) * scale;
             }
           }();
 
