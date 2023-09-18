@@ -194,20 +194,20 @@ def from_arrow(object input_table):
 
 
 @acquire_spill_lock()
-def to_arrow_scalar(DeviceScalar source_scalar, scalar_dtype):
-    """Convert a list of columns from
-    cudf Frame to a PyArrow Table.
+def to_arrow_scalar(DeviceScalar source_scalar):
+    """Convert a scalar to a PyArrow scalar.
 
     Parameters
     ----------
-    source_columns : a list of columns to convert
-    column_dtypes : The scalar dtype
+    source_scalar : the scalar to convert
 
     Returns
     -------
-    pyarrow table
+    pyarrow scalar
     """
-    cdef vector[column_metadata] cpp_metadata = gather_metadata({"": scalar_dtype})
+    cdef vector[column_metadata] cpp_metadata = gather_metadata(
+        [("", source_scalar.dtype)]
+    )
     cdef const scalar* source_scalar_ptr = source_scalar.get_raw_ptr()
 
     cdef shared_ptr[CScalar] cpp_arrow_scalar
@@ -221,7 +221,7 @@ def to_arrow_scalar(DeviceScalar source_scalar, scalar_dtype):
 
 @acquire_spill_lock()
 def from_arrow_scalar(object input_scalar):
-    """Convert from PyArrow Table to a list of columns.
+    """Convert from PyArrow scalar to a cudf scalar.
 
     Parameters
     ----------
@@ -229,7 +229,7 @@ def from_arrow_scalar(object input_scalar):
 
     Returns
     -------
-    A list of columns to construct Frame object
+    A cudf scalar
     """
     cdef shared_ptr[CScalar] cpp_arrow_scalar = (
         pyarrow_unwrap_scalar(input_scalar)
