@@ -390,7 +390,29 @@ TYPED_TEST(ReductionTest, SumOfSquare)
 
 #endif
 
-TYPED_TEST(ReductionTest, Histogram)
+template <typename T>
+struct ReductionHistogramTest : public cudf::test::BaseFixture {};
+
+using HistogramTestTypes = cudf::test::Concat<cudf::test::Types<int8_t, int16_t, int32_t, int64_t>,
+                                              cudf::test::FloatingPointTypes,
+                                              cudf::test::FixedPointTypes,
+                                              cudf::test::ChronoTypes>;
+TYPED_TEST_SUITE(ReductionHistogramTest, HistogramTestTypes);
+
+auto histogram_reduction(cudf::column_view const& input,
+                         std::unique_ptr<cudf::reduce_aggregation> const& agg)
+{
+  CUDF_EXPECTS(
+    agg->kind == cudf::aggregation::HISTOGRAM || agg->kind == cudf::aggregation::MERGE_HISTOGRAM,
+    "Aggregation must be either HISTOGRAM or MERGE_HISTOGRAM.");
+
+  auto const result_scalar = cudf::reduce(input, *agg, cudf::data_type{cudf::type_id::INT64});
+  auto const result_col    = dynamic_cast<cudf::list_scalar*>(result_scalar.get())->view();
+  auto const sort_order    = cudf::sorted_order(cudf::table_view{{result_col.child(0)}}, {}, {});
+  return std::move(cudf::gather(cudf::table_view{{result_col}}, *sort_order)->release().front());
+}
+
+TYPED_TEST(ReductionHistogramTest, Histogram)
 {
   using col_data    = cudf::test::fixed_width_column_wrapper<TypeParam, int>;
   using int64_data  = cudf::test::fixed_width_column_wrapper<int64_t>;
@@ -406,15 +428,8 @@ TYPED_TEST(ReductionTest, Histogram)
       auto child2 = int64_data{2, 1, 1, 2, 4, 1};
       return structs_col{{child1, child2}};
     }();
-    auto const result     = cudf::reduce(input, *agg, cudf::data_type{cudf::type_id::INT64});
-    auto const result_col = dynamic_cast<cudf::list_scalar*>(result.get())->view();
-    //    cudf::test::print(result_col);
-
-    auto const sort_order    = cudf::sorted_order(cudf::table_view{{result_col.child(0)}}, {}, {});
-    auto const sorted_result = cudf::gather(cudf::table_view{{result_col}}, *sort_order);
-    //    cudf::test::print(sorted_result->get_column(0).view());
-
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, sorted_result->get_column(0).view());
+    auto const result = histogram_reduction(input, agg);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
 
   // Test without nulls, sliced input.
@@ -426,15 +441,8 @@ TYPED_TEST(ReductionTest, Histogram)
       auto child2 = int64_data{1, 1, 1, 3, 1};
       return structs_col{{child1, child2}};
     }();
-    auto const result     = cudf::reduce(input, *agg, cudf::data_type{cudf::type_id::INT64});
-    auto const result_col = dynamic_cast<cudf::list_scalar*>(result.get())->view();
-    //    cudf::test::print(result_col);
-
-    auto const sort_order    = cudf::sorted_order(cudf::table_view{{result_col.child(0)}}, {}, {});
-    auto const sorted_result = cudf::gather(cudf::table_view{{result_col}}, *sort_order);
-    //    cudf::test::print(sorted_result->get_column(0).view());
-
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, sorted_result->get_column(0).view());
+    auto const result = histogram_reduction(input, agg);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
 
   // Test with nulls.
@@ -449,15 +457,8 @@ TYPED_TEST(ReductionTest, Histogram)
       auto child2 = int64_data{4, 2, 1, 1, 2, 4, 1};
       return structs_col{{child1, child2}};
     }();
-    auto const result     = cudf::reduce(input, *agg, cudf::data_type{cudf::type_id::INT64});
-    auto const result_col = dynamic_cast<cudf::list_scalar*>(result.get())->view();
-    //    cudf::test::print(result_col);
-
-    auto const sort_order    = cudf::sorted_order(cudf::table_view{{result_col.child(0)}}, {}, {});
-    auto const sorted_result = cudf::gather(cudf::table_view{{result_col}}, *sort_order);
-    //    cudf::test::print(sorted_result->get_column(0).view());
-
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, sorted_result->get_column(0).view());
+    auto const result = histogram_reduction(input, agg);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
 
   // Test with nulls, sliced input.
@@ -473,19 +474,12 @@ TYPED_TEST(ReductionTest, Histogram)
       auto child2 = int64_data{2, 1, 1, 1, 3, 1};
       return structs_col{{child1, child2}};
     }();
-    auto const result     = cudf::reduce(input, *agg, cudf::data_type{cudf::type_id::INT64});
-    auto const result_col = dynamic_cast<cudf::list_scalar*>(result.get())->view();
-    //    cudf::test::print(result_col);
-
-    auto const sort_order    = cudf::sorted_order(cudf::table_view{{result_col.child(0)}}, {}, {});
-    auto const sorted_result = cudf::gather(cudf::table_view{{result_col}}, *sort_order);
-    //    cudf::test::print(sorted_result->get_column(0).view());
-
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, sorted_result->get_column(0).view());
+    auto const result = histogram_reduction(input, agg);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
 }
 
-TYPED_TEST(ReductionTest, MergeHistogram)
+TYPED_TEST(ReductionHistogramTest, MergeHistogram)
 {
   using col_data    = cudf::test::fixed_width_column_wrapper<TypeParam>;
   using int64_data  = cudf::test::fixed_width_column_wrapper<int64_t>;
@@ -506,15 +500,8 @@ TYPED_TEST(ReductionTest, MergeHistogram)
       auto child2 = int64_data{5, 5, 4, 5, 8, 1};
       return structs_col{{child1, child2}};
     }();
-    auto const result     = cudf::reduce(input, *agg, cudf::data_type{cudf::type_id::INT64});
-    auto const result_col = dynamic_cast<cudf::list_scalar*>(result.get())->view();
-    //    cudf::test::print(result_col);
-
-    auto const sort_order    = cudf::sorted_order(cudf::table_view{{result_col.child(0)}}, {}, {});
-    auto const sorted_result = cudf::gather(cudf::table_view{{result_col}}, *sort_order);
-    //    cudf::test::print(sorted_result->get_column(0).view());
-
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, sorted_result->get_column(0).view());
+    auto const result = histogram_reduction(input, agg);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
 
   // Test without nulls, sliced input.
@@ -531,15 +518,8 @@ TYPED_TEST(ReductionTest, MergeHistogram)
       auto child2 = int64_data{2, 4, 1, 5, 1};
       return structs_col{{child1, child2}};
     }();
-    auto const result     = cudf::reduce(input, *agg, cudf::data_type{cudf::type_id::INT64});
-    auto const result_col = dynamic_cast<cudf::list_scalar*>(result.get())->view();
-    //    cudf::test::print(result_col);
-
-    auto const sort_order    = cudf::sorted_order(cudf::table_view{{result_col.child(0)}}, {}, {});
-    auto const sorted_result = cudf::gather(cudf::table_view{{result_col}}, *sort_order);
-    //    cudf::test::print(sorted_result->get_column(0).view());
-
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, sorted_result->get_column(0).view());
+    auto const result = histogram_reduction(input, agg);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
 
   // Test with nulls.
@@ -559,15 +539,8 @@ TYPED_TEST(ReductionTest, MergeHistogram)
       auto child2 = int64_data{67, 5, 5, 4, 5, 8, 1};
       return structs_col{{child1, child2}};
     }();
-    auto const result     = cudf::reduce(input, *agg, cudf::data_type{cudf::type_id::INT64});
-    auto const result_col = dynamic_cast<cudf::list_scalar*>(result.get())->view();
-    //    cudf::test::print(result_col);
-
-    auto const sort_order    = cudf::sorted_order(cudf::table_view{{result_col.child(0)}}, {}, {});
-    auto const sorted_result = cudf::gather(cudf::table_view{{result_col}}, *sort_order);
-    //    cudf::test::print(sorted_result->get_column(0).view());
-
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, sorted_result->get_column(0).view());
+    auto const result = histogram_reduction(input, agg);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
 
   // Test with nulls, sliced input.
@@ -588,15 +561,8 @@ TYPED_TEST(ReductionTest, MergeHistogram)
       auto child2 = int64_data{33, 2, 4, 1, 3, 1};
       return structs_col{{child1, child2}};
     }();
-    auto const result     = cudf::reduce(input, *agg, cudf::data_type{cudf::type_id::INT64});
-    auto const result_col = dynamic_cast<cudf::list_scalar*>(result.get())->view();
-    //    cudf::test::print(result_col);
-
-    auto const sort_order    = cudf::sorted_order(cudf::table_view{{result_col.child(0)}}, {}, {});
-    auto const sorted_result = cudf::gather(cudf::table_view{{result_col}}, *sort_order);
-    //    cudf::test::print(sorted_result->get_column(0).view());
-
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, sorted_result->get_column(0).view());
+    auto const result = histogram_reduction(input, agg);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
 }
 
