@@ -173,8 +173,8 @@ struct aggregate_writer_metadata {
     std::vector<std::vector<uint8_t>> column_indexes;
   };
   std::vector<per_file_metadata> files;
-  std::string created_by                                = "";
-  std::optional<std::vector<ColumnOrder>> column_orders = std::nullopt;
+  std::string created_by                                   = "";
+  thrust::optional<std::vector<ColumnOrder>> column_orders = thrust::nullopt;
 };
 
 namespace {

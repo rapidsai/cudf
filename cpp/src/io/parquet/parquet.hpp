@@ -18,6 +18,8 @@
 
 #include "parquet_common.hpp"
 
+#include <thrust/optional.h>
+
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -145,7 +147,7 @@ struct SchemaElement {
   int32_t num_children                = 0;
   int32_t decimal_scale               = 0;
   int32_t decimal_precision           = 0;
-  std::optional<int32_t> field_id     = std::nullopt;
+  thrust::optional<int32_t> field_id  = thrust::nullopt;
   bool output_as_byte_array           = false;
 
   // The following fields are filled in later during schema initialization
@@ -295,7 +297,7 @@ struct FileMetaData {
   std::vector<RowGroup> row_groups;
   std::vector<KeyValue> key_value_metadata;
   std::string created_by = "";
-  std::optional<std::vector<ColumnOrder>> column_orders;
+  thrust::optional<std::vector<ColumnOrder>> column_orders;
 };
 
 /**

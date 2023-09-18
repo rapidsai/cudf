@@ -140,11 +140,11 @@ class CompactProtocolReader {
   uint8_t const* m_cur  = nullptr;
   uint8_t const* m_end  = nullptr;
 
-  friend class ParquetFieldString;
-  friend class ParquetFieldStringList;
-  friend class ParquetFieldBinary;
-  friend class ParquetFieldBinaryList;
-  friend class ParquetFieldStructBlob;
+  friend class parquet_field_string;
+  friend class parquet_field_string_list;
+  friend class parquet_field_binary;
+  friend class parquet_field_binary_list;
+  friend class parquet_field_struct_blob;
 };
 
 }  // namespace parquet
