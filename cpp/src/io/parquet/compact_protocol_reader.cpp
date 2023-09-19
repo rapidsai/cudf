@@ -47,16 +47,18 @@ class parquet_field {
  */
 template <typename T>
 class parquet_field_list : public parquet_field {
- protected:
+ private:
   using read_func_type = std::function<bool(uint32_t, CompactProtocolReader*)>;
-  std::vector<T>& val;
-  FieldType const expected_type;
-  read_func_type read_value;
+  FieldType _expected_type;
+  read_func_type _read_value;
 
-  void bind_read_func(read_func_type fn) { read_value = fn; }
+ protected:
+  std::vector<T>& val;
+
+  void bind_read_func(read_func_type fn) { _read_value = fn; }
 
   parquet_field_list(int f, std::vector<T>& v, FieldType t)
-    : parquet_field(f), val(v), expected_type(t)
+    : parquet_field(f), _expected_type(t), val(v)
   {
   }
 
@@ -65,10 +67,10 @@ class parquet_field_list : public parquet_field {
   {
     if (field_type != ST_FLD_LIST) { return true; }
     auto const [t, n] = cpr->get_listh();
-    if (t != expected_type) { return true; }
+    if (t != _expected_type) { return true; }
     val.resize(n);
     for (uint32_t i = 0; i < n; i++) {
-      if (read_value(i, cpr)) { return true; }
+      if (_read_value(i, cpr)) { return true; }
     }
     return false;
   }
