@@ -419,7 +419,18 @@ TYPED_TEST(ReductionHistogramTest, Histogram)
 
   auto const agg = cudf::make_histogram_aggregation<reduce_aggregation>();
 
-  // Test without nulls.
+  // Empty input.
+  {
+    auto const input    = col_data{};
+    auto const expected = [] {
+      auto child1 = col_data{};
+      auto child2 = int64_data{};
+      return structs_col{{child1, child2}};
+    }();
+    auto const result = histogram_reduction(input, agg);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
+
   {
     auto const input    = col_data{-3, 2, 1, 2, 0, 5, 2, -3, -2, 2, 1};
     auto const expected = [] {
@@ -481,6 +492,22 @@ TYPED_TEST(ReductionHistogramTest, MergeHistogram)
   using structs_col = cudf::test::structs_column_wrapper;
 
   auto const agg = cudf::make_merge_histogram_aggregation<reduce_aggregation>();
+
+  // Empty input.
+  {
+    auto const input = [] {
+      auto child1 = col_data{};
+      auto child2 = int64_data{};
+      return structs_col{{child1, child2}};
+    }();
+    auto const expected = [] {
+      auto child1 = col_data{};
+      auto child2 = int64_data{};
+      return structs_col{{child1, child2}};
+    }();
+    auto const result = histogram_reduction(input, agg);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
 
   // Test without nulls.
   {
