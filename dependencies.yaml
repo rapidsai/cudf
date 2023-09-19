@@ -250,7 +250,7 @@ dependencies:
             packages:
   build_wheels:
     common:
-      - output_types: pyproject
+      - output_types: [requirements, pyproject]
         packages:
           - wheel
           - setuptools
