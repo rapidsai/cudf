@@ -111,10 +111,10 @@ struct string_statistics : minmax_statistics<std::string>, sum_statistics<int64_
 /**
  * @brief Statistics for boolean columns.
  *
- * The `count` array includes the count of `false` and `true` values.
+ * The `count` array contains the count of `true` values.
  */
 struct bucket_statistics {
-  std::vector<uint64_t> count;  ///< Count of `false` and `true` values
+  std::vector<uint64_t> count;  ///< count of `true` values
 };
 
 /**
@@ -141,8 +141,10 @@ using binary_statistics = sum_statistics<int64_t>;
  * the UNIX epoch. The `minimum_utc` and `maximum_utc` are the same values adjusted to UTC.
  */
 struct timestamp_statistics : minmax_statistics<int64_t> {
-  std::optional<int64_t> minimum_utc;  ///< minimum in milliseconds
-  std::optional<int64_t> maximum_utc;  ///< maximum in milliseconds
+  std::optional<int64_t> minimum_utc;    ///< minimum in milliseconds
+  std::optional<int64_t> maximum_utc;    ///< maximum in milliseconds
+  std::optional<int32_t> minimum_nanos;  ///< nanoseconds part of the minimum
+  std::optional<int32_t> maximum_nanos;  ///< nanoseconds part of the maximum
 };
 
 namespace orc {
