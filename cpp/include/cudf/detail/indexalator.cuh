@@ -248,7 +248,7 @@ struct input_indexalator : base_indexalator<input_indexalator> {
   friend struct indexalator_factory;
   friend struct base_indexalator<input_indexalator>;  // for CRTP
 
-  using reference = size_type const;                  // this keeps STL and thrust happy
+  using reference = size_type const;  // this keeps STL and thrust happy
 
   input_indexalator()                                    = default;
   input_indexalator(input_indexalator const&)            = default;
@@ -332,7 +332,7 @@ struct output_indexalator : base_indexalator<output_indexalator> {
   friend struct indexalator_factory;
   friend struct base_indexalator<output_indexalator>;  // for CRTP
 
-  using reference = output_indexalator const&;         // required for output iterators
+  using reference = output_indexalator const&;  // required for output iterators
 
   output_indexalator()                                     = default;
   output_indexalator(output_indexalator const&)            = default;
