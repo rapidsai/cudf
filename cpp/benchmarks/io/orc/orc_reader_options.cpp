@@ -121,7 +121,7 @@ void BM_orc_read_varying_options(nvbench::state& state,
         if (is_last_chunk) { timer.stop(); }
 
         rows_read += res.tbl->num_rows();
-        if (checker.has_value()) checker->check_once(res.tbl->view());
+        if (checker.has_value()) { checker->check_once(res.tbl->view()); }
       }
 
       CUDF_EXPECTS(rows_read == view.num_rows(), "Benchmark did not read the entire table");
