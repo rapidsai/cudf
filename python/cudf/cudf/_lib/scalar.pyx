@@ -166,10 +166,6 @@ cdef class DeviceScalar:
         _replace_nested(ret, lambda item: item is None, NA)
         return ret
 
-    # TODO: This is just here for testing and should be removed.
-    def get(self):
-        return self.c_value
-
     @property
     def dtype(self):
         """
