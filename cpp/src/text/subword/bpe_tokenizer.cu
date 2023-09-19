@@ -52,10 +52,155 @@ constexpr int block_size = 512;
 template <typename MapRefType>
 __global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
                                 MapRefType const d_map,
-                                cudf::size_type* d_sizes,  // output size of encoded string
                                 int8_t* d_spaces_in,       // working memory
                                 cudf::size_type* d_ranks,  // more working memory
                                 int8_t* d_rerank_in        // and one more working memory
+)
+{
+  // string per block
+  auto const str_idx =
+    static_cast<cudf::size_type>(cudf::detail::grid_1d::global_thread_id() / block_size);
+  auto const lane_idx = static_cast<cudf::size_type>(threadIdx.x);
+
+  if (d_strings.is_null(str_idx)) { return; }
+  auto const d_str = d_strings.element<cudf::string_view>(str_idx);
+  if (d_str.empty()) { return; }
+
+  auto const offsets =
+    d_strings.child(cudf::strings_column_view::offsets_column_index).data<cudf::size_type>();
+  auto const offset = offsets[str_idx + d_strings.offset()] - offsets[d_strings.offset()];
+
+  auto const d_spaces    = d_spaces_in + offset;
+  auto const end_spaces  = d_spaces + d_str.size_bytes();
+  auto const d_min_ranks = d_ranks + offset;
+  auto const end_ranks   = d_min_ranks + d_str.size_bytes();
+  auto const d_rerank    = d_rerank_in + offset;
+  auto const end_rerank  = d_rerank + d_str.size_bytes();
+  auto const max_rank    = cuda::std::numeric_limits<cudf::size_type>::max();
+  auto const num_valid   = block_size < d_str.size_bytes() ? block_size : d_str.size_bytes();
+
+  __shared__ cudf::size_type block_min_rank;
+  using block_reduce = cub::BlockReduce<cudf::size_type, block_size>;
+  __shared__ typename block_reduce::TempStorage temp_storage;
+
+  auto next_substr = [d_str, d_spaces, end = end_spaces](int8_t* begin) {
+    auto const next = thrust::find_if(thrust::seq, begin + 1, end, [](auto v) { return v != 0; });
+    auto const size = static_cast<cudf::size_type>(thrust::distance(begin, next));
+    return cudf::string_view(d_str.data() + thrust::distance(d_spaces, begin), size);
+  };
+
+  // init all ranks to max
+  for (auto itr = d_min_ranks + lane_idx; itr < end_ranks; itr += block_size) {
+    *itr = max_rank;
+  }
+  __syncthreads();
+
+  auto min_rank = max_rank;
+
+  // store all the initial ranks for each pair
+  for (auto itr = d_spaces + lane_idx; itr < end_spaces; itr += block_size) {
+    if (*itr == 0) { continue; }  // start on valid bytes only
+    // resolve pair and lookup its rank
+    auto const lhs      = next_substr(itr);  // retrieve lhs of the pair
+    auto const next_itr = itr + lhs.size_bytes();
+    if (next_itr < end_spaces) {
+      auto const rhs = next_substr(next_itr);  // retrieve rhs of the pair
+      if (!rhs.empty()) {
+        auto rank          = max_rank;
+        auto const mp      = merge_pair_type{lhs, rhs};
+        auto const map_itr = d_map.find(mp);                       // lookup pair in merges table;
+        if (map_itr != d_map.end()) { rank = map_itr->second; }    // found a match;
+        d_min_ranks[thrust::distance(d_spaces, next_itr)] = rank;  // store the rank
+        if (rank < min_rank) min_rank = rank;
+      }
+    }
+  }
+  __syncthreads();
+  // compute the min rank across the block
+  auto const reduce_rank = block_reduce(temp_storage).Reduce(min_rank, cub::Min(), num_valid);
+  if (lane_idx == 0) { block_min_rank = reduce_rank; }
+  __syncthreads();
+
+  // loop through the ranks finding the current minimum until there are no more
+  while (block_min_rank < max_rank) {
+    // (re)initialize all the re-rank identifiers to zero
+    for (auto itr = d_rerank + lane_idx; itr < end_rerank; itr += block_size) {
+      *itr = 0;
+    }
+
+    // search the d_min_ranks for all the places where the rank matches block_min_rank
+    for (auto itr = d_min_ranks + lane_idx; itr < end_ranks; itr += block_size) {
+      if (*itr == block_min_rank) {
+        auto ptr = itr - 1;  // check for adjacent min-rank edge-case
+        while (ptr > d_min_ranks && *ptr == max_rank) {
+          --ptr;
+        }
+        // set the output value to 0 at this position (erases separator)
+        if (*ptr != block_min_rank) { d_spaces[thrust::distance(d_min_ranks, itr)] = 0; }
+      }
+    }
+    __syncthreads();
+
+    auto find_prev = [begin = d_spaces](int8_t* ptr) {
+      while (ptr > begin && *ptr == 0) {
+        --ptr;
+      }
+      return ptr;
+    };
+    auto find_next = [end = end_spaces](int8_t* ptr) {
+      while (ptr < end && *ptr == 0) {
+        ++ptr;
+      }
+      return ptr;
+    };
+
+    // identify the re-rank locations
+    for (auto itr = d_min_ranks + lane_idx; itr < end_ranks; itr += block_size) {
+      auto const index = thrust::distance(d_min_ranks, itr);
+      if (*itr == block_min_rank && d_spaces[index] == 0) {
+        auto ptr = find_prev(d_spaces + index - 1);  // find previous pair mid-point
+        if (ptr > d_spaces) { d_rerank[thrust::distance(d_spaces, ptr)] = 1; }
+        ptr = find_next(d_spaces + index + 1);  // find next pair mid-point
+        if (ptr < end_spaces) { d_rerank[thrust::distance(d_spaces, ptr)] = 1; }
+        *itr = max_rank;  // reset this rank
+      }
+    }
+    __syncthreads();
+
+    // compute the ranks for the newly created pairs
+    min_rank = max_rank;  // and record new minimum
+    for (auto itr = d_rerank + lane_idx; itr < end_rerank; itr += block_size) {
+      auto const index = thrust::distance(d_rerank, itr);
+      auto rank        = d_min_ranks[index];
+      if (*itr) {
+        // build lhs of pair
+        auto const ptr  = find_prev(d_spaces + index - 1);
+        auto const size = static_cast<cudf::size_type>(thrust::distance(ptr, d_spaces + index));
+        auto const lhs  = cudf::string_view(d_str.data() + thrust::distance(d_spaces, ptr), size);
+        // retrieve rhs of pair
+        auto const rhs = next_substr(d_spaces + index);
+        rank           = max_rank;
+        if (!rhs.empty()) {
+          auto const mp      = merge_pair_type{lhs, rhs};
+          auto const map_itr = d_map.find(mp);                     // lookup in merges;
+          if (map_itr != d_map.end()) { rank = map_itr->second; }  // found a match
+        }
+        d_min_ranks[index] = rank;
+      }
+      if (rank < min_rank) min_rank = rank;
+    }
+    __syncthreads();
+
+    // compute the min rank across the block
+    auto const reduce_rank = block_reduce(temp_storage).Reduce(min_rank, cub::Min(), num_valid);
+    if (lane_idx == 0) { block_min_rank = reduce_rank; }
+    __syncthreads();
+  }  // if no mins were found we are done, otherwise start again
+}
+
+__global__ void bpe_finalize(cudf::column_device_view const d_strings,
+                             int8_t* d_spaces_in,      // where separators are inserted
+                             cudf::size_type* d_sizes  // output sizes of encoded strings
 )
 {
   // string per block
@@ -77,133 +222,12 @@ __global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
     d_strings.child(cudf::strings_column_view::offsets_column_index).data<cudf::size_type>();
   auto const offset = offsets[str_idx + d_strings.offset()] - offsets[d_strings.offset()];
 
-  auto const d_spaces    = d_spaces_in + offset;
-  auto const end_spaces  = d_spaces + d_str.size_bytes();
-  auto const d_min_ranks = d_ranks + offset;
-  auto const end_ranks   = d_min_ranks + d_str.size_bytes();
-  auto const d_rerank    = d_rerank_in + offset;
-  auto const end_rerank  = d_rerank + d_str.size_bytes();
-  auto const max_rank    = cuda::std::numeric_limits<cudf::size_type>::max();
-  auto const num_valid   = block_size < d_str.size_bytes() ? block_size : d_str.size_bytes();
+  auto const d_spaces   = d_spaces_in + offset;
+  auto const end_spaces = d_spaces + d_str.size_bytes();
+  auto const num_valid  = block_size < d_str.size_bytes() ? block_size : d_str.size_bytes();
 
-  __shared__ cudf::size_type block_min_rank;
   using block_reduce = cub::BlockReduce<cudf::size_type, block_size>;
   __shared__ typename block_reduce::TempStorage temp_storage;
-
-  if (lane_idx == 0) { block_min_rank = 0; }
-  // init all ranks to max
-  for (auto itr = d_min_ranks + lane_idx; itr < end_ranks; itr += block_size) {
-    *itr = max_rank;
-  }
-  __syncthreads();
-
-  auto next_substr = [d_str, d_spaces, end = end_spaces](int8_t* begin) {
-    auto const next = thrust::find_if(thrust::seq, begin + 1, end, [](auto v) { return v != 0; });
-    auto const size = static_cast<cudf::size_type>(thrust::distance(begin, next));
-    return cudf::string_view(d_str.data() + thrust::distance(d_spaces, begin), size);
-  };
-
-  // store all the initial ranks for each pair in the string for this block
-  for (auto itr = d_spaces + lane_idx; itr < end_spaces; itr += block_size) {
-    if (*itr == 0) { continue; }  // start on valid bytes only
-    // resolve pair and lookup its rank
-    auto const lhs      = next_substr(itr);  // retrieve lhs of the pair
-    auto const next_itr = itr + lhs.size_bytes();
-    if (next_itr < end_spaces) {
-      auto const rhs = next_substr(next_itr);  // retrieve rhs of the pair
-      if (!rhs.empty()) {
-        auto rank          = max_rank;
-        auto const mp      = merge_pair_type{lhs, rhs};
-        auto const map_itr = d_map.find(mp);                       // lookup pair in merges table;
-        if (map_itr != d_map.end()) { rank = map_itr->second; }    // found a match;
-        d_min_ranks[thrust::distance(d_spaces, next_itr)] = rank;  // store the rank
-      }
-    }
-  }
-  __syncthreads();
-
-  // loop through the ranks finding the current minimum until there are no more
-  while (block_min_rank < max_rank) {
-    // find new minimum rank
-    auto min_rank = max_rank;
-    for (auto itr = d_min_ranks + lane_idx; itr < end_ranks; itr += block_size) {
-      auto const rank = *itr;
-      if (rank < min_rank) { min_rank = rank; }
-    }
-    __syncthreads();
-
-    // compute the min rank across the block
-    auto const reduce_rank = block_reduce(temp_storage).Reduce(min_rank, cub::Min(), num_valid);
-    if (lane_idx == 0) { block_min_rank = reduce_rank; }
-    __syncthreads();
-
-    if (block_min_rank < max_rank) {
-      // (re)initialize all the re-rank identifiers to zero
-      for (auto itr = d_rerank + lane_idx; itr < end_rerank; itr += block_size) {
-        *itr = 0;
-      }
-
-      // search the d_min_ranks for all the places where the rank matches block_min_rank
-      for (auto itr = d_min_ranks + lane_idx; itr < end_ranks; itr += block_size) {
-        if (*itr == block_min_rank) {
-          auto ptr = itr - 1;  // check for adjacent min-rank edge-case
-          while (ptr > d_min_ranks && *ptr == max_rank) {
-            --ptr;
-          }
-          // set the output value to 0 at this position (erases separator)
-          if (*ptr != block_min_rank) { d_spaces[thrust::distance(d_min_ranks, itr)] = 0; }
-        }
-      }
-      __syncthreads();
-
-      auto find_prev = [begin = d_spaces](int8_t* ptr) {
-        while (ptr > begin && *ptr == 0) {
-          --ptr;
-        }
-        return ptr;
-      };
-      auto find_next = [end = end_spaces](int8_t* ptr) {
-        while (ptr < end && *ptr == 0) {
-          ++ptr;
-        }
-        return ptr;
-      };
-
-      // identify the re-rank locations
-      for (auto itr = d_min_ranks + lane_idx; itr < end_ranks; itr += block_size) {
-        auto const index = thrust::distance(d_min_ranks, itr);
-        if (*itr == block_min_rank && d_spaces[index] == 0) {
-          auto ptr = find_prev(d_spaces + index - 1);  // find previous pair mid-point
-          if (ptr > d_spaces) { d_rerank[thrust::distance(d_spaces, ptr)] = 1; }  // atomicExch
-          ptr = find_next(d_spaces + index + 1);  // find next pair mid-point
-          if (ptr < end_spaces) { d_rerank[thrust::distance(d_spaces, ptr)] = 1; }  // atomicExch
-          *itr = max_rank;  // reset this rank
-        }
-      }
-      __syncthreads();
-
-      // compute the ranks for the newly created pairs
-      for (auto itr = d_rerank + lane_idx; itr < end_rerank; itr += block_size) {
-        if (*itr) {
-          auto const index = thrust::distance(d_rerank, itr);
-          // build lhs of pair
-          auto const ptr  = find_prev(d_spaces + index - 1);
-          auto const size = static_cast<cudf::size_type>(thrust::distance(ptr, d_spaces + index));
-          auto const lhs  = cudf::string_view(d_str.data() + thrust::distance(d_spaces, ptr), size);
-          // retrieve rhs of pair
-          auto const rhs = next_substr(d_spaces + index);
-          auto rank      = max_rank;
-          if (!rhs.empty()) {
-            auto const mp      = merge_pair_type{lhs, rhs};
-            auto const map_itr = d_map.find(mp);                     // lookup in merges;
-            if (map_itr != d_map.end()) { rank = map_itr->second; }  // found a match
-          }
-          d_min_ranks[index] = rank;
-        }
-      }
-      __syncthreads();
-    }
-  }  // if no mins were found we are done, otherwise start again
 
   // reset the first position -- no separator to be added here
   if (lane_idx == 0) { *d_spaces = 0; }
@@ -216,6 +240,7 @@ __global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
   auto const size = block_reduce(temp_storage).Sum(bytes, num_valid);
   if (lane_idx == 0) { d_sizes[str_idx] = size + d_str.size_bytes(); }
 }
+
 }  // namespace
 
 std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const& input,
@@ -250,6 +275,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
   auto d_offsets = offsets->mutable_view().data<cudf::size_type>();
 
   // initialize the spaces vector which will hold the separators locations
+  // (this is about 20% of the run: look into vector loading)
   rmm::device_uvector<int8_t> d_spaces(chars_size, stream);
   auto const zero_itr  = thrust::counting_iterator<cudf::size_type>(0);
   auto const chars_end = thrust::counting_iterator<cudf::size_type>(chars_size);
@@ -266,10 +292,11 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
   rmm::device_uvector<int8_t> d_rerank(chars_size, stream);          // re-ranking identifiers
   auto const map_ref = merge_pairs.impl->get_merge_pairs_ref();
 
-  // the main kernel here produces the sizes of the encoded output string
-  // as well as the d_spaces values which identify where to insert the separators
   bpe_parallel_fn<decltype(map_ref)><<<input.size(), block_size, 0, stream.value()>>>(
-    *d_strings, map_ref, d_offsets, d_spaces.data(), d_ranks.data(), d_rerank.data());
+    *d_strings, map_ref, d_spaces.data(), d_ranks.data(), d_rerank.data());
+  // this could probably be re-fused into the above kernel
+  bpe_finalize<<<input.size(), block_size, 0, stream.value()>>>(
+    *d_strings, d_spaces.data(), d_offsets);
 
   // convert sizes to offsets in-place
   auto const bytes =
@@ -297,9 +324,9 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
   thrust::merge_by_key(rmm::exec_policy(stream),
                        d_inserts,  // where separator is inserted
                        copy_end,
-                       zero_itr,   // all positions
+                       zero_itr,  // all positions
                        chars_end,
-                       sep_char,   // byte to insert
+                       sep_char,  // byte to insert
                        d_input_chars,
                        thrust::make_discard_iterator(),
                        d_chars);  // result

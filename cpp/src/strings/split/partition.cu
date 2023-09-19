@@ -170,7 +170,7 @@ struct rpartition_fn : public partition_fn {
       --itr;
       pos = check_delimiter(idx, d_str, itr);
     }
-    if (pos < 0)                                        // delimiter not found
+    if (pos < 0)  // delimiter not found
     {
       d_indices_left[idx]  = string_index_pair{"", 0};  // two empty
       d_indices_delim[idx] = string_index_pair{"", 0};  // strings
