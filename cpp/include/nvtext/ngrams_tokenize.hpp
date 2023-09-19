@@ -67,23 +67,21 @@ namespace nvtext {
  * All null row entries are ignored and the output contains all valid rows.
  *
  * @param input Strings column to tokenize and produce ngrams from
- * @param ngrams The ngram number to generate.
- *               Default is 2 = bigram.
+ * @param ngrams The ngram number to generate
  * @param delimiter UTF-8 characters used to separate each string into tokens.
- *                  The default of empty string will separate tokens using whitespace.
- * @param separator The string to use for separating ngram tokens.
- *                  Default is "_" character.
+ *                  An empty string will separate tokens using whitespace.
+ * @param separator The string to use for separating ngram tokens
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings columns of tokens
  */
 std::unique_ptr<cudf::column> ngrams_tokenize(
   cudf::strings_column_view const& input,
-  cudf::size_type ngrams               = 2,
-  cudf::string_scalar const& delimiter = cudf::string_scalar{"", true, cudf::get_default_stream()},
-  cudf::string_scalar const& separator = cudf::string_scalar{"_", true, cudf::get_default_stream()},
-  rmm::cuda_stream_view stream         = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
+  cudf::size_type ngrams,
+  cudf::string_scalar const& delimiter,
+  cudf::string_scalar const& separator,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace nvtext
