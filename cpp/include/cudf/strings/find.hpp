@@ -177,7 +177,7 @@ std::unique_ptr<column> contains(
  * @param input Strings instance for this operation
  * @param target UTF-8 encoded string to search for in each string
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New type_id::BOOL8 column.
  */
 std::unique_ptr<column> starts_with(
