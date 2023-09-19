@@ -10374,3 +10374,9 @@ def test_dataframe_init_from_nested_dict():
     pdf = pd.DataFrame(regular_dict)
     gdf = cudf.DataFrame(regular_dict)
     assert_eq(pdf, gdf)
+
+
+def test_data_frame_values_no_cols_but_index():
+    result = cudf.DataFrame(index=range(5)).values
+    expected = cupy.empty((5, 0), dtype=np.dtype("float64"), order="F")
+    assert_eq(result, expected)
