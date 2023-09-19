@@ -605,10 +605,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         cls,
         data: MutableMapping,
         index: Optional[BaseIndex] = None,
-        name: Any = None,
+        name: Any = no_default,
     ) -> Series:
         out = super()._from_data(data=data, index=index)
-        if name is not None:
+        if name is not no_default:
             out.name = name
         return out
 
@@ -2549,7 +2549,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     # Stats
     #
     @_cudf_nvtx_annotate
-    def count(self, level=None, **kwargs):
+    def count(self, level=None):
         """
         Return number of non-NA/null observations in the Series
 

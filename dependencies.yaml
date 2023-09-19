@@ -241,6 +241,10 @@ dependencies:
               cuda: "11.8"
             packages:
               - *nvcomp
+          # TODO: Fallback matrix for aarch64 CUDA 12. After migrating to nvcomp 3,
+          # all CUDA/arch combinations should be supported by existing packages.
+          - matrix:
+            packages:
   build_wheels:
     common:
       - output_types: pyproject

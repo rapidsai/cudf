@@ -303,7 +303,7 @@ avro_decode_row(schemadesc_s const* schema,
     // If within an array, check if we reached the last item
     if (array_repeat_count != 0 && array_children <= 0 && cur < end) {
       if (!--array_repeat_count) {
-        i = array_start;                   // Restart at the array parent
+        i = array_start;  // Restart at the array parent
       } else {
         i              = array_start + 1;  // Restart after the array parent
         array_children = schema[array_start].count;
