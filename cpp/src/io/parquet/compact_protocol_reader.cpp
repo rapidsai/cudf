@@ -578,7 +578,7 @@ inline bool function_builder(CompactProtocolReader* cpr, std::tuple<Operator...>
 
 bool CompactProtocolReader::read(FileMetaData* f)
 {
-  using OptionalListColumnOrder =
+  using optional_list_column_order =
     parquet_field_optional<std::vector<ColumnOrder>, parquet_field_struct_list<ColumnOrder>>;
   auto op = std::make_tuple(parquet_field_int32(1, f->version),
                             parquet_field_struct_list(2, f->schema),
@@ -586,7 +586,7 @@ bool CompactProtocolReader::read(FileMetaData* f)
                             parquet_field_struct_list(4, f->row_groups),
                             parquet_field_struct_list(5, f->key_value_metadata),
                             parquet_field_string(6, f->created_by),
-                            OptionalListColumnOrder(7, f->column_orders));
+                            optional_list_column_order(7, f->column_orders));
   return function_builder(this, op);
 }
 
