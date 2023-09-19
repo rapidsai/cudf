@@ -2453,11 +2453,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         name = "proportion" if normalize else "count"
 
         if subset is None:
-            subset = [i for i in df.columns if i not in groupings]
+            subset = [i for i in df._column_names if i not in groupings]
         # Check subset exists in dataframe
-        elif set(subset) - set(df.columns):
+        elif set(subset) - set(df._column_names):
             raise ValueError(
-                f"Keys {set(subset) - set(df.columns)} in subset "
+                f"Keys {set(subset) - set(df._column_names)} in subset "
                 f"do not exist in the DataFrame."
             )
         # Catch case where groupby and subset share an element
@@ -2489,7 +2489,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             )
 
         if not self._as_index:
-            if name in df.columns:
+            if name in df._column_names:
                 raise ValueError(
                     f"Column label '{name}' is duplicate of result column"
                 )
