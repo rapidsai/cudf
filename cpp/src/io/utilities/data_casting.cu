@@ -492,7 +492,8 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
       if (!d_chars) {
         if (lane == 0) { d_offsets[istring] = in_end - in_begin; }
       } else {
-        for (size_t char_index = lane; char_index < (in_end - in_begin); char_index += BLOCK_SIZE) {
+        for (thread_index_type char_index = lane; char_index < (in_end - in_begin);
+             char_index += BLOCK_SIZE) {
           d_buffer[char_index] = in_begin[char_index];
         }
       }
@@ -529,7 +530,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
     __syncthreads();
     // 0-31, 32-63, ... i*32-n.
     // entire warp executes but with mask.
-    for (size_t char_index = lane;
+    for (thread_index_type char_index = lane;
          char_index < cudf::util::round_up_safe(in_end - in_begin, static_cast<long>(BLOCK_SIZE));
          char_index += BLOCK_SIZE) {
       bool const is_within_bounds = char_index < (in_end - in_begin);
@@ -679,7 +680,10 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
               write_char   = strings::detail::codepoint_to_utf8(unicode_code_point);
               this_num_out = strings::detail::bytes_in_char_utf8(write_char);
             } else {
+              // if hex_val is high surrogate, ideally it should be parsing failure.
+              // but skipping it as other parsers do this too.
               if (hex_val >= UTF16_LOW_SURROGATE_BEGIN && hex_val < UTF16_LOW_SURROGATE_END) {
+                // Ideally this should be skipped if previous char is high surrogate.
                 skip         = true;
                 this_num_out = 0;
                 write_char   = 0;
@@ -726,7 +730,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
       }
     }  // char for-loop
     if (!d_chars && lane == 0) { d_offsets[istring] = last_offset; }
-  }    // grid-stride for-loop
+  }  // grid-stride for-loop
 }
 
 template <typename str_tuple_it>
