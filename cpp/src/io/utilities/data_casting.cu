@@ -249,7 +249,8 @@ process_string(in_iterator_t in_begin,
     // If this may be a UTF-16 encoded surrogate pair:
     // we expect another \uXXXX sequence
     int32_t hex_low_val = 0;
-    if (thrust::distance(in_begin, in_end) >= NUM_UNICODE_ESC_SEQ_CHARS &&
+    if (hex_val >= UTF16_HIGH_SURROGATE_BEGIN && hex_val < UTF16_HIGH_SURROGATE_END &&
+        thrust::distance(in_begin, in_end) >= NUM_UNICODE_ESC_SEQ_CHARS &&
         *in_begin == backslash_char && *thrust::next(in_begin) == 'u') {
       // Try to parse hex value following the '\' and 'u' characters from what may be a UTF16 low
       // surrogate
@@ -267,10 +268,8 @@ process_string(in_iterator_t in_begin,
                                     (hex_low_val - UTF16_LOW_SURROGATE_BEGIN);
       auto utf8_chars = strings::detail::codepoint_to_utf8(unicode_code_point);
       bytes += write_utf8_char(utf8_chars, d_buffer);
-    }
-
-    // Just a single \uXXXX sequence
-    else {
+    } else {
+      // Just a single \uXXXX sequence
       auto utf8_chars = strings::detail::codepoint_to_utf8(hex_val);
       bytes += write_utf8_char(utf8_chars, d_buffer);
     }
@@ -293,6 +292,8 @@ struct bitfield_warp {
   // 5 because for skipping unicode hex chars, look back up to 5 chars are needed.
   // 5+32 for each warp.
   bool is_slash[num_warps][UNICODE_LOOK_BACK + cudf::detail::warp_size];
+
+  /// Sets all bits to 0
   __device__ void reset(unsigned warp_id)
   {
     if (threadIdx.x % cudf::detail::warp_size < UNICODE_LOOK_BACK) {
@@ -300,6 +301,8 @@ struct bitfield_warp {
     }
     is_slash[warp_id][threadIdx.x % cudf::detail::warp_size + UNICODE_LOOK_BACK] = 0;
   }
+
+  /// Shifts UNICODE_LOOK_BACK bits to the left to hold the previous UNICODE_LOOK_BACK bits
   __device__ void shift(unsigned warp_id)
   {
     if (threadIdx.x % cudf::detail::warp_size < UNICODE_LOOK_BACK)
@@ -307,12 +310,16 @@ struct bitfield_warp {
         is_slash[warp_id][cudf::detail::warp_size + threadIdx.x % cudf::detail::warp_size];
     __syncwarp();
   }
+
+  /// Each thread in a warp sets its own bit.
   __device__ void set_bits(unsigned warp_id, bool is_escaping_backslash)
   {
     is_slash[warp_id][UNICODE_LOOK_BACK + threadIdx.x % cudf::detail::warp_size] =
       is_escaping_backslash;
     __syncwarp();
   }
+
+  /// Each thread in a warp gets the requested bit.
   __device__ bool get_bit(unsigned warp_id, int bit_index)
   {
     return is_slash[warp_id][UNICODE_LOOK_BACK + bit_index];
@@ -332,22 +339,29 @@ struct bitfield_block {
   // 5 + num_warps*32 for entire block
   bool is_slash[UNICODE_LOOK_BACK + num_warps * cudf::detail::warp_size];
 
+  /// Sets all bits to 0
   __device__ void reset(unsigned warp_id)
   {
     if (threadIdx.x < UNICODE_LOOK_BACK) { is_slash[threadIdx.x] = 0; }
     is_slash[threadIdx.x + UNICODE_LOOK_BACK] = 0;
   }
+
+  /// Shifts UNICODE_LOOK_BACK bits to the left to hold the previous UNICODE_LOOK_BACK bits
   __device__ void shift(unsigned warp_id)
   {
     if (threadIdx.x < UNICODE_LOOK_BACK)
       is_slash[threadIdx.x] = is_slash[num_warps * cudf::detail::warp_size + threadIdx.x];
     __syncthreads();
   }
+
+  /// Each thread in a block sets its own bit.
   __device__ void set_bits(unsigned warp_id, bool is_escaping_backslash)
   {
     is_slash[UNICODE_LOOK_BACK + threadIdx.x] = is_escaping_backslash;
     __syncthreads();
   }
+
+  /// Each thread in a block gets the requested bit.
   __device__ bool get_bit(unsigned warp_id, int bit_index)
   {
     return is_slash[UNICODE_LOOK_BACK + bit_index];
@@ -478,8 +492,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
       if (!d_chars) {
         if (lane == 0) { d_offsets[istring] = in_end - in_begin; }
       } else {
-        for (size_type char_index = lane; char_index < (in_end - in_begin);
-             char_index += BLOCK_SIZE) {
+        for (size_t char_index = lane; char_index < (in_end - in_begin); char_index += BLOCK_SIZE) {
           d_buffer[char_index] = in_begin[char_index];
         }
       }
@@ -516,7 +529,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
     __syncthreads();
     // 0-31, 32-63, ... i*32-n.
     // entire warp executes but with mask.
-    for (size_type char_index = lane;
+    for (size_t char_index = lane;
          char_index < cudf::util::round_up_safe(in_end - in_begin, static_cast<long>(BLOCK_SIZE));
          char_index += BLOCK_SIZE) {
       bool const is_within_bounds = char_index < (in_end - in_begin);
@@ -620,14 +633,14 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
       skip |= is_escaping_backslash;
       if (is_within_bounds) {
         // skip X for each X in \uXXXX
-        skip |= char_index - 2 >= 0 && is_slash.get_bit(warp_id, lane - 2) &&
-                in_begin[char_index - 1] == 'u';
-        skip |= char_index - 3 >= 0 && is_slash.get_bit(warp_id, lane - 3) &&
-                in_begin[char_index - 2] == 'u';
-        skip |= char_index - 4 >= 0 && is_slash.get_bit(warp_id, lane - 4) &&
-                in_begin[char_index - 3] == 'u';
-        skip |= char_index - 5 >= 0 && is_slash.get_bit(warp_id, lane - 5) &&
-                in_begin[char_index - 4] == 'u';
+        skip |=
+          char_index >= 2 && is_slash.get_bit(warp_id, lane - 2) && in_begin[char_index - 1] == 'u';
+        skip |=
+          char_index >= 3 && is_slash.get_bit(warp_id, lane - 3) && in_begin[char_index - 2] == 'u';
+        skip |=
+          char_index >= 4 && is_slash.get_bit(warp_id, lane - 4) && in_begin[char_index - 3] == 'u';
+        skip |=
+          char_index >= 5 && is_slash.get_bit(warp_id, lane - 5) && in_begin[char_index - 4] == 'u';
       }
       int this_num_out = 0;
       cudf::char_utf8 write_char{};
@@ -650,7 +663,8 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
             // UTF16 \uXXXX\uXXXX
             // Note: no need for scanned_backslash below because we already know that
             // only '\u' check is enough.
-            if ((in_begin + char_index + UNICODE_HEX_DIGIT_COUNT + NUM_UNICODE_ESC_SEQ_CHARS) <
+            if (hex_val >= UTF16_HIGH_SURROGATE_BEGIN && hex_val < UTF16_HIGH_SURROGATE_END &&
+                (in_begin + char_index + UNICODE_HEX_DIGIT_COUNT + NUM_UNICODE_ESC_SEQ_CHARS) <
                   in_end &&
                 in_begin[char_index + NUM_UNICODE_ESC_SEQ_CHARS - 1] == '\\' &&
                 in_begin[char_index + NUM_UNICODE_ESC_SEQ_CHARS] == 'u') {
@@ -773,6 +787,123 @@ struct to_string_view_pair {
   }
 };
 
+template <typename string_view_pair_it>
+static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
+                                            size_type col_size,
+                                            rmm::device_buffer&& null_mask,
+                                            rmm::device_scalar<size_type>& d_null_count,
+                                            cudf::io::parse_options_view const& options,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr)
+{
+  //  CUDF_FUNC_RANGE();
+
+  auto const max_length = thrust::transform_reduce(
+    rmm::exec_policy(stream),
+    str_tuples,
+    str_tuples + col_size,
+    [] __device__(auto t) { return t.second; },
+    size_type{0},
+    thrust::maximum<size_type>{});
+
+  auto offsets = cudf::make_numeric_column(
+    data_type{type_to_id<size_type>()}, col_size + 1, cudf::mask_state::UNALLOCATED, stream, mr);
+  auto d_offsets       = offsets->mutable_view().data<size_type>();
+  auto null_count_data = d_null_count.data();
+
+  auto single_thread_fn = string_parse<decltype(str_tuples)>{
+    str_tuples, static_cast<bitmask_type*>(null_mask.data()), null_count_data, options, d_offsets};
+  thrust::for_each_n(rmm::exec_policy(stream),
+                     thrust::make_counting_iterator<size_type>(0),
+                     col_size,
+                     single_thread_fn);
+
+  constexpr auto warps_per_block  = 8;
+  constexpr int threads_per_block = cudf::detail::warp_size * warps_per_block;
+  auto num_blocks                 = cudf::util::div_rounding_up_safe(col_size, warps_per_block);
+  auto str_counter                = cudf::numeric_scalar(size_type{0}, true, stream);
+
+  // TODO run these independent kernels in parallel streams.
+  if (max_length > SINGLE_THREAD_THRESHOLD) {
+    parse_fn_string_parallel<true, warps_per_block>
+      <<<num_blocks, threads_per_block, 0, stream.value()>>>(
+        str_tuples,
+        col_size,
+        str_counter.data(),
+        static_cast<bitmask_type*>(null_mask.data()),
+        null_count_data,
+        options,
+        d_offsets,
+        nullptr);
+  }
+
+  if (max_length > WARP_THRESHOLD) {
+    // for strings longer than WARP_THRESHOLD, 1 block per string
+    str_counter.set_value(0, stream);
+    parse_fn_string_parallel<false, warps_per_block>
+      <<<num_blocks, threads_per_block, 0, stream.value()>>>(
+        str_tuples,
+        col_size,
+        str_counter.data(),
+        static_cast<bitmask_type*>(null_mask.data()),
+        null_count_data,
+        options,
+        d_offsets,
+        nullptr);
+  }
+  auto const bytes =
+    cudf::detail::sizes_to_offsets(d_offsets, d_offsets + col_size + 1, d_offsets, stream);
+  CUDF_EXPECTS(bytes <= std::numeric_limits<size_type>::max(),
+               "Size of output exceeds the column size limit",
+               std::overflow_error);
+
+  // CHARS column
+  std::unique_ptr<column> chars =
+    strings::detail::create_chars_child_column(static_cast<size_type>(bytes), stream, mr);
+  auto d_chars = chars->mutable_view().data<char>();
+
+  single_thread_fn.d_chars = d_chars;
+  thrust::for_each_n(rmm::exec_policy(stream),
+                     thrust::make_counting_iterator<size_type>(0),
+                     col_size,
+                     single_thread_fn);
+
+  if (max_length > SINGLE_THREAD_THRESHOLD) {
+    str_counter.set_value(0, stream);
+    parse_fn_string_parallel<true, warps_per_block>
+      <<<num_blocks, threads_per_block, 0, stream.value()>>>(
+        str_tuples,
+        col_size,
+        str_counter.data(),
+        static_cast<bitmask_type*>(null_mask.data()),
+        null_count_data,
+        options,
+        d_offsets,
+        d_chars);
+  }
+
+  if (max_length > WARP_THRESHOLD) {
+    str_counter.set_value(0, stream);
+    // for strings longer than WARP_THRESHOLD, 1 block per string
+    parse_fn_string_parallel<false, warps_per_block>
+      <<<num_blocks, threads_per_block, 0, stream.value()>>>(
+        str_tuples,
+        col_size,
+        str_counter.data(),
+        static_cast<bitmask_type*>(null_mask.data()),
+        null_count_data,
+        options,
+        d_offsets,
+        d_chars);
+  }
+
+  return make_strings_column(col_size,
+                             std::move(offsets),
+                             std::move(chars),
+                             d_null_count.value(stream),
+                             std::move(null_mask));
+}
+
 std::unique_ptr<column> parse_data(
   const char* data,
   thrust::zip_iterator<thrust::tuple<const size_type*, const size_type*>> offset_length_begin,
@@ -794,113 +925,13 @@ std::unique_ptr<column> parse_data(
   auto str_tuples = thrust::make_transform_iterator(offset_length_begin, to_string_view_pair{data});
 
   if (col_type == cudf::data_type{cudf::type_id::STRING}) {
-    auto const max_length = thrust::transform_reduce(
-      rmm::exec_policy(stream),
-      str_tuples,
-      str_tuples + col_size,
-      [] __device__(auto t) { return t.second; },
-      size_type{0},
-      thrust::maximum<size_type>{});
-
-    auto offsets = cudf::make_numeric_column(
-      data_type{cudf::type_id::INT32}, col_size + 1, cudf::mask_state::UNALLOCATED, stream, mr);
-    auto d_offsets = offsets->mutable_view().data<size_type>();
-
-    auto single_thread_fn =
-      string_parse<decltype(str_tuples)>{str_tuples,
-                                         static_cast<bitmask_type*>(null_mask.data()),
-                                         null_count_data,
-                                         options,
-                                         d_offsets};
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       col_size,
-                       single_thread_fn);
-
-    constexpr auto warps_per_block  = 8;
-    constexpr int threads_per_block = cudf::detail::warp_size * warps_per_block;
-    auto num_blocks                 = cudf::util::div_rounding_up_safe(col_size, warps_per_block);
-    auto str_counter                = cudf::numeric_scalar(size_type{0}, true, stream);
-
-    // TODO run these independent kernels in parallel streams.
-    if (max_length > SINGLE_THREAD_THRESHOLD) {
-      parse_fn_string_parallel<true, warps_per_block>
-        <<<num_blocks, threads_per_block, 0, stream.value()>>>(
-          str_tuples,
-          col_size,
-          str_counter.data(),
-          static_cast<bitmask_type*>(null_mask.data()),
-          null_count_data,
-          options,
-          d_offsets,
-          nullptr);
-    }
-
-    if (max_length > WARP_THRESHOLD) {
-      // for strings longer than WARP_THRESHOLD, 1 block per string
-      str_counter.set_value(0, stream);
-      parse_fn_string_parallel<false, warps_per_block>
-        <<<num_blocks, threads_per_block, 0, stream.value()>>>(
-          str_tuples,
-          col_size,
-          str_counter.data(),
-          static_cast<bitmask_type*>(null_mask.data()),
-          null_count_data,
-          options,
-          d_offsets,
-          nullptr);
-    }
-    auto const bytes =
-      cudf::detail::sizes_to_offsets(d_offsets, d_offsets + col_size + 1, d_offsets, stream);
-    CUDF_EXPECTS(bytes <= std::numeric_limits<size_type>::max(),
-                 "Size of output exceeds the column size limit",
-                 std::overflow_error);
-
-    // CHARS column
-    std::unique_ptr<column> chars =
-      strings::detail::create_chars_child_column(static_cast<size_type>(bytes), stream, mr);
-    auto d_chars = chars->mutable_view().data<char>();
-
-    single_thread_fn.d_chars = d_chars;
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       col_size,
-                       single_thread_fn);
-
-    if (max_length > SINGLE_THREAD_THRESHOLD) {
-      str_counter.set_value(0, stream);
-      parse_fn_string_parallel<true, warps_per_block>
-        <<<num_blocks, threads_per_block, 0, stream.value()>>>(
-          str_tuples,
-          col_size,
-          str_counter.data(),
-          static_cast<bitmask_type*>(null_mask.data()),
-          null_count_data,
-          options,
-          d_offsets,
-          d_chars);
-    }
-
-    if (max_length > WARP_THRESHOLD) {
-      str_counter.set_value(0, stream);
-      // for strings longer than WARP_THRESHOLD, 1 block per string
-      parse_fn_string_parallel<false, warps_per_block>
-        <<<num_blocks, threads_per_block, 0, stream.value()>>>(
-          str_tuples,
-          col_size,
-          str_counter.data(),
-          static_cast<bitmask_type*>(null_mask.data()),
-          null_count_data,
-          options,
-          d_offsets,
-          d_chars);
-    }
-
-    return make_strings_column(col_size,
-                               std::move(offsets),
-                               std::move(chars),
-                               d_null_count.value(stream),
-                               std::move(null_mask));
+    return parse_string(str_tuples,
+                        col_size,
+                        std::forward<rmm::device_buffer>(null_mask),
+                        d_null_count,
+                        options,
+                        stream,
+                        mr);
   }
 
   auto out_col =
