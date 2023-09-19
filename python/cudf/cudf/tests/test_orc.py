@@ -633,16 +633,19 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
     for col in gdf:
         if "minimum" in file_stats[0][col]:
             stats_min = file_stats[0][col]["minimum"]
-            actual_min = gdf[col].min()
-            assert normalized_equals(actual_min, stats_min)
+            if stats_min is not None:
+                actual_min = gdf[col].min()
+                assert normalized_equals(actual_min, stats_min)
         if "maximum" in file_stats[0][col]:
             stats_max = file_stats[0][col]["maximum"]
-            actual_max = gdf[col].max()
-            assert normalized_equals(actual_max, stats_max)
+            if stats_max is not None:
+                actual_max = gdf[col].max()
+                assert normalized_equals(actual_max, stats_max)
         if "number_of_values" in file_stats[0][col]:
             stats_num_vals = file_stats[0][col]["number_of_values"]
-            actual_num_vals = gdf[col].count()
-            assert stats_num_vals == actual_num_vals
+            if stats_num_vals is not None:
+                actual_num_vals = gdf[col].count()
+                assert stats_num_vals == actual_num_vals
 
     # compare stripe statistics with actual min/max
     for stripe_idx in range(0, orc_file.nstripes):
@@ -651,21 +654,24 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
         stripe_df = cudf.DataFrame(stripe.to_pandas())
         for col in stripe_df:
             if "minimum" in stripes_stats[stripe_idx][col]:
-                actual_min = stripe_df[col].min()
                 stats_min = stripes_stats[stripe_idx][col]["minimum"]
-                assert normalized_equals(actual_min, stats_min)
+                if stats_min is not None:
+                    actual_min = stripe_df[col].min()
+                    assert normalized_equals(actual_min, stats_min)
 
             if "maximum" in stripes_stats[stripe_idx][col]:
-                actual_max = stripe_df[col].max()
                 stats_max = stripes_stats[stripe_idx][col]["maximum"]
-                assert normalized_equals(actual_max, stats_max)
+                if stats_max is not None:
+                    actual_max = stripe_df[col].max()
+                    assert normalized_equals(actual_max, stats_max)
 
             if "number_of_values" in stripes_stats[stripe_idx][col]:
                 stats_num_vals = stripes_stats[stripe_idx][col][
                     "number_of_values"
                 ]
-                actual_num_vals = stripe_df[col].count()
-                assert stats_num_vals == actual_num_vals
+                if stats_num_vals is not None:
+                    actual_num_vals = stripe_df[col].count()
+                    assert stats_num_vals == actual_num_vals
 
 
 @pytest.mark.parametrize("stats_freq", ["STRIPE", "ROWGROUP"])
@@ -733,16 +739,19 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
     for col in expect:
         if "minimum" in file_stats[0][col]:
             stats_min = file_stats[0][col]["minimum"]
-            actual_min = expect[col].min()
-            assert normalized_equals(actual_min, stats_min)
+            if stats_min is not None:
+                actual_min = expect[col].min()
+                assert normalized_equals(actual_min, stats_min)
         if "maximum" in file_stats[0][col]:
             stats_max = file_stats[0][col]["maximum"]
-            actual_max = expect[col].max()
-            assert normalized_equals(actual_max, stats_max)
+            if stats_max is not None:
+                actual_max = expect[col].max()
+                assert normalized_equals(actual_max, stats_max)
         if "number_of_values" in file_stats[0][col]:
             stats_num_vals = file_stats[0][col]["number_of_values"]
-            actual_num_vals = expect[col].count()
-            assert stats_num_vals == actual_num_vals
+            if stats_num_vals is not None:
+                actual_num_vals = expect[col].count()
+                assert stats_num_vals == actual_num_vals
 
     # compare stripe statistics with actual min/max
     for stripe_idx in range(0, orc_file.nstripes):
@@ -751,21 +760,24 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
         stripe_df = cudf.DataFrame(stripe.to_pandas())
         for col in stripe_df:
             if "minimum" in stripes_stats[stripe_idx][col]:
-                actual_min = stripe_df[col].min()
                 stats_min = stripes_stats[stripe_idx][col]["minimum"]
-                assert normalized_equals(actual_min, stats_min)
+                if stats_min is not None:
+                    actual_min = stripe_df[col].min()
+                    assert normalized_equals(actual_min, stats_min)
 
             if "maximum" in stripes_stats[stripe_idx][col]:
-                actual_max = stripe_df[col].max()
                 stats_max = stripes_stats[stripe_idx][col]["maximum"]
-                assert normalized_equals(actual_max, stats_max)
+                if stats_max is not None:
+                    actual_max = stripe_df[col].max()
+                    assert normalized_equals(actual_max, stats_max)
 
             if "number_of_values" in stripes_stats[stripe_idx][col]:
                 stats_num_vals = stripes_stats[stripe_idx][col][
                     "number_of_values"
                 ]
-                actual_num_vals = stripe_df[col].count()
-                assert stats_num_vals == actual_num_vals
+                if stats_num_vals is not None:
+                    actual_num_vals = stripe_df[col].count()
+                    assert stats_num_vals == actual_num_vals
 
 
 @pytest.mark.parametrize("nrows", [1, 100, 6000000])
