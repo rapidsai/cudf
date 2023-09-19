@@ -116,7 +116,7 @@ std::unique_ptr<column> create_collect_gather_map(column_view const& child_offse
     thrust::make_counting_iterator<size_type>(per_row_mapping.size()),
     gather_map->mutable_view().template begin<size_type>(),
     [d_offsets =
-       child_offsets.template begin<size_type>(),    // E.g. [0,   2,     5,     8,     11, 13]
+       child_offsets.template begin<size_type>(),  // E.g. [0,   2,     5,     8,     11, 13]
      d_groups =
        per_row_mapping.template begin<size_type>(),  // E.g. [0,0, 1,1,1, 2,2,2, 3,3,3, 4,4]
      d_prev = preceding_iter] __device__(auto i) {
