@@ -125,14 +125,12 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
 
 /**
  * @brief Invokes the given `func` with desired comparators based on the specified `compare_nans`
- parameter.
+ * parameter
  *
  * @tparam HaystackHasNested Flag indicating whether there are nested columns in haystack
  * @tparam HasAnyNested Flag indicating whether there are nested columns in either haystack or
- needles
+ * needles
  * @tparam Func Type of the helper function doing `contains` check
-
- * @tparam haystack_has_nulls Flag indicating whether haystack has nulls or not
  *
  * @param compare_nulls Control whether nulls should be compared as equal or not
  * @param compare_nans Control whether floating-point NaNs values should be compared as equal or not
