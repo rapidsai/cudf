@@ -25,6 +25,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/utilities/default_stream.hpp>
@@ -76,8 +77,9 @@ __global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
   auto const end_ranks   = d_min_ranks + d_str.size_bytes();
   auto const d_rerank    = d_rerank_in + offset;
   auto const end_rerank  = d_rerank + d_str.size_bytes();
-  auto const max_rank    = cuda::std::numeric_limits<cudf::size_type>::max();
   auto const num_valid   = block_size < d_str.size_bytes() ? block_size : d_str.size_bytes();
+
+  auto constexpr max_rank = cuda::std::numeric_limits<cudf::size_type>::max();
 
   __shared__ cudf::size_type block_min_rank;
   using block_reduce = cub::BlockReduce<cudf::size_type, block_size>;
@@ -92,6 +94,11 @@ __global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
   // init all ranks to max
   for (auto itr = d_min_ranks + lane_idx; itr < end_ranks; itr += block_size) {
     *itr = max_rank;
+  }
+  // init all spaces to 1 as appropriate
+  for (auto itr = d_spaces + lane_idx; itr < end_spaces; itr += block_size) {
+    auto const index = thrust::distance(d_spaces, itr);
+    *itr = static_cast<int8_t>(cudf::strings::detail::is_begin_utf8_char(d_str.data()[index]));
   }
   __syncthreads();
 
@@ -115,7 +122,6 @@ __global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
       }
     }
   }
-  __syncthreads();
   // compute the min rank across the block
   auto const reduce_rank = block_reduce(temp_storage).Reduce(min_rank, cub::Min(), num_valid);
   if (lane_idx == 0) { block_min_rank = reduce_rank; }
@@ -189,7 +195,6 @@ __global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
       }
       if (rank < min_rank) min_rank = rank;
     }
-    __syncthreads();
 
     // compute the min rank across the block
     auto const reduce_rank = block_reduce(temp_storage).Reduce(min_rank, cub::Min(), num_valid);
@@ -235,7 +240,7 @@ __global__ void bpe_finalize(cudf::column_device_view const d_strings,
   // compute the output size for this string by counting the resulting separator positions
   auto bytes = 0;
   for (auto itr = d_spaces + lane_idx; itr < end_spaces; itr += block_size) {
-    bytes += *itr;
+    bytes += (*itr > 0);
   }
   auto const size = block_reduce(temp_storage).Sum(bytes, num_valid);
   if (lane_idx == 0) { d_sizes[str_idx] = size + d_str.size_bytes(); }
@@ -274,20 +279,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
     offset_data_type, input.size() + 1, cudf::mask_state::UNALLOCATED, stream, mr);
   auto d_offsets = offsets->mutable_view().data<cudf::size_type>();
 
-  // initialize the spaces vector which will hold the separators locations
-  // (this is about 20% of the run: look into vector loading)
   rmm::device_uvector<int8_t> d_spaces(chars_size, stream);
-  auto const zero_itr  = thrust::counting_iterator<cudf::size_type>(0);
-  auto const chars_end = thrust::counting_iterator<cudf::size_type>(chars_size);
-  thrust::transform(
-    rmm::exec_policy(stream),
-    zero_itr,
-    chars_end,
-    d_spaces.begin(),
-    [d_input_chars] __device__(auto idx) {
-      return static_cast<int8_t>(cudf::strings::detail::is_begin_utf8_char(d_input_chars[idx]));
-    });
-
   rmm::device_uvector<cudf::size_type> d_ranks(chars_size, stream);  // rank per string pair;
   rmm::device_uvector<int8_t> d_rerank(chars_size, stream);          // re-ranking identifiers
   auto const map_ref = merge_pairs.impl->get_merge_pairs_ref();
@@ -313,11 +305,13 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
   // the offsets are produced by the index of the d_spaces values
   auto const d_inserts = d_ranks.data();
   // create offsets where separators will be inserted
-  auto offsets_at_one = [d_spaces = d_spaces.data()] __device__(auto idx) {
+  auto offsets_at_non_zero = [d_spaces = d_spaces.data()] __device__(auto idx) {
     return d_spaces[idx] > 0;  // separator to be inserted here
   };
-  auto const copy_end =
-    thrust::copy_if(rmm::exec_policy(stream), zero_itr + 1, chars_end, d_inserts, offsets_at_one);
+  auto const zero_itr  = thrust::counting_iterator<cudf::size_type>(0);
+  auto const chars_end = thrust::counting_iterator<cudf::size_type>(chars_size);
+  auto const copy_end  = thrust::copy_if(
+    rmm::exec_policy(stream), zero_itr + 1, chars_end, d_inserts, offsets_at_non_zero);
 
   // this will insert the single-byte separator in positions specified in d_inserts
   auto const sep_char = thrust::constant_iterator<char>(separator.to_string(stream)[0]);
