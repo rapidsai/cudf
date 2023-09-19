@@ -261,7 +261,7 @@ struct byte_pair_encoding_fn {
           while (itr < end) {
             auto rhs = next_substr(itr, end, d_str);
             if (d_pair.first == lhs && d_pair.second == rhs) {
-              *itr = 0;                   // removes the pair from this string
+              *itr = 0;  // removes the pair from this string
               itr += rhs.size_bytes();
               if (itr >= end) { break; }  // done checking for pairs
               // skip to the next adjacent pair

@@ -2166,7 +2166,7 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullabilityList)
   cudf::io::table_input_metadata metadata(table1);
   metadata.column_metadata[0].set_nullability(true);  // List is nullable at first (root) level
   metadata.column_metadata[0].child(1).set_nullability(
-    false);                                           // non-nullable at second (leaf) level
+    false);  // non-nullable at second (leaf) level
   metadata.column_metadata[1].set_nullability(true);
 
   auto filepath = temp_env->get_temp_filepath("ChunkedListNullable.parquet");
@@ -5880,7 +5880,7 @@ TEST_F(ParquetMetadataReaderTest, TestNested)
   EXPECT_EQ(out_map_col.type_kind(), cudf::io::parquet::TypeKind::UNDEFINED_TYPE);  // map
 
   ASSERT_EQ(out_map_col.num_children(), 1);
-  EXPECT_EQ(out_map_col.child(0).name(), "key_value");       // key_value (named in parquet writer)
+  EXPECT_EQ(out_map_col.child(0).name(), "key_value");  // key_value (named in parquet writer)
   ASSERT_EQ(out_map_col.child(0).num_children(), 2);
   EXPECT_EQ(out_map_col.child(0).child(0).name(), "key");    // key (named in parquet writer)
   EXPECT_EQ(out_map_col.child(0).child(1).name(), "value");  // value (named in parquet writer)
@@ -5897,7 +5897,7 @@ TEST_F(ParquetMetadataReaderTest, TestNested)
   ASSERT_EQ(out_list_col.child(0).num_children(), 1);
 
   auto const& out_list_struct_col = out_list_col.child(0).child(0);
-  EXPECT_EQ(out_list_struct_col.name(), "element");        // elements (named in parquet writer)
+  EXPECT_EQ(out_list_struct_col.name(), "element");  // elements (named in parquet writer)
   EXPECT_EQ(out_list_struct_col.type_kind(),
             cudf::io::parquet::TypeKind::UNDEFINED_TYPE);  // struct
   ASSERT_EQ(out_list_struct_col.num_children(), 2);
