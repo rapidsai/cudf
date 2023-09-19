@@ -315,7 +315,7 @@ inline void CompactProtocolFieldWriter::field_struct(int field, T const& val)
   if constexpr (not std::is_empty_v<T>) {
     writer.write(val);  // write the struct if it's not empty
   } else {
-    put_byte(0);        // otherwise, add a stop field
+    put_byte(0);  // otherwise, add a stop field
   }
   current_field_value = field;
 }
