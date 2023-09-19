@@ -18,6 +18,8 @@
 
 #include "parquet_common.hpp"
 
+#include <thrust/optional.h>
+
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -121,14 +123,14 @@ struct LogicalType {
   BsonType BSON;
 };
 
-/** Empty struct to signal the order defined by the physical or logical type */
-struct TypeDefinedOrder {};
-
 /**
  * Union to specify the order used for the min_value and max_value fields for a column.
  */
 struct ColumnOrder {
-  std::optional<TypeDefinedOrder> TYPE_ORDER;
+  enum Type { UNDEFINED, TYPE_ORDER };
+  Type type;
+
+  operator Type() const { return type; }
 };
 
 /**
@@ -148,7 +150,7 @@ struct SchemaElement {
   int32_t num_children                = 0;
   int32_t decimal_scale               = 0;
   int32_t decimal_precision           = 0;
-  std::optional<int32_t> field_id     = std::nullopt;
+  thrust::optional<int32_t> field_id  = thrust::nullopt;
   bool output_as_byte_array           = false;
 
   // The following fields are filled in later during schema initialization
@@ -237,7 +239,7 @@ struct KeyValue {
 struct SizeStatistics {
   // number of variable-width bytes stored for the page/chunk. should not be set for anything
   // but the BYTE_ARRAY physical type.
-  std::optional<int64_t> unencoded_byte_array_data_bytes = std::nullopt;
+  thrust::optional<int64_t> unencoded_byte_array_data_bytes = thrust::nullopt;
   /**
    * When present, there is expected to be one element corresponding to each
    * repetition (i.e. size=max repetition_level+1) where each element
@@ -246,14 +248,14 @@ struct SizeStatistics {
    *
    * This value should not be written if max_repetition_level is 0.
    */
-  std::optional<std::vector<int64_t>> repetition_level_histogram = std::nullopt;
+  thrust::optional<std::vector<int64_t>> repetition_level_histogram = thrust::nullopt;
 
   /**
    * Same as repetition_level_histogram except for definition levels.
    *
    * This value should not be written if max_definition_level is 0 or 1.
    */
-  std::optional<std::vector<int64_t>> definition_level_histogram = std::nullopt;
+  thrust::optional<std::vector<int64_t>> definition_level_histogram = thrust::nullopt;
 };
 
 /**
@@ -274,7 +276,7 @@ struct OffsetIndex {
   std::vector<PageLocation> page_locations;
   // per-page size info. see description of the same field in SizeStatistics. only present for
   // columns with a BYTE_ARRAY physical type.
-  std::optional<std::vector<int64_t>> unencoded_byte_array_data_bytes = std::nullopt;
+  thrust::optional<std::vector<int64_t>> unencoded_byte_array_data_bytes = thrust::nullopt;
 };
 
 /**
@@ -285,11 +287,11 @@ struct ColumnIndex {
   std::vector<std::vector<uint8_t>> min_values;  // lower bound for values in each page
   std::vector<std::vector<uint8_t>> max_values;  // upper bound for values in each page
   BoundaryOrder boundary_order =
-    BoundaryOrder::UNORDERED;                    // Indicates if min and max values are ordered
-  std::vector<int64_t> null_counts;              // Optional count of null values per page
+    BoundaryOrder::UNORDERED;        // Indicates if min and max values are ordered
+  std::vector<int64_t> null_counts;  // Optional count of null values per page
   // repetition/definition level histograms for the column chunk
-  std::optional<std::vector<int64_t>> repetition_level_histogram = std::nullopt;
-  std::optional<std::vector<int64_t>> definition_level_histogram = std::nullopt;
+  thrust::optional<std::vector<int64_t>> repetition_level_histogram = thrust::nullopt;
+  thrust::optional<std::vector<int64_t>> definition_level_histogram = thrust::nullopt;
 };
 
 /**
@@ -311,7 +313,8 @@ struct ColumnChunkMetaData {
   int64_t dictionary_page_offset =
     0;                    // Byte offset from the beginning of file to first (only) dictionary page
   Statistics statistics;  // Encoded chunk-level statistics
-  std::optional<SizeStatistics> size_statistics = std::nullopt;  // Size statistics for the chunk
+  thrust::optional<SizeStatistics> size_statistics =
+    thrust::nullopt;  // Size statistics for the chunk
 };
 
 /**
@@ -364,7 +367,7 @@ struct FileMetaData {
   std::vector<RowGroup> row_groups;
   std::vector<KeyValue> key_value_metadata;
   std::string created_by = "";
-  std::optional<std::vector<ColumnOrder>> column_orders;
+  thrust::optional<std::vector<ColumnOrder>> column_orders;
 };
 
 /**

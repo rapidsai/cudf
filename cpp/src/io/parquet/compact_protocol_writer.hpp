@@ -98,6 +98,8 @@ class CompactProtocolFieldWriter {
   template <typename T>
   inline void field_struct(int field, T const& val);
 
+  inline void field_empty_struct(int field);
+
   template <typename T>
   inline void field_struct_list(int field, std::vector<T> const& val);
 

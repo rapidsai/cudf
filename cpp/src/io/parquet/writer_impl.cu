@@ -77,7 +77,7 @@ struct aggregate_writer_metadata {
     }
 
     if (stats_granularity != statistics_freq::STATISTICS_NONE) {
-      ColumnOrder default_order = {TypeDefinedOrder{}};
+      ColumnOrder default_order = {ColumnOrder::TYPE_ORDER};
       this->column_orders       = std::vector<ColumnOrder>(num_columns, default_order);
     }
 
@@ -176,8 +176,8 @@ struct aggregate_writer_metadata {
     std::vector<std::vector<uint8_t>> column_indexes;
   };
   std::vector<per_file_metadata> files;
-  std::string created_by                                = "";
-  std::optional<std::vector<ColumnOrder>> column_orders = std::nullopt;
+  std::string created_by                                   = "";
+  thrust::optional<std::vector<ColumnOrder>> column_orders = thrust::nullopt;
 };
 
 namespace {
