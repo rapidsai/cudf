@@ -160,9 +160,9 @@ __global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
       if (*itr == block_min_rank && d_spaces[index] == 0) {
         auto ptr = find_prev(d_spaces + index - 1);  // find previous pair mid-point
         if (ptr > d_spaces) { d_rerank[thrust::distance(d_spaces, ptr)] = 1; }
-        ptr = find_next(d_spaces + index + 1);       // find next pair mid-point
+        ptr = find_next(d_spaces + index + 1);  // find next pair mid-point
         if (ptr < end_spaces) { d_rerank[thrust::distance(d_spaces, ptr)] = 1; }
-        *itr = max_rank;                             // reset this rank
+        *itr = max_rank;  // reset this rank
       }
     }
     __syncthreads();
@@ -324,9 +324,9 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
   thrust::merge_by_key(rmm::exec_policy(stream),
                        d_inserts,  // where separator is inserted
                        copy_end,
-                       zero_itr,   // all positions
+                       zero_itr,  // all positions
                        chars_end,
-                       sep_char,   // byte to insert
+                       sep_char,  // byte to insert
                        d_input_chars,
                        thrust::make_discard_iterator(),
                        d_chars);  // result

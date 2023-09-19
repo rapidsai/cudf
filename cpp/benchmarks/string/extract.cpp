@@ -43,7 +43,7 @@ static void bench_extract(nvbench::state& state)
   std::uniform_int_distribution<int> words_dist(0, 999);
   std::vector<std::string> samples(100);  // 100 unique rows of data to reuse
   std::generate(samples.begin(), samples.end(), [&]() {
-    std::string row;                      // build a row of random tokens
+    std::string row;  // build a row of random tokens
     while (static_cast<cudf::size_type>(row.size()) < row_width) {
       row += std::to_string(words_dist(generator)) + " ";
     }

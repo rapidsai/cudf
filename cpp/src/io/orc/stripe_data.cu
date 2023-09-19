@@ -367,14 +367,14 @@ inline __device__ uint32_t varint_length(volatile orc_bytestream_s* bs, int pos)
       if (zbit) {
         return 5 + (zbit >> 3);  // up to 9x7 bits
       } else if ((sizeof(T) <= 8) || (bytestream_readbyte(bs, pos + 9) <= 0x7f)) {
-        return 10;               // up to 70 bits
+        return 10;  // up to 70 bits
       } else {
         uint64_t next64 = bytestream_readu64(bs, pos + 10);
         zbit            = __ffsll((~next64) & 0x8080'8080'8080'8080ull);
         if (zbit) {
           return 10 + (zbit >> 3);  // Up to 18x7 bits (126)
         } else {
-          return 19;                // Up to 19x7 bits (133)
+          return 19;  // Up to 19x7 bits (133)
         }
       }
     }
