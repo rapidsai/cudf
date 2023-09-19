@@ -56,28 +56,32 @@ auto make_empty_histogram(column_view const& values)
                                   std::move(lists_children));
 }
 
-std::unique_ptr<column> histogram(column_view const& input,
-                                  cudf::device_span<size_type const> group_labels,
-                                  std::optional<column_view> const& partial_counts,
-                                  size_type num_groups,
-                                  rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> build_histogram(column_view const& values,
+                                        cudf::device_span<size_type const> group_labels,
+                                        std::optional<column_view> const& partial_counts,
+                                        size_type num_groups,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(num_groups >= 0, "number of groups cannot be negative");
-  CUDF_EXPECTS(static_cast<size_t>(input.size()) == group_labels.size(),
+  CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
                "Size of values column should be same as that of group labels");
 
-  if (num_groups == 0) { return make_empty_histogram(input); }
+  if (num_groups == 0) { return make_empty_histogram(values); }
 
+  // Attach group labels to the input values.
   auto const labels_cv      = column_view{data_type{type_to_id<size_type>()},
                                      static_cast<size_type>(group_labels.size()),
                                      group_labels.data(),
                                      nullptr,
                                      0};
-  auto const labeled_values = table_view{{labels_cv, input}};
+  auto const labeled_values = table_view{{labels_cv, values}};
 
+  // Build histogram for the labeled values.
   auto [distinct_indices, distinct_counts] = cudf::reduction::detail::table_histogram(
     labeled_values, partial_counts, histogram_count_dtype, stream, mr);
+
+  // Gather the distinct rows for output histogram.
   auto out_table = cudf::detail::gather(labeled_values,
                                         distinct_indices,
                                         out_of_bounds_policy::DONT_CHECK,
@@ -85,6 +89,8 @@ std::unique_ptr<column> histogram(column_view const& input,
                                         stream,
                                         mr);
 
+  // Build offsets for the output lists column.
+  // Each list will be a histogram corresponding to each value group.
   auto out_offsets = cudf::lists::detail::reconstruct_offsets(
     out_table->get_column(0).view(), num_groups, stream, mr);
 
@@ -100,35 +106,36 @@ std::unique_ptr<column> histogram(column_view const& input,
 
 }  // namespace
 
-std::unique_ptr<column> group_histogram(column_view const& input,
+std::unique_ptr<column> group_histogram(column_view const& values,
                                         cudf::device_span<size_type const> group_labels,
                                         size_type num_groups,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
-  return histogram(input, group_labels, std::nullopt, num_groups, stream, mr);
+  return build_histogram(values, group_labels, std::nullopt, num_groups, stream, mr);
 }
 
-std::unique_ptr<column> group_merge_histogram(column_view const& input,
+std::unique_ptr<column> group_merge_histogram(column_view const& values,
                                               cudf::device_span<size_type const> group_labels,
                                               size_type num_groups,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(!input.has_nulls(), "The input column must not have nulls.");
+  CUDF_EXPECTS(!values.has_nulls(), "The input column must not have nulls.");
   CUDF_EXPECTS(
-    input.type().id() == type_id::STRUCT && input.num_children() == 2,
+    values.type().id() == type_id::STRUCT && values.num_children() == 2,
     "The input of merge_histogram aggregation must be a struct column having two children.");
-  CUDF_EXPECTS(cudf::is_integral(input.child(1).type()) && !input.child(1).has_nulls(),
+  CUDF_EXPECTS(cudf::is_integral(values.child(1).type()) && !values.child(1).has_nulls(),
                "The second child of the input column must be integral type and has no nulls.");
 
-  if (num_groups == 0) { return empty_like(input); }
+  if (num_groups == 0) { return empty_like(values); }
 
-  auto const structs_cv   = structs_column_view{input};
+  // The input values column is already in histogram format (i.e., column of Struct<value, count>).
+  auto const structs_cv   = structs_column_view{values};
   auto const input_values = structs_cv.get_sliced_child(0, stream);
   auto const input_counts = structs_cv.get_sliced_child(1, stream);
 
-  return histogram(input_values, group_labels, input_counts, num_groups, stream, mr);
+  return build_histogram(input_values, group_labels, input_counts, num_groups, stream, mr);
 }
 
 }  // namespace cudf::groupby::detail

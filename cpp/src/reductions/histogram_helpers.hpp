@@ -37,8 +37,8 @@ namespace cudf::reduction::detail {
  * @param output_dtype The output type to store the count value
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate memory of the returned objects
- * @return A pair of array contains the indices of the distinct rows in the input table, and their
- *         corresponding distinct counts
+ * @return A pair of array contains the (stable-order) indices of the distinct rows in the input
+ * table, and their corresponding distinct counts
  */
 std::pair<rmm::device_uvector<size_type>, std::unique_ptr<column>> table_histogram(
   table_view const& input,
