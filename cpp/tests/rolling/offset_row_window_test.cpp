@@ -253,6 +253,55 @@ TEST_F(OffsetRowWindowTest, OffsetRowWindow_Ungrouped_0_to_2)
                  no_nulls});
 }
 
+// To test that preceding bounds are clamped correctly at group boundaries.
+TEST_F(OffsetRowWindowTest, TestNegativeBoundsClamp)
+{
+  auto const grp_iter =
+    thrust::make_transform_iterator(thrust::make_counting_iterator(0), [](auto const& i) {
+      return i / 10;  // 0-9 in the first group, 10-19 in the second, etc.
+    });
+  auto const agg_iter = thrust::make_constant_iterator(1);
+
+  auto const grp = ints_column(grp_iter, grp_iter + 30);
+  auto const agg = ints_column(agg_iter, agg_iter + 30);
+
+  auto const min_periods = 0;
+  auto const rolling_sum = [&](auto const preceding, auto const following) {
+    return cudf::grouped_rolling_window(
+      cudf::table_view{{grp}}, agg, preceding, following, min_periods, *AGG_SUM);
+  };
+
+  // Testing negative preceding.
+  for (auto const preceding : {0, -1, -2, -5, -10, -20, -50}) {
+    auto const results      = rolling_sum(preceding, 100);
+    auto const expected_fun = [&](auto const& i) {
+      assert(preceding < 1);
+      auto const index_in_group = i % 10;
+      auto const start          = std::min(-(preceding - 1) + index_in_group, 10);
+      return int64_t{10 - start};
+    };
+    auto const expected_iter =
+      thrust::make_transform_iterator(thrust::make_counting_iterator(0), expected_fun);
+    auto const expected = bigints_column(expected_iter, expected_iter + 30, no_nulls());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+
+  // Testing negative following.
+  for (auto const following : {-1, -2, -5, -10, -20, -50}) {
+    auto const results      = rolling_sum(100, following);
+    auto const expected_fun = [&](auto const& i) {
+      assert(following < 0);
+      auto const index_in_group = i % 10;
+      auto const end            = std::max(index_in_group + following, -1);
+      return int64_t{end + 1};
+    };
+    auto const expected_iter =
+      thrust::make_transform_iterator(thrust::make_counting_iterator(0), expected_fun);
+    auto const expected = bigints_column(expected_iter, expected_iter + 30, no_nulls());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+}
+
 TEST_F(OffsetRowWindowTest, CheckGroupBoundaries)
 {
   auto grp_iter =
