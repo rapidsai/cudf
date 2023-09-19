@@ -16,15 +16,16 @@
 
 #include "orc_gpu.hpp"
 
-#include <cudf/io/orc_types.hpp>
 #include <io/utilities/block_utils.cuh>
+
+#include <cudf/io/orc_types.hpp>
+#include <cudf/strings/detail/convert/fixed_point_to_string.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
-namespace io {
-namespace orc {
-namespace gpu {
+namespace cudf::io::orc::gpu {
+
+using strings::detail::fixed_point_string_size;
 
 constexpr unsigned int init_threads_per_group = 32;
 constexpr unsigned int init_groups_per_block  = 4;
@@ -58,13 +59,14 @@ __global__ void __launch_bounds__(init_threads_per_block)
 constexpr unsigned int buffersize_reduction_dim = 32;
 constexpr unsigned int block_size        = buffersize_reduction_dim * buffersize_reduction_dim;
 constexpr unsigned int pb_fld_hdrlen     = 1;
-constexpr unsigned int pb_fld_hdrlen16   = 2;  // > 127-byte length
-constexpr unsigned int pb_fld_hdrlen32   = 5;  // > 16KB length
+constexpr unsigned int pb_fld_hdrlen32   = 5;
+constexpr unsigned int pb_fldlen_int32   = 5;
 constexpr unsigned int pb_fldlen_int64   = 10;
 constexpr unsigned int pb_fldlen_float64 = 8;
-constexpr unsigned int pb_fldlen_decimal = 40;  // Assume decimal2string fits in 40 characters
 constexpr unsigned int pb_fldlen_bucket1 = 1 + pb_fldlen_int64;
-constexpr unsigned int pb_fldlen_common  = 2 * pb_fld_hdrlen + pb_fldlen_int64;
+// statistics field number + number of values + has null
+constexpr unsigned int pb_fldlen_common =
+  pb_fld_hdrlen + (pb_fld_hdrlen + pb_fldlen_int64) + 2 * pb_fld_hdrlen;
 
 template <unsigned int block_size>
 __global__ void __launch_bounds__(block_size, 1)
@@ -87,21 +89,32 @@ __global__ void __launch_bounds__(block_size, 1)
         case dtype_int8:
         case dtype_int16:
         case dtype_int32:
-        case dtype_date32:
         case dtype_int64:
-        case dtype_timestamp64:
           stats_len = pb_fldlen_common + pb_fld_hdrlen + 3 * (pb_fld_hdrlen + pb_fldlen_int64);
+          break;
+        case dtype_date32:
+          stats_len = pb_fldlen_common + pb_fld_hdrlen + 2 * (pb_fld_hdrlen + pb_fldlen_int64);
+          break;
+        case dtype_timestamp64:
+          stats_len = pb_fldlen_common + pb_fld_hdrlen + 4 * (pb_fld_hdrlen + pb_fldlen_int64) +
+                      2 * (pb_fld_hdrlen + pb_fldlen_int32);
           break;
         case dtype_float32:
         case dtype_float64:
           stats_len = pb_fldlen_common + pb_fld_hdrlen + 3 * (pb_fld_hdrlen + pb_fldlen_float64);
           break;
         case dtype_decimal64:
-        case dtype_decimal128:
-          stats_len = pb_fldlen_common + pb_fld_hdrlen16 + 3 * (pb_fld_hdrlen + pb_fldlen_decimal);
-          break;
+        case dtype_decimal128: {
+          auto const scale    = groups[idx].col_dtype.scale();
+          auto const min_size = fixed_point_string_size(chunks[idx].min_value.d128_val, scale);
+          auto const max_size = fixed_point_string_size(chunks[idx].max_value.d128_val, scale);
+          auto const sum_size = fixed_point_string_size(chunks[idx].sum.d128_val, scale);
+          // common + total field length + encoded string lengths + strings
+          stats_len = pb_fldlen_common + pb_fld_hdrlen32 + 3 * (pb_fld_hdrlen + pb_fld_hdrlen32) +
+                      min_size + max_size + sum_size;
+        } break;
         case dtype_string:
-          stats_len = pb_fldlen_common + pb_fld_hdrlen32 + 3 * (pb_fld_hdrlen + pb_fldlen_int64) +
+          stats_len = pb_fldlen_common + pb_fld_hdrlen32 + 3 * (pb_fld_hdrlen + pb_fld_hdrlen32) +
                       chunks[idx].min_value.str_val.length + chunks[idx].max_value.str_val.length;
           break;
         case dtype_none: stats_len = pb_fldlen_common;
@@ -126,9 +139,6 @@ struct stats_state_s {
   statistics_chunk chunk;
   statistics_merge_group group;
   statistics_dtype stats_dtype;  //!< Statistics data type for this column
-  // ORC stats
-  uint64_t numberOfValues;
-  uint8_t hasNull;
 };
 
 /*
@@ -178,12 +188,30 @@ __device__ inline uint8_t* pb_put_binary(uint8_t* p, uint32_t id, void const* by
   return p + len;
 }
 
+__device__ inline uint8_t* pb_put_decimal(
+  uint8_t* p, uint32_t id, __int128_t value, int32_t scale, int32_t len)
+{
+  p[0] = id * 8 + ProtofType::FIXEDLEN;
+  p    = pb_encode_uint(p + 1, len);
+  strings::detail::fixed_point_to_string(value, scale, reinterpret_cast<char*>(p));
+  return p + len;
+}
+
 // Protobuf field encoding for 64-bit raw encoding (double)
 __device__ inline uint8_t* pb_put_fixed64(uint8_t* p, uint32_t id, void const* raw64)
 {
   p[0] = id * 8 + ProtofType::FIXED64;
   memcpy(p + 1, raw64, 8);
   return p + 9;
+}
+
+// Splits a nanosecond timestamp into milliseconds and nanoseconds
+__device__ std::pair<int64_t, int32_t> split_nanosecond_timestamp(int64_t nano_count)
+{
+  auto const ns           = cuda::std::chrono::nanoseconds(nano_count);
+  auto const ms_floor     = cuda::std::chrono::floor<cuda::std::chrono::milliseconds>(ns);
+  auto const ns_remainder = ns - ms_floor;
+  return {ms_floor.count(), ns_remainder.count()};
 }
 
 /**
@@ -228,12 +256,14 @@ __global__ void __launch_bounds__(encode_threads_per_block)
 
   // Encode and update actual bfr size
   if (idx < statistics_count && t == 0) {
-    s->chunk           = chunks[idx];
-    s->group           = groups[idx];
-    s->stats_dtype     = s->group.stats_dtype;
-    s->base            = blob_bfr + s->group.start_chunk;
-    s->end             = blob_bfr + s->group.start_chunk + s->group.num_chunks;
-    uint8_t* cur       = pb_put_uint(s->base, 1, s->chunk.non_nulls);
+    s->chunk       = chunks[idx];
+    s->group       = groups[idx];
+    s->stats_dtype = s->group.stats_dtype;
+    s->base        = blob_bfr + s->group.start_chunk;
+    s->end         = blob_bfr + s->group.start_chunk + s->group.num_chunks;
+    uint8_t* cur   = pb_put_uint(s->base, 1, s->chunk.non_nulls);
+    cur            = pb_put_uint(cur, 10, s->chunk.null_count != 0);  // hasNull (bool)
+
     uint8_t* fld_start = cur;
     switch (s->stats_dtype) {
       case dtype_int8:
@@ -265,11 +295,14 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional double maximum = 2;
         //  optional double sum = 3;
         // }
-        if (s->chunk.has_minmax) {
+        if (s->chunk.has_minmax || s->chunk.has_sum) {
           *cur = 3 * 8 + ProtofType::FIXEDLEN;
           cur += 2;
-          cur          = pb_put_fixed64(cur, 1, &s->chunk.min_value.fp_val);
-          cur          = pb_put_fixed64(cur, 2, &s->chunk.max_value.fp_val);
+          if (s->chunk.has_minmax) {
+            cur = pb_put_fixed64(cur, 1, &s->chunk.min_value.fp_val);
+            cur = pb_put_fixed64(cur, 2, &s->chunk.max_value.fp_val);
+          }
+          if (s->chunk.has_sum) { cur = pb_put_fixed64(cur, 3, &s->chunk.sum.fp_val); }
           fld_start[1] = cur - (fld_start + 2);
         }
         break;
@@ -280,18 +313,25 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional string maximum = 2;
         //  optional sint64 sum = 3; // sum will store the total length of all strings
         // }
-        if (s->chunk.has_minmax && s->chunk.has_sum) {
-          uint32_t sz = (pb_put_int(cur, 3, s->chunk.sum.i_val) - cur) +
-                        (pb_put_uint(cur, 1, s->chunk.min_value.str_val.length) - cur) +
-                        (pb_put_uint(cur, 2, s->chunk.max_value.str_val.length) - cur) +
-                        s->chunk.min_value.str_val.length + s->chunk.max_value.str_val.length;
+        if (s->chunk.has_minmax || s->chunk.has_sum) {
+          uint32_t sz = 0;
+          if (s->chunk.has_minmax) {
+            sz += (pb_put_uint(cur, 1, s->chunk.min_value.str_val.length) - cur) +
+                  (pb_put_uint(cur, 2, s->chunk.max_value.str_val.length) - cur) +
+                  s->chunk.min_value.str_val.length + s->chunk.max_value.str_val.length;
+          }
+          if (s->chunk.has_sum) { sz += pb_put_int(cur, 3, s->chunk.sum.i_val) - cur; }
+
           cur[0] = 4 * 8 + ProtofType::FIXEDLEN;
           cur    = pb_encode_uint(cur + 1, sz);
-          cur    = pb_put_binary(
-            cur, 1, s->chunk.min_value.str_val.ptr, s->chunk.min_value.str_val.length);
-          cur = pb_put_binary(
-            cur, 2, s->chunk.max_value.str_val.ptr, s->chunk.max_value.str_val.length);
-          cur = pb_put_int(cur, 3, s->chunk.sum.i_val);
+
+          if (s->chunk.has_minmax) {
+            cur = pb_put_binary(
+              cur, 1, s->chunk.min_value.str_val.ptr, s->chunk.min_value.str_val.length);
+            cur = pb_put_binary(
+              cur, 2, s->chunk.max_value.str_val.ptr, s->chunk.max_value.str_val.length);
+          }
+          if (s->chunk.has_sum) { cur = pb_put_int(cur, 3, s->chunk.sum.i_val); }
         }
         break;
       case dtype_bool:
@@ -299,8 +339,9 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         // message BucketStatistics {
         //  repeated uint64 count = 1 [packed=true];
         // }
-        if (s->chunk.has_sum) {  // Sum is equal to the number of 'true' values
-          cur[0]       = 5 * 8 + ProtofType::FIXEDLEN;
+        if (s->chunk.has_sum) {
+          cur[0] = 5 * 8 + ProtofType::FIXEDLEN;
+          // count is equal to the number of 'true' values, despite what specs say
           cur          = pb_put_packed_uint(cur + 2, 1, s->chunk.sum.u_val);
           fld_start[1] = cur - (fld_start + 2);
         }
@@ -313,8 +354,33 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional string maximum = 2;
         //  optional string sum = 3;
         // }
-        if (s->chunk.has_minmax) {
-          // TODO: Decimal support (decimal min/max stored as strings)
+        if (s->chunk.has_minmax or s->chunk.has_sum) {
+          auto const scale = s->group.col_dtype.scale();
+
+          uint32_t sz = 0;
+          auto const min_size =
+            s->chunk.has_minmax ? fixed_point_string_size(s->chunk.min_value.d128_val, scale) : 0;
+          auto const max_size =
+            s->chunk.has_minmax ? fixed_point_string_size(s->chunk.max_value.d128_val, scale) : 0;
+          if (s->chunk.has_minmax) {
+            // encoded string lengths, plus the strings
+            sz += (pb_put_uint(cur, 1, min_size) - cur) + min_size +
+                  (pb_put_uint(cur, 1, max_size) - cur) + max_size;
+          }
+          auto const sum_size =
+            s->chunk.has_sum ? fixed_point_string_size(s->chunk.sum.d128_val, scale) : 0;
+          if (s->chunk.has_sum) { sz += (pb_put_uint(cur, 1, sum_size) - cur) + sum_size; }
+
+          cur[0] = 6 * 8 + ProtofType::FIXEDLEN;
+          cur    = pb_encode_uint(cur + 1, sz);
+
+          if (s->chunk.has_minmax) {
+            cur = pb_put_decimal(cur, 1, s->chunk.min_value.d128_val, scale, min_size);  //  minimum
+            cur = pb_put_decimal(cur, 2, s->chunk.max_value.d128_val, scale, max_size);  // maximum
+          }
+          if (s->chunk.has_sum) {
+            cur = pb_put_decimal(cur, 3, s->chunk.sum.d128_val, scale, sum_size);  // sum
+          }
         }
         break;
       case dtype_date32:
@@ -338,12 +404,24 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional sint64 maximum = 2;
         //  optional sint64 minimumUtc = 3; // min,max values saved as milliseconds since UNIX epoch
         //  optional sint64 maximumUtc = 4;
+        //  optional int32 minimumNanos = 5; // lower 6 TS digits for min/max to achieve nanosecond
+        //  precision optional int32 maximumNanos = 6;
         // }
         if (s->chunk.has_minmax) {
           cur[0] = 9 * 8 + ProtofType::FIXEDLEN;
           cur += 2;
-          cur          = pb_put_int(cur, 3, s->chunk.min_value.i_val);  // minimumUtc
-          cur          = pb_put_int(cur, 4, s->chunk.max_value.i_val);  // maximumUtc
+          auto const [min_ms, min_ns_remainder] =
+            split_nanosecond_timestamp(s->chunk.min_value.i_val);
+          auto const [max_ms, max_ns_remainder] =
+            split_nanosecond_timestamp(s->chunk.max_value.i_val);
+
+          // minimum/maximum are the same as minimumUtc/maximumUtc as we always write files in UTC
+          cur          = pb_put_int(cur, 1, min_ms);            // minimum
+          cur          = pb_put_int(cur, 2, max_ms);            // maximum
+          cur          = pb_put_int(cur, 3, min_ms);            // minimumUtc
+          cur          = pb_put_int(cur, 4, max_ms);            // maximumUtc
+          cur          = pb_put_int(cur, 5, min_ns_remainder);  // minimumNanos
+          cur          = pb_put_int(cur, 6, max_ns_remainder);  // maximumNanos
           fld_start[1] = cur - (fld_start + 2);
         }
         break;
@@ -403,7 +481,4 @@ void orc_encode_statistics(uint8_t* blob_bfr,
     blob_bfr, groups, chunks, statistics_count);
 }
 
-}  // namespace gpu
-}  // namespace orc
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc::gpu
