@@ -589,12 +589,12 @@ TYPED_TEST_SUITE(ToArrowNumericScalarTest, NumericTypesNotBool);
 TYPED_TEST(ToArrowNumericScalarTest, Basic)
 {
   TypeParam const value{42};
-  auto cudf_scalar = cudf::make_fixed_width_scalar<TypeParam>(value);
+  auto const cudf_scalar = cudf::make_fixed_width_scalar<TypeParam>(value);
 
-  cudf::column_metadata metadata{""};
-  auto arrow_scalar = cudf::to_arrow(*cudf_scalar, metadata);
+  cudf::column_metadata const metadata{""};
+  auto const arrow_scalar = cudf::to_arrow(*cudf_scalar, metadata);
 
-  auto ref_arrow_scalar = arrow::MakeScalar(value);
+  auto const ref_arrow_scalar = arrow::MakeScalar(value);
   EXPECT_TRUE(arrow_scalar->Equals(*ref_arrow_scalar));
 }
 
@@ -607,15 +607,16 @@ TEST_F(ToArrowDecimalScalarTest, Basic)
   auto const precision{18};  // cudf will convert to the widest-precision Arrow scalar of the type
   int32_t const scale{4};
 
-  auto cudf_scalar =
+  auto const cudf_scalar =
     cudf::make_fixed_point_scalar<numeric::decimal128>(value, numeric::scale_type{scale});
 
-  cudf::column_metadata metadata{""};
-  auto arrow_scalar = cudf::to_arrow(*cudf_scalar, metadata);
+  cudf::column_metadata const metadata{""};
+  auto const arrow_scalar = cudf::to_arrow(*cudf_scalar, metadata);
 
-  auto maybe_ref_arrow_scalar = arrow::MakeScalar(arrow::decimal128(precision, -scale), value);
+  auto const maybe_ref_arrow_scalar =
+    arrow::MakeScalar(arrow::decimal128(precision, -scale), value);
   if (!maybe_ref_arrow_scalar.ok()) { CUDF_FAIL("Failed to construct reference scalar"); }
-  auto ref_arrow_scalar = *maybe_ref_arrow_scalar;
+  auto const ref_arrow_scalar = *maybe_ref_arrow_scalar;
   EXPECT_TRUE(arrow_scalar->Equals(*ref_arrow_scalar));
 }
 
@@ -624,11 +625,11 @@ struct ToArrowStringScalarTest : public cudf::test::BaseFixture {};
 TEST_F(ToArrowStringScalarTest, Basic)
 {
   std::string const value{"hello world"};
-  auto cudf_scalar = cudf::make_string_scalar(value);
-  cudf::column_metadata metadata{""};
-  auto arrow_scalar = cudf::to_arrow(*cudf_scalar, metadata);
+  auto const cudf_scalar = cudf::make_string_scalar(value);
+  cudf::column_metadata const metadata{""};
+  auto const arrow_scalar = cudf::to_arrow(*cudf_scalar, metadata);
 
-  auto ref_arrow_scalar = arrow::MakeScalar(value);
+  auto const ref_arrow_scalar = arrow::MakeScalar(value);
   EXPECT_TRUE(arrow_scalar->Equals(*ref_arrow_scalar));
 }
 
@@ -636,23 +637,23 @@ struct ToArrowListScalarTest : public cudf::test::BaseFixture {};
 
 TEST_F(ToArrowListScalarTest, Basic)
 {
-  std::vector<int64_t> host_values = {1, 2, 3, 5, 6, 7, 8};
-  std::vector<bool> host_validity  = {true, true, true, false, true, true, true};
+  std::vector<int64_t> const host_values = {1, 2, 3, 5, 6, 7, 8};
+  std::vector<bool> const host_validity  = {true, true, true, false, true, true, true};
 
-  cudf::test::fixed_width_column_wrapper<int64_t> col(
+  cudf::test::fixed_width_column_wrapper<int64_t> const col(
     host_values.begin(), host_values.end(), host_validity.begin());
 
-  auto cudf_scalar = cudf::make_list_scalar(col);
+  auto const cudf_scalar = cudf::make_list_scalar(col);
 
-  cudf::column_metadata metadata{""};
-  auto arrow_scalar = cudf::to_arrow(*cudf_scalar, metadata);
+  cudf::column_metadata const metadata{""};
+  auto const arrow_scalar = cudf::to_arrow(*cudf_scalar, metadata);
 
   arrow::Int64Builder builder;
-  auto status      = builder.AppendValues(host_values, host_validity);
-  auto maybe_array = builder.Finish();
-  auto array       = *maybe_array;
+  auto const status      = builder.AppendValues(host_values, host_validity);
+  auto const maybe_array = builder.Finish();
+  auto const array       = *maybe_array;
 
-  auto ref_arrow_scalar = arrow::ListScalar(array);
+  auto const ref_arrow_scalar = arrow::ListScalar(array);
 
   EXPECT_TRUE(arrow_scalar->Equals(ref_arrow_scalar));
 }
@@ -664,18 +665,18 @@ TEST_F(ToArrowStructScalarTest, Basic)
   int64_t const value{42};
   auto const field_name{"a"};
 
-  cudf::test::fixed_width_column_wrapper<int64_t> col{value};
-  cudf::table_view tbl({col});
-  auto cudf_scalar = cudf::make_struct_scalar(tbl);
+  cudf::test::fixed_width_column_wrapper<int64_t> const col{value};
+  cudf::table_view const tbl({col});
+  auto const cudf_scalar = cudf::make_struct_scalar(tbl);
 
   cudf::column_metadata metadata{""};
   metadata.children_meta.emplace_back(field_name);
-  auto arrow_scalar = cudf::to_arrow(*cudf_scalar, metadata);
+  auto const arrow_scalar = cudf::to_arrow(*cudf_scalar, metadata);
 
-  auto underlying_arrow_scalar = arrow::MakeScalar(value);
-  auto field                   = arrow::field(field_name, underlying_arrow_scalar->type, false);
-  auto arrow_type              = arrow::struct_({field});
-  auto ref_arrow_scalar        = arrow::StructScalar({underlying_arrow_scalar}, arrow_type);
+  auto const underlying_arrow_scalar = arrow::MakeScalar(value);
+  auto const field            = arrow::field(field_name, underlying_arrow_scalar->type, false);
+  auto const arrow_type       = arrow::struct_({field});
+  auto const ref_arrow_scalar = arrow::StructScalar({underlying_arrow_scalar}, arrow_type);
 
   EXPECT_TRUE(arrow_scalar->Equals(ref_arrow_scalar));
 }

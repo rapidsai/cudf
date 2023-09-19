@@ -165,7 +165,7 @@ std::shared_ptr<arrow::Array> unsupported_decimals_to_arrow(column_view input,
     [in = input.begin<DeviceType>(), out = buf.data(), BIT_WIDTH_RATIO] __device__(auto in_idx) {
       auto const out_idx = in_idx * BIT_WIDTH_RATIO;
       // The lowest order bits are the value, the remainder
-      // simply match the sign bit to satisfy the two's
+      // simply matches the sign bit to satisfy the two's
       // complement integer representation of negative numbers.
       out[out_idx] = in[in_idx];
 #pragma unroll BIT_WIDTH_RATIO - 1
@@ -442,11 +442,11 @@ std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
                                         rmm::cuda_stream_view stream,
                                         arrow::MemoryPool* ar_mr)
 {
-  auto column = cudf::make_column_from_scalar(input, 1, stream);
-  cudf::table_view tv{{column->view()}};
-  auto arrow_table  = cudf::to_arrow(tv, {metadata}, stream);
-  auto ac           = arrow_table->column(0);
-  auto maybe_scalar = ac->GetScalar(0);
+  auto const column = cudf::make_column_from_scalar(input, 1, stream);
+  cudf::table_view const tv{{column->view()}};
+  auto const arrow_table  = cudf::to_arrow(tv, {metadata}, stream);
+  auto const ac           = arrow_table->column(0);
+  auto const maybe_scalar = ac->GetScalar(0);
   if (!maybe_scalar.ok()) { CUDF_FAIL("Failed to produce a scalar"); }
   return maybe_scalar.ValueOrDie();
 }

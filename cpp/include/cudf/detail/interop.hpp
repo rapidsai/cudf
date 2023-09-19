@@ -109,7 +109,7 @@ std::shared_ptr<arrow::Array> to_arrow_array(cudf::type_id id, Ts&&... args)
  * the specified `arrow::DataType`'s `id()`.
  *
  * This function is analogous to libcudf's type_dispatcher, but instead applies
- * to Arrow functions. It's primary use case is to leverage Arrow's
+ * to Arrow functions. Its primary use case is to leverage Arrow's
  * metaprogramming facilities like arrow::TypeTraits that require translating
  * the runtime dtype information into compile-time types.
  */
@@ -177,7 +177,6 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
  */
 std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
                                         column_metadata const& metadata,
-
                                         rmm::cuda_stream_view stream,
                                         arrow::MemoryPool* ar_mr);
 /**

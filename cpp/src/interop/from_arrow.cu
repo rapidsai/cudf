@@ -434,7 +434,7 @@ struct BuilderGenerator {
                            std::is_same_v<T, arrow::StructType>)>
   std::shared_ptr<arrow::ArrayBuilder> operator()(std::shared_ptr<arrow::DataType> const& type)
   {
-    CUDF_FAIL("Type not support for BuilderGenerator");
+    CUDF_FAIL("Type not supported by BuilderGenerator");
   }
 };
 
