@@ -63,7 +63,7 @@ repos:
                 # Explicitly specify the pyproject.toml at the repo root, not per-project.
                 args: ["--config=pyproject.toml"]
       - repo: https://github.com/pre-commit/mirrors-clang-format
-        rev: v16.0.1
+        rev: v16.0.6
         hooks:
               - id: clang-format
                 types_or: [c, c++, cuda]

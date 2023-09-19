@@ -155,18 +155,18 @@ constexpr inline size_type from_char_utf8(char_utf8 character, char* str)
 constexpr uint32_t utf8_to_codepoint(cudf::char_utf8 utf8_char)
 {
   uint32_t unchr = 0;
-  if (utf8_char < 0x0000'0080)                // single-byte pass thru
+  if (utf8_char < 0x0000'0080)  // single-byte pass thru
     unchr = utf8_char;
-  else if (utf8_char < 0x0000'E000)           // two bytes
+  else if (utf8_char < 0x0000'E000)  // two bytes
   {
-    unchr = (utf8_char & 0x1F00) >> 2;        // shift and
-    unchr |= (utf8_char & 0x003F);            // unmask
-  } else if (utf8_char < 0x00F0'0000)         // three bytes
+    unchr = (utf8_char & 0x1F00) >> 2;  // shift and
+    unchr |= (utf8_char & 0x003F);      // unmask
+  } else if (utf8_char < 0x00F0'0000)   // three bytes
   {
-    unchr = (utf8_char & 0x0F'0000) >> 4;     // get upper 4 bits
-    unchr |= (utf8_char & 0x00'3F00) >> 2;    // shift and
-    unchr |= (utf8_char & 0x00'003F);         // unmask
-  } else if (utf8_char <= 0xF800'0000u)       // four bytes
+    unchr = (utf8_char & 0x0F'0000) >> 4;   // get upper 4 bits
+    unchr |= (utf8_char & 0x00'3F00) >> 2;  // shift and
+    unchr |= (utf8_char & 0x00'003F);       // unmask
+  } else if (utf8_char <= 0xF800'0000u)     // four bytes
   {
     unchr = (utf8_char & 0x0300'0000) >> 6;   // upper 3 bits
     unchr |= (utf8_char & 0x003F'0000) >> 4;  // next 6 bits
@@ -185,20 +185,20 @@ constexpr uint32_t utf8_to_codepoint(cudf::char_utf8 utf8_char)
 constexpr cudf::char_utf8 codepoint_to_utf8(uint32_t unchr)
 {
   cudf::char_utf8 utf8 = 0;
-  if (unchr < 0x0000'0080)               // single byte utf8
+  if (unchr < 0x0000'0080)  // single byte utf8
     utf8 = unchr;
-  else if (unchr < 0x0000'0800)          // double byte utf8
+  else if (unchr < 0x0000'0800)  // double byte utf8
   {
-    utf8 = (unchr << 2) & 0x1F00;        // shift bits for
-    utf8 |= (unchr & 0x3F);              // utf8 encoding
+    utf8 = (unchr << 2) & 0x1F00;  // shift bits for
+    utf8 |= (unchr & 0x3F);        // utf8 encoding
     utf8 |= 0x0000'C080;
-  } else if (unchr < 0x0001'0000)        // triple byte utf8
+  } else if (unchr < 0x0001'0000)  // triple byte utf8
   {
-    utf8 = (unchr << 4) & 0x0F'0000;     // upper 4 bits
-    utf8 |= (unchr << 2) & 0x00'3F00;    // next 6 bits
-    utf8 |= (unchr & 0x3F);              // last 6 bits
+    utf8 = (unchr << 4) & 0x0F'0000;   // upper 4 bits
+    utf8 |= (unchr << 2) & 0x00'3F00;  // next 6 bits
+    utf8 |= (unchr & 0x3F);            // last 6 bits
     utf8 |= 0x00E0'8080;
-  } else if (unchr < 0x0011'0000)        // quadruple byte utf8
+  } else if (unchr < 0x0011'0000)  // quadruple byte utf8
   {
     utf8 = (unchr << 6) & 0x0700'0000;   // upper 3 bits
     utf8 |= (unchr << 4) & 0x003F'0000;  // next 6 bits
