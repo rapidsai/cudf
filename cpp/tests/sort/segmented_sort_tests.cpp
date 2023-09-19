@@ -270,7 +270,7 @@ TEST_F(SegmentedSortInt, Sliced)
   column_wrapper<int> expected2{{0, 1, 3, 2, 4, 5, 6}};
   column_wrapper<int> expected3{{0, 1, 2, 3, 4, 5, 6}};
   // clang-format on
-  auto slice = cudf::slice(col1, {4, 11})[0];          // 7 elements
+  auto slice = cudf::slice(col1, {4, 11})[0];  // 7 elements
   cudf::table_view input{{slice}};
   auto seg_slice = cudf::slice(segments2, {2, 4})[0];  // 2 elements
 

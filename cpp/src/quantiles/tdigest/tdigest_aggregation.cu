@@ -459,7 +459,7 @@ __global__ void generate_cluster_limits_kernel(int delta,
     int adjusted_w_index       = nearest_w_index;
     if ((last_inserted_index < 0) ||  // if we haven't inserted anything yet
         (nearest_w_index ==
-         last_inserted_index)) {      // if we land in the same bucket as the previous cap
+         last_inserted_index)) {  // if we land in the same bucket as the previous cap
 
       // force the value into this bucket
       adjusted_w_index = (last_inserted_index == group_size - 1)
