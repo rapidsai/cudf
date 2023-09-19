@@ -338,17 +338,5 @@ def _create_proxy_nat_scalar(dtype):
         elif dtype.type == np.timedelta64:
             _set_timedelta64_from_np_scalar(result.c_value.c_obj, nat, dtype, True)
         return result
-
-        # TODO: It should be able to reimplement the above with pylibcudf.
-        # Currently this doesn't quite seem to work, though, apparently because
-        # we need a way to create NaT _valid_ scalars but ingesting from
-        # pyarrow automatically sets them to invalid. Merely setting to valid
-        # after the fact is insufficient because the underlying memory appears
-        # to not be initialized.
-        # nat = pa.scalar(dtype.type('NaT').astype(dtype))
-        # result.c_value = pylibcudf.Scalar.from_pyarrow_scalar(nat)
-        # result.c_value.c_obj.get().set_valid_async(True)
-        # result._dtype = dtype
-        # return result
     else:
         raise TypeError('NAT only valid for datetime and timedelta')
