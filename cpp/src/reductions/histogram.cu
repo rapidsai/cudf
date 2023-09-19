@@ -232,7 +232,7 @@ std::pair<rmm::device_uvector<size_type>, std::unique_ptr<column>> table_histogr
   auto distinct_indices = rmm::device_uvector<size_type>(
     static_cast<size_type>(map.get_size()), stream, rmm::mr::get_current_device_resource());
 
-  // Store the number of occurences of each distinct row.
+  // Store the number of occurrences of each distinct row.
   auto distinct_counts = make_numeric_column(
     output_dtype, static_cast<size_type>(map.get_size()), mask_state::UNALLOCATED, stream, mr);
 
@@ -271,7 +271,7 @@ std::unique_ptr<cudf::scalar> merge_histogram(column_view const& input,
     input.type().id() == type_id::STRUCT && input.num_children() == 2,
     "The input of merge_histogram aggregation must be a struct column having two children.");
   CUDF_EXPECTS(cudf::is_integral(input.child(1).type()) && !input.child(1).has_nulls(),
-               "The second child of the input column must be ingegral type and has no nulls.");
+               "The second child of the input column must be integral type and has no nulls.");
 
   auto const structs_cv   = structs_column_view{input};
   auto const input_values = structs_cv.get_sliced_child(0, stream);

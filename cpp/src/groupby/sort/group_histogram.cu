@@ -120,7 +120,7 @@ std::unique_ptr<column> group_merge_histogram(column_view const& input,
     input.type().id() == type_id::STRUCT && input.num_children() == 2,
     "The input of merge_histogram aggregation must be a struct column having two children.");
   CUDF_EXPECTS(cudf::is_integral(input.child(1).type()) && !input.child(1).has_nulls(),
-               "The second child of the input column must be ingegral type and has no nulls.");
+               "The second child of the input column must be integral type and has no nulls.");
 
   if (num_groups == 0) { return empty_like(input); }
 
