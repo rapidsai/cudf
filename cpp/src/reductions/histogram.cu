@@ -21,6 +21,7 @@
 #include <cudf/detail/hash_reduce_by_row.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/iterator/discard_iterator.h>

@@ -21,6 +21,7 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 
 #include <optional>
 
