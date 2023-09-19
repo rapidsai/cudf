@@ -611,7 +611,7 @@ bool CompactProtocolReader::read(LogicalType* l)
                     ParquetFieldUnion(2, l->isset.MAP, l->MAP),
                     ParquetFieldUnion(3, l->isset.LIST, l->LIST),
                     ParquetFieldUnion(4, l->isset.ENUM, l->ENUM),
-                    ParquetFieldUnion(5, l->isset.DECIMAL, l->DECIMAL),      // read the struct
+                    ParquetFieldUnion(5, l->isset.DECIMAL, l->DECIMAL),  // read the struct
                     ParquetFieldUnion(6, l->isset.DATE, l->DATE),
                     ParquetFieldUnion(7, l->isset.TIME, l->TIME),            //  read the struct
                     ParquetFieldUnion(8, l->isset.TIMESTAMP, l->TIMESTAMP),  //  read the struct
@@ -759,7 +759,7 @@ bool CompactProtocolReader::read(OffsetIndex* o)
 
 bool CompactProtocolReader::read(SizeStatistics* s)
 {
-  using optional_i64     = parquet_field_optional<int64_t, parquet_field_int64>;
+  using optional_i64      = parquet_field_optional<int64_t, parquet_field_int64>;
   using optional_list_i64 = parquet_field_optional<std::vector<int64_t>, parquet_field_int64_list>;
 
   auto op = std::make_tuple(optional_i64(1, s->unencoded_byte_array_data_bytes),
