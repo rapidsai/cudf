@@ -31,14 +31,15 @@ namespace parquet {
  * Holds the field value used by all of the specialized functors.
  */
 class parquet_field {
- protected:
-  int const field_val;
+ private:
+  int _field_val;
 
-  parquet_field(int f) : field_val(f) {}
+ protected:
+  parquet_field(int f) : _field_val(f) {}
 
  public:
   virtual ~parquet_field() = default;
-  int field() const { return field_val; }
+  int field() const { return _field_val; }
 };
 
 /**
@@ -285,10 +286,10 @@ class parquet_field_union_struct : public parquet_field {
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     T v;
-    bool const res = parquet_field_struct<T>(field_val, v).operator()(cpr, field_type);
+    bool const res = parquet_field_struct<T>(field(), v).operator()(cpr, field_type);
     if (!res) {
       val      = v;
-      enum_val = static_cast<E>(field_val);
+      enum_val = static_cast<E>(field());
     }
     return res;
   }
@@ -312,7 +313,7 @@ class parquet_field_union_enumerator : public parquet_field {
   {
     if (field_type != ST_FLD_STRUCT) { return true; }
     cpr->skip_struct_field(field_type);
-    val = static_cast<E>(field_val);
+    val = static_cast<E>(field());
     return false;
   }
 };
@@ -475,7 +476,7 @@ class parquet_field_optional : public parquet_field {
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     T v;
-    bool const res = FieldFunctor(field_val, v).operator()(cpr, field_type);
+    bool const res = FieldFunctor(field(), v).operator()(cpr, field_type);
     if (!res) { val = v; }
     return res;
   }
