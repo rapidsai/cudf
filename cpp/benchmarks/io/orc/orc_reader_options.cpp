@@ -90,6 +90,10 @@ void BM_orc_read_varying_options(nvbench::state& state,
     cudf::io::read_orc_metadata(source_sink.make_source_info()).num_stripes();
   cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;
 
+  std::optional<benchmark_roundtrip_checker> checker;
+  if (ColSelection == column_selection::ALL and RowSelection == row_selection::ALL) {
+    checker = benchmark_roundtrip_checker{options.get_table()};
+  }
   auto mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(
@@ -113,11 +117,14 @@ void BM_orc_read_varying_options(nvbench::state& state,
           default: CUDF_FAIL("Unsupported row selection method");
         }
 
-        rows_read += cudf::io::read_orc(read_options).tbl->num_rows();
+        auto const res = cudf::io::read_orc(read_options);
+        if (is_last_chunk) { timer.stop(); }
+
+        rows_read += res.tbl->num_rows();
+        if (checker.has_value()) checker->check_once(res.tbl->view());
       }
 
       CUDF_EXPECTS(rows_read == view.num_rows(), "Benchmark did not read the entire table");
-      timer.stop();
     });
 
   auto const elapsed_time   = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");

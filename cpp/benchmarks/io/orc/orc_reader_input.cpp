@@ -38,6 +38,7 @@ void orc_read_common(cudf::io::orc_writer_options const& opts,
   cudf::io::orc_reader_options read_opts =
     cudf::io::orc_reader_options::builder(source_sink.make_source_info());
 
+  auto checker          = benchmark_roundtrip_checker{opts.get_table()};
   auto mem_stats_logger = cudf::memory_stats_logger();  // init stats logger
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
@@ -45,8 +46,9 @@ void orc_read_common(cudf::io::orc_writer_options const& opts,
                try_drop_l3_cache();
 
                timer.start();
-               cudf::io::read_orc(read_opts);
+               auto const res = cudf::io::read_orc(read_opts);
                timer.stop();
+               checker.check_once(res.tbl->view());
              });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
