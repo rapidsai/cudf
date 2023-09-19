@@ -53,7 +53,7 @@ class parquet_field_list : public parquet_field {
   FieldType const expected_type;
   read_func_type read_value;
 
-  void bind_func(read_func_type fn) { read_value = fn; }
+  void bind_read_func(read_func_type fn) { read_value = fn; }
 
   parquet_field_list(int f, std::vector<T>& v, FieldType t)
     : parquet_field(f), val(v), expected_type(t)
@@ -107,7 +107,7 @@ struct parquet_field_bool_list : public parquet_field_list<bool> {
       this->val[i] = current_byte == ST_FLD_TRUE;
       return false;
     };
-    bind_func(read_value);
+    bind_read_func(read_value);
   }
 };
 
@@ -156,7 +156,7 @@ struct parquet_field_int_list : public parquet_field_list<T> {
       this->val[i] = cpr->get_zigzag<T>();
       return false;
     };
-    this->bind_func(read_value);
+    this->bind_read_func(read_value);
   }
 };
 
@@ -208,7 +208,7 @@ struct parquet_field_string_list : public parquet_field_list<std::string> {
       }
       return false;
     };
-    bind_func(read_value);
+    bind_read_func(read_value);
   }
 };
 
@@ -244,7 +244,7 @@ struct parquet_field_enum_list : public parquet_field_list<Enum> {
       this->val[i] = static_cast<Enum>(cpr->get_i32());
       return false;
     };
-    this->bind_func(read_value);
+    this->bind_read_func(read_value);
   }
 };
 
@@ -332,7 +332,7 @@ struct parquet_field_struct_list : public parquet_field_list<T> {
       if (not cpr->read(&this->val[i])) { return true; }
       return false;
     };
-    this->bind_func(read_value);
+    this->bind_read_func(read_value);
   }
 };
 
@@ -439,7 +439,7 @@ struct parquet_field_binary_list : public parquet_field_list<std::vector<uint8_t
       }
       return false;
     };
-    bind_func(read_value);
+    bind_read_func(read_value);
   }
 };
 
