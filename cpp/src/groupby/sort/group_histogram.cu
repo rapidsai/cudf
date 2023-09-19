@@ -14,104 +14,121 @@
  * limitations under the License.
  */
 
+#include <lists/utilities.hpp>
+#include <reductions/histogram_helpers.hpp>
+
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/iterator.cuh>
+#include <cudf/detail/gather.hpp>
+#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/exec_policy.hpp>
-
-#include <thrust/adjacent_difference.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
-#include <thrust/reduce.h>
+#include <rmm/device_buffer.hpp>
 
 namespace cudf::groupby::detail {
-std::unique_ptr<column> group_histogram(column_view const& values,
+
+// Fixed type for counting frequencies in historam.
+// This is to avoid using `target_type_t` which requires type_dispatcher.
+constexpr auto histogram_count_dtype = data_type{type_to_id<int64_t>()};
+
+namespace {
+auto make_empty_histogram(column_view const& values)
+{
+  std::vector<std::unique_ptr<column>> struct_children;
+  struct_children.emplace_back(empty_like(values));
+  struct_children.emplace_back(make_numeric_column(histogram_count_dtype, 0));
+  auto structs = std::make_unique<column>(data_type{type_id::STRUCT},
+                                          0,
+                                          rmm::device_buffer{},
+                                          rmm::device_buffer{},
+                                          0,
+                                          std::move(struct_children));
+
+  std::vector<std::unique_ptr<column>> lists_children;
+  lists_children.emplace_back(make_numeric_column(data_type{type_to_id<size_type>()}, 0));
+  lists_children.emplace_back(std::move(structs));
+  return std::make_unique<column>(cudf::data_type{type_id::LIST},
+                                  0,
+                                  rmm::device_buffer{},
+                                  rmm::device_buffer{},
+                                  0,
+                                  std::move(lists_children));
+}
+
+std::unique_ptr<column> group_histogram(column_view const& input,
                                         cudf::device_span<size_type const> group_labels,
+                                        std::optional<column_view> const& partial_counts,
                                         size_type num_groups,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(num_groups >= 0, "number of groups cannot be negative");
-  CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
+  CUDF_EXPECTS(static_cast<size_t>(input.size()) == group_labels.size(),
                "Size of values column should be same as that of group labels");
 
-  auto result = make_numeric_column(
-    data_type(type_to_id<size_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
+  if (num_groups == 0) { return make_empty_histogram(input); }
 
-  if (num_groups == 0) { return result; }
+  auto const labels_cv      = column_view{data_type{type_to_id<size_type>()},
+                                     static_cast<size_type>(group_labels.size()),
+                                     group_labels.data(),
+                                     nullptr,
+                                     0};
+  auto const labeled_values = table_view{{labels_cv, input}};
 
-  if (values.nullable()) {
-    auto values_view = column_device_view::create(values, stream);
+  auto [distinct_indices, distinct_counts] = cudf::reduction::detail::table_histogram(
+    labeled_values, partial_counts, histogram_count_dtype, stream, mr);
+  auto out_table = cudf::detail::gather(labeled_values,
+                                        distinct_indices,
+                                        out_of_bounds_policy::DONT_CHECK,
+                                        cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                        stream,
+                                        mr);
 
-    // make_validity_iterator returns a boolean iterator that sums to 1 (1+1=1)
-    // so we need to transform it to cast it to an integer type
-    auto bitmask_iterator =
-      thrust::make_transform_iterator(cudf::detail::make_validity_iterator(*values_view),
-                                      [] __device__(auto b) { return static_cast<size_type>(b); });
+  auto out_offsets = cudf::lists::detail::reconstruct_offsets(
+    out_table->get_column(0).view(), num_groups, stream, mr);
 
-    thrust::reduce_by_key(rmm::exec_policy(stream),
-                          group_labels.begin(),
-                          group_labels.end(),
-                          bitmask_iterator,
-                          thrust::make_discard_iterator(),
-                          result->mutable_view().begin<size_type>());
-  } else {
-    thrust::reduce_by_key(rmm::exec_policy(stream),
-                          group_labels.begin(),
-                          group_labels.end(),
-                          thrust::make_constant_iterator(1),
-                          thrust::make_discard_iterator(),
-                          result->mutable_view().begin<size_type>());
-  }
+  std::vector<std::unique_ptr<column>> struct_children;
+  struct_children.emplace_back(std::move(out_table->release().back()));
+  struct_children.emplace_back(std::move(distinct_counts));
+  auto out_structs = make_structs_column(
+    static_cast<size_type>(distinct_indices.size()), std::move(struct_children), 0, {}, stream, mr);
 
-  return result;
+  return make_lists_column(
+    num_groups, std::move(out_offsets), std::move(out_structs), 0, {}, stream, mr);
 }
 
-std::unique_ptr<column> group_merge_histogram(column_view const& values,
+}  // namespace
+
+std::unique_ptr<column> group_histogram(column_view const& input,
+                                        cudf::device_span<size_type const> group_labels,
+                                        size_type num_groups,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
+{
+  return group_histogram(input, group_labels, std::nullopt, num_groups, stream, mr);
+}
+
+std::unique_ptr<column> group_merge_histogram(column_view const& input,
                                               cudf::device_span<size_type const> group_labels,
                                               size_type num_groups,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(num_groups >= 0, "number of groups cannot be negative");
-  CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
-               "Size of values column should be same as that of group labels");
+  CUDF_EXPECTS(!input.has_nulls(), "The input column must not have nulls.");
+  CUDF_EXPECTS(
+    input.type().id() == type_id::STRUCT && input.num_children() == 2,
+    "The input of merge_histogram aggregation must be a struct column having two children.");
+  CUDF_EXPECTS(cudf::is_integral(input.child(1).type()) && !input.child(1).has_nulls(),
+               "The second child of the input column must be ingegral type and has no nulls.");
 
-  auto result = make_numeric_column(
-    data_type(type_to_id<size_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
+  if (num_groups == 0) { return empty_like(input); }
 
-  if (num_groups == 0) { return result; }
+  auto const structs_cv   = structs_column_view{input};
+  auto const input_values = structs_cv.get_sliced_child(0, stream);
+  auto const input_counts = structs_cv.get_sliced_child(1, stream);
 
-  if (values.nullable()) {
-    auto values_view = column_device_view::create(values, stream);
-
-    // make_validity_iterator returns a boolean iterator that sums to 1 (1+1=1)
-    // so we need to transform it to cast it to an integer type
-    auto bitmask_iterator =
-      thrust::make_transform_iterator(cudf::detail::make_validity_iterator(*values_view),
-                                      [] __device__(auto b) { return static_cast<size_type>(b); });
-
-    thrust::reduce_by_key(rmm::exec_policy(stream),
-                          group_labels.begin(),
-                          group_labels.end(),
-                          bitmask_iterator,
-                          thrust::make_discard_iterator(),
-                          result->mutable_view().begin<size_type>());
-  } else {
-    thrust::reduce_by_key(rmm::exec_policy(stream),
-                          group_labels.begin(),
-                          group_labels.end(),
-                          thrust::make_constant_iterator(1),
-                          thrust::make_discard_iterator(),
-                          result->mutable_view().begin<size_type>());
-  }
-
-  return result;
+  return group_histogram(input_values, group_labels, input_counts, num_groups, stream, mr);
 }
 
 }  // namespace cudf::groupby::detail
