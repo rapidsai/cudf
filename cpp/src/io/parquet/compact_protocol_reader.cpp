@@ -79,6 +79,8 @@ class parquet_field_list : public parquet_field {
 /**
  * @brief Functor to set value to bool read from CompactProtocolReader
  *
+ * bool doesn't actually encode a value, we just use the field type to indicate true/false
+ *
  * @return True if field type is not bool
  */
 class parquet_field_bool : public parquet_field {
@@ -89,8 +91,9 @@ class parquet_field_bool : public parquet_field {
 
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
-    return (field_type != ST_FLD_TRUE && field_type != ST_FLD_FALSE) ||
-           !(val = (field_type == ST_FLD_TRUE), true);
+    if (field_type != ST_FLD_TRUE && field_type != ST_FLD_FALSE) { return true; }
+    val = field_type == ST_FLD_TRUE;
+    return false;
   }
 };
 
