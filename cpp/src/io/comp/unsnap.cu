@@ -45,7 +45,7 @@ void __device__ busy_wait(size_t cycles)
 struct unsnap_batch_s {
   int32_t len;  // 1..64 = Number of bytes
   uint32_t
-    offset;     // copy distance if greater than zero or negative of literal offset in byte stream
+    offset;  // copy distance if greater than zero or negative of literal offset in byte stream
 };
 
 /**

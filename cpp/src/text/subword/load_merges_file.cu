@@ -93,7 +93,7 @@ std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
   auto merge_pairs_map = std::make_unique<merge_pairs_map_type>(
     static_cast<size_t>(input.size() * 2),  // capacity is 2x;
     cuco::empty_key{-1},
-    cuco::empty_value{-1},                  // empty value is not used
+    cuco::empty_value{-1},  // empty value is not used
     bpe_equal{input},
     probe_scheme{bpe_hasher{input}},
     hash_table_allocator_type{default_allocator<char>{}, stream},
