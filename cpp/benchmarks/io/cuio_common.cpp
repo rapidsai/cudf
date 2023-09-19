@@ -16,6 +16,7 @@
 
 #include <benchmarks/io/cuio_common.hpp>
 #include <cudf/detail/utilities/logger.hpp>
+#include <cudf_test/column_utilities.hpp>
 
 #include <cstdio>
 #include <fstream>
@@ -198,4 +199,43 @@ void try_drop_l3_cache()
                            drop_cache_cmds.cend(),
                            [](auto& cmd) { return exec_cmd(cmd).empty(); }),
                "Failed to execute the drop cache command");
+}
+
+[[nodiscard]] cudf::test::debug_output_level get_env_verbosity()
+{
+  static auto const env_val = getenv("CUDF_BENCH_OUTPUT_DIFF");
+  if (env_val == nullptr) { return cudf::test::debug_output_level::QUIET; }
+
+  auto const env_verbosity = std::string{env_val};
+  if (env_verbosity == "FIRST_ERROR") { return cudf::test::debug_output_level::FIRST_ERROR; }
+  if (env_verbosity == "ALL_ERRORS") { return cudf::test::debug_output_level::ALL_ERRORS; }
+  CUDF_FAIL("Invalid CUDF_BENCH_OUTPUT_DIFF value: " + env_verbosity);
+}
+
+void benchmark_roundtrip_checker::check_once(cudf::table_view const& output_table)
+{
+  if (is_checked) { return; }
+  is_checked = true;
+
+  if (input_table.num_columns() != output_table.num_columns()) {
+    CUDF_LOG_WARN("Number of columns mismatch");
+    return;
+  }
+  if (input_table.num_rows() != output_table.num_rows()) {
+    CUDF_LOG_WARN("Number of rows mismatch");
+    return;
+  }
+
+  auto const verbosity = get_env_verbosity();
+  auto const output_matches =
+    std::all_of(thrust::make_counting_iterator(0),
+                thrust::make_counting_iterator(input_table.num_columns()),
+                [&](auto i) {
+                  return cudf::test::detail::expect_columns_equal(
+                    input_table.column(i), output_table.column(i), verbosity);
+                });
+
+  if (not output_matches and verbosity == cudf::test::debug_output_level::QUIET) {
+    CUDF_LOG_WARN("Data (type) mismatch; set `CUDF_BENCH_OUTPUT_DIFF` for more details");
+  }
 }

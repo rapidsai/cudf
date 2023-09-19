@@ -138,3 +138,23 @@ std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks,
  * @throw cudf::logic_error if the environment variable is set and the command fails
  */
 void try_drop_l3_cache();
+
+/**
+ * @brief Checks if the output table is equal to the input table.
+ *
+ * Logs a warning if the tables are not equal. Setting `CUDF_BENCH_OUTPUT_DIFF` environment variable
+ * enables printing the difference to stdout.
+ */
+class benchmark_roundtrip_checker {
+ public:
+  explicit benchmark_roundtrip_checker(cudf::table_view const& input_table)
+    : input_table(input_table)
+  {
+  }
+
+  void check_once(cudf::table_view const& output_table);
+
+ private:
+  bool is_checked = false;
+  cudf::table_view input_table;
+};
