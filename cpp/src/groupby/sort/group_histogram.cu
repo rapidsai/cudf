@@ -56,12 +56,12 @@ auto make_empty_histogram(column_view const& values)
                                   std::move(lists_children));
 }
 
-std::unique_ptr<column> group_histogram(column_view const& input,
-                                        cudf::device_span<size_type const> group_labels,
-                                        std::optional<column_view> const& partial_counts,
-                                        size_type num_groups,
-                                        rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> histogram(column_view const& input,
+                                  cudf::device_span<size_type const> group_labels,
+                                  std::optional<column_view> const& partial_counts,
+                                  size_type num_groups,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(num_groups >= 0, "number of groups cannot be negative");
   CUDF_EXPECTS(static_cast<size_t>(input.size()) == group_labels.size(),
@@ -106,7 +106,7 @@ std::unique_ptr<column> group_histogram(column_view const& input,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
-  return group_histogram(input, group_labels, std::nullopt, num_groups, stream, mr);
+  return histogram(input, group_labels, std::nullopt, num_groups, stream, mr);
 }
 
 std::unique_ptr<column> group_merge_histogram(column_view const& input,
@@ -128,7 +128,7 @@ std::unique_ptr<column> group_merge_histogram(column_view const& input,
   auto const input_values = structs_cv.get_sliced_child(0, stream);
   auto const input_counts = structs_cv.get_sliced_child(1, stream);
 
-  return group_histogram(input_values, group_labels, input_counts, num_groups, stream, mr);
+  return histogram(input_values, group_labels, input_counts, num_groups, stream, mr);
 }
 
 }  // namespace cudf::groupby::detail
