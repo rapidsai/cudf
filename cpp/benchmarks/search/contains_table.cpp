@@ -15,6 +15,7 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
 
 #include <cudf/detail/search.hpp>
 #include <cudf/lists/list_view.hpp>
@@ -47,6 +48,8 @@ static void nvbench_contains_table(nvbench::state& state, nvbench::type_list<Typ
   auto const needles = create_random_table(
     {dtype}, table_size_bytes{static_cast<size_t>(size)}, data_profile{builder}, 1);
 
+  auto mem_stats_logger = cudf::memory_stats_logger();
+
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     auto const stream_view = rmm::cuda_stream_view{launch.get_stream()};
     [[maybe_unused]] auto const result =
@@ -57,6 +60,9 @@ static void nvbench_contains_table(nvbench::state& state, nvbench::type_list<Typ
                              stream_view,
                              rmm::mr::get_current_device_resource());
   });
+
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 NVBENCH_BENCH_TYPES(nvbench_contains_table,
