@@ -1192,6 +1192,12 @@ struct target_type_impl<Source, aggregation::COUNT_ALL> {
   using type = size_type;
 };
 
+// Use list for HISTOGRAM
+template <typename SourceType>
+struct target_type_impl<SourceType, aggregation::HISTOGRAM> {
+  using type = list_view;
+};
+
 // Computing ANY of any type, use bool accumulator
 template <typename Source>
 struct target_type_impl<Source, aggregation::ANY> {
@@ -1368,6 +1374,12 @@ struct target_type_impl<Source, aggregation::MERGE_SETS> {
 template <typename SourceType>
 struct target_type_impl<SourceType, aggregation::MERGE_M2> {
   using type = struct_view;
+};
+
+// Use list for MERGE_HISTOGRAM
+template <typename SourceType>
+struct target_type_impl<SourceType, aggregation::MERGE_HISTOGRAM> {
+  using type = list_view;
 };
 
 // Always use double for COVARIANCE
