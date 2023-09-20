@@ -18,6 +18,8 @@
 
 #include "parquet_common.hpp"
 
+#include <thrust/optional.h>
+
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -119,6 +121,16 @@ struct LogicalType {
 };
 
 /**
+ * Union to specify the order used for the min_value and max_value fields for a column.
+ */
+struct ColumnOrder {
+  enum Type { UNDEFINED, TYPE_ORDER };
+  Type type;
+
+  operator Type() const { return type; }
+};
+
+/**
  * @brief Struct for describing an element/field in the Parquet format schema
  *
  * Parquet is a strongly-typed format so the file layout can be interpreted as
@@ -135,7 +147,7 @@ struct SchemaElement {
   int32_t num_children                = 0;
   int32_t decimal_scale               = 0;
   int32_t decimal_precision           = 0;
-  std::optional<int32_t> field_id     = std::nullopt;
+  thrust::optional<int32_t> field_id  = thrust::nullopt;
   bool output_as_byte_array           = false;
 
   // The following fields are filled in later during schema initialization
@@ -284,8 +296,8 @@ struct FileMetaData {
   int64_t num_rows = 0;
   std::vector<RowGroup> row_groups;
   std::vector<KeyValue> key_value_metadata;
-  std::string created_by         = "";
-  uint32_t column_order_listsize = 0;
+  std::string created_by = "";
+  thrust::optional<std::vector<ColumnOrder>> column_orders;
 };
 
 /**
