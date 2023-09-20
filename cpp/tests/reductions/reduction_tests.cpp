@@ -393,12 +393,14 @@ auto histogram_reduction(cudf::column_view const& input,
   auto const result_list_scalar = dynamic_cast<cudf::list_scalar*>(result_scalar.get());
   EXPECT_NE(result_list_scalar, nullptr);
 
-  auto const result_col = result_list_scalar->view();
-  EXPECT_EQ(result_col.num_children(), 2);
+  auto const histogram = result_list_scalar->view();
+  EXPECT_EQ(histogram.num_children(), 2);
+  EXPECT_EQ(histogram.null_count(), 0);
+  EXPECT_EQ(histogram.child(1).null_count(), 0);
 
   // Sort the histogram based on the first column (unique input values).
-  auto const sort_order = cudf::sorted_order(cudf::table_view{{result_col.child(0)}}, {}, {});
-  return std::move(cudf::gather(cudf::table_view{{result_col}}, *sort_order)->release().front());
+  auto const sort_order = cudf::sorted_order(cudf::table_view{{histogram.child(0)}}, {}, {});
+  return std::move(cudf::gather(cudf::table_view{{histogram}}, *sort_order)->release().front());
 }
 
 template <typename T>
