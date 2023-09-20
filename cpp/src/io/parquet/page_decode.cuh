@@ -42,7 +42,7 @@ struct page_state_s {
   int32_t dict_val;
   uint32_t initial_rle_run[NUM_LEVEL_TYPES];   // [def,rep]
   int32_t initial_rle_value[NUM_LEVEL_TYPES];  // [def,rep]
-  int32_t error;
+  int error;
   PageInfo page;
   ColumnChunkDesc col;
 
@@ -495,7 +495,7 @@ __device__ void gpuDecodeStream(
       level_run = shuffle(level_run);
       cur_def += sym_len;
     }
-    if (s->error) { break; }
+    if (s->error != 0) { break; }
 
     batch_len = min(num_input_values - value_count, 32);
     if (level_run & 1) {
@@ -851,7 +851,7 @@ __device__ void gpuDecodeLevels(page_state_s* s,
 
   constexpr int batch_size = 32;
   int cur_leaf_count       = target_leaf_count;
-  while (!s->error && s->nz_count < target_leaf_count &&
+  while (s->error != 0 && s->nz_count < target_leaf_count &&
          s->input_value_count < s->num_input_values) {
     if (has_repetition) {
       gpuDecodeStream<level_t, rolling_buf_size>(rep, s, cur_leaf_count, t, level_type::REPETITION);

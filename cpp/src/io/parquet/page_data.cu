@@ -430,10 +430,15 @@ static __device__ void gpuOutputGeneric(
  * @param chunks List of column chunks
  * @param min_row Row index to start reading at
  * @param num_rows Maximum number of rows to read
+ * @param error_code Error code to set if an error is encountered
  */
 template <int lvl_buf_size, typename level_t>
-__global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
-  PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
+__global__ void __launch_bounds__(decode_block_size)
+  gpuDecodePageData(PageInfo* pages,
+                    device_span<ColumnChunkDesc const> chunks,
+                    size_t min_row,
+                    size_t num_rows,
+                    int* error_code)
 {
   __shared__ __align__(16) page_state_s state_g;
   __shared__ __align__(16)
@@ -472,7 +477,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t skipped_leaf_values = s->page.skipped_leaf_values;
-  while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
+  while (s->error != 0 &&
+         (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
     int target_pos;
     int src_pos = s->src_pos;
 
@@ -596,6 +602,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
     }
     __syncthreads();
   }
+
+  if (!t and s->error != 0) { atomicOr(error_code, s->error); }
 }
 
 struct mask_tform {
@@ -621,6 +629,7 @@ void __host__ DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
                              size_t num_rows,
                              size_t min_row,
                              int level_type_size,
+                             int* error_code,
                              rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
@@ -629,11 +638,11 @@ void __host__ DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   if (level_type_size == 1) {
-    gpuDecodePageData<rolling_buf_size, uint8_t>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+    gpuDecodePageData<rolling_buf_size, uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+      pages.device_ptr(), chunks, min_row, num_rows, error_code);
   } else {
-    gpuDecodePageData<rolling_buf_size, uint16_t>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+    gpuDecodePageData<rolling_buf_size, uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+      pages.device_ptr(), chunks, min_row, num_rows, error_code);
   }
 }
 

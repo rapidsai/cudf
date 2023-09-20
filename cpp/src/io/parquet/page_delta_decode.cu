@@ -32,8 +32,12 @@ namespace {
 // with V2 page headers; see https://www.mail-archive.com/dev@parquet.apache.org/msg11826.html).
 // this kernel only needs 96 threads (3 warps)(for now).
 template <typename level_t>
-__global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
-  PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
+__global__ void __launch_bounds__(96)
+  gpuDecodeDeltaBinary(PageInfo* pages,
+                       device_span<ColumnChunkDesc const> chunks,
+                       size_t min_row,
+                       size_t num_rows,
+                       int* error_code)
 {
   using cudf::detail::warp_size;
   __shared__ __align__(16) delta_binary_decoder db_state;
@@ -145,6 +149,8 @@ __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
     }
     __syncthreads();
   }
+
+  if (!t and s->error != 0) { atomicOr(error_code, s->error); }
 }
 
 }  // anonymous namespace
@@ -157,6 +163,7 @@ void __host__ DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages
                                 size_t num_rows,
                                 size_t min_row,
                                 int level_type_size,
+                                int* error_code,
                                 rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
@@ -165,11 +172,11 @@ void __host__ DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   if (level_type_size == 1) {
-    gpuDecodeDeltaBinary<uint8_t>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+    gpuDecodeDeltaBinary<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+      pages.device_ptr(), chunks, min_row, num_rows, error_code);
   } else {
-    gpuDecodeDeltaBinary<uint16_t>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+    gpuDecodeDeltaBinary<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+      pages.device_ptr(), chunks, min_row, num_rows, error_code);
   }
 }
 
