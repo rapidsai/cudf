@@ -137,9 +137,11 @@ __global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
     // search the d_min_ranks for all the places where the rank matches block_min_rank
     for (auto itr = d_min_ranks + lane_idx; itr < end_ranks; itr += block_size) {
       if (*itr == block_min_rank) {
-        auto ptr = itr - 1;  // check for adjacent min-rank edge-case
-        while (ptr > d_min_ranks && *ptr == max_rank) {
+        auto ptr   = itr - 1;  // check for adjacent min-rank edge-case
+        auto count = 8;
+        while (ptr > d_min_ranks && *ptr == max_rank && count > 0) {
           --ptr;
+          --count;
         }
         // set the output value to 0 at this position (erases separator)
         if (*ptr != block_min_rank) { d_spaces[thrust::distance(d_min_ranks, itr)] = 0; }
