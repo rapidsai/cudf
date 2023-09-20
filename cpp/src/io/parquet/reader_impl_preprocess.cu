@@ -868,45 +868,40 @@ void reader::impl::compute_input_pass_row_group_info()
     _input_pass_read_limit > 0 ? _input_pass_read_limit : std::numeric_limits<std::size_t>::max();
   std::size_t cur_read      = 0;
   std::size_t cur_rg_start  = 0;
-  std::size_t cur_rg_index  = 0;
   std::size_t cur_row_count = 0;
   _input_pass_row_group_indices.push_back(0);
   _input_pass_row_count.push_back(0);
-  for (auto const& rg : row_groups_info) {
-    auto const& row_group = _metadata->get_row_group(rg.index, rg.source_index);
 
-    // if we're past the read limit, add another pass
+  // for (auto const& rg : row_groups_info) {
+  for (size_t cur_rg_index = 0; cur_rg_index < row_groups_info.size(); cur_rg_index++) {
+    auto const& rgi       = row_groups_info[cur_rg_index];
+    auto const& row_group = _metadata->get_row_group(rgi.index, rgi.source_index);
+
+    // can we add this guy
     if (cur_read + row_group.total_byte_size >= read_limit) {
-      // always need to add at least 1 row group
+      // always need to add at least 1 row group, so add ourselves
       if (cur_rg_start == cur_rg_index) {
         _input_pass_row_group_indices.push_back(cur_rg_index + 1);
         _input_pass_row_count.push_back(cur_row_count + row_group.num_rows);
         cur_rg_start = cur_rg_index + 1;
-      } else {
+        cur_read     = 0;
+      }
+      // add the previous group
+      else {
         _input_pass_row_group_indices.push_back(cur_rg_index);
         _input_pass_row_count.push_back(cur_row_count);
         cur_rg_start = cur_rg_index;
+        cur_read     = row_group.total_byte_size;
       }
-      cur_read     = 0;
-      cur_rg_index = cur_rg_start;
     } else {
       cur_read += row_group.total_byte_size;
-      cur_rg_index++;
     }
-
     cur_row_count += row_group.num_rows;
   }
   // add the last pass if necessary
   if (_input_pass_row_group_indices.back() != row_groups_info.size()) {
     _input_pass_row_group_indices.push_back(row_groups_info.size());
     _input_pass_row_count.push_back(cur_row_count);
-  }
-
-  for (size_t idx = 0; idx < _input_pass_row_group_indices.size(); idx++) {
-    printf("Pass(%lu): rgi(%lu), row_count(%lu)\n",
-           idx,
-           _input_pass_row_group_indices[idx],
-           _input_pass_row_count[idx]);
   }
 }
 
@@ -945,18 +940,14 @@ void reader::impl::setup_pass()
   } else {
     auto const global_start_row = _file_itm_data.global_skip_rows;
     auto const global_end_row   = global_start_row + _file_itm_data.global_num_rows;
-    auto const start_row = std::max(_input_pass_row_count[row_group_start], global_start_row);
-    auto const end_row   = std::min(_input_pass_row_count[row_group_end], global_end_row);
+    auto const start_row = std::max(_input_pass_row_count[_current_input_pass], global_start_row);
+    auto const end_row   = std::min(_input_pass_row_count[_current_input_pass + 1], global_end_row);
 
     // skip_rows is always global in the sense that it is relative to the first row of
     // everything we will be reading, regardless of what pass we are on.
     // num_rows is how many rows we are reading this pass.
-    // _pass_itm_data->skip_rows = start_row - _input_pass_row_count[row_group_start];
-    _pass_itm_data->skip_rows = global_start_row + _input_pass_row_count[row_group_start];
+    _pass_itm_data->skip_rows = global_start_row + _input_pass_row_count[_current_input_pass];
     _pass_itm_data->num_rows  = end_row - start_row;
-
-    int whee = 10;
-    whee++;
   }
 }
 
