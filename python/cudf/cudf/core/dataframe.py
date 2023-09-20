@@ -894,6 +894,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         self, data, index=None, columns=None, nan_as_null=None
     ):
         if columns is not None:
+            if len(data) != len(columns):
+                raise ValueError(
+                    f"Length of values ({len(data)}) does not "
+                    f"match length of columns ({len(columns)})"
+                )
             # remove all entries in data that are not in columns,
             # inserting new empty columns for entries in columns that
             # are not in data
