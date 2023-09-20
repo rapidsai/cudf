@@ -30,11 +30,11 @@ namespace cudf::reduction::detail {
 /**
  * @brief Compute the histogram for the input table.
  *
- * This is equivalent to do a distinct count for each unique rows in the input.
+ * This is equivalent to do a distinct count for each unique row in the input.
  *
  * @param input The input table to compute histogram
- * @param partial_counts An optional column containing counts for each row
- * @param output_dtype The output type to store the count value
+ * @param partial_counts An optional column containing count for each row
+ * @param output_dtype The type to store count value
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate memory of the returned objects
  * @return A pair of array contains the (stable-order) indices of the distinct rows in the input
