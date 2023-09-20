@@ -31,14 +31,15 @@ namespace parquet {
  * Holds the field value used by all of the specialized functors.
  */
 class parquet_field {
- protected:
-  int const field_val;
+ private:
+  int _field_val;
 
-  parquet_field(int f) : field_val(f) {}
+ protected:
+  parquet_field(int f) : _field_val(f) {}
 
  public:
   virtual ~parquet_field() = default;
-  int field() const { return field_val; }
+  int field() const { return _field_val; }
 };
 
 /**
@@ -46,16 +47,18 @@ class parquet_field {
  */
 template <typename T>
 class parquet_field_list : public parquet_field {
- protected:
+ private:
   using read_func_type = std::function<bool(uint32_t, CompactProtocolReader*)>;
-  std::vector<T>& val;
-  FieldType const expected_type;
-  read_func_type read_value;
+  FieldType _expected_type;
+  read_func_type _read_value;
 
-  void bind_func(read_func_type fn) { read_value = fn; }
+ protected:
+  std::vector<T>& val;
+
+  void bind_read_func(read_func_type fn) { _read_value = fn; }
 
   parquet_field_list(int f, std::vector<T>& v, FieldType t)
-    : parquet_field(f), val(v), expected_type(t)
+    : parquet_field(f), _expected_type(t), val(v)
   {
   }
 
@@ -64,10 +67,10 @@ class parquet_field_list : public parquet_field {
   {
     if (field_type != ST_FLD_LIST) { return true; }
     auto const [t, n] = cpr->get_listh();
-    if (t != expected_type) { return true; }
+    if (t != _expected_type) { return true; }
     val.resize(n);
     for (uint32_t i = 0; i < n; i++) {
-      if (read_value(i, cpr)) { return true; }
+      if (_read_value(i, cpr)) { return true; }
     }
     return false;
   }
@@ -75,6 +78,8 @@ class parquet_field_list : public parquet_field {
 
 /**
  * @brief Functor to set value to bool read from CompactProtocolReader
+ *
+ * bool doesn't actually encode a value, we just use the field type to indicate true/false
  *
  * @return True if field type is not bool
  */
@@ -86,8 +91,9 @@ class parquet_field_bool : public parquet_field {
 
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
-    return (field_type != ST_FLD_TRUE && field_type != ST_FLD_FALSE) ||
-           !(val = (field_type == ST_FLD_TRUE), true);
+    if (field_type != ST_FLD_TRUE && field_type != ST_FLD_FALSE) { return true; }
+    val = field_type == ST_FLD_TRUE;
+    return false;
   }
 };
 
@@ -106,7 +112,7 @@ struct parquet_field_bool_list : public parquet_field_list<bool> {
       this->val[i] = current_byte == ST_FLD_TRUE;
       return false;
     };
-    bind_func(read_value);
+    bind_read_func(read_value);
   }
 };
 
@@ -155,7 +161,7 @@ struct parquet_field_int_list : public parquet_field_list<T> {
       this->val[i] = cpr->get_zigzag<T>();
       return false;
     };
-    this->bind_func(read_value);
+    this->bind_read_func(read_value);
   }
 };
 
@@ -207,7 +213,7 @@ struct parquet_field_string_list : public parquet_field_list<std::string> {
       }
       return false;
     };
-    bind_func(read_value);
+    bind_read_func(read_value);
   }
 };
 
@@ -243,7 +249,7 @@ struct parquet_field_enum_list : public parquet_field_list<Enum> {
       this->val[i] = static_cast<Enum>(cpr->get_i32());
       return false;
     };
-    this->bind_func(read_value);
+    this->bind_read_func(read_value);
   }
 };
 
@@ -285,10 +291,10 @@ class parquet_field_union_struct : public parquet_field {
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     T v;
-    bool const res = parquet_field_struct<T>(field_val, v).operator()(cpr, field_type);
+    bool const res = parquet_field_struct<T>(field(), v).operator()(cpr, field_type);
     if (!res) {
       val      = v;
-      enum_val = static_cast<E>(field_val);
+      enum_val = static_cast<E>(field());
     }
     return res;
   }
@@ -312,7 +318,7 @@ class parquet_field_union_enumerator : public parquet_field {
   {
     if (field_type != ST_FLD_STRUCT) { return true; }
     cpr->skip_struct_field(field_type);
-    val = static_cast<E>(field_val);
+    val = static_cast<E>(field());
     return false;
   }
 };
@@ -331,7 +337,7 @@ struct parquet_field_struct_list : public parquet_field_list<T> {
       if (not cpr->read(&this->val[i])) { return true; }
       return false;
     };
-    this->bind_func(read_value);
+    this->bind_read_func(read_value);
   }
 };
 
@@ -438,7 +444,7 @@ struct parquet_field_binary_list : public parquet_field_list<std::vector<uint8_t
       }
       return false;
     };
-    bind_func(read_value);
+    bind_read_func(read_value);
   }
 };
 
@@ -475,7 +481,7 @@ class parquet_field_optional : public parquet_field {
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     T v;
-    bool const res = FieldFunctor(field_val, v).operator()(cpr, field_type);
+    bool const res = FieldFunctor(field(), v).operator()(cpr, field_type);
     if (!res) { val = v; }
     return res;
   }
