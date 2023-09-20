@@ -219,8 +219,10 @@ struct window_bounds {
  *
  * @param[in] group_keys The (pre-sorted) grouping columns
  * @param[in] input The input column (to be aggregated)
- * @param[in] preceding_window The static rolling window size in the backward direction
- * @param[in] following_window The static rolling window size in the forward direction
+ * @param[in] preceding_window The static rolling window size in the backward direction (for
+ * positive values), or forward direction (for negative values)
+ * @param[in] following_window The static rolling window size in the forward direction (for positive
+ * values), or backward direction (for negative values)
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise element `i` is null.
  * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc.)
