@@ -32,7 +32,6 @@
 namespace cudf::groupby::detail {
 
 // Fixed type for counting frequencies in historam.
-// This is to avoid using `target_type_t` which requires type_dispatcher.
 constexpr auto histogram_count_dtype = data_type{type_to_id<int64_t>()};
 
 namespace {
