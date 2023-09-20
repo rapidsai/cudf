@@ -4,17 +4,20 @@ from __future__ import annotations
 
 import cudf
 from cudf._lib.nvtext.tokenize import (
-    Tokenize_Vocabulary as cpp_tokenize_vocabulary,
+    TokenizeVocabulary as cpp_tokenize_vocabulary,
     tokenize_with_vocabulary as cpp_tokenize_with_vocabulary,
 )
 
 
 class TokenizeVocabulary:
     """
+    A vocabulary object used to tokenize input text.
+
     Parameters
     ----------
     vocabulary : str
         Strings column of vocabulary terms
+
     Returns
     -------
     TokenizeVocabulary
@@ -23,7 +26,7 @@ class TokenizeVocabulary:
     def __init__(self, vocabulary: "cudf.Series"):
         self.vocabulary = cpp_tokenize_vocabulary(vocabulary._column)
 
-    def __call__(self, text, delimiter: str = "", default_id: int = -1):
+    def tokenize(self, text, delimiter: str = "", default_id: int = -1):
         """
         Parameters
         ----------

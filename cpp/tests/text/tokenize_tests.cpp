@@ -153,9 +153,10 @@ TEST_F(TextTokenizeTest, TokenizeEmptyTest)
   EXPECT_EQ(results->size(), 0);
   results = nvtext::character_tokenize(all_null);
   EXPECT_EQ(results->size(), 0);
-  results = nvtext::tokenize_with_vocabulary(view, all_empty);
+  auto const delimiter = cudf::string_scalar{""};
+  results              = nvtext::tokenize_with_vocabulary(view, all_empty, delimiter);
   EXPECT_EQ(results->size(), 0);
-  results = nvtext::tokenize_with_vocabulary(all_null, all_empty);
+  results = nvtext::tokenize_with_vocabulary(all_null, all_empty, delimiter);
   EXPECT_EQ(results->size(), results->null_count());
 }
 

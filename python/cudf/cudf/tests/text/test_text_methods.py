@@ -210,9 +210,9 @@ def test_tokenize_with_vocabulary(delimiter, input, default_id, results):
         ]
     )
 
-    actual = tokenizer(strings, delimiter, default_id)
+    actual = tokenizer.tokenize(strings, delimiter, default_id)
     assert type(expected) == type(actual)
-    assert_eq(expected, actual, check_dtype=False)
+    assert_eq(expected, actual)
 
 
 def test_normalize_spaces():

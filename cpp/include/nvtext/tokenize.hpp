@@ -274,12 +274,11 @@ std::unique_ptr<tokenize_vocabulary> load_vocabulary(
  *
  * Any null row entry results in a corresponding null entry in the output
  *
- * @throw cudf::logic_error is `delimiter` is invalid
+ * @throw cudf::logic_error if `delimiter` is invalid
  *
  * @param input Strings column to tokenize
- * @param vocabulary To lookup tokens within
- * @param delimiter Used to identify tokens within `input`;
- *                  Default empty/valid delimiter indicates whitespace
+ * @param vocabulary Used to lookup tokens within
+ * @param delimiter Used to identify tokens within `input`
  * @param default_id The token id to be used for tokens not found in the `vocabulary`;
  *                   Default is -1
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -289,10 +288,10 @@ std::unique_ptr<tokenize_vocabulary> load_vocabulary(
 std::unique_ptr<cudf::column> tokenize_with_vocabulary(
   cudf::strings_column_view const& input,
   tokenize_vocabulary const& vocabulary,
-  cudf::string_scalar const& delimiter = cudf::string_scalar{""},
-  cudf::size_type default_id           = -1,
-  rmm::cuda_stream_view stream         = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
+  cudf::string_scalar const& delimiter,
+  cudf::size_type default_id          = -1,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of tokenize group
 }  // namespace nvtext

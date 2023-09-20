@@ -128,7 +128,7 @@ def detokenize(Column strings, Column indices, object py_separator):
     return Column.from_unique_ptr(move(c_result))
 
 
-cdef class Tokenize_Vocabulary:
+cdef class TokenizeVocabulary:
     cdef unique_ptr[cpp_tokenize_vocabulary] c_obj
 
     def __cinit__(self, Column vocab):
@@ -139,7 +139,7 @@ cdef class Tokenize_Vocabulary:
 
 @acquire_spill_lock()
 def tokenize_with_vocabulary(Column strings,
-                             Tokenize_Vocabulary vocabulary,
+                             TokenizeVocabulary vocabulary,
                              object py_delimiter,
                              size_type default_id):
 

@@ -42,8 +42,8 @@ namespace nvtext {
 namespace detail {
 namespace {
 
-using hash_value_type    = uint32_t;
 using string_hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>;
+using hash_value_type    = string_hasher_type::result_type;
 
 /**
  * @brief Hasher function used for building and using the cuco static-map
