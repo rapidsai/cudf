@@ -20,11 +20,14 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/device_buffer.hpp>
+
+#include <thrust/gather.h>
 
 namespace cudf::groupby::detail {
 
@@ -55,9 +58,9 @@ std::unique_ptr<column> build_histogram(column_view const& values,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(num_groups >= 0, "number of groups cannot be negative");
+  CUDF_EXPECTS(num_groups >= 0, "Number of groups cannot be negative.");
   CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
-               "Size of values column should be same as that of group labels");
+               "Size of values column should be same as that of group labels.");
 
   if (num_groups == 0) { return make_empty_histogram(values); }
 
@@ -108,26 +111,49 @@ std::unique_ptr<column> group_histogram(column_view const& values,
 }
 
 std::unique_ptr<column> group_merge_histogram(column_view const& values,
-                                              cudf::device_span<size_type const> group_labels,
+                                              cudf::device_span<size_type const> group_offsets,
                                               size_type num_groups,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
+  // The input must be a lists column without nulls.
   CUDF_EXPECTS(!values.has_nulls(), "The input column must not have nulls.");
+  CUDF_EXPECTS(values.type().id() == type_id::LIST,
+               "The input of MERGE_HISTOGRAM aggregation must be a lists column.");
+
+  // Child of the input lists column must be a structs column without nulls,
+  // and its second child is a count columns of integer type having no nulls.
+  auto const lists_cv     = lists_column_view{values};
+  auto const histogram_cv = lists_cv.get_sliced_child(stream);
+  CUDF_EXPECTS(!histogram_cv.has_nulls(), "Child of the input lists column must not have nulls.");
+  CUDF_EXPECTS(histogram_cv.type().id() == type_id::STRUCT && histogram_cv.num_children() == 2,
+               "The input column has invalid histograms structure.");
   CUDF_EXPECTS(
-    values.type().id() == type_id::STRUCT && values.num_children() == 2,
-    "The input of merge_histogram aggregation must be a struct column having two children.");
-  CUDF_EXPECTS(cudf::is_integral(values.child(1).type()) && !values.child(1).has_nulls(),
-               "The second child of the input column must be integral type and has no nulls.");
+    cudf::is_integral(histogram_cv.child(1).type()) && !histogram_cv.child(1).has_nulls(),
+    "The input column has invalid histograms structure.");
 
   if (num_groups == 0) { return empty_like(values); }
 
+  // Firstly concatenate the histograms corresponding to the same key values.
+  // That is equivalent to creating a new lists column (view) from the input lists column
+  // with new offsets as below.
+  auto new_offsets = rmm::device_uvector<size_type>(num_groups + 1, stream);
+  thrust::gather(rmm::exec_policy(stream),
+                 group_offsets.begin(),
+                 group_offsets.end(),
+                 lists_cv.offsets_begin(),
+                 new_offsets.begin());
+
+  auto key_labels = rmm::device_uvector<size_type>(histogram_cv.size(), stream);
+  cudf::detail::label_segments(
+    new_offsets.begin(), new_offsets.end(), key_labels.begin(), key_labels.end(), stream);
+
   // The input values column is already in histogram format (i.e., column of Struct<value, count>).
-  auto const structs_cv   = structs_column_view{values};
+  auto const structs_cv   = structs_column_view{histogram_cv};
   auto const input_values = structs_cv.get_sliced_child(0, stream);
   auto const input_counts = structs_cv.get_sliced_child(1, stream);
 
-  return build_histogram(input_values, group_labels, input_counts, num_groups, stream, mr);
+  return build_histogram(input_values, key_labels, input_counts, num_groups, stream, mr);
 }
 
 }  // namespace cudf::groupby::detail

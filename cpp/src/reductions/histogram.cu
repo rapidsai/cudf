@@ -267,9 +267,8 @@ std::unique_ptr<cudf::scalar> merge_histogram(column_view const& input,
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(!input.has_nulls(), "The input column must not have nulls.");
-  CUDF_EXPECTS(
-    input.type().id() == type_id::STRUCT && input.num_children() == 2,
-    "The input of merge_histogram aggregation must be a struct column having two children.");
+  CUDF_EXPECTS(input.type().id() == type_id::STRUCT && input.num_children() == 2,
+               "The input must be a structs column having two children.");
   CUDF_EXPECTS(cudf::is_integral(input.child(1).type()) && !input.child(1).has_nulls(),
                "The second child of the input column must be integral type and has no nulls.");
 
