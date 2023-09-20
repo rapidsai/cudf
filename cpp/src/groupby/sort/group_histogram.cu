@@ -44,16 +44,8 @@ auto make_empty_histogram(column_view const& values)
                                           rmm::device_buffer{},
                                           0,
                                           std::move(struct_children));
-
-  std::vector<std::unique_ptr<column>> lists_children;
-  lists_children.emplace_back(make_numeric_column(data_type{type_to_id<size_type>()}, 0));
-  lists_children.emplace_back(std::move(structs));
-  return std::make_unique<column>(cudf::data_type{type_id::LIST},
-                                  0,
-                                  rmm::device_buffer{},
-                                  rmm::device_buffer{},
-                                  0,
-                                  std::move(lists_children));
+  return make_lists_column(
+    0, make_empty_column(type_to_id<size_type>()), std::move(structs), 0, {});
 }
 
 std::unique_ptr<column> build_histogram(column_view const& values,
