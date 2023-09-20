@@ -110,16 +110,16 @@ struct empty_column_constructor {
         0, make_empty_column(type_to_id<size_type>()), empty_like(values), 0, {});
     }
 
-    if constexpr (k == aggregation::Kind::HISTOGRAM || k == aggregation::Kind::MERGE_HISTOGRAM) {
-        std::vector<std::unique_ptr<column>> struct_children;
-        struct_children.emplace_back(empty_like(values));
-        struct_children.emplace_back(make_numeric_column(data_type{type_id::INT64}, 0));
-        auto structs = std::make_unique<column>(data_type{type_id::STRUCT},
-                                                0,
-                                                rmm::device_buffer{},
-                                                rmm::device_buffer{},
-                                                0,
-                                                std::move(struct_children));
+    if constexpr (k == aggregation::Kind::HISTOGRAM) {
+      std::vector<std::unique_ptr<column>> struct_children;
+      struct_children.emplace_back(empty_like(values));
+      struct_children.emplace_back(make_numeric_column(data_type{type_id::INT64}, 0));
+      auto structs = std::make_unique<column>(data_type{type_id::STRUCT},
+                                              0,
+                                              rmm::device_buffer{},
+                                              rmm::device_buffer{},
+                                              0,
+                                              std::move(struct_children));
       return make_lists_column(
         0, make_empty_column(type_to_id<size_type>()), std::move(structs), 0, {});
     }
