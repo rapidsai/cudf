@@ -62,7 +62,12 @@ void BM_csv_read_varying_options(
 
   size_t const chunk_size             = source_sink.size() / num_chunks;
   cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;
-  auto const mem_stats_logger         = cudf::memory_stats_logger();
+
+  std::optional<benchmark_roundtrip_checker> checker;
+  if (ColSelection == column_selection::ALL and RowSelection == row_selection::ALL) {
+    checker = benchmark_roundtrip_checker{options.get_table()};
+  }
+  auto const mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
              [&](nvbench::launch& launch, auto& timer) {
@@ -94,9 +99,11 @@ void BM_csv_read_varying_options(
                    default: CUDF_FAIL("Unsupported row selection method");
                  }
 
-                 cudf::io::read_csv(read_options);
+                 auto const res = cudf::io::read_csv(read_options);
+                 if (is_last_chunk) { timer.stop(); }
+
+                 if (checker.has_value()) { checker->check_once(res.tbl->view()); }
                }
-               timer.stop();
              });
 
   auto const elapsed_time   = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");

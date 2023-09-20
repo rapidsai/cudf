@@ -45,6 +45,7 @@ void csv_read_common(DataType const& data_types,
   cudf::io::csv_reader_options const read_options =
     cudf::io::csv_reader_options::builder(source_sink.make_source_info());
 
+  auto checker                = benchmark_roundtrip_checker{options.get_table()};
   auto const mem_stats_logger = cudf::memory_stats_logger();  // init stats logger
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
@@ -52,8 +53,9 @@ void csv_read_common(DataType const& data_types,
                try_drop_l3_cache();  // Drop L3 cache for accurate measurement
 
                timer.start();
-               cudf::io::read_csv(read_options);
+               auto const res = cudf::io::read_csv(read_options);
                timer.stop();
+               checker.check_once(res.tbl->view());
              });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
