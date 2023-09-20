@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -154,10 +154,11 @@ std::unique_ptr<column> contains(column_view const& haystack,
 
 std::unique_ptr<column> contains(column_view const& haystack,
                                  column_view const& needles,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(haystack, needles, cudf::get_default_stream(), mr);
+  return detail::contains(haystack, needles, stream, mr);
 }
 
 }  // namespace cudf

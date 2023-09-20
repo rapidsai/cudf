@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,13 @@
 
 #include <text/subword/detail/cp_data.h>
 
+#include <cudf/types.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
 using uvector_pair = std::pair<std::unique_ptr<rmm::device_uvector<uint32_t>>,
-                               std::unique_ptr<rmm::device_uvector<uint32_t>>>;
+                               std::unique_ptr<rmm::device_uvector<cudf::size_type>>>;
 
 namespace nvtext {
 namespace detail {
@@ -85,8 +87,8 @@ class data_normalizer {
    *         used to locate the code points for each string.
    */
   uvector_pair normalize(char const* d_strings,
-                         uint32_t const* d_offsets,
-                         uint32_t num_strings,
+                         cudf::size_type const* d_offsets,
+                         cudf::size_type num_strings,
                          rmm::cuda_stream_view stream) const;
 
  private:

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,22 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#pragma once
 
 #include <io/utilities/column_type_histogram.hpp>
-#include <io/utilities/parsing_utils.cuh>
+#include <io/utilities/string_parsing.hpp>
 #include <io/utilities/trie.cuh>
 
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/span.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
-
-#include <thrust/distance.h>
-#include <thrust/tuple.h>
 
 #include <cub/block/block_reduce.cuh>
 
@@ -114,14 +107,14 @@ __device__ __inline__ bool is_like_float(std::size_t len,
  *
  * @param[in] options View of inference options
  * @param[in] data JSON string input
- * @param[in] column_strings_begin The beginning of an offset-length tuple sequence
+ * @param[in] offset_length_begin The beginning of an offset-length tuple sequence
  * @param[in] size Size of the string input
  * @param[out] column_info Histogram of column type counters
  */
 template <int BlockSize, typename OptionsView, typename ColumnStringIter>
 __global__ void infer_column_type_kernel(OptionsView options,
                                          device_span<char const> data,
-                                         ColumnStringIter column_strings_begin,
+                                         ColumnStringIter offset_length_begin,
                                          std::size_t size,
                                          cudf::io::column_type_histogram* column_info)
 {
@@ -129,8 +122,8 @@ __global__ void infer_column_type_kernel(OptionsView options,
 
   for (auto idx = threadIdx.x + blockDim.x * blockIdx.x; idx < size;
        idx += gridDim.x * blockDim.x) {
-    auto const field_offset = thrust::get<0>(*(column_strings_begin + idx));
-    auto const field_len    = thrust::get<1>(*(column_strings_begin + idx));
+    auto const field_offset = thrust::get<0>(*(offset_length_begin + idx));
+    auto const field_len    = thrust::get<1>(*(offset_length_begin + idx));
     auto const field_begin  = data.begin() + field_offset;
 
     if (cudf::detail::serialized_trie_contains(
@@ -234,7 +227,7 @@ __global__ void infer_column_type_kernel(OptionsView options,
  *
  * @param options View of inference options
  * @param data JSON string input
- * @param column_strings_begin The beginning of an offset-length tuple sequence
+ * @param offset_length_begin The beginning of an offset-length tuple sequence
  * @param size Size of the string input
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A histogram containing column-specific type counters
@@ -242,7 +235,7 @@ __global__ void infer_column_type_kernel(OptionsView options,
 template <typename OptionsView, typename ColumnStringIter>
 cudf::io::column_type_histogram infer_column_type(OptionsView const& options,
                                                   cudf::device_span<char const> data,
-                                                  ColumnStringIter column_strings_begin,
+                                                  ColumnStringIter offset_length_begin,
                                                   std::size_t const size,
                                                   rmm::cuda_stream_view stream)
 {
@@ -254,40 +247,22 @@ cudf::io::column_type_histogram infer_column_type(OptionsView const& options,
     d_column_info.data(), 0, sizeof(cudf::io::column_type_histogram), stream.value()));
 
   infer_column_type_kernel<block_size><<<grid_size, block_size, 0, stream.value()>>>(
-    options, data, column_strings_begin, size, d_column_info.data());
+    options, data, offset_length_begin, size, d_column_info.data());
 
   return d_column_info.value(stream);
 }
 
-/**
- * @brief Infers data type for a given JSON string input `data`.
- *
- * @throw cudf::logic_error if input size is 0
- * @throw cudf::logic_error if date time is not inferred as string
- * @throw cudf::logic_error if data type inference failed
- *
- * @tparam OptionsView Type of inference options view
- * @tparam ColumnStringIter Iterator type whose `value_type` is convertible to
- * `thrust::tuple<device_span, string_view>`
- *
- * @param options View of inference options
- * @param data JSON string input
- * @param column_strings_begin The beginning of an offset-length tuple sequence
- * @param size Size of the string input
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @return The inferred data type
- */
-template <typename OptionsView, typename ColumnStringIter>
-cudf::data_type infer_data_type(OptionsView const& options,
-                                device_span<char const> data,
-                                ColumnStringIter column_strings_begin,
-                                std::size_t const size,
-                                rmm::cuda_stream_view stream)
+cudf::data_type infer_data_type(
+  cudf::io::json_inference_options_view const& options,
+  device_span<char const> data,
+  thrust::zip_iterator<thrust::tuple<const size_type*, const size_type*>> offset_length_begin,
+  std::size_t const size,
+  rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(size != 0, "No data available for data type inference.\n");
 
-  auto const h_column_info = infer_column_type(options, data, column_strings_begin, size, stream);
+  auto const h_column_info = infer_column_type(options, data, offset_length_begin, size, stream);
 
   auto get_type_id = [&](auto const& cinfo) {
     auto int_count_total =

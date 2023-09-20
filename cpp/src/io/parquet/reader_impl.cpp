@@ -18,30 +18,14 @@
 
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/transform.hpp>
+#include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <rmm/cuda_stream_pool.hpp>
 
+#include <bitset>
 #include <numeric>
 
 namespace cudf::io::detail::parquet {
-
-namespace {
-
-int constexpr NUM_DECODERS       = 2;  // how many decode kernels are there to run
-int constexpr APPROX_NUM_THREADS = 4;  // guestimate from DaveB
-int constexpr STREAM_POOL_SIZE   = NUM_DECODERS * APPROX_NUM_THREADS;
-
-auto& get_stream_pool()
-{
-  // TODO: creating this on the heap because there were issues with trying to call the
-  // stream pool destructor during cuda shutdown that lead to a segmentation fault in
-  // nvbench. this allocation is being deliberately leaked to avoid the above, but still
-  // results in non-fatal warnings when running nvbench in cuda-gdb.
-  static auto pool = new rmm::cuda_stream_pool{STREAM_POOL_SIZE};
-  return *pool;
-}
-
-}  // namespace
 
 void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 {
@@ -58,14 +42,16 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
       return cursum + _metadata->get_output_nesting_depth(chunk.src_col_schema);
     });
 
+  // figure out which kernels to run
+  auto const kernel_mask = GetAggregatedDecodeKernelMask(pages, _stream);
+
   // Check to see if there are any string columns present. If so, then we need to get size info
   // for each string page. This size info will be used to pre-allocate memory for the column,
   // allowing the page decoder to write string data directly to the column buffer, rather than
   // doing a gather operation later on.
   // TODO: This step is somewhat redundant if size info has already been calculated (nested schema,
   // chunked reader).
-  auto const has_strings = std::any_of(chunks.begin(), chunks.end(), gpu::is_string_col);
-
+  auto const has_strings = (kernel_mask & gpu::KERNEL_MASK_STRING) != 0;
   std::vector<size_t> col_sizes(_input_columns.size(), 0L);
   if (has_strings) {
     gpu::ComputePageStringSizes(
@@ -176,18 +162,33 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   chunks.host_to_device_async(_stream);
   chunk_nested_valids.host_to_device_async(_stream);
   chunk_nested_data.host_to_device_async(_stream);
-  _stream.synchronize();
 
-  auto stream1 = get_stream_pool().get_stream();
-  gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, stream1);
+  // get the number of streams we need from the pool and tell them to wait on the H2D copies
+  int const nkernels = std::bitset<32>(kernel_mask).count();
+  auto streams       = cudf::detail::fork_streams(_stream, nkernels);
+
+  auto const level_type_size = _file_itm_data.level_type_size;
+
+  // launch string decoder
+  int s_idx = 0;
   if (has_strings) {
-    auto stream2 = get_stream_pool().get_stream();
-    chunk_nested_str_data.host_to_device_async(stream2);
-    gpu::DecodeStringPageData(
-      pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, stream2);
-    stream2.synchronize();
+    auto& stream = streams[s_idx++];
+    chunk_nested_str_data.host_to_device_async(stream);
+    gpu::DecodeStringPageData(pages, chunks, num_rows, skip_rows, level_type_size, stream);
   }
-  stream1.synchronize();
+
+  // launch delta binary decoder
+  if ((kernel_mask & gpu::KERNEL_MASK_DELTA_BINARY) != 0) {
+    gpu::DecodeDeltaBinary(pages, chunks, num_rows, skip_rows, level_type_size, streams[s_idx++]);
+  }
+
+  // launch the catch-all page decoder
+  if ((kernel_mask & gpu::KERNEL_MASK_GENERAL) != 0) {
+    gpu::DecodePageData(pages, chunks, num_rows, skip_rows, level_type_size, streams[s_idx++]);
+  }
+
+  // synchronize the streams
+  cudf::detail::join_streams(streams, _stream);
 
   pages.device_to_host_async(_stream);
   page_nesting.device_to_host_async(_stream);
@@ -326,9 +327,10 @@ void reader::impl::prepare_data(int64_t skip_rows,
                    [](auto const& col) { return col.type; });
   }
   auto const [skip_rows_corrected, num_rows_corrected, row_groups_info] =
-    _metadata->select_row_groups(row_group_indices, skip_rows, num_rows, output_types, filter);
+    _metadata->select_row_groups(
+      row_group_indices, skip_rows, num_rows, output_types, filter, _stream);
 
-  if (num_rows_corrected > 0 && row_groups_info.size() != 0 && _input_columns.size() != 0) {
+  if (num_rows_corrected > 0 && not row_groups_info.empty() && not _input_columns.empty()) {
     load_and_decompress_data(row_groups_info, num_rows_corrected);
     preprocess_pages(
       skip_rows_corrected, num_rows_corrected, uses_custom_row_bounds, _chunk_read_limit);
@@ -347,8 +349,9 @@ void reader::impl::populate_metadata(table_metadata& out_metadata)
   // Return column names
   out_metadata.schema_info.resize(_output_buffers.size());
   for (size_t i = 0; i < _output_column_schemas.size(); i++) {
-    auto const& schema               = _metadata->get_schema(_output_column_schemas[i]);
-    out_metadata.schema_info[i].name = schema.name;
+    auto const& schema                      = _metadata->get_schema(_output_column_schemas[i]);
+    out_metadata.schema_info[i].name        = schema.name;
+    out_metadata.schema_info[i].is_nullable = schema.repetition_type != REQUIRED;
   }
 
   // Return user metadata
@@ -368,7 +371,7 @@ table_with_metadata reader::impl::read_chunk_internal(
   auto out_columns = std::vector<std::unique_ptr<column>>{};
   out_columns.reserve(_output_buffers.size());
 
-  if (!has_next() || _chunk_read_info.size() == 0) {
+  if (!has_next() || _chunk_read_info.empty()) {
     return finalize_output(out_metadata, out_columns, filter);
   }
 
@@ -382,9 +385,15 @@ table_with_metadata reader::impl::read_chunk_internal(
 
   // Create the final output cudf columns.
   for (size_t i = 0; i < _output_buffers.size(); ++i) {
-    auto const metadata = _reader_column_schema.has_value()
-                            ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
-                            : std::nullopt;
+    auto metadata      = _reader_column_schema.has_value()
+                           ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
+                           : std::nullopt;
+    auto const& schema = _metadata->get_schema(_output_column_schemas[i]);
+    // FIXED_LEN_BYTE_ARRAY never read as string
+    if (schema.type == FIXED_LEN_BYTE_ARRAY and schema.converted_type != DECIMAL) {
+      metadata = std::make_optional<reader_column_schema>();
+      metadata->set_convert_binary_to_strings(false);
+    }
     // Only construct `out_metadata` if `_output_metadata` has not been cached.
     if (!_output_metadata) {
       column_name_info& col_name = out_metadata.schema_info[i];

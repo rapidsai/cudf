@@ -241,10 +241,11 @@ public final class Table implements AutoCloseable {
   private static native long readJSON(String[] columnNames,
                                         int[] dTypeIds, int[] dTypeScales,
                                         String filePath, long address, long length,
-                                        boolean dayFirst, boolean lines) throws CudfException;
+                                        boolean dayFirst, boolean lines,
+                                        boolean recoverWithNulls) throws CudfException;
 
   private static native long readAndInferJSON(long address, long length,
-      boolean dayFirst, boolean lines) throws CudfException;
+      boolean dayFirst, boolean lines, boolean recoverWithNulls) throws CudfException;
 
   /**
    * Read in Parquet formatted data.
@@ -336,7 +337,9 @@ public final class Table implements AutoCloseable {
                                                      boolean[] isBinaryValues,
                                                      boolean[] hasParquetFieldIds,
                                                      int[] parquetFieldIds,
-                                                     HostBufferConsumer consumer) throws CudfException;
+                                                     HostBufferConsumer consumer,
+                                                     HostMemoryAllocator hostMemoryAllocator
+                                                     ) throws CudfException;
 
   /**
    * Write out a table to an open handle.
@@ -419,7 +422,9 @@ public final class Table implements AutoCloseable {
                                                  int compression,
                                                  int[] precisions,
                                                  boolean[] isMapValues,
-                                                 HostBufferConsumer consumer) throws CudfException;
+                                                 HostBufferConsumer consumer,
+                                                 HostMemoryAllocator hostMemoryAllocator
+                                                 ) throws CudfException;
 
   /**
    * Write out a table to an open handle.
@@ -447,10 +452,12 @@ public final class Table implements AutoCloseable {
    * Setup everything to write Arrow IPC formatted data to a buffer.
    * @param columnNames names that correspond to the table columns
    * @param consumer consumer of host buffers produced.
+   * @param hostMemoryAllocator allocator for host memory buffers.
    * @return a handle that is used in later calls to writeArrowIPCChunk and writeArrowIPCEnd.
    */
   private static native long writeArrowIPCBufferBegin(String[] columnNames,
-                                                      HostBufferConsumer consumer);
+                                                      HostBufferConsumer consumer,
+                                                      HostMemoryAllocator hostMemoryAllocator);
 
   /**
    * Convert a cudf table to an arrow table handle.
@@ -821,20 +828,27 @@ public final class Table implements AutoCloseable {
    * @param buffer raw UTF8 formatted bytes.
    * @param offset the starting offset into buffer.
    * @param len the number of bytes to parse.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return the data parsed as a table on the GPU.
    */
   public static Table readCSV(Schema schema, CSVOptions opts, byte[] buffer, long offset,
-                              long len) {
+                              long len, HostMemoryAllocator hostMemoryAllocator) {
     if (len <= 0) {
       len = buffer.length - offset;
     }
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostMemoryBuffer newBuf = hostMemoryAllocator.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readCSV(schema, opts, newBuf, 0, len);
     }
+  }
+
+
+  public static Table readCSV(Schema schema, CSVOptions opts, byte[] buffer, long offset,
+                              long len) {
+    return readCSV(schema, opts, buffer, offset, len, DefaultHostMemoryAllocator.get());
   }
 
   /**
@@ -899,7 +913,9 @@ public final class Table implements AutoCloseable {
                                                    String trueValue,
                                                    String falseValue,
                                                    int quoteStyle,
-                                                   HostBufferConsumer buffer) throws CudfException;
+                                                   HostBufferConsumer buffer,
+                                                   HostMemoryAllocator hostMemoryAllocator
+                                                   ) throws CudfException;
 
   private static native void writeCSVChunkToBuffer(long writerHandle, long tableHandle);
 
@@ -908,7 +924,8 @@ public final class Table implements AutoCloseable {
   private static class CSVTableWriter extends TableWriter {
     private HostBufferConsumer consumer;
 
-    private CSVTableWriter(CSVWriterOptions options, HostBufferConsumer consumer) {
+    private CSVTableWriter(CSVWriterOptions options, HostBufferConsumer consumer,
+        HostMemoryAllocator hostMemoryAllocator) {
       super(startWriteCSVToBuffer(options.getColumnNames(),
           options.getIncludeHeader(),
           options.getRowDelimiter(),
@@ -917,7 +934,7 @@ public final class Table implements AutoCloseable {
           options.getTrueValue(),
           options.getFalseValue(),
           options.getQuoteStyle().nativeId,
-          consumer));
+          consumer, hostMemoryAllocator));
       this.consumer = consumer;
     }
 
@@ -942,8 +959,14 @@ public final class Table implements AutoCloseable {
     }
   }
 
-  public static TableWriter getCSVBufferWriter(CSVWriterOptions options, HostBufferConsumer bufferConsumer) {
-    return new CSVTableWriter(options, bufferConsumer);
+  public static TableWriter getCSVBufferWriter(CSVWriterOptions options,
+      HostBufferConsumer bufferConsumer, HostMemoryAllocator hostMemoryAllocator) {
+    return new CSVTableWriter(options, bufferConsumer, hostMemoryAllocator);
+  }
+
+   public static TableWriter getCSVBufferWriter(CSVWriterOptions options,
+      HostBufferConsumer bufferConsumer) {
+    return getCSVBufferWriter(options, bufferConsumer, DefaultHostMemoryAllocator.get());
   }
 
   /**
@@ -1025,7 +1048,7 @@ public final class Table implements AutoCloseable {
             readJSON(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
                     path.getAbsolutePath(),
                     0, 0,
-                    opts.isDayFirst(), opts.isLines()))) {
+                    opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull()))) {
 
       return gatherJSONColumns(schema, twm);
     }
@@ -1038,20 +1061,26 @@ public final class Table implements AutoCloseable {
    * @param buffer raw UTF8 formatted bytes.
    * @param offset the starting offset into buffer.
    * @param len the number of bytes to parse.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return the data parsed as a table on the GPU.
    */
   public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
-                               long len) {
+                               long len, HostMemoryAllocator hostMemoryAllocator) {
     if (len <= 0) {
       len = buffer.length - offset;
     }
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostMemoryBuffer newBuf = hostMemoryAllocator.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readJSON(schema, opts, newBuf, 0, len);
     }
+  }
+
+  public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
+                               long len) {
+    return readJSON(schema, opts, buffer, offset, len, DefaultHostMemoryAllocator.get());
   }
 
   /**
@@ -1071,7 +1100,7 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
     return new TableWithMeta(readAndInferJSON(buffer.getAddress() + offset, len,
-        opts.isDayFirst(), opts.isLines()));
+        opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull()));
   }
 
   /**
@@ -1093,7 +1122,8 @@ public final class Table implements AutoCloseable {
     assert offset >= 0 && offset < buffer.length;
     try (TableWithMeta twm = new TableWithMeta(readJSON(schema.getColumnNames(),
             schema.getTypeIds(), schema.getTypeScales(), null,
-            buffer.getAddress() + offset, len, opts.isDayFirst(), opts.isLines()))) {
+            buffer.getAddress() + offset, len, opts.isDayFirst(), opts.isLines(),
+            opts.isRecoverWithNull()))) {
       return gatherJSONColumns(schema, twm);
     }
   }
@@ -1143,19 +1173,25 @@ public final class Table implements AutoCloseable {
    * @param buffer raw parquet formatted bytes.
    * @param offset the starting offset into buffer.
    * @param len the number of bytes to parse.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return the data parsed as a table on the GPU.
    */
-  public static Table readParquet(ParquetOptions opts, byte[] buffer, long offset, long len) {
+  public static Table readParquet(ParquetOptions opts, byte[] buffer, long offset, long len,
+      HostMemoryAllocator hostMemoryAllocator) {
     if (len <= 0) {
       len = buffer.length - offset;
     }
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostMemoryBuffer newBuf = hostMemoryAllocator.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readParquet(opts, newBuf, 0, len);
     }
+  }
+
+  public static Table readParquet(ParquetOptions opts, byte[] buffer, long offset, long len) {
+    return readParquet(opts, buffer, offset, len, DefaultHostMemoryAllocator.get());
   }
 
   /**
@@ -1223,18 +1259,25 @@ public final class Table implements AutoCloseable {
    * @param buffer raw Avro formatted bytes.
    * @param offset the starting offset into buffer.
    * @param len the number of bytes to parse.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return the data parsed as a table on the GPU.
    */
-  public static Table readAvro(AvroOptions opts, byte[] buffer, long offset, long len) {
+  public static Table readAvro(AvroOptions opts, byte[] buffer, long offset, long len,
+      HostMemoryAllocator hostMemoryAllocator) {
     assert offset >= 0 && offset < buffer.length;
     assert len <= buffer.length - offset;
     len = len > 0 ? len : buffer.length - offset;
 
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostMemoryBuffer newBuf = hostMemoryAllocator.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readAvro(opts, newBuf, 0, len);
     }
   }
+
+  public static Table readAvro(AvroOptions opts, byte[] buffer, long offset, long len) {
+    return readAvro(opts, buffer, offset, len, DefaultHostMemoryAllocator.get());
+  }
+
 
   /**
    * Read Avro formatted data.
@@ -1301,20 +1344,27 @@ public final class Table implements AutoCloseable {
    * @param buffer raw ORC formatted bytes.
    * @param offset the starting offset into buffer.
    * @param len the number of bytes to parse.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return the data parsed as a table on the GPU.
    */
-  public static Table readORC(ORCOptions opts, byte[] buffer, long offset, long len) {
+  public static Table readORC(ORCOptions opts, byte[] buffer, long offset, long len,
+      HostMemoryAllocator hostMemoryAllocator) {
     if (len <= 0) {
       len = buffer.length - offset;
     }
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostMemoryBuffer newBuf = hostMemoryAllocator.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readORC(opts, newBuf, 0, len);
     }
   }
+
+  public static Table readORC(ORCOptions opts, byte[] buffer, long offset, long len) {
+    return readORC(opts, buffer, offset, len, DefaultHostMemoryAllocator.get());
+  }
+
 
   /**
    * Read ORC formatted data.
@@ -1360,7 +1410,8 @@ public final class Table implements AutoCloseable {
       this.consumer = null;
     }
 
-    private ParquetTableWriter(ParquetWriterOptions options, HostBufferConsumer consumer) {
+    private ParquetTableWriter(ParquetWriterOptions options, HostBufferConsumer consumer,
+        HostMemoryAllocator hostMemoryAllocator) {
       super(writeParquetBufferBegin(options.getFlatColumnNames(),
           options.getTopLevelChildren(),
           options.getFlatNumChildren(),
@@ -1375,7 +1426,7 @@ public final class Table implements AutoCloseable {
           options.getFlatIsBinary(),
           options.getFlatHasParquetFieldId(),
           options.getFlatParquetFieldId(),
-          consumer));
+          consumer, hostMemoryAllocator));
       this.consumer = consumer;
     }
 
@@ -1415,11 +1466,18 @@ public final class Table implements AutoCloseable {
    * @param options the parquet writer options.
    * @param consumer a class that will be called when host buffers are ready with parquet
    *                 formatted data in them.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return a table writer to use for writing out multiple tables.
    */
   public static TableWriter writeParquetChunked(ParquetWriterOptions options,
+                                                HostBufferConsumer consumer,
+                                                HostMemoryAllocator hostMemoryAllocator) {
+    return new ParquetTableWriter(options, consumer, hostMemoryAllocator);
+  }
+
+  public static TableWriter writeParquetChunked(ParquetWriterOptions options,
                                                 HostBufferConsumer consumer) {
-    return new ParquetTableWriter(options, consumer);
+    return writeParquetChunked(options, consumer, DefaultHostMemoryAllocator.get());
   }
 
   /**
@@ -1428,10 +1486,12 @@ public final class Table implements AutoCloseable {
    * @param options the Parquet writer options.
    * @param consumer a class that will be called when host buffers are ready with Parquet
    *                 formatted data in them.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @param columnViews ColumnViews to write to Parquet
    */
   public static void writeColumnViewsToParquet(ParquetWriterOptions options,
                                                HostBufferConsumer consumer,
+                                               HostMemoryAllocator hostMemoryAllocator,
                                                ColumnView... columnViews) {
     assert columnViews != null && columnViews.length > 0 : "ColumnViews can't be null or empty";
     long rows = columnViews[0].getRowCount();
@@ -1450,7 +1510,9 @@ public final class Table implements AutoCloseable {
 
     long nativeHandle = createCudfTableView(viewPointers);
     try {
-      try (ParquetTableWriter writer = new ParquetTableWriter(options, consumer)) {
+      try (
+        ParquetTableWriter writer = new ParquetTableWriter(options, consumer, hostMemoryAllocator)
+      ) {
         long total = 0;
         for (ColumnView cv : columnViews) {
           total += cv.getDeviceMemorySize();
@@ -1460,6 +1522,12 @@ public final class Table implements AutoCloseable {
     } finally {
       deleteCudfTable(nativeHandle);
     }
+  }
+
+  public static void writeColumnViewsToParquet(ParquetWriterOptions options,
+                                               HostBufferConsumer consumer,
+                                               ColumnView... columnViews) {
+    writeColumnViewsToParquet(options, consumer, DefaultHostMemoryAllocator.get(), columnViews);
   }
 
   private static class ORCTableWriter extends TableWriter {
@@ -1479,7 +1547,8 @@ public final class Table implements AutoCloseable {
       this.consumer = null;
     }
 
-    private ORCTableWriter(ORCWriterOptions options, HostBufferConsumer consumer) {
+    private ORCTableWriter(ORCWriterOptions options, HostBufferConsumer consumer,
+        HostMemoryAllocator hostMemoryAllocator) {
       super(writeORCBufferBegin(options.getFlatColumnNames(),
           options.getTopLevelChildren(),
           options.getFlatNumChildren(),
@@ -1489,7 +1558,7 @@ public final class Table implements AutoCloseable {
           options.getCompressionType().nativeId,
           options.getFlatPrecision(),
           options.getFlatIsMap(),
-          consumer));
+          consumer, hostMemoryAllocator));
       this.consumer = consumer;
     }
 
@@ -1529,10 +1598,16 @@ public final class Table implements AutoCloseable {
    * @param options the ORC writer options.
    * @param consumer a class that will be called when host buffers are ready with ORC
    *                 formatted data in them.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return a table writer to use for writing out multiple tables.
    */
+  public static TableWriter writeORCChunked(ORCWriterOptions options, HostBufferConsumer consumer,
+      HostMemoryAllocator hostMemoryAllocator) {
+    return new ORCTableWriter(options, consumer, hostMemoryAllocator);
+  }
+
   public static TableWriter writeORCChunked(ORCWriterOptions options, HostBufferConsumer consumer) {
-    return new ORCTableWriter(options, consumer);
+    return writeORCChunked(options, consumer, DefaultHostMemoryAllocator.get());
   }
 
   private static class ArrowIPCTableWriter extends TableWriter {
@@ -1547,8 +1622,9 @@ public final class Table implements AutoCloseable {
       this.maxChunkSize = options.getMaxChunkSize();
     }
 
-    private ArrowIPCTableWriter(ArrowIPCWriterOptions options, HostBufferConsumer consumer) {
-      super(writeArrowIPCBufferBegin(options.getColumnNames(), consumer));
+    private ArrowIPCTableWriter(ArrowIPCWriterOptions options, HostBufferConsumer consumer,
+        HostMemoryAllocator hostMemoryAllocator) {
+      super(writeArrowIPCBufferBegin(options.getColumnNames(), consumer, hostMemoryAllocator));
       this.callback = options.getCallback();
       this.consumer = consumer;
       this.maxChunkSize = options.getMaxChunkSize();
@@ -1596,20 +1672,30 @@ public final class Table implements AutoCloseable {
    * @param options the arrow IPC writer options.
    * @param consumer a class that will be called when host buffers are ready with arrow IPC
    *                 formatted data in them.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return a table writer to use for writing out multiple tables.
    */
   public static TableWriter writeArrowIPCChunked(ArrowIPCWriterOptions options,
+                                                 HostBufferConsumer consumer,
+                                                 HostMemoryAllocator hostMemoryAllocator) {
+    return new ArrowIPCTableWriter(options, consumer, hostMemoryAllocator);
+  }
+
+  public static TableWriter writeArrowIPCChunked(ArrowIPCWriterOptions options,
                                                  HostBufferConsumer consumer) {
-    return new ArrowIPCTableWriter(options, consumer);
+    return writeArrowIPCChunked(options, consumer, DefaultHostMemoryAllocator.get());
   }
 
   private static class ArrowReaderWrapper implements AutoCloseable {
     private HostBufferProvider provider;
     private HostMemoryBuffer buffer;
+    private final HostMemoryAllocator hostMemoryAllocator;
 
-    private ArrowReaderWrapper(HostBufferProvider provider) {
+    private ArrowReaderWrapper(HostBufferProvider provider,
+        HostMemoryAllocator hostMemoryAllocator) {
       this.provider = provider;
-      buffer = HostMemoryBuffer.allocate(10 * 1024 * 1024, false);
+      this.hostMemoryAllocator = hostMemoryAllocator;
+      buffer = this.hostMemoryAllocator.allocate(10 * 1024 * 1024, false);
     }
 
     // Called From JNI
@@ -1656,8 +1742,9 @@ public final class Table implements AutoCloseable {
       this.callback = options.getCallback();
     }
 
-    private ArrowIPCStreamedTableReader(ArrowIPCOptions options, HostBufferProvider provider) {
-      this.provider = new ArrowReaderWrapper(provider);
+    private ArrowIPCStreamedTableReader(ArrowIPCOptions options, HostBufferProvider provider,
+      HostMemoryAllocator hostMemoryAllocator) {
+      this.provider = new ArrowReaderWrapper(provider, hostMemoryAllocator);
       this.handle = readArrowIPCBufferBegin(this.provider);
       this.callback = options.getCallback();
     }
@@ -1720,9 +1807,16 @@ public final class Table implements AutoCloseable {
    * @param provider what will provide the data being read.
    * @return a reader.
    */
+
+  public static StreamedTableReader readArrowIPCChunked(ArrowIPCOptions options,
+                                                        HostBufferProvider provider,
+                                                        HostMemoryAllocator hostMemoryAllocator) {
+    return new ArrowIPCStreamedTableReader(options, provider, hostMemoryAllocator);
+  }
+
   public static StreamedTableReader readArrowIPCChunked(ArrowIPCOptions options,
                                                         HostBufferProvider provider) {
-    return new ArrowIPCStreamedTableReader(options, provider);
+    return new ArrowIPCStreamedTableReader(options, provider, DefaultHostMemoryAllocator.get());
   }
 
   /**

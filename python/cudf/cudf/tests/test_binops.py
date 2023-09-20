@@ -3,6 +3,7 @@
 import decimal
 import operator
 import random
+import warnings
 from itertools import combinations_with_replacement, product
 
 import cupy as cp
@@ -148,6 +149,7 @@ _cudf_scalar_reflected_ops = [
     lambda x: cudf.Scalar(0) // x,
     lambda x: cudf.Scalar(0) / x,
 ]
+
 
 pytest_xfail = pytest.mark.xfail
 pytestmark = pytest.mark.spilling
@@ -1672,7 +1674,12 @@ def test_scalar_null_binops(op, dtype_l, dtype_r):
     rhs = cudf.Scalar(cudf.NA, dtype=dtype_r)
 
     result = op(lhs, rhs)
-    assert result.value is cudf.NA
+    assert result.value is (
+        cudf.NaT
+        if cudf.api.types.is_datetime64_dtype(result.dtype)
+        or cudf.api.types.is_timedelta64_dtype(result.dtype)
+        else cudf.NA
+    )
 
     # make sure dtype is the same as had there been a valid scalar
     valid_lhs = cudf.Scalar(1, dtype=dtype_l)
@@ -3265,3 +3272,51 @@ def test_binop_integer_power_int_scalar():
     expected = base**exponent.value
     got = base**exponent
     utils.assert_eq(expected, got)
+
+
+def test_numpy_int_scalar_binop():
+    assert (np.float32(1.0) - cudf.Scalar(1)) == 0.0
+
+
+@pytest.mark.parametrize("op", _binops)
+def test_binop_index_series(op):
+    gi = cudf.Index([10, 11, 12])
+    gs = cudf.Series([1, 2, 3])
+
+    actual = op(gi, gs)
+    expected = op(gi.to_pandas(), gs.to_pandas())
+
+    utils.assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("name1", utils.SERIES_OR_INDEX_NAMES)
+@pytest.mark.parametrize("name2", utils.SERIES_OR_INDEX_NAMES)
+def test_binop_index_dt_td_series_with_names(name1, name2):
+    gi = cudf.Index([1, 2, 3], dtype="datetime64[ns]", name=name1)
+    gs = cudf.Series([10, 11, 12], dtype="timedelta64[ns]", name=name2)
+    with warnings.catch_warnings():
+        # Numpy raises a deprecation warning:
+        # "elementwise comparison failed; this will raise an error "
+        warnings.simplefilter("ignore", (DeprecationWarning,))
+
+        expected = gi.to_pandas() + gs.to_pandas()
+    actual = gi + gs
+
+    utils.assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("data1", [[1, 2, 3], [10, 11, None]])
+@pytest.mark.parametrize("data2", [[1, 2, 3], [10, 11, None]])
+def test_binop_eq_ne_index_series(data1, data2):
+    gi = cudf.Index(data1, dtype="datetime64[ns]", name=np.nan)
+    gs = cudf.Series(data2, dtype="timedelta64[ns]", name="abc")
+
+    actual = gi == gs
+    expected = gi.to_pandas() == gs.to_pandas()
+
+    utils.assert_eq(expected, actual)
+
+    actual = gi != gs
+    expected = gi.to_pandas() != gs.to_pandas()
+
+    utils.assert_eq(expected, actual)

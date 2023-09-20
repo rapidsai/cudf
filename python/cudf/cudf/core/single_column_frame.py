@@ -49,9 +49,11 @@ class SingleColumnFrame(Frame, NotIterable):
         if level is not None:
             raise NotImplementedError("level parameter is not implemented yet")
 
-        if numeric_only:
+        if numeric_only and not isinstance(
+            self._column, cudf.core.column.numerical_base.NumericalBaseColumn
+        ):
             raise NotImplementedError(
-                f"Series.{op} does not implement numeric_only"
+                f"Series.{op} does not implement numeric_only."
             )
         try:
             return getattr(self._column, op)(**kwargs)
@@ -327,7 +329,9 @@ class SingleColumnFrame(Frame, NotIterable):
         # Get the appropriate name for output operations involving two objects
         # that are Series-like objects. The output shares the lhs's name unless
         # the rhs is a _differently_ named Series-like object.
-        if isinstance(other, SingleColumnFrame) and self.name != other.name:
+        if isinstance(
+            other, SingleColumnFrame
+        ) and not cudf.utils.utils._is_same_name(self.name, other.name):
             result_name = None
         else:
             result_name = self.name

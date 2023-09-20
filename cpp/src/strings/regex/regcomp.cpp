@@ -184,9 +184,9 @@ class regex_parser {
   int32_t _id_cclass_d{-1};  // digits [0-9]
   int32_t _id_cclass_D{-1};  // not digits
 
-  char32_t _chr{};           // last lex'd char
-  int32_t _cclass_id{};      // last lex'd class
-  int16_t _min_count{};      // data for counted operators
+  char32_t _chr{};       // last lex'd char
+  int32_t _cclass_id{};  // last lex'd class
+  int16_t _min_count{};  // data for counted operators
   int16_t _max_count{};
 
   std::vector<Item> _items;
@@ -361,9 +361,9 @@ class regex_parser {
         auto [q, n_chr] = next_char();
         if (n_chr == 0) { return 0; }  // malformed: '[x-'
 
-        if (!q && n_chr == ']') {      // handles: '[x-]'
+        if (!q && n_chr == ']') {  // handles: '[x-]'
           literals.push_back(chr);
-          literals.push_back(chr);     // add '-' as literal
+          literals.push_back(chr);  // add '-' as literal
           break;
         }
         // normal case: '[a-z]'
@@ -749,7 +749,7 @@ class regex_parser {
           // infinite repeats
           if (n > 0) {  // append '+' after last repetition
             out.push_back(regex_parser::Item{item.type == COUNTED ? PLUS : PLUS_LAZY, 0});
-          } else {      // copy it once then append '*'
+          } else {  // copy it once then append '*'
             out.insert(out.end(), begin, end);
             out.push_back(regex_parser::Item{item.type == COUNTED ? STAR : STAR_LAZY, 0});
           }
@@ -1095,7 +1095,7 @@ void reprog::build_start_ids()
     ids.pop();
     reinst const& inst = _insts[id];
     if (inst.type == OR) {
-      if (inst.u2.left_id != id)   // prevents infinite while-loop here
+      if (inst.u2.left_id != id)  // prevents infinite while-loop here
         ids.push(inst.u2.left_id);
       if (inst.u1.right_id != id)  // prevents infinite while-loop here
         ids.push(inst.u1.right_id);

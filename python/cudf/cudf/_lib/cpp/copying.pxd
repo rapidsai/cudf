@@ -19,9 +19,9 @@ from cudf._lib.exception_handler cimport cudf_exception_handler
 ctypedef const scalar constscalar
 
 cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
-    ctypedef enum out_of_bounds_policy:
-        NULLIFY 'cudf::out_of_bounds_policy::NULLIFY'
-        DONT_CHECK 'cudf::out_of_bounds_policy::DONT_CHECK'
+    cpdef enum class out_of_bounds_policy(bool):
+        NULLIFY
+        DONT_CHECK
 
     cdef unique_ptr[table] gather (
         const table_view& source_table,

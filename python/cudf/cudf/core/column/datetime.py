@@ -31,7 +31,7 @@ from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.dtypes import _get_base_dtype
-from cudf.utils.utils import _fillna_natwise
+from cudf.utils.utils import _all_bools_with_nulls, _fillna_natwise
 
 _guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
 
@@ -424,12 +424,8 @@ class DatetimeColumn(column.ColumnBase):
         )
         lhs, rhs = (other, self) if reflect else (self, other)
         out_dtype = None
-        if op in {
-            "__eq__",
-            "NULL_EQUALS",
-        }:
-            out_dtype = cudf.dtype(np.bool_)
-        elif (
+
+        if (
             op
             in {
                 "__ne__",
@@ -455,11 +451,31 @@ class DatetimeColumn(column.ColumnBase):
             # well-defined if this operation was not invoked via reflection.
             elif other_is_timedelta and not reflect:
                 out_dtype = _resolve_mixed_dtypes(lhs, rhs, "datetime64")
+        elif op in {
+            "__eq__",
+            "NULL_EQUALS",
+            "__ne__",
+        }:
+            out_dtype = cudf.dtype(np.bool_)
+            if isinstance(other, ColumnBase) and not isinstance(
+                other, DatetimeColumn
+            ):
+                result = _all_bools_with_nulls(
+                    self, other, bool_fill_value=op == "__ne__"
+                )
+                if cudf.get_option("mode.pandas_compatible"):
+                    result = result.fillna(op == "__ne__")
+                return result
 
         if out_dtype is None:
             return NotImplemented
 
-        return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
+        result = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
+        if cudf.get_option(
+            "mode.pandas_compatible"
+        ) and out_dtype == cudf.dtype(np.bool_):
+            result = result.fillna(op == "__ne__")
+        return result
 
     def fillna(
         self,
@@ -615,6 +631,10 @@ def infer_format(element: str, **kwargs) -> str:
     fmt = _guess_datetime_format(element, **kwargs)
 
     if fmt is not None:
+        if "%z" in fmt or "%Z" in fmt:
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
         return fmt
 
     element_parts = element.split(".")
@@ -635,11 +655,12 @@ def infer_format(element: str, **kwargs) -> str:
         raise ValueError("Unable to infer the timestamp format from the data")
 
     if len(second_parts) > 1:
-        # "Z" indicates Zulu time(widely used in aviation) - Which is
-        # UTC timezone that currently cudf only supports. Having any other
-        # unsupported timezone will let the code fail below
-        # with a ValueError.
-        second_parts.remove("Z")
+        # We may have a non-digit, timezone-like component
+        # like Z, UTC-3, +01:00
+        if any(re.search(r"\D", part) for part in second_parts):
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
         second_part = "".join(second_parts[1:])
 
         if len(second_part) > 1:

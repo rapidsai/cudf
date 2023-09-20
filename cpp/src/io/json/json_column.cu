@@ -16,14 +16,13 @@
 
 #include "nested_json.hpp"
 #include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/type_inference.cuh>
+#include <io/utilities/string_parsing.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
-#include <cudf/io/detail/data_casting.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -169,7 +168,7 @@ reduce_to_column_tree(tree_meta_t& tree,
     });
 
   // 4. unique_copy parent_node_ids, ranges
-  rmm::device_uvector<TreeDepthT> column_levels(0, stream);                 // not required
+  rmm::device_uvector<TreeDepthT> column_levels(0, stream);  // not required
   rmm::device_uvector<NodeIndexT> parent_col_ids(num_columns, stream);
   rmm::device_uvector<SymbolOffsetT> col_range_begin(num_columns, stream);  // Field names
   rmm::device_uvector<SymbolOffsetT> col_range_end(num_columns, stream);
@@ -331,23 +330,27 @@ std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
 {
   CUDF_FUNC_RANGE();
   auto const num_strings = node_range_begin.size();
-  rmm::device_uvector<thrust::pair<char const*, size_type>> string_views(num_strings, stream);
+  rmm::device_uvector<size_type> string_offsets(num_strings, stream);
+  rmm::device_uvector<size_type> string_lengths(num_strings, stream);
   auto d_offset_pairs = thrust::make_zip_iterator(node_range_begin.begin(), node_range_end.begin());
   thrust::transform(rmm::exec_policy(stream),
                     d_offset_pairs,
                     d_offset_pairs + num_strings,
-                    string_views.begin(),
-                    [data = input.data()] __device__(auto const& offsets) {
+                    thrust::make_zip_iterator(string_offsets.begin(), string_lengths.begin()),
+                    [] __device__(auto const& offsets) {
                       // Note: first character for non-field columns
-                      return thrust::make_pair(
-                        data + thrust::get<0>(offsets),
+                      return thrust::make_tuple(
+                        static_cast<size_type>(thrust::get<0>(offsets)),
                         static_cast<size_type>(thrust::get<1>(offsets) - thrust::get<0>(offsets)));
                     });
 
   cudf::io::parse_options_view options_view{};
   options_view.quotechar  = '\0';  // no quotes
   options_view.keepquotes = true;
-  auto d_column_names     = parse_data(string_views.begin(),
+  auto d_offset_length_it =
+    thrust::make_zip_iterator(string_offsets.begin(), string_lengths.begin());
+  auto d_column_names = parse_data(input.data(),
+                                   d_offset_length_it,
                                    num_strings,
                                    data_type{type_id::STRING},
                                    rmm::device_buffer{},
@@ -355,16 +358,15 @@ std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
                                    options_view,
                                    stream,
                                    rmm::mr::get_current_device_resource());
-  auto to_host            = [](auto const& col) {
+  auto to_host        = [stream](auto const& col) {
     if (col.is_empty()) return std::vector<std::string>{};
     auto const scv     = cudf::strings_column_view(col);
     auto const h_chars = cudf::detail::make_std_vector_sync<char>(
-      cudf::device_span<char const>(scv.chars().data<char>(), scv.chars().size()),
-      cudf::get_default_stream());
+      cudf::device_span<char const>(scv.chars().data<char>(), scv.chars().size()), stream);
     auto const h_offsets = cudf::detail::make_std_vector_sync(
       cudf::device_span<cudf::size_type const>(scv.offsets().data<cudf::size_type>() + scv.offset(),
                                                scv.size() + 1),
-      cudf::get_default_stream());
+      stream);
 
     // build std::string vector from chars and offsets
     std::vector<std::string> host_data;
@@ -719,7 +721,8 @@ void make_device_json_column(device_span<SymbolT const> input,
  * @param options The reader options to influence the relevant type inference and type casting
  * options
  */
-cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& options);
+cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& options,
+                                        rmm::cuda_stream_view stream);
 
 std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_column_to_cudf_column(
   device_json_column& json_col,
@@ -763,19 +766,6 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       // TODO how about directly storing pair<char*, size_t> in json_column?
       auto offset_length_it =
         thrust::make_zip_iterator(json_col.string_offsets.begin(), json_col.string_lengths.begin());
-      // Prepare iterator that returns (string_offset, string_length)-pairs needed by inference
-      auto string_ranges_it =
-        thrust::make_transform_iterator(offset_length_it, [] __device__(auto ip) {
-          return thrust::pair<json_column::row_offset_t, std::size_t>{
-            thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
-        });
-
-      // Prepare iterator that returns (string_ptr, string_length)-pairs needed by type conversion
-      auto string_spans_it = thrust::make_transform_iterator(
-        offset_length_it, [data = d_input.data()] __device__(auto ip) {
-          return thrust::pair<char const*, std::size_t>{
-            data + thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
-        });
 
       data_type target_type{};
 
@@ -790,12 +780,13 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       // Infer column type, if we don't have an explicit type for it
       else {
         target_type = cudf::io::detail::infer_data_type(
-          options.json_view(), d_input, string_ranges_it, col_size, stream);
+          options.json_view(), d_input, offset_length_it, col_size, stream);
       }
 
       auto [result_bitmask, null_count] = make_validity(json_col);
       // Convert strings to the inferred data type
-      auto col = parse_data(string_spans_it,
+      auto col = parse_data(d_input.data(),
+                            offset_length_it,
                             col_size,
                             target_type,
                             std::move(result_bitmask),
@@ -958,7 +949,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     options.is_enabled_lines() ? root_column : root_column.child_columns.begin()->second;
 
   // Zero row entries
-  if (data_root.type == json_col_t::ListColumn && data_root.child_columns.size() == 0) {
+  if (data_root.type == json_col_t::ListColumn && data_root.child_columns.empty()) {
     return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{})};
   }
 
@@ -976,7 +967,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
   // Initialize meta data to be populated while recursing through the tree of columns
   std::vector<std::unique_ptr<column>> out_columns;
   std::vector<column_name_info> out_column_names;
-  auto parse_opt = parsing_options(options);
+  auto parse_opt = parsing_options(options, stream);
 
   // Iterate over the struct's child columns and convert to cudf column
   size_type column_index = 0;

@@ -13,9 +13,6 @@ from pandas.core.dtypes.common import infer_dtype_from_object
 import cudf
 from cudf._typing import DtypeObj
 from cudf.api.types import is_bool, is_float, is_integer
-from cudf.core.missing import NA
-
-_NA_REP = "<NA>"
 
 """Map numpy dtype to pyarrow types.
 Note that np.bool_ bitwidth (8) is different from pa.bool_ (1). Special
@@ -429,6 +426,11 @@ def get_min_float_dtype(col):
 
 
 def is_mixed_with_object_dtype(lhs, rhs):
+    if cudf.api.types.is_categorical_dtype(lhs.dtype):
+        return is_mixed_with_object_dtype(lhs.dtype.categories, rhs)
+    elif cudf.api.types.is_categorical_dtype(rhs.dtype):
+        return is_mixed_with_object_dtype(lhs, rhs.dtype.categories)
+
     return (lhs.dtype == "object" and rhs.dtype != "object") or (
         rhs.dtype == "object" and lhs.dtype != "object"
     )
@@ -632,6 +634,16 @@ def find_common_type(dtypes):
     return cudf.dtype(common_dtype)
 
 
+def _dtype_pandas_compatible(dtype):
+    """
+    A utility function, that returns `str` instead of `object`
+    dtype when pandas comptibility mode is enabled.
+    """
+    if cudf.get_option("mode.pandas_compatible") and dtype == cudf.dtype("O"):
+        return "str"
+    return dtype
+
+
 def _can_cast(from_dtype, to_dtype):
     """
     Utility function to determine if we can cast
@@ -639,7 +651,7 @@ def _can_cast(from_dtype, to_dtype):
     `np.can_cast` but with some special handling around
     cudf specific dtypes.
     """
-    if from_dtype in {None, NA}:
+    if cudf.utils.utils.is_na_like(from_dtype):
         return True
     if isinstance(from_dtype, type):
         from_dtype = cudf.dtype(from_dtype)
