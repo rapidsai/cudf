@@ -215,5 +215,5 @@ CUDF_HOST_DEVICE inline bool operator>(dictionary_wrapper<Integer> const& lhs,
 
 using dictionary32 = dictionary_wrapper<int32_t>;  ///< 32-bit integer indexed dictionary wrapper
 
-/** @} */                                          // end of group
+/** @} */  // end of group
 }  // namespace cudf

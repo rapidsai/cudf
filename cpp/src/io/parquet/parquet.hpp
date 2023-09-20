@@ -365,8 +365,8 @@ struct ColumnIndex {
   std::vector<std::vector<uint8_t>> min_values;  // lower bound for values in each page
   std::vector<std::vector<uint8_t>> max_values;  // upper bound for values in each page
   BoundaryOrder boundary_order =
-    BoundaryOrder::UNORDERED;                    // Indicates if min and max values are ordered
-  std::vector<int64_t> null_counts;              // Optional count of null values per page
+    BoundaryOrder::UNORDERED;        // Indicates if min and max values are ordered
+  std::vector<int64_t> null_counts;  // Optional count of null values per page
 };
 
 // bit space we are reserving in column_buffer::user_data
