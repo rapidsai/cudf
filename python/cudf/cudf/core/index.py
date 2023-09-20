@@ -13,6 +13,7 @@ from typing import (
     List,
     MutableMapping,
     Optional,
+    Sequence,
     Tuple,
     Type,
     Union,
@@ -3467,7 +3468,7 @@ class Index(BaseIndex, metaclass=IndexMeta):
                 "tupleize_cols != True is not yet supported"
             )
 
-        return as_index(
+        res = as_index(
             data,
             copy=copy,
             dtype=dtype,
@@ -3475,6 +3476,15 @@ class Index(BaseIndex, metaclass=IndexMeta):
             nan_as_null=nan_as_null,
             **kwargs,
         )
+        if (
+            isinstance(data, Sequence)
+            and not isinstance(data, range)
+            and len(data) == 0
+            and dtype is None
+            and getattr(data, "dtype", None) is None
+        ):
+            return res.astype("str")
+        return res
 
     @classmethod
     @_cudf_nvtx_annotate

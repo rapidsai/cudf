@@ -5607,7 +5607,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 result.name = q
                 return result
 
-        result.index = list(map(float, qs))
+        result.index = cudf.Index(list(map(float, qs)), dtype="float64")
         return result
 
     @_cudf_nvtx_annotate
