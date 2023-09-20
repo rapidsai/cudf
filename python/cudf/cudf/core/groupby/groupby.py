@@ -2336,6 +2336,170 @@ class GroupBy(Serializable, Reducible, Scannable):
         shifted = fill_grp.shift(periods=periods, freq=freq)
         return (filled / shifted) - 1
 
+    def value_counts(
+        self,
+        subset=None,
+        normalize: bool = False,
+        sort: bool = True,
+        ascending: bool = False,
+        dropna: bool = True,
+    ) -> DataFrameOrSeries:
+        """
+        Return a Series or DataFrame containing counts of unique rows.
+
+        Parameters
+        ----------
+        subset : list-like, optional
+            Columns to use when counting unique combinations.
+        normalize : bool, default False
+            Return proportions rather than frequencies.
+        sort : bool, default True
+            Sort by frequencies.
+        ascending : bool, default False
+            Sort in ascending order.
+        dropna : bool, default True
+            Don't include counts of rows that contain NA values.
+
+        Returns
+        -------
+        Series or DataFrame
+            Series if the groupby as_index is True, otherwise DataFrame.
+
+        See Also
+        --------
+        Series.value_counts: Equivalent method on Series.
+        DataFrame.value_counts: Equivalent method on DataFrame.
+        SeriesGroupBy.value_counts: Equivalent method on SeriesGroupBy.
+
+        Notes
+        -----
+        - If the groupby as_index is True then the returned Series will have a
+          MultiIndex with one level per input column.
+        - If the groupby as_index is False then the returned DataFrame will
+          have an additional column with the value_counts. The column is
+          labelled 'count' or 'proportion', depending on the ``normalize``
+          parameter.
+
+        By default, rows that contain any NA values are omitted from
+        the result.
+
+        By default, the result will be in descending order so that the
+        first element of each group is the most frequently-occurring row.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({
+        ...    'gender': ['male', 'male', 'female', 'male', 'female', 'male'],
+        ...    'education': ['low', 'medium', 'high', 'low', 'high', 'low'],
+        ...    'country': ['US', 'FR', 'US', 'FR', 'FR', 'FR']
+        ... })
+
+        >>> df
+                gender  education   country
+        0       male    low         US
+        1       male    medium      FR
+        2       female  high        US
+        3       male    low         FR
+        4       female  high        FR
+        5       male    low         FR
+
+        >>> df.groupby('gender').value_counts()
+        gender  education  country
+        female  high       FR         1
+                           US         1
+        male    low        FR         2
+                           US         1
+                medium     FR         1
+        Name: count, dtype: int64
+
+        >>> df.groupby('gender').value_counts(ascending=True)
+        gender  education  country
+        female  high       FR         1
+                           US         1
+        male    low        US         1
+                medium     FR         1
+                low        FR         2
+        Name: count, dtype: int64
+
+        >>> df.groupby('gender').value_counts(normalize=True)
+        gender  education  country
+        female  high       FR         0.50
+                           US         0.50
+        male    low        FR         0.50
+                           US         0.25
+                medium     FR         0.25
+        Name: proportion, dtype: float64
+
+        >>> df.groupby('gender', as_index=False).value_counts()
+           gender education country  count
+        0  female      high      FR      1
+        1  female      high      US      1
+        2    male       low      FR      2
+        3    male       low      US      1
+        4    male    medium      FR      1
+
+        >>> df.groupby('gender', as_index=False).value_counts(normalize=True)
+           gender education country  proportion
+        0  female      high      FR        0.50
+        1  female      high      US        0.50
+        2    male       low      FR        0.50
+        3    male       low      US        0.25
+        4    male    medium      FR        0.25
+        """
+
+        df = cudf.DataFrame.copy(self.obj)
+        groupings = self.grouping.names
+        name = "proportion" if normalize else "count"
+
+        if subset is None:
+            subset = [i for i in df._column_names if i not in groupings]
+        # Check subset exists in dataframe
+        elif set(subset) - set(df._column_names):
+            raise ValueError(
+                f"Keys {set(subset) - set(df._column_names)} in subset "
+                f"do not exist in the DataFrame."
+            )
+        # Catch case where groupby and subset share an element
+        elif set(subset) & set(groupings):
+            raise ValueError(
+                f"Keys {set(subset) & set(groupings)} in subset "
+                "cannot be in the groupby column keys."
+            )
+
+        df["__placeholder"] = 1
+        result = (
+            df.groupby(groupings + list(subset), dropna=dropna)[
+                "__placeholder"
+            ]
+            .count()
+            .sort_index()
+            .astype(np.int64)
+        )
+
+        if normalize:
+            levels = list(range(len(groupings), result.index.nlevels))
+            result /= result.groupby(
+                result.index.droplevel(levels),
+            ).transform("sum")
+
+        if sort:
+            result = result.sort_values(ascending=ascending).sort_index(
+                level=range(len(groupings)), sort_remaining=False
+            )
+
+        if not self._as_index:
+            if name in df._column_names:
+                raise ValueError(
+                    f"Column label '{name}' is duplicate of result column"
+                )
+            result.name = name
+            result = result.to_frame().reset_index()
+        else:
+            result.name = name
+
+        return result
+
     def _mimic_pandas_order(
         self, result: DataFrameOrSeries
     ) -> DataFrameOrSeries:

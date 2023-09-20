@@ -91,7 +91,7 @@ struct window_exec {
   ScalarT preceding;             // Preceding window scalar.
   ScalarT following;             // Following window scalar.
   cudf::size_type min_periods = 1;
-};                               // struct window_exec;
+};  // struct window_exec;
 
 struct RangeRollingTest : public cudf::test::BaseFixture {};
 
