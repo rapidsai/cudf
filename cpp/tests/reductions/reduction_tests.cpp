@@ -1091,10 +1091,10 @@ TEST_F(ReductionEmptyTest, empty_column)
   // test if null count is equal or greater than size of input
   // expect result.is_valid() is false
   int col_size = 5;
-  std::vector<T> data_col(col_size);
+  std::vector<T> col_data(col_size);
   std::vector<bool> valids(col_size, 0);
 
-  cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(data_col, valids);
+  cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(col_data, valids);
   CUDF_EXPECT_NO_THROW(statement(col_nulls));
 
   auto any_agg   = cudf::make_any_aggregation<cudf::reduce_aggregation>();
