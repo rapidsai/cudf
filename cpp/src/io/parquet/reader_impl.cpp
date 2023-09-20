@@ -167,6 +167,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   chunks.host_to_device_async(_stream);
   chunk_nested_valids.host_to_device_async(_stream);
   chunk_nested_data.host_to_device_async(_stream);
+  if (has_strings) { chunk_nested_str_data.host_to_device_async(_stream); }
 
   // get the number of streams we need from the pool and tell them to wait on the H2D copies
   int const nkernels = std::bitset<32>(kernel_mask).count();
@@ -175,9 +176,8 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   // launch string decoder
   int s_idx = 0;
   if (BitAnd(kernel_mask, gpu::DecodeKernelMask::STRING) != 0) {
-    auto& stream = streams[s_idx++];
-    chunk_nested_str_data.host_to_device_async(stream);
-    gpu::DecodeStringPageData(pages, chunks, num_rows, skip_rows, level_type_size, stream);
+    gpu::DecodeStringPageData(
+      pages, chunks, num_rows, skip_rows, level_type_size, streams[s_idx++]);
   }
 
   // launch delta byte array decoder
