@@ -47,7 +47,7 @@ using replace_result = thrust::pair<bool, cudf::string_view>;
 struct base_token_replacer_fn {
   cudf::column_device_view const d_strings;  ///< strings to tokenize
   cudf::string_view const d_delimiter;       ///< delimiter characters for tokenizing
-  int32_t* d_offsets{};                      ///< for locating output string in d_chars
+  cudf::size_type* d_offsets{};              ///< for locating output string in d_chars
   char* d_chars{};                           ///< output buffer
 
   /**
@@ -114,7 +114,7 @@ using strings_iterator = cudf::column_device_view::const_iterator<cudf::string_v
  * time to fill in the allocated output buffer for each string.
  */
 struct replace_tokens_fn : base_token_replacer_fn {
-  strings_iterator d_targets_begin;               ///< strings to search for
+  strings_iterator d_targets_begin;  ///< strings to search for
   strings_iterator d_targets_end;
   cudf::column_device_view const d_replacements;  ///< replacement strings
 

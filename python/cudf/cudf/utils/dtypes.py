@@ -426,6 +426,11 @@ def get_min_float_dtype(col):
 
 
 def is_mixed_with_object_dtype(lhs, rhs):
+    if cudf.api.types.is_categorical_dtype(lhs.dtype):
+        return is_mixed_with_object_dtype(lhs.dtype.categories, rhs)
+    elif cudf.api.types.is_categorical_dtype(rhs.dtype):
+        return is_mixed_with_object_dtype(lhs, rhs.dtype.categories)
+
     return (lhs.dtype == "object" and rhs.dtype != "object") or (
         rhs.dtype == "object" and lhs.dtype != "object"
     )
@@ -627,6 +632,16 @@ def find_common_type(dtypes):
     if common_dtype == np.dtype("float16"):
         return cudf.dtype("float32")
     return cudf.dtype(common_dtype)
+
+
+def _dtype_pandas_compatible(dtype):
+    """
+    A utility function, that returns `str` instead of `object`
+    dtype when pandas comptibility mode is enabled.
+    """
+    if cudf.get_option("mode.pandas_compatible") and dtype == cudf.dtype("O"):
+        return "str"
+    return dtype
 
 
 def _can_cast(from_dtype, to_dtype):

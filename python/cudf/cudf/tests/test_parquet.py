@@ -2374,11 +2374,11 @@ def test_parquet_writer_list_statistics(tmpdir):
         for i, col in enumerate(pd_slice):
             stats = pq_file.metadata.row_group(rg).column(i).statistics
 
-            actual_min = cudf.Series(pd_slice[col].explode().explode()).min()
+            actual_min = pd_slice[col].explode().explode().dropna().min()
             stats_min = stats.min
             assert normalized_equals(actual_min, stats_min)
 
-            actual_max = cudf.Series(pd_slice[col].explode().explode()).max()
+            actual_max = pd_slice[col].explode().explode().dropna().max()
             stats_max = stats.max
             assert normalized_equals(actual_max, stats_max)
 
@@ -2564,6 +2564,15 @@ def test_parquet_reader_binary_decimal(datadir):
 
     expect = pd.read_parquet(fname)
     got = cudf.read_parquet(fname).to_pandas()
+
+    assert_eq(expect, got)
+
+
+def test_parquet_reader_fixed_bin(datadir):
+    fname = datadir / "fixed_len_byte_array.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname)
 
     assert_eq(expect, got)
 

@@ -19,14 +19,13 @@
 #include <io/fst/logical_stack.cuh>
 #include <io/fst/lookup_tables.cuh>
 #include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/type_inference.cuh>
+#include <io/utilities/string_parsing.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/detail/valid_if.cuh>
-#include <cudf/io/detail/data_casting.cuh>
 #include <cudf/io/detail/tokenize_json.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/table/table.hpp>
@@ -762,18 +761,18 @@ auto get_translation_table(bool include_line_delimiter)
                                                         nl_tokens({}),   // LINE_BREAK
                                                         {ValueBegin}}};  // OTHER
   pda_tlt[static_cast<StateT>(pda_state_t::PD_BOA)] = {
-    {                                                                    /*ROOT*/
-     {ErrorBegin},                                                       // OPENING_BRACE
-     {ErrorBegin},                                                       // OPENING_BRACKET
-     {ErrorBegin},                                                       // CLOSING_BRACE
-     {ErrorBegin},                                                       // CLOSING_BRACKET
-     {ErrorBegin},                                                       // QUOTE
-     {ErrorBegin},                                                       // ESCAPE
-     {ErrorBegin},                                                       // COMMA
-     {ErrorBegin},                                                       // COLON
-     {ErrorBegin},                                                       // WHITE_SPACE
-     nl_tokens({ErrorBegin}),                                            // LINE_BREAK
-     {ErrorBegin},                                                       // OTHER
+    {                          /*ROOT*/
+     {ErrorBegin},             // OPENING_BRACE
+     {ErrorBegin},             // OPENING_BRACKET
+     {ErrorBegin},             // CLOSING_BRACE
+     {ErrorBegin},             // CLOSING_BRACKET
+     {ErrorBegin},             // QUOTE
+     {ErrorBegin},             // ESCAPE
+     {ErrorBegin},             // COMMA
+     {ErrorBegin},             // COLON
+     {ErrorBegin},             // WHITE_SPACE
+     nl_tokens({ErrorBegin}),  // LINE_BREAK
+     {ErrorBegin},             // OTHER
      /*LIST*/
      {StructBegin},  // OPENING_BRACE
      {ListBegin},    // OPENING_BRACKET
@@ -799,18 +798,18 @@ auto get_translation_table(bool include_line_delimiter)
      nl_tokens({}),                        // LINE_BREAK
      {ErrorBegin}}};                       // OTHER
   pda_tlt[static_cast<StateT>(pda_state_t::PD_LON)] = {
-    {                                      /*ROOT*/
-     {ErrorBegin},                         // OPENING_BRACE
-     {ErrorBegin},                         // OPENING_BRACKET
-     {ErrorBegin},                         // CLOSING_BRACE
-     {ErrorBegin},                         // CLOSING_BRACKET
-     {ErrorBegin},                         // QUOTE
-     {ErrorBegin},                         // ESCAPE
-     {ErrorBegin},                         // COMMA
-     {ErrorBegin},                         // COLON
-     {ValueEnd},                           // WHITE_SPACE
-     nl_tokens({ValueEnd}),                // LINE_BREAK
-     {},                                   // OTHER
+    {                        /*ROOT*/
+     {ErrorBegin},           // OPENING_BRACE
+     {ErrorBegin},           // OPENING_BRACKET
+     {ErrorBegin},           // CLOSING_BRACE
+     {ErrorBegin},           // CLOSING_BRACKET
+     {ErrorBegin},           // QUOTE
+     {ErrorBegin},           // ESCAPE
+     {ErrorBegin},           // COMMA
+     {ErrorBegin},           // COLON
+     {ValueEnd},             // WHITE_SPACE
+     nl_tokens({ValueEnd}),  // LINE_BREAK
+     {},                     // OTHER
      /*LIST*/
      {ErrorBegin},           // OPENING_BRACE
      {ErrorBegin},           // OPENING_BRACKET
@@ -824,17 +823,17 @@ auto get_translation_table(bool include_line_delimiter)
      nl_tokens({ValueEnd}),  // LINE_BREAK
      {},                     // OTHER
      /*STRUCT*/
-     {ErrorBegin},                                                      // OPENING_BRACE
-     {ErrorBegin},                                                      // OPENING_BRACKET
-     {ValueEnd, StructMemberEnd, StructEnd},                            // CLOSING_BRACE
-     {ErrorBegin},                                                      // CLOSING_BRACKET
-     {ErrorBegin},                                                      // QUOTE
-     {ErrorBegin},                                                      // ESCAPE
-     {ValueEnd, StructMemberEnd},                                       // COMMA
-     {ErrorBegin},                                                      // COLON
-     {ValueEnd},                                                        // WHITE_SPACE
-     nl_tokens({ValueEnd}),                                             // LINE_BREAK
-     {}}};                                                              // OTHER
+     {ErrorBegin},                            // OPENING_BRACE
+     {ErrorBegin},                            // OPENING_BRACKET
+     {ValueEnd, StructMemberEnd, StructEnd},  // CLOSING_BRACE
+     {ErrorBegin},                            // CLOSING_BRACKET
+     {ErrorBegin},                            // QUOTE
+     {ErrorBegin},                            // ESCAPE
+     {ValueEnd, StructMemberEnd},             // COMMA
+     {ErrorBegin},                            // COLON
+     {ValueEnd},                              // WHITE_SPACE
+     nl_tokens({ValueEnd}),                   // LINE_BREAK
+     {}}};                                    // OTHER
 
   pda_tlt[static_cast<StateT>(pda_state_t::PD_STR)] = {{                /*ROOT*/
                                                         {},             // OPENING_BRACE
@@ -974,17 +973,17 @@ auto get_translation_table(bool include_line_delimiter)
      nl_tokens({ErrorBegin}),  // LINE_BREAK
      {ErrorBegin},             // OTHER
      /*STRUCT*/
-     {ErrorBegin},                                                                // OPENING_BRACE
-     {ErrorBegin},                                                                // OPENING_BRACKET
-     {StructEnd},                                                                 // CLOSING_BRACE
-     {ErrorBegin},                                                                // CLOSING_BRACKET
-     {StructMemberBegin, FieldNameBegin},                                         // QUOTE
-     {ErrorBegin},                                                                // ESCAPE
-     {ErrorBegin},                                                                // COMMA
-     {ErrorBegin},                                                                // COLON
-     {},                                                                          // WHITE_SPACE
-     nl_tokens({}),                                                               // LINE_BREAK
-     {ErrorBegin}}};                                                              // OTHER
+     {ErrorBegin},                         // OPENING_BRACE
+     {ErrorBegin},                         // OPENING_BRACKET
+     {StructEnd},                          // CLOSING_BRACE
+     {ErrorBegin},                         // CLOSING_BRACKET
+     {StructMemberBegin, FieldNameBegin},  // QUOTE
+     {ErrorBegin},                         // ESCAPE
+     {ErrorBegin},                         // COMMA
+     {ErrorBegin},                         // COLON
+     {},                                   // WHITE_SPACE
+     nl_tokens({}),                        // LINE_BREAK
+     {ErrorBegin}}};                       // OTHER
 
   pda_tlt[static_cast<StateT>(pda_state_t::PD_FLN)] = {{                          /*ROOT*/
                                                         {ErrorBegin},             // OPENING_BRACE
@@ -1011,17 +1010,17 @@ auto get_translation_table(bool include_line_delimiter)
                                                         nl_tokens({ErrorBegin}),  // LINE_BREAK
                                                         {ErrorBegin},             // OTHER
                                                         /*STRUCT*/
-                                                        {},                       // OPENING_BRACE
-                                                        {},                       // OPENING_BRACKET
-                                                        {},                       // CLOSING_BRACE
-                                                        {},                       // CLOSING_BRACKET
-                                                        {FieldNameEnd},           // QUOTE
-                                                        {},                       // ESCAPE
-                                                        {},                       // COMMA
-                                                        {},                       // COLON
-                                                        {},                       // WHITE_SPACE
-                                                        nl_tokens({}),            // LINE_BREAK
-                                                        {}}};                     // OTHER
+                                                        {},              // OPENING_BRACE
+                                                        {},              // OPENING_BRACKET
+                                                        {},              // CLOSING_BRACE
+                                                        {},              // CLOSING_BRACKET
+                                                        {FieldNameEnd},  // QUOTE
+                                                        {},              // ESCAPE
+                                                        {},              // COMMA
+                                                        {},              // COLON
+                                                        {},              // WHITE_SPACE
+                                                        nl_tokens({}),   // LINE_BREAK
+                                                        {}}};            // OTHER
 
   pda_tlt[static_cast<StateT>(pda_state_t::PD_FNE)] = {{                          /*ROOT*/
                                                         {ErrorBegin},             // OPENING_BRACE
@@ -1048,17 +1047,17 @@ auto get_translation_table(bool include_line_delimiter)
                                                         nl_tokens({ErrorBegin}),  // LINE_BREAK
                                                         {ErrorBegin},             // OTHER
                                                         /*STRUCT*/
-                                                        {},                       // OPENING_BRACE
-                                                        {},                       // OPENING_BRACKET
-                                                        {},                       // CLOSING_BRACE
-                                                        {},                       // CLOSING_BRACKET
-                                                        {},                       // QUOTE
-                                                        {},                       // ESCAPE
-                                                        {},                       // COMMA
-                                                        {},                       // COLON
-                                                        {},                       // WHITE_SPACE
-                                                        nl_tokens({}),            // LINE_BREAK
-                                                        {}}};                     // OTHER
+                                                        {},             // OPENING_BRACE
+                                                        {},             // OPENING_BRACKET
+                                                        {},             // CLOSING_BRACE
+                                                        {},             // CLOSING_BRACKET
+                                                        {},             // QUOTE
+                                                        {},             // ESCAPE
+                                                        {},             // COMMA
+                                                        {},             // COLON
+                                                        {},             // WHITE_SPACE
+                                                        nl_tokens({}),  // LINE_BREAK
+                                                        {}}};           // OTHER
 
   pda_tlt[static_cast<StateT>(pda_state_t::PD_PFN)] = {{                          /*ROOT*/
                                                         {ErrorBegin},             // OPENING_BRACE
@@ -1097,18 +1096,18 @@ auto get_translation_table(bool include_line_delimiter)
                                                         nl_tokens({}),   // LINE_BREAK
                                                         {ErrorBegin}}};  // OTHER
 
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_ERR)] = {{                 /*ROOT*/
-                                                        {},              // OPENING_BRACE
-                                                        {},              // OPENING_BRACKET
-                                                        {},              // CLOSING_BRACE
-                                                        {},              // CLOSING_BRACKET
-                                                        {},              // QUOTE
-                                                        {},              // ESCAPE
-                                                        {},              // COMMA
-                                                        {},              // COLON
-                                                        {},              // WHITE_SPACE
-                                                        nl_tokens({}),   // LINE_BREAK
-                                                        {},              // OTHER
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_ERR)] = {{                /*ROOT*/
+                                                        {},             // OPENING_BRACE
+                                                        {},             // OPENING_BRACKET
+                                                        {},             // CLOSING_BRACE
+                                                        {},             // CLOSING_BRACKET
+                                                        {},             // QUOTE
+                                                        {},             // ESCAPE
+                                                        {},             // COMMA
+                                                        {},             // COLON
+                                                        {},             // WHITE_SPACE
+                                                        nl_tokens({}),  // LINE_BREAK
+                                                        {},             // OTHER
                                                         /*LIST*/
                                                         {},             // OPENING_BRACE
                                                         {},             // OPENING_BRACKET
@@ -1949,20 +1948,6 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       auto offset_length_it =
         thrust::make_zip_iterator(d_string_offsets.begin(), d_string_lengths.begin());
 
-      // Prepare iterator that returns (string_offset, string_length)-pairs needed by inference
-      auto string_ranges_it =
-        thrust::make_transform_iterator(offset_length_it, [] __device__(auto ip) {
-          return thrust::pair<json_column::row_offset_t, std::size_t>{
-            thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
-        });
-
-      // Prepare iterator that returns (string_ptr, string_length)-pairs needed by type conversion
-      auto string_spans_it = thrust::make_transform_iterator(
-        offset_length_it, [data = d_input.data()] __device__(auto ip) {
-          return thrust::pair<char const*, std::size_t>{
-            data + thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
-        });
-
       data_type target_type{};
 
       if (schema.has_value()) {
@@ -1978,7 +1963,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
         target_type =
           cudf::io::detail::infer_data_type(parsing_options(options, stream).json_view(),
                                             d_input,
-                                            string_ranges_it,
+                                            offset_length_it,
                                             col_size,
                                             stream);
       }
@@ -1986,7 +1971,8 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       auto [result_bitmask, null_count] = make_validity(json_col);
 
       // Convert strings to the inferred data type
-      auto col = parse_data(string_spans_it,
+      auto col = parse_data(d_input.data(),
+                            offset_length_it,
                             col_size,
                             target_type,
                             std::move(result_bitmask),
