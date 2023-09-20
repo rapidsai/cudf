@@ -151,7 +151,7 @@ struct histogram_dispatcher {
     auto const input_it = thrust::make_zip_iterator(
       thrust::make_tuple(thrust::make_counting_iterator(0), reduction_results.begin()));
     auto const output_it = thrust::make_zip_iterator(
-      thrust::make_tuple(output_indices, output_counts.begin<OutputTykpe>()));
+      thrust::make_tuple(output_indices, output_counts.begin<CountType>()));
 
     // Reduction results above are either group sizes of equal rows, or `0`.
     // The final output is non-zero group sizes only.
