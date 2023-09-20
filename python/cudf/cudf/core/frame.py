@@ -437,7 +437,7 @@ class Frame(BinaryOperand, Scannable):
         ncol = self._num_columns
         if ncol == 0:
             return make_empty_matrix(
-                shape=(0, 0), dtype=np.dtype("float64"), order="F"
+                shape=(len(self), ncol), dtype=np.dtype("float64"), order="F"
             )
 
         if dtype is None:
