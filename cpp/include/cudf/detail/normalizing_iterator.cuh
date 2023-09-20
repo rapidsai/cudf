@@ -206,7 +206,7 @@ struct base_normalator {
   /**
    * @brief Constructor assigns width and type member variables for base class.
    */
-  base_normalator(data_type dtype) : width_(size_of(dtype)), dtype_(dtype) {}
+  explicit base_normalator(data_type dtype) : width_(size_of(dtype)), dtype_(dtype) {}
 
   int width_;        /// integer type width = 1,2,4, or 8
   data_type dtype_;  /// for type-dispatcher calls
@@ -307,14 +307,14 @@ struct output_normalator : base_normalator<output_normalator<Integer>, Integer> 
 
   /**
    * @brief Indirection operator returns this iterator instance in order
-   * to capture the `operator=(size_type)` calls.
+   * to capture the `operator=(Integer)` calls.
    */
   __device__ inline output_normalator const& operator*() const { return *this; }
 
   /**
    * @brief Array subscript operator returns an iterator instance at the specified `idx` position.
    *
-   * This allows capturing the subsequent `operator=(size_type)` call in this class.
+   * This allows capturing the subsequent `operator=(Integer)` call in this class.
    */
   __device__ inline output_normalator const operator[](size_type idx) const
   {
