@@ -130,6 +130,7 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
  * @tparam HaystackHasNested Flag indicating whether there are nested columns in haystack
  * @tparam HasAnyNested Flag indicating whether there are nested columns in either haystack or
  * needles
+ * @tparam Hasher Type of device hash function
  * @tparam Func Type of the helper function doing `contains` check
  *
  * @param compare_nulls Control whether nulls should be compared as equal or not
@@ -138,9 +139,10 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
  * @param has_any_nulls Flag indicating whether there are nested nulls is either haystack or needles
  * @param self_equal Self table comparator
  * @param two_table_equal Two table comparator
+ * @param d_hasher Device hash functor
  * @param func The input functor to invoke
  */
-template <bool HaystackHasNested, bool HasAnyNested, typename Func>
+template <bool HaystackHasNested, bool HasAnyNested, typename Hasher, typename Func>
 void dispatch_nan_comparator(
   null_equality compare_nulls,
   nan_equality compare_nans,
@@ -148,8 +150,18 @@ void dispatch_nan_comparator(
   bool has_any_nulls,
   cudf::experimental::row::equality::self_comparator self_equal,
   cudf::experimental::row::equality::two_table_comparator two_table_equal,
+  Hasher const& d_hasher,
   Func&& func)
 {
+  // Distinguish probing scheme CG sizes between nested and flat types for better performance
+  auto const probing_scheme = [&]() {
+    if constexpr (HaystackHasNested) {
+      return cuco::experimental::linear_probing<4, Hasher>{d_hasher};
+    } else {
+      return cuco::experimental::linear_probing<1, Hasher>{d_hasher};
+    }
+  }();
+
   if (compare_nans == nan_equality::ALL_EQUAL) {
     using nan_equal_comparator =
       cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
@@ -157,14 +169,14 @@ void dispatch_nan_comparator(
       nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, nan_equal_comparator{});
     auto const d_two_table_equal = two_table_equal.equal_to<HasAnyNested>(
       nullate::DYNAMIC{has_any_nulls}, compare_nulls, nan_equal_comparator{});
-    func(d_self_equal, d_two_table_equal);
+    func(d_self_equal, d_two_table_equal, probing_scheme);
   } else {
     using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
     auto const d_self_equal      = self_equal.equal_to<HaystackHasNested>(
       nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, nan_unequal_comparator{});
     auto const d_two_table_equal = two_table_equal.equal_to<HasAnyNested>(
       nullate::DYNAMIC{has_any_nulls}, compare_nulls, nan_unequal_comparator{});
-    func(d_self_equal, d_two_table_equal);
+    func(d_self_equal, d_two_table_equal, probing_scheme);
   }
 }
 
@@ -202,7 +214,6 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
   auto const needle_hasher     = cudf::experimental::row::hash::row_hasher(preprocessed_needles);
   auto const d_needle_hasher   = needle_hasher.device_hasher(nullate::DYNAMIC{has_any_nulls});
   auto const d_hasher          = hasher_adapter{d_haystack_hasher, d_needle_hasher};
-  using hasher_type            = decltype(d_hasher);
 
   auto const self_equal = cudf::experimental::row::equality::self_comparator(preprocessed_haystack);
   auto const two_table_equal = cudf::experimental::row::equality::two_table_comparator(
@@ -216,48 +227,49 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
   auto const needles_iter = cudf::detail::make_counting_transform_iterator(
     size_type{0}, [] __device__(auto idx) { return rhs_index_type{idx}; });
 
-  auto const helper_func = [&](auto const& d_self_equal, auto const& d_two_table_equal) {
-    auto const d_equal = comparator_adapter{d_self_equal, d_two_table_equal};
+  auto const helper_func =
+    [&](auto const& d_self_equal, auto const& d_two_table_equal, auto const& probing_scheme) {
+      auto const d_equal = comparator_adapter{d_self_equal, d_two_table_equal};
 
-    auto set = cuco::experimental::static_set{
-      cuco::experimental::extent{compute_hash_table_size(haystack.num_rows())},
-      cuco::empty_key{lhs_index_type{-1}},
-      d_equal,
-      cuco::experimental::linear_probing<1, hasher_type>{d_hasher},
-      detail::hash_table_allocator_type{default_allocator<lhs_index_type>{}, stream},
-      stream.value()};
+      auto set = cuco::experimental::static_set{
+        cuco::experimental::extent{compute_hash_table_size(haystack.num_rows())},
+        cuco::empty_key{lhs_index_type{-1}},
+        d_equal,
+        probing_scheme,
+        detail::hash_table_allocator_type{default_allocator<lhs_index_type>{}, stream},
+        stream.value()};
 
-    if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
-      auto const bitmask_buffer_and_ptr = build_row_bitmask(haystack, stream);
-      auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
+      if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
+        auto const bitmask_buffer_and_ptr = build_row_bitmask(haystack, stream);
+        auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
 
-      // If the haystack table has nulls but they are compared unequal, don't insert them.
-      // Otherwise, it was known to cause performance issue:
-      // - https://github.com/rapidsai/cudf/pull/6943
-      // - https://github.com/rapidsai/cudf/pull/8277
-      set.insert_if_async(haystack_iter,
-                          haystack_iter + haystack.num_rows(),
-                          thrust::counting_iterator<size_type>(0),  // stencil
-                          row_is_valid{row_bitmask_ptr},
-                          stream.value());
-    } else {
-      set.insert_async(haystack_iter, haystack_iter + haystack.num_rows(), stream.value());
-    }
-
-    if (needles_has_nulls && compare_nulls == null_equality::UNEQUAL) {
-      auto const bitmask_buffer_and_ptr = build_row_bitmask(needles, stream);
-      auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
-      set.contains_if_async(needles_iter,
-                            needles_iter + needles.num_rows(),
+        // If the haystack table has nulls but they are compared unequal, don't insert them.
+        // Otherwise, it was known to cause performance issue:
+        // - https://github.com/rapidsai/cudf/pull/6943
+        // - https://github.com/rapidsai/cudf/pull/8277
+        set.insert_if_async(haystack_iter,
+                            haystack_iter + haystack.num_rows(),
                             thrust::counting_iterator<size_type>(0),  // stencil
                             row_is_valid{row_bitmask_ptr},
-                            contained.begin(),
                             stream.value());
-    } else {
-      set.contains_async(
-        needles_iter, needles_iter + needles.num_rows(), contained.begin(), stream.value());
-    }
-  };
+      } else {
+        set.insert_async(haystack_iter, haystack_iter + haystack.num_rows(), stream.value());
+      }
+
+      if (needles_has_nulls && compare_nulls == null_equality::UNEQUAL) {
+        auto const bitmask_buffer_and_ptr = build_row_bitmask(needles, stream);
+        auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
+        set.contains_if_async(needles_iter,
+                              needles_iter + needles.num_rows(),
+                              thrust::counting_iterator<size_type>(0),  // stencil
+                              row_is_valid{row_bitmask_ptr},
+                              contained.begin(),
+                              stream.value());
+      } else {
+        set.contains_async(
+          needles_iter, needles_iter + needles.num_rows(), contained.begin(), stream.value());
+      }
+    };
 
   if (cudf::detail::has_nested_columns(haystack)) {
     dispatch_nan_comparator<true, true>(compare_nulls,
@@ -266,6 +278,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
                                         has_any_nulls,
                                         self_equal,
                                         two_table_equal,
+                                        d_hasher,
                                         helper_func);
   } else {
     if (cudf::detail::has_nested_columns(needles)) {
@@ -275,6 +288,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
                                            has_any_nulls,
                                            self_equal,
                                            two_table_equal,
+                                           d_hasher,
                                            helper_func);
     } else {
       dispatch_nan_comparator<false, false>(compare_nulls,
@@ -283,6 +297,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
                                             has_any_nulls,
                                             self_equal,
                                             two_table_equal,
+                                            d_hasher,
                                             helper_func);
     }
   }
