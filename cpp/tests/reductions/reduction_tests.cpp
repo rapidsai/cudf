@@ -413,18 +413,18 @@ TYPED_TEST_SUITE(ReductionHistogramTest, HistogramTestTypes);
 
 TYPED_TEST(ReductionHistogramTest, Histogram)
 {
-  using col_data    = cudf::test::fixed_width_column_wrapper<TypeParam, int>;
-  using int64_data  = cudf::test::fixed_width_column_wrapper<int64_t>;
+  using data_col    = cudf::test::fixed_width_column_wrapper<TypeParam, int>;
+  using int64_col   = cudf::test::fixed_width_column_wrapper<int64_t>;
   using structs_col = cudf::test::structs_column_wrapper;
 
   auto const agg = cudf::make_histogram_aggregation<reduce_aggregation>();
 
   // Empty input.
   {
-    auto const input    = col_data{};
+    auto const input    = data_col{};
     auto const expected = [] {
-      auto child1 = col_data{};
-      auto child2 = int64_data{};
+      auto child1 = data_col{};
+      auto child2 = int64_col{};
       return structs_col{{child1, child2}};
     }();
     auto const result = histogram_reduction(input, agg);
@@ -432,10 +432,10 @@ TYPED_TEST(ReductionHistogramTest, Histogram)
   }
 
   {
-    auto const input    = col_data{-3, 2, 1, 2, 0, 5, 2, -3, -2, 2, 1};
+    auto const input    = data_col{-3, 2, 1, 2, 0, 5, 2, -3, -2, 2, 1};
     auto const expected = [] {
-      auto child1 = col_data{-3, -2, 0, 1, 2, 5};
-      auto child2 = int64_data{2, 1, 1, 2, 4, 1};
+      auto child1 = data_col{-3, -2, 0, 1, 2, 5};
+      auto child2 = int64_col{2, 1, 1, 2, 4, 1};
       return structs_col{{child1, child2}};
     }();
     auto const result = histogram_reduction(input, agg);
@@ -444,11 +444,11 @@ TYPED_TEST(ReductionHistogramTest, Histogram)
 
   // Test without nulls, sliced input.
   {
-    auto const input_original = col_data{-3, 2, 1, 2, 0, 5, 2, -3, -2, 2, 1};
+    auto const input_original = data_col{-3, 2, 1, 2, 0, 5, 2, -3, -2, 2, 1};
     auto const input          = cudf::slice(input_original, {0, 7})[0];
     auto const expected       = [] {
-      auto child1 = col_data{-3, 0, 1, 2, 5};
-      auto child2 = int64_data{1, 1, 1, 3, 1};
+      auto child1 = data_col{-3, 0, 1, 2, 5};
+      auto child2 = int64_col{1, 1, 1, 3, 1};
       return structs_col{{child1, child2}};
     }();
     auto const result = histogram_reduction(input, agg);
@@ -459,11 +459,11 @@ TYPED_TEST(ReductionHistogramTest, Histogram)
   using namespace cudf::test::iterators;
   auto constexpr null{0};
   {
-    auto const input    = col_data{{null, -3, 2, 1, 2, 0, null, 5, 2, null, -3, -2, null, 2, 1},
+    auto const input    = data_col{{null, -3, 2, 1, 2, 0, null, 5, 2, null, -3, -2, null, 2, 1},
                                 nulls_at({0, 6, 9, 12})};
     auto const expected = [] {
-      auto child1 = col_data{{null, -3, -2, 0, 1, 2, 5}, null_at(0)};
-      auto child2 = int64_data{4, 2, 1, 1, 2, 4, 1};
+      auto child1 = data_col{{null, -3, -2, 0, 1, 2, 5}, null_at(0)};
+      auto child2 = int64_col{4, 2, 1, 1, 2, 4, 1};
       return structs_col{{child1, child2}};
     }();
     auto const result = histogram_reduction(input, agg);
@@ -472,12 +472,12 @@ TYPED_TEST(ReductionHistogramTest, Histogram)
 
   // Test with nulls, sliced input.
   {
-    auto const input_original = col_data{
+    auto const input_original = data_col{
       {null, -3, 2, 1, 2, 0, null, 5, 2, null, -3, -2, null, 2, 1}, nulls_at({0, 6, 9, 12})};
     auto const input    = cudf::slice(input_original, {0, 9})[0];
     auto const expected = [] {
-      auto child1 = col_data{{null, -3, 0, 1, 2, 5}, null_at(0)};
-      auto child2 = int64_data{2, 1, 1, 1, 3, 1};
+      auto child1 = data_col{{null, -3, 0, 1, 2, 5}, null_at(0)};
+      auto child2 = int64_col{2, 1, 1, 1, 3, 1};
       return structs_col{{child1, child2}};
     }();
     auto const result = histogram_reduction(input, agg);
@@ -487,8 +487,8 @@ TYPED_TEST(ReductionHistogramTest, Histogram)
 
 TYPED_TEST(ReductionHistogramTest, MergeHistogram)
 {
-  using col_data    = cudf::test::fixed_width_column_wrapper<TypeParam>;
-  using int64_data  = cudf::test::fixed_width_column_wrapper<int64_t>;
+  using data_col    = cudf::test::fixed_width_column_wrapper<TypeParam>;
+  using int64_col   = cudf::test::fixed_width_column_wrapper<int64_t>;
   using structs_col = cudf::test::structs_column_wrapper;
 
   auto const agg = cudf::make_merge_histogram_aggregation<reduce_aggregation>();
@@ -496,13 +496,13 @@ TYPED_TEST(ReductionHistogramTest, MergeHistogram)
   // Empty input.
   {
     auto const input = [] {
-      auto child1 = col_data{};
-      auto child2 = int64_data{};
+      auto child1 = data_col{};
+      auto child2 = int64_col{};
       return structs_col{{child1, child2}};
     }();
     auto const expected = [] {
-      auto child1 = col_data{};
-      auto child2 = int64_data{};
+      auto child1 = data_col{};
+      auto child2 = int64_col{};
       return structs_col{{child1, child2}};
     }();
     auto const result = histogram_reduction(input, agg);
@@ -512,14 +512,14 @@ TYPED_TEST(ReductionHistogramTest, MergeHistogram)
   // Test without nulls.
   {
     auto const input = [] {
-      auto child1 = col_data{-3, 2, 1, 2, 0, 5, 2, -3, -2, 2, 1};
-      auto child2 = int64_data{2, 1, 1, 2, 4, 1, 2, 3, 5, 3, 4};
+      auto child1 = data_col{-3, 2, 1, 2, 0, 5, 2, -3, -2, 2, 1};
+      auto child2 = int64_col{2, 1, 1, 2, 4, 1, 2, 3, 5, 3, 4};
       return structs_col{{child1, child2}};
     }();
 
     auto const expected = [] {
-      auto child1 = col_data{-3, -2, 0, 1, 2, 5};
-      auto child2 = int64_data{5, 5, 4, 5, 8, 1};
+      auto child1 = data_col{-3, -2, 0, 1, 2, 5};
+      auto child2 = int64_col{5, 5, 4, 5, 8, 1};
       return structs_col{{child1, child2}};
     }();
     auto const result = histogram_reduction(input, agg);
@@ -529,15 +529,15 @@ TYPED_TEST(ReductionHistogramTest, MergeHistogram)
   // Test without nulls, sliced input.
   {
     auto const input_original = [] {
-      auto child1 = col_data{-3, 2, 1, 2, 0, 5, 2, -3, -2, 2, 1};
-      auto child2 = int64_data{2, 1, 1, 2, 4, 1, 2, 3, 5, 3, 4};
+      auto child1 = data_col{-3, 2, 1, 2, 0, 5, 2, -3, -2, 2, 1};
+      auto child2 = int64_col{2, 1, 1, 2, 4, 1, 2, 3, 5, 3, 4};
       return structs_col{{child1, child2}};
     }();
     auto const input = cudf::slice(input_original, {0, 7})[0];
 
     auto const expected = [] {
-      auto child1 = col_data{-3, 0, 1, 2, 5};
-      auto child2 = int64_data{2, 4, 1, 5, 1};
+      auto child1 = data_col{-3, 0, 1, 2, 5};
+      auto child2 = int64_col{2, 4, 1, 5, 1};
       return structs_col{{child1, child2}};
     }();
     auto const result = histogram_reduction(input, agg);
@@ -549,15 +549,15 @@ TYPED_TEST(ReductionHistogramTest, MergeHistogram)
   auto constexpr null{0};
   {
     auto const input = [] {
-      auto child1 = col_data{{-3, 2, null, 1, 2, null, 0, 5, null, 2, -3, null, -2, 2, 1, null},
+      auto child1 = data_col{{-3, 2, null, 1, 2, null, 0, 5, null, 2, -3, null, -2, 2, 1, null},
                              nulls_at({2, 5, 8, 11, 15})};
-      auto child2 = int64_data{2, 1, 12, 1, 2, 11, 4, 1, 10, 2, 3, 15, 5, 3, 4, 19};
+      auto child2 = int64_col{2, 1, 12, 1, 2, 11, 4, 1, 10, 2, 3, 15, 5, 3, 4, 19};
       return structs_col{{child1, child2}};
     }();
 
     auto const expected = [] {
-      auto child1 = col_data{{null, -3, -2, 0, 1, 2, 5}, null_at(0)};
-      auto child2 = int64_data{67, 5, 5, 4, 5, 8, 1};
+      auto child1 = data_col{{null, -3, -2, 0, 1, 2, 5}, null_at(0)};
+      auto child2 = int64_col{67, 5, 5, 4, 5, 8, 1};
       return structs_col{{child1, child2}};
     }();
     auto const result = histogram_reduction(input, agg);
@@ -567,16 +567,16 @@ TYPED_TEST(ReductionHistogramTest, MergeHistogram)
   // Test with nulls, sliced input.
   {
     auto const input_original = [] {
-      auto child1 = col_data{{-3, 2, null, 1, 2, null, 0, 5, null, 2, -3, null, -2, 2, 1, null},
+      auto child1 = data_col{{-3, 2, null, 1, 2, null, 0, 5, null, 2, -3, null, -2, 2, 1, null},
                              nulls_at({2, 5, 8, 11, 15})};
-      auto child2 = int64_data{2, 1, 12, 1, 2, 11, 4, 1, 10, 2, 3, 15, 5, 3, 4, 19};
+      auto child2 = int64_col{2, 1, 12, 1, 2, 11, 4, 1, 10, 2, 3, 15, 5, 3, 4, 19};
       return structs_col{{child1, child2}};
     }();
     auto const input = cudf::slice(input_original, {0, 9})[0];
 
     auto const expected = [] {
-      auto child1 = col_data{{null, -3, 0, 1, 2, 5}, null_at(0)};
-      auto child2 = int64_data{33, 2, 4, 1, 3, 1};
+      auto child1 = data_col{{null, -3, 0, 1, 2, 5}, null_at(0)};
+      auto child2 = int64_col{33, 2, 4, 1, 3, 1};
       return structs_col{{child1, child2}};
     }();
     auto const result = histogram_reduction(input, agg);
@@ -1089,10 +1089,10 @@ TEST_F(ReductionEmptyTest, empty_column)
   // test if null count is equal or greater than size of input
   // expect result.is_valid() is false
   int col_size = 5;
-  std::vector<T> col_data(col_size);
+  std::vector<T> data_col(col_size);
   std::vector<bool> valids(col_size, 0);
 
-  cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(col_data, valids);
+  cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(data_col, valids);
   CUDF_EXPECT_NO_THROW(statement(col_nulls));
 
   auto any_agg   = cudf::make_any_aggregation<cudf::reduce_aggregation>();
