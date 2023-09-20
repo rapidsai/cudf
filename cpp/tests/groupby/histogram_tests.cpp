@@ -229,9 +229,17 @@ TYPED_TEST(GroupbyMergeHistogramTest, EmptyInput)
   using col_data = cudf::test::fixed_width_column_wrapper<TypeParam, int>;
 
   auto const keys   = int32s_col{};
-  auto const values = col_data{};
+  auto const values = [] {
+    auto structs = [] {
+      auto values = col_data{};
+      auto counts = int64s_col{};
+      return structs_col{{values, counts}};
+    }();
+    return cudf::make_lists_column(
+      0, int32s_col{}.release(), structs.release(), 0, rmm::device_buffer{});
+  }();
   auto const [res_keys, res_histogram] =
-    groupby_histogram(keys, values, cudf::aggregation::MERGE_HISTOGRAM);
+    groupby_histogram(keys, *values, cudf::aggregation::MERGE_HISTOGRAM);
 
   // The structure of the output is already verified in the function `groupby_histogram`.
   ASSERT_EQ(res_histogram->size(), 0);
