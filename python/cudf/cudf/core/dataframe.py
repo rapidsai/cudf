@@ -894,7 +894,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         self, data, index=None, columns=None, nan_as_null=None
     ):
         if columns is not None:
-            if isinstance(data, Series) and len(data) != len(columns):
+            if isinstance(data, cudf.Series) and len(data) != len(columns):
                 raise ValueError(
                     f"Length of values ({len(data)}) does not "
                     f"match length of columns ({len(columns)})"
