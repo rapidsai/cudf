@@ -33,18 +33,7 @@ size_t CompactProtocolWriter::write(FileMetaData const& f)
   c.field_struct_list(4, f.row_groups);
   if (not f.key_value_metadata.empty()) { c.field_struct_list(5, f.key_value_metadata); }
   if (not f.created_by.empty()) { c.field_string(6, f.created_by); }
-  if (f.column_order_listsize != 0) {
-    // Dummy list of struct containing an empty field1 struct
-    c.put_field_header(7, c.current_field(), ST_FLD_LIST);
-    c.put_byte((uint8_t)((std::min(f.column_order_listsize, 0xfu) << 4) | ST_FLD_STRUCT));
-    if (f.column_order_listsize >= 0xf) c.put_uint(f.column_order_listsize);
-    for (uint32_t i = 0; i < f.column_order_listsize; i++) {
-      c.put_field_header(1, 0, ST_FLD_STRUCT);
-      c.put_byte(0);  // ColumnOrder.field1 struct end
-      c.put_byte(0);  // ColumnOrder struct end
-    }
-    c.set_current_field(7);
-  }
+  if (f.column_orders.has_value()) { c.field_struct_list(7, f.column_orders.value()); }
   return c.value();
 }
 
@@ -233,6 +222,16 @@ size_t CompactProtocolWriter::write(OffsetIndex const& s)
   return c.value();
 }
 
+size_t CompactProtocolWriter::write(ColumnOrder const& co)
+{
+  CompactProtocolFieldWriter c(*this);
+  switch (co) {
+    case ColumnOrder::TYPE_ORDER: c.field_empty_struct(1); break;
+    default: break;
+  }
+  return c.value();
+}
+
 void CompactProtocolFieldWriter::put_byte(uint8_t v) { writer.m_buf.push_back(v); }
 
 void CompactProtocolFieldWriter::put_byte(uint8_t const* raw, uint32_t len)
@@ -317,6 +316,13 @@ inline void CompactProtocolFieldWriter::field_struct(int field, T const& val)
   } else {
     put_byte(0);  // otherwise, add a stop field
   }
+  current_field_value = field;
+}
+
+inline void CompactProtocolFieldWriter::field_empty_struct(int field)
+{
+  put_field_header(field, current_field_value, ST_FLD_STRUCT);
+  put_byte(0);  // add a stop field
   current_field_value = field;
 }
 
