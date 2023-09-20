@@ -380,16 +380,6 @@ TYPED_TEST(ReductionTest, SumOfSquare)
             expected_null_value);
 }
 
-template <typename T>
-struct ReductionHistogramTest : public cudf::test::BaseFixture {};
-
-// Avoid unsigned types, as the tests below have negative values in their input.
-using HistogramTestTypes = cudf::test::Concat<cudf::test::Types<int8_t, int16_t, int32_t, int64_t>,
-                                              cudf::test::FloatingPointTypes,
-                                              cudf::test::FixedPointTypes,
-                                              cudf::test::ChronoTypes>;
-TYPED_TEST_SUITE(ReductionHistogramTest, HistogramTestTypes);
-
 auto histogram_reduction(cudf::column_view const& input,
                          std::unique_ptr<cudf::reduce_aggregation> const& agg)
 {
@@ -410,6 +400,16 @@ auto histogram_reduction(cudf::column_view const& input,
   auto const sort_order = cudf::sorted_order(cudf::table_view{{result_col.child(0)}}, {}, {});
   return std::move(cudf::gather(cudf::table_view{{result_col}}, *sort_order)->release().front());
 }
+
+template <typename T>
+struct ReductionHistogramTest : public cudf::test::BaseFixture {};
+
+// Avoid unsigned types, as the tests below have negative values in their input.
+using HistogramTestTypes = cudf::test::Concat<cudf::test::Types<int8_t, int16_t, int32_t, int64_t>,
+                                              cudf::test::FloatingPointTypes,
+                                              cudf::test::FixedPointTypes,
+                                              cudf::test::ChronoTypes>;
+TYPED_TEST_SUITE(ReductionHistogramTest, HistogramTestTypes);
 
 TYPED_TEST(ReductionHistogramTest, Histogram)
 {
