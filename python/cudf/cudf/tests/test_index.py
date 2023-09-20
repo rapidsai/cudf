@@ -30,7 +30,8 @@ from cudf.testing._utils import (
     SIGNED_INTEGER_TYPES,
     SIGNED_TYPES,
     UNSIGNED_TYPES,
-    _create_pandas_series,
+    _create_cudf_series_float64_default,
+    _create_pandas_series_float64_default,
     assert_column_memory_eq,
     assert_column_memory_ne,
     assert_eq,
@@ -1006,8 +1007,8 @@ def test_index_equal_misc(data, other):
     actual = gd_data.equals(np.array(gd_other))
     assert_eq(expected, actual)
 
-    expected = pd_data.equals(_create_pandas_series(pd_other))
-    actual = gd_data.equals(cudf.Series(gd_other))
+    expected = pd_data.equals(_create_pandas_series_float64_default(pd_other))
+    actual = gd_data.equals(_create_cudf_series_float64_default(gd_other))
     assert_eq(expected, actual)
 
     expected = pd_data.astype("category").equals(pd_other)
@@ -2275,7 +2276,7 @@ def test_index_nan_as_null(data, nan_idx, NA_idx, nan_as_null):
     ],
 )
 def test_isin_index(data, values):
-    psr = _create_pandas_series(data)
+    psr = _create_pandas_series_float64_default(data)
     gsr = cudf.Series.from_pandas(psr)
 
     got = gsr.index.isin(values)
@@ -2776,6 +2777,13 @@ def test_index_empty_from_pandas(request, dtype):
     )
     pidx = pd.Index([], dtype=dtype)
     gidx = cudf.from_pandas(pidx)
+
+    assert_eq(pidx, gidx)
+
+
+def test_empty_index_init():
+    pidx = pd.Index([])
+    gidx = cudf.Index([])
 
     assert_eq(pidx, gidx)
 
