@@ -221,6 +221,18 @@ def test_init_unaligned_with_index():
     assert_eq(pdf, gdf, check_dtype=False)
 
 
+def test_init_series_list_columns_unsort():
+    pseries = [
+        pd.Series(i, index=["b", "a", "c"], name=str(i)) for i in range(3)
+    ]
+    gseries = [
+        cudf.Series(i, index=["b", "a", "c"], name=str(i)) for i in range(3)
+    ]
+    pdf = pd.DataFrame(pseries)
+    gdf = cudf.DataFrame(gseries)
+    assert_eq(pdf, gdf)
+
+
 def test_series_basic():
     # Make series from buffer
     a1 = np.arange(10, dtype=np.float64)

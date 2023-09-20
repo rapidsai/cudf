@@ -7885,9 +7885,7 @@ def _get_union_of_indices(indexes):
         return indexes[0]
     else:
         merged_index = cudf.core.index.GenericIndex._concat(indexes)
-        merged_index = merged_index.drop_duplicates()
-        inds = merged_index._values.argsort()
-        return merged_index.take(inds)
+        return merged_index.drop_duplicates()
 
 
 def _get_union_of_series_names(series_list):
