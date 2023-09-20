@@ -894,7 +894,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         self, data, index=None, columns=None, nan_as_null=None
     ):
         if columns is not None:
-            if len(data) != len(columns):
+            if isinstance(data, Series) and len(data) != len(columns):
                 raise ValueError(
                     f"Length of values ({len(data)}) does not "
                     f"match length of columns ({len(columns)})"
@@ -5612,7 +5612,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 result.name = q
                 return result
 
-        result.index = cudf.Index(list(map(float, qs)), dtype="float64")
+        result.index = list(map(float, qs))
         return result
 
     @_cudf_nvtx_annotate
@@ -7890,7 +7890,9 @@ def _get_union_of_indices(indexes):
         return indexes[0]
     else:
         merged_index = cudf.core.index.GenericIndex._concat(indexes)
-        return merged_index.drop_duplicates()
+        merged_index = merged_index.drop_duplicates()
+        inds = merged_index._values.argsort()
+        return merged_index.take(inds)
 
 
 def _get_union_of_series_names(series_list):
