@@ -234,8 +234,8 @@ std::unique_ptr<column> group_count_all(cudf::device_span<size_type const> group
  *
  * @param values Grouped values to compute histogram
  * @param group_labels ID of group that the corresponding value belongs to
- * @param num_groups Number of groups ( unique values in @p group_labels )
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param num_groups Number of groups
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> group_histogram(column_view const& values,
@@ -472,22 +472,22 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
 /**
  * @brief Internal API to merge multiple output of HISTOGRAM aggregation.
  *
- * The input values column should be given as a structs column in the form of
- * `STRUCT<value, count>`.
+ * The input values column should be given as a lists column in the form of
+ * `LIST<STRUCT<value, count>>`.
  * After merging, the order of distinct elements in each output list is not specified.
  *
  * @code{.pseudo}
- * values       = [<1, 2>, <2, 1>, <2, 2>, <3, 2>, <2, 1>, <1, 1>, <2, 1>]
- * group_labels = [0,      0,      0,      1,      1,      1,      1]
- * num_groups = 2
+ * values        = [ [<1, 2>, <2, 1>], [<2, 2>], [<3, 2>, <2, 1>], [<1, 1>, <2, 1>] ]
+ * group_offsets = [ 0,                          2,                                 4]
+ * num_groups    = 2
  *
- * output = [[<1, 2>, <2, 3>], [<1, 1>, <2, 2>, <3, 3>]]]
+ * output = [[<1, 2>, <2, 3>], [<1, 1>, <2, 2>, <3, 2>]]]
  * @endcode
  *
  * @param values Grouped values to get valid count of
- * @param group_offsets Offsets of groups' starting points within @p values.
- * @param num_groups Number of groups ( unique values in @p group_labels )
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param group_offsets Offsets of groups' starting points within @p values
+ * @param num_groups Number of groups
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> group_merge_histogram(column_view const& values,
