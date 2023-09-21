@@ -154,16 +154,3 @@ NVBENCH_BENCH_TYPES(BM_orc_read_varying_options,
   .set_type_axes_names(
     {"column_selection", "row_selection", "uses_index", "uses_numpy_dtype", "timestamp_type"})
   .set_min_samples(4);
-
-NVBENCH_BENCH_TYPES(
-  BM_orc_read_varying_options,
-  NVBENCH_TYPE_AXES(
-    nvbench::enum_type_list<column_selection::ALL>,
-    nvbench::enum_type_list<row_selection::ALL>,
-    nvbench::enum_type_list<uses_index::YES, uses_index::NO>,
-    nvbench::enum_type_list<uses_numpy_dtype::YES, uses_numpy_dtype::NO>,
-    nvbench::enum_type_list<cudf::type_id::EMPTY, cudf::type_id::TIMESTAMP_NANOSECONDS>))
-  .set_name("orc_read_misc_options")
-  .set_type_axes_names(
-    {"column_selection", "row_selection", "uses_index", "uses_numpy_dtype", "timestamp_type"})
-  .set_min_samples(4);
