@@ -128,7 +128,7 @@ jobs:
       script: ci/test_wheel_dask_cudf.sh
   devcontainer:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/build-in-devcontainer.yaml@fea/devcontainers
+    uses: rapidsai/shared-action-workflows/.github/workflows/build-in-devcontainer.yaml@branch-23.10
     with:
       build_command: |
         sccache -z;
