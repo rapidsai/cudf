@@ -2601,7 +2601,6 @@ class IndexedFrame(Frame):
         -------
         Series or DataFrame
         """
-        breakpoint()
         if dtypes is None:
             dtypes = {}
 
