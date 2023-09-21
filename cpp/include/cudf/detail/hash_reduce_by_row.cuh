@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <stream_compaction/stream_compaction_common.cuh>
-
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/types.hpp>
 
@@ -27,7 +25,12 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/uninitialized_fill.h>
 
+#include <cuco/static_map.cuh>
+
 namespace cudf::detail {
+
+using hash_map_type =
+  cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
 
 /**
  * @brief The base struct for customized reduction functor to perform reduce-by-key with keys are
@@ -124,7 +127,7 @@ rmm::device_uvector<OutputType> hash_reduce_by_row(
 {
   auto const map_dview  = map.get_device_view();
   auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
-  auto const key_hasher = experimental::compaction_hash(row_hasher.device_hasher(has_nulls));
+  auto const key_hasher = row_hasher.device_hasher(has_nulls);
   auto const row_comp   = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
   auto reduction_results = rmm::device_uvector<OutputType>(num_rows, stream, mr);

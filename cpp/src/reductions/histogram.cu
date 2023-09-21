@@ -14,18 +14,19 @@
  * limitations under the License.
  */
 
-// #include <cudf_test/column_utilities.hpp>
-
-#include <reductions/hash_reduce_by_row.cuh>
-#include <stream_compaction/stream_compaction_common.cuh>
+#include <stream_compaction/stream_compaction_common.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/hash_reduce_by_row.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <thrust/iterator/discard_iterator.h>
+#include <thrust/copy.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/tuple.h>
 
 #include <cuda/atomic>
 
@@ -36,21 +37,21 @@ namespace cudf::reduction::detail {
 namespace {
 
 /**
- * @brief The functor to compute the occurences of each unique rows in the input table.
+ * @brief The functor to accumulate the frequency of each distinct rows in the input table.
  */
-template <typename MapView, typename KeyHasher, typename KeyEqual, typename OutputType>
-struct reduce_fn : cudf::detail::reduce_by_row_fn_base<MapView, KeyHasher, KeyEqual, OutputType> {
-  OutputType const* d_partial_output;
+template <typename MapView, typename KeyHasher, typename KeyEqual, typename CountType>
+struct reduce_fn : cudf::detail::reduce_by_row_fn_base<MapView, KeyHasher, KeyEqual, CountType> {
+  CountType const* d_partial_output;
 
   reduce_fn(MapView const& d_map,
             KeyHasher const& d_hasher,
             KeyEqual const& d_equal,
-            OutputType* const d_output,
-            OutputType const* const d_partial_output)
-    : cudf::detail::reduce_by_row_fn_base<MapView, KeyHasher, KeyEqual, OutputType>{d_map,
-                                                                                    d_hasher,
-                                                                                    d_equal,
-                                                                                    d_output},
+            CountType* const d_output,
+            CountType const* const d_partial_output)
+    : cudf::detail::reduce_by_row_fn_base<MapView, KeyHasher, KeyEqual, CountType>{d_map,
+                                                                                   d_hasher,
+                                                                                   d_equal,
+                                                                                   d_output},
       d_partial_output{d_partial_output}
   {
   }
@@ -58,23 +59,21 @@ struct reduce_fn : cudf::detail::reduce_by_row_fn_base<MapView, KeyHasher, KeyEq
   // Count the number of rows in each group of rows that are compared equal.
   __device__ void operator()(size_type const idx) const
   {
-    cuda::atomic_ref<OutputType, cuda::thread_scope_device> count(*this->get_output_ptr(idx));
-    if (d_partial_output) {
-      count.fetch_add(d_partial_output[idx], cuda::std::memory_order_relaxed);
-    } else {
-      count.fetch_add(OutputType{1}, cuda::std::memory_order_relaxed);
-    }
+    auto const increment = d_partial_output ? d_partial_output[idx] : CountType{1};
+    auto const count =
+      cuda::atomic_ref<CountType, cuda::thread_scope_device>(*this->get_output_ptr(idx));
+    count.fetch_add(increment, cuda::std::memory_order_relaxed);
   }
 };
 
 /**
  * @brief The builder to construct an instance of `reduce_fn` functor.
  */
-template <typename OutputType>
+template <typename CountType>
 struct reduce_func_builder {
-  OutputType const* const d_partial_output;
+  CountType const* const d_partial_output;
 
-  reduce_func_builder(OutputType const* const d_partial_output) : d_partial_output{d_partial_output}
+  reduce_func_builder(CountType const* const d_partial_output) : d_partial_output{d_partial_output}
   {
   }
 
@@ -82,37 +81,47 @@ struct reduce_func_builder {
   auto build(MapView const& d_map,
              KeyHasher const& d_hasher,
              KeyEqual const& d_equal,
-             OutputType* const d_output)
+             CountType* const d_output)
   {
-    return reduce_fn<MapView, KeyHasher, KeyEqual, OutputType>{
+    return reduce_fn<MapView, KeyHasher, KeyEqual, CountType>{
       d_map, d_hasher, d_equal, d_output, d_partial_output};
   }
 };
 
+/**
+ * @brief Specialized functor to check for non-zero of the second component of the input.
+ */
 struct is_none_zero {
   template <typename Pair>
-  __device__ bool operator()(Pair const inp_pair) const
+  __device__ bool operator()(Pair const input) const
   {
-    return thrust::get<1>(inp_pair) != 0;
+    return thrust::get<1>(input) != 0;
   }
 };
 
+/**
+ * @brief Dispatcher functor to compute histogram with frequencies (aka element counts) stored in
+ * a buffer of type given by CountType.
+ *
+ * The indices of distinct rows and their corresponding frequencies are written into two separate
+ * output buffers.
+ */
 struct histogram_dispatcher {
-  template <typename OutputType>
+  template <typename CountType>
   static bool constexpr is_supported()
   {
     // Currently only int64_t is requested by Spark-Rapids.
-    // More data type can be supported by enabling it below.
-    return std::is_same_v<OutputType, int64_t>;
+    // More data type (integer only) can be supported by enabling below.
+    return std::is_same_v<CountType, int64_t>;
   }
 
-  template <typename OutputType, typename... Args>
-  std::enable_if_t<!is_supported<OutputType>(), void> operator()(Args&&...)
+  template <typename CountType, typename... Args>
+  std::enable_if_t<!is_supported<CountType>(), void> operator()(Args&&...)
   {
-    CUDF_FAIL("Unsupported output type in histogram aggregation.");
+    CUDF_FAIL("Unsupported count type in histogram aggregation.");
   }
 
-  template <typename OutputType, CUDF_ENABLE_IF(is_supported<OutputType>())>
+  template <typename CountType, CUDF_ENABLE_IF(is_supported<CountType>())>
   void operator()(
     cudf::detail::hash_map_type const& map,
     std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> const preprocessed_input,
@@ -124,6 +133,7 @@ struct histogram_dispatcher {
     std::optional<column_view> const& partial_counts,
     rmm::cuda_stream_view stream) const
   {
+    // Note that we consider null and NaNs as always equal.
     auto const reduction_results = cudf::detail::hash_reduce_by_row(
       map,
       preprocessed_input,
@@ -132,97 +142,41 @@ struct histogram_dispatcher {
       has_nested_columns,
       null_equality::EQUAL,
       nan_equality::ALL_EQUAL,
-      reduce_func_builder<OutputType>{partial_counts ? partial_counts.value().begin<OutputType>()
-                                                     : nullptr},
-      OutputType{0},
+      reduce_func_builder<CountType>{partial_counts ? partial_counts.value().begin<CountType>()
+                                                    : nullptr},
+      CountType{0},
       stream,
       rmm::mr::get_current_device_resource());
 
-    column_view cv = column_view(data_type{type_id::INT64},
-                                 (int)reduction_results.size(),
-                                 reduction_results.data(),
-                                 nullptr,
-                                 0);
-    //    printf("reduction result, num rows = %d\n", num_rows);
-    //    cudf::test::print(cv);
-
     auto const input_it = thrust::make_zip_iterator(
       thrust::make_tuple(thrust::make_counting_iterator(0), reduction_results.begin()));
-
     auto const output_it = thrust::make_zip_iterator(
-      thrust::make_tuple(output_indices, output_counts.begin<OutputType>()));
+      thrust::make_tuple(output_indices, output_counts.begin<CountType>()));
 
+    // Reduction results above are either group sizes of equal rows, or `0`.
+    // The final output is non-zero group sizes only.
     thrust::copy_if(
       rmm::exec_policy(stream), input_it, input_it + num_rows, output_it, is_none_zero{});
-
-    // Reduction results are either group sizes of equal rows, or `0`.
-    // Thus, we only needs to extract the non-zero group sizes.
   }
 };
 
-}  // namespace
-
-std::unique_ptr<cudf::scalar> histogram(table_view const& input,
-                                        std::optional<column_view> const& partial_distinct_counts,
-                                        data_type const output_dtype,
-                                        rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+/**
+ * @brief Building a histogram by gathering distinct rows from the input table and their
+ * corresponding distinct counts.
+ *
+ * @param input The input table
+ * @param distinct_indices Indices of the distinct rows
+ * @param distinct_counts Distinct counts corresponding to the distinct rows
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned object's device memory
+ * @return A list_scalar storing the output histogram
+ */
+auto gather_histogram(table_view const& input,
+                      device_span<size_type const> distinct_indices,
+                      std::unique_ptr<column>&& distinct_counts,
+                      rmm::cuda_stream_view stream,
+                      rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(cudf::is_integral(output_dtype) &&
-                 (cudf::size_of(output_dtype) == 4 || cudf::size_of(output_dtype) == 8),
-               "The output type of histogram aggregation must be an 32/64bit integral type.");
-
-  auto map = cudf::detail::hash_map_type{
-    compute_hash_table_size(input.num_rows()),
-    cuco::empty_key{cudf::detail::COMPACTION_EMPTY_KEY_SENTINEL},
-    cuco::empty_value{cudf::detail::COMPACTION_EMPTY_VALUE_SENTINEL},
-    cudf::detail::hash_table_allocator_type{default_allocator<char>{}, stream},
-    stream.value()};
-
-  auto const preprocessed_input =
-    cudf::experimental::row::hash::preprocessed_table::create(input, stream);
-  auto const has_nulls          = nullate::DYNAMIC{cudf::has_nested_nulls(input)};
-  auto const has_nested_columns = cudf::detail::has_nested_columns(input);
-
-  auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
-  auto const key_hasher =
-    cudf::detail::experimental::compaction_hash(row_hasher.device_hasher(has_nulls));
-  auto const row_comp = cudf::experimental::row::equality::self_comparator(preprocessed_input);
-
-  auto const pair_iter = cudf::detail::make_counting_transform_iterator(
-    size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
-
-  using nan_equal_comparator =
-    cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
-  auto const value_comp = nan_equal_comparator{};
-  if (has_nested_columns) {
-    auto const key_equal = row_comp.equal_to<true>(has_nulls, null_equality::EQUAL, value_comp);
-    map.insert(pair_iter, pair_iter + input.num_rows(), key_hasher, key_equal, stream.value());
-  } else {
-    auto const key_equal = row_comp.equal_to<false>(has_nulls, null_equality::EQUAL, value_comp);
-    map.insert(pair_iter, pair_iter + input.num_rows(), key_hasher, key_equal, stream.value());
-  }
-
-  // Gather the indices of distinct rows and distinct rows.
-  auto distinct_indices = rmm::device_uvector<size_type>(
-    static_cast<size_type>(map.get_size()), stream, rmm::mr::get_current_device_resource());
-  //  map.retrieve_all(distinct_indices.begin(), thrust::make_discard_iterator(), stream.value());
-
-  // Count the number of occurences of each unique row.
-  auto distinct_counts = make_numeric_column(
-    output_dtype, static_cast<size_type>(map.get_size()), mask_state::UNALLOCATED, stream, mr);
-  type_dispatcher(output_dtype,
-                  histogram_dispatcher{},
-                  map,
-                  std::move(preprocessed_input),
-                  input.num_rows(),
-                  has_nulls,
-                  has_nested_columns,
-                  distinct_indices.begin(),
-                  distinct_counts->mutable_view(),
-                  partial_distinct_counts,
-                  stream);
-
   auto distinct_rows =
     std::move(cudf::detail::gather(input,
                                    distinct_indices,
@@ -232,17 +186,82 @@ std::unique_ptr<cudf::scalar> histogram(table_view const& input,
                                    mr)
                 ->release()
                 .front());
-  //  printf("reduction result 2\n");
-  //  cudf::test::print(distinct_counts->view());
 
   std::vector<std::unique_ptr<column>> struct_children;
   struct_children.emplace_back(std::move(distinct_rows));
   struct_children.emplace_back(std::move(distinct_counts));
   auto output_structs = make_structs_column(
-    static_cast<size_type>(map.get_size()), std::move(struct_children), 0, {}, stream, mr);
+    static_cast<size_type>(distinct_indices.size()), std::move(struct_children), 0, {}, stream, mr);
 
   return std::make_unique<cudf::list_scalar>(
     std::move(*output_structs.release()), true, stream, mr);
+}
+
+}  // namespace
+
+std::pair<rmm::device_uvector<size_type>, std::unique_ptr<column>> table_histogram(
+  table_view const& input,
+  std::optional<column_view> const& partial_counts,
+  data_type const output_dtype,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(cudf::is_integral(output_dtype),
+               "The output count type of histogram aggregation must be an integral type.");
+
+  auto map = cudf::detail::hash_map_type{
+    compute_hash_table_size(input.num_rows()),
+    cuco::empty_key{-1},
+    cuco::empty_value{std::numeric_limits<size_type>::min()},
+    cudf::detail::hash_table_allocator_type{default_allocator<char>{}, stream},
+    stream.value()};
+
+  auto const preprocessed_input =
+    cudf::experimental::row::hash::preprocessed_table::create(input, stream);
+  auto const has_nulls          = nullate::DYNAMIC{cudf::has_nested_nulls(input)};
+  auto const has_nested_columns = cudf::detail::has_nested_columns(input);
+
+  auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
+  auto const key_hasher = row_hasher.device_hasher(has_nulls);
+  auto const row_comp   = cudf::experimental::row::equality::self_comparator(preprocessed_input);
+
+  auto const pair_iter = cudf::detail::make_counting_transform_iterator(
+    size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
+
+  // Always compare NaNs as equal.
+  using nan_equal_comparator =
+    cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
+  auto const value_comp = nan_equal_comparator{};
+
+  if (has_nested_columns) {
+    auto const key_equal = row_comp.equal_to<true>(has_nulls, null_equality::EQUAL, value_comp);
+    map.insert(pair_iter, pair_iter + input.num_rows(), key_hasher, key_equal, stream.value());
+  } else {
+    auto const key_equal = row_comp.equal_to<false>(has_nulls, null_equality::EQUAL, value_comp);
+    map.insert(pair_iter, pair_iter + input.num_rows(), key_hasher, key_equal, stream.value());
+  }
+
+  // Gather the indices of distinct rows.
+  auto distinct_indices = rmm::device_uvector<size_type>(
+    static_cast<size_type>(map.get_size()), stream, rmm::mr::get_current_device_resource());
+
+  // Store the number of occurrences of each distinct row.
+  auto distinct_counts = make_numeric_column(
+    output_dtype, static_cast<size_type>(map.get_size()), mask_state::UNALLOCATED, stream, mr);
+
+  type_dispatcher(output_dtype,
+                  histogram_dispatcher{},
+                  map,
+                  std::move(preprocessed_input),
+                  input.num_rows(),
+                  has_nulls,
+                  has_nested_columns,
+                  distinct_indices.begin(),
+                  distinct_counts->mutable_view(),
+                  partial_counts,
+                  stream);
+
+  return {std::move(distinct_indices), std::move(distinct_counts)};
 }
 
 std::unique_ptr<cudf::scalar> histogram(column_view const& input,
@@ -250,26 +269,30 @@ std::unique_ptr<cudf::scalar> histogram(column_view const& input,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
-  return histogram(table_view{{input}}, std::nullopt, output_dtype, stream, mr);
+  auto const input_tv = table_view{{input}};
+  auto [distinct_indices, distinct_counts] =
+    table_histogram(input_tv, std::nullopt, output_dtype, stream, mr);
+  return gather_histogram(input_tv, distinct_indices, std::move(distinct_counts), stream, mr);
 }
 
 std::unique_ptr<cudf::scalar> merge_histogram(column_view const& input,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(
-    input.type().id() == type_id::STRUCT && input.num_children() == 2,
-    "The input of merge_histogram aggregation must be a struct column having two children.");
-  CUDF_EXPECTS(input.child(1).type().id() == type_id::INT64 && !input.child(1).has_nulls(),
-               "The second child of the input column must be INT64 type and has no nulls.");
   CUDF_EXPECTS(!input.has_nulls(), "The input column must not have nulls.");
+  CUDF_EXPECTS(input.type().id() == type_id::STRUCT && input.num_children() == 2,
+               "The input must be a structs column having two children.");
+  CUDF_EXPECTS(cudf::is_integral(input.child(1).type()) && !input.child(1).has_nulls(),
+               "The second child of the input column must be integral type and has no nulls.");
 
-  auto const structs_cv = structs_column_view{input};
-  return histogram(table_view{{structs_cv.get_sliced_child(0, stream)}},
-                   structs_cv.get_sliced_child(1, stream),
-                   data_type{type_id::INT64},
-                   stream,
-                   mr);
+  auto const structs_cv   = structs_column_view{input};
+  auto const input_values = structs_cv.get_sliced_child(0, stream);
+  auto const input_counts = structs_cv.get_sliced_child(1, stream);
+
+  auto const values_tv = table_view{{input_values}};
+  auto [distinct_indices, distinct_counts] =
+    table_histogram(values_tv, input_counts, data_type{type_id::INT64}, stream, mr);
+  return gather_histogram(values_tv, distinct_indices, std::move(distinct_counts), stream, mr);
 }
 
 }  // namespace cudf::reduction::detail

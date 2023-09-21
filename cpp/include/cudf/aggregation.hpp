@@ -618,8 +618,12 @@ template <typename Base = aggregation>
 std::unique_ptr<Base> make_merge_m2_aggregation();
 
 /**
- * @brief make_merge_m2_aggregation
- * @return
+ * @brief Factory to create a MERGE_HISTOGRAM aggregation
+ *
+ * Merges the results of `HISTOGRAM` aggregations on independent sets into a new `HISTOGRAM` value
+ * equivalent to if a single `HISTOGRAM` aggregation was done across all of the sets at once.
+ *
+ * @return A MERGE_HISTOGRAM aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_merge_histogram_aggregation();

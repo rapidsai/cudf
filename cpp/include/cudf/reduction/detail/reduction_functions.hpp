@@ -132,21 +132,33 @@ std::unique_ptr<scalar> all(column_view const& col,
                             rmm::mr::device_memory_resource* mr);
 
 /**
- * @brief
+ * @brief Compute frequency for each unique element in the input column.
  *
- * If all elements in input column are null, output scalar is null.
+ * The result histogram is stored in structs column having two children. The first child contains
+ * unique elements from the input, and the second child contains their corresponding frequencies.
+ *
+ * @throw cudf::logic_error if `output_dtype` is not integer type
+ *
+ * @param input The column to compute histogram
+ * @param output_dtype Data type to store the element frequencies
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return A list_scalar storing a structs column as the result histogram
  */
-std::unique_ptr<scalar> histogram(column_view const& col,
+std::unique_ptr<scalar> histogram(column_view const& input,
                                   data_type const output_dtype,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr);
 
 /**
- * @brief
+ * @brief Merge multiple histograms together.
  *
- * If all elements in input column are null, output scalar is null.
+ * @param input The input given as multiple histograms concatenated together
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return A list_scalar storing the result histogram
  */
-std::unique_ptr<scalar> merge_histogram(column_view const& col,
+std::unique_ptr<scalar> merge_histogram(column_view const& input,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr);
 

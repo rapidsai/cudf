@@ -116,6 +116,7 @@ ConfigureTest(
   groupby/covariance_tests.cpp
   groupby/groupby_test_util.cpp
   groupby/groups_tests.cpp
+  groupby/histogram_tests.cpp
   groupby/keys_tests.cpp
   groupby/lists_tests.cpp
   groupby/m2_tests.cpp
@@ -627,6 +628,7 @@ ConfigureTest(STREAM_CONCATENATE_TEST streams/concatenate_test.cpp STREAM_MODE t
 ConfigureTest(STREAM_FILLING_TEST streams/filling_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_REPLACE_TEST streams/replace_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_SEARCH_TEST streams/search_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_STRINGS_TEST streams/strings/case_test.cpp STREAM_MODE testing)
 
 # ##################################################################################################
 # Install tests ####################################################################################
