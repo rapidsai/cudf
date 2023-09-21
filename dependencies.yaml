@@ -259,8 +259,8 @@ dependencies:
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
           - pyarrow==12.0.1.*
-          # TODO: Pin to numpy <1.26 until upgrading to pandas 2
-          - numpy>=1.21,<1.26
+          # TODO: Pin to numpy <1.25 until upgrading to pandas 2
+          - numpy>=1.21,<1.25
   build_python:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -426,8 +426,8 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          # TODO: Pin to numpy <1.26 until upgrading to pandas 2
-          - numpy>=1.21,<1.26
+          # TODO: Pin to numpy <1.25 until upgrading to pandas 2
+          - numpy>=1.21,<1.25
           - pandas>=1.3,<1.6.0dev0
   run_cudf:
     common:
