@@ -851,7 +851,7 @@ __device__ void gpuDecodeLevels(page_state_s* s,
 
   constexpr int batch_size = 32;
   int cur_leaf_count       = target_leaf_count;
-  while (s->error != 0 && s->nz_count < target_leaf_count &&
+  while (s->error == 0 && s->nz_count < target_leaf_count &&
          s->input_value_count < s->num_input_values) {
     if (has_repetition) {
       gpuDecodeStream<level_t, rolling_buf_size>(rep, s, cur_leaf_count, t, level_type::REPETITION);

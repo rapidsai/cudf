@@ -621,7 +621,8 @@ __global__ void __launch_bounds__(decode_block_size)
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t skipped_leaf_values = s->page.skipped_leaf_values;
-  while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
+  while (s->error == 0 &&
+         (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
     int target_pos;
     int src_pos = s->src_pos;
 

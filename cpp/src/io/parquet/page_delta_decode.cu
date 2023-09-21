@@ -83,7 +83,8 @@ __global__ void __launch_bounds__(96)
   // that has a value we need.
   if (skipped_leaf_values > 0) { db->skip_values(skipped_leaf_values); }
 
-  while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
+  while (s->error == 0 &&
+         (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
     uint32_t target_pos;
     uint32_t const src_pos = s->src_pos;
 
