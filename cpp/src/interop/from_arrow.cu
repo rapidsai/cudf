@@ -444,8 +444,8 @@ std::shared_ptr<arrow::ArrayBuilder> make_builder(std::shared_ptr<arrow::DataTyp
     case arrow::Type::STRUCT: {
       std::vector<std::shared_ptr<arrow::ArrayBuilder>> field_builders;
 
-      for (auto i = 0; i < type->num_fields(); ++i) {
-        auto const vt = type->field(i)->type();
+      for (auto field : type->fields()) {
+        auto const vt = field->type();
         if (vt->id() == arrow::Type::STRUCT || vt->id() == arrow::Type::LIST) {
           field_builders.push_back(make_builder(vt));
         } else {
@@ -535,9 +535,7 @@ std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
 
   auto cudf_table = detail::from_arrow(*table, stream, mr);
 
-  auto& col = cudf_table->get_column(0);
-
-  auto cv = col.view();
+  auto cv = cudf_table->view().column(0);
   return get_element(cv, 0, stream);
 }
 

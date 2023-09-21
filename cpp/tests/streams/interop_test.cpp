@@ -31,7 +31,7 @@ TEST_F(ArrowTest, ToArrow)
   cudf::table_view tbl{{col}};
 
   std::vector<cudf::column_metadata> metadata{{""}};
-  auto arrow_scalar = cudf::to_arrow(tbl, metadata, cudf::test::get_default_stream());
+  cudf::to_arrow(tbl, metadata, cudf::test::get_default_stream());
 }
 
 TEST_F(ArrowTest, FromArrow)
@@ -57,7 +57,7 @@ TEST_F(ArrowTest, ToArrowScalar)
     cudf::make_fixed_width_scalar<int32_t>(value, cudf::test::get_default_stream());
 
   cudf::column_metadata metadata{""};
-  auto arrow_scalar = cudf::to_arrow(*cudf_scalar, metadata, cudf::test::get_default_stream());
+  cudf::to_arrow(*cudf_scalar, metadata, cudf::test::get_default_stream());
 }
 
 TEST_F(ArrowTest, FromArrowScalar)

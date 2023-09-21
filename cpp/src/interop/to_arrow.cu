@@ -22,11 +22,9 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/scatter.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/interop.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -81,7 +79,10 @@ std::shared_ptr<arrow::Buffer> fetch_mask_buffer(column_view input_view,
     auto mask_buffer = allocate_arrow_bitmap(static_cast<int64_t>(input_view.size()), ar_mr);
     CUDF_CUDA_TRY(cudaMemcpyAsync(
       mask_buffer->mutable_data(),
-      (input_view.offset() > 0) ? cudf::copy_bitmask(input_view).data() : input_view.null_mask(),
+      (input_view.offset() > 0)
+        ? cudf::detail::copy_bitmask(input_view, stream, rmm::mr::get_current_device_resource())
+            .data()
+        : input_view.null_mask(),
       mask_size_in_bytes,
       cudaMemcpyDefault,
       stream.value()));

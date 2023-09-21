@@ -126,7 +126,7 @@ struct column_metadata {
  *
  * @param input table_view that needs to be converted to arrow Table
  * @param metadata Contains hierarchy of names of columns and children
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param ar_mr arrow memory pool to allocate memory for arrow Table
  * @return arrow Table generated from `input`
  */
@@ -142,7 +142,7 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
  *
  * @param input scalar that needs to be converted to arrow Scalar
  * @param metadata Contains hierarchy of names of columns and children
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param ar_mr arrow memory pool to allocate memory for arrow Scalar
  * @return arrow Scalar generated from `input`
  */
@@ -154,7 +154,7 @@ std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
  * @brief Create `cudf::table` from given arrow Table input
  *
  * @param input arrow:Table that needs to be converted to `cudf::table`
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr    Device memory resource used to allocate `cudf::table`
  * @return cudf table generated from given arrow Table
  */
@@ -168,7 +168,7 @@ std::unique_ptr<table> from_arrow(
  * @brief Create `cudf::scalar` from given arrow Scalar input
  *
  * @param input arrow:Scalar that needs to be converted to `cudf::scalar`
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr    Device memory resource used to allocate `cudf::scalar`
  * @return cudf scalar generated from given arrow Scalar
  */
