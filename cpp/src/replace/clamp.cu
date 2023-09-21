@@ -164,7 +164,7 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
     detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, stream, mr);
   // mask will not change
   if (input.nullable()) {
-    output->set_null_mask(copy_bitmask(input, stream, mr), input.null_count());
+    output->set_null_mask(cudf::detail::copy_bitmask(input, stream, mr), input.null_count());
   }
 
   auto output_device_view =
