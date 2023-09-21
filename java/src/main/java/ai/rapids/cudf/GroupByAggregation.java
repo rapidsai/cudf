@@ -315,12 +315,4 @@ public final class GroupByAggregation {
   public static GroupByAggregation mergeTDigest(int delta) {
     return new GroupByAggregation(Aggregation.mergeTDigest(delta));
   }
-
-  public static GroupByAggregation histogram() {
-    return new GroupByAggregation(Aggregation.histogram());
-  }
-
-  public static GroupByAggregation mergeHistogram() {
-    return new GroupByAggregation(Aggregation.mergeHistogram());
-  }
 }
