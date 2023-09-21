@@ -1390,20 +1390,19 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         except ValueError:
             return _return_sentinel_column()
 
-        codes = arange(len(cats), dtype=dtype)
         left_gather_map, right_gather_map = cpp_join(
             [self], [cats], how="left"
         )
-        codes = codes.take(
-            right_gather_map, nullify=True, check_bounds=False
-        ).fillna(na_sentinel.value)
-
+        codes = libcudf.copying.gather(
+            [arange(len(cats), dtype=dtype)], right_gather_map, nullify=True
+        )
+        del right_gather_map
         # reorder `codes` so that its values correspond to the
         # values of `self`:
-        order = arange(len(self))
-        order = order.take(left_gather_map, check_bounds=False).argsort()
-        codes = codes.take(order)
-        return codes
+        (codes,) = libcudf.sort.sort_by_key(
+            codes, [left_gather_map], [True], ["last"], stable=True
+        )
+        return codes.fillna(na_sentinel.value)
 
 
 def column_empty_like(
@@ -2519,11 +2518,11 @@ def _construct_array(
         arbitrary = cupy.asarray(arbitrary, dtype=dtype)
     except (TypeError, ValueError):
         native_dtype = dtype
-        inferred_dtype = None
+        inferred_dtype = infer_dtype(arbitrary, skipna=False)
         if (
             dtype is None
             and not cudf._lib.scalar._is_null_host_scalar(arbitrary)
-            and (inferred_dtype := infer_dtype(arbitrary, skipna=False))
+            and inferred_dtype
             in (
                 "mixed",
                 "mixed-integer",
@@ -2533,6 +2532,20 @@ def _construct_array(
         if inferred_dtype == "interval":
             # Only way to construct an Interval column.
             return pd.array(arbitrary)
+        elif (
+            inferred_dtype == "string" and getattr(dtype, "kind", None) == "M"
+        ):
+            # We may have date-like strings with timezones
+            try:
+                pd_arbitrary = pd.to_datetime(arbitrary)
+                if isinstance(pd_arbitrary.dtype, pd.DatetimeTZDtype):
+                    raise NotImplementedError(
+                        "cuDF does not yet support timezone-aware datetimes"
+                    )
+            except pd.errors.OutOfBoundsDatetime:
+                # https://github.com/pandas-dev/pandas/issues/55096
+                pass
+
         arbitrary = np.asarray(
             arbitrary,
             dtype=native_dtype

@@ -353,14 +353,15 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
                 format=format,
             )
         else:
-            if infer_datetime_format and format is None:
+            if format is None:
+                if not infer_datetime_format and dayfirst:
+                    raise NotImplementedError(
+                        f"{dayfirst=} not implemented "
+                        f"when {format=} and {infer_datetime_format=}."
+                    )
                 format = column.datetime.infer_format(
                     element=col.element_indexing(0),
                     dayfirst=dayfirst,
-                )
-            elif format is None:
-                format = column.datetime.infer_format(
-                    element=col.element_indexing(0)
                 )
             return col.as_datetime_column(
                 dtype=_unit_dtype_map[unit],

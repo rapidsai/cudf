@@ -85,7 +85,7 @@ __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
 
     if (t < 2 * warp_size) {  // warp0..1
       target_pos = min(src_pos + 2 * batch_size, s->nz_count + batch_size);
-    } else {                  // warp2
+    } else {  // warp2
       target_pos = min(s->nz_count, src_pos + batch_size);
     }
     __syncthreads();

@@ -19,6 +19,7 @@ from cudf._lib.stream_compaction import (
     drop_nulls,
 )
 from cudf._lib.types import size_type_dtype
+from cudf.api.extensions import no_default
 from cudf.api.types import (
     is_bool_dtype,
     is_integer,
@@ -701,21 +702,65 @@ class BaseIndex(Serializable):
 
         return super().fillna(value=value)
 
-    def to_frame(self, index=True, name=None):
+    def to_frame(self, index=True, name=no_default):
         """Create a DataFrame with a column containing this Index
 
         Parameters
         ----------
         index : boolean, default True
             Set the index of the returned DataFrame as the original Index
-        name : str, default None
-            Name to be used for the column
+        name : object, defaults to index.name
+            The passed name should substitute for the index name (if it has
+            one).
+
         Returns
         -------
         DataFrame
-            cudf DataFrame
+            DataFrame containing the original Index data.
+
+        See Also
+        --------
+        Index.to_series : Convert an Index to a Series.
+        Series.to_frame : Convert Series to DataFrame.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index(['Ant', 'Bear', 'Cow'], name='animal')
+        >>> idx.to_frame()
+               animal
+        animal
+        Ant       Ant
+        Bear     Bear
+        Cow       Cow
+
+        By default, the original Index is reused. To enforce a new Index:
+
+        >>> idx.to_frame(index=False)
+            animal
+        0   Ant
+        1  Bear
+        2   Cow
+
+        To override the name of the resulting column, specify `name`:
+
+        >>> idx.to_frame(index=False, name='zoo')
+            zoo
+        0   Ant
+        1  Bear
+        2   Cow
         """
-        if name is not None:
+        if name is None:
+            warnings.warn(
+                "Explicitly passing `name=None` currently preserves "
+                "the Index's name or uses a default name of 0. This "
+                "behaviour is deprecated, and in the future `None` "
+                "will be used as the name of the "
+                "resulting DataFrame column.",
+                FutureWarning,
+            )
+            name = no_default
+        if name is not no_default:
             col_name = name
         elif self.name is None:
             col_name = 0
