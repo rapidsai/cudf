@@ -21,6 +21,7 @@
 
 #include <io/utilities/block_utils.cuh>
 
+#include <cuda/atomic>
 #include <cuda/std/tuple>
 
 namespace cudf::io::parquet::gpu {
@@ -42,7 +43,7 @@ struct page_state_s {
   int32_t dict_val;
   uint32_t initial_rle_run[NUM_LEVEL_TYPES];   // [def,rep]
   int32_t initial_rle_value[NUM_LEVEL_TYPES];  // [def,rep]
-  int error;
+  int32_t error;
   PageInfo page;
   ColumnChunkDesc col;
 
@@ -68,6 +69,12 @@ struct page_state_s {
   PageNestingDecodeInfo nesting_decode_cache[max_cacheable_nesting_decode_info];
   // points to either nesting_decode_cache above when possible, or to the global source otherwise
   PageNestingDecodeInfo* nesting_info;
+
+  inline __device__ void set_error_code(int32_t err) volatile
+  {
+    cuda::atomic_ref<int32_t, cuda::thread_scope_block> ref{const_cast<int&>(error)};
+    ref.store(err, cuda::std::memory_order_relaxed);
+  }
 };
 
 // buffers only used in the decode kernel.  separated from page_state_s to keep
@@ -423,7 +430,12 @@ __device__ size_type gpuInitStringDescriptors(page_state_s volatile* s,
     while (pos < target_pos) {
       int len = 0;
       if ((s->col.data_type & 7) == FIXED_LEN_BYTE_ARRAY) {
-        if (k < dict_size) { len = s->dtype_len_in; }
+        if (k < dict_size) {
+          len = s->dtype_len_in;
+        } else {
+          s->set_error_code(0x20);
+          break;
+        }
       } else {
         if (k + 4 <= dict_size) {
           len = (cur[k]) | (cur[k + 1] << 8) | (cur[k + 2] << 16) | (cur[k + 3] << 24);
@@ -470,7 +482,7 @@ __device__ void gpuDecodeStream(
   int32_t value_count       = s->lvl_count[lvl];
   int32_t batch_coded_count = 0;
 
-  while (value_count < target_count && value_count < num_input_values) {
+  while (s->error == 0 && value_count < target_count && value_count < num_input_values) {
     int batch_len;
     if (level_run <= 1) {
       // Get a new run symbol from the byte stream
@@ -486,7 +498,10 @@ __device__ void gpuDecodeStream(
             cur++;
           }
         }
-        if (cur > end || level_run <= 1) { s->error = 0x10; }
+        if (cur > end || level_run <= 1) {
+          s->set_error_code(0x10);
+          break;
+        }
         sym_len = (int32_t)(cur - cur_def);
         __threadfence_block();
       }
@@ -915,7 +930,7 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
     }
     s->lvl_start[lvl] = cur;
 
-    if (cur > end) { s->error = 2; }
+    if (cur > end) { s->set_error_code(2); }
   };
 
   // this is a little redundant. if level_bits == 0, then nothing should be encoded
@@ -940,8 +955,8 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
       // add back the 4 bytes for the length
       len += 4;
     } else {
-      len      = 0;
-      s->error = 2;
+      len = 0;
+      s->set_error_code(2);
     }
   } else if (encoding == Encoding::BIT_PACKED) {
     len                       = (s->page.num_input_values * level_bits + 7) >> 3;
@@ -950,8 +965,8 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
     s->lvl_start[lvl]         = cur;
     s->abs_lvl_start[lvl]     = cur;
   } else {
-    s->error = 3;
-    len      = 0;
+    len = 0;
+    s->set_error_code(3);
   }
 
   s->abs_lvl_end[lvl] = start + len;
@@ -1093,7 +1108,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
   }
 
   if (!t) {
-    s->error = 0;
+    s->set_error_code(0);
 
     // IMPORTANT : nested schemas can have 0 rows in a page but still have
     // values. The case is:
@@ -1151,7 +1166,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           break;
         default:  // FIXED_LEN_BYTE_ARRAY:
           s->dtype_len = dtype_len_out;
-          s->error |= (s->dtype_len <= 0);
+          s->set_error_code(s->dtype_len <= 0);
           break;
       }
       // Special check for downconversions
@@ -1267,7 +1282,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           s->dict_run  = 0;
           s->dict_val  = 0;
           s->dict_bits = (cur < end) ? *cur++ : 0;
-          if (s->dict_bits > 32 || !s->dict_base) { s->error = (10 << 8) | s->dict_bits; }
+          if (s->dict_bits > 32 || !s->dict_base) { s->set_error_code((10 << 8) | s->dict_bits); }
           break;
         case Encoding::PLAIN:
           s->dict_size = static_cast<int32_t>(end - cur);
@@ -1278,22 +1293,23 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           // first 4 bytes are length of RLE data
           int const len = (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);
           cur += 4;
-          if (cur + len > end) { s->error = 2; }
+          if (cur + len > end) { s->set_error_code(2); }
           s->dict_run = 0;
         } break;
         case Encoding::DELTA_BINARY_PACKED:
           // nothing to do, just don't error
           break;
-        default:
-          s->error = 1;  // Unsupported encoding
+        default: {
+          s->set_error_code(1);  // Unsupported encoding
           break;
+        }
       }
-      if (cur > end) { s->error = 1; }
+      if (cur > end) { s->set_error_code(1); }
       s->lvl_end    = cur;
       s->data_start = cur;
       s->data_end   = end;
     } else {
-      s->error = 1;
+      s->set_error_code(1);
     }
 
     s->lvl_count[level_type::REPETITION] = 0;
