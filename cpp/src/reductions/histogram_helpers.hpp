@@ -23,6 +23,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <memory>
 #include <optional>
 
 namespace cudf::reduction::detail {
@@ -40,11 +41,21 @@ namespace cudf::reduction::detail {
  * @return A pair of array contains the (stable-order) indices of the distinct rows in the input
  * table, and their corresponding distinct counts
  */
-std::pair<rmm::device_uvector<size_type>, std::unique_ptr<column>> table_histogram(
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>, std::unique_ptr<column>> histogram_table(
   table_view const& input,
   std::optional<column_view> const& partial_counts,
   data_type const output_dtype,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Create an empty histogram column.
+ *
+ * A histogram column is a structs column `STRUCT<T, int64_t>` where T is type of the input
+ * values.
+ *
+ * @returns An empty histogram column
+ */
+std::unique_ptr<column> make_empty_histogram_like(column_view const& values);
 
 }  // namespace cudf::reduction::detail

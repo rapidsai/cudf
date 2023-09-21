@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <reductions/histogram_helpers.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
@@ -165,6 +167,15 @@ std::unique_ptr<scalar> reduce(column_view const& col,
   if (col.size() <= col.null_count()) {
     if (agg.kind == aggregation::TDIGEST || agg.kind == aggregation::MERGE_TDIGEST) {
       return tdigest::detail::make_empty_tdigest_scalar(stream, mr);
+    }
+
+    if (agg.kind == aggregation::HISTOGRAM) {
+      return std::make_unique<list_scalar>(
+        std::move(*reduction::detail::make_empty_histogram_like(col)), true, stream, mr);
+    }
+    if (agg.kind == aggregation::MERGE_HISTOGRAM) {
+      return std::make_unique<list_scalar>(
+        std::move(*reduction::detail::make_empty_histogram_like(col.child(0))), true, stream, mr);
     }
 
     if (output_dtype.id() == type_id::LIST) {
