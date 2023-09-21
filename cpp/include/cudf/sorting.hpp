@@ -77,13 +77,13 @@ std::unique_ptr<column> stable_sorted_order(
  *
  * @param table             Table whose rows need to be compared for ordering
  * @param column_order      The expected sort order for each column. Size
- *                              must be equal to `in.num_columns()` or empty. If
- *                              empty, it is expected all columns are in
- *                              ascending order.
+ *                          must be equal to `in.num_columns()` or empty. If
+ *                          empty, it is expected all columns are in
+ *                          ascending order.
  * @param null_precedence   The desired order of null compared to other
- *                              elements for each column. Size must be equal to
- *                              `input.num_columns()` or empty. If empty,
- *                              `null_order::BEFORE` is assumed for all columns.
+ *                          elements for each column. Size must be equal to
+ *                          `input.num_columns()` or empty. If empty,
+ *                          `null_order::BEFORE` is assumed for all columns.
  *
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @returns bool                true if sorted as expected, false if not
