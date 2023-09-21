@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,7 +52,7 @@ std::unique_ptr<column> count_elements(lists_column_view const& input,
   // create output column
   auto output = make_fixed_width_column(data_type{type_to_id<size_type>()},
                                         input.size(),
-                                        copy_bitmask(input.parent()),
+                                        copy_bitmask(input.parent(), stream, mr),
                                         input.null_count(),
                                         stream,
                                         mr);
