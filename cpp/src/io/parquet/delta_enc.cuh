@@ -36,7 +36,7 @@ inline __device__ void put_uleb128(uint8_t*& p, uleb128_t v)
   *p++ = v;
 }
 
-inline __device__ uint8_t* put_zz128(uint8_t*& p, zigzag128_t v)
+inline __device__ void put_zz128(uint8_t*& p, zigzag128_t v)
 {
   zigzag128_t s = (v < 0);
   put_uleb128(p, (v ^ -s) * 2 + s);
