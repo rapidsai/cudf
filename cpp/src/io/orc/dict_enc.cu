@@ -60,6 +60,7 @@ void rowgroup_char_counts(device_2dspan<size_type> counts,
 
   auto const num_rowgroups = rowgroup_bounds.size().first;
   auto const num_str_cols  = str_col_indexes.size();
+  if (num_str_cols == 0) { return; }
 
   int block_size    = 0;  // suggested thread count to use
   int min_grid_size = 0;  // minimum block count required
