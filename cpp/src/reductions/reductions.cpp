@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-#include <reductions/histogram_helpers.hpp>
-
 #include <cudf/column/column.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/histogram_helpers.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/quantiles.hpp>
 #include <cudf/detail/sorting.hpp>

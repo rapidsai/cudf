@@ -15,11 +15,11 @@
  */
 
 #include <lists/utilities.hpp>
-#include <reductions/histogram_helpers.hpp>
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/histogram_helpers.hpp>
 #include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/types.hpp>
