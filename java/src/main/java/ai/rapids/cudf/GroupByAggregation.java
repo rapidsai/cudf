@@ -316,10 +316,24 @@ public final class GroupByAggregation {
     return new GroupByAggregation(Aggregation.mergeTDigest(delta));
   }
 
+  /**
+   * Histogram aggregation, computing the frequencies for each unique row.
+   *
+   * A histogram is given as a lists column, in which the first child stores unique rows from
+   * the input values and the second child stores their corresponding frequencies.
+   *
+   * @return A lists of structs column in which each list contains a histogram corresponding to
+   *         an input key.
+   */
   public static GroupByAggregation histogram() {
     return new GroupByAggregation(Aggregation.histogram());
   }
 
+  /**
+   * MergeHistogram aggregation, to merge multiple histograms.
+   *
+   * @return A new histogram in which the frequencies of the unique rows are sum up.
+   */
   public static GroupByAggregation mergeHistogram() {
     return new GroupByAggregation(Aggregation.mergeHistogram());
   }
