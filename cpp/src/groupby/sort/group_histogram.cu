@@ -75,8 +75,12 @@ std::unique_ptr<column> build_histogram(column_view const& values,
   std::vector<std::unique_ptr<column>> struct_children;
   struct_children.emplace_back(std::move(out_table->release().back()));
   struct_children.emplace_back(std::move(distinct_counts));
-  auto out_structs = make_structs_column(
-    static_cast<size_type>(distinct_indices->size()), std::move(struct_children), 0, {}, stream, mr);
+  auto out_structs = make_structs_column(static_cast<size_type>(distinct_indices->size()),
+                                         std::move(struct_children),
+                                         0,
+                                         {},
+                                         stream,
+                                         mr);
 
   return make_lists_column(
     num_groups, std::move(out_offsets), std::move(out_structs), 0, {}, stream, mr);
