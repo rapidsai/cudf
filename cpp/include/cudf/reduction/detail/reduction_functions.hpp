@@ -137,8 +137,6 @@ std::unique_ptr<scalar> all(column_view const& col,
  * The result histogram is stored in structs column having two children. The first child contains
  * unique elements from the input, and the second child contains their corresponding frequencies.
  *
- * @throw cudf::logic_error if `output_dtype` is not integer type
- *
  * @param input The column to compute histogram
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
