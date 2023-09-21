@@ -79,7 +79,8 @@ requirements:
     - pandas >=1.3,<1.6.0dev0
     - cupy >=12.0.0
     - numba >=0.57
-    - numpy >=1.21
+      # TODO: Pin to numpy <1.26 until upgrading to pandas 2
+    - numpy >=1.21,<1.26
     - {{ pin_compatible('pyarrow', max_pin='x.x.x') }}
     - libcudf ={{ version }}
     - {{ pin_compatible('rmm', max_pin='x.x') }}
