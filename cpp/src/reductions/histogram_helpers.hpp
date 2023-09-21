@@ -23,6 +23,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <memory>
 #include <optional>
 
 namespace cudf::reduction::detail {
@@ -46,5 +47,15 @@ std::pair<rmm::device_uvector<size_type>, std::unique_ptr<column>> table_histogr
   data_type const output_dtype,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Create an empty histogram column.
+ *
+ * A histogram column is a structs column `STRUCT<T, int64_t>` where T is type of the input
+ * values.
+ *
+ * @returns An empty histogram column
+ */
+std::unique_ptr<column> make_empty_histogram_like(column_view const& values);
 
 }  // namespace cudf::reduction::detail

@@ -199,6 +199,19 @@ auto gather_histogram(table_view const& input,
 
 }  // namespace
 
+std::unique_ptr<column> make_empty_histogram_like(column_view const& values)
+{
+  std::vector<std::unique_ptr<column>> struct_children;
+  struct_children.emplace_back(empty_like(values));
+  struct_children.emplace_back(make_numeric_column(data_type{type_id::INT64}, 0));
+  return std::make_unique<column>(data_type{type_id::STRUCT},
+                                  0,
+                                  rmm::device_buffer{},
+                                  rmm::device_buffer{},
+                                  0,
+                                  std::move(struct_children));
+}
+
 std::pair<rmm::device_uvector<size_type>, std::unique_ptr<column>> table_histogram(
   table_view const& input,
   std::optional<column_view> const& partial_counts,
@@ -269,6 +282,9 @@ std::unique_ptr<cudf::scalar> histogram(column_view const& input,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
+  // Empty group should be handled before reaching here.
+  CUDF_EXPECTS(input.size() > 0, "Input should not be empty.");
+
   auto const input_tv = table_view{{input}};
   auto [distinct_indices, distinct_counts] =
     table_histogram(input_tv, std::nullopt, output_dtype, stream, mr);
@@ -279,6 +295,8 @@ std::unique_ptr<cudf::scalar> merge_histogram(column_view const& input,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
+  // Empty group should be handled before reaching here.
+  CUDF_EXPECTS(input.size() > 0, "Input should not be empty.");
   CUDF_EXPECTS(!input.has_nulls(), "The input column must not have nulls.");
   CUDF_EXPECTS(input.type().id() == type_id::STRUCT && input.num_children() == 2,
                "The input must be a structs column having two children.");
