@@ -37,7 +37,6 @@ class ColumnFactoryTest : public cudf::test::BaseFixture {
 
  public:
   cudf::size_type size() { return _size; }
-  rmm::cuda_stream_view stream() { return cudf::get_default_stream(); }
 };
 
 template <typename T>
@@ -47,11 +46,8 @@ TYPED_TEST_SUITE(NumericFactoryTest, cudf::test::NumericTypes);
 
 TYPED_TEST(NumericFactoryTest, EmptyNoMask)
 {
-  auto column = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
-                                          0,
-                                          cudf::mask_state::UNALLOCATED,
-                                          this->stream(),
-                                          this->mr());
+  auto column = cudf::make_numeric_column(
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, 0, cudf::mask_state::UNALLOCATED);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), 0);
   EXPECT_EQ(0, column->null_count());
@@ -62,11 +58,8 @@ TYPED_TEST(NumericFactoryTest, EmptyNoMask)
 
 TYPED_TEST(NumericFactoryTest, EmptyAllValidMask)
 {
-  auto column = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
-                                          0,
-                                          cudf::mask_state::ALL_VALID,
-                                          this->stream(),
-                                          this->mr());
+  auto column = cudf::make_numeric_column(
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, 0, cudf::mask_state::ALL_VALID);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), 0);
   EXPECT_EQ(0, column->null_count());
@@ -77,11 +70,8 @@ TYPED_TEST(NumericFactoryTest, EmptyAllValidMask)
 
 TYPED_TEST(NumericFactoryTest, EmptyAllNullMask)
 {
-  auto column = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
-                                          0,
-                                          cudf::mask_state::ALL_NULL,
-                                          this->stream(),
-                                          this->mr());
+  auto column = cudf::make_numeric_column(
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, 0, cudf::mask_state::ALL_NULL);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), 0);
   EXPECT_EQ(0, column->null_count());
@@ -92,11 +82,8 @@ TYPED_TEST(NumericFactoryTest, EmptyAllNullMask)
 
 TYPED_TEST(NumericFactoryTest, NoMask)
 {
-  auto column = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
-                                          this->size(),
-                                          cudf::mask_state::UNALLOCATED,
-                                          this->stream(),
-                                          this->mr());
+  auto column = cudf::make_numeric_column(
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, this->size(), cudf::mask_state::UNALLOCATED);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());
   EXPECT_EQ(0, column->null_count());
@@ -107,11 +94,8 @@ TYPED_TEST(NumericFactoryTest, NoMask)
 
 TYPED_TEST(NumericFactoryTest, UnitializedMask)
 {
-  auto column = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
-                                          this->size(),
-                                          cudf::mask_state::UNINITIALIZED,
-                                          this->stream(),
-                                          this->mr());
+  auto column = cudf::make_numeric_column(
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, this->size(), cudf::mask_state::UNINITIALIZED);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());
   EXPECT_TRUE(column->nullable());
@@ -120,11 +104,8 @@ TYPED_TEST(NumericFactoryTest, UnitializedMask)
 
 TYPED_TEST(NumericFactoryTest, AllValidMask)
 {
-  auto column = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
-                                          this->size(),
-                                          cudf::mask_state::ALL_VALID,
-                                          this->stream(),
-                                          this->mr());
+  auto column = cudf::make_numeric_column(
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, this->size(), cudf::mask_state::ALL_VALID);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());
   EXPECT_EQ(0, column->null_count());
@@ -135,11 +116,8 @@ TYPED_TEST(NumericFactoryTest, AllValidMask)
 
 TYPED_TEST(NumericFactoryTest, AllNullMask)
 {
-  auto column = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
-                                          this->size(),
-                                          cudf::mask_state::ALL_NULL,
-                                          this->stream(),
-                                          this->mr());
+  auto column = cudf::make_numeric_column(
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, this->size(), cudf::mask_state::ALL_NULL);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());
   EXPECT_EQ(this->size(), column->null_count());
@@ -154,9 +132,7 @@ TYPED_TEST(NumericFactoryTest, NullMaskAsParm)
   auto column = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                           this->size(),
                                           std::move(null_mask),
-                                          this->size(),
-                                          this->stream(),
-                                          this->mr());
+                                          this->size());
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());
   EXPECT_EQ(this->size(), column->null_count());
@@ -167,12 +143,8 @@ TYPED_TEST(NumericFactoryTest, NullMaskAsParm)
 
 TYPED_TEST(NumericFactoryTest, NullMaskAsEmptyParm)
 {
-  auto column = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
-                                          this->size(),
-                                          rmm::device_buffer{},
-                                          0,
-                                          this->stream(),
-                                          this->mr());
+  auto column = cudf::make_numeric_column(
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, this->size(), rmm::device_buffer{}, 0);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());
   EXPECT_EQ(0, column->null_count());
@@ -188,11 +160,8 @@ class NonNumericFactoryTest : public ColumnFactoryTest,
 TEST_P(NonNumericFactoryTest, NonNumericThrow)
 {
   auto construct = [this]() {
-    auto column = cudf::make_numeric_column(cudf::data_type{GetParam()},
-                                            this->size(),
-                                            cudf::mask_state::UNALLOCATED,
-                                            this->stream(),
-                                            this->mr());
+    auto column = cudf::make_numeric_column(
+      cudf::data_type{GetParam()}, this->size(), cudf::mask_state::UNALLOCATED);
   };
   EXPECT_THROW(construct(), cudf::logic_error);
 }
@@ -208,11 +177,8 @@ TYPED_TEST_SUITE(FixedWidthFactoryTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(FixedWidthFactoryTest, EmptyNoMask)
 {
-  auto column = cudf::make_fixed_width_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
-                                              0,
-                                              cudf::mask_state::UNALLOCATED,
-                                              this->stream(),
-                                              this->mr());
+  auto column = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, 0, cudf::mask_state::UNALLOCATED);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
 }
 
@@ -235,11 +201,8 @@ TYPED_TEST(EmptyFactoryTest, Empty)
 
 TYPED_TEST(FixedWidthFactoryTest, EmptyAllValidMask)
 {
-  auto column = cudf::make_fixed_width_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
-                                              0,
-                                              cudf::mask_state::ALL_VALID,
-                                              this->stream(),
-                                              this->mr());
+  auto column = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, 0, cudf::mask_state::ALL_VALID);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), 0);
   EXPECT_EQ(0, column->null_count());
@@ -250,11 +213,8 @@ TYPED_TEST(FixedWidthFactoryTest, EmptyAllValidMask)
 
 TYPED_TEST(FixedWidthFactoryTest, EmptyAllNullMask)
 {
-  auto column = cudf::make_fixed_width_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
-                                              0,
-                                              cudf::mask_state::ALL_NULL,
-                                              this->stream(),
-                                              this->mr());
+  auto column = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, 0, cudf::mask_state::ALL_NULL);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), 0);
   EXPECT_EQ(0, column->null_count());
@@ -265,11 +225,8 @@ TYPED_TEST(FixedWidthFactoryTest, EmptyAllNullMask)
 
 TYPED_TEST(FixedWidthFactoryTest, NoMask)
 {
-  auto column = cudf::make_fixed_width_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
-                                              this->size(),
-                                              cudf::mask_state::UNALLOCATED,
-                                              this->stream(),
-                                              this->mr());
+  auto column = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, this->size(), cudf::mask_state::UNALLOCATED);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());
   EXPECT_EQ(0, column->null_count());
@@ -280,11 +237,8 @@ TYPED_TEST(FixedWidthFactoryTest, NoMask)
 
 TYPED_TEST(FixedWidthFactoryTest, UnitializedMask)
 {
-  auto column = cudf::make_fixed_width_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
-                                              this->size(),
-                                              cudf::mask_state::UNINITIALIZED,
-                                              this->stream(),
-                                              this->mr());
+  auto column = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, this->size(), cudf::mask_state::UNINITIALIZED);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());
   EXPECT_TRUE(column->nullable());
@@ -293,11 +247,8 @@ TYPED_TEST(FixedWidthFactoryTest, UnitializedMask)
 
 TYPED_TEST(FixedWidthFactoryTest, AllValidMask)
 {
-  auto column = cudf::make_fixed_width_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
-                                              this->size(),
-                                              cudf::mask_state::ALL_VALID,
-                                              this->stream(),
-                                              this->mr());
+  auto column = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, this->size(), cudf::mask_state::ALL_VALID);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());
   EXPECT_EQ(0, column->null_count());
@@ -308,11 +259,8 @@ TYPED_TEST(FixedWidthFactoryTest, AllValidMask)
 
 TYPED_TEST(FixedWidthFactoryTest, AllNullMask)
 {
-  auto column = cudf::make_fixed_width_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
-                                              this->size(),
-                                              cudf::mask_state::ALL_NULL,
-                                              this->stream(),
-                                              this->mr());
+  auto column = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, this->size(), cudf::mask_state::ALL_NULL);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());
   EXPECT_EQ(this->size(), column->null_count());
@@ -327,9 +275,7 @@ TYPED_TEST(FixedWidthFactoryTest, NullMaskAsParm)
   auto column = cudf::make_fixed_width_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                               this->size(),
                                               std::move(null_mask),
-                                              this->size(),
-                                              this->stream(),
-                                              this->mr());
+                                              this->size());
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());
   EXPECT_EQ(this->size(), column->null_count());
@@ -340,12 +286,8 @@ TYPED_TEST(FixedWidthFactoryTest, NullMaskAsParm)
 
 TYPED_TEST(FixedWidthFactoryTest, NullMaskAsEmptyParm)
 {
-  auto column = cudf::make_fixed_width_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
-                                              this->size(),
-                                              rmm::device_buffer{},
-                                              0,
-                                              this->stream(),
-                                              this->mr());
+  auto column = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, this->size(), rmm::device_buffer{}, 0);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());
   EXPECT_EQ(0, column->null_count());
@@ -361,11 +303,8 @@ class NonFixedWidthFactoryTest : public ColumnFactoryTest,
 TEST_P(NonFixedWidthFactoryTest, NonFixedWidthThrow)
 {
   auto construct = [this]() {
-    auto column = cudf::make_fixed_width_column(cudf::data_type{GetParam()},
-                                                this->size(),
-                                                cudf::mask_state::UNALLOCATED,
-                                                this->stream(),
-                                                this->mr());
+    auto column = cudf::make_fixed_width_column(
+      cudf::data_type{GetParam()}, this->size(), cudf::mask_state::UNALLOCATED);
   };
   EXPECT_THROW(construct(), cudf::logic_error);
 }
@@ -508,7 +447,7 @@ TYPED_TEST_SUITE(ListsDictionaryLeafTest, cudf::test::FixedWidthTypes);
 TYPED_TEST(ListsDictionaryLeafTest, FromNonNested)
 {
   using DCW      = cudf::test::dictionary_column_wrapper<TypeParam>;
-  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 
   auto s   = cudf::make_list_scalar(DCW({1, 3, -1, 1, 3}, {1, 1, 0, 1, 1}));
   auto col = cudf::make_column_from_scalar(*s, 2);
@@ -524,7 +463,7 @@ TYPED_TEST(ListsDictionaryLeafTest, FromNonNested)
 TYPED_TEST(ListsDictionaryLeafTest, FromNested)
 {
   using DCW      = cudf::test::dictionary_column_wrapper<TypeParam>;
-  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 
   DCW leaf({1, 3, -1, 1, 3, 1, 3, -1, 1, 3}, {1, 1, 0, 1, 1, 1, 1, 0, 1, 1});
   offset_t offsets{0, 3, 3, 6, 6, 10};
@@ -617,7 +556,7 @@ TYPED_TEST(ListsStructsLeafTest, FromNonNested)
 {
   using LCWinner_t = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
   using StringCW   = cudf::test::strings_column_wrapper;
-  using offset_t   = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using offset_t   = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
   using valid_t    = std::vector<cudf::valid_type>;
 
   auto data = this->make_test_structs_column(
@@ -648,7 +587,7 @@ TYPED_TEST(ListsStructsLeafTest, FromNested)
 {
   using LCWinner_t = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
   using StringCW   = cudf::test::strings_column_wrapper;
-  using offset_t   = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using offset_t   = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
   using valid_t    = std::vector<cudf::valid_type>;
   auto leaf        = this->make_test_structs_column(
     {{1, 2}, {0, 1}},
@@ -702,7 +641,7 @@ TEST_F(ListsZeroLengthColumnTest, MixedTypes)
   using FCW      = cudf::test::fixed_width_column_wrapper<int32_t>;
   using StringCW = cudf::test::strings_column_wrapper;
   using LCW      = cudf::test::lists_column_wrapper<int32_t>;
-  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
   {
     auto s   = cudf::make_list_scalar(FCW{1, 2, 3});
     auto got = cudf::make_column_from_scalar(*s, 0);
@@ -759,7 +698,7 @@ TEST_F(ListsZeroLengthColumnTest, SuperimposeNulls)
   using FCW      = cudf::test::fixed_width_column_wrapper<int32_t>;
   using StringCW = cudf::test::strings_column_wrapper;
   using LCW      = cudf::test::lists_column_wrapper<int32_t>;
-  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 
   auto const lists = [&] {
     auto child = this
@@ -819,3 +758,13 @@ void struct_from_scalar(bool is_valid)
 TEST_F(ColumnFactoryTest, FromStructScalar) { struct_from_scalar(true); }
 
 TEST_F(ColumnFactoryTest, FromStructScalarNull) { struct_from_scalar(false); }
+
+TEST_F(ColumnFactoryTest, FromScalarErrors)
+{
+  cudf::string_scalar ss("hello world");
+  EXPECT_THROW(cudf::make_column_from_scalar(ss, 214748365), std::overflow_error);
+
+  using FCW = cudf::test::fixed_width_column_wrapper<int8_t>;
+  auto s    = cudf::make_list_scalar(FCW({1, 2, 3, 4, 5, 6, 7, 8, 9, 10}));
+  EXPECT_THROW(cudf::make_column_from_scalar(*s, 214748365), std::overflow_error);
+}

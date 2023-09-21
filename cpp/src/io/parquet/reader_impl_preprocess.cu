@@ -325,7 +325,8 @@ constexpr bool is_supported_encoding(Encoding enc)
     case Encoding::PLAIN:
     case Encoding::PLAIN_DICTIONARY:
     case Encoding::RLE:
-    case Encoding::RLE_DICTIONARY: return true;
+    case Encoding::RLE_DICTIONARY:
+    case Encoding::DELTA_BINARY_PACKED: return true;
     default: return false;
   }
 }
@@ -482,7 +483,8 @@ int decode_page_headers(cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc>& c
       auto const dst_base = static_cast<uint8_t*>(decomp_pages.data()) + decomp_offset;
       auto& page          = pages[page_idx];
       // offset will only be non-zero for V2 pages
-      auto const offset = page.def_lvl_bytes + page.rep_lvl_bytes;
+      auto const offset =
+        page.lvl_bytes[gpu::level_type::DEFINITION] + page.lvl_bytes[gpu::level_type::REPETITION];
       // for V2 need to copy def and rep level info into place, and then offset the
       // input and output buffers. otherwise we'd have to keep both the compressed
       // and decompressed data.
@@ -731,8 +733,8 @@ std::pair<bool, std::vector<std::future<void>>> reader::impl::create_and_read_co
   auto& chunks        = _file_itm_data.chunks;
 
   // Descriptors for all the chunks that make up the selected columns
-  const auto num_input_columns = _input_columns.size();
-  const auto num_chunks        = row_groups_info.size() * num_input_columns;
+  auto const num_input_columns = _input_columns.size();
+  auto const num_chunks        = row_groups_info.size() * num_input_columns;
   chunks = cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc>(0, num_chunks, _stream);
 
   // Association between each column chunk and its source
@@ -1018,7 +1020,7 @@ struct row_size_functor {
 template <>
 __device__ size_t row_size_functor::operator()<list_view>(size_t num_rows, bool nullable)
 {
-  auto const offset_size = sizeof(offset_type);
+  auto const offset_size = sizeof(size_type);
   // NOTE: Adding the + 1 offset here isn't strictly correct.  There will only be 1 extra offset
   // for the entire column, whereas this is adding an extra offset per page.  So we will get a
   // small over-estimate of the real size of the order :  # of pages * 4 bytes. It seems better
@@ -1038,7 +1040,7 @@ __device__ size_t row_size_functor::operator()<string_view>(size_t num_rows, boo
 {
   // only returns the size of offsets and validity. the size of the actual string chars
   // is tracked separately.
-  auto const offset_size = sizeof(offset_type);
+  auto const offset_size = sizeof(size_type);
   // see note about offsets in the list_view template.
   return (offset_size * (num_rows + 1)) + validity_size(num_rows, nullable);
 }
@@ -1179,7 +1181,7 @@ std::vector<gpu::chunk_read_info> find_splits(std::vector<cumulative_row_info> c
  * @param id Additional intermediate information required to process the pages
  * @param num_rows Total number of rows to read
  * @param chunk_read_limit Limit on total number of bytes to be returned per read, for all columns
- * @param stream CUDA stream to use, default 0
+ * @param stream CUDA stream to use
  */
 std::vector<gpu::chunk_read_info> compute_splits(
   cudf::detail::hostdevice_vector<gpu::PageInfo>& pages,
@@ -1673,7 +1675,7 @@ void reader::impl::preprocess_pages(size_t skip_rows,
     // - we will be doing a chunked read
     gpu::ComputePageSizes(pages,
                           chunks,
-                          0,                     // 0-max size_t. process all possible rows
+                          0,  // 0-max size_t. process all possible rows
                           std::numeric_limits<size_t>::max(),
                           true,                  // compute num_rows
                           chunk_read_limit > 0,  // compute string sizes

@@ -39,12 +39,15 @@ __global__ void rowgroup_char_counts_kernel(device_2dspan<size_type> char_counts
   auto const row_group_idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (row_group_idx >= rowgroup_bounds.size().first) { return; }
 
-  auto const start_row = rowgroup_bounds[row_group_idx][col_idx].begin;
+  auto const& str_col  = orc_columns[col_idx];
+  auto const start_row = rowgroup_bounds[row_group_idx][col_idx].begin + str_col.offset();
   auto const num_rows  = rowgroup_bounds[row_group_idx][col_idx].size();
 
-  auto const& offsets = orc_columns[col_idx].child(strings_column_view::offsets_column_index);
+  auto const& offsets = str_col.child(strings_column_view::offsets_column_index);
   char_counts[str_col_idx][row_group_idx] =
-    offsets.element<size_type>(start_row + num_rows) - offsets.element<size_type>(start_row);
+    (num_rows == 0)
+      ? 0
+      : offsets.element<size_type>(start_row + num_rows) - offsets.element<size_type>(start_row);
 }
 
 void rowgroup_char_counts(device_2dspan<size_type> counts,
@@ -57,6 +60,7 @@ void rowgroup_char_counts(device_2dspan<size_type> counts,
 
   auto const num_rowgroups = rowgroup_bounds.size().first;
   auto const num_str_cols  = str_col_indexes.size();
+  if (num_str_cols == 0) { return; }
 
   int block_size    = 0;  // suggested thread count to use
   int min_grid_size = 0;  // minimum block count required
@@ -127,7 +131,7 @@ __global__ void __launch_bounds__(block_size)
   size_type entry_count{0};
   size_type char_count{0};
   // all threads should loop the same number of times
-  for (auto cur_row = start_row + t; cur_row - t < end_row; cur_row += block_size) {
+  for (thread_index_type cur_row = start_row + t; cur_row - t < end_row; cur_row += block_size) {
     auto const is_valid = cur_row < end_row and col.is_valid(cur_row);
 
     if (is_valid) {
@@ -212,11 +216,9 @@ __global__ void __launch_bounds__(block_size)
                                          cuco::empty_key{KEY_SENTINEL},
                                          cuco::empty_value{VALUE_SENTINEL});
 
-  auto cur_row = start_row + t;
+  thread_index_type cur_row = start_row + t;
   while (cur_row < end_row) {
-    auto const is_valid = cur_row < col.size() and col.is_valid(cur_row);
-
-    if (is_valid) {
+    if (col.is_valid(cur_row)) {
       auto const hash_fn     = hash_functor{col};
       auto const equality_fn = equality_functor{col};
       auto const found_slot  = map.find(cur_row, hash_fn, equality_fn);

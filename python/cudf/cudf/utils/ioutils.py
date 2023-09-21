@@ -166,14 +166,6 @@ row_groups : int, or list, or a list of lists default None
     If not None, specifies, for each input file, which row groups to read.
     If reading multiple inputs, a list of lists should be passed, one list
     for each input.
-strings_to_categorical : boolean, default False
-    If True, return string columns as GDF_CATEGORY dtype; if False, return a
-    as GDF_STRING dtype.
-
-    .. deprecated:: 23.08
-
-        This parameter is deprecated and will be removed in a future
-        version of cudf.
 categorical_partitions : boolean, default True
     Whether directory-partitioned columns should be interpreted as categorical
     or raw dtypes.

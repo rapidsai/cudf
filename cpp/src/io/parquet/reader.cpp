@@ -38,7 +38,8 @@ table_with_metadata reader::read(parquet_reader_options const& options)
   return _impl->read(options.get_skip_rows(),
                      options.get_num_rows(),
                      uses_custom_row_bounds,
-                     options.get_row_groups());
+                     options.get_row_groups(),
+                     options.get_filter());
 }
 
 chunked_reader::chunked_reader(std::size_t chunk_read_limit,

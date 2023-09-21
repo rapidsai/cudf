@@ -17,6 +17,7 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 cimport cudf._lib.cpp.io.types as cudf_io_types
+from cudf._lib.cpp.io.data_sink cimport data_sink
 from cudf._lib.cpp.io.json cimport (
     json_reader_options,
     json_writer_options,
@@ -27,7 +28,6 @@ from cudf._lib.cpp.io.json cimport (
 from cudf._lib.cpp.io.types cimport (
     column_name_info,
     compression_type,
-    data_sink,
     sink_info,
     table_metadata,
     table_with_metadata,
@@ -211,7 +211,7 @@ def write_json(
         )
 
 
-cdef schema_element _get_cudf_schema_element_from_dtype(object dtype) except +:
+cdef schema_element _get_cudf_schema_element_from_dtype(object dtype) except *:
     cdef schema_element s_element
     cdef data_type lib_type
     if cudf.api.types.is_categorical_dtype(dtype):
@@ -236,7 +236,7 @@ cdef schema_element _get_cudf_schema_element_from_dtype(object dtype) except +:
     return s_element
 
 
-cdef data_type _get_cudf_data_type_from_dtype(object dtype) except +:
+cdef data_type _get_cudf_data_type_from_dtype(object dtype) except *:
     if cudf.api.types.is_categorical_dtype(dtype):
         raise NotImplementedError(
             "CategoricalDtype as dtype is not yet "
@@ -259,9 +259,10 @@ cdef _set_col_children_metadata(Column col,
                 child_col, col_meta.children[i]
             )
     elif is_list_dtype(col):
-        _set_col_children_metadata(
-            col.children[0],
-            col_meta.children[0]
-        )
+        for i, child_col in enumerate(col.children):
+            col_meta.children.push_back(child_info)
+            _set_col_children_metadata(
+                child_col, col_meta.children[i]
+            )
     else:
         return

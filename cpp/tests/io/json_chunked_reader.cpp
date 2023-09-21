@@ -20,7 +20,7 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/table_utilities.hpp>
 
-#include <io/json/experimental/read_json.hpp>
+#include <io/json/read_json.hpp>
 
 /**
  * @brief Base test fixture for JSON reader tests
@@ -37,7 +37,7 @@ std::vector<cudf::io::table_with_metadata> skeleton_for_parellel_chunk_reader(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  using namespace cudf::io::detail::json::experimental;
+  using namespace cudf::io::json::detail;
   using cudf::size_type;
   // assuming single source.
   size_t total_source_size = 0;
