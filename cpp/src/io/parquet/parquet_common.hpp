@@ -141,7 +141,7 @@ enum BoundaryOrder {
 /**
  * @brief Thrift compact protocol struct field types
  */
-enum {
+enum FieldType {
   ST_FLD_TRUE   = 1,
   ST_FLD_FALSE  = 2,
   ST_FLD_BYTE   = 3,
