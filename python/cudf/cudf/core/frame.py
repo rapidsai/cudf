@@ -362,12 +362,12 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @_cudf_nvtx_annotate
-    def _get_columns_by_label(self, labels, downcast=False):
+    def _get_columns_by_label(self, labels, *, downcast=False) -> Self:
         """
         Returns columns of the Frame specified by `labels`
 
         """
-        return self._data.select_by_label(labels)
+        return self.__class__._from_data(self._data.select_by_label(labels))
 
     @property
     @_cudf_nvtx_annotate
@@ -437,7 +437,7 @@ class Frame(BinaryOperand, Scannable):
         ncol = self._num_columns
         if ncol == 0:
             return make_empty_matrix(
-                shape=(0, 0), dtype=np.dtype("float64"), order="F"
+                shape=(len(self), ncol), dtype=np.dtype("float64"), order="F"
             )
 
         if dtype is None:

@@ -20,6 +20,7 @@
  */
 
 #include <io/csv/durations.hpp>
+#include <io/utilities/parsing_utils.cuh>
 #include <lists/utilities.hpp>
 
 #include <cudf/column/column_device_view.cuh>
@@ -27,9 +28,9 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/data_sink.hpp>
-#include <cudf/io/detail/data_casting.cuh>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -582,7 +583,7 @@ struct column_to_strings_fn {
     return cudf::strings::detail::from_timestamps(
       column,
       format,
-      strings_column_view(column_view{data_type{type_id::STRING}, 0, nullptr, nullptr, 0}),
+      strings_column_view(make_empty_column(type_id::STRING)->view()),
       stream_,
       mr_);
   }

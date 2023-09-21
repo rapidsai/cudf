@@ -74,8 +74,11 @@ struct aggregate_writer_metadata {
     for (size_t i = 0; i < partitions.size(); ++i) {
       this->files[i].num_rows = partitions[i].num_rows;
     }
-    this->column_order_listsize =
-      (stats_granularity != statistics_freq::STATISTICS_NONE) ? num_columns : 0;
+
+    if (stats_granularity != statistics_freq::STATISTICS_NONE) {
+      ColumnOrder default_order = {ColumnOrder::TYPE_ORDER};
+      this->column_orders       = std::vector<ColumnOrder>(num_columns, default_order);
+    }
 
     for (size_t p = 0; p < kv_md.size(); ++p) {
       std::transform(kv_md[p].begin(),
@@ -102,13 +105,13 @@ struct aggregate_writer_metadata {
   {
     CUDF_EXPECTS(part < files.size(), "Invalid part index queried");
     FileMetaData meta{};
-    meta.version               = this->version;
-    meta.schema                = this->schema;
-    meta.num_rows              = this->files[part].num_rows;
-    meta.row_groups            = this->files[part].row_groups;
-    meta.key_value_metadata    = this->files[part].key_value_metadata;
-    meta.created_by            = this->created_by;
-    meta.column_order_listsize = this->column_order_listsize;
+    meta.version            = this->version;
+    meta.schema             = this->schema;
+    meta.num_rows           = this->files[part].num_rows;
+    meta.row_groups         = this->files[part].row_groups;
+    meta.key_value_metadata = this->files[part].key_value_metadata;
+    meta.created_by         = this->created_by;
+    meta.column_orders      = this->column_orders;
     return meta;
   }
 
@@ -170,8 +173,8 @@ struct aggregate_writer_metadata {
     std::vector<std::vector<uint8_t>> column_indexes;
   };
   std::vector<per_file_metadata> files;
-  std::string created_by         = "";
-  uint32_t column_order_listsize = 0;
+  std::string created_by                                   = "";
+  thrust::optional<std::vector<ColumnOrder>> column_orders = thrust::nullopt;
 };
 
 namespace {
@@ -190,6 +193,20 @@ parquet::Compression to_parquet_compression(compression_type compression)
     case compression_type::ZSTD: return parquet::Compression::ZSTD;
     case compression_type::NONE: return parquet::Compression::UNCOMPRESSED;
     default: CUDF_FAIL("Unsupported compression type");
+  }
+}
+
+/**
+ * @brief Convert a mask of encodings to a vector.
+ *
+ * @param encodings Vector of `Encoding`s to populate
+ * @param enc_mask Mask of encodings used
+ */
+void update_chunk_encodings(std::vector<Encoding>& encodings, uint32_t enc_mask)
+{
+  for (uint8_t enc = 0; enc < static_cast<uint8_t>(Encoding::NUM_ENCODINGS); enc++) {
+    auto const enc_enum = static_cast<Encoding>(enc);
+    if ((enc_mask & gpu::encoding_to_mask(enc_enum)) != 0) { encodings.push_back(enc_enum); }
   }
 }
 
@@ -1671,6 +1688,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         ck.start_row         = start_row;
         ck.num_rows          = (uint32_t)row_group.num_rows;
         ck.first_fragment    = c * num_fragments + f;
+        ck.encodings         = 0;
         auto chunk_fragments = row_group_fragments[c].subspan(f, fragments_in_chunk);
         // In fragment struct, add a pointer to the chunk it belongs to
         // In each fragment in chunk_fragments, update the chunk pointer here.
@@ -1687,7 +1705,6 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           });
         auto& column_chunk_meta          = row_group.columns[c].meta_data;
         column_chunk_meta.type           = parquet_columns[c].physical_type();
-        column_chunk_meta.encodings      = {Encoding::PLAIN, Encoding::RLE};
         column_chunk_meta.path_in_schema = parquet_columns[c].get_path_in_schema();
         column_chunk_meta.codec          = UNCOMPRESSED;
         column_chunk_meta.num_values     = ck.num_values;
@@ -1703,17 +1720,6 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   row_group_fragments.host_to_device_async(stream);
   [[maybe_unused]] auto dict_info_owner = build_chunk_dictionaries(
     chunks, col_desc, row_group_fragments, compression, dict_policy, max_dictionary_size, stream);
-  for (size_t p = 0; p < partitions.size(); p++) {
-    for (int rg = 0; rg < num_rg_in_part[p]; rg++) {
-      size_t global_rg = global_rowgroup_base[p] + rg;
-      for (int col = 0; col < num_columns; col++) {
-        if (chunks.host_view()[rg][col].use_dictionary) {
-          agg_meta->file(p).row_groups[global_rg].columns[col].meta_data.encodings.push_back(
-            Encoding::PLAIN_DICTIONARY);
-        }
-      }
-    }
-  }
 
   // The code preceding this used a uniform fragment size for all columns. Now recompute
   // fragments with a (potentially) varying number of fragments per column.
@@ -1948,6 +1954,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           all_device_write = false;
         }
         max_write_size = std::max(max_write_size, ck.compressed_size);
+
+        update_chunk_encodings(column_chunk_meta.encodings, ck.encodings);
 
         if (ck.ck_stat_size != 0) {
           std::vector<uint8_t> const stats_blob = cudf::detail::make_std_vector_sync(
@@ -2368,20 +2376,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_row_group_metadata(
       md.num_rows += tmp.num_rows;
     }
   }
-  // Reader doesn't currently populate column_order, so infer it here
-  if (not md.row_groups.empty()) {
-    auto const is_valid_stats = [](auto const& stats) {
-      return not stats.max.empty() || not stats.min.empty() || stats.null_count != -1 ||
-             stats.distinct_count != -1 || not stats.max_value.empty() ||
-             not stats.min_value.empty();
-    };
 
-    uint32_t num_columns = static_cast<uint32_t>(md.row_groups[0].columns.size());
-    md.column_order_listsize =
-      (num_columns > 0 && is_valid_stats(md.row_groups[0].columns[0].meta_data.statistics))
-        ? num_columns
-        : 0;
-  }
   // Thrift-encode the resulting output
   file_header_s fhdr;
   file_ender_s fendr;

@@ -390,10 +390,12 @@ add_library(
   src/io/orc/writer_impl.cu
   src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
+  src/io/parquet/decode_preprocess.cu
   src/io/parquet/page_data.cu
   src/io/parquet/chunk_dict.cu
   src/io/parquet/page_enc.cu
   src/io/parquet/page_hdr.cu
+  src/io/parquet/page_delta_decode.cu
   src/io/parquet/page_string_decode.cu
   src/io/parquet/predicate_pushdown.cpp
   src/io/parquet/reader.cpp
@@ -411,11 +413,13 @@ add_library(
   src/io/utilities/arrow_io_source.cpp
   src/io/utilities/column_buffer.cpp
   src/io/utilities/config_utils.cpp
+  src/io/utilities/data_casting.cu
   src/io/utilities/data_sink.cpp
   src/io/utilities/datasource.cpp
   src/io/utilities/file_io_utilities.cpp
   src/io/utilities/parsing_utils.cu
   src/io/utilities/row_selection.cpp
+  src/io/utilities/type_inference.cu
   src/io/utilities/trie.cu
   src/jit/cache.cpp
   src/jit/parser.cpp
@@ -528,7 +532,7 @@ add_library(
   src/stream_compaction/apply_boolean_mask.cu
   src/stream_compaction/distinct.cu
   src/stream_compaction/distinct_count.cu
-  src/stream_compaction/distinct_reduce.cu
+  src/stream_compaction/distinct_helpers.cu
   src/stream_compaction/drop_nans.cu
   src/stream_compaction/drop_nulls.cu
   src/stream_compaction/stable_distinct.cu
@@ -631,6 +635,7 @@ add_library(
   src/utilities/linked_column.cpp
   src/utilities/logger.cpp
   src/utilities/stacktrace.cpp
+  src/utilities/stream_pool.cpp
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
   src/utilities/type_dispatcher.cpp

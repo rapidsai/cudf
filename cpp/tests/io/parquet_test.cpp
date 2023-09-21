@@ -2166,7 +2166,7 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullabilityList)
   cudf::io::table_input_metadata metadata(table1);
   metadata.column_metadata[0].set_nullability(true);  // List is nullable at first (root) level
   metadata.column_metadata[0].child(1).set_nullability(
-    false);                                           // non-nullable at second (leaf) level
+    false);  // non-nullable at second (leaf) level
   metadata.column_metadata[1].set_nullability(true);
 
   auto filepath = temp_env->get_temp_filepath("ChunkedListNullable.parquet");
@@ -5880,7 +5880,7 @@ TEST_F(ParquetMetadataReaderTest, TestNested)
   EXPECT_EQ(out_map_col.type_kind(), cudf::io::parquet::TypeKind::UNDEFINED_TYPE);  // map
 
   ASSERT_EQ(out_map_col.num_children(), 1);
-  EXPECT_EQ(out_map_col.child(0).name(), "key_value");       // key_value (named in parquet writer)
+  EXPECT_EQ(out_map_col.child(0).name(), "key_value");  // key_value (named in parquet writer)
   ASSERT_EQ(out_map_col.child(0).num_children(), 2);
   EXPECT_EQ(out_map_col.child(0).child(0).name(), "key");    // key (named in parquet writer)
   EXPECT_EQ(out_map_col.child(0).child(1).name(), "value");  // value (named in parquet writer)
@@ -5897,7 +5897,7 @@ TEST_F(ParquetMetadataReaderTest, TestNested)
   ASSERT_EQ(out_list_col.child(0).num_children(), 1);
 
   auto const& out_list_struct_col = out_list_col.child(0).child(0);
-  EXPECT_EQ(out_list_struct_col.name(), "element");        // elements (named in parquet writer)
+  EXPECT_EQ(out_list_struct_col.name(), "element");  // elements (named in parquet writer)
   EXPECT_EQ(out_list_struct_col.type_kind(),
             cudf::io::parquet::TypeKind::UNDEFINED_TYPE);  // struct
   ASSERT_EQ(out_list_struct_col.num_children(), 2);
@@ -6534,7 +6534,6 @@ TEST_F(ParquetReaderTest, FilterFloatNAN)
   auto col0 = cudf::test::fixed_width_column_wrapper<float>(elements, elements + num_rows);
   auto col1 = cudf::test::fixed_width_column_wrapper<double>(elements, elements + num_rows);
 
-  cudf::test::print(col0);
   auto const written_table = table_view{{col0, col1}};
   auto const filepath      = temp_env->get_temp_filepath("FilterFloatNAN.parquet");
   {
@@ -6597,6 +6596,140 @@ TEST_F(ParquetWriterTest, TimestampMicrosINT96NoOverflow)
   auto const result = read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+TEST_F(ParquetWriterTest, PreserveNullability)
+{
+  constexpr auto num_rows = 100;
+
+  auto const col0_data = random_values<int32_t>(num_rows);
+  auto const col1_data = random_values<int32_t>(num_rows);
+
+  auto const col0_validity = cudf::test::iterators::no_nulls();
+  auto const col1_validity =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+
+  column_wrapper<int32_t> col0{col0_data.begin(), col0_data.end(), col0_validity};
+  column_wrapper<int32_t> col1{col1_data.begin(), col1_data.end(), col1_validity};
+  auto const col2 = make_parquet_list_list_col<int>(0, num_rows, 5, 8, true);
+
+  auto const expected = table_view{{col0, col1, *col2}};
+
+  cudf::io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].set_name("mandatory");
+  expected_metadata.column_metadata[0].set_nullability(false);
+  expected_metadata.column_metadata[1].set_name("optional");
+  expected_metadata.column_metadata[1].set_nullability(true);
+  expected_metadata.column_metadata[2].set_name("lists");
+  expected_metadata.column_metadata[2].set_nullability(true);
+  // offsets is a cudf thing that's not part of the parquet schema so it won't have nullability set
+  expected_metadata.column_metadata[2].child(0).set_name("offsets");
+  expected_metadata.column_metadata[2].child(1).set_name("element");
+  expected_metadata.column_metadata[2].child(1).set_nullability(false);
+  expected_metadata.column_metadata[2].child(1).child(0).set_name("offsets");
+  expected_metadata.column_metadata[2].child(1).child(1).set_name("element");
+  expected_metadata.column_metadata[2].child(1).child(1).set_nullability(true);
+
+  auto const filepath = temp_env->get_temp_filepath("PreserveNullability.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .metadata(expected_metadata);
+
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options const in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto const result        = cudf::io::read_parquet(in_opts);
+  auto const read_metadata = cudf::io::table_input_metadata{result.metadata};
+
+  // test that expected_metadata matches read_metadata
+  std::function<void(cudf::io::column_in_metadata, cudf::io::column_in_metadata)>
+    compare_names_and_nullability = [&](auto lhs, auto rhs) {
+      EXPECT_EQ(lhs.get_name(), rhs.get_name());
+      ASSERT_EQ(lhs.is_nullability_defined(), rhs.is_nullability_defined());
+      if (lhs.is_nullability_defined()) { EXPECT_EQ(lhs.nullable(), rhs.nullable()); }
+      ASSERT_EQ(lhs.num_children(), rhs.num_children());
+      for (int i = 0; i < lhs.num_children(); ++i) {
+        compare_names_and_nullability(lhs.child(i), rhs.child(i));
+      }
+    };
+
+  ASSERT_EQ(expected_metadata.column_metadata.size(), read_metadata.column_metadata.size());
+
+  for (size_t i = 0; i < expected_metadata.column_metadata.size(); ++i) {
+    compare_names_and_nullability(expected_metadata.column_metadata[i],
+                                  read_metadata.column_metadata[i]);
+  }
+}
+
+TEST_P(ParquetV2Test, CheckEncodings)
+{
+  using cudf::io::parquet::Encoding;
+  constexpr auto num_rows = 100'000;
+  auto const is_v2        = GetParam();
+
+  auto const validity = cudf::test::iterators::no_nulls();
+  // data should be PLAIN for v1, RLE for V2
+  auto col0_data =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) -> bool { return i % 2 == 0; });
+  // data should be PLAIN for both
+  auto col1_data = random_values<int32_t>(num_rows);
+  // data should be PLAIN_DICTIONARY for v1, PLAIN and RLE_DICTIONARY for v2
+  auto col2_data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return 1; });
+
+  cudf::test::fixed_width_column_wrapper<bool> col0{col0_data, col0_data + num_rows, validity};
+  column_wrapper<int32_t> col1{col1_data.begin(), col1_data.end(), validity};
+  column_wrapper<int32_t> col2{col2_data, col2_data + num_rows, validity};
+
+  auto expected = table_view{{col0, col1, col2}};
+
+  auto const filename = is_v2 ? "CheckEncodingsV2.parquet" : "CheckEncodingsV1.parquet";
+  auto filepath       = temp_env->get_temp_filepath(filename);
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .max_page_size_rows(num_rows)
+      .write_v2_headers(is_v2);
+  cudf::io::write_parquet(out_opts);
+
+  // make sure the expected encodings are present
+  auto contains = [](auto const& vec, auto const& enc) {
+    return std::find(vec.begin(), vec.end(), enc) != vec.end();
+  };
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+
+  read_footer(source, &fmd);
+  auto const& chunk0_enc = fmd.row_groups[0].columns[0].meta_data.encodings;
+  auto const& chunk1_enc = fmd.row_groups[0].columns[1].meta_data.encodings;
+  auto const& chunk2_enc = fmd.row_groups[0].columns[2].meta_data.encodings;
+  if (is_v2) {
+    // col0 should have RLE for rep/def and data
+    EXPECT_TRUE(chunk0_enc.size() == 1);
+    EXPECT_TRUE(contains(chunk0_enc, Encoding::RLE));
+    // col1 should have RLE for rep/def and PLAIN for data
+    EXPECT_TRUE(chunk1_enc.size() == 2);
+    EXPECT_TRUE(contains(chunk1_enc, Encoding::RLE));
+    EXPECT_TRUE(contains(chunk1_enc, Encoding::PLAIN));
+    // col2 should have RLE for rep/def, PLAIN for dict, and RLE_DICTIONARY for data
+    EXPECT_TRUE(chunk2_enc.size() == 3);
+    EXPECT_TRUE(contains(chunk2_enc, Encoding::RLE));
+    EXPECT_TRUE(contains(chunk2_enc, Encoding::PLAIN));
+    EXPECT_TRUE(contains(chunk2_enc, Encoding::RLE_DICTIONARY));
+  } else {
+    // col0 should have RLE for rep/def and PLAIN for data
+    EXPECT_TRUE(chunk0_enc.size() == 2);
+    EXPECT_TRUE(contains(chunk0_enc, Encoding::RLE));
+    EXPECT_TRUE(contains(chunk0_enc, Encoding::PLAIN));
+    // col1 should have RLE for rep/def and PLAIN for data
+    EXPECT_TRUE(chunk1_enc.size() == 2);
+    EXPECT_TRUE(contains(chunk1_enc, Encoding::RLE));
+    EXPECT_TRUE(contains(chunk1_enc, Encoding::PLAIN));
+    // col2 should have RLE for rep/def and PLAIN_DICTIONARY for data and dict
+    EXPECT_TRUE(chunk2_enc.size() == 2);
+    EXPECT_TRUE(contains(chunk2_enc, Encoding::RLE));
+    EXPECT_TRUE(contains(chunk2_enc, Encoding::PLAIN_DICTIONARY));
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()
