@@ -972,14 +972,14 @@ parse_options make_parse_options(csv_reader_options const& reader_opts,
 
   // Handle user-defined true values, whereby field data is substituted with a
   // boolean true or numeric `1` value
-  if (reader_opts.get_true_values().size() != 0) {
+  if (not reader_opts.get_true_values().empty()) {
     parse_opts.trie_true =
       cudf::detail::create_serialized_trie(reader_opts.get_true_values(), stream);
   }
 
   // Handle user-defined false values, whereby field data is substituted with a
   // boolean false or numeric `0` value
-  if (reader_opts.get_false_values().size() != 0) {
+  if (not reader_opts.get_false_values().empty()) {
     parse_opts.trie_false =
       cudf::detail::create_serialized_trie(reader_opts.get_false_values(), stream);
   }

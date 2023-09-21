@@ -200,23 +200,23 @@ cdef class DeviceScalar:
         if dtype is not None:
             s._dtype = dtype
         elif cdtype.id() in {
-            libcudf_types.DECIMAL32,
-            libcudf_types.DECIMAL64,
-            libcudf_types.DECIMAL128,
+            libcudf_types.type_id.DECIMAL32,
+            libcudf_types.type_id.DECIMAL64,
+            libcudf_types.type_id.DECIMAL128,
         }:
             raise TypeError(
                 "Must pass a dtype when constructing from a fixed-point scalar"
             )
-        elif cdtype.id() == libcudf_types.STRUCT:
+        elif cdtype.id() == libcudf_types.type_id.STRUCT:
             struct_table_view = (<struct_scalar*>s.get_raw_ptr())[0].view()
             s._dtype = StructDtype({
                 str(i): dtype_from_column_view(struct_table_view.column(i))
                 for i in range(struct_table_view.num_columns())
             })
-        elif cdtype.id() == libcudf_types.LIST:
+        elif cdtype.id() == libcudf_types.type_id.LIST:
             if (
                 <list_scalar*>s.get_raw_ptr()
-            )[0].view().type().id() == libcudf_types.LIST:
+            )[0].view().type().id() == libcudf_types.type_id.LIST:
                 s._dtype = dtype_from_column_view(
                     (<list_scalar*>s.get_raw_ptr())[0].view()
                 )
@@ -442,27 +442,27 @@ cdef _get_np_scalar_from_numeric(unique_ptr[scalar]& s):
 
     cdef libcudf_types.data_type cdtype = s_ptr[0].type()
 
-    if cdtype.id() == libcudf_types.INT8:
+    if cdtype.id() == libcudf_types.type_id.INT8:
         return np.int8((<numeric_scalar[int8_t]*>s_ptr)[0].value())
-    elif cdtype.id() == libcudf_types.INT16:
+    elif cdtype.id() == libcudf_types.type_id.INT16:
         return np.int16((<numeric_scalar[int16_t]*>s_ptr)[0].value())
-    elif cdtype.id() == libcudf_types.INT32:
+    elif cdtype.id() == libcudf_types.type_id.INT32:
         return np.int32((<numeric_scalar[int32_t]*>s_ptr)[0].value())
-    elif cdtype.id() == libcudf_types.INT64:
+    elif cdtype.id() == libcudf_types.type_id.INT64:
         return np.int64((<numeric_scalar[int64_t]*>s_ptr)[0].value())
-    elif cdtype.id() == libcudf_types.UINT8:
+    elif cdtype.id() == libcudf_types.type_id.UINT8:
         return np.uint8((<numeric_scalar[uint8_t]*>s_ptr)[0].value())
-    elif cdtype.id() == libcudf_types.UINT16:
+    elif cdtype.id() == libcudf_types.type_id.UINT16:
         return np.uint16((<numeric_scalar[uint16_t]*>s_ptr)[0].value())
-    elif cdtype.id() == libcudf_types.UINT32:
+    elif cdtype.id() == libcudf_types.type_id.UINT32:
         return np.uint32((<numeric_scalar[uint32_t]*>s_ptr)[0].value())
-    elif cdtype.id() == libcudf_types.UINT64:
+    elif cdtype.id() == libcudf_types.type_id.UINT64:
         return np.uint64((<numeric_scalar[uint64_t]*>s_ptr)[0].value())
-    elif cdtype.id() == libcudf_types.FLOAT32:
+    elif cdtype.id() == libcudf_types.type_id.FLOAT32:
         return np.float32((<numeric_scalar[float]*>s_ptr)[0].value())
-    elif cdtype.id() == libcudf_types.FLOAT64:
+    elif cdtype.id() == libcudf_types.type_id.FLOAT64:
         return np.float64((<numeric_scalar[double]*>s_ptr)[0].value())
-    elif cdtype.id() == libcudf_types.BOOL8:
+    elif cdtype.id() == libcudf_types.type_id.BOOL8:
         return np.bool_((<numeric_scalar[bool]*>s_ptr)[0].value())
     else:
         raise ValueError("Could not convert cudf::scalar to numpy scalar")
@@ -475,15 +475,15 @@ cdef _get_py_decimal_from_fixed_point(unique_ptr[scalar]& s):
 
     cdef libcudf_types.data_type cdtype = s_ptr[0].type()
 
-    if cdtype.id() == libcudf_types.DECIMAL64:
+    if cdtype.id() == libcudf_types.type_id.DECIMAL64:
         rep_val = int((<fixed_point_scalar[decimal64]*>s_ptr)[0].value())
         scale = int((<fixed_point_scalar[decimal64]*>s_ptr)[0].type().scale())
         return decimal.Decimal(rep_val).scaleb(scale)
-    elif cdtype.id() == libcudf_types.DECIMAL32:
+    elif cdtype.id() == libcudf_types.type_id.DECIMAL32:
         rep_val = int((<fixed_point_scalar[decimal32]*>s_ptr)[0].value())
         scale = int((<fixed_point_scalar[decimal32]*>s_ptr)[0].type().scale())
         return decimal.Decimal(rep_val).scaleb(scale)
-    elif cdtype.id() == libcudf_types.DECIMAL128:
+    elif cdtype.id() == libcudf_types.type_id.DECIMAL128:
         rep_val = int((<fixed_point_scalar[decimal128]*>s_ptr)[0].value())
         scale = int((<fixed_point_scalar[decimal128]*>s_ptr)[0].type().scale())
         return decimal.Decimal(rep_val).scaleb(scale)
@@ -499,28 +499,28 @@ cdef _get_np_scalar_from_timestamp64(unique_ptr[scalar]& s):
 
     cdef libcudf_types.data_type cdtype = s_ptr[0].type()
 
-    if cdtype.id() == libcudf_types.TIMESTAMP_SECONDS:
+    if cdtype.id() == libcudf_types.type_id.TIMESTAMP_SECONDS:
         return np.datetime64(
             (
                 <timestamp_scalar[timestamp_ms]*> s_ptr
             )[0].ticks_since_epoch_64(),
             datetime_unit_map[<underlying_type_t_type_id>(cdtype.id())]
         )
-    elif cdtype.id() == libcudf_types.TIMESTAMP_MILLISECONDS:
+    elif cdtype.id() == libcudf_types.type_id.TIMESTAMP_MILLISECONDS:
         return np.datetime64(
             (
                 <timestamp_scalar[timestamp_ms]*> s_ptr
             )[0].ticks_since_epoch_64(),
             datetime_unit_map[<underlying_type_t_type_id>(cdtype.id())]
         )
-    elif cdtype.id() == libcudf_types.TIMESTAMP_MICROSECONDS:
+    elif cdtype.id() == libcudf_types.type_id.TIMESTAMP_MICROSECONDS:
         return np.datetime64(
             (
                 <timestamp_scalar[timestamp_ms]*> s_ptr
             )[0].ticks_since_epoch_64(),
             datetime_unit_map[<underlying_type_t_type_id>(cdtype.id())]
         )
-    elif cdtype.id() == libcudf_types.TIMESTAMP_NANOSECONDS:
+    elif cdtype.id() == libcudf_types.type_id.TIMESTAMP_NANOSECONDS:
         return np.datetime64(
             (
                 <timestamp_scalar[timestamp_ms]*> s_ptr
@@ -540,28 +540,28 @@ cdef _get_np_scalar_from_timedelta64(unique_ptr[scalar]& s):
 
     cdef libcudf_types.data_type cdtype = s_ptr[0].type()
 
-    if cdtype.id() == libcudf_types.DURATION_SECONDS:
+    if cdtype.id() == libcudf_types.type_id.DURATION_SECONDS:
         return np.timedelta64(
             (
                 <duration_scalar[duration_s]*> s_ptr
             )[0].ticks(),
             duration_unit_map[<underlying_type_t_type_id>(cdtype.id())]
         )
-    elif cdtype.id() == libcudf_types.DURATION_MILLISECONDS:
+    elif cdtype.id() == libcudf_types.type_id.DURATION_MILLISECONDS:
         return np.timedelta64(
             (
                 <duration_scalar[duration_ms]*> s_ptr
             )[0].ticks(),
             duration_unit_map[<underlying_type_t_type_id>(cdtype.id())]
         )
-    elif cdtype.id() == libcudf_types.DURATION_MICROSECONDS:
+    elif cdtype.id() == libcudf_types.type_id.DURATION_MICROSECONDS:
         return np.timedelta64(
             (
                 <duration_scalar[duration_us]*> s_ptr
             )[0].ticks(),
             duration_unit_map[<underlying_type_t_type_id>(cdtype.id())]
         )
-    elif cdtype.id() == libcudf_types.DURATION_NANOSECONDS:
+    elif cdtype.id() == libcudf_types.type_id.DURATION_NANOSECONDS:
         return np.timedelta64(
             (
                 <duration_scalar[duration_ns]*> s_ptr

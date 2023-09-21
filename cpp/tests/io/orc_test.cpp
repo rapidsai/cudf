@@ -976,6 +976,10 @@ TEST_F(OrcReaderTest, CombinedSkipRowTest)
 TEST_F(OrcStatisticsTest, Basic)
 {
   auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto ts_sequence =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i - 4) * 1000002; });
+  auto dec_sequence =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return i * 1001; });
   auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
 
   std::vector<char const*> strings{
@@ -986,11 +990,17 @@ TEST_F(OrcStatisticsTest, Basic)
     sequence, sequence + num_rows, validity);
   column_wrapper<float, typename decltype(sequence)::value_type> col2(
     sequence, sequence + num_rows, validity);
-  column_wrapper<cudf::string_view> col3{strings.begin(), strings.end()};
-  column_wrapper<bool, typename decltype(sequence)::value_type> col4(sequence, sequence + num_rows);
-  column_wrapper<cudf::timestamp_s, typename decltype(sequence)::value_type> col5(
-    sequence, sequence + num_rows, validity);
-  table_view expected({col1, col2, col3, col4, col5});
+  str_col col3{strings.begin(), strings.end()};
+  column_wrapper<cudf::timestamp_ns, typename decltype(sequence)::value_type> col4(
+    ts_sequence, ts_sequence + num_rows, validity);
+  column_wrapper<cudf::timestamp_us, typename decltype(sequence)::value_type> col5(
+    ts_sequence, ts_sequence + num_rows, validity);
+  bool_col col6({true, true, true, true, true, false, false, false, false}, validity);
+
+  cudf::test::fixed_point_column_wrapper<int64_t> col7(
+    dec_sequence, dec_sequence + num_rows, numeric::scale_type{-1});
+
+  table_view expected({col1, col2, col3, col4, col5, col6, col7});
 
   auto filepath = temp_env->get_temp_filepath("OrcStatsMerge.orc");
 
@@ -1000,16 +1010,21 @@ TEST_F(OrcStatisticsTest, Basic)
 
   auto const stats = cudf::io::read_parsed_orc_statistics(cudf::io::source_info{filepath});
 
-  auto const expected_column_names =
-    std::vector<std::string>{"", "_col0", "_col1", "_col2", "_col3", "_col4"};
+  auto expected_column_names = std::vector<std::string>{""};
+  std::generate_n(
+    std::back_inserter(expected_column_names),
+    expected.num_columns(),
+    [starting_index = 0]() mutable { return "_col" + std::to_string(starting_index++); });
   EXPECT_EQ(stats.column_names, expected_column_names);
 
   auto validate_statistics = [&](std::vector<cudf::io::column_statistics> const& stats) {
+    ASSERT_EQ(stats.size(), expected.num_columns() + 1);
     auto& s0 = stats[0];
     EXPECT_EQ(*s0.number_of_values, 9ul);
 
     auto& s1 = stats[1];
     EXPECT_EQ(*s1.number_of_values, 4ul);
+    EXPECT_TRUE(*s1.has_null);
     auto& ts1 = std::get<cudf::io::integer_statistics>(s1.type_specific_stats);
     EXPECT_EQ(*ts1.minimum, 1);
     EXPECT_EQ(*ts1.maximum, 7);
@@ -1017,30 +1032,55 @@ TEST_F(OrcStatisticsTest, Basic)
 
     auto& s2 = stats[2];
     EXPECT_EQ(*s2.number_of_values, 4ul);
+    EXPECT_TRUE(*s2.has_null);
     auto& ts2 = std::get<cudf::io::double_statistics>(s2.type_specific_stats);
     EXPECT_EQ(*ts2.minimum, 1.);
     EXPECT_EQ(*ts2.maximum, 7.);
-    // No sum ATM, filed #7087
-    ASSERT_FALSE(ts2.sum);
+    EXPECT_EQ(*ts2.sum, 16.);
 
     auto& s3 = stats[3];
     EXPECT_EQ(*s3.number_of_values, 9ul);
+    EXPECT_FALSE(*s3.has_null);
     auto& ts3 = std::get<cudf::io::string_statistics>(s3.type_specific_stats);
     EXPECT_EQ(*ts3.minimum, "Friday");
     EXPECT_EQ(*ts3.maximum, "Wednesday");
     EXPECT_EQ(*ts3.sum, 58ul);
 
     auto& s4 = stats[4];
-    EXPECT_EQ(*s4.number_of_values, 9ul);
-    EXPECT_EQ(std::get<cudf::io::bucket_statistics>(s4.type_specific_stats).count[0], 8ul);
+    EXPECT_EQ(*s4.number_of_values, 4ul);
+    EXPECT_TRUE(*s4.has_null);
+    auto& ts4 = std::get<cudf::io::timestamp_statistics>(s4.type_specific_stats);
+    EXPECT_EQ(*ts4.minimum, -4);
+    EXPECT_EQ(*ts4.maximum, 3);
+    EXPECT_EQ(*ts4.minimum_utc, -4);
+    EXPECT_EQ(*ts4.maximum_utc, 3);
+    EXPECT_EQ(*ts4.minimum_nanos, 999994);
+    EXPECT_EQ(*ts4.maximum_nanos, 6);
 
     auto& s5 = stats[5];
     EXPECT_EQ(*s5.number_of_values, 4ul);
+    EXPECT_TRUE(*s5.has_null);
     auto& ts5 = std::get<cudf::io::timestamp_statistics>(s5.type_specific_stats);
-    EXPECT_EQ(*ts5.minimum_utc, 1000);
-    EXPECT_EQ(*ts5.maximum_utc, 7000);
-    ASSERT_FALSE(ts5.minimum);
-    ASSERT_FALSE(ts5.maximum);
+    EXPECT_EQ(*ts5.minimum, -3001);
+    EXPECT_EQ(*ts5.maximum, 3000);
+    EXPECT_EQ(*ts5.minimum_utc, -3001);
+    EXPECT_EQ(*ts5.maximum_utc, 3000);
+    EXPECT_EQ(*ts5.minimum_nanos, 994000);
+    EXPECT_EQ(*ts5.maximum_nanos, 6000);
+
+    auto& s6 = stats[6];
+    EXPECT_EQ(*s6.number_of_values, 4ul);
+    EXPECT_TRUE(*s6.has_null);
+    auto& ts6 = std::get<cudf::io::bucket_statistics>(s6.type_specific_stats);
+    EXPECT_EQ(ts6.count[0], 2);
+
+    auto& s7 = stats[7];
+    EXPECT_EQ(*s7.number_of_values, 9ul);
+    EXPECT_FALSE(*s7.has_null);
+    auto& ts7 = std::get<cudf::io::decimal_statistics>(s7.type_specific_stats);
+    EXPECT_EQ(*ts7.minimum, "0.0");
+    EXPECT_EQ(*ts7.maximum, "800.8");
+    EXPECT_EQ(*ts7.sum, "3603.6");
   };
 
   validate_statistics(stats.file_stats);
@@ -1259,9 +1299,8 @@ TEST_F(OrcStatisticsTest, Overflow)
 
 TEST_F(OrcStatisticsTest, HasNull)
 {
-  // cudf's ORC writer doesn't yet support the ability to encode the hasNull value in statistics so
-  // we're embedding a file created using pyorc
-  //
+  // This test can now be implemented with libcudf; keeping the pyorc version to keep the test
+  // inputs diversified
   // Method to create file:
   // >>> import pyorc
   // >>> output = open("./temp.orc", "wb")
@@ -1859,6 +1898,40 @@ TEST_F(OrcWriterTest, EmptyChildStringColumn)
   auto result = cudf::io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+template <typename T>
+void check_all_null_stats(cudf::io::column_statistics const& stats)
+{
+  EXPECT_EQ(stats.number_of_values, 0);
+  EXPECT_TRUE(stats.has_null);
+
+  auto const ts = std::get<T>(stats.type_specific_stats);
+  EXPECT_FALSE(ts.minimum.has_value());
+  EXPECT_FALSE(ts.maximum.has_value());
+  EXPECT_TRUE(ts.sum.has_value());
+  EXPECT_EQ(*ts.sum, 0);
+}
+
+TEST_F(OrcStatisticsTest, AllNulls)
+{
+  float64_col double_col({0., 0., 0.}, cudf::test::iterators::all_nulls());
+  int32_col int_col({0, 0, 0}, cudf::test::iterators::all_nulls());
+  str_col string_col({"", "", ""}, cudf::test::iterators::all_nulls());
+
+  cudf::table_view expected({int_col, double_col, string_col});
+
+  std::vector<char> out_buffer;
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer}, expected);
+  cudf::io::write_orc(out_opts);
+
+  auto const stats = cudf::io::read_parsed_orc_statistics(
+    cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+
+  check_all_null_stats<cudf::io::integer_statistics>(stats.file_stats[1]);
+  check_all_null_stats<cudf::io::double_statistics>(stats.file_stats[2]);
+  check_all_null_stats<cudf::io::string_statistics>(stats.file_stats[3]);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

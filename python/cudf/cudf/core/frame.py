@@ -362,12 +362,12 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @_cudf_nvtx_annotate
-    def _get_columns_by_label(self, labels, downcast=False):
+    def _get_columns_by_label(self, labels, *, downcast=False) -> Self:
         """
         Returns columns of the Frame specified by `labels`
 
         """
-        return self._data.select_by_label(labels)
+        return self.__class__._from_data(self._data.select_by_label(labels))
 
     @property
     @_cudf_nvtx_annotate
@@ -437,7 +437,7 @@ class Frame(BinaryOperand, Scannable):
         ncol = self._num_columns
         if ncol == 0:
             return make_empty_matrix(
-                shape=(0, 0), dtype=np.dtype("float64"), order="F"
+                shape=(len(self), ncol), dtype=np.dtype("float64"), order="F"
             )
 
         if dtype is None:
@@ -1409,12 +1409,25 @@ class Frame(BinaryOperand, Scannable):
         if len(values) != len(self._data):
             raise ValueError("Mismatch number of columns to search for.")
 
-        sources = [
-            col
-            if is_dtype_equal(col.dtype, val.dtype)
-            else col.astype(val.dtype)
+        # TODO: Change behavior based on the decision in
+        # https://github.com/pandas-dev/pandas/issues/54668
+        common_dtype_list = [
+            find_common_type([col.dtype, val.dtype])
             for col, val in zip(self._columns, values)
         ]
+        sources = [
+            col
+            if is_dtype_equal(col.dtype, common_dtype)
+            else col.astype(common_dtype)
+            for col, common_dtype in zip(self._columns, common_dtype_list)
+        ]
+        values = [
+            val
+            if is_dtype_equal(val.dtype, common_dtype)
+            else val.astype(common_dtype)
+            for val, common_dtype in zip(values, common_dtype_list)
+        ]
+
         outcol = libcudf.search.search_sorted(
             sources,
             values,
