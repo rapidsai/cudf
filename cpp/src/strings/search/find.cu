@@ -305,20 +305,22 @@ std::unique_ptr<column> find(strings_column_view const& strings,
                              string_scalar const& target,
                              size_type start,
                              size_type stop,
+                             rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::find(strings, target, start, stop, cudf::get_default_stream(), mr);
+  return detail::find(strings, target, start, stop, stream, mr);
 }
 
 std::unique_ptr<column> rfind(strings_column_view const& strings,
                               string_scalar const& target,
                               size_type start,
                               size_type stop,
+                              rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rfind(strings, target, start, stop, cudf::get_default_stream(), mr);
+  return detail::rfind(strings, target, start, stop, stream, mr);
 }
 
 std::unique_ptr<column> find(strings_column_view const& input,
@@ -618,50 +620,56 @@ std::unique_ptr<column> ends_with(strings_column_view const& strings,
 
 std::unique_ptr<column> contains(strings_column_view const& strings,
                                  string_scalar const& target,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(strings, target, cudf::get_default_stream(), mr);
+  return detail::contains(strings, target, stream, mr);
 }
 
 std::unique_ptr<column> contains(strings_column_view const& strings,
                                  strings_column_view const& targets,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(strings, targets, cudf::get_default_stream(), mr);
+  return detail::contains(strings, targets, stream, mr);
 }
 
 std::unique_ptr<column> starts_with(strings_column_view const& strings,
                                     string_scalar const& target,
+                                    rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::starts_with(strings, target, cudf::get_default_stream(), mr);
+  return detail::starts_with(strings, target, stream, mr);
 }
 
 std::unique_ptr<column> starts_with(strings_column_view const& strings,
                                     strings_column_view const& targets,
+                                    rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::starts_with(strings, targets, cudf::get_default_stream(), mr);
+  return detail::starts_with(strings, targets, stream, mr);
 }
 
 std::unique_ptr<column> ends_with(strings_column_view const& strings,
                                   string_scalar const& target,
+                                  rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::ends_with(strings, target, cudf::get_default_stream(), mr);
+  return detail::ends_with(strings, target, stream, mr);
 }
 
 std::unique_ptr<column> ends_with(strings_column_view const& strings,
                                   strings_column_view const& targets,
+                                  rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::ends_with(strings, targets, cudf::get_default_stream(), mr);
+  return detail::ends_with(strings, targets, stream, mr);
 }
 
 }  // namespace strings
