@@ -29,24 +29,20 @@
 namespace cudf::reduction::detail {
 
 /**
- * @brief Compute the histogram for the input table.
- *
- * This is equivalent to do a distinct count for each unique row in the input.
+ * @brief Compute the frequency for each unique row in the input table.
  *
  * @param input The input table to compute histogram
  * @param partial_counts An optional column containing count for each row
- * @param output_dtype The type to store count value
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate memory of the returned objects
  * @return A pair of array contains the (stable-order) indices of the distinct rows in the input
  * table, and their corresponding distinct counts
  */
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>, std::unique_ptr<column>> histogram_table(
-  table_view const& input,
-  std::optional<column_view> const& partial_counts,
-  data_type const output_dtype,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr);
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>, std::unique_ptr<column>>
+compute_row_frequencies(table_view const& input,
+                        std::optional<column_view> const& partial_counts,
+                        rmm::cuda_stream_view stream,
+                        rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Create an empty histogram column.

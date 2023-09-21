@@ -140,13 +140,11 @@ std::unique_ptr<scalar> all(column_view const& col,
  * @throw cudf::logic_error if `output_dtype` is not integer type
  *
  * @param input The column to compute histogram
- * @param output_dtype Data type to store the element frequencies
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return A list_scalar storing a structs column as the result histogram
  */
 std::unique_ptr<scalar> histogram(column_view const& input,
-                                  data_type const output_dtype,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr);
 
