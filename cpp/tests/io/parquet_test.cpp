@@ -5686,7 +5686,16 @@ TEST_F(ParquetReaderTest, RepeatedNoAnnotations)
   auto list_col = cudf::make_lists_column(
     num_list_rows, std::move(list_offsets_column), struct_col.release(), 2, std::move(mask));
 
-  table_view expected{{col0, *list_col}};
+  std::vector<std::unique_ptr<cudf::column>> struct_children;
+  struct_children.push_back(std::move(list_col));
+
+  auto outer_struct =
+    cudf::test::structs_column_wrapper{{std::move(struct_children)}, {0, 0, 1, 1, 1, 1}};
+  table_view expected{{col0, outer_struct}};
+
+  cudf::test::print(expected.column(1));
+  printf("vs:\n");
+  cudf::test::print(result.tbl->view().column(1));
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view(), expected);
 }

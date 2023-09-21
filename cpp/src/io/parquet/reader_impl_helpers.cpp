@@ -175,6 +175,102 @@ type_id to_type_id(SchemaElement const& schema,
   return type_id::EMPTY;
 }
 
+void metadata::sanitize_schema()
+{
+  // Parquet isn't very strict about incoming metadata. Lots of things can and should be inferred.
+  // There are also a lot of rules that simply aren't followed and are expected to be worked around.
+  // This step sanitizes the metadata to something that isn't ambiguous.
+  //
+  // Take, for example, the following schema:
+  //
+  //  required group field_id=-1 user {
+  //    required int32 field_id=-1 id;
+  //    optional group field_id=-1 phoneNumbers {
+  //      repeated group field_id=-1 phone {
+  //        required int64 field_id=-1 number;
+  //        optional binary field_id=-1 kind (String);
+  //      }
+  //    }
+  //  }
+  //
+  // This real-world example has no annotations telling us what is a list or a struct. On the
+  // surface this looks like a column of id's and a column of list<struct<int64, string>>, but this
+  // actually should be interpreted as a struct<list<struct<int64, string>>>. The phoneNumbers field
+  // has to be a struct because it is a group with no repeated tag and we have no annotation. The
+  // repeated group is actually BOTH a struct due to the multiple children and a list due to
+  // repeated.
+  //
+  // This code attempts to make this less messy for the code that follows.
+
+  std::function<void(size_t, std::string)> print_node = [&](size_t idx, std::string prefix) {
+    auto& e = schema[idx];
+    printf(
+      "%sschema element %lu(%s) type %d, converted type %d, repetition_type %d, num_children %d "
+      "parent %u, max def %d, max rep %d\n",
+      prefix.c_str(),
+      idx,
+      e.name.c_str(),
+      (int)e.type,
+      (int)e.converted_type,
+      (int)e.repetition_type,
+      (int)e.num_children,
+      e.parent_idx,
+      e.max_definition_level,
+      e.max_repetition_level);
+    for (auto& child_idx : e.children_idx) {
+      print_node(child_idx, "  " + prefix);
+    }
+  };
+
+  std::function<void(size_t)> process = [&](size_t schema_idx) -> void {
+    if (schema_idx < 0) { return; }
+    auto& schema_elem = schema[schema_idx];
+    if (schema_idx != 0 && schema_elem.type == UNDEFINED_TYPE) {
+      if (schema_elem.type == UNDEFINED_TYPE && schema_elem.repetition_type == REPEATED &&
+          schema_elem.num_children > 1) {
+        // This is a list of structs, so we need to add a need to both mark this as a list, but also
+        // add a struct child and move this element's children to the struct
+        schema_elem.converted_type  = LIST;
+        schema_elem.repetition_type = OPTIONAL;
+        auto const struct_node_idx  = schema.size();
+
+        SchemaElement struct_elem;
+        struct_elem.name            = "struct_node";
+        struct_elem.repetition_type = REQUIRED;
+        struct_elem.num_children    = schema_elem.num_children;
+        struct_elem.type            = UNDEFINED_TYPE;
+        struct_elem.converted_type  = UNKNOWN;
+
+        // swap children
+        struct_elem.children_idx = std::move(schema_elem.children_idx);
+        schema_elem.children_idx = {struct_node_idx};
+        schema_elem.num_children = 1;
+
+        struct_elem.max_definition_level = schema_elem.max_definition_level;
+        struct_elem.max_repetition_level = schema_elem.max_repetition_level;
+        schema_elem.max_repetition_level = schema[schema_elem.parent_idx].max_repetition_level;
+
+        // change parent index on new node and on children
+        struct_elem.parent_idx = schema_idx;
+        for (auto& child_idx : struct_elem.children_idx) {
+          schema[child_idx].parent_idx = struct_node_idx;
+        }
+        // add our struct
+        schema.push_back(struct_elem);
+      }
+    }
+
+    for (auto& child_idx : schema_elem.children_idx) {
+      process(child_idx);
+    }
+  };
+
+  //  printf("initial layout:\n");
+  //  print_node(0, "initial ");
+  process(0);
+  //  print_node(0, "final_layout ");
+}
+
 metadata::metadata(datasource* source)
 {
   constexpr auto header_len = sizeof(file_header_s);
@@ -195,6 +291,7 @@ metadata::metadata(datasource* source)
   CompactProtocolReader cp(buffer->data(), ender->footer_len);
   CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
   CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
+  sanitize_schema();
 }
 
 std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
@@ -425,7 +522,7 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
 
       // if schema_elem is a stub then it does not exist in the column_name_info and column_buffer
       // hierarchy. So continue on
-      if (schema_elem.is_stub()) {
+      if (schema_elem.is_stub(get_schema(schema_elem.parent_idx))) {
         // is this legit?
         CUDF_EXPECTS(schema_elem.num_children == 1, "Unexpected number of children for stub");
         auto child_col_name_info = (col_name_info) ? &col_name_info->children[0] : nullptr;
@@ -433,10 +530,10 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
           child_col_name_info, schema_elem.children_idx[0], out_col_array, has_list_parent);
       }
 
+      auto const one_level_list = schema_elem.is_one_level_list(get_schema(schema_elem.parent_idx));
+
       // if we're at the root, this is a new output column
-      auto const col_type = schema_elem.is_one_level_list(get_schema(schema_elem.parent_idx)) ||
-                                (schema_elem.num_children >= 1 &&
-                                 schema_elem.is_list(get_schema(schema_elem.children_idx[0])))
+      auto const col_type = one_level_list
                               ? type_id::LIST
                               : to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
       auto const dtype    = to_data_type(col_type, schema_elem);
@@ -475,7 +572,7 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
           input_column_info{schema_idx, schema_elem.name, schema_elem.max_repetition_level > 0});
 
         // set up child output column for one-level encoding list
-        if (schema_elem.is_one_level_list(get_schema(schema_elem.parent_idx))) {
+        if (one_level_list) {
           // determine the element data type
           auto const element_type =
             to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
@@ -496,9 +593,7 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
         std::copy(nesting.cbegin(), nesting.cend(), std::back_inserter(input_col.nesting));
 
         // pop off the extra nesting element.
-        if (schema_elem.is_one_level_list(get_schema(schema_elem.parent_idx))) {
-          nesting.pop_back();
-        }
+        if (one_level_list) { nesting.pop_back(); }
 
         path_is_valid = true;  // If we're able to reach leaf then path is valid
       }
