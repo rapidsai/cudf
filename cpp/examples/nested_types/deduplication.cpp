@@ -24,9 +24,36 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <rmm/mr/device/cuda_memory_resource.hpp>
+#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device/owning_wrapper.hpp>
+#include <rmm/mr/device/pool_memory_resource.hpp>
+
 #include <chrono>
 #include <iostream>
 #include <string>
+
+/**
+ * @brief Create CUDA memory resource
+ */
+auto make_cuda_mr() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
+
+/**
+ * @brief Create a pool device memory resource
+ */
+auto make_pool_mr()
+{
+  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_cuda_mr());
+}
+
+/**
+ * @brief Create memory resource for libcudf functions
+ */
+std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::string const& name)
+{
+  if (name == "pool") { return make_pool_mr(); }
+  return make_cuda_mr();
+}
 
 cudf::io::table_with_metadata read_json(std::string filepath)
 {
@@ -60,11 +87,14 @@ std::unique_ptr<cudf::table> count_aggregate(cudf::table_view tbl)
   auto agg_results   = grpby_obj.aggregate(requests);
   auto result_key    = std::move(agg_results.first);
   auto result_val    = std::move(agg_results.second[0].results[0]);
-  std::vector<cudf::column_view> columns{result_key->get_column(0), *result_val};
-  auto agg_v = cudf::table_view(columns);
+
+  auto left_cols = result_key->release();
+  left_cols.push_back(std::move(result_val));
+  // std::vector<cudf::column_view> columns{result_key->get_column(0), *result_val};
+  // auto agg_v = cudf::table_view(columns);
 
   // Join on keys to get
-  return std::make_unique<cudf::table>(agg_v);
+  return std::make_unique<cudf::table>(std::move(left_cols));
 }
 
 std::unique_ptr<cudf::table> join_count(cudf::table_view left, cudf::table_view right)
@@ -93,6 +123,7 @@ std::unique_ptr<cudf::table> sort_keys(cudf::table_view tbl)
  * Command line parameters:
  * 1. JSON input file name/path (default: "example.json")
  * 2. JSON output file name/path (default: "output.json")
+ * 3. Memory resource (optional): "pool" or "cuda" (default: "pool")
  *
  * The stdout includes the number of rows in the input and the output size in bytes.
  */
@@ -100,16 +131,22 @@ int main(int argc, char const** argv)
 {
   std::string input_filepath;
   std::string output_filepath;
-  if (argc < 2) {
+  std::string mr_name;
+  if (argc < 3) {
     input_filepath  = "example.json";
     output_filepath = "output.json";
+    mr_name         = "pool";
   } else if (argc == 3) {
     input_filepath  = argv[1];
     output_filepath = argv[2];
+    mr_name         = argv[3];
   } else {
     std::cout << "Either provide all command-line arguments, or none to use defaults" << std::endl;
     return 1;
   }
+
+  auto resource = create_memory_resource(mr_name);
+  rmm::mr::set_current_device_resource(resource.get());
 
   // read input file
   auto [tbl, metadata] = read_json(input_filepath);
