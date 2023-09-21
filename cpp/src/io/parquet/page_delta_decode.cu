@@ -37,7 +37,7 @@ __global__ void __launch_bounds__(96)
                        device_span<ColumnChunkDesc const> chunks,
                        size_t min_row,
                        size_t num_rows,
-                       int* error_code)
+                       int32_t* error_code)
 {
   using cudf::detail::warp_size;
   __shared__ __align__(16) delta_binary_decoder db_state;
@@ -151,7 +151,10 @@ __global__ void __launch_bounds__(96)
     __syncthreads();
   }
 
-  if (!t and s->error != 0) { atomicOr(error_code, s->error); }
+  if (!t and s->error != 0) {
+    cuda::atomic_ref<int32_t, cuda::thread_scope_device> ref{*error_code};
+    ref.store(s->error, cuda::std::memory_order_relaxed);
+  }
 }
 
 }  // anonymous namespace
@@ -164,7 +167,7 @@ void __host__ DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages
                                 size_t num_rows,
                                 size_t min_row,
                                 int level_type_size,
-                                int* error_code,
+                                int32_t* error_code,
                                 rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");

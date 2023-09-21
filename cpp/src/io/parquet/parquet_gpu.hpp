@@ -574,7 +574,7 @@ void DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
                     size_t num_rows,
                     size_t min_row,
                     int level_type_size,
-                    int* error_code,
+                    int32_t* error_code,
                     rmm::cuda_stream_view stream);
 
 /**
@@ -596,7 +596,7 @@ void DecodeStringPageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
                           size_t num_rows,
                           size_t min_row,
                           int level_type_size,
-                          int* error_code,
+                          int32_t* error_code,
                           rmm::cuda_stream_view stream);
 
 /**
@@ -618,7 +618,7 @@ void DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages,
                        size_t num_rows,
                        size_t min_row,
                        int level_type_size,
-                       int* error_code,
+                       int32_t* error_code,
                        rmm::cuda_stream_view stream);
 
 /**

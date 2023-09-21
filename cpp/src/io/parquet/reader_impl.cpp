@@ -163,7 +163,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   chunk_nested_valids.host_to_device_async(_stream);
   chunk_nested_data.host_to_device_async(_stream);
 
-  rmm::device_scalar<int> error_code(0, _stream);
+  rmm::device_scalar<int32_t> error_code(0, _stream);
 
   // get the number of streams we need from the pool and tell them to wait on the H2D copies
   int const nkernels = std::bitset<32>(kernel_mask).count();
