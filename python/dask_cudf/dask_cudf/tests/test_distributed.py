@@ -89,7 +89,7 @@ def test_p2p_shuffle():
                     end="2000-01-08",
                     dtypes={"x": int},
                 )
-                .reset_index()
+                .reset_index(drop=True)
                 .to_backend("cudf")
             )
             dd.assert_eq(
