@@ -56,12 +56,12 @@ std::unique_ptr<column> build_histogram(column_view const& values,
   auto const labeled_values = table_view{{labels_cv, values}};
 
   // Build histogram for the labeled values.
-  auto [distinct_indices, distinct_counts] = cudf::reduction::detail::table_histogram(
+  auto [distinct_indices, distinct_counts] = cudf::reduction::detail::histogram_table(
     labeled_values, partial_counts, histogram_count_dtype, stream, mr);
 
   // Gather the distinct rows for the output histogram.
   auto out_table = cudf::detail::gather(labeled_values,
-                                        distinct_indices,
+                                        *distinct_indices,
                                         out_of_bounds_policy::DONT_CHECK,
                                         cudf::detail::negative_index_policy::NOT_ALLOWED,
                                         stream,
@@ -76,7 +76,7 @@ std::unique_ptr<column> build_histogram(column_view const& values,
   struct_children.emplace_back(std::move(out_table->release().back()));
   struct_children.emplace_back(std::move(distinct_counts));
   auto out_structs = make_structs_column(
-    static_cast<size_type>(distinct_indices.size()), std::move(struct_children), 0, {}, stream, mr);
+    static_cast<size_type>(distinct_indices->size()), std::move(struct_children), 0, {}, stream, mr);
 
   return make_lists_column(
     num_groups, std::move(out_offsets), std::move(out_structs), 0, {}, stream, mr);

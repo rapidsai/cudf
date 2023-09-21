@@ -41,7 +41,7 @@ namespace cudf::reduction::detail {
  * @return A pair of array contains the (stable-order) indices of the distinct rows in the input
  * table, and their corresponding distinct counts
  */
-std::pair<rmm::device_uvector<size_type>, std::unique_ptr<column>> table_histogram(
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>, std::unique_ptr<column>> histogram_table(
   table_view const& input,
   std::optional<column_view> const& partial_counts,
   data_type const output_dtype,

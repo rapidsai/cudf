@@ -212,7 +212,7 @@ std::unique_ptr<column> make_empty_histogram_like(column_view const& values)
                                   std::move(struct_children));
 }
 
-std::pair<rmm::device_uvector<size_type>, std::unique_ptr<column>> table_histogram(
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>, std::unique_ptr<column>> histogram_table(
   table_view const& input,
   std::optional<column_view> const& partial_counts,
   data_type const output_dtype,
@@ -255,8 +255,8 @@ std::pair<rmm::device_uvector<size_type>, std::unique_ptr<column>> table_histogr
   }
 
   // Gather the indices of distinct rows.
-  auto distinct_indices = rmm::device_uvector<size_type>(
-    static_cast<size_type>(map.get_size()), stream, rmm::mr::get_current_device_resource());
+  auto distinct_indices = std::make_unique<rmm::device_uvector<size_type>>(
+    static_cast<size_type>(map.get_size()), stream, mr);
 
   // Store the number of occurrences of each distinct row.
   auto distinct_counts = make_numeric_column(
@@ -269,7 +269,7 @@ std::pair<rmm::device_uvector<size_type>, std::unique_ptr<column>> table_histogr
                   input.num_rows(),
                   has_nulls,
                   has_nested_columns,
-                  distinct_indices.begin(),
+                  distinct_indices->begin(),
                   distinct_counts->mutable_view(),
                   partial_counts,
                   stream);
@@ -287,8 +287,8 @@ std::unique_ptr<cudf::scalar> histogram(column_view const& input,
 
   auto const input_tv = table_view{{input}};
   auto [distinct_indices, distinct_counts] =
-    table_histogram(input_tv, std::nullopt, output_dtype, stream, mr);
-  return gather_histogram(input_tv, distinct_indices, std::move(distinct_counts), stream, mr);
+    histogram_table(input_tv, std::nullopt, output_dtype, stream, mr);
+  return gather_histogram(input_tv, *distinct_indices, std::move(distinct_counts), stream, mr);
 }
 
 std::unique_ptr<cudf::scalar> merge_histogram(column_view const& input,
@@ -309,8 +309,8 @@ std::unique_ptr<cudf::scalar> merge_histogram(column_view const& input,
 
   auto const values_tv = table_view{{input_values}};
   auto [distinct_indices, distinct_counts] =
-    table_histogram(values_tv, input_counts, data_type{type_id::INT64}, stream, mr);
-  return gather_histogram(values_tv, distinct_indices, std::move(distinct_counts), stream, mr);
+    histogram_table(values_tv, input_counts, data_type{type_id::INT64}, stream, mr);
+  return gather_histogram(values_tv, *distinct_indices, std::move(distinct_counts), stream, mr);
 }
 
 }  // namespace cudf::reduction::detail
