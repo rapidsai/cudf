@@ -57,12 +57,14 @@ struct regex_program;
  *
  * @param input Strings instance for this operation
  * @param prog Regex program instance
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New lists column of strings
  */
 std::unique_ptr<column> findall(
   strings_column_view const& input,
   regex_program const& prog,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
