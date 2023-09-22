@@ -167,7 +167,7 @@ std::unique_ptr<table> from_arrow(
 /**
  * @brief Create `cudf::scalar` from given arrow Scalar input
  *
- * @param input arrow:Scalar that needs to be converted to `cudf::scalar`
+ * @param input `arrow::Scalar` that needs to be converted to `cudf::scalar`
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr    Device memory resource used to allocate `cudf::scalar`
  * @return cudf scalar generated from given arrow Scalar
