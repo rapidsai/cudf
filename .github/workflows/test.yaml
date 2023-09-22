@@ -32,7 +32,7 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: "gpu-v100-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci:latest"
+      container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_cpp_memcheck.sh"
   conda-python-cudf-tests:
     secrets: inherit
@@ -63,7 +63,7 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: "gpu-v100-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci:latest"
+      container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_java.sh"
   conda-notebook-tests:
     secrets: inherit
@@ -75,7 +75,7 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: "gpu-v100-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci:latest"
+      container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_notebooks.sh"
   wheel-tests-cudf:
     secrets: inherit
