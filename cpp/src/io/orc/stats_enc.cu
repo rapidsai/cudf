@@ -76,8 +76,8 @@ __global__ void __launch_bounds__(block_size, 1)
 {
   using block_scan = cub::BlockScan<uint32_t, block_size, cub::BLOCK_SCAN_WARP_SCANS>;
   __shared__ typename block_scan::TempStorage temp_storage;
-  volatile uint32_t stats_size = 0;
-  auto t                       = threadIdx.x;
+  uint32_t stats_size = 0;
+  auto t              = threadIdx.x;
   __syncthreads();
   for (thread_index_type start = 0; start < statistics_count; start += block_size) {
     uint32_t stats_len = 0, stats_pos;
