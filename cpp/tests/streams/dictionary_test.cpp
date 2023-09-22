@@ -48,7 +48,7 @@ TEST_F(DictionaryTest, GetIndex)
   std::vector<int32_t> elements{0, 2, 2, 6, 6};
   cudf::test::dictionary_column_wrapper<int32_t> dict_col(elements.begin(), elements.end());
   cudf::dictionary_column_view dict_col_view = dict_col;
-  cudf::numeric_scalar<int32_t> key_scalar(2);
+  cudf::numeric_scalar<int32_t> key_scalar(2, true, cudf::test::get_default_stream());
   cudf::dictionary::get_index(dict_col_view, key_scalar, cudf::test::get_default_stream());
 }
 
