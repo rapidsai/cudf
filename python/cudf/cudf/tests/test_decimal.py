@@ -93,15 +93,15 @@ def test_from_arrow_max_precision_decimal32():
 )
 def test_typecast_from_float_to_decimal(data, from_dtype, to_dtype):
     got = data.astype(from_dtype)
-
+    import pdb;pdb.set_trace()
     pa_arr = got.to_arrow().cast(
         pa.decimal128(to_dtype.precision, to_dtype.scale)
     )
     expected = cudf.Series(Decimal64Column.from_arrow(pa_arr))
 
-    got = got.astype(to_dtype)
+    new_got = got.astype(to_dtype)
 
-    assert_eq(got, expected)
+    assert_eq(new_got, expected)
 
 
 @pytest.mark.parametrize(
