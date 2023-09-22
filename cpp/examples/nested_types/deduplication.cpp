@@ -132,11 +132,11 @@ int main(int argc, char const** argv)
   std::string input_filepath;
   std::string output_filepath;
   std::string mr_name;
-  if (argc < 3) {
+  if (argc < 4) {
     input_filepath  = "example.json";
     output_filepath = "output.json";
     mr_name         = "pool";
-  } else if (argc == 3) {
+  } else if (argc == 4) {
     input_filepath  = argv[1];
     output_filepath = argv[2];
     mr_name         = argv[3];
