@@ -85,8 +85,8 @@ std::unique_ptr<column> stable_sorted_order(
  *                          `input.num_columns()` or empty. If empty,
  *                          `null_order::BEFORE` is assumed for all columns.
  *
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @returns bool                true if sorted as expected, false if not
+ * @param stream            CUDA stream used for device memory operations and kernel launches
+ * @returns                 true if sorted as expected, false if not
  */
 bool is_sorted(cudf::table_view const& table,
                std::vector<order> const& column_order,
