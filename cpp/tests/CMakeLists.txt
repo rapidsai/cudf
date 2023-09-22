@@ -453,6 +453,7 @@ ConfigureTest(
   rolling/grouped_rolling_test.cpp
   rolling/lead_lag_test.cpp
   rolling/nth_element_test.cpp
+  rolling/offset_row_window_test.cpp
   rolling/range_comparator_test.cu
   rolling/range_rolling_window_test.cpp
   rolling/range_window_bounds_test.cpp
@@ -627,7 +628,11 @@ ConfigureTest(STREAM_CONCATENATE_TEST streams/concatenate_test.cpp STREAM_MODE t
 ConfigureTest(STREAM_FILLING_TEST streams/filling_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_REPLACE_TEST streams/replace_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_SEARCH_TEST streams/search_test.cpp STREAM_MODE testing)
-ConfigureTest(STREAM_STRINGS_TEST streams/strings/case_test.cpp STREAM_MODE testing)
+ConfigureTest(
+  STREAM_STRINGS_TEST streams/strings/case_test.cpp streams/strings/find_test.cpp STREAM_MODE
+  testing
+)
+ConfigureTest(STREAM_TEXT_TEST streams/text/ngrams_test.cpp STREAM_MODE testing)
 
 # ##################################################################################################
 # Install tests ####################################################################################
