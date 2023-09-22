@@ -127,9 +127,7 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
  * @brief Invokes the given `func` with desired comparators based on the specified `compare_nans`
  * parameter
  *
- * @tparam HaystackHasNested Flag indicating whether there are nested columns in haystack
- * @tparam HasAnyNested Flag indicating whether there are nested columns in either haystack or
- * needles
+ * @tparam HasNested Flag indicating whether there are nested columns in haystack or needles
  * @tparam Hasher Type of device hash function
  * @tparam Func Type of the helper function doing `contains` check
  *
@@ -142,7 +140,7 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
  * @param d_hasher Device hash functor
  * @param func The input functor to invoke
  */
-template <bool HaystackHasNested, bool HasAnyNested, typename Hasher, typename Func>
+template <bool HasNested, typename Hasher, typename Func>
 void dispatch_nan_comparator(
   null_equality compare_nulls,
   nan_equality compare_nans,
@@ -155,7 +153,7 @@ void dispatch_nan_comparator(
 {
   // Distinguish probing scheme CG sizes between nested and flat types for better performance
   auto const probing_scheme = [&]() {
-    if constexpr (HaystackHasNested) {
+    if constexpr (HasNested) {
       return cuco::experimental::linear_probing<4, Hasher>{d_hasher};
     } else {
       return cuco::experimental::linear_probing<1, Hasher>{d_hasher};
@@ -165,16 +163,16 @@ void dispatch_nan_comparator(
   if (compare_nans == nan_equality::ALL_EQUAL) {
     using nan_equal_comparator =
       cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
-    auto const d_self_equal = self_equal.equal_to<HaystackHasNested>(
+    auto const d_self_equal = self_equal.equal_to<HasNested>(
       nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, nan_equal_comparator{});
-    auto const d_two_table_equal = two_table_equal.equal_to<HasAnyNested>(
+    auto const d_two_table_equal = two_table_equal.equal_to<HasNested>(
       nullate::DYNAMIC{has_any_nulls}, compare_nulls, nan_equal_comparator{});
     func(d_self_equal, d_two_table_equal, probing_scheme);
   } else {
     using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
-    auto const d_self_equal      = self_equal.equal_to<HaystackHasNested>(
+    auto const d_self_equal      = self_equal.equal_to<HasNested>(
       nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, nan_unequal_comparator{});
-    auto const d_two_table_equal = two_table_equal.equal_to<HasAnyNested>(
+    auto const d_two_table_equal = two_table_equal.equal_to<HasNested>(
       nullate::DYNAMIC{has_any_nulls}, compare_nulls, nan_unequal_comparator{});
     func(d_self_equal, d_two_table_equal, probing_scheme);
   }
@@ -263,34 +261,23 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
     };
 
   if (cudf::detail::has_nested_columns(haystack)) {
-    dispatch_nan_comparator<true, true>(compare_nulls,
-                                        compare_nans,
-                                        haystack_has_nulls,
-                                        has_any_nulls,
-                                        self_equal,
-                                        two_table_equal,
-                                        d_hasher,
-                                        helper_func);
+    dispatch_nan_comparator<true>(compare_nulls,
+                                  compare_nans,
+                                  haystack_has_nulls,
+                                  has_any_nulls,
+                                  self_equal,
+                                  two_table_equal,
+                                  d_hasher,
+                                  helper_func);
   } else {
-    if (cudf::detail::has_nested_columns(needles)) {
-      dispatch_nan_comparator<false, true>(compare_nulls,
-                                           compare_nans,
-                                           haystack_has_nulls,
-                                           has_any_nulls,
-                                           self_equal,
-                                           two_table_equal,
-                                           d_hasher,
-                                           helper_func);
-    } else {
-      dispatch_nan_comparator<false, false>(compare_nulls,
-                                            compare_nans,
-                                            haystack_has_nulls,
-                                            has_any_nulls,
-                                            self_equal,
-                                            two_table_equal,
-                                            d_hasher,
-                                            helper_func);
-    }
+    dispatch_nan_comparator<false>(compare_nulls,
+                                   compare_nans,
+                                   haystack_has_nulls,
+                                   has_any_nulls,
+                                   self_equal,
+                                   two_table_equal,
+                                   d_hasher,
+                                   helper_func);
   }
 
   return contained;
