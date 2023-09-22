@@ -189,6 +189,8 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(cudf::have_same_types(haystack, needles), "Column types mismatch");
+
   auto const haystack_has_nulls = has_nested_nulls(haystack);
   auto const needles_has_nulls  = has_nested_nulls(needles);
   auto const has_any_nulls      = haystack_has_nulls || needles_has_nulls;
