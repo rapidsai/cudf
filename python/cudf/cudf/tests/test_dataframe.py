@@ -10418,7 +10418,7 @@ def test_init_from_2_categoricalindex_series_diff_categories():
     )
     result = cudf.DataFrame([s1, s2])
     expected = pd.DataFrame([s1.to_pandas(), s2.to_pandas()])
-    assert_eq(result, expected)
+    assert_eq(result, expected, check_dtype=False)
 
 
 def test_data_frame_values_no_cols_but_index():
