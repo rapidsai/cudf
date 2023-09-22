@@ -47,19 +47,19 @@ namespace nvtext {
  * @throw cudf::logic_error if `separator` is invalid
  * @throw cudf::logic_error if there are not enough strings to generate any ngrams
  *
- * @param strings Strings column to tokenize and produce ngrams from.
- * @param ngrams The ngram number to generate.
- *               Default is 2 = bigram.
- * @param separator The string to use for separating ngram tokens.
- *                  Default is "_" character.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings columns of tokens.
+ * @param input Strings column to tokenize and produce ngrams from
+ * @param ngrams The ngram number to generate
+ * @param separator The string to use for separating ngram tokens
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings columns of tokens
  */
 std::unique_ptr<cudf::column> generate_ngrams(
-  cudf::strings_column_view const& strings,
-  cudf::size_type ngrams               = 2,
-  cudf::string_scalar const& separator = cudf::string_scalar{"_"},
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
+  cudf::strings_column_view const& input,
+  cudf::size_type ngrams,
+  cudf::string_scalar const& separator,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Generates ngrams of characters within each string.
@@ -79,15 +79,17 @@ std::unique_ptr<cudf::column> generate_ngrams(
  * @throw cudf::logic_error if `ngrams < 2`
  * @throw cudf::logic_error if there are not enough characters to generate any ngrams
  *
- * @param strings Strings column to produce ngrams from.
+ * @param input Strings column to produce ngrams from
  * @param ngrams The ngram number to generate.
  *               Default is 2 = bigram.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings columns of tokens.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings columns of tokens
  */
 std::unique_ptr<cudf::column> generate_character_ngrams(
-  cudf::strings_column_view const& strings,
+  cudf::strings_column_view const& input,
   cudf::size_type ngrams              = 2,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -113,14 +115,16 @@ std::unique_ptr<cudf::column> generate_character_ngrams(
  * @throw cudf::logic_error if `ngrams < 2`
  * @throw cudf::logic_error if there are not enough characters to generate any ngrams
  *
- * @param strings Strings column to produce ngrams from.
+ * @param input Strings column to produce ngrams from
  * @param ngrams The ngram number to generate. Default is 5.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return A lists column of hash values
  */
 std::unique_ptr<cudf::column> hash_character_ngrams(
-  cudf::strings_column_view const& strings,
+  cudf::strings_column_view const& input,
   cudf::size_type ngrams              = 5,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

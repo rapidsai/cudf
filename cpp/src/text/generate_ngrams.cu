@@ -150,10 +150,11 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
 std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& strings,
                                               cudf::size_type ngrams,
                                               cudf::string_scalar const& separator,
+                                              rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::generate_ngrams(strings, ngrams, separator, cudf::get_default_stream(), mr);
+  return detail::generate_ngrams(strings, ngrams, separator, stream, mr);
 }
 
 namespace detail {
@@ -317,18 +318,20 @@ std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view co
 
 std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_view const& strings,
                                                         cudf::size_type ngrams,
+                                                        rmm::cuda_stream_view stream,
                                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::generate_character_ngrams(strings, ngrams, cudf::get_default_stream(), mr);
+  return detail::generate_character_ngrams(strings, ngrams, stream, mr);
 }
 
 std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view const& strings,
                                                     cudf::size_type ngrams,
+                                                    rmm::cuda_stream_view stream,
                                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hash_character_ngrams(strings, ngrams, cudf::get_default_stream(), mr);
+  return detail::hash_character_ngrams(strings, ngrams, stream, mr);
 }
 
 }  // namespace nvtext
