@@ -347,15 +347,13 @@ std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
   cudf::io::parse_options_view options_view{};
   options_view.quotechar  = '\0';  // no quotes
   options_view.keepquotes = true;
-  auto nulls              = cudf::detail::create_null_mask(
-    num_strings, mask_state::ALL_VALID, stream, rmm::mr::get_current_device_resource());
   auto d_offset_length_it =
     thrust::make_zip_iterator(string_offsets.begin(), string_lengths.begin());
   auto d_column_names = parse_data(input.data(),
                                    d_offset_length_it,
                                    num_strings,
                                    data_type{type_id::STRING},
-                                   std::move(nulls),
+                                   rmm::device_buffer{},
                                    0,
                                    options_view,
                                    stream,
