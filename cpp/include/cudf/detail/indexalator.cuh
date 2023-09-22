@@ -16,14 +16,13 @@
 
 #pragma once
 
+#include <cudf/detail/normalizing_iterator.cuh>
+
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <thrust/binary_search.h>
-#include <thrust/execution_policy.h>
-#include <thrust/functional.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/optional.h>
@@ -31,193 +30,6 @@
 
 namespace cudf {
 namespace detail {
-
-/**
- * @brief The base class for the input or output index normalizing iterator.
- *
- * This implementation uses CRTP to define the `input_indexalator` and the
- * `output_indexalator` classes. This is so this class can manipulate the
- * uniquely typed subclass member variable `p_` directly without requiring
- * virtual functions since iterator instances will be copied to device memory.
- *
- * The base class mainly manages updating the `p_` member variable while the
- * subclasses handle accessing individual elements in device memory.
- *
- * @tparam T The derived class type for the iterator.
- */
-template <class T>
-struct base_indexalator {
-  using difference_type   = ptrdiff_t;
-  using value_type        = size_type;
-  using pointer           = size_type*;
-  using iterator_category = std::random_access_iterator_tag;
-
-  base_indexalator()                                   = default;
-  base_indexalator(base_indexalator const&)            = default;
-  base_indexalator(base_indexalator&&)                 = default;
-  base_indexalator& operator=(base_indexalator const&) = default;
-  base_indexalator& operator=(base_indexalator&&)      = default;
-
-  /**
-   * @brief Prefix increment operator.
-   */
-  CUDF_HOST_DEVICE inline T& operator++()
-  {
-    T& derived = static_cast<T&>(*this);
-    derived.p_ += width_;
-    return derived;
-  }
-
-  /**
-   * @brief Postfix increment operator.
-   */
-  CUDF_HOST_DEVICE inline T operator++(int)
-  {
-    T tmp{static_cast<T&>(*this)};
-    operator++();
-    return tmp;
-  }
-
-  /**
-   * @brief Prefix decrement operator.
-   */
-  CUDF_HOST_DEVICE inline T& operator--()
-  {
-    T& derived = static_cast<T&>(*this);
-    derived.p_ -= width_;
-    return derived;
-  }
-
-  /**
-   * @brief Postfix decrement operator.
-   */
-  CUDF_HOST_DEVICE inline T operator--(int)
-  {
-    T tmp{static_cast<T&>(*this)};
-    operator--();
-    return tmp;
-  }
-
-  /**
-   * @brief Compound assignment by sum operator.
-   */
-  CUDF_HOST_DEVICE inline T& operator+=(difference_type offset)
-  {
-    T& derived = static_cast<T&>(*this);
-    derived.p_ += offset * width_;
-    return derived;
-  }
-
-  /**
-   * @brief Increment by offset operator.
-   */
-  CUDF_HOST_DEVICE inline T operator+(difference_type offset) const
-  {
-    auto tmp = T{static_cast<T const&>(*this)};
-    tmp.p_ += (offset * width_);
-    return tmp;
-  }
-
-  /**
-   * @brief Addition assignment operator.
-   */
-  CUDF_HOST_DEVICE inline friend T operator+(difference_type offset, T const& rhs)
-  {
-    T tmp{rhs};
-    tmp.p_ += (offset * rhs.width_);
-    return tmp;
-  }
-
-  /**
-   * @brief Compound assignment by difference operator.
-   */
-  CUDF_HOST_DEVICE inline T& operator-=(difference_type offset)
-  {
-    T& derived = static_cast<T&>(*this);
-    derived.p_ -= offset * width_;
-    return derived;
-  }
-
-  /**
-   * @brief Decrement by offset operator.
-   */
-  CUDF_HOST_DEVICE inline T operator-(difference_type offset) const
-  {
-    auto tmp = T{static_cast<T const&>(*this)};
-    tmp.p_ -= (offset * width_);
-    return tmp;
-  }
-
-  /**
-   * @brief Subtraction assignment operator.
-   */
-  CUDF_HOST_DEVICE inline friend T operator-(difference_type offset, T const& rhs)
-  {
-    T tmp{rhs};
-    tmp.p_ -= (offset * rhs.width_);
-    return tmp;
-  }
-
-  /**
-   * @brief Compute offset from iterator difference operator.
-   */
-  CUDF_HOST_DEVICE inline difference_type operator-(T const& rhs) const
-  {
-    return (static_cast<T const&>(*this).p_ - rhs.p_) / width_;
-  }
-
-  /**
-   * @brief Equals to operator.
-   */
-  CUDF_HOST_DEVICE inline bool operator==(T const& rhs) const
-  {
-    return rhs.p_ == static_cast<T const&>(*this).p_;
-  }
-  /**
-   * @brief Not equals to operator.
-   */
-  CUDF_HOST_DEVICE inline bool operator!=(T const& rhs) const
-  {
-    return rhs.p_ != static_cast<T const&>(*this).p_;
-  }
-  /**
-   * @brief Less than operator.
-   */
-  CUDF_HOST_DEVICE inline bool operator<(T const& rhs) const
-  {
-    return static_cast<T const&>(*this).p_ < rhs.p_;
-  }
-  /**
-   * @brief Greater than operator.
-   */
-  CUDF_HOST_DEVICE inline bool operator>(T const& rhs) const
-  {
-    return static_cast<T const&>(*this).p_ > rhs.p_;
-  }
-  /**
-   * @brief Less than or equals to operator.
-   */
-  CUDF_HOST_DEVICE inline bool operator<=(T const& rhs) const
-  {
-    return static_cast<T const&>(*this).p_ <= rhs.p_;
-  }
-  /**
-   * @brief Greater than or equals to operator.
-   */
-  CUDF_HOST_DEVICE inline bool operator>=(T const& rhs) const
-  {
-    return static_cast<T const&>(*this).p_ >= rhs.p_;
-  }
-
- protected:
-  /**
-   * @brief Constructor assigns width and type member variables for base class.
-   */
-  base_indexalator(int32_t width, data_type dtype) : width_(width), dtype_(dtype) {}
-
-  int width_;        /// integer type width = 1,2,4, or 8
-  data_type dtype_;  /// for type-dispatcher calls
-};
 
 /**
  * @brief The index normalizing input iterator.
@@ -244,65 +56,7 @@ struct base_indexalator {
  *  auto result = thrust::find(thrust::device, begin, end, size_type{12} );
  * @endcode
  */
-struct input_indexalator : base_indexalator<input_indexalator> {
-  friend struct indexalator_factory;
-  friend struct base_indexalator<input_indexalator>;  // for CRTP
-
-  using reference = size_type const;  // this keeps STL and thrust happy
-
-  input_indexalator()                                    = default;
-  input_indexalator(input_indexalator const&)            = default;
-  input_indexalator(input_indexalator&&)                 = default;
-  input_indexalator& operator=(input_indexalator const&) = default;
-  input_indexalator& operator=(input_indexalator&&)      = default;
-
-  /**
-   * @brief Indirection operator returns the value at the current iterator position.
-   */
-  __device__ inline size_type operator*() const { return operator[](0); }
-
-  /**
-   * @brief Dispatch functor for resolving a size_type value from any index type.
-   */
-  struct index_as_size_type {
-    template <typename T, std::enable_if_t<is_index_type<T>()>* = nullptr>
-    __device__ size_type operator()(void const* tp)
-    {
-      return static_cast<size_type>(*static_cast<T const*>(tp));
-    }
-    template <typename T, std::enable_if_t<not is_index_type<T>()>* = nullptr>
-    __device__ size_type operator()(void const* tp)
-    {
-      CUDF_UNREACHABLE("only index types are supported");
-    }
-  };
-  /**
-   * @brief Array subscript operator returns a value at the input
-   * `idx` position as a `size_type` value.
-   */
-  __device__ inline size_type operator[](size_type idx) const
-  {
-    void const* tp = p_ + (idx * width_);
-    return type_dispatcher(dtype_, index_as_size_type{}, tp);
-  }
-
- protected:
-  /**
-   * @brief Create an input index normalizing iterator.
-   *
-   * Use the indexalator_factory to create an iterator instance.
-   *
-   * @param data      Pointer to an integer array in device memory.
-   * @param width     The width of the integer type (1, 2, 4, or 8)
-   * @param data_type Index integer type of width `width`
-   */
-  input_indexalator(void const* data, int width, data_type dtype)
-    : base_indexalator<input_indexalator>(width, dtype), p_{static_cast<char const*>(data)}
-  {
-  }
-
-  char const* p_;  /// pointer to the integer data in device memory
-};
+using input_indexalator = input_normalator<cudf::size_type>;
 
 /**
  * @brief The index normalizing output iterator.
@@ -328,79 +82,7 @@ struct input_indexalator : base_indexalator<input_indexalator> {
  *                      thrust::less<Element>());
  * @endcode
  */
-struct output_indexalator : base_indexalator<output_indexalator> {
-  friend struct indexalator_factory;
-  friend struct base_indexalator<output_indexalator>;  // for CRTP
-
-  using reference = output_indexalator const&;  // required for output iterators
-
-  output_indexalator()                                     = default;
-  output_indexalator(output_indexalator const&)            = default;
-  output_indexalator(output_indexalator&&)                 = default;
-  output_indexalator& operator=(output_indexalator const&) = default;
-  output_indexalator& operator=(output_indexalator&&)      = default;
-
-  /**
-   * @brief Indirection operator returns this iterator instance in order
-   * to capture the `operator=(size_type)` calls.
-   */
-  __device__ inline output_indexalator const& operator*() const { return *this; }
-
-  /**
-   * @brief Array subscript operator returns an iterator instance at the specified `idx` position.
-   *
-   * This allows capturing the subsequent `operator=(size_type)` call in this class.
-   */
-  __device__ inline output_indexalator const operator[](size_type idx) const
-  {
-    output_indexalator tmp{*this};
-    tmp.p_ += (idx * width_);
-    return tmp;
-  }
-
-  /**
-   * @brief Dispatch functor for setting the index value from a size_type value.
-   */
-  struct size_type_to_index {
-    template <typename T, std::enable_if_t<is_index_type<T>()>* = nullptr>
-    __device__ void operator()(void* tp, size_type const value)
-    {
-      (*static_cast<T*>(tp)) = static_cast<T>(value);
-    }
-    template <typename T, std::enable_if_t<not is_index_type<T>()>* = nullptr>
-    __device__ void operator()(void* tp, size_type const value)
-    {
-      CUDF_UNREACHABLE("only index types are supported");
-    }
-  };
-
-  /**
-   * @brief Assign a size_type value to the current iterator position.
-   */
-  __device__ inline output_indexalator const& operator=(size_type const value) const
-  {
-    void* tp = p_;
-    type_dispatcher(dtype_, size_type_to_index{}, tp, value);
-    return *this;
-  }
-
- protected:
-  /**
-   * @brief Create an output index normalizing iterator.
-   *
-   * Use the indexalator_factory to create an iterator instance.
-   *
-   * @param data      Pointer to an integer array in device memory.
-   * @param width     The width of the integer type (1, 2, 4, or 8)
-   * @param data_type Index integer type of width `width`
-   */
-  output_indexalator(void* data, int width, data_type dtype)
-    : base_indexalator<output_indexalator>(width, dtype), p_{static_cast<char*>(data)}
-  {
-  }
-
-  char* p_;  /// pointer to the integer data in device memory
-};
+using output_indexalator = output_normalator<cudf::size_type>;
 
 /**
  * @brief Use this class to create an indexalator instance.
@@ -413,7 +95,7 @@ struct indexalator_factory {
     template <typename IndexType, std::enable_if_t<is_index_type<IndexType>()>* = nullptr>
     input_indexalator operator()(column_view const& indices)
     {
-      return input_indexalator(indices.data<IndexType>(), sizeof(IndexType), indices.type());
+      return input_indexalator(indices.data<IndexType>(), indices.type());
     }
     template <typename IndexType,
               typename... Args,
@@ -433,7 +115,7 @@ struct indexalator_factory {
     {
       // note: using static_cast<scalar_type_t<IndexType> const&>(index) creates a copy
       auto const scalar_impl = static_cast<scalar_type_t<IndexType> const*>(&index);
-      return input_indexalator(scalar_impl->data(), sizeof(IndexType), index.type());
+      return input_indexalator(scalar_impl->data(), index.type());
     }
     template <typename IndexType,
               typename... Args,
@@ -451,7 +133,7 @@ struct indexalator_factory {
     template <typename IndexType, std::enable_if_t<is_index_type<IndexType>()>* = nullptr>
     output_indexalator operator()(mutable_column_view const& indices)
     {
-      return output_indexalator(indices.data<IndexType>(), sizeof(IndexType), indices.type());
+      return output_indexalator(indices.data<IndexType>(), indices.type());
     }
     template <typename IndexType,
               typename... Args,
