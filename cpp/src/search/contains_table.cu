@@ -182,17 +182,6 @@ void dispatch_nan_comparator(
 
 }  // namespace
 
-/**
- * @brief Check if rows in the given `needles` table exist in the `haystack` table.
- *
- * @param haystack The table containing the search space
- * @param needles A table of rows whose existence to check in the search space
- * @param compare_nulls Control whether nulls should be compared as equal or not
- * @param compare_nans Control whether floating-point NaNs values should be compared as equal or not
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned vector
- * @return A vector of bools indicating if each row in `needles` has matching rows in `haystack`
- */
 rmm::device_uvector<bool> contains(table_view const& haystack,
                                    table_view const& needles,
                                    null_equality compare_nulls,
