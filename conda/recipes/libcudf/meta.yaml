@@ -74,6 +74,7 @@ requirements:
     - gtest {{ gtest_version }}
     - gmock {{ gtest_version }}
     - zlib {{ zlib_version }}
+    - aws-sdk-cpp {{ aws_sdk_cpp_version }}
 
 outputs:
   - name: libcudf
@@ -107,6 +108,7 @@ outputs:
         - dlpack {{ dlpack_version }}
         - gtest {{ gtest_version }}
         - gmock {{ gtest_version }}
+        - aws-sdk-cpp {{ aws_sdk_cpp_version }}
     test:
       commands:
         - test -f $PREFIX/lib/libcudf.so
