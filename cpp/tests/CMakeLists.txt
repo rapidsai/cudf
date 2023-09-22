@@ -632,6 +632,7 @@ ConfigureTest(
   STREAM_STRINGS_TEST streams/strings/case_test.cpp streams/strings/find_test.cpp STREAM_MODE
   testing
 )
+ConfigureTest(STREAM_TEXT_TEST streams/text/ngrams_test.cpp STREAM_MODE testing)
 
 # ##################################################################################################
 # Install tests ####################################################################################
