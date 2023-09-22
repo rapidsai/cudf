@@ -40,6 +40,16 @@ static void BM_transpose(benchmark::State& state)
     cuda_event_timer raii(state, true);
     auto output = cudf::transpose(input);
   }
+
+  // Collect memory statistics.
+  auto const bytes_read = input.num_columns() * input.num_rows() * (sizeof(int32_t));
+  auto const bytes_written = bytes_read;
+  // Account for nullability in input and output.
+  auto const null_bytes =
+    2 * input.num_columns() * cudf::bitmask_allocation_size_bytes(input.num_rows());
+
+  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) *
+                          (bytes_read + bytes_written + null_bytes));
 }
 
 class Transpose : public cudf::benchmark {};
