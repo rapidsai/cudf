@@ -67,8 +67,11 @@ static void bench_tokenize(nvbench::state& state)
       auto result = nvtext::count_tokens(input, cudf::strings_column_view(delimiters));
     });
   } else if (tokenize_type == "ngrams") {
-    state.exec(nvbench::exec_tag::sync,
-               [&](nvbench::launch& launch) { auto result = nvtext::ngrams_tokenize(input); });
+    auto const delimiter = cudf::string_scalar("");
+    auto const separator = cudf::string_scalar("_");
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      auto result = nvtext::ngrams_tokenize(input, 2, delimiter, separator);
+    });
   } else if (tokenize_type == "characters") {
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { auto result = nvtext::character_tokenize(input); });

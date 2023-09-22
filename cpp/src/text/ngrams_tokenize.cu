@@ -265,11 +265,11 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
                                               cudf::size_type ngrams,
                                               cudf::string_scalar const& delimiter,
                                               cudf::string_scalar const& separator,
+                                              rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::ngrams_tokenize(
-    strings, ngrams, delimiter, separator, cudf::get_default_stream(), mr);
+  return detail::ngrams_tokenize(strings, ngrams, delimiter, separator, stream, mr);
 }
 
 }  // namespace nvtext

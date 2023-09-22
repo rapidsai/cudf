@@ -214,8 +214,8 @@ dependencies:
     common:
       - output_types: [conda, requirements]
         packages:
-          - librmm==23.10.*
-          - libkvikio==23.10.*
+          - librmm==23.12.*
+          - libkvikio==23.12.*
       - output_types: conda
         packages:
           - fmt>=9.1.0,<10
@@ -259,13 +259,14 @@ dependencies:
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
           - pyarrow==12.0.1.*
-          - numpy>=1.21
+          # TODO: Pin to numpy<1.25 until cudf requires pandas 2
+          - &numpy numpy>=1.21,<1.25
   build_python:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           - scikit-build>=0.13.1
-          - rmm==23.10.*
+          - rmm==23.12.*
       - output_types: conda
         packages:
           - &protobuf protobuf>=4.21,<5
@@ -384,7 +385,7 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-          - dask-cuda==23.10.*
+          - dask-cuda==23.12.*
           - *doxygen
           - make
           - myst-nb
@@ -425,17 +426,18 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          - numpy>=1.21
+          - *numpy
           - pandas>=1.3,<1.6.0dev0
   run_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - &numba numba>=0.57
+          # TODO: Pin to numba<0.58 until #14160 is resolved
+          - &numba numba>=0.57,<0.58
           - nvtx>=0.2.1
           - packaging
-          - rmm==23.10.*
+          - rmm==23.12.*
           - typing_extensions>=4.0.0
           - *protobuf
       - output_types: conda
@@ -496,7 +498,7 @@ dependencies:
           - dask-core>=2023.7.1  # dask-core in conda is the actual package & dask is the meta package
       - output_types: pyproject
         packages:
-          - &cudf cudf==23.10.*
+          - &cudf cudf==23.12.*
           - *cupy_pip
   run_cudf_kafka:
     common:
@@ -515,7 +517,7 @@ dependencies:
         packages:
           - confluent-kafka>=1.9.0,<1.10.0a0
           - *cudf
-          - cudf_kafka==23.10.*
+          - cudf_kafka==23.12.*
   test_cpp:
     common:
       - output_types: conda
@@ -597,5 +599,5 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - dask-cuda==23.10.*
+          - dask-cuda==23.12.*
           - *numba
