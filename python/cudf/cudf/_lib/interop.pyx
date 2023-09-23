@@ -211,7 +211,7 @@ def to_arrow_scalar(DeviceScalar source_scalar):
 
     Returns
     -------
-    pyarrow scalar
+    pyarrow.lib.Scalar
     """
     cdef vector[column_metadata] cpp_metadata = gather_metadata(
         [("", source_scalar.dtype)]
@@ -238,7 +238,7 @@ def from_arrow_scalar(object input_scalar, output_dtype=None):
 
     Returns
     -------
-    A cudf scalar
+    cudf._lib.DeviceScalar
     """
     cdef shared_ptr[CScalar] cpp_arrow_scalar = (
         pyarrow_unwrap_scalar(input_scalar)

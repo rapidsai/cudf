@@ -114,8 +114,8 @@ cdef class DeviceScalar:
         self.c_value.swap(obj.c_value)
 
     def _to_host_scalar(self):
-        is_datetime = cudf.api.types.is_datetime64_dtype(self.dtype)
-        is_timedelta = cudf.api.types.is_timedelta64_dtype(self.dtype)
+        is_datetime = self.dtype.kind == "M"
+        is_timedelta = self.dtype.kind == "m"
 
         null_type = NaT if is_datetime or is_timedelta else NA
 
