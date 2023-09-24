@@ -1327,6 +1327,25 @@ def test_assign():
     np.testing.assert_equal(gdf2.y.to_numpy(), [2, 3, 4])
 
 
+@pytest.mark.parametrize(
+    "mapping",
+    [
+        {"y": 1, "z": lambda df: df["x"] + df["y"]},
+        {
+            "x": lambda df: df["x"] * 2,
+            "y": lambda df: 2,
+            "z": lambda df: df["x"] / df["y"],
+        },
+    ],
+)
+def test_assign_callable(mapping):
+    df = pd.DataFrame({"x": [1, 2, 3]})
+    cdf = cudf.from_pandas(df)
+    expect = df.assign(**mapping)
+    actual = cdf.assign(**mapping)
+    assert_eq(expect, actual)
+
+
 @pytest.mark.parametrize("nrows", [1, 8, 100, 1000])
 @pytest.mark.parametrize("method", ["murmur3", "md5"])
 @pytest.mark.parametrize("seed", [None, 42])
