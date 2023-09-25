@@ -396,13 +396,9 @@ def _cudf_to_table(obj, preserve_index=None, **kwargs):
     # TODO: Remove this logic when cudf#14159 is resolved
     # (see: https://github.com/rapidsai/cudf/issues/14159)
     if preserve_index and isinstance(obj.index, cudf.RangeIndex):
-        index_name = obj.index.name
         obj = obj.copy()
-        if index_name is None:
-            index_name = "__index_level_0__"
-            obj.index.name = index_name
-        obj.reset_index(inplace=True)
-        obj.set_index(index_name, inplace=True)
+        obj.index.name = obj.index.name if obj.index.name is not None else "__index_level_0__"
+        obj.index = obj.index._as_int_index()
 
     return obj.to_arrow(preserve_index=preserve_index)
 
