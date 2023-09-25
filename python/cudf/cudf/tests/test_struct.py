@@ -150,13 +150,44 @@ def test_struct_setitem(data, item):
     "data",
     [
         {"a": 1, "b": "rapids", "c": [1, 2, 3, 4]},
-        {"a": 1, "b": "rapids", "c": [1, 2, 3, 4], "d": cudf.NA},
         {"a": "Hello"},
-        {"b": [], "c": [1, 2, 3]},
     ],
 )
 def test_struct_scalar_host_construction(data):
     slr = cudf.Scalar(data)
+    assert slr.value == data
+    assert list(slr.device_value.value.values()) == list(data.values())
+
+
+@pytest.mark.parametrize(
+    ("data", "dtype"),
+    [
+        (
+            {"a": 1, "b": "rapids", "c": [1, 2, 3, 4], "d": cudf.NA},
+            cudf.StructDtype(
+                {
+                    "a": np.dtype(np.int64),
+                    "b": np.dtype(np.str_),
+                    "c": cudf.ListDtype(np.dtype(np.int64)),
+                    "d": np.dtype(np.int64),
+                }
+            ),
+        ),
+        (
+            {"b": [], "c": [1, 2, 3]},
+            cudf.StructDtype(
+                {
+                    "b": cudf.ListDtype(np.dtype(np.int64)),
+                    "c": cudf.ListDtype(np.dtype(np.int64)),
+                }
+            ),
+        ),
+    ],
+)
+def test_struct_scalar_host_construction_no_dtype_inference(data, dtype):
+    # cudf cannot infer the dtype of the scalar when it contains only nulls or
+    # is empty.
+    slr = cudf.Scalar(data, dtype=dtype)
     assert slr.value == data
     assert list(slr.device_value.value.values()) == list(data.values())
 
