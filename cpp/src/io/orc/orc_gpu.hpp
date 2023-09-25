@@ -157,7 +157,7 @@ struct EncChunk {
   uint8_t dtype_len;                 // data type length
   int32_t scale;                     // scale for decimals or timestamps
 
-  uint32_t* dict_index;              // dictionary index from row index
+  uint32_t* dict_index;  // dictionary index from row index
   uint32_t* decimal_offsets;
   orc_column_device_view const* column;
 };

@@ -18,30 +18,14 @@
 
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/transform.hpp>
+#include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <rmm/cuda_stream_pool.hpp>
 
+#include <bitset>
 #include <numeric>
 
 namespace cudf::io::detail::parquet {
-
-namespace {
-
-int constexpr NUM_DECODERS       = 3;  // how many decode kernels are there to run
-int constexpr APPROX_NUM_THREADS = 4;  // guestimate from DaveB
-int constexpr STREAM_POOL_SIZE   = NUM_DECODERS * APPROX_NUM_THREADS;
-
-auto& get_stream_pool()
-{
-  // TODO: creating this on the heap because there were issues with trying to call the
-  // stream pool destructor during cuda shutdown that lead to a segmentation fault in
-  // nvbench. this allocation is being deliberately leaked to avoid the above, but still
-  // results in non-fatal warnings when running nvbench in cuda-gdb.
-  static auto pool = new rmm::cuda_stream_pool{STREAM_POOL_SIZE};
-  return *pool;
-}
-
-}  // namespace
 
 void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 {
@@ -178,34 +162,33 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   chunks.host_to_device_async(_stream);
   chunk_nested_valids.host_to_device_async(_stream);
   chunk_nested_data.host_to_device_async(_stream);
-  _stream.synchronize();
+
+  // get the number of streams we need from the pool and tell them to wait on the H2D copies
+  int const nkernels = std::bitset<32>(kernel_mask).count();
+  auto streams       = cudf::detail::fork_streams(_stream, nkernels);
 
   auto const level_type_size = _file_itm_data.level_type_size;
 
-  // vector of launched streams
-  std::vector<rmm::cuda_stream_view> streams;
-
   // launch string decoder
+  int s_idx = 0;
   if (has_strings) {
-    streams.push_back(get_stream_pool().get_stream());
-    chunk_nested_str_data.host_to_device_async(streams.back());
-    gpu::DecodeStringPageData(pages, chunks, num_rows, skip_rows, level_type_size, streams.back());
+    auto& stream = streams[s_idx++];
+    chunk_nested_str_data.host_to_device_async(stream);
+    gpu::DecodeStringPageData(pages, chunks, num_rows, skip_rows, level_type_size, stream);
   }
 
   // launch delta binary decoder
   if ((kernel_mask & gpu::KERNEL_MASK_DELTA_BINARY) != 0) {
-    streams.push_back(get_stream_pool().get_stream());
-    gpu::DecodeDeltaBinary(pages, chunks, num_rows, skip_rows, level_type_size, streams.back());
+    gpu::DecodeDeltaBinary(pages, chunks, num_rows, skip_rows, level_type_size, streams[s_idx++]);
   }
 
   // launch the catch-all page decoder
   if ((kernel_mask & gpu::KERNEL_MASK_GENERAL) != 0) {
-    streams.push_back(get_stream_pool().get_stream());
-    gpu::DecodePageData(pages, chunks, num_rows, skip_rows, level_type_size, streams.back());
+    gpu::DecodePageData(pages, chunks, num_rows, skip_rows, level_type_size, streams[s_idx++]);
   }
 
   // synchronize the streams
-  std::for_each(streams.begin(), streams.end(), [](auto& stream) { stream.synchronize(); });
+  cudf::detail::join_streams(streams, _stream);
 
   pages.device_to_host_async(_stream);
   page_nesting.device_to_host_async(_stream);

@@ -1331,7 +1331,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_endWriteCSVToBuffer(JNIEnv *env
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readAndInferJSON(
-    JNIEnv *env, jclass, jlong buffer, jlong buffer_length, jboolean day_first, jboolean lines) {
+    JNIEnv *env, jclass, jlong buffer, jlong buffer_length, jboolean day_first, jboolean lines,
+    jboolean recover_with_null) {
 
   JNI_NULL_CHECK(env, buffer, "buffer cannot be null", 0);
   if (buffer_length <= 0) {
@@ -1344,9 +1345,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readAndInferJSON(
     auto source = cudf::io::source_info{reinterpret_cast<char *>(buffer),
                                         static_cast<std::size_t>(buffer_length)};
 
+    auto const recovery_mode = recover_with_null ?
+                                   cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL :
+                                   cudf::io::json_recovery_mode_t::FAIL;
     cudf::io::json_reader_options_builder opts = cudf::io::json_reader_options::builder(source)
                                                      .dayfirst(static_cast<bool>(day_first))
-                                                     .lines(static_cast<bool>(lines));
+                                                     .lines(static_cast<bool>(lines))
+                                                     .recovery_mode(recovery_mode);
 
     auto result =
         std::make_unique<cudf::io::table_with_metadata>(cudf::io::read_json(opts.build()));
@@ -1404,7 +1409,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_TableWithMeta_releaseTable(JNIE
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(
     JNIEnv *env, jclass, jobjectArray col_names, jintArray j_types, jintArray j_scales,
-    jstring inputfilepath, jlong buffer, jlong buffer_length, jboolean day_first, jboolean lines) {
+    jstring inputfilepath, jlong buffer, jlong buffer_length, jboolean day_first, jboolean lines,
+    jboolean recover_with_null) {
 
   bool read_buffer = true;
   if (buffer == 0) {
@@ -1448,9 +1454,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(
                                                       static_cast<std::size_t>(buffer_length)} :
                                 cudf::io::source_info{filename.get()};
 
+    cudf::io::json_recovery_mode_t recovery_mode =
+        recover_with_null ? cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL :
+                            cudf::io::json_recovery_mode_t::FAIL;
     cudf::io::json_reader_options_builder opts = cudf::io::json_reader_options::builder(source)
                                                      .dayfirst(static_cast<bool>(day_first))
-                                                     .lines(static_cast<bool>(lines));
+                                                     .lines(static_cast<bool>(lines))
+                                                     .recovery_mode(recovery_mode);
 
     if (!n_col_names.is_null() && data_types.size() > 0) {
       if (n_col_names.size() != n_types.size()) {
@@ -1592,7 +1602,11 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     std::map<std::string, std::string> kv_metadata;
     std::transform(meta_keys.begin(), meta_keys.end(), meta_values.begin(),
                    std::inserter(kv_metadata, kv_metadata.end()),
-                   [](auto const &key, auto const &value) { return std::make_pair(key, value); });
+                   [](auto const &key, auto const &value) {
+                     // The metadata value will be ignored if it is empty.
+                     // We modify it into a space character to workaround such issue.
+                     return std::make_pair(key, value.empty() ? std::string(" ") : value);
+                   });
 
     auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
     chunked_parquet_writer_options opts =
@@ -1638,7 +1652,11 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
     std::map<std::string, std::string> kv_metadata;
     std::transform(meta_keys.begin(), meta_keys.end(), meta_values.begin(),
                    std::inserter(kv_metadata, kv_metadata.end()),
-                   [](auto const &key, auto const &value) { return std::make_pair(key, value); });
+                   [](auto const &key, auto const &value) {
+                     // The metadata value will be ignored if it is empty.
+                     // We modify it into a space character to workaround such issue.
+                     return std::make_pair(key, value.empty() ? std::string(" ") : value);
+                   });
 
     sink_info sink{output_path.get()};
     auto stats = std::make_shared<cudf::io::writer_compression_statistics>();

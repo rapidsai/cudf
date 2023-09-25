@@ -104,13 +104,67 @@ std::shared_ptr<arrow::Array> to_arrow_array(cudf::type_id id, Ts&&... args)
   }
 }
 
+/**
+ * @brief Invokes an `operator()` template with the type instantiation based on
+ * the specified `arrow::DataType`'s `id()`.
+ *
+ * This function is analogous to libcudf's type_dispatcher, but instead applies
+ * to Arrow functions. Its primary use case is to leverage Arrow's
+ * metaprogramming facilities like arrow::TypeTraits that require translating
+ * the runtime dtype information into compile-time types.
+ */
+template <typename Functor, typename... Ts>
+constexpr decltype(auto) arrow_type_dispatcher(arrow::DataType const& dtype,
+                                               Functor f,
+                                               Ts&&... args)
+{
+  switch (dtype.id()) {
+    case arrow::Type::INT8:
+      return f.template operator()<arrow::Int8Type>(std::forward<Ts>(args)...);
+    case arrow::Type::INT16:
+      return f.template operator()<arrow::Int16Type>(std::forward<Ts>(args)...);
+    case arrow::Type::INT32:
+      return f.template operator()<arrow::Int32Type>(std::forward<Ts>(args)...);
+    case arrow::Type::INT64:
+      return f.template operator()<arrow::Int64Type>(std::forward<Ts>(args)...);
+    case arrow::Type::UINT8:
+      return f.template operator()<arrow::UInt8Type>(std::forward<Ts>(args)...);
+    case arrow::Type::UINT16:
+      return f.template operator()<arrow::UInt16Type>(std::forward<Ts>(args)...);
+    case arrow::Type::UINT32:
+      return f.template operator()<arrow::UInt32Type>(std::forward<Ts>(args)...);
+    case arrow::Type::UINT64:
+      return f.template operator()<arrow::UInt64Type>(std::forward<Ts>(args)...);
+    case arrow::Type::FLOAT:
+      return f.template operator()<arrow::FloatType>(std::forward<Ts>(args)...);
+    case arrow::Type::DOUBLE:
+      return f.template operator()<arrow::DoubleType>(std::forward<Ts>(args)...);
+    case arrow::Type::BOOL:
+      return f.template operator()<arrow::BooleanType>(std::forward<Ts>(args)...);
+    case arrow::Type::TIMESTAMP:
+      return f.template operator()<arrow::TimestampType>(std::forward<Ts>(args)...);
+    case arrow::Type::DURATION:
+      return f.template operator()<arrow::DurationType>(std::forward<Ts>(args)...);
+    case arrow::Type::STRING:
+      return f.template operator()<arrow::StringType>(std::forward<Ts>(args)...);
+    case arrow::Type::LIST:
+      return f.template operator()<arrow::ListType>(std::forward<Ts>(args)...);
+    case arrow::Type::DECIMAL128:
+      return f.template operator()<arrow::Decimal128Type>(std::forward<Ts>(args)...);
+    case arrow::Type::STRUCT:
+      return f.template operator()<arrow::StructType>(std::forward<Ts>(args)...);
+    default: {
+      CUDF_FAIL("Invalid type.");
+    }
+  }
+}
+
 // Converting arrow type to cudf type
 data_type arrow_to_cudf_type(arrow::DataType const& arrow_type);
 
 /**
- * @copydoc cudf::to_arrow
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @copydoc cudf::to_arrow(table_view input, std::vector<column_metadata> const& metadata,
+ * rmm::cuda_stream_view stream, arrow::MemoryPool* ar_mr)
  */
 std::shared_ptr<arrow::Table> to_arrow(table_view input,
                                        std::vector<column_metadata> const& metadata,
@@ -118,13 +172,27 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
                                        arrow::MemoryPool* ar_mr);
 
 /**
- * @copydoc cudf::arrow_to_cudf
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @copydoc cudf::to_arrow(cudf::scalar const& input, column_metadata const& metadata,
+ * rmm::cuda_stream_view stream, arrow::MemoryPool* ar_mr)
+ */
+std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
+                                        column_metadata const& metadata,
+                                        rmm::cuda_stream_view stream,
+                                        arrow::MemoryPool* ar_mr);
+/**
+ * @copydoc cudf::from_arrow(arrow::Table const& input_table, rmm::cuda_stream_view stream,
+ * rmm::mr::device_memory_resource* mr)
  */
 std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr);
 
+/**
+ * @copydoc cudf::from_arrow(arrow::Scalar const& input, rmm::cuda_stream_view stream,
+ * rmm::mr::device_memory_resource* mr)
+ */
+std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr);
 }  // namespace detail
 }  // namespace cudf
