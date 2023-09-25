@@ -5440,6 +5440,13 @@ def _is_same_dtype(lhs_dtype, rhs_dtype):
         return True
     elif (
         is_categorical_dtype(lhs_dtype)
+        and is_categorical_dtype(rhs_dtype)
+        and lhs_dtype.categories.dtype == rhs_dtype.categories.dtype
+    ):
+        # OK if categories are not all the same
+        return True
+    elif (
+        is_categorical_dtype(lhs_dtype)
         and not is_categorical_dtype(rhs_dtype)
         and lhs_dtype.categories.dtype == rhs_dtype
     ):
