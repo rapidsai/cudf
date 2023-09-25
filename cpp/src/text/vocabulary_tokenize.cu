@@ -18,8 +18,6 @@
 
 #include <nvtext/tokenize.hpp>
 
-#include <hash/hash_allocator.cuh>  // should move this to a detail header
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -27,6 +25,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
+#include <cudf/hashing/detail/hash_allocator.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
