@@ -64,8 +64,9 @@ static void BM_copy(benchmark::State& state, copy_type ct)
     }
   }
 
-  state.SetBytesProcessed(state.iterations() *
-                          cudf::strings_column_view(source->view().column(0)).chars_size());
+  state.SetBytesProcessed(
+    state.iterations() *
+    cudf::strings_column_view(source->view().column(0)).chars_size(cudf::get_default_stream()));
 }
 
 static void generate_bench_args(benchmark::internal::Benchmark* b)

@@ -43,7 +43,7 @@ static void bench_hash(nvbench::state& state)
 
   // collect statistics
   cudf::strings_column_view input(data->get_column(1).view());
-  auto const chars_size = input.chars_size();
+  auto const chars_size = input.chars_size(cudf::get_default_stream());
   // add memory read from string column
   state.add_global_memory_reads<nvbench::int8_t>(chars_size);
   // add memory read from int64_t column

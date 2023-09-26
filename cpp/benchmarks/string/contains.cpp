@@ -100,7 +100,7 @@ static void bench_contains(nvbench::state& state)
   auto pattern = patterns[pattern_index];
   auto program = cudf::strings::regex_program::create(pattern);
 
-  auto chars_size = input.chars_size();
+  auto chars_size = input.chars_size(cudf::get_default_stream());
   state.add_element_count(chars_size, "chars_size");
   state.add_global_memory_reads<nvbench::int8_t>(chars_size);
   state.add_global_memory_writes<nvbench::int32_t>(input.size());

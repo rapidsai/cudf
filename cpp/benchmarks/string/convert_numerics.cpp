@@ -63,8 +63,9 @@ void convert_to_number(benchmark::State& state)
   }
 
   // bytes_processed = bytes_input + bytes_output
-  state.SetBytesProcessed(state.iterations() *
-                          (strings_view.chars_size() + rows * sizeof(NumericType)));
+  state.SetBytesProcessed(
+    state.iterations() *
+    (strings_view.chars_size(cudf::get_default_stream()) + rows * sizeof(NumericType)));
 }
 
 class StringsFromNumeric : public cudf::benchmark {};
@@ -90,7 +91,8 @@ void convert_from_number(benchmark::State& state)
   // bytes_processed = bytes_input + bytes_output
   state.SetBytesProcessed(
     state.iterations() *
-    (cudf::strings_column_view(results->view()).chars_size() + rows * sizeof(NumericType)));
+    (cudf::strings_column_view(results->view()).chars_size(cudf::get_default_stream()) +
+     rows * sizeof(NumericType)));
 }
 
 #define CONVERT_TO_NUMERICS_BD(name, type)                               \

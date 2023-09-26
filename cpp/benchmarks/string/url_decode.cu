@@ -67,7 +67,7 @@ auto generate_column(cudf::size_type num_rows, cudf::size_type chars_per_row, do
   auto col_1a     = cudf::test::strings_column_wrapper(strings.begin(), strings.end());
   auto table_a    = cudf::repeat(cudf::table_view{{col_1a}}, num_rows);
   auto result_col = std::move(table_a->release()[0]);  // string column with num_rows  aaa...
-  auto chars_col  = result_col->child(cudf::strings_column_view::chars_column_index).mutable_view();
+  auto chars_col  = result_col->mutable_view();
   auto offset_col = result_col->child(cudf::strings_column_view::offsets_column_index).view();
 
   auto engine = thrust::default_random_engine{};
@@ -75,7 +75,7 @@ auto generate_column(cudf::size_type num_rows, cudf::size_type chars_per_row, do
                      thrust::make_zip_iterator(offset_col.begin<cudf::size_type>(),
                                                offset_col.begin<cudf::size_type>() + 1),
                      num_rows,
-                     url_string_generator{chars_col.begin<char>(), esc_seq_chance, engine});
+                     url_string_generator{chars_col.data<char>(), esc_seq_chance, engine});
   return result_col;
 }
 

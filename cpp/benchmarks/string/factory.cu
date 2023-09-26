@@ -67,7 +67,7 @@ static void BM_factory(benchmark::State& state)
   }
 
   cudf::strings_column_view input(column->view());
-  state.SetBytesProcessed(state.iterations() * input.chars_size());
+  state.SetBytesProcessed(state.iterations() * input.chars_size(cudf::get_default_stream()));
 }
 
 static void generate_bench_args(benchmark::internal::Benchmark* b)

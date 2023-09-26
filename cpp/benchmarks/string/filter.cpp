@@ -57,7 +57,7 @@ static void BM_filter_chars(benchmark::State& state, FilterAPI api)
     }
   }
 
-  state.SetBytesProcessed(state.iterations() * input.chars_size());
+  state.SetBytesProcessed(state.iterations() * input.chars_size(cudf::get_default_stream()));
 }
 
 static void generate_bench_args(benchmark::internal::Benchmark* b)

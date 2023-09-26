@@ -44,7 +44,8 @@ static void BM_combine(benchmark::State& state)
     cudf::strings::concatenate(table->view(), separator);
   }
 
-  state.SetBytesProcessed(state.iterations() * (input1.chars_size() + input2.chars_size()));
+  state.SetBytesProcessed(state.iterations() * (input1.chars_size(cudf::get_default_stream()) +
+                                                input2.chars_size(cudf::get_default_stream())));
 }
 
 static void generate_bench_args(benchmark::internal::Benchmark* b)

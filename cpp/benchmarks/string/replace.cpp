@@ -58,7 +58,7 @@ static void BM_replace(benchmark::State& state, replace_type rt)
     }
   }
 
-  state.SetBytesProcessed(state.iterations() * input.chars_size());
+  state.SetBytesProcessed(state.iterations() * input.chars_size(cudf::get_default_stream()));
 }
 
 static void generate_bench_args(benchmark::internal::Benchmark* b)

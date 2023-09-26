@@ -52,7 +52,7 @@ static void bench_minhash(nvbench::state& state)
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
 
-  auto chars_size = input.chars_size();
+  auto chars_size = input.chars_size(cudf::get_default_stream());
   state.add_global_memory_reads<nvbench::int8_t>(chars_size);
   state.add_global_memory_writes<nvbench::int32_t>(num_rows);  // output are hashes
 

@@ -48,7 +48,8 @@ void BM_convert_datetime(benchmark::State& state, direction dir)
       cudf::strings::from_timestamps(input, "%Y-%m-%d %H:%M:%S");
   }
 
-  auto const bytes = dir == direction::to ? source_string.chars_size() : n_rows * sizeof(TypeParam);
+  auto const bytes = dir == direction::to ? source_string.chars_size(cudf::get_default_stream())
+                                          : n_rows * sizeof(TypeParam);
   state.SetBytesProcessed(state.iterations() * bytes);
 }
 
