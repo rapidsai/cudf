@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import types
 from contextlib import ExitStack as does_not_raise
@@ -193,7 +193,7 @@ def test_cuda_array_interface_pytorch():
 
     assert_eq(got, cudf.Series(buffer, dtype=np.bool_))
 
-    index = cudf.Index([])
+    index = cudf.Index([], dtype="float64")
     tensor = torch.tensor(index)
     got = cudf.Index(tensor)
     assert_eq(got, index)
