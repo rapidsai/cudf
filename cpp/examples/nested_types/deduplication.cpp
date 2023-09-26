@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/groupby.hpp>
@@ -77,21 +78,20 @@ std::unique_ptr<cudf::table> count_aggregate(cudf::table_view tbl)
 {
   // Get count for each key
   auto keys = cudf::table_view{{tbl.column(0)}};
-  auto val  = tbl.column(0);
+  auto val  = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, keys.num_rows());
+
   cudf::groupby::groupby grpby_obj(keys);
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
   auto agg = cudf::make_count_aggregation<cudf::groupby_aggregation>();
   requests[0].aggregations.push_back(std::move(agg));
-  requests[0].values = val;
+  requests[0].values = *val;
   auto agg_results   = grpby_obj.aggregate(requests);
   auto result_key    = std::move(agg_results.first);
   auto result_val    = std::move(agg_results.second[0].results[0]);
 
   auto left_cols = result_key->release();
   left_cols.push_back(std::move(result_val));
-  // std::vector<cudf::column_view> columns{result_key->get_column(0), *result_val};
-  // auto agg_v = cudf::table_view(columns);
 
   // Join on keys to get
   return std::make_unique<cudf::table>(std::move(left_cols));
