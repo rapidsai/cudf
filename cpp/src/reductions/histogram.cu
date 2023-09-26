@@ -199,7 +199,7 @@ compute_row_frequencies(table_view const& input,
                                              stream,
                                              mr);
 
-  // Compute frequencies (aka unique counts) for the input rows.
+  // Compute frequencies (aka distinct counts) for the input rows.
   // Note that we consider null and NaNs as always equal.
   auto const reduction_results = cudf::detail::hash_reduce_by_row(
     map,

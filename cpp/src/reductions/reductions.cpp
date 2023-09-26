@@ -19,11 +19,11 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/quantiles.hpp>
-#include <cudf/detail/reduction/histogram.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/reduction.hpp>
+#include <cudf/reduction/detail/histogram.hpp>
 #include <cudf/reduction/detail/reduction_functions.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/structs/structs_column_view.hpp>

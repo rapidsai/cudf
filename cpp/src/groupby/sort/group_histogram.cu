@@ -20,7 +20,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/labeling/label_segments.cuh>
-#include <cudf/detail/reduction/histogram.hpp>
+#include <cudf/reduction/detail/histogram.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
