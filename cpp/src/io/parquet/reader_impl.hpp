@@ -95,6 +95,8 @@ class reader::impl {
    *
    * @param chunk_read_limit Limit on total number of bytes to be returned per read,
    *        or `0` if there is no limit
+   * @param pass_read_limit Limit on memory usage for the purposes of decompression and processing
+   * of input, or `0` if there is no limit.
    * @param sources Dataset sources
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches

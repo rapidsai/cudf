@@ -726,8 +726,8 @@ void reader::impl::allocate_level_decode_space()
 
 std::pair<bool, std::vector<std::future<void>>> reader::impl::read_and_decompress_column_chunks()
 {
-  auto row_groups_info = _pass_itm_data->row_groups;
-  auto const num_rows  = _pass_itm_data->num_rows;
+  auto const& row_groups_info = _pass_itm_data->row_groups;
+  auto const num_rows         = _pass_itm_data->num_rows;
 
   auto& raw_page_data = _pass_itm_data->raw_page_data;
   auto& chunks        = _pass_itm_data->chunks;
@@ -795,9 +795,9 @@ std::pair<bool, std::vector<std::future<void>>> reader::impl::read_and_decompres
 
 void reader::impl::load_global_chunk_info()
 {
-  auto const num_rows  = _file_itm_data.global_num_rows;
-  auto row_groups_info = _file_itm_data.row_groups;
-  auto& chunks         = _file_itm_data.chunks;
+  auto const num_rows         = _file_itm_data.global_num_rows;
+  auto const& row_groups_info = _file_itm_data.row_groups;
+  auto& chunks                = _file_itm_data.chunks;
 
   // Descriptors for all the chunks that make up the selected columns
   auto const num_input_columns = _input_columns.size();
@@ -853,7 +853,7 @@ void reader::impl::compute_input_pass_row_group_info()
 {
   // at this point, row_groups has already been filtered down to just the row groups we need to
   // handle optional skip_rows/num_rows parameters.
-  auto row_groups_info = _file_itm_data.row_groups;
+  auto const& row_groups_info = _file_itm_data.row_groups;
 
   // if the user hasn't specified an input size limit, read everything in a single pass.
   if (_input_pass_read_limit == 0) {
@@ -872,7 +872,6 @@ void reader::impl::compute_input_pass_row_group_info()
   _input_pass_row_group_indices.push_back(0);
   _input_pass_row_count.push_back(0);
 
-  // for (auto const& rg : row_groups_info) {
   for (size_t cur_rg_index = 0; cur_rg_index < row_groups_info.size(); cur_rg_index++) {
     auto const& rgi       = row_groups_info[cur_rg_index];
     auto const& row_group = _metadata->get_row_group(rgi.index, rgi.source_index);

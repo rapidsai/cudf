@@ -310,13 +310,13 @@ struct ColumnChunkDesc {
  */
 struct row_group_info {
   size_type index;
-  size_t start_row;  // TODO source index
+  size_t start_row;
   size_type source_index;
 
   row_group_info() = default;
 
   row_group_info(size_type index, size_t start_row, size_type source_index)
-    : index(index), start_row(start_row), source_index(source_index)
+    : index{index}, start_row{start_row}, source_index{source_index}
   {
   }
 };
