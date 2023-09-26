@@ -310,24 +310,27 @@ std::unique_ptr<column> swapcase(strings_column_view const& strings,
 // APIs
 
 std::unique_ptr<column> to_lower(strings_column_view const& strings,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_lower(strings, cudf::get_default_stream(), mr);
+  return detail::to_lower(strings, stream, mr);
 }
 
 std::unique_ptr<column> to_upper(strings_column_view const& strings,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_upper(strings, cudf::get_default_stream(), mr);
+  return detail::to_upper(strings, stream, mr);
 }
 
 std::unique_ptr<column> swapcase(strings_column_view const& strings,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::swapcase(strings, cudf::get_default_stream(), mr);
+  return detail::swapcase(strings, stream, mr);
 }
 
 }  // namespace strings

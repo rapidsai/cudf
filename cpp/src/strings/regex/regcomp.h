@@ -77,16 +77,16 @@ constexpr int32_t NCCLASS_D{1 << 5};  // not CCLASS_D or '\n'
  * @brief Structure of an encoded regex instruction
  */
 struct reinst {
-  int32_t type;       /* operator type or instruction type */
+  int32_t type; /* operator type or instruction type */
   union {
     int32_t cls_id;   /* class pointer */
     char32_t c;       /* character */
     int32_t subid;    /* sub-expression id for RBRA and LBRA */
     int32_t right_id; /* right child of OR */
   } u1;
-  union {             /* regexec relies on these two being in the same union */
-    int32_t left_id;  /* left child of OR */
-    int32_t next_id;  /* next instruction for CAT & LBRA */
+  union {            /* regexec relies on these two being in the same union */
+    int32_t left_id; /* left child of OR */
+    int32_t next_id; /* next instruction for CAT & LBRA */
   } u2;
   int32_t reserved4;
 };

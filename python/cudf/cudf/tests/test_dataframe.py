@@ -30,6 +30,7 @@ from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
+    _create_cudf_series_float64_default,
     assert_eq,
     assert_exceptions_equal,
     assert_neq,
@@ -218,6 +219,18 @@ def test_init_unaligned_with_index():
     )
 
     assert_eq(pdf, gdf, check_dtype=False)
+
+
+def test_init_series_list_columns_unsort():
+    pseries = [
+        pd.Series(i, index=["b", "a", "c"], name=str(i)) for i in range(3)
+    ]
+    gseries = [
+        cudf.Series(i, index=["b", "a", "c"], name=str(i)) for i in range(3)
+    ]
+    pdf = pd.DataFrame(pseries)
+    gdf = cudf.DataFrame(gseries)
+    assert_eq(pdf, gdf)
 
 
 def test_series_basic():
@@ -1314,6 +1327,25 @@ def test_assign():
     np.testing.assert_equal(gdf2.y.to_numpy(), [2, 3, 4])
 
 
+@pytest.mark.parametrize(
+    "mapping",
+    [
+        {"y": 1, "z": lambda df: df["x"] + df["y"]},
+        {
+            "x": lambda df: df["x"] * 2,
+            "y": lambda df: 2,
+            "z": lambda df: df["x"] / df["y"],
+        },
+    ],
+)
+def test_assign_callable(mapping):
+    df = pd.DataFrame({"x": [1, 2, 3]})
+    cdf = cudf.from_pandas(df)
+    expect = df.assign(**mapping)
+    actual = cdf.assign(**mapping)
+    assert_eq(expect, actual)
+
+
 @pytest.mark.parametrize("nrows", [1, 8, 100, 1000])
 @pytest.mark.parametrize("method", ["murmur3", "md5"])
 @pytest.mark.parametrize("seed", [None, 42])
@@ -2000,8 +2032,8 @@ def test_series_shape():
 
 
 def test_series_shape_empty():
-    ps = pd.Series(dtype="float64")
-    cs = cudf.Series([])
+    ps = pd.Series([], dtype="float64")
+    cs = cudf.Series([], dtype="float64")
 
     assert ps.shape == cs.shape
 
@@ -2840,7 +2872,7 @@ def test_series_all_null(num_elements, null_type):
 @pytest.mark.parametrize("num_elements", [0, 2, 10, 100])
 def test_series_all_valid_nan(num_elements):
     data = [np.nan] * num_elements
-    sr = cudf.Series(data, nan_as_null=False)
+    sr = _create_cudf_series_float64_default(data, nan_as_null=False)
     np.testing.assert_equal(sr.null_count, 0)
 
 
@@ -4073,28 +4105,28 @@ def test_empty_dataframe_describe():
 
 
 def test_as_column_types():
-    col = column.as_column(cudf.Series([]))
+    col = column.as_column(cudf.Series([], dtype="float64"))
     assert_eq(col.dtype, np.dtype("float64"))
     gds = cudf.Series(col)
     pds = pd.Series(pd.Series([], dtype="float64"))
 
     assert_eq(pds, gds)
 
-    col = column.as_column(cudf.Series([]), dtype="float32")
+    col = column.as_column(cudf.Series([], dtype="float64"), dtype="float32")
     assert_eq(col.dtype, np.dtype("float32"))
     gds = cudf.Series(col)
     pds = pd.Series(pd.Series([], dtype="float32"))
 
     assert_eq(pds, gds)
 
-    col = column.as_column(cudf.Series([]), dtype="str")
+    col = column.as_column(cudf.Series([], dtype="float64"), dtype="str")
     assert_eq(col.dtype, np.dtype("object"))
     gds = cudf.Series(col)
     pds = pd.Series(pd.Series([], dtype="str"))
 
     assert_eq(pds, gds)
 
-    col = column.as_column(cudf.Series([]), dtype="object")
+    col = column.as_column(cudf.Series([], dtype="float64"), dtype="object")
     assert_eq(col.dtype, np.dtype("object"))
     gds = cudf.Series(col)
     pds = pd.Series(pd.Series([], dtype="object"))
@@ -4469,7 +4501,7 @@ def test_create_dataframe_column():
 )
 def test_series_values_host_property(data):
     pds = pd.Series(data=data, dtype=None if data else float)
-    gds = cudf.Series(data)
+    gds = _create_cudf_series_float64_default(data)
 
     np.testing.assert_array_equal(pds.values, gds.values_host)
 
@@ -4492,7 +4524,7 @@ def test_series_values_host_property(data):
 )
 def test_series_values_property(data):
     pds = pd.Series(data=data, dtype=None if data else float)
-    gds = cudf.Series(data)
+    gds = _create_cudf_series_float64_default(data)
     gds_vals = gds.values
     assert isinstance(gds_vals, cupy.ndarray)
     np.testing.assert_array_equal(gds_vals.get(), pds.values)
@@ -10260,6 +10292,12 @@ def test_dataframe_constructor_unbounded_sequence():
         cudf.DataFrame({"a": A()})
 
 
+def test_dataframe_constructor_dataframe_list():
+    df = cudf.DataFrame(range(2))
+    with pytest.raises(ValueError):
+        cudf.DataFrame([df])
+
+
 def test_dataframe_constructor_from_namedtuple():
     Point1 = namedtuple("Point1", ["a", "b", "c"])
     Point2 = namedtuple("Point1", ["x", "y"])
@@ -10349,3 +10387,41 @@ def test_dataframe_round_builtin(digits):
     actual = round(gdf, digits)
 
     assert_eq(expected, actual)
+
+
+def test_dataframe_init_from_nested_dict():
+    ordered_dict = OrderedDict(
+        [
+            ("one", OrderedDict([("col_a", "foo1"), ("col_b", "bar1")])),
+            ("two", OrderedDict([("col_a", "foo2"), ("col_b", "bar2")])),
+            ("three", OrderedDict([("col_a", "foo3"), ("col_b", "bar3")])),
+        ]
+    )
+    pdf = pd.DataFrame(ordered_dict)
+    gdf = cudf.DataFrame(ordered_dict)
+
+    assert_eq(pdf, gdf)
+    regular_dict = {key: dict(value) for key, value in ordered_dict.items()}
+
+    pdf = pd.DataFrame(regular_dict)
+    gdf = cudf.DataFrame(regular_dict)
+    assert_eq(pdf, gdf)
+
+
+def test_init_from_2_categoricalindex_series_diff_categories():
+    s1 = cudf.Series(
+        [39, 6, 4], index=cudf.CategoricalIndex(["female", "male", "unknown"])
+    )
+    s2 = cudf.Series(
+        [2, 152, 2, 242, 150],
+        index=cudf.CategoricalIndex(["f", "female", "m", "male", "unknown"]),
+    )
+    result = cudf.DataFrame([s1, s2])
+    expected = pd.DataFrame([s1.to_pandas(), s2.to_pandas()])
+    assert_eq(result, expected, check_dtype=False)
+
+
+def test_data_frame_values_no_cols_but_index():
+    result = cudf.DataFrame(index=range(5)).values
+    expected = pd.DataFrame(index=range(5)).values
+    assert_eq(result, expected)

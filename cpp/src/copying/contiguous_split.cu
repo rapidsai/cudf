@@ -114,8 +114,8 @@ struct dst_buf_info {
   int bit_shift;           // # of bits to shift right by (for validity buffers)
   size_type valid_count;   // validity count for this block of work
 
-  int src_buf_index;       // source buffer index
-  int dst_buf_index;       // destination buffer index
+  int src_buf_index;  // source buffer index
+  int dst_buf_index;  // destination buffer index
 };
 
 /**
@@ -1384,7 +1384,7 @@ struct chunk_iteration_state {
   std::size_t starting_batch;  ///< Starting batch index for the current iteration
   std::vector<std::size_t> const h_num_buffs_per_iteration;  ///< The count of batches per iteration
   std::vector<std::size_t> const
-    h_size_of_buffs_per_iteration;                           ///< The size in bytes per iteration
+    h_size_of_buffs_per_iteration;  ///< The size in bytes per iteration
 };
 
 std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
@@ -1989,7 +1989,7 @@ struct contiguous_split_state {
   // This can be 1 if `contiguous_split` is just packing and not splitting
   std::size_t const num_partitions;  ///< The number of partitions to produce
 
-  size_type const num_src_bufs;      ///< Number of source buffers including children
+  size_type const num_src_bufs;  ///< Number of source buffers including children
 
   std::size_t const num_bufs;  ///< Number of source buffers including children * number of splits
 
