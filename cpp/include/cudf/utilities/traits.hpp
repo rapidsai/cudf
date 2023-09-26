@@ -23,6 +23,7 @@
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <cuda/std/type_traits>
+#include <type_traits>
 
 namespace cudf {
 
@@ -450,7 +451,7 @@ template <typename T>
 constexpr bool is_rep_layout_compatible()
 {
   return cudf::is_numeric<T>() or cudf::is_chrono<T>() or cudf::is_boolean<T>() or
-         cudf::is_byte<T>();
+         cudf::is_byte<T>() or std::is_same_v<T, char>;
 }
 
 /**
