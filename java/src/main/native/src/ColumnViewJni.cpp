@@ -2064,8 +2064,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeDataAddress(JNIE
     if (column->type().id() == cudf::type_id::STRING) {
       if (column->size() > 0) {
         cudf::strings_column_view view = cudf::strings_column_view(*column);
-        cudf::column_view data_view = view.chars();
-        result = reinterpret_cast<jlong>(data_view.data<char>());
+        result = reinterpret_cast<jlong>(view.chars_begin());
       }
     } else if (column->type().id() != cudf::type_id::LIST &&
                column->type().id() != cudf::type_id::STRUCT) {
@@ -2086,8 +2085,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeDataLength(JNIEn
     if (column->type().id() == cudf::type_id::STRING) {
       if (column->size() > 0) {
         cudf::strings_column_view view = cudf::strings_column_view(*column);
-        cudf::column_view data_view = view.chars();
-        result = data_view.size();
+        result = view.chars_size(cudf::get_default_stream());
       }
     } else if (column->type().id() != cudf::type_id::LIST &&
                column->type().id() != cudf::type_id::STRUCT) {
