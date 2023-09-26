@@ -5693,10 +5693,6 @@ TEST_F(ParquetReaderTest, RepeatedNoAnnotations)
     cudf::test::structs_column_wrapper{{std::move(struct_children)}, {0, 0, 1, 1, 1, 1}};
   table_view expected{{col0, outer_struct}};
 
-  cudf::test::print(expected.column(1));
-  printf("vs:\n");
-  cudf::test::print(result.tbl->view().column(1));
-
   CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view(), expected);
 }
 

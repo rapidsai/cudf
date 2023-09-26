@@ -202,33 +202,13 @@ void metadata::sanitize_schema()
   //
   // This code attempts to make this less messy for the code that follows.
 
-  std::function<void(size_t, std::string)> print_node = [&](size_t idx, std::string prefix) {
-    auto& e = schema[idx];
-    printf(
-      "%sschema element %lu(%s) type %d, converted type %d, repetition_type %d, num_children %d "
-      "parent %u, max def %d, max rep %d\n",
-      prefix.c_str(),
-      idx,
-      e.name.c_str(),
-      (int)e.type,
-      (int)e.converted_type,
-      (int)e.repetition_type,
-      (int)e.num_children,
-      e.parent_idx,
-      e.max_definition_level,
-      e.max_repetition_level);
-    for (auto& child_idx : e.children_idx) {
-      print_node(child_idx, "  " + prefix);
-    }
-  };
-
   std::function<void(size_t)> process = [&](size_t schema_idx) -> void {
     if (schema_idx < 0) { return; }
     auto& schema_elem = schema[schema_idx];
     if (schema_idx != 0 && schema_elem.type == UNDEFINED_TYPE) {
       if (schema_elem.type == UNDEFINED_TYPE && schema_elem.repetition_type == REPEATED &&
           schema_elem.num_children > 1) {
-        // This is a list of structs, so we need to add a need to both mark this as a list, but also
+        // This is a list of structs, so we need to mark this as a list, but also
         // add a struct child and move this element's children to the struct
         schema_elem.converted_type  = LIST;
         schema_elem.repetition_type = OPTIONAL;
@@ -248,6 +228,7 @@ void metadata::sanitize_schema()
 
         struct_elem.max_definition_level = schema_elem.max_definition_level;
         struct_elem.max_repetition_level = schema_elem.max_repetition_level;
+        schema_elem.max_definition_level--;
         schema_elem.max_repetition_level = schema[schema_elem.parent_idx].max_repetition_level;
 
         // change parent index on new node and on children
@@ -265,10 +246,7 @@ void metadata::sanitize_schema()
     }
   };
 
-  //  printf("initial layout:\n");
-  //  print_node(0, "initial ");
   process(0);
-  //  print_node(0, "final_layout ");
 }
 
 metadata::metadata(datasource* source)
