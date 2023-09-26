@@ -69,7 +69,8 @@ from cudf.core.udf.utils import (
 )
 from cudf.utils import docutils
 from cudf.utils._numba import _CUDFNumbaConfig
-from cudf.utils.utils import _cudf_nvtx_annotate, _warn_no_dask_cudf
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.utils import _warn_no_dask_cudf
 
 doc_reset_index_template = """
         Reset the index of the {klass}, or a level of it.

@@ -8,7 +8,6 @@ import warnings
 from typing import FrozenSet, Set, Union
 
 import numpy as np
-from nvtx import annotate  # noqa: F401
 
 import rmm
 
@@ -16,9 +15,6 @@ import cudf
 import cudf.api.types
 from cudf.core import column
 from cudf.core.buffer import as_buffer
-from cudf.utils.nvtx_annotation import _NVTX_COLORS  # noqa: F401
-from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate  # noqa: F401
-from cudf.utils.nvtx_annotation import _dask_cudf_nvtx_annotate  # noqa: F401
 
 # The size of the mask in bytes
 mask_dtype = cudf.api.types.dtype(np.int32)

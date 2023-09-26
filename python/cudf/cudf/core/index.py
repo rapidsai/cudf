@@ -64,12 +64,8 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     numeric_normalize_types,
 )
-from cudf.utils.utils import (
-    _cudf_nvtx_annotate,
-    _is_same_name,
-    _warn_no_dask_cudf,
-    search_range,
-)
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.utils import _is_same_name, _warn_no_dask_cudf, search_range
 
 
 def _lexsorted_equal_range(
