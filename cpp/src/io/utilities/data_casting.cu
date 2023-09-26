@@ -931,13 +931,8 @@ std::unique_ptr<column> parse_data(
   auto str_tuples = thrust::make_transform_iterator(offset_length_begin, to_string_view_pair{data});
 
   if (col_type == cudf::data_type{cudf::type_id::STRING}) {
-    return parse_string(str_tuples,
-                        col_size,
-                        std::forward<rmm::device_buffer>(null_mask),
-                        d_null_count,
-                        options,
-                        stream,
-                        mr);
+    return parse_string(
+      str_tuples, col_size, std::move(null_mask), d_null_count, options, stream, mr);
   }
 
   auto out_col =
