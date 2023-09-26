@@ -2,15 +2,13 @@
 
 import decimal
 import functools
-import hashlib
 import os
 import traceback
 import warnings
-from functools import partial
 from typing import FrozenSet, Set, Union
 
 import numpy as np
-from nvtx import annotate
+from nvtx import annotate  # noqa: F401
 
 import rmm
 
@@ -18,6 +16,9 @@ import cudf
 import cudf.api.types
 from cudf.core import column
 from cudf.core.buffer import as_buffer
+from cudf.utils.nvtx_annotation import _NVTX_COLORS  # noqa: F401
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate  # noqa: F401
+from cudf.utils.nvtx_annotation import _dask_cudf_nvtx_annotate  # noqa: F401
 
 # The size of the mask in bytes
 mask_dtype = cudf.api.types.dtype(np.int32)
@@ -118,8 +119,6 @@ _EQUALITY_OPS = {
     "__le__",
     "__ge__",
 }
-
-_NVTX_COLORS = ["green", "blue", "purple", "rapids"]
 
 # The test root is set by pytest to support situations where tests are run from
 # a source tree on a built version of cudf.
@@ -351,28 +350,6 @@ def is_na_like(obj):
     i.e., None, cudf.NA or cudf.NaT
     """
     return obj is None or obj is cudf.NA or obj is cudf.NaT
-
-
-def _get_color_for_nvtx(name):
-    m = hashlib.sha256()
-    m.update(name.encode())
-    hash_value = int(m.hexdigest(), 16)
-    idx = hash_value % len(_NVTX_COLORS)
-    return _NVTX_COLORS[idx]
-
-
-def _cudf_nvtx_annotate(func, domain="cudf_python"):
-    """Decorator for applying nvtx annotations to methods in cudf."""
-    return annotate(
-        message=func.__qualname__,
-        color=_get_color_for_nvtx(func.__qualname__),
-        domain=domain,
-    )(func)
-
-
-_dask_cudf_nvtx_annotate = partial(
-    _cudf_nvtx_annotate, domain="dask_cudf_python"
-)
 
 
 def _warn_no_dask_cudf(fn):
