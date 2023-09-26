@@ -154,6 +154,14 @@ compute_row_frequencies(table_view const& input,
                         rmm::cuda_stream_view stream,
                         rmm::mr::device_memory_resource* mr)
 {
+  auto const has_nested_columns = cudf::detail::has_nested_columns(input);
+
+  // Nested types are not tested, thus we just throw exception if we see such input for now.
+  // We should remove this check after having enough tests.
+  CUDF_EXPECTS(!has_nested_columns,
+               "Nested types are not yet supported in histogram aggregation.",
+               std::invalid_argument);
+
   auto map = cudf::detail::hash_map_type{
     compute_hash_table_size(input.num_rows()),
     cuco::empty_key{-1},
@@ -163,8 +171,7 @@ compute_row_frequencies(table_view const& input,
 
   auto const preprocessed_input =
     cudf::experimental::row::hash::preprocessed_table::create(input, stream);
-  auto const has_nulls          = nullate::DYNAMIC{cudf::has_nested_nulls(input)};
-  auto const has_nested_columns = cudf::detail::has_nested_columns(input);
+  auto const has_nulls = nullate::DYNAMIC{cudf::has_nested_nulls(input)};
 
   auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
   auto const key_hasher = row_hasher.device_hasher(has_nulls);
