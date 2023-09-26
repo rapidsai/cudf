@@ -22,7 +22,6 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/iterator/zip_iterator.h>
@@ -92,9 +91,9 @@ struct reduce_func_builder {
 };
 
 /**
- * @brief Specialized functor to check for non-zero of the second component of the input.
+ * @brief Specialized functor to check for not-zero of the second component of the input.
  */
-struct is_none_zero {
+struct is_not_zero {
   template <typename Pair>
   __device__ bool operator()(Pair const input) const
   {
@@ -119,18 +118,15 @@ auto gather_histogram(table_view const& input,
                       rmm::cuda_stream_view stream,
                       rmm::mr::device_memory_resource* mr)
 {
-  auto distinct_rows =
-    std::move(cudf::detail::gather(input,
-                                   distinct_indices,
-                                   out_of_bounds_policy::DONT_CHECK,
-                                   cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                   stream,
-                                   mr)
-                ->release()
-                .front());
+  auto distinct_rows = cudf::detail::gather(input,
+                                            distinct_indices,
+                                            out_of_bounds_policy::DONT_CHECK,
+                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                            stream,
+                                            mr);
 
   std::vector<std::unique_ptr<column>> struct_children;
-  struct_children.emplace_back(std::move(distinct_rows));
+  struct_children.emplace_back(std::move(distinct_rows->release().front()));
   struct_children.emplace_back(std::move(distinct_counts));
   auto output_structs = make_structs_column(
     static_cast<size_type>(distinct_indices.size()), std::move(struct_children), 0, {}, stream, mr);
@@ -227,7 +223,7 @@ compute_row_frequencies(table_view const& input,
   // Reduction results above are either group sizes of equal rows, or `0`.
   // The final output is non-zero group sizes only.
   thrust::copy_if(
-    rmm::exec_policy(stream), input_it, input_it + input.num_rows(), output_it, is_none_zero{});
+    rmm::exec_policy(stream), input_it, input_it + input.num_rows(), output_it, is_not_zero{});
 
   return {std::move(distinct_indices), std::move(distinct_counts)};
 }
@@ -237,7 +233,7 @@ std::unique_ptr<cudf::scalar> histogram(column_view const& input,
                                         rmm::mr::device_memory_resource* mr)
 {
   // Empty group should be handled before reaching here.
-  CUDF_EXPECTS(input.size() > 0, "Input should not be empty.");
+  CUDF_EXPECTS(input.size() > 0, "Input should not be empty.", std::invalid_argument);
 
   auto const input_tv = table_view{{input}};
   auto [distinct_indices, distinct_counts] =
@@ -250,12 +246,14 @@ std::unique_ptr<cudf::scalar> merge_histogram(column_view const& input,
                                               rmm::mr::device_memory_resource* mr)
 {
   // Empty group should be handled before reaching here.
-  CUDF_EXPECTS(input.size() > 0, "Input should not be empty.");
-  CUDF_EXPECTS(!input.has_nulls(), "The input column must not have nulls.");
+  CUDF_EXPECTS(input.size() > 0, "Input should not be empty.", std::invalid_argument);
+  CUDF_EXPECTS(!input.has_nulls(), "The input column must not have nulls.", std::invalid_argument);
   CUDF_EXPECTS(input.type().id() == type_id::STRUCT && input.num_children() == 2,
-               "The input must be a structs column having two children.");
+               "The input must be a structs column having two children.",
+               std::invalid_argument);
   CUDF_EXPECTS(cudf::is_integral(input.child(1).type()) && !input.child(1).has_nulls(),
-               "The second child of the input column must be integral type and has no nulls.");
+               "The second child of the input column must be of integral type and without nulls.",
+               std::invalid_argument);
 
   auto const structs_cv   = structs_column_view{input};
   auto const input_values = structs_cv.get_sliced_child(0, stream);

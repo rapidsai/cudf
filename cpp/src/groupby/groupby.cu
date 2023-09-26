@@ -24,8 +24,8 @@
 #include <cudf/detail/groupby.hpp>
 #include <cudf/detail/groupby/group_replace_nulls.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
-#include <cudf/detail/histogram_helpers.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/reduction/histogram.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>

@@ -19,8 +19,8 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
-#include <cudf/detail/histogram_helpers.hpp>
 #include <cudf/detail/labeling/label_segments.cuh>
+#include <cudf/detail/reduction/histogram.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -40,9 +40,9 @@ std::unique_ptr<column> build_histogram(column_view const& values,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(num_groups >= 0, "Number of groups cannot be negative.");
   CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
-               "Size of values column should be the same as that of group labels.");
+               "Size of values column should be the same as that of group labels.",
+               std::invalid_argument);
 
   // Attach group labels to the input values.
   auto const labels_cv      = column_view{data_type{type_to_id<size_type>()},
@@ -92,7 +92,7 @@ std::unique_ptr<column> group_histogram(column_view const& values,
                                         rmm::mr::device_memory_resource* mr)
 {
   // Empty group should be handled before reaching here.
-  CUDF_EXPECTS(num_groups > 0, "Group should not be empty.");
+  CUDF_EXPECTS(num_groups > 0, "Group should not be empty.", std::invalid_argument);
 
   return build_histogram(values, group_labels, std::nullopt, num_groups, stream, mr);
 }
@@ -104,23 +104,28 @@ std::unique_ptr<column> group_merge_histogram(column_view const& values,
                                               rmm::mr::device_memory_resource* mr)
 {
   // Empty group should be handled before reaching here.
-  CUDF_EXPECTS(num_groups > 0, "Group should not be empty.");
+  CUDF_EXPECTS(num_groups > 0, "Group should not be empty.", std::invalid_argument);
 
   // The input must be a lists column without nulls.
-  CUDF_EXPECTS(!values.has_nulls(), "The input column must not have nulls.");
+  CUDF_EXPECTS(!values.has_nulls(), "The input column must not have nulls.", std::invalid_argument);
   CUDF_EXPECTS(values.type().id() == type_id::LIST,
-               "The input of MERGE_HISTOGRAM aggregation must be a lists column.");
+               "The input of MERGE_HISTOGRAM aggregation must be a lists column.",
+               std::invalid_argument);
 
   // Child of the input lists column must be a structs column without nulls,
   // and its second child is a columns of integer type having no nulls.
   auto const lists_cv     = lists_column_view{values};
   auto const histogram_cv = lists_cv.get_sliced_child(stream);
-  CUDF_EXPECTS(!histogram_cv.has_nulls(), "Child of the input lists column must not have nulls.");
+  CUDF_EXPECTS(!histogram_cv.has_nulls(),
+               "Child of the input lists column must not have nulls.",
+               std::invalid_argument);
   CUDF_EXPECTS(histogram_cv.type().id() == type_id::STRUCT && histogram_cv.num_children() == 2,
-               "The input column has invalid histograms structure.");
+               "The input column has invalid histograms structure.",
+               std::invalid_argument);
   CUDF_EXPECTS(
     cudf::is_integral(histogram_cv.child(1).type()) && !histogram_cv.child(1).has_nulls(),
-    "The input column has invalid histograms structure.");
+    "The input column has invalid histograms structure.",
+    std::invalid_argument);
 
   // Concatenate the histograms corresponding to the same key values.
   // That is equivalent to creating a new lists column (view) from the input lists column

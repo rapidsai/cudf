@@ -29,7 +29,7 @@
 namespace cudf::reduction::detail {
 
 /**
- * @brief Compute the frequency for each unique row in the input table.
+ * @brief Compute the frequency for each distinct row in the input table.
  *
  * @param input The input table to compute histogram
  * @param partial_counts An optional column containing count for each row
@@ -38,7 +38,7 @@ namespace cudf::reduction::detail {
  * @return A pair of array contains the (stable-order) indices of the distinct rows in the input
  * table, and their corresponding distinct counts
  */
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>, std::unique_ptr<column>>
+[[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>, std::unique_ptr<column>>
 compute_row_frequencies(table_view const& input,
                         std::optional<column_view> const& partial_counts,
                         rmm::cuda_stream_view stream,
@@ -52,6 +52,6 @@ compute_row_frequencies(table_view const& input,
  *
  * @returns An empty histogram column
  */
-std::unique_ptr<column> make_empty_histogram_like(column_view const& values);
+[[nodiscard]] std::unique_ptr<column> make_empty_histogram_like(column_view const& values);
 
 }  // namespace cudf::reduction::detail
