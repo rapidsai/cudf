@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <stream_compaction/stream_compaction_common.hpp>
-
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/hash_reduce_by_row.cuh>
