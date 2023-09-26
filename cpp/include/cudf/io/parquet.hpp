@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/ast/expressions.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
@@ -61,6 +62,9 @@ class parquet_reader_options {
   int64_t _skip_rows = 0;
   // Number of rows to read; `nullopt` is all
   std::optional<size_type> _num_rows;
+
+  // Predicate filter as AST to filter output rows.
+  std::optional<std::reference_wrapper<ast::expression const>> _filter;
 
   // Whether to store string data as categorical type
   bool _convert_strings_to_categories = false;
@@ -161,6 +165,13 @@ class parquet_reader_options {
   [[nodiscard]] auto const& get_row_groups() const { return _row_groups; }
 
   /**
+   * @brief Returns AST based filter for predicate pushdown.
+   *
+   * @return AST expression to use as filter
+   */
+  [[nodiscard]] auto const& get_filter() const { return _filter; }
+
+  /**
    * @brief Returns timestamp type used to cast timestamp columns.
    *
    * @return Timestamp type used to cast timestamp columns
@@ -180,6 +191,13 @@ class parquet_reader_options {
    * @param row_groups Vector of row groups to read
    */
   void set_row_groups(std::vector<std::vector<size_type>> row_groups);
+
+  /**
+   * @brief Sets AST based filter for predicate pushdown.
+   *
+   * @param filter AST expression to use as filter
+   */
+  void set_filter(ast::expression const& filter) { _filter = filter; }
 
   /**
    * @brief Sets to enable/disable conversion of strings to categories.
@@ -270,6 +288,18 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& row_groups(std::vector<std::vector<size_type>> row_groups)
   {
     options.set_row_groups(std::move(row_groups));
+    return *this;
+  }
+
+  /**
+   * @brief Sets vector of individual row groups to read.
+   *
+   * @param filter Vector of row groups to read
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& filter(ast::expression const& filter)
+  {
+    options.set_filter(filter);
     return *this;
   }
 
@@ -498,6 +528,8 @@ class parquet_writer_options {
   std::optional<size_type> _max_page_fragment_size;
   // Optional compression statistics
   std::shared_ptr<writer_compression_statistics> _compression_stats;
+  // write V2 page headers?
+  bool _v2_page_headers = false;
 
   /**
    * @brief Constructor from sink and table.
@@ -683,6 +715,13 @@ class parquet_writer_options {
   }
 
   /**
+   * @brief Returns `true` if V2 page headers should be written.
+   *
+   * @return `true` if V2 page headers should be written.
+   */
+  [[nodiscard]] auto is_enabled_write_v2_headers() const { return _v2_page_headers; }
+
+  /**
    * @brief Sets partitions.
    *
    * @param partitions Partitions of input table in {start_row, num_rows} pairs. If specified, must
@@ -799,6 +838,13 @@ class parquet_writer_options {
   {
     _compression_stats = std::move(comp_stats);
   }
+
+  /**
+   * @brief Sets preference for V2 page headers. Write V2 page headers if set to `true`.
+   *
+   * @param val Boolean value to enable/disable writing of V2 page headers.
+   */
+  void enable_write_v2_headers(bool val) { _v2_page_headers = val; }
 };
 
 /**
@@ -1031,6 +1077,14 @@ class parquet_writer_options_builder {
   }
 
   /**
+   * @brief Set to true if V2 page headers are to be written.
+   *
+   * @param enabled Boolean value to enable/disable writing of V2 page headers.
+   * @return this for chaining
+   */
+  parquet_writer_options_builder& write_v2_headers(bool enabled);
+
+  /**
    * @brief move parquet_writer_options member once it's built.
    */
   operator parquet_writer_options&&() { return std::move(options); }
@@ -1111,6 +1165,8 @@ class chunked_parquet_writer_options {
   std::optional<size_type> _max_page_fragment_size;
   // Optional compression statistics
   std::shared_ptr<writer_compression_statistics> _compression_stats;
+  // write V2 page headers?
+  bool _v2_page_headers = false;
 
   /**
    * @brief Constructor from sink.
@@ -1252,6 +1308,13 @@ class chunked_parquet_writer_options {
   }
 
   /**
+   * @brief Returns `true` if V2 page headers should be written.
+   *
+   * @return `true` if V2 page headers should be written.
+   */
+  [[nodiscard]] auto is_enabled_write_v2_headers() const { return _v2_page_headers; }
+
+  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata
@@ -1355,6 +1418,13 @@ class chunked_parquet_writer_options {
   }
 
   /**
+   * @brief Sets preference for V2 page headers. Write V2 page headers if set to `true`.
+   *
+   * @param val Boolean value to enable/disable writing of V2 page headers.
+   */
+  void enable_write_v2_headers(bool val) { _v2_page_headers = val; }
+
+  /**
    * @brief creates builder to build chunked_parquet_writer_options.
    *
    * @param sink sink to use for writer output
@@ -1444,6 +1514,14 @@ class chunked_parquet_writer_options_builder {
     options._write_timestamps_as_int96 = enabled;
     return *this;
   }
+
+  /**
+   * @brief Set to true if V2 page headers are to be written.
+   *
+   * @param enabled Boolean value to enable/disable writing of V2 page headers.
+   * @return this for chaining
+   */
+  chunked_parquet_writer_options_builder& write_v2_headers(bool enabled);
 
   /**
    * @brief Sets the maximum row group size, in bytes.

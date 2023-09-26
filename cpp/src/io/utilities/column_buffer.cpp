@@ -68,7 +68,7 @@ std::unique_ptr<column> inline_column_buffer::make_string_column_impl(rmm::cuda_
   // no need for copies, just transfer ownership of the data_buffers to the columns
   auto const state = mask_state::UNALLOCATED;
   auto str_col =
-    _string_data.size() == 0
+    _string_data.is_empty()
       ? make_empty_column(data_type{type_id::INT8})
       : std::make_unique<column>(data_type{type_id::INT8},
                                  string_size(),
@@ -149,7 +149,10 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
                                     std::optional<reader_column_schema> const& schema,
                                     rmm::cuda_stream_view stream)
 {
-  if (schema_info != nullptr) { schema_info->name = buffer.name; }
+  if (schema_info != nullptr) {
+    schema_info->name        = buffer.name;
+    schema_info->is_nullable = buffer.is_nullable;
+  }
 
   switch (buffer.type.id()) {
     case type_id::STRING:

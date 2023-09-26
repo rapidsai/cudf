@@ -274,6 +274,14 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToString)
   EXPECT_EQ(cudf::test::to_string(strings, delimiter), tmp.str());
 }
 
+TEST_F(ColumnUtilitiesStringsTest, PrintEscapeStrings)
+{
+  char const* delimiter = ",";
+  cudf::test::strings_column_wrapper input({"e\te\ne", "é\bé\ré", "e\vé\fé\abell"});
+  std::string expected{"e\\te\\ne,é\\bé\\ré,e\\vé\\fé\\abell"};
+  EXPECT_EQ(cudf::test::to_string(input, delimiter), expected);
+}
+
 TYPED_TEST(ColumnUtilitiesTestFixedPoint, NonNullableToHost)
 {
   using namespace numeric;
@@ -385,7 +393,7 @@ TEST_F(ColumnUtilitiesListsTest, UnsanitaryLists)
   //    0, 1, 2
   std::vector<std::unique_ptr<cudf::column>> children;
   children.emplace_back(
-    std::move(cudf::test::fixed_width_column_wrapper<cudf::offset_type>{0, 3}.release()));
+    std::move(cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 3}.release()));
   children.emplace_back(std::move(cudf::test::fixed_width_column_wrapper<int>{0, 1, 2}.release()));
 
   auto l0 = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::LIST},

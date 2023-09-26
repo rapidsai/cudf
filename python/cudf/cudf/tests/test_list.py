@@ -697,7 +697,12 @@ def test_list_scalar_host_construction_null(elem_type, nesting_level):
         dtype = cudf.ListDtype(dtype)
 
     slr = cudf.Scalar(None, dtype=dtype)
-    assert slr.value is cudf.NA
+    assert slr.value is (
+        cudf.NaT
+        if cudf.api.types.is_datetime64_dtype(slr.dtype)
+        or cudf.api.types.is_timedelta64_dtype(slr.dtype)
+        else cudf.NA
+    )
 
 
 @pytest.mark.parametrize(
@@ -890,14 +895,14 @@ def test_memory_usage():
     "data, idx",
     [
         (
-            [[{"f2": {"a": 100}, "f1": "a"}, {"f1": "sf12", "f2": None}]],
+            [[{"f2": {"a": 100}, "f1": "a"}, {"f1": "sf12", "f2": NA}]],
             0,
         ),
         (
             [
                 [
                     {"f2": {"a": 100, "c": 90, "f2": 10}, "f1": "a"},
-                    {"f1": "sf12", "f2": None},
+                    {"f1": "sf12", "f2": NA},
                 ]
             ],
             0,

@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 import cudf
 
@@ -15,7 +15,7 @@ from cudf._lib.cpp.strings.convert.convert_fixed_point cimport (
     is_fixed_point as cpp_is_fixed_point,
     to_fixed_point as cpp_to_fixed_point,
 )
-from cudf._lib.cpp.types cimport DECIMAL32, DECIMAL64, DECIMAL128, data_type
+from cudf._lib.cpp.types cimport data_type, type_id
 
 
 @acquire_spill_lock()
@@ -61,11 +61,11 @@ def to_decimal(Column input_col, object out_type):
     cdef int scale = out_type.scale
     cdef data_type c_out_type
     if isinstance(out_type, cudf.Decimal32Dtype):
-        c_out_type = data_type(DECIMAL32, -scale)
+        c_out_type = data_type(type_id.DECIMAL32, -scale)
     elif isinstance(out_type, cudf.Decimal64Dtype):
-        c_out_type = data_type(DECIMAL64, -scale)
+        c_out_type = data_type(type_id.DECIMAL64, -scale)
     elif isinstance(out_type, cudf.Decimal128Dtype):
-        c_out_type = data_type(DECIMAL128, -scale)
+        c_out_type = data_type(type_id.DECIMAL128, -scale)
     else:
         raise TypeError("should be a decimal dtype")
     with nogil:
@@ -100,7 +100,7 @@ def is_fixed_point(Column input_col, object dtype):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = input_col.view()
     cdef int scale = dtype.scale
-    cdef data_type c_dtype = data_type(DECIMAL64, -scale)
+    cdef data_type c_dtype = data_type(type_id.DECIMAL64, -scale)
     with nogil:
         c_result = move(cpp_is_fixed_point(
             source_view,

@@ -94,7 +94,7 @@ TEST_F(ReductionTDigestMerge, FewHeavyCentroids)
   cudf::test::fixed_width_column_wrapper<double> c0c{1.0, 2.0};
   cudf::test::fixed_width_column_wrapper<double> c0w{100.0, 50.0};
   cudf::test::structs_column_wrapper c0s({c0c, c0w});
-  cudf::test::fixed_width_column_wrapper<cudf::offset_type> c0_offsets{0, 2};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> c0_offsets{0, 2};
   auto c0l =
     cudf::make_lists_column(1, c0_offsets.release(), c0s.release(), 0, rmm::device_buffer{});
   cudf::test::fixed_width_column_wrapper<double> c0min{1.0};
@@ -111,7 +111,7 @@ TEST_F(ReductionTDigestMerge, FewHeavyCentroids)
   cudf::test::fixed_width_column_wrapper<double> c1c{3.0, 4.0};
   cudf::test::fixed_width_column_wrapper<double> c1w{200.0, 50.0};
   cudf::test::structs_column_wrapper c1s({c1c, c1w});
-  cudf::test::fixed_width_column_wrapper<cudf::offset_type> c1_offsets{0, 2};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> c1_offsets{0, 2};
   auto c1l =
     cudf::make_lists_column(1, c1_offsets.release(), c1s.release(), 0, rmm::device_buffer{});
   cudf::test::fixed_width_column_wrapper<double> c1min{3.0};
@@ -147,7 +147,7 @@ TEST_F(ReductionTDigestMerge, FewHeavyCentroids)
   cudf::test::fixed_width_column_wrapper<double> ec{1.0, 2.0, 3.0, 4.0};
   cudf::test::fixed_width_column_wrapper<double> ew{100.0, 50.0, 200.0, 50.0};
   cudf::test::structs_column_wrapper es({ec, ew});
-  cudf::test::fixed_width_column_wrapper<cudf::offset_type> e_offsets{0, 4};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets{0, 4};
   auto el = cudf::make_lists_column(1, e_offsets.release(), es.release(), 0, rmm::device_buffer{});
   cudf::test::fixed_width_column_wrapper<double> emin{1.0};
   cudf::test::fixed_width_column_wrapper<double> emax{4.0};

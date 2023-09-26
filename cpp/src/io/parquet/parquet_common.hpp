@@ -92,6 +92,7 @@ enum class Encoding : uint8_t {
   DELTA_BYTE_ARRAY        = 7,
   RLE_DICTIONARY          = 8,
   BYTE_STREAM_SPLIT       = 9,
+  NUM_ENCODINGS           = 10,
 };
 
 /**
@@ -140,7 +141,7 @@ enum BoundaryOrder {
 /**
  * @brief Thrift compact protocol struct field types
  */
-enum {
+enum FieldType {
   ST_FLD_TRUE   = 1,
   ST_FLD_FALSE  = 2,
   ST_FLD_BYTE   = 3,

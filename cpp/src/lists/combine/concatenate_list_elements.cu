@@ -19,7 +19,9 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -53,11 +55,10 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
 {
   auto const num_rows = input.size();
 
-  static_assert(std::is_same_v<offset_type, int32_t> && std::is_same_v<size_type, int32_t>);
   auto out_offsets = make_numeric_column(
-    data_type{type_id::INT32}, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
 
-  auto const d_out_offsets  = out_offsets->mutable_view().template begin<offset_type>();
+  auto const d_out_offsets  = out_offsets->mutable_view().template begin<size_type>();
   auto const d_row_offsets  = lists_column_view(input).offsets_begin();
   auto const d_list_offsets = lists_column_view(lists_column_view(input).child()).offsets_begin();
 
@@ -121,13 +122,8 @@ generate_list_offsets_and_validities(column_view const& input,
 {
   auto const num_rows = input.size();
 
-  static_assert(std::is_same_v<offset_type, int32_t> && std::is_same_v<size_type, int32_t>);
-  auto out_offsets = make_numeric_column(
-    data_type{type_id::INT32}, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
-
   auto const lists_of_lists_dv_ptr = column_device_view::create(input, stream);
   auto const lists_dv_ptr   = column_device_view::create(lists_column_view(input).child(), stream);
-  auto const d_out_offsets  = out_offsets->mutable_view().template begin<offset_type>();
   auto const d_row_offsets  = lists_column_view(input).offsets_begin();
   auto const d_list_offsets = lists_column_view(lists_column_view(input).child()).offsets_begin();
 
@@ -135,23 +131,19 @@ generate_list_offsets_and_validities(column_view const& input,
   auto validities = rmm::device_uvector<int8_t>(num_rows, stream);
 
   // Compute output list sizes and validities.
-  auto const iter = thrust::make_counting_iterator<size_type>(0);
-  thrust::transform(
-    rmm::exec_policy(stream),
-    iter,
-    iter + num_rows,
-    d_out_offsets,
+  auto sizes_itr = cudf::detail::make_counting_transform_iterator(
+    0,
     [lists_of_lists_dv = *lists_of_lists_dv_ptr,
      lists_dv          = *lists_dv_ptr,
      d_row_offsets,
      d_list_offsets,
-     d_validities = validities.begin(),
-     iter] __device__(auto const idx) {
+     d_validities = validities.begin()] __device__(auto const idx) {
       if (d_row_offsets[idx] == d_row_offsets[idx + 1]) {  // This is a null/empty row.
         d_validities[idx] = static_cast<int8_t>(lists_of_lists_dv.is_valid(idx));
         return size_type{0};
       }
       // The output row will not be null only if all lists on the input row are not null.
+      auto const iter = thrust::make_counting_iterator<size_type>(0);
       auto const is_valid =
         thrust::all_of(thrust::seq,
                        iter + d_row_offsets[idx],
@@ -163,10 +155,9 @@ generate_list_offsets_and_validities(column_view const& input,
       // Compute size of the output list as sum of sizes of all lists in the current input row.
       return d_list_offsets[d_row_offsets[idx + 1]] - d_list_offsets[d_row_offsets[idx]];
     });
-
   // Compute offsets from sizes.
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_out_offsets, d_out_offsets + num_rows + 1, d_out_offsets);
+  auto out_offsets = std::get<0>(
+    cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + num_rows, stream, mr));
 
   return {std::move(out_offsets), std::move(validities)};
 }
@@ -198,7 +189,7 @@ std::unique_ptr<column> gather_list_entries(column_view const& input,
      d_list_offsets,
      d_indices = gather_map.begin(),
      d_out_list_offsets =
-       output_list_offsets.template begin<offset_type>()] __device__(size_type const idx) {
+       output_list_offsets.template begin<size_type>()] __device__(size_type const idx) {
       // The output row has been identified as a null/empty list during list size computation.
       if (d_out_list_offsets[idx + 1] == d_out_list_offsets[idx]) { return; }
 

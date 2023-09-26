@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -134,7 +134,7 @@ struct format_lists_fn {
       auto const view = get_nested_child(stack_idx);
 
       auto offsets   = view.child(cudf::lists_column_view::offsets_column_index);
-      auto d_offsets = offsets.data<offset_type>() + view.offset();
+      auto d_offsets = offsets.data<size_type>() + view.offset();
 
       // add pending separator
       if (item.separator == item_separator::LIST) {

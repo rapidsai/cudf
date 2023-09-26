@@ -22,3 +22,4 @@ This page provides a list of all publicly accessible modules, methods and classe
     list_handling
     struct_handling
     options
+    extension_dtypes
