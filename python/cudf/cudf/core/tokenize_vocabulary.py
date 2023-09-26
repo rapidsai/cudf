@@ -17,10 +17,6 @@ class TokenizeVocabulary:
     ----------
     vocabulary : str
         Strings column of vocabulary terms
-
-    Returns
-    -------
-    TokenizeVocabulary
     """
 
     def __init__(self, vocabulary: "cudf.Series"):
