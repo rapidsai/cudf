@@ -357,6 +357,16 @@ template <typename T>
 struct device_value_accessor {
   column_device_view const col;  ///< column view of column in device
 
+  /// Checks that the type used to access device values matches the rep-type
+  /// of the order-by column.
+  struct is_correct_range_rep {
+    template <typename U>  /// Order-by type.
+    constexpr bool operator()() const
+    {
+      return std::is_same_v<T, cudf::detail::range_rep_type<U>>;
+    }
+  };
+
   /**
    * @brief constructor
    *
@@ -364,8 +374,11 @@ struct device_value_accessor {
    */
   explicit __device__ device_value_accessor(column_device_view const& col_) : col{col_}
   {
-    cudf_assert(type_id_matches_device_storage_type<T>(col.type().id()) &&
-                "the data type mismatch");
+    // For non-timestamp types, T must match the order-by column's type.
+    // For timestamp types, T must match the range rep type for the order-by column.
+    cudf_assert((type_id_matches_device_storage_type<T>(col.type().id()) or
+                 cudf::type_dispatcher(col.type(), is_correct_range_rep{})) &&
+                "data type mismatch when accessing the order-by column");
   }
 
   /**

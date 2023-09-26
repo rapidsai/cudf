@@ -456,3 +456,98 @@ INSTANTIATE_TEST_CASE_P(FromArrowTest,
                                           std::make_tuple(0, 0),
                                           std::make_tuple(0, 3000),
                                           std::make_tuple(10000, 10000)));
+
+template <typename T>
+struct FromArrowNumericScalarTest : public cudf::test::BaseFixture {};
+
+using NumericTypesNotBool =
+  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
+TYPED_TEST_SUITE(FromArrowNumericScalarTest, NumericTypesNotBool);
+
+TYPED_TEST(FromArrowNumericScalarTest, Basic)
+{
+  TypeParam const value{42};
+  auto const arrow_scalar = arrow::MakeScalar(value);
+  auto const cudf_scalar  = cudf::from_arrow(*arrow_scalar);
+  auto const cudf_numeric_scalar =
+    dynamic_cast<cudf::numeric_scalar<TypeParam>*>(cudf_scalar.get());
+  if (cudf_numeric_scalar == nullptr) { CUDF_FAIL("Attempted to test with a non-numeric type."); }
+  EXPECT_EQ(cudf_numeric_scalar->type(), cudf::data_type(cudf::type_to_id<TypeParam>()));
+  EXPECT_EQ(cudf_numeric_scalar->value(), value);
+}
+
+struct FromArrowDecimalScalarTest : public cudf::test::BaseFixture {};
+
+// Only testing Decimal128 because that's the only size cudf and arrow have in common.
+TEST_F(FromArrowDecimalScalarTest, Basic)
+{
+  auto const value{42};
+  auto const precision{8};
+  auto const scale{4};
+  auto arrow_scalar = arrow::Decimal128Scalar(value, arrow::decimal128(precision, -scale));
+  auto cudf_scalar  = cudf::from_arrow(arrow_scalar);
+
+  // Arrow offers a minimum of 128 bits for the Decimal type.
+  auto const cudf_decimal_scalar =
+    dynamic_cast<cudf::fixed_point_scalar<numeric::decimal128>*>(cudf_scalar.get());
+  EXPECT_EQ(cudf_decimal_scalar->type(),
+            cudf::data_type(cudf::type_to_id<numeric::decimal128>(), scale));
+  EXPECT_EQ(cudf_decimal_scalar->value(), value);
+}
+
+struct FromArrowStringScalarTest : public cudf::test::BaseFixture {};
+
+TEST_F(FromArrowStringScalarTest, Basic)
+{
+  auto const value        = std::string("hello world");
+  auto const arrow_scalar = arrow::StringScalar(value);
+  auto const cudf_scalar  = cudf::from_arrow(arrow_scalar);
+
+  auto const cudf_string_scalar = dynamic_cast<cudf::string_scalar*>(cudf_scalar.get());
+  EXPECT_EQ(cudf_string_scalar->type(), cudf::data_type(cudf::type_id::STRING));
+  EXPECT_EQ(cudf_string_scalar->to_string(), value);
+}
+
+struct FromArrowListScalarTest : public cudf::test::BaseFixture {};
+
+TEST_F(FromArrowListScalarTest, Basic)
+{
+  std::vector<int64_t> host_values = {1, 2, 3, 5, 6, 7, 8};
+  std::vector<bool> host_validity  = {true, true, true, false, true, true, true};
+
+  arrow::Int64Builder builder;
+  auto const status      = builder.AppendValues(host_values, host_validity);
+  auto const maybe_array = builder.Finish();
+  auto const array       = *maybe_array;
+
+  auto const arrow_scalar = arrow::ListScalar(array);
+  auto const cudf_scalar  = cudf::from_arrow(arrow_scalar);
+
+  auto const cudf_list_scalar = dynamic_cast<cudf::list_scalar*>(cudf_scalar.get());
+  EXPECT_EQ(cudf_list_scalar->type(), cudf::data_type(cudf::type_id::LIST));
+
+  cudf::test::fixed_width_column_wrapper<int64_t> const lhs(
+    host_values.begin(), host_values.end(), host_validity.begin());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(lhs, cudf_list_scalar->view());
+}
+
+struct FromArrowStructScalarTest : public cudf::test::BaseFixture {};
+
+TEST_F(FromArrowStructScalarTest, Basic)
+{
+  int64_t const value{42};
+  auto const underlying_arrow_scalar = arrow::MakeScalar(value);
+
+  auto const field        = arrow::field("", underlying_arrow_scalar->type);
+  auto const arrow_type   = arrow::struct_({field});
+  auto const arrow_scalar = arrow::StructScalar({underlying_arrow_scalar}, arrow_type);
+  auto const cudf_scalar  = cudf::from_arrow(arrow_scalar);
+
+  auto const cudf_struct_scalar = dynamic_cast<cudf::struct_scalar*>(cudf_scalar.get());
+  EXPECT_EQ(cudf_struct_scalar->type(), cudf::data_type(cudf::type_id::STRUCT));
+
+  cudf::test::fixed_width_column_wrapper<int64_t> const col({value});
+  cudf::table_view const lhs({col});
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(lhs, cudf_struct_scalar->view());
+}
