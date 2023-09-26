@@ -186,7 +186,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   auto const offsets   = strings.offsets();
   auto const d_offsets = offsets.data<cudf::size_type>() + strings.offset();
   auto const offset  = cudf::detail::get_value<cudf::size_type>(offsets, strings.offset(), stream);
-  auto const d_chars = strings.chars().data<char>() + offset;
+  auto const d_chars = strings.chars_begin() + offset;
 
   // Create tokenizer
   wordpiece_tokenizer tokenizer(

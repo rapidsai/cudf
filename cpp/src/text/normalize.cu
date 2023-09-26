@@ -210,7 +210,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
     auto const offsets     = strings.offsets();
     auto const d_offsets   = offsets.data<cudf::size_type>() + strings.offset();
     auto const offset = cudf::detail::get_value<cudf::size_type>(offsets, strings.offset(), stream);
-    auto const d_chars = strings.chars().data<char>() + offset;
+    auto const d_chars = strings.chars_begin() + offset;
     return normalizer.normalize(d_chars, d_offsets, strings.size(), stream);
   }();
 

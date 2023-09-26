@@ -191,8 +191,7 @@ struct compute_string_sizes_and_interleave_lists_fn {
       auto const start_byte = str_offsets[start_str_idx];
       auto const end_byte   = str_offsets[end_str_idx];
       if (start_byte < end_byte) {
-        auto const input_ptr =
-          str_col.child(strings_column_view::chars_column_index).template data<char>() + start_byte;
+        auto const input_ptr  = str_col.template head<char>() + start_byte;
         auto const output_ptr = d_chars + d_offsets[write_idx];
         thrust::copy(thrust::seq, input_ptr, input_ptr + end_byte - start_byte, output_ptr);
       }

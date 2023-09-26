@@ -500,7 +500,7 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_vi
   int offset_stack_pos,
   int parent_offset_index,
   int offset_depth,
-  rmm::cuda_stream_view)
+  rmm::cuda_stream_view stream)
 {
   if (col.nullable()) {
     std::tie(current, offset_stack_pos) =
@@ -516,7 +516,7 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_vi
 
   // string columns don't necessarily have children
   if (col.num_children() > 0) {
-    CUDF_EXPECTS(col.num_children() == 2, "Encountered malformed string column");
+    CUDF_EXPECTS(col.num_children() == 1, "Encountered malformed string column");
     strings_column_view scv(col);
 
     // info for the offsets buffer
@@ -539,13 +539,13 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_vi
     parent_offset_index = offset_col - head;
 
     // prevent appending buf_info for non-existent chars buffer
-    CUDF_EXPECTS(not scv.chars().nullable(), "Encountered nullable string chars column");
+    // CUDF_EXPECTS(not scv.chars(stream).nullable(), "Encountered nullable string chars column");
 
     // info for the chars buffer
-    *current = src_buf_info(
-      type_id::INT8, nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
-    current++;
-    offset_stack_pos += offset_depth;
+    // *current = src_buf_info(
+    //   type_id::INT8, nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
+    // current++;
+    // offset_stack_pos += offset_depth;
   }
 
   return {current, offset_stack_pos};

@@ -182,7 +182,8 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
   auto chars_bytes = cudf::detail::get_value<cudf::size_type>(
                        offsets, strings_column.offset() + strings_count, stream) -
                      offset;
-  auto d_chars = strings_column.chars().data<uint8_t>();  // unsigned is necessary for checking bits
+  auto d_chars =
+    strings_column.parent().data<uint8_t>();  // unsigned is necessary for checking bits
   d_chars += offset;
 
   // To minimize memory, count the number of characters so we can

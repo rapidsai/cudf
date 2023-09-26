@@ -375,7 +375,7 @@ void write_chunked(data_sink* out_sink,
                                                             rmm::mr::get_current_device_resource());
   strings_column_view strings_column{p_str_col_w_nl->view()};
 
-  auto total_num_bytes      = strings_column.chars_size();
+  auto total_num_bytes      = strings_column.chars_size(stream);
   char const* ptr_all_bytes = strings_column.chars_begin();
 
   if (out_sink->is_device_write_preferred(total_num_bytes)) {

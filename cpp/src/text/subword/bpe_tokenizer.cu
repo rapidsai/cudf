@@ -354,7 +354,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(
   CUDF_EXPECTS(d_merges.size() > 0, "Merge pairs table must not be empty");
 
   // build working vector to hold index values per byte
-  rmm::device_uvector<cudf::size_type> d_byte_indices(input.chars().size(), stream);
+  rmm::device_uvector<cudf::size_type> d_byte_indices(input.chars_size(stream), stream);
 
   auto const d_strings = cudf::column_device_view::create(input.parent(), stream);
 
@@ -401,8 +401,7 @@ struct edge_of_space_fn {
   cudf::column_device_view const d_strings;
   __device__ bool operator()(cudf::size_type offset)
   {
-    auto const d_chars =
-      d_strings.child(cudf::strings_column_view::chars_column_index).data<char>();
+    auto const d_chars = d_strings.head<char>();
     if (is_whitespace(d_chars[offset]) || !is_whitespace(d_chars[offset - 1])) { return false; }
 
     auto const offsets   = d_strings.child(cudf::strings_column_view::offsets_column_index);
@@ -440,7 +439,7 @@ std::unique_ptr<cudf::column> space_offsets(cudf::strings_column_view const& inp
 {
   // count space offsets
   auto const begin = thrust::make_counting_iterator<cudf::size_type>(1);
-  auto const end   = thrust::make_counting_iterator<cudf::size_type>(input.chars().size());
+  auto const end   = thrust::make_counting_iterator<cudf::size_type>(input.chars_size(stream));
   edge_of_space_fn edge_of_space{d_strings};
   auto const space_count = thrust::count_if(rmm::exec_policy(stream), begin, end, edge_of_space);
 
@@ -500,7 +499,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
                                                  rmm::cuda_stream_view stream,
                                                  rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty() || input.chars_size() == 0)
+  if (input.is_empty() || input.chars_size(stream) == 0)
     return cudf::make_empty_column(cudf::type_id::STRING);
 
   auto const d_strings = cudf::column_device_view::create(input.parent(), stream);
@@ -509,11 +508,11 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
   // build a view using the new offsets and the current input chars column
   auto const input_view = cudf::column_view(cudf::data_type{cudf::type_id::STRING},
                                             offsets->size() - 1,
-                                            nullptr,  // no parent data
-                                            nullptr,  // null-mask
-                                            0,        // null-count
-                                            0,        // offset
-                                            {offsets->view(), input.chars()});
+                                            input.chars_begin(),  // no parent data
+                                            nullptr,              // null-mask
+                                            0,                    // null-count
+                                            0,                    // offset
+                                            {offsets->view()});
 
   // run BPE on this view
   auto const bpe_column =

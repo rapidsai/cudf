@@ -67,7 +67,7 @@ void rowgroup_char_counts(device_2dspan<size_type> counts,
   CUDF_CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, rowgroup_char_counts_kernel));
   auto const grid_size =
-    dim3(cudf::util::div_rounding_up_unsafe<unsigned int>(num_rowgroups, block_size),
+    dim3(cudf::util::div_rounding_up_safe<unsigned int>(num_rowgroups, block_size),
          static_cast<unsigned int>(num_str_cols));
 
   rowgroup_char_counts_kernel<<<grid_size, block_size, 0, stream.value()>>>(

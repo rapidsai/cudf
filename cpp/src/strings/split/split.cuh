@@ -49,10 +49,7 @@ namespace cudf::strings::detail {
  */
 template <typename Derived>
 struct base_split_tokenizer {
-  __device__ char const* get_base_ptr() const
-  {
-    return d_strings.child(strings_column_view::chars_column_index).data<char>();
-  }
+  __device__ char const* get_base_ptr() const { return d_strings.head<char>(); }
 
   __device__ string_view const get_string(size_type idx) const
   {

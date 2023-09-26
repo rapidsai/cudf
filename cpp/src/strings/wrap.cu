@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
@@ -112,7 +113,7 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
   auto offsets_column = std::make_unique<column>(strings.offsets(), stream, mr);  // makes a copy
   auto d_new_offsets  = offsets_column->view().template data<int32_t>();
 
-  auto chars_column = std::make_unique<column>(strings.chars(), stream, mr);  // makes a copy
+  auto chars_column = std::make_unique<column>(strings.chars(stream), stream, mr);  // makes a copy
   auto d_chars      = chars_column->mutable_view().data<char>();
 
   device_execute_functor d_execute_fctr{d_column, d_new_offsets, d_chars, width};

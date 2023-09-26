@@ -65,7 +65,8 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
   auto const data_size =
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
   auto chars_column = std::make_unique<cudf::column>(
-    cudf::detail::slice(strings.chars(), {chars_offset, chars_offset + data_size}, stream).front(),
+    cudf::detail::slice(strings.chars(stream), {chars_offset, chars_offset + data_size}, stream)
+      .front(),
     stream,
     mr);
 

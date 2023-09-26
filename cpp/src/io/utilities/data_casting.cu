@@ -604,7 +604,12 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
       }
       // Make sure all threads have no errors before continuing
       if constexpr (is_warp) {
-        error = __any_sync(MASK, error);
+        using WarpAny = cub::WarpReduce<bool>;
+        __shared__ typename WarpAny::TempStorage temp_storage[num_warps];
+        bool aggregate = WarpAny(temp_storage[warp_id]).Sum(error);
+        __shared__ typename cub::WarpScan<bool>::TempStorage temp_storage[num_warps];
+        error = cub::WarpScan<bool>(temp_storage[warp_id]).Broadcast(aggregate, 0);
+        // error = __any_sync(MASK, error);
       } else {
         using ErrorReduce = cub::BlockReduce<bool, BLOCK_SIZE>;
         __shared__ typename ErrorReduce::TempStorage temp_storage_error;

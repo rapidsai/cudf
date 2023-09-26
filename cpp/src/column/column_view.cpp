@@ -51,7 +51,8 @@ column_view_base::column_view_base(data_type type,
     CUDF_EXPECTS(nullptr == data, "EMPTY column should have no data.");
     CUDF_EXPECTS(nullptr == null_mask, "EMPTY column should have no null mask.");
   } else if (is_compound(type)) {
-    CUDF_EXPECTS(nullptr == data, "Compound (parent) columns cannot have data");
+    if (type.id() != type_id::STRING)
+      CUDF_EXPECTS(nullptr == data, "Compound (parent) columns cannot have data");
   } else if (size > 0) {
     CUDF_EXPECTS(nullptr != data, "Null data pointer.");
   }

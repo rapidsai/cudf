@@ -713,7 +713,7 @@ std::vector<schema_tree_node> construct_schema_tree(
       } else {
         // if leaf, add current
         if (col->type().id() == type_id::STRING) {
-          CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,
+          CUDF_EXPECTS(col_meta.num_children() == 1 or col_meta.num_children() == 0,
                        "String column's corresponding metadata should have zero or two children");
         } else {
           CUDF_EXPECTS(col_meta.num_children() == 0,

@@ -415,9 +415,9 @@ void traverse_children::operator()<cudf::string_view>(host_span<column_view cons
                         cudf::detail::get_value<size_type>(scv.offsets(), scv.offset(), stream)
                   // if the offset() is 0, it can still be sliced to a shorter length. in this case
                   // we only need to read a single offset. otherwise just return the full length
-                  // (chars_size())
+                  // (chars_size()) TODO: FIXME: check if logic is correct for new code.
                   : scv.size() + 1 == scv.offsets().size()
-                    ? scv.chars_size()
+                    ? scv.chars_size(stream)
                     : cudf::detail::get_value<size_type>(scv.offsets(), scv.size(), stream));
     });
   CUDF_EXPECTS(total_char_count <= static_cast<size_t>(std::numeric_limits<size_type>::max()),

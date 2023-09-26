@@ -25,6 +25,8 @@
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/interop.hpp>
+#include <cudf/null_mask.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -275,7 +277,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
 {
   std::unique_ptr<column> tmp_column =
     ((input.offset() != 0) or
-     ((input.num_children() == 2) and (input.child(0).size() - 1 != input.size())))
+     ((input.num_children() == 1) and (input.child(0).size() - 1 != input.size())))
       ? std::make_unique<cudf::column>(input, stream)
       : nullptr;
 
@@ -290,8 +292,10 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
     return std::make_shared<arrow::StringArray>(
       0, std::move(tmp_offset_buffer), std::move(tmp_data_buffer));
   }
-  auto offset_buffer = child_arrays[0]->data()->buffers[1];
-  auto data_buffer   = child_arrays[1]->data()->buffers[1];
+  auto offset_buffer = child_arrays[strings_column_view::offsets_column_index]->data()->buffers[1];
+  // auto data_buffer   = child_arrays[1]->data()->buffers[1];
+  auto data_buffer =
+    fetch_data_buffer<int8_t>(strings_column_view{input_view}.chars(stream), ar_mr, stream);
   return std::make_shared<arrow::StringArray>(static_cast<int64_t>(input_view.size()),
                                               offset_buffer,
                                               data_buffer,

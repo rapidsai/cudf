@@ -571,7 +571,7 @@ std::unique_ptr<column> replace<replace_algorithm::AUTO>(strings_column_view con
       ? 0
       : cudf::detail::get_value<int32_t>(strings.offsets(), strings.offset(), stream);
   size_type const chars_end   = (offset_count == strings.offsets().size())
-                                  ? strings.chars_size()
+                                  ? strings.chars_size(stream)
                                   : cudf::detail::get_value<int32_t>(
                                     strings.offsets(), strings.offset() + strings_count, stream);
   size_type const chars_bytes = chars_end - chars_start;
@@ -609,7 +609,7 @@ std::unique_ptr<column> replace<replace_algorithm::CHAR_PARALLEL>(
                                                      : cudf::detail::get_value<int32_t>(
                                                       strings.offsets(), strings.offset(), stream);
   size_type chars_end      = (offset_count == strings.offsets().size())
-                               ? strings.chars_size()
+                               ? strings.chars_size(stream)
                                : cudf::detail::get_value<int32_t>(
                               strings.offsets(), strings.offset() + strings_count, stream);
   return replace_char_parallel(
