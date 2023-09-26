@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,13 +70,13 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
   auto output_offset = build_output_offsets(input, stream, mr);
   auto const child   = input.get_sliced_child(stream);
 
-  auto const sorted_child_table = segmented_sort_by_key(table_view{{child}},
-                                                        table_view{{child}},
-                                                        output_offset->view(),
-                                                        {column_order},
-                                                        {null_precedence},
-                                                        stream,
-                                                        mr);
+  auto const sorted_child_table = cudf::detail::segmented_sort_by_key(table_view{{child}},
+                                                                      table_view{{child}},
+                                                                      output_offset->view(),
+                                                                      {column_order},
+                                                                      {null_precedence},
+                                                                      stream,
+                                                                      mr);
 
   return make_lists_column(input.size(),
                            std::move(output_offset),
@@ -98,13 +98,13 @@ std::unique_ptr<column> stable_sort_lists(lists_column_view const& input,
   auto output_offset = build_output_offsets(input, stream, mr);
   auto const child   = input.get_sliced_child(stream);
 
-  auto const sorted_child_table = stable_segmented_sort_by_key(table_view{{child}},
-                                                               table_view{{child}},
-                                                               output_offset->view(),
-                                                               {column_order},
-                                                               {null_precedence},
-                                                               stream,
-                                                               mr);
+  auto const sorted_child_table = cudf::detail::stable_segmented_sort_by_key(table_view{{child}},
+                                                                             table_view{{child}},
+                                                                             output_offset->view(),
+                                                                             {column_order},
+                                                                             {null_precedence},
+                                                                             stream,
+                                                                             mr);
 
   return make_lists_column(input.size(),
                            std::move(output_offset),
