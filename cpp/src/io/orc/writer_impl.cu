@@ -1870,6 +1870,60 @@ hostdevice_2dvector<rowgroup_rows> calculate_rowgroup_bounds(orc_table_view cons
   return rowgroup_bounds;
 }
 
+struct decimal_column_element_sizes {
+  uint32_t col_idx;
+  device_span<uint32_t> sizes;
+  decimal_column_element_sizes(uint32_t col_idx, device_span<uint32_t> sizes)
+    : col_idx(col_idx), sizes(sizes)
+  {
+  }
+};
+
+template <int block_size>
+__global__ void rowgroup_inclusive_scan(device_2dspan<rowgroup_rows const> rg_bounds,
+                                        device_span<decimal_column_element_sizes> sizes)
+{
+  using block_scan = cub::BlockScan<uint32_t, block_size>;
+  __shared__ typename block_scan::TempStorage scan_storage;
+  int const t = threadIdx.x;
+
+  auto const& col_elem_sizes = sizes[blockIdx.x];
+  auto const& row_group      = rg_bounds[blockIdx.y][col_elem_sizes.col_idx];
+  auto const elem_sizes      = col_elem_sizes.sizes.data() + row_group.begin;
+
+  uint32_t initial_value = 0;
+  // do a series of block sums, storing results in the array as we go
+  for (int pos = 0; pos < row_group.size(); pos += block_size) {
+    auto const tidx    = pos + t;
+    auto tval          = tidx < row_group.size() ? elem_sizes[tidx] : 0u;
+    uint32_t block_sum = 0;
+    block_scan(scan_storage).InclusiveSum(tval, tval, block_sum);
+    if (tidx < row_group.size()) { elem_sizes[tidx] = tval + initial_value; }
+    initial_value += block_sum;
+  }
+}
+
+void decimal_element_sizes_to_offsets(device_2dspan<rowgroup_rows const> rg_bounds,
+                                      std::map<uint32_t, rmm::device_uvector<uint32_t>>& elem_sizes,
+                                      rmm::cuda_stream_view stream)
+{
+  if (rg_bounds.count() == 0) return;
+  std::vector<decimal_column_element_sizes> h_sizes;
+  h_sizes.reserve(elem_sizes.size());
+  for (auto& [col_idx, current_sizes] : elem_sizes) {
+    h_sizes.emplace_back(col_idx, current_sizes);
+  }
+
+  auto d_sizes = cudf::detail::make_device_uvector_async<decimal_column_element_sizes>(
+    h_sizes, stream, rmm::mr::get_current_device_resource());
+
+  constexpr int block_size = 256;
+  dim3 const grid_size{static_cast<unsigned int>(elem_sizes.size()),        // num decimal columns
+                       static_cast<unsigned int>(rg_bounds.size().first)};  // num rowgroups
+  rowgroup_inclusive_scan<block_size>
+    <<<grid_size, block_size, 0, stream.value()>>>(rg_bounds, d_sizes);
+}
+
 // returns host vector of per-rowgroup sizes
 encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
                                          file_segmentation const& segmentation,
@@ -1882,7 +1936,7 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
       auto& current_sizes =
         elem_sizes.insert({orc_col.index(), rmm::device_uvector<uint32_t>(orc_col.size(), stream)})
           .first->second;
-      thrust::tabulate(rmm::exec_policy(stream),
+      thrust::tabulate(rmm::exec_policy_nosync(stream),
                        current_sizes.begin(),
                        current_sizes.end(),
                        [d_cols  = device_span<orc_column_device_view const>{orc_table.d_columns},
@@ -1908,24 +1962,13 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
                          return varint_size(zigzaged_value);
                        });
 
-      // Compute element offsets within each row group
-      thrust::for_each_n(rmm::exec_policy(stream),
-                         thrust::make_counting_iterator(0ul),
-                         segmentation.num_rowgroups(),
-                         [sizes     = device_span<uint32_t>{current_sizes},
-                          rg_bounds = device_2dspan<rowgroup_rows const>{segmentation.rowgroups},
-                          col_idx   = orc_col.index()] __device__(auto rg_idx) {
-                           auto const& range = rg_bounds[rg_idx][col_idx];
-                           thrust::inclusive_scan(thrust::seq,
-                                                  sizes.begin() + range.begin,
-                                                  sizes.begin() + range.end,
-                                                  sizes.begin() + range.begin);
-                         });
-
       orc_col.attach_decimal_offsets(current_sizes.data());
     }
   }
   if (elem_sizes.empty()) return {};
+
+  // Compute element offsets within each row group
+  decimal_element_sizes_to_offsets(segmentation.rowgroups, elem_sizes, stream);
 
   // Gather the row group sizes and copy to host
   auto d_tmp_rowgroup_sizes = rmm::device_uvector<uint32_t>(segmentation.num_rowgroups(), stream);
@@ -1944,6 +1987,7 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
 
     rg_sizes[col_idx] = cudf::detail::make_std_vector_async(d_tmp_rowgroup_sizes, stream);
   }
+  stream.synchronize();
 
   return {std::move(elem_sizes), std::move(rg_sizes)};
 }
