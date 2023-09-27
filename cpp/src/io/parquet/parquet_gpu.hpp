@@ -228,7 +228,7 @@ struct PageInfo {
  * @brief Struct describing a particular chunk of column data
  */
 struct ColumnChunkDesc {
-  ColumnChunkDesc() = default;
+  constexpr ColumnChunkDesc() noexcept {};
   explicit ColumnChunkDesc(size_t compressed_size_,
                            uint8_t* compressed_data_,
                            size_t num_values_,
@@ -275,34 +275,34 @@ struct ColumnChunkDesc {
   {
   }
 
-  uint8_t const* compressed_data;                  // pointer to compressed column chunk data
-  size_t compressed_size;                          // total compressed data size for this chunk
-  size_t num_values;                               // total number of values in this column
-  size_t start_row;                                // starting row of this chunk
-  uint32_t num_rows;                               // number of rows in this chunk
-  int16_t max_level[level_type::NUM_LEVEL_TYPES];  // max definition/repetition level
-  int16_t max_nesting_depth;                       // max nesting depth of the output
-  uint16_t data_type;                              // basic column data type, ((type_length << 3) |
-                                                   // parquet::Type)
+  uint8_t const* compressed_data{};                  // pointer to compressed column chunk data
+  size_t compressed_size{};                          // total compressed data size for this chunk
+  size_t num_values{};                               // total number of values in this column
+  size_t start_row{};                                // starting row of this chunk
+  uint32_t num_rows{};                               // number of rows in this chunk
+  int16_t max_level[level_type::NUM_LEVEL_TYPES]{};  // max definition/repetition level
+  int16_t max_nesting_depth{};                       // max nesting depth of the output
+  uint16_t data_type{};  // basic column data type, ((type_length << 3) |
+                         // parquet::Type)
   uint8_t
-    level_bits[level_type::NUM_LEVEL_TYPES];  // bits to encode max definition/repetition levels
-  int32_t num_data_pages;                     // number of data pages
-  int32_t num_dict_pages;                     // number of dictionary pages
-  int32_t max_num_pages;                      // size of page_info array
-  PageInfo* page_info;                        // output page info for up to num_dict_pages +
-                                              // num_data_pages (dictionary pages first)
-  string_index_pair* str_dict_index;          // index for string dictionary
-  bitmask_type** valid_map_base;              // base pointers of valid bit map for this column
-  void** column_data_base;                    // base pointers of column data
-  void** column_string_base;                  // base pointers of column string data
-  int8_t codec;                               // compressed codec enum
-  int8_t converted_type;                      // converted type enum
-  LogicalType logical_type;                   // logical type
-  int8_t decimal_precision;                   // Decimal precision
-  int32_t ts_clock_rate;  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
+    level_bits[level_type::NUM_LEVEL_TYPES]{};  // bits to encode max definition/repetition levels
+  int32_t num_data_pages{};                     // number of data pages
+  int32_t num_dict_pages{};                     // number of dictionary pages
+  int32_t max_num_pages{};                      // size of page_info array
+  PageInfo* page_info{};                        // output page info for up to num_dict_pages +
+                                                // num_data_pages (dictionary pages first)
+  string_index_pair* str_dict_index{};          // index for string dictionary
+  bitmask_type** valid_map_base{};              // base pointers of valid bit map for this column
+  void** column_data_base{};                    // base pointers of column data
+  void** column_string_base{};                  // base pointers of column string data
+  int8_t codec{};                               // compressed codec enum
+  int8_t converted_type{};                      // converted type enum
+  LogicalType logical_type{};                   // logical type
+  int8_t decimal_precision{};                   // Decimal precision
+  int32_t ts_clock_rate{};  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 
-  int32_t src_col_index;   // my input column index
-  int32_t src_col_schema;  // my schema index in the file
+  int32_t src_col_index{};   // my input column index
+  int32_t src_col_schema{};  // my schema index in the file
 };
 
 /**
