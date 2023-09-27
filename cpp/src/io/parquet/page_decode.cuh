@@ -26,16 +26,6 @@
 
 namespace cudf::io::parquet::gpu {
 
-enum class decode_error {
-  STREAM_OVERRUN       = 1,
-  RLE_STREAM_OVERRUN   = 2,
-  UNSUPPORTED_ENCODING = 4,
-  INVALID_LEVEL_RUN    = 8,
-  INVALID_DATA_TYPE    = 16,
-  EMPTY_PAGE           = 32,
-  INVALID_DICT_WIDTH   = 64,
-};
-
 struct page_state_s {
   uint8_t const* data_start;
   uint8_t const* data_end;

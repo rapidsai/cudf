@@ -203,7 +203,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   if (decode_error != 0) {
     std::stringstream stream;
     stream << std::hex << decode_error;
-    CUDF_FAIL("Parquet data decode failed with code(s) " + stream.str());
+    CUDF_FAIL("Parquet data decode failed with code(s) 0x" + stream.str());
   }
 
   // for list columns, add the final offset to every offset buffer.

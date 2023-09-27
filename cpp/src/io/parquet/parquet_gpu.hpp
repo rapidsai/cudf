@@ -55,6 +55,21 @@ constexpr int rolling_index(int index)
 }
 
 /**
+ * @brief Enum for the different types of errors that can occur during decoding.
+ *
+ * These values are used as bitmasks, so they must be powers of 2.
+ */
+enum class decode_error : int32_t {
+  STREAM_OVERRUN       = 1,
+  RLE_STREAM_OVERRUN   = 2,
+  UNSUPPORTED_ENCODING = 4,
+  INVALID_LEVEL_RUN    = 8,
+  INVALID_DATA_TYPE    = 16,
+  EMPTY_PAGE           = 32,
+  INVALID_DICT_WIDTH   = 64,
+};
+
+/**
  * @brief Struct representing an input column in the file.
  */
 struct input_column_info {
