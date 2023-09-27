@@ -63,14 +63,14 @@ struct page_state_s {
   uint8_t const* abs_lvl_end[NUM_LEVEL_TYPES]{};    // [def,rep]
   int32_t lvl_count[NUM_LEVEL_TYPES]{};             // how many of each of the streams we've decoded
   int32_t row_index_lower_bound{};                  // lower bound of row indices we should process
-  
+
   // a shared-memory cache of frequently used data when decoding. The source of this data is
   // normally stored in global memory which can yield poor performance. So, when possible
   // we copy that info here prior to decoding
   PageNestingDecodeInfo nesting_decode_cache[max_cacheable_nesting_decode_info]{};
   // points to either nesting_decode_cache above when possible, or to the global source otherwise
   PageNestingDecodeInfo* nesting_info{};
-  
+
   inline __device__ void set_error_code(decode_error err) volatile
   {
     cuda::atomic_ref<int32_t, cuda::thread_scope_block> ref{const_cast<int&>(error)};
