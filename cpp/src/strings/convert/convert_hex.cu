@@ -93,7 +93,9 @@ struct hex_to_integer_fn {
  * The output_column is expected to be one of the integer types only.
  */
 struct dispatch_hex_to_integers_fn {
-  template <typename IntegerType, std::enable_if_t<std::is_integral_v<IntegerType>>* = nullptr>
+  template <typename IntegerType,
+            std::enable_if_t<std::is_integral_v<IntegerType> and
+                             not std::is_same_v<IntegerType, bool>>* = nullptr>
   void operator()(column_device_view const& strings_column,
                   mutable_column_view& output_column,
                   rmm::cuda_stream_view stream) const
@@ -107,19 +109,12 @@ struct dispatch_hex_to_integers_fn {
   }
   // non-integral types throw an exception
   template <typename T, typename... Args>
-  std::enable_if_t<not std::is_integral_v<T>, void> operator()(Args&&...) const
+  std::enable_if_t<not std::is_integral_v<T> or std::is_same_v<T, bool>, void> operator()(
+    Args&&...) const
   {
     CUDF_FAIL("Output for hex_to_integers must be an integral type.");
   }
 };
-
-template <>
-void dispatch_hex_to_integers_fn::operator()<bool>(column_device_view const&,
-                                                   mutable_column_view&,
-                                                   rmm::cuda_stream_view) const
-{
-  CUDF_FAIL("Output for hex_to_integers must not be a boolean type.");
-}
 
 /**
  * @brief Functor to convert integers to hexadecimal strings
@@ -179,7 +174,9 @@ struct integer_to_hex_fn {
 };
 
 struct dispatch_integers_to_hex_fn {
-  template <typename IntegerType, std::enable_if_t<std::is_integral_v<IntegerType>>* = nullptr>
+  template <typename IntegerType,
+            std::enable_if_t<std::is_integral_v<IntegerType> and
+                             not std::is_same_v<IntegerType, bool>>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& input,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
@@ -197,7 +194,8 @@ struct dispatch_integers_to_hex_fn {
   }
   // non-integral types throw an exception
   template <typename T, typename... Args>
-  std::enable_if_t<not std::is_integral_v<T>, std::unique_ptr<column>> operator()(Args...) const
+  std::enable_if_t<not std::is_integral_v<T> or std::is_same_v<T, bool>, std::unique_ptr<column>>
+  operator()(Args...) const
   {
     CUDF_FAIL("integers_to_hex only supports integral type columns");
   }
