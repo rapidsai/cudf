@@ -611,6 +611,11 @@ class DatetimeTZColumn(DatetimeColumn):
     ) -> "cudf.core.column.StringColumn":
         return self._local_time.as_string_column(dtype, format, **kwargs)
 
+    def get_dt_field(self, field: str) -> ColumnBase:
+        return libcudf.datetime.extract_datetime_component(
+            self._local_time, field
+        )
+
     def __repr__(self):
         # Arrow prints the UTC timestamps, but we want to print the
         # local timestamps:
