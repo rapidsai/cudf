@@ -353,7 +353,7 @@ void reader::impl::prepare_data(int64_t skip_rows,
 
   // if we have to start a new pass, do that now
   if (!_pass_preprocessed) {
-    auto const num_passes = _input_pass_row_group_indices.size() - 1;
+    auto const num_passes = _input_pass_row_group_offsets.size() - 1;
 
     // always create the pass struct, even if we end up with no passes.
     // this will also cause the previous pass information to be deleted
@@ -531,7 +531,7 @@ bool reader::impl::has_next()
                std::nullopt /*filter*/);
 
   auto const num_input_passes =
-    _input_pass_row_group_indices.size() == 0 ? 0 : _input_pass_row_group_indices.size() - 1;
+    _input_pass_row_group_offsets.size() == 0 ? 0 : _input_pass_row_group_offsets.size() - 1;
   return (_pass_itm_data->current_output_chunk < _pass_itm_data->output_chunk_read_info.size()) ||
          (_current_input_pass < num_input_passes);
 }

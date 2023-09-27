@@ -757,7 +757,7 @@ std::pair<bool, std::vector<std::future<void>>> reader::impl::read_and_decompres
 
     // generate ColumnChunkDesc objects for everything to be decoded (all input columns)
     for (size_t i = 0; i < num_input_columns; ++i) {
-      auto col = _input_columns[i];
+      auto const& col = _input_columns[i];
       // look up metadata
       auto& col_meta = _metadata->get_column_metadata(rg.index, rg.source_index, col.schema_idx);
 
@@ -857,8 +857,8 @@ void reader::impl::compute_input_pass_row_group_info()
 
   // if the user hasn't specified an input size limit, read everything in a single pass.
   if (_input_pass_read_limit == 0) {
-    _input_pass_row_group_indices.push_back(0);
-    _input_pass_row_group_indices.push_back(row_groups_info.size());
+    _input_pass_row_group_offsets.push_back(0);
+    _input_pass_row_group_offsets.push_back(row_groups_info.size());
     return;
   }
 
@@ -869,25 +869,25 @@ void reader::impl::compute_input_pass_row_group_info()
   std::size_t cur_read      = 0;
   std::size_t cur_rg_start  = 0;
   std::size_t cur_row_count = 0;
-  _input_pass_row_group_indices.push_back(0);
+  _input_pass_row_group_offsets.push_back(0);
   _input_pass_row_count.push_back(0);
 
   for (size_t cur_rg_index = 0; cur_rg_index < row_groups_info.size(); cur_rg_index++) {
     auto const& rgi       = row_groups_info[cur_rg_index];
     auto const& row_group = _metadata->get_row_group(rgi.index, rgi.source_index);
 
-    // can we add this guy
+    // can we add this row group
     if (cur_read + row_group.total_byte_size >= read_limit) {
       // always need to add at least 1 row group, so add ourselves
       if (cur_rg_start == cur_rg_index) {
-        _input_pass_row_group_indices.push_back(cur_rg_index + 1);
+        _input_pass_row_group_offsets.push_back(cur_rg_index + 1);
         _input_pass_row_count.push_back(cur_row_count + row_group.num_rows);
         cur_rg_start = cur_rg_index + 1;
         cur_read     = 0;
       }
       // add the previous group
       else {
-        _input_pass_row_group_indices.push_back(cur_rg_index);
+        _input_pass_row_group_offsets.push_back(cur_rg_index);
         _input_pass_row_count.push_back(cur_row_count);
         cur_rg_start = cur_rg_index;
         cur_read     = row_group.total_byte_size;
@@ -898,8 +898,8 @@ void reader::impl::compute_input_pass_row_group_info()
     cur_row_count += row_group.num_rows;
   }
   // add the last pass if necessary
-  if (_input_pass_row_group_indices.back() != row_groups_info.size()) {
-    _input_pass_row_group_indices.push_back(row_groups_info.size());
+  if (_input_pass_row_group_offsets.back() != row_groups_info.size()) {
+    _input_pass_row_group_offsets.push_back(row_groups_info.size());
     _input_pass_row_count.push_back(cur_row_count);
   }
 }
@@ -910,15 +910,15 @@ void reader::impl::setup_pass()
   _pass_itm_data = std::make_unique<cudf::io::parquet::gpu::pass_intermediate_data>();
 
   // setup row groups to be loaded for this pass
-  auto const row_group_start = _input_pass_row_group_indices[_current_input_pass];
-  auto const row_group_end   = _input_pass_row_group_indices[_current_input_pass + 1];
+  auto const row_group_start = _input_pass_row_group_offsets[_current_input_pass];
+  auto const row_group_end   = _input_pass_row_group_offsets[_current_input_pass + 1];
   auto const num_row_groups  = row_group_end - row_group_start;
   _pass_itm_data->row_groups.resize(num_row_groups);
   std::copy(_file_itm_data.row_groups.begin() + row_group_start,
             _file_itm_data.row_groups.begin() + row_group_end,
             _pass_itm_data->row_groups.begin());
 
-  auto const num_passes = _input_pass_row_group_indices.size() - 1;
+  auto const num_passes = _input_pass_row_group_offsets.size() - 1;
   CUDF_EXPECTS(_current_input_pass < num_passes, "Encountered an invalid read pass index");
 
   auto const chunks_per_rowgroup = _input_columns.size();
@@ -928,8 +928,7 @@ void reader::impl::setup_pass()
   auto chunk_end   = _file_itm_data.chunks.begin() + (row_group_end * chunks_per_rowgroup);
 
   _pass_itm_data->chunks =
-    cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc>(0, num_chunks, _stream);
-  _pass_itm_data->chunks.resize(num_chunks, _stream);
+    cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc>(num_chunks, _stream);
   std::copy(chunk_start, chunk_end, _pass_itm_data->chunks.begin());
 
   // adjust skip_rows and num_rows by what's available in the row groups we are processing

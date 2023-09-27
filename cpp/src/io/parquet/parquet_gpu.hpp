@@ -309,9 +309,10 @@ struct ColumnChunkDesc {
  * @brief The row_group_info class
  */
 struct row_group_info {
-  size_type index;
+  size_type index;  // row group index within a file. aggregate_reader_metadata::get_row_group() is
+                    // called with index and source_index
   size_t start_row;
-  size_type source_index;
+  size_type source_index;  // file index.
 
   row_group_info() = default;
 
@@ -348,8 +349,7 @@ struct chunk_read_info {
 };
 
 /**
- * @brief Struct to store pass-level data that remains constant for
- * a single pass.
+ * @brief Struct to store pass-level data that remains constant for a single pass.
  */
 struct pass_intermediate_data {
   std::vector<std::unique_ptr<datasource::buffer>> raw_page_data;

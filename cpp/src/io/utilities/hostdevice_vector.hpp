@@ -96,14 +96,6 @@ class hostdevice_vector {
   [[nodiscard]] size_t size_bytes() const noexcept { return sizeof(T) * size(); }
   [[nodiscard]] bool empty() const noexcept { return size() == 0; }
 
-  void resize(size_t new_size, rmm::cuda_stream_view stream)
-  {
-    CUDF_EXPECTS(new_size <= capacity(),
-                 "hostdevice_vector resize must fit within existing capacity");
-    stream.synchronize();
-    current_size = new_size;
-  }
-
   [[nodiscard]] T& operator[](size_t i) { return host_data[i]; }
   [[nodiscard]] T const& operator[](size_t i) const { return host_data[i]; }
 

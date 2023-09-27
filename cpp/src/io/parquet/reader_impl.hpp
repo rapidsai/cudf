@@ -288,9 +288,9 @@ class reader::impl {
   cudf::io::parquet::gpu::file_intermediate_data _file_itm_data;
   std::unique_ptr<cudf::io::parquet::gpu::pass_intermediate_data> _pass_itm_data;
 
-  // an array of indices into _file_itm_data::global_chunks. Each pair of indices represents
+  // an array of offsets into _file_itm_data::global_chunks. Each pair of offsets represents
   // the start/end of the chunks to be loaded for a given pass.
-  std::vector<std::size_t> _input_pass_row_group_indices{};
+  std::vector<std::size_t> _input_pass_row_group_offsets{};
   std::vector<std::size_t> _input_pass_row_count{};
   std::size_t _current_input_pass{0};
   std::size_t _chunk_count{0};

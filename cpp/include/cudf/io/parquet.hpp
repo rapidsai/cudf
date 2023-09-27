@@ -457,9 +457,9 @@ class chunked_parquet_reader {
    * loaded.
    *
    * @param chunk_read_limit Limit on total number of bytes to be returned per read,
-   *        or `0` if there is no limit
+   * or `0` if there is no limit
    * @param pass_read_limit Limit on the amount of memory used for reading and decompressing data or
-   * `0` if there is no limit.
+   * `0` if there is no limit
    * @param options The options used to read Parquet file
    * @param mr Device memory resource to use for device memory allocation
    */

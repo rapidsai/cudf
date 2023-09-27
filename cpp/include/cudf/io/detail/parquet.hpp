@@ -107,13 +107,37 @@ class chunked_reader : private reader {
    * temporary memory size limit) a call to `read_chunk()` will read the whole file and return a
    * table containing all rows.
    *
+   * The chunk_read_limit parameter controls the size of the output chunks produces.  If the user
+   * specifies 100 MB of data, the reader will attempt to return chunks containing tables that have
+   * a total bytes size (over all columns) of 100 MB or less.  This is a soft limit and the code
+   * will not fail if it cannot satisfy the limit.  It will make a best-effort atttempt only.
+   *
+   * The pass_read_limit parameter controls how much temporary memory is used in the process of
+   * decoding the file.  The primary contributor to this memory usage is the uncompressed size of
+   * the data read out of the file and the decompressed (but not yet decoded) size of the data. The
+   * granularity of a given pass is at the row group level. It will not attempt to read at the sub
+   * row-group level.
+   *
+   * Combined, the way to visualize passes and chunks is as follows:
+   *
+   * @code{.pseudo}
+   * for(each pass){
+   *    for(each output chunk within a pass){
+   *       return a table that fits within the output chunk limit
+   *    }
+   *  }
+   * @endcode
+   *
+   * With a pass_read_limit of `0` you are simply saying you have one pass that reads the entire
+   * file as normal.
+   *
    * @param chunk_read_limit Limit on total number of bytes to be returned per read,
-   *        or `0` if there is no limit
+   * or `0` if there is no limit
    * @param pass_read_limit Limit on total amount of memory used for temporary computations during
-   * loading, or `0` if there is no limit.
+   * loading, or `0` if there is no limit
    * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
-   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit chunked_reader(std::size_t chunk_read_limit,
