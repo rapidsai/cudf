@@ -228,7 +228,7 @@ for a particular test module or set of test modules. The script
 python scripts/analyze-test-failures.py pandas-testing/pandas-full.json "arithmetic/test_datetime64.py"
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Failure message                                                                   ┃ Number of occurences ┃
+┃ Failure message                                                                   ┃ Number of occurrences ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━┩
 │ AssertionError: [5000000000 5000000000]                                           │ 280                  │
 │ AssertionError: [              0  86400000000000 172800000000000 259200000000000  │ 160                  │

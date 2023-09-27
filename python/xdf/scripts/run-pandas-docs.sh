@@ -41,7 +41,7 @@ cd pandas-docs/
 
 for rst_fle in $(find doc/source/user_guide -iname "*.rst")
 do
-    # TODO: There are ".. code-block:: ipython" blocks that are not as trival to replace
+    # TODO: There are ".. code-block:: ipython" blocks that are not as trivial to replace
     sed -i 's/{{ header }}/.. code-block:: python\n\n   import numpy as np\n   import xdf as pd/g' $rst_fle
     sed -i 's/.. ipython::/.. code-block::/g' $rst_fle
     sed -i '/:suppress:/d' $rst_fle
