@@ -4088,6 +4088,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
 
   private static native long isFixedPoint(long viewHandle, int nativeTypeId, int scale);
+  
+  private static native long toHex(long viewHandle);
 
   /**
    * Native method to concatenate a list column of strings (each row is a list of strings),
@@ -5230,5 +5232,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         throw t;
       }
     }
+  }
+
+  /**
+   * Convert this integer column to hexadecimal column
+   * @return new string ColumnVector
+   */
+  public ColumnVector toHex() {
+    assert getType().isIntegral() : "Only integers are supported";
+    return new ColumnVector(toHex(this.getNativeView()));
   }
 }
