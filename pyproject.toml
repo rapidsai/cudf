@@ -72,4 +72,3 @@ line-length = 79
 [tool.ruff.per-file-ignores]
 # Lots of pytest implicitly injected attributes in conftest-patch.py
 "python/xdf/scripts/conftest-patch.py" = ["F821"]
-
