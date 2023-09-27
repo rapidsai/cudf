@@ -5665,6 +5665,11 @@ class StringColumn(column.ColumnBase):
         if (self == "None").any():
             raise ValueError("Could not convert `None` value to datetime")
 
+        if dtype.kind == "M":
+            valid = str_cast.istimestamp(self, format)
+            if not valid.all():
+                raise ValueError(f"Column contains invalid data for {format=}")
+
         casting_func = (
             str_cast.timestamp2int
             if dtype.type == np.datetime64

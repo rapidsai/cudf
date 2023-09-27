@@ -804,6 +804,11 @@ def test_to_datetime_format(data, format, infer_datetime_format):
     assert_eq(actual, expected)
 
 
+def test_to_datetime_data_out_of_range_for_format():
+    with pytest.raises(ValueError):
+        cudf.to_datetime("2015-02-99", format="%Y-%m-%d")
+
+
 def test_datetime_can_cast_safely():
 
     sr = cudf.Series(
