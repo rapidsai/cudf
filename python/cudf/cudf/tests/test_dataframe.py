@@ -1327,6 +1327,25 @@ def test_assign():
     np.testing.assert_equal(gdf2.y.to_numpy(), [2, 3, 4])
 
 
+@pytest.mark.parametrize(
+    "mapping",
+    [
+        {"y": 1, "z": lambda df: df["x"] + df["y"]},
+        {
+            "x": lambda df: df["x"] * 2,
+            "y": lambda df: 2,
+            "z": lambda df: df["x"] / df["y"],
+        },
+    ],
+)
+def test_assign_callable(mapping):
+    df = pd.DataFrame({"x": [1, 2, 3]})
+    cdf = cudf.from_pandas(df)
+    expect = df.assign(**mapping)
+    actual = cdf.assign(**mapping)
+    assert_eq(expect, actual)
+
+
 @pytest.mark.parametrize("nrows", [1, 8, 100, 1000])
 @pytest.mark.parametrize("method", ["murmur3", "md5"])
 @pytest.mark.parametrize("seed", [None, 42])
@@ -10387,6 +10406,19 @@ def test_dataframe_init_from_nested_dict():
     pdf = pd.DataFrame(regular_dict)
     gdf = cudf.DataFrame(regular_dict)
     assert_eq(pdf, gdf)
+
+
+def test_init_from_2_categoricalindex_series_diff_categories():
+    s1 = cudf.Series(
+        [39, 6, 4], index=cudf.CategoricalIndex(["female", "male", "unknown"])
+    )
+    s2 = cudf.Series(
+        [2, 152, 2, 242, 150],
+        index=cudf.CategoricalIndex(["f", "female", "m", "male", "unknown"]),
+    )
+    result = cudf.DataFrame([s1, s2])
+    expected = pd.DataFrame([s1.to_pandas(), s2.to_pandas()])
+    assert_eq(result, expected, check_dtype=False)
 
 
 def test_data_frame_values_no_cols_but_index():
