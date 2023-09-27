@@ -646,6 +646,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if isinstance(data, pd.Series):
                 data = cudf.Series.from_pandas(data, nan_as_null=nan_as_null)
 
+            if (
+                columns is not None
+                and data.name not in columns
+                and len(data) != len(columns)
+            ):
+                raise ValueError(
+                    f"Length of values ({len(data)}) does not "
+                    f"match length of columns ({len(columns)})"
+                )
             name = data.name or 0
             self._init_from_dict_like(
                 {name: data},
