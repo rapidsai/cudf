@@ -866,9 +866,9 @@ void reader::impl::compute_input_pass_row_group_info()
   //
   std::size_t const read_limit =
     _input_pass_read_limit > 0 ? _input_pass_read_limit : std::numeric_limits<std::size_t>::max();
-  std::size_t cur_read      = 0;
-  std::size_t cur_rg_start  = 0;
-  std::size_t cur_row_count = 0;
+  std::size_t cur_pass_byte_size = 0;
+  std::size_t cur_rg_start       = 0;
+  std::size_t cur_row_count      = 0;
   _input_pass_row_group_offsets.push_back(0);
   _input_pass_row_count.push_back(0);
 
@@ -877,23 +877,25 @@ void reader::impl::compute_input_pass_row_group_info()
     auto const& row_group = _metadata->get_row_group(rgi.index, rgi.source_index);
 
     // can we add this row group
-    if (cur_read + row_group.total_byte_size >= read_limit) {
-      // always need to add at least 1 row group, so add ourselves
+    if (cur_pass_byte_size + row_group.total_byte_size >= read_limit) {
+      // A single row group (the current one) is larger than the read limit:
+      // We always need to include at least one row group, so end the pass at the end of the current
+      // row group
       if (cur_rg_start == cur_rg_index) {
         _input_pass_row_group_offsets.push_back(cur_rg_index + 1);
         _input_pass_row_count.push_back(cur_row_count + row_group.num_rows);
-        cur_rg_start = cur_rg_index + 1;
-        cur_read     = 0;
+        cur_rg_start       = cur_rg_index + 1;
+        cur_pass_byte_size = 0;
       }
-      // add the previous group
+      // End the pass at the end of the previous row group
       else {
         _input_pass_row_group_offsets.push_back(cur_rg_index);
         _input_pass_row_count.push_back(cur_row_count);
-        cur_rg_start = cur_rg_index;
-        cur_read     = row_group.total_byte_size;
+        cur_rg_start       = cur_rg_index;
+        cur_pass_byte_size = row_group.total_byte_size;
       }
     } else {
-      cur_read += row_group.total_byte_size;
+      cur_pass_byte_size += row_group.total_byte_size;
     }
     cur_row_count += row_group.num_rows;
   }

@@ -369,8 +369,8 @@ struct pass_intermediate_data {
   std::vector<gpu::chunk_read_info> output_chunk_read_info;
   std::size_t current_output_chunk{0};
 
-  rmm::device_buffer level_decode_data;
-  int level_type_size;
+  rmm::device_buffer level_decode_data{};
+  int level_type_size{0};
 
   // skip_rows and num_rows values for this particular pass. these may be adjusted values from the
   // global values stored in file_intermediate_data.

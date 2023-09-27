@@ -961,13 +961,16 @@ TEST_F(ParquetChunkedReaderTest, InputLimitSimple)
   constexpr int num_rows = 25'000'000;
   auto value_iter = cudf::detail::make_counting_transform_iterator(0, [](int i) { return i; });
   cudf::test::fixed_width_column_wrapper<int> expected(value_iter, value_iter + num_rows);
-  cudf::io::parquet_writer_options opts = cudf::io::parquet_writer_options::builder(
-    cudf::io::sink_info{filepath}, cudf::table_view{{expected}});
-  cudf::io::write_parquet(opts);
+  cudf::io::parquet_writer_options opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath},
+                                              cudf::table_view{{expected}})
+      // note: it is unnecessary to force compression to NONE here because the size we are using in
+      // the row group is the uncompressed data size. But forcing the dictionary policy to
+      // dictionary_policy::NEVER is necessary to prevent changes in the
+      // decompressed-but-not-yet-decoded data.
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
 
-  // Note: some of these tests make explicit assumptions that the compressed size of the data in
-  // each row group will be 4001150. Changes to compression or other defaults may cause them to
-  // break (just requiring some tweaks).
+  cudf::io::write_parquet(opts);
 
   {
     // no chunking
