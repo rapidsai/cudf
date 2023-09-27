@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
+#include <cudf/hashing/detail/hash_allocator.cuh>
+#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/types.hpp>
-#include <hash/hash_allocator.cuh>
-#include <hash/helper_functions.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
