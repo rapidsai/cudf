@@ -11,8 +11,8 @@
 project = "dask-cudf"
 copyright = "2018-2023, NVIDIA Corporation"
 author = "NVIDIA Corporation"
-version = '23.10'
-release = '23.10.00'
+version = '23.12'
+release = '23.12.00'
 
 language = "en"
 
