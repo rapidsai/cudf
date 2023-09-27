@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,10 +89,11 @@ data_type get_indices_type_for_size(size_type keys_size)
 
 std::unique_ptr<column> encode(column_view const& input_column,
                                data_type indices_type,
+                               rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::encode(input_column, indices_type, cudf::get_default_stream(), mr);
+  return detail::encode(input_column, indices_type, stream, mr);
 }
 
 }  // namespace dictionary

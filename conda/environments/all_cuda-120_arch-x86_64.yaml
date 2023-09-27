@@ -9,6 +9,7 @@ channels:
 - nvidia
 dependencies:
 - aiobotocore>=2.2.0
+- aws-sdk-cpp<1.11
 - benchmark==1.8.0
 - boto3>=1.21.21
 - botocore>=1.24.21
