@@ -202,11 +202,32 @@ struct base_normalator {
     return static_cast<Derived const&>(*this).p_ >= rhs.p_;
   }
 
+ private:
+  struct integer_sizeof_fn {
+    template <typename T, std::enable_if_t<not cudf::is_integral<T>()>* = nullptr>
+    constexpr int operator()() const
+    {
+#ifndef __CUDA_ARCH__
+      CUDF_FAIL("only integral types are supported");
+#else
+      CUDF_UNREACHABLE("only integral types are supported");
+#endif
+    }
+    template <typename T, std::enable_if_t<is_integral<T>()>* = nullptr>
+    constexpr int operator()() const noexcept
+    {
+      return sizeof(T);
+    }
+  };
+
  protected:
   /**
    * @brief Constructor assigns width and type member variables for base class.
    */
-  explicit base_normalator(data_type dtype) : width_(size_of(dtype)), dtype_(dtype) {}
+  explicit CUDF_HOST_DEVICE base_normalator(data_type dtype) : dtype_(dtype)
+  {
+    width_ = type_dispatcher(dtype, integer_sizeof_fn{});
+  }
 
   int width_;        /// integer type width = 1,2,4, or 8
   data_type dtype_;  /// for type-dispatcher calls
@@ -274,9 +295,10 @@ struct input_normalator : base_normalator<input_normalator<Integer>, Integer> {
    * @param data      Pointer to an integer array in device memory.
    * @param data_type Type of data in data
    */
-  input_normalator(void const* data, data_type dtype)
+  CUDF_HOST_DEVICE input_normalator(void const* data, data_type dtype, cudf::size_type offset = 0)
     : base_normalator<input_normalator<Integer>, Integer>(dtype), p_{static_cast<char const*>(data)}
   {
+    p_ += offset * this->width_;
   }
 
   char const* p_;  /// pointer to the integer data in device memory
@@ -309,7 +331,7 @@ struct output_normalator : base_normalator<output_normalator<Integer>, Integer> 
    * @brief Indirection operator returns this iterator instance in order
    * to capture the `operator=(Integer)` calls.
    */
-  __device__ inline output_normalator const& operator*() const { return *this; }
+  __device__ inline output_normalator const operator*() const { return *this; }
 
   /**
    * @brief Array subscript operator returns an iterator instance at the specified `idx` position.
@@ -355,7 +377,7 @@ struct output_normalator : base_normalator<output_normalator<Integer>, Integer> 
    * @param data      Pointer to an integer array in device memory.
    * @param data_type Type of data in data
    */
-  output_normalator(void* data, data_type dtype)
+  CUDF_HOST_DEVICE output_normalator(void* data, data_type dtype)
     : base_normalator<output_normalator<Integer>, Integer>(dtype), p_{static_cast<char*>(data)}
   {
   }
