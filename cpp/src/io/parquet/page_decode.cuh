@@ -501,7 +501,7 @@ __device__ void gpuDecodeStream(
           }
         }
         if (cur > end) {
-          s->set_error_code(decode_error::STREAM_OVERRUN);
+          s->set_error_code(decode_error::LEVEL_STREAM_OVERRUN);
           break;
         }
         if (level_run <= 1) {
@@ -936,7 +936,7 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
     }
     s->lvl_start[lvl] = cur;
 
-    if (cur > end) { s->set_error_code(decode_error::RLE_STREAM_OVERRUN); }
+    if (cur > end) { s->set_error_code(decode_error::LEVEL_STREAM_OVERRUN); }
   };
 
   // this is a little redundant. if level_bits == 0, then nothing should be encoded
@@ -962,7 +962,7 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
       len += 4;
     } else {
       len = 0;
-      s->set_error_code(decode_error::RLE_STREAM_OVERRUN);
+      s->set_error_code(decode_error::LEVEL_STREAM_OVERRUN);
     }
   } else if (encoding == Encoding::BIT_PACKED) {
     len                       = (s->page.num_input_values * level_bits + 7) >> 3;
@@ -1301,7 +1301,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           // first 4 bytes are length of RLE data
           int const len = (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);
           cur += 4;
-          if (cur + len > end) { s->set_error_code(decode_error::RLE_STREAM_OVERRUN); }
+          if (cur + len > end) { s->set_error_code(decode_error::DATA_STREAM_OVERRUN); }
           s->dict_run = 0;
         } break;
         case Encoding::DELTA_BINARY_PACKED:
@@ -1312,7 +1312,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           break;
         }
       }
-      if (cur > end) { s->set_error_code(decode_error::STREAM_OVERRUN); }
+      if (cur > end) { s->set_error_code(decode_error::DATA_STREAM_OVERRUN); }
       s->lvl_end    = cur;
       s->data_start = cur;
       s->data_end   = end;
