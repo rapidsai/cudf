@@ -2661,7 +2661,9 @@ class IndexedFrame(Frame):
             data=cudf.core.column_accessor.ColumnAccessor(
                 cols,
                 multiindex=self._data.multiindex,
-                level_names=self._data.level_names,
+                level_names=tuple(column_names.names)
+                if isinstance(column_names, pd.Index)
+                else None,
             ),
             index=index,
         )
