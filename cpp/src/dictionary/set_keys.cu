@@ -241,17 +241,20 @@ std::pair<std::vector<std::unique_ptr<column>>, std::vector<table_view>> match_d
 
 std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column,
                                  column_view const& keys,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::set_keys(dictionary_column, keys, cudf::get_default_stream(), mr);
+  return detail::set_keys(dictionary_column, keys, stream, mr);
 }
 
 std::vector<std::unique_ptr<column>> match_dictionaries(
-  cudf::host_span<dictionary_column_view const> input, rmm::mr::device_memory_resource* mr)
+  cudf::host_span<dictionary_column_view const> input,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::match_dictionaries(input, cudf::get_default_stream(), mr);
+  return detail::match_dictionaries(input, stream, mr);
 }
 
 }  // namespace dictionary
