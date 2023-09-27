@@ -20,9 +20,9 @@ from .types cimport DataType, type_id
 
 
 # The DeviceMemoryResource attribute could be released prematurely
-# by the gc if the DeviceScalar is in a reference cycle. Removing
-# the tp_clear function with the no_gc_clear decoration prevents that.
-# See https://github.com/rapidsai/rmm/pull/931 for details.
+# by the gc if the Scalar is in a reference cycle. Removing the tp_clear
+# function with the no_gc_clear decoration prevents that. See
+# https://github.com/rapidsai/rmm/pull/931 for details.
 @no_gc_clear
 cdef class Scalar:
     """A scalar value in device memory."""
@@ -64,13 +64,6 @@ cdef class Scalar:
             )
 
         cdef type_id tid = data_type.id()
-        if tid not in (type_id.DECIMAL32, type_id.DECIMAL64, type_id.DECIMAL128):
-            raise ValueError(
-                "Decimal scalars may only be cast to decimals"
-            )
-
-        if tid == type_id.DECIMAL128:
-            return s
 
         if tid == type_id.DECIMAL32:
             s.c_obj.reset(
@@ -88,9 +81,14 @@ cdef class Scalar:
                     s.c_obj.get().is_valid()
                 )
             )
+        elif tid != type_id.DECIMAL128:
+            raise ValueError(
+                "Decimal scalars may only be cast to decimals"
+            )
+
         return s
 
-    cpdef to_pyarrow_scalar(self, metadata):
+    cpdef to_arrow(self, metadata):
         from .interop import to_arrow_scalar
         return to_arrow_scalar(self, metadata)
 

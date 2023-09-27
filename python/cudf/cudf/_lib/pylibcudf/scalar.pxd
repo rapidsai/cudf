@@ -29,4 +29,4 @@ cdef class Scalar:
 
     # TODO: Make sure I'm correct to avoid typing the metadata as
     # ColumnMetadata, I assume that will cause circular cimport problems
-    cpdef to_pyarrow_scalar(self, metadata)
+    cpdef to_arrow(self, metadata)

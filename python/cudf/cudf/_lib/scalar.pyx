@@ -61,9 +61,21 @@ def _replace_nested(obj, check, replacement):
 
 
 def gather_metadata(dtypes):
-    # dtypes is a dict mapping names to column dtypes
-    # This interface is a bit clunky, but it matches libcudf. May want to
-    # consider better approaches to building up the metadata eventually.
+    """Convert a dict of dtypes to a list of ColumnMetadata objects.
+
+    The metadata is constructed recursively so that nested types are
+    represented as nested ColumnMetadata objects.
+
+    Parameters
+    ----------
+    dtypes : dict
+        A dict mapping column names to dtypes.
+
+    Returns
+    -------
+    List[ColumnMetadata]
+        A list of ColumnMetadata objects.
+    """
     out = []
     for name, dtype in dtypes.items():
         v = pylibcudf.interop.ColumnMetadata(name)
@@ -143,7 +155,7 @@ cdef class DeviceScalar:
         null_type = NaT if is_datetime or is_timedelta else NA
 
         metadata = gather_metadata({"": self.dtype})[0]
-        ps = self.c_value.to_pyarrow_scalar(metadata)
+        ps = self.c_value.to_arrow(metadata)
         if not ps.is_valid:
             return null_type
 
