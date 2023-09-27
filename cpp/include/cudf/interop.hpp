@@ -126,23 +126,56 @@ struct column_metadata {
  *
  * @param input table_view that needs to be converted to arrow Table
  * @param metadata Contains hierarchy of names of columns and children
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param ar_mr arrow memory pool to allocate memory for arrow Table
  * @return arrow Table generated from `input`
  */
 std::shared_ptr<arrow::Table> to_arrow(table_view input,
                                        std::vector<column_metadata> const& metadata = {},
-                                       arrow::MemoryPool* ar_mr = arrow::default_memory_pool());
+                                       rmm::cuda_stream_view stream = cudf::get_default_stream(),
+                                       arrow::MemoryPool* ar_mr     = arrow::default_memory_pool());
 
+/**
+ * @brief Create `arrow::Scalar` from cudf scalar `input`
+ *
+ * Converts the `cudf::scalar` to `arrow::Scalar`.
+ *
+ * @param input scalar that needs to be converted to arrow Scalar
+ * @param metadata Contains hierarchy of names of columns and children
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param ar_mr arrow memory pool to allocate memory for arrow Scalar
+ * @return arrow Scalar generated from `input`
+ */
+std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
+                                        column_metadata const& metadata = {},
+                                        rmm::cuda_stream_view stream = cudf::get_default_stream(),
+                                        arrow::MemoryPool* ar_mr = arrow::default_memory_pool());
 /**
  * @brief Create `cudf::table` from given arrow Table input
  *
  * @param input arrow:Table that needs to be converted to `cudf::table`
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr    Device memory resource used to allocate `cudf::table`
  * @return cudf table generated from given arrow Table
  */
 
 std::unique_ptr<table> from_arrow(
   arrow::Table const& input,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Create `cudf::scalar` from given arrow Scalar input
+ *
+ * @param input `arrow::Scalar` that needs to be converted to `cudf::scalar`
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr    Device memory resource used to allocate `cudf::scalar`
+ * @return cudf scalar generated from given arrow Scalar
+ */
+
+std::unique_ptr<cudf::scalar> from_arrow(
+  arrow::Scalar const& input,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
