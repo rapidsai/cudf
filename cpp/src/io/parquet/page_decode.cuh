@@ -90,7 +90,7 @@ struct page_state_s {
   inline __device__ void reset_error_code() volatile
   {
     cuda::atomic_ref<int32_t, cuda::thread_scope_block> ref{const_cast<int&>(error)};
-    ref.store(0, cuda::std::memory_order_relaxed);
+    ref.store(0, cuda::std::memory_order_release);
   }
 };
 
