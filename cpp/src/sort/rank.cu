@@ -366,16 +366,11 @@ std::unique_ptr<column> rank(column_view const& input,
                              null_policy null_handling,
                              null_order null_precedence,
                              bool percentage,
+                             rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rank(input,
-                      method,
-                      column_order,
-                      null_handling,
-                      null_precedence,
-                      percentage,
-                      cudf::get_default_stream(),
-                      mr);
+  return detail::rank(
+    input, method, column_order, null_handling, null_precedence, percentage, stream, mr);
 }
 }  // namespace cudf

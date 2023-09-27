@@ -9,6 +9,7 @@ channels:
 - nvidia
 dependencies:
 - aiobotocore>=2.2.0
+- aws-sdk-cpp<1.11
 - benchmark==1.8.0
 - boto3>=1.21.21
 - botocore>=1.24.21
@@ -54,8 +55,8 @@ dependencies:
 - nbsphinx
 - ninja
 - notebook
-- numba>=0.57
-- numpy>=1.21
+- numba>=0.57,<0.58
+- numpy>=1.21,<1.25
 - numpydoc
 - nvcomp==2.6.1
 - nvtx>=0.2.1
