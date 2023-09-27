@@ -107,3 +107,23 @@ jobs:
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
       package-name: dask_cudf
+  wheel-build-xdf:
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-build.yaml@branch-23.10
+    with:
+      build_type: ${{ inputs.build_type || 'branch' }}
+      branch: ${{ inputs.branch }}
+      sha: ${{ inputs.sha }}
+      date: ${{ inputs.date }}
+      script: ci/build_wheel_xdf.sh
+      matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and .CUDA_VER == "12.0.1"))
+  wheel-publish-xdf:
+    needs: wheel-build-xdf
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-publish.yaml@branch-23.10
+    with:
+      build_type: ${{ inputs.build_type || 'branch' }}
+      branch: ${{ inputs.branch }}
+      sha: ${{ inputs.sha }}
+      date: ${{ inputs.date }}
+      package-name: xdf
