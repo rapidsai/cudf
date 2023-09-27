@@ -1408,9 +1408,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self[columns]
 
     @_cudf_nvtx_annotate
-    def assign(self, **kwargs):
+    def assign(self, **kwargs: Union[Callable[[Self], Any], Any]):
         """
         Assign columns to DataFrame from keyword arguments.
+
+        Parameters
+        ----------
+        **kwargs: dict mapping string column names to values
+            The value for each key can either be a literal column (or
+            something that can be converted to a column), or
+            a callable of one argument that will be given the
+            dataframe as an argument and should return the new column
+            (without modifying the input argument).
+            Columns are added in-order, so callables can refer to
+            column names constructed in the assignment.
 
         Examples
         --------
@@ -1423,15 +1434,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         1  1  4
         2  2  5
         """
-        new_df = cudf.DataFrame(index=self.index.copy())
-        for name, col in self._data.items():
-            if name in kwargs:
-                new_df[name] = kwargs.pop(name)
-            else:
-                new_df._data[name] = col.copy()
-
+        new_df = self.copy(deep=False)
         for k, v in kwargs.items():
-            new_df[k] = v
+            new_df[k] = v(new_df) if callable(v) else v
         return new_df
 
     @classmethod
@@ -5627,7 +5632,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 result.name = q
                 return result
 
-        result.index = list(map(float, qs))
+        result.index = cudf.Index(list(map(float, qs)), dtype="float64")
         return result
 
     @_cudf_nvtx_annotate
@@ -7905,9 +7910,7 @@ def _get_union_of_indices(indexes):
         return indexes[0]
     else:
         merged_index = cudf.core.index.GenericIndex._concat(indexes)
-        merged_index = merged_index.drop_duplicates()
-        inds = merged_index._values.argsort()
-        return merged_index.take(inds)
+        return merged_index.drop_duplicates()
 
 
 def _get_union_of_series_names(series_list):
