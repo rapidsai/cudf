@@ -6885,5 +6885,5 @@ public class ColumnVectorTest extends CudfTestBase {
       ColumnVector actual = input.toHex()) {
         assertColumnsAreEqual(expected, actual);
     }
-  } 
+  }
 }

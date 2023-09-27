@@ -413,7 +413,7 @@ public final class DType {
   }
 
   /**
-   * Returns true for strictly Integer types not a type backed by 
+   * Returns true for strictly Integer types not a type backed by
    * ints
    */
   public boolean isIntegral() {

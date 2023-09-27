@@ -4088,7 +4088,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
 
   private static native long isFixedPoint(long viewHandle, int nativeTypeId, int scale);
-  
+
   private static native long toHex(long viewHandle);
 
   /**
@@ -5244,14 +5244,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * zero is applied to the first non-zero output byte if it is less than 0x10.
    *
    * Example:
-   * input = [123, -1, 0, 27, 342718233] 
+   * input = [123, -1, 0, 27, 342718233]
    * s = input.toHex()
    * s is [ '04D2', 'FFFFFFFF', '00', '1B', '146D7719']
    *
    * The example above shows an `INT32` type column where each integer is 4 bytes.
    * Leading zeros are suppressed unless filling out a complete byte as in
-   * `123 -> '04D2'` instead of `000004D2` or `4D2`. 
-   * 
+   * `123 -> '04D2'` instead of `000004D2` or `4D2`.
+   *
    * @return new string ColumnVector
    */
   public ColumnVector toHex() {
