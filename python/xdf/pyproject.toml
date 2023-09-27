@@ -70,3 +70,40 @@ test = [
     "xlsxwriter",
     "zstandard",
 ]
+
+[tool.isort]
+line_length = 79
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+combine_as_imports = true
+order_by_type = true
+known_first_party = [
+    "xdf",
+    "cudf",
+]
+known_third_party = [
+    "pandas",
+]
+default_section = "THIRDPARTY"
+sections = [
+    "FUTURE",
+    "STDLIB",
+    "THIRDPARTY",
+    "FIRSTPARTY",
+    "LOCALFOLDER",
+]
+skip = [
+    "thirdparty",
+    ".eggs",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".tox",
+    ".venv",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "__init__.py",
+]
