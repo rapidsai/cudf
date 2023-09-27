@@ -20,6 +20,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/transpose.hpp>
+#include <cudf/types.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -27,8 +28,7 @@
 static void BM_transpose(benchmark::State& state)
 {
   auto count = state.range(0);
-
-  constexpr auto column_type = cudf::type_id::INT32;
+  constexpr auto column_type = cudf::data_type{cudf::type_id::INT32};
   auto int_column_generator =
     thrust::make_transform_iterator(thrust::counting_iterator(0), [count](int i) {
       return cudf::make_numeric_column(
