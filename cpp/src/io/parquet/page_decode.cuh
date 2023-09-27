@@ -26,6 +26,16 @@
 
 namespace cudf::io::parquet::gpu {
 
+enum class decode_error {
+  STREAM_OVERRUN       = 1,
+  RLE_STREAM_OVERRUN   = 2,
+  UNSUPPORTED_ENCODING = 4,
+  INVALID_LEVEL_RUN    = 8,
+  INVALID_DATA_TYPE    = 16,
+  EMPTY_PAGE           = 32,
+  INVALID_DICT_WIDTH   = 64,
+};
+
 struct page_state_s {
   uint8_t const* data_start;
   uint8_t const* data_end;
@@ -70,10 +80,16 @@ struct page_state_s {
   // points to either nesting_decode_cache above when possible, or to the global source otherwise
   PageNestingDecodeInfo* nesting_info;
 
-  inline __device__ void set_error_code(int32_t err) volatile
+  inline __device__ void set_error_code(decode_error err) volatile
   {
     cuda::atomic_ref<int32_t, cuda::thread_scope_block> ref{const_cast<int&>(error)};
-    ref.store(err, cuda::std::memory_order_relaxed);
+    ref.fetch_or(static_cast<int32_t>(err), cuda::std::memory_order_relaxed);
+  }
+
+  inline __device__ void reset_error_code() volatile
+  {
+    cuda::atomic_ref<int32_t, cuda::thread_scope_block> ref{const_cast<int&>(error)};
+    ref.store(0, cuda::std::memory_order_relaxed);
   }
 };
 
@@ -493,8 +509,12 @@ __device__ void gpuDecodeStream(
             cur++;
           }
         }
-        if (cur > end || level_run <= 1) {
-          s->set_error_code(0x10);
+        if (cur > end) {
+          s->set_error_code(decode_error::STREAM_OVERRUN);
+          break;
+        }
+        if (level_run <= 1) {
+          s->set_error_code(decode_error::INVALID_LEVEL_RUN);
           break;
         }
         sym_len = (int32_t)(cur - cur_def);
@@ -925,7 +945,7 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
     }
     s->lvl_start[lvl] = cur;
 
-    if (cur > end) { s->set_error_code(2); }
+    if (cur > end) { s->set_error_code(decode_error::RLE_STREAM_OVERRUN); }
   };
 
   // this is a little redundant. if level_bits == 0, then nothing should be encoded
@@ -951,7 +971,7 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
       len += 4;
     } else {
       len = 0;
-      s->set_error_code(2);
+      s->set_error_code(decode_error::RLE_STREAM_OVERRUN);
     }
   } else if (encoding == Encoding::BIT_PACKED) {
     len                       = (s->page.num_input_values * level_bits + 7) >> 3;
@@ -961,7 +981,7 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
     s->abs_lvl_start[lvl]     = cur;
   } else {
     len = 0;
-    s->set_error_code(3);
+    s->set_error_code(decode_error::UNSUPPORTED_ENCODING);
   }
 
   s->abs_lvl_end[lvl] = start + len;
@@ -1103,7 +1123,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
   }
 
   if (!t) {
-    s->set_error_code(0);
+    s->reset_error_code();
 
     // IMPORTANT : nested schemas can have 0 rows in a page but still have
     // values. The case is:
@@ -1161,7 +1181,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           break;
         default:  // FIXED_LEN_BYTE_ARRAY:
           s->dtype_len = dtype_len_out;
-          s->set_error_code(s->dtype_len <= 0);
+          if (s->dtype_len <= 0) { s->set_error_code(decode_error::INVALID_DATA_TYPE); }
           break;
       }
       // Special check for downconversions
@@ -1277,7 +1297,9 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           s->dict_run  = 0;
           s->dict_val  = 0;
           s->dict_bits = (cur < end) ? *cur++ : 0;
-          if (s->dict_bits > 32 || !s->dict_base) { s->set_error_code((10 << 8) | s->dict_bits); }
+          if (s->dict_bits > 32 || !s->dict_base) {
+            s->set_error_code(decode_error::INVALID_DICT_WIDTH);
+          }
           break;
         case Encoding::PLAIN:
           s->dict_size = static_cast<int32_t>(end - cur);
@@ -1288,23 +1310,23 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           // first 4 bytes are length of RLE data
           int const len = (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);
           cur += 4;
-          if (cur + len > end) { s->set_error_code(2); }
+          if (cur + len > end) { s->set_error_code(decode_error::RLE_STREAM_OVERRUN); }
           s->dict_run = 0;
         } break;
         case Encoding::DELTA_BINARY_PACKED:
           // nothing to do, just don't error
           break;
         default: {
-          s->set_error_code(1);  // Unsupported encoding
+          s->set_error_code(decode_error::UNSUPPORTED_ENCODING);
           break;
         }
       }
-      if (cur > end) { s->set_error_code(1); }
+      if (cur > end) { s->set_error_code(decode_error::STREAM_OVERRUN); }
       s->lvl_end    = cur;
       s->data_start = cur;
       s->data_end   = end;
     } else {
-      s->set_error_code(1);
+      s->set_error_code(decode_error::EMPTY_PAGE);
     }
 
     s->lvl_count[level_type::REPETITION] = 0;

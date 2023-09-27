@@ -200,8 +200,11 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   page_nesting_decode.device_to_host_async(_stream);
 
   auto const decode_error = error_code.value(_stream);
-  CUDF_EXPECTS(decode_error == 0,
-               "Parquet data decode failed with error code " + std::to_string(decode_error));
+  if (decode_error != 0) {
+    std::stringstream stream;
+    stream << std::hex << decode_error;
+    CUDF_FAIL("Parquet data decode failed with code(s) " + stream.str());
+  }
 
   // for list columns, add the final offset to every offset buffer.
   // TODO : make this happen in more efficiently. Maybe use thrust::for_each
