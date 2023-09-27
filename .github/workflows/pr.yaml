@@ -73,7 +73,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci:latest"
+      container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_java.sh"
   conda-notebook-tests:
     needs: conda-python-build
@@ -83,7 +83,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci:latest"
+      container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_notebooks.sh"
   docs-build:
     needs: conda-python-build
@@ -93,7 +93,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci:latest"
+      container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/build_docs.sh"
   wheel-build-cudf:
     needs: checks
