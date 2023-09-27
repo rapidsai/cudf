@@ -145,7 +145,7 @@ cdef class DeviceScalar:
                 tid = pylibcudf.TypeId.DECIMAL64
             data_type = pylibcudf.DataType(tid, -dtype.scale)
 
-        self.c_value = pylibcudf.Scalar.from_pyarrow_scalar(pa_scalar, data_type)
+        self.c_value = pylibcudf.Scalar.from_arrow(pa_scalar, data_type)
         self._dtype = dtype
 
     def _to_host_scalar(self):

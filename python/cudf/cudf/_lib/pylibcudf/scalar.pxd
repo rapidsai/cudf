@@ -2,11 +2,13 @@
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
+from pyarrow cimport lib as pa
 
 from rmm._lib.memory_resource cimport DeviceMemoryResource
 
 from cudf._lib.cpp.scalar.scalar cimport scalar
 
+from .interop cimport ColumnMetadata
 from .types cimport DataType
 
 
@@ -27,6 +29,4 @@ cdef class Scalar:
     @staticmethod
     cdef Scalar from_libcudf(unique_ptr[scalar] libcudf_scalar, dtype=*)
 
-    # TODO: Make sure I'm correct to avoid typing the metadata as
-    # ColumnMetadata, I assume that will cause circular cimport problems
-    cpdef to_arrow(self, metadata)
+    cpdef pa.Scalar to_arrow(self, ColumnMetadata metadata)

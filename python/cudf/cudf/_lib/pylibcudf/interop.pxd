@@ -17,10 +17,4 @@ cpdef Table from_arrow(
     pa.Table pyarrow_table,
 )
 
-cpdef Scalar from_arrow_scalar(
-    pa.Scalar pyarrow_scalar,
-)
-
 cpdef pa.Table to_arrow(Table tbl, list metadata)
-
-cpdef pa.Scalar to_arrow_scalar(Scalar slr, ColumnMetadata metadata)
