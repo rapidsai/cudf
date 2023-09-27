@@ -56,8 +56,9 @@ static void BM_shift(benchmark::State& state)
   cudf::size_type size   = state.range(0);
   cudf::size_type offset = size * (static_cast<double>(shift_factor) / 100.0);
 
+  auto constexpr column_type_id = cudf::type_to_id<int>();
   auto const input_table =
-    create_sequence_table({cudf::type_to_id<int>()},
+    create_sequence_table({column_type_id},
                           row_count{size},
                           use_validity ? std::optional<double>{1.0} : std::nullopt);
   cudf::column_view input{input_table->get_column(0)};
@@ -76,7 +77,7 @@ static void BM_shift(benchmark::State& state)
   // (excluding the null bitmask) needs to be written. On the other hand, if 'use_validity'
   // is true, only the elements that can be shifted are written, along with the full null bitmask.
   auto const elems_written = use_validity ? (size - offset) : size;
-  auto const bytes_written = elems_written * sizeof(int);
+  auto const bytes_written = elems_written * cudf::size_of(cudf::data_type{column_type_id});
   auto const null_bytes    = use_validity ? 2 * cudf::bitmask_allocation_size_bytes(size) : 0;
 
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) *
