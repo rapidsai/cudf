@@ -8,7 +8,7 @@ package_dir="python/cudf"
 export SKBUILD_CONFIGURE_OPTIONS="-DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF"
 
 # Force a build using the latest version of the code before this PR
-CUDF_BUILD_BRANCH=${1}
+CUDF_BUILD_BRANCH=${1:-""}
 WHEEL_NAME_PREFIX="cudf_"
 if [[ "${CUDF_BUILD_BRANCH}" == "main" ]]; then
     git checkout branch-23.10-xdf
