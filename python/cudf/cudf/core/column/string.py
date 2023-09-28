@@ -5665,8 +5665,10 @@ class StringColumn(column.ColumnBase):
         if (self == "None").any():
             raise ValueError("Could not convert `None` value to datetime")
 
+        is_nat = self == "NaT"
         if dtype.kind == "M":
-            valid = str_cast.istimestamp(self, format)
+            valid_ts = str_cast.istimestamp(self, format)
+            valid = valid_ts | is_nat
             if not valid.all():
                 raise ValueError(f"Column contains invalid data for {format=}")
 
@@ -5677,9 +5679,8 @@ class StringColumn(column.ColumnBase):
         )
         result_col = casting_func(self, dtype, format)
 
-        boolean_match = self == "NaT"
-        if (boolean_match).any():
-            result_col[boolean_match] = None
+        if is_nat.any():
+            result_col[is_nat] = None
 
         return result_col
 
