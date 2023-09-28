@@ -28,11 +28,11 @@
 static void BM_transpose(benchmark::State& state)
 {
   auto count = state.range(0);
-  constexpr auto column_type = cudf::data_type{cudf::type_id::INT32};
+  constexpr auto column_type_id = cudf::type_id::INT32;
   auto int_column_generator =
     thrust::make_transform_iterator(thrust::counting_iterator(0), [count](int i) {
       return cudf::make_numeric_column(
-        column_type, count, cudf::mask_state::ALL_VALID);
+        cudf::data_type{column_type_id}, count, cudf::mask_state::ALL_VALID);
     });
 
   auto input_table = cudf::table(std::vector(int_column_generator, int_column_generator + count));
@@ -44,7 +44,7 @@ static void BM_transpose(benchmark::State& state)
   }
 
   // Collect memory statistics.
-  auto const bytes_read    = input.num_columns() * input.num_rows() * cudf::size_of(column_type);
+  auto const bytes_read    = input.num_columns() * input.num_rows() * sizeof(cudf::id_to_type<column_type_id>);
   auto const bytes_written = bytes_read;
   // Account for nullability in input and output.
   auto const null_bytes =
