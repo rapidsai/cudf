@@ -220,6 +220,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal128>
   rmm::cuda_stream_view stream)
 {
   using DeviceType = __int128_t;
+  auto constexpr max_precision = 38;
 
   rmm::device_uvector<DeviceType> buf(input.size(), stream);
 
@@ -234,7 +235,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal128>
   CUDF_CUDA_TRY(cudaMemcpyAsync(
     data_buffer->mutable_data(), buf.data(), buf_size_in_bytes, cudaMemcpyDefault, stream.value()));
 
-  auto type    = arrow::decimal(18, -input.type().scale());
+  auto type    = arrow::decimal(max_precision, -input.type().scale());
   auto mask    = fetch_mask_buffer(input, ar_mr, stream);
   auto buffers = std::vector<std::shared_ptr<arrow::Buffer>>{mask, std::move(data_buffer)};
   auto data    = std::make_shared<arrow::ArrayData>(type, input.size(), buffers);

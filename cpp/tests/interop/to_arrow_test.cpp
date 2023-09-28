@@ -355,6 +355,9 @@ TEST_F(ToArrowTest, StructColumn)
 template <typename T>
 using fp_wrapper = cudf::test::fixed_point_column_wrapper<T>;
 
+auto constexpr decimal64_max_precision = 18;
+auto constexpr decimal128_max_precision = 38;
+
 TEST_F(ToArrowTest, FixedPoint64Table)
 {
   using namespace numeric;
@@ -364,7 +367,7 @@ TEST_F(ToArrowTest, FixedPoint64Table)
     auto const input       = cudf::table_view({col});
     auto const expect_data = std::vector<int64_t>{-1, -1, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0};
 
-    auto const arr = make_decimal128_arrow_array(expect_data, std::nullopt, scale);
+    auto const arr = make_decimal128_arrow_array(expect_data, std::nullopt, decimal64_max_precision, scale);
 
     auto const field                = arrow::field("a", arr->type());
     auto const schema_vector        = std::vector<std::shared_ptr<arrow::Field>>({field});
@@ -386,7 +389,7 @@ TEST_F(ToArrowTest, FixedPoint128Table)
     auto const input       = cudf::table_view({col});
     auto const expect_data = std::vector<__int128_t>{-1, 2, 3, 4, 5, 6};
 
-    auto const arr = make_decimal128_arrow_array(expect_data, std::nullopt, scale);
+    auto const arr = make_decimal128_arrow_array(expect_data, std::nullopt, decimal128_max_precision, scale);
 
     auto const field                = arrow::field("a", arr->type());
     auto const schema_vector        = std::vector<std::shared_ptr<arrow::Field>>({field});
@@ -415,7 +418,7 @@ TEST_F(ToArrowTest, FixedPoint64TableLarge)
     auto const expect_data =
       std::vector<int64_t>{transform, transform + NUM_ELEMENTS * BIT_WIDTH_RATIO};
 
-    auto const arr = make_decimal128_arrow_array(expect_data, std::nullopt, scale);
+    auto const arr = make_decimal128_arrow_array(expect_data, std::nullopt, decimal64_max_precision, scale);
 
     auto const field                = arrow::field("a", arr->type());
     auto const schema_vector        = std::vector<std::shared_ptr<arrow::Field>>({field});
@@ -439,7 +442,7 @@ TEST_F(ToArrowTest, FixedPoint128TableLarge)
     auto const input       = cudf::table_view({col});
     auto const expect_data = std::vector<__int128_t>{iota, iota + NUM_ELEMENTS};
 
-    auto const arr = make_decimal128_arrow_array(expect_data, std::nullopt, scale);
+    auto const arr = make_decimal128_arrow_array(expect_data, std::nullopt, decimal128_max_precision, scale);
 
     auto const field                = arrow::field("a", arr->type());
     auto const schema_vector        = std::vector<std::shared_ptr<arrow::Field>>({field});
@@ -463,7 +466,7 @@ TEST_F(ToArrowTest, FixedPoint64TableNullsSimple)
       fp_wrapper<int64_t>({1, 2, 3, 4, 5, 6, 0, 0}, {1, 1, 1, 1, 1, 1, 0, 0}, scale_type{scale});
     auto const input = cudf::table_view({col});
 
-    auto const arr = make_decimal128_arrow_array(data, validity, scale);
+    auto const arr = make_decimal128_arrow_array(data, validity, decimal64_max_precision, scale);
 
     auto const field         = arrow::field("a", arr->type());
     auto const schema_vector = std::vector<std::shared_ptr<arrow::Field>>({field});
@@ -487,7 +490,7 @@ TEST_F(ToArrowTest, FixedPoint128TableNullsSimple)
       fp_wrapper<__int128_t>({1, 2, 3, 4, 5, 6, 0, 0}, {1, 1, 1, 1, 1, 1, 0, 0}, scale_type{scale});
     auto const input = cudf::table_view({col});
 
-    auto const arr = make_decimal128_arrow_array(data, validity, scale);
+    auto const arr = make_decimal128_arrow_array(data, validity, decimal128_max_precision, scale);
 
     auto const field         = arrow::field("a", arr->type());
     auto const schema_vector = std::vector<std::shared_ptr<arrow::Field>>({field});
@@ -513,7 +516,7 @@ TEST_F(ToArrowTest, FixedPoint64TableNulls)
       std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0, 8, 0, 9, 0, 10, 0};
     auto const validity = std::vector<int32_t>{1, 0, 1, 0, 1, 0, 1, 0, 1, 0};
 
-    auto arr = make_decimal128_arrow_array(expect_data, validity, scale);
+    auto arr = make_decimal128_arrow_array(expect_data, validity, decimal64_max_precision, scale);
 
     auto const field                = arrow::field("a", arr->type());
     auto const schema_vector        = std::vector<std::shared_ptr<arrow::Field>>({field});
@@ -538,7 +541,7 @@ TEST_F(ToArrowTest, FixedPoint128TableNulls)
     auto const expect_data = std::vector<__int128_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
     auto const validity    = std::vector<int32_t>{1, 0, 1, 0, 1, 0, 1, 0, 1, 0};
 
-    auto arr = make_decimal128_arrow_array(expect_data, validity, scale);
+    auto arr = make_decimal128_arrow_array(expect_data, validity, decimal128_max_precision, scale);
 
     auto const field                = arrow::field("a", arr->type());
     auto const schema_vector        = std::vector<std::shared_ptr<arrow::Field>>({field});

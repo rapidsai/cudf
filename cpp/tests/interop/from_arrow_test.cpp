@@ -360,7 +360,7 @@ TEST_F(FromArrowTest, FixedPoint128Table)
     auto const col      = fp_wrapper<__int128_t>(data.cbegin(), data.cend(), scale_type{scale});
     auto const expected = cudf::table_view({col});
 
-    auto const arr = make_decimal128_arrow_array(data, std::nullopt, scale);
+    auto const arr = make_decimal128_arrow_array(data, std::nullopt, 38, scale);
 
     auto const field         = arrow::field("a", arr->type());
     auto const schema_vector = std::vector<std::shared_ptr<arrow::Field>>({field});
@@ -384,7 +384,7 @@ TEST_F(FromArrowTest, FixedPoint128TableLarge)
     auto const col      = fp_wrapper<__int128_t>(iota, iota + NUM_ELEMENTS, scale_type{scale});
     auto const expected = cudf::table_view({col});
 
-    auto const arr = make_decimal128_arrow_array(data, std::nullopt, scale);
+    auto const arr = make_decimal128_arrow_array(data, std::nullopt, 38, scale);
 
     auto const field         = arrow::field("a", arr->type());
     auto const schema_vector = std::vector<std::shared_ptr<arrow::Field>>({field});
@@ -408,7 +408,7 @@ TEST_F(FromArrowTest, FixedPoint128TableNulls)
       fp_wrapper<__int128_t>({1, 2, 3, 4, 5, 6, 0, 0}, {1, 1, 1, 1, 1, 1, 0, 0}, scale_type{scale});
     auto const expected = cudf::table_view({col});
 
-    auto const arr = make_decimal128_arrow_array(data, validity, scale);
+    auto const arr = make_decimal128_arrow_array(data, validity, 38, scale);
 
     auto const field         = arrow::field("a", arr->type());
     auto const schema_vector = std::vector<std::shared_ptr<arrow::Field>>({field});
@@ -435,7 +435,7 @@ TEST_F(FromArrowTest, FixedPoint128TableNullsLarge)
     auto const expected = cudf::table_view({col});
 
     auto const arr = make_decimal128_arrow_array(
-      data, std::vector<int32_t>(validity, validity + NUM_ELEMENTS), scale);
+      data, std::vector<int32_t>(validity, validity + NUM_ELEMENTS), 38, scale);
 
     auto const field         = arrow::field("a", arr->type());
     auto const schema_vector = std::vector<std::shared_ptr<arrow::Field>>({field});

@@ -181,12 +181,13 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
 template <typename T>
 [[nodiscard]] auto make_decimal128_arrow_array(std::vector<T> const& data,
                                                std::optional<std::vector<int>> const& validity,
+                                               int32_t max_precision,
                                                int32_t scale) -> std::shared_ptr<arrow::Array>
 {
   auto constexpr BIT_WIDTH_RATIO = sizeof(__int128_t) / sizeof(T);
 
   std::shared_ptr<arrow::Array> arr;
-  arrow::Decimal128Builder decimal_builder(arrow::decimal(18, -scale),
+  arrow::Decimal128Builder decimal_builder(arrow::decimal(max_precision, -scale),
                                            arrow::default_memory_pool());
 
   for (T i = 0; i < static_cast<T>(data.size() / BIT_WIDTH_RATIO); ++i) {
