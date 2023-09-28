@@ -434,8 +434,12 @@ __global__ void __launch_bounds__(96)
 // suffixes are not encoded in the header, we're going to have to first do a quick pass through them
 // to find the start/end of each structure.
 template <typename level_t>
-__global__ void __launch_bounds__(decode_block_size) gpuDecodeDeltaByteArray(
-  PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
+__global__ void __launch_bounds__(decode_block_size)
+  gpuDecodeDeltaByteArray(PageInfo* pages,
+                          device_span<ColumnChunkDesc const> chunks,
+                          size_t min_row,
+                          size_t num_rows,
+                          int32_t* error_code)
 {
   using cudf::detail::warp_size;
   __shared__ __align__(16) delta_byte_array_decoder db_state;
@@ -567,6 +571,11 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeDeltaByteArray(
 
   auto const offptr = reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out);
   block_excl_sum<decode_block_size>(offptr, value_count, s->page.str_offset);
+
+  if (t == 0 and s->error != 0) {
+    cuda::atomic_ref<int32_t, cuda::thread_scope_device> ref{*error_code};
+    ref.fetch_or(s->error, cuda::std::memory_order_relaxed);
+  }
 }
 
 }  // anonymous namespace
@@ -613,11 +622,11 @@ void __host__ DecodeDeltaByteArray(cudf::detail::hostdevice_vector<PageInfo>& pa
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   if (level_type_size == 1) {
-    gpuDecodeDeltaByteArray<uint8_t>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+    gpuDecodeDeltaByteArray<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+      pages.device_ptr(), chunks, min_row, num_rows, error_code);
   } else {
-    gpuDecodeDeltaByteArray<uint16_t>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+    gpuDecodeDeltaByteArray<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+      pages.device_ptr(), chunks, min_row, num_rows, error_code);
   }
 }
 
