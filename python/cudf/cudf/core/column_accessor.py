@@ -197,8 +197,6 @@ class ColumnAccessor(abc.MutableMapping):
 
     @property
     def name(self) -> Any:
-        if len(self._data) == 0:
-            return None
         return self.level_names[-1]
 
     @property
