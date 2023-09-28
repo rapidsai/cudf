@@ -55,6 +55,21 @@ constexpr int rolling_index(int index)
 }
 
 /**
+ * @brief Enum for the different types of errors that can occur during decoding.
+ *
+ * These values are used as bitmasks, so they must be powers of 2.
+ */
+enum class decode_error : int32_t {
+  DATA_STREAM_OVERRUN  = 0x1,
+  LEVEL_STREAM_OVERRUN = 0x2,
+  UNSUPPORTED_ENCODING = 0x4,
+  INVALID_LEVEL_RUN    = 0x8,
+  INVALID_DATA_TYPE    = 0x10,
+  EMPTY_PAGE           = 0x20,
+  INVALID_DICT_WIDTH   = 0x40,
+};
+
+/**
  * @brief Struct representing an input column in the file.
  */
 struct input_column_info {
@@ -566,6 +581,7 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
 void DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
@@ -573,6 +589,7 @@ void DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
                     size_t num_rows,
                     size_t min_row,
                     int level_type_size,
+                    int32_t* error_code,
                     rmm::cuda_stream_view stream);
 
 /**
@@ -586,6 +603,7 @@ void DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
 void DecodeStringPageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
@@ -593,6 +611,7 @@ void DecodeStringPageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
                           size_t num_rows,
                           size_t min_row,
                           int level_type_size,
+                          int32_t* error_code,
                           rmm::cuda_stream_view stream);
 
 /**
@@ -606,6 +625,7 @@ void DecodeStringPageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use, default 0
  */
 void DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages,
@@ -613,6 +633,7 @@ void DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages,
                        size_t num_rows,
                        size_t min_row,
                        int level_type_size,
+                       int32_t* error_code,
                        rmm::cuda_stream_view stream);
 
 /**
