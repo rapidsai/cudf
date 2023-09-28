@@ -77,7 +77,7 @@ static void BM_shift(benchmark::State& state)
   // (excluding the null bitmask) needs to be written. On the other hand, if 'use_validity'
   // is true, only the elements that can be shifted are written, along with the full null bitmask.
   auto const elems_written = use_validity ? (size - offset) : size;
-  auto const bytes_written = elems_written * cudf::size_of(cudf::data_type{column_type_id});
+  auto const bytes_written = elems_written * sizeof(cudf::id_to_type<column_type_id>);
   auto const null_bytes    = use_validity ? 2 * cudf::bitmask_allocation_size_bytes(size) : 0;
 
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) *
