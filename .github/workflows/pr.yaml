@@ -14,6 +14,7 @@ jobs:
     needs:
       - checks
       - wheel-build-cudf
+      - wheel-build-cudf-main
       - wheel-tests-cudf
       - wheel-build-dask-cudf
       - wheel-tests-dask-cudf
@@ -39,6 +40,14 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
       script: "ci/build_wheel_cudf.sh"
+  wheel-build-cudf-main:
+    needs: checks
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-build.yaml@branch-23.10
+    with:
+      matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
+      build_type: pull-request
+      script: "ci/build_wheel_cudf.sh main"
   wheel-tests-cudf:
     needs: wheel-build-cudf
     secrets: inherit
@@ -64,7 +73,7 @@ jobs:
       build_type: pull-request
       script: ci/test_wheel_dask_cudf.sh
   wheel-build-xdf:
-    needs: wheel-build-cudf
+    needs: checks
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-build.yaml@branch-23.10
     with:
@@ -72,7 +81,7 @@ jobs:
       build_type: pull-request
       script: ci/build_wheel_xdf.sh
   unit-tests-xdf:
-    needs: wheel-build-xdf
+    needs: [wheel-build-xdf, wheel-build-cudf]
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-test.yaml@branch-23.10
     with:
@@ -115,7 +124,7 @@ jobs:
           python -m pytest -p xdf.autoload ./tests
   pandas-tests-xdf-main:
     # run the Pandas unit tests using xdf (main branch)
-    needs: wheel-build-xdf
+    needs: [wheel-build-xdf, wheel-build-cudf-main]
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-test.yaml@branch-23.10
     with:
@@ -124,7 +133,7 @@ jobs:
       script: ci/xdf_scripts/pandas-tests/run.sh main --rewrite-imports
   pandas-tests-xdf-pr:
     # run the Pandas unit tests using xdf (PR branch)
-    needs: wheel-build-xdf
+    needs: [wheel-build-xdf, wheel-build-cudf]
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-test.yaml@branch-23.10
     with:
