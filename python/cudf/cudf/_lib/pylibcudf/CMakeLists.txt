@@ -30,16 +30,14 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
-set(targets_using_arrow_headers pylibcudf_interop pylibcudf_scalar pylibcudf_table)
-foreach(target IN LISTS targets_using_arrow_headers)
+foreach(target IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)
   target_include_directories(${target} PRIVATE "${PYARROW_INCLUDE_DIR}")
 endforeach()
 
 # TODO: Clean up this include when switching to scikit-build-core. See cudf/_lib/CMakeLists.txt for
 # more info
 find_package(NumPy REQUIRED)
-set(targets_using_numpy ${targets_using_arrow_headers} pylibcudf_types)
-foreach(target IN LISTS targets_using_numpy)
+foreach(target IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)
   target_include_directories(${target} PRIVATE "${NumPy_INCLUDE_DIRS}")
   # Switch to the line below when we switch back to FindPython.cmake in CMake 3.24.
   # target_include_directories(${target} PRIVATE "${Python_NumPy_INCLUDE_DIRS}")
