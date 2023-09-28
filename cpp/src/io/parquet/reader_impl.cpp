@@ -169,6 +169,8 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   chunk_nested_data.host_to_device_async(_stream);
   if (has_strings) { chunk_nested_str_data.host_to_device_async(_stream); }
 
+  rmm::device_scalar<int32_t> error_code(0, _stream);
+
   // get the number of streams we need from the pool and tell them to wait on the H2D copies
   int const nkernels = std::bitset<32>(kernel_mask).count();
   auto streams       = cudf::detail::fork_streams(_stream, nkernels);
@@ -177,23 +179,25 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   int s_idx = 0;
   if (BitAnd(kernel_mask, gpu::DecodeKernelMask::STRING) != 0) {
     gpu::DecodeStringPageData(
-      pages, chunks, num_rows, skip_rows, level_type_size, streams[s_idx++]);
+      pages, chunks, num_rows, skip_rows, level_type_size, error_code.data(), streams[s_idx++]);
   }
 
   // launch delta byte array decoder
   if (BitAnd(kernel_mask, gpu::DecodeKernelMask::DELTA_BYTE_ARRAY) != 0) {
     gpu::DecodeDeltaByteArray(
-      pages, chunks, num_rows, skip_rows, level_type_size, streams[s_idx++]);
+      pages, chunks, num_rows, skip_rows, level_type_size, error_code.data(), streams[s_idx++]);
   }
 
   // launch delta binary decoder
   if (BitAnd(kernel_mask, gpu::DecodeKernelMask::DELTA_BINARY) != 0) {
-    gpu::DecodeDeltaBinary(pages, chunks, num_rows, skip_rows, level_type_size, streams[s_idx++]);
+    gpu::DecodeDeltaBinary(
+      pages, chunks, num_rows, skip_rows, level_type_size, error_code.data(), streams[s_idx++]);
   }
 
   // launch the catch-all page decoder
   if (BitAnd(kernel_mask, gpu::DecodeKernelMask::GENERAL) != 0) {
-    gpu::DecodePageData(pages, chunks, num_rows, skip_rows, level_type_size, streams[s_idx++]);
+    gpu::DecodePageData(
+      pages, chunks, num_rows, skip_rows, level_type_size, error_code.data(), streams[s_idx++]);
   }
 
   // synchronize the streams
@@ -202,7 +206,13 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   pages.device_to_host_async(_stream);
   page_nesting.device_to_host_async(_stream);
   page_nesting_decode.device_to_host_async(_stream);
-  _stream.synchronize();
+
+  auto const decode_error = error_code.value(_stream);
+  if (decode_error != 0) {
+    std::stringstream stream;
+    stream << std::hex << decode_error;
+    CUDF_FAIL("Parquet data decode failed with code(s) 0x" + stream.str());
+  }
 
   // for list columns, add the final offset to every offset buffer.
   // TODO : make this happen in more efficiently. Maybe use thrust::for_each

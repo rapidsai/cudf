@@ -301,8 +301,12 @@ struct delta_byte_array_decoder {
 // with V2 page headers; see https://www.mail-archive.com/dev@parquet.apache.org/msg11826.html).
 // this kernel only needs 96 threads (3 warps)(for now).
 template <typename level_t>
-__global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
-  PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
+__global__ void __launch_bounds__(96)
+  gpuDecodeDeltaBinary(PageInfo* pages,
+                       device_span<ColumnChunkDesc const> chunks,
+                       size_t min_row,
+                       size_t num_rows,
+                       int32_t* error_code)
 {
   using cudf::detail::warp_size;
   __shared__ __align__(16) delta_binary_decoder db_state;
@@ -348,7 +352,8 @@ __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
   // that has a value we need.
   if (skipped_leaf_values > 0) { db->skip_values(skipped_leaf_values); }
 
-  while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
+  while (s->error == 0 &&
+         (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
     uint32_t target_pos;
     uint32_t const src_pos = s->src_pos;
 
@@ -413,6 +418,11 @@ __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
       if (lane_id == 0) { s->src_pos = src_pos + batch_size; }
     }
     __syncthreads();
+  }
+
+  if (t == 0 and s->error != 0) {
+    cuda::atomic_ref<int32_t, cuda::thread_scope_device> ref{*error_code};
+    ref.fetch_or(s->error, cuda::std::memory_order_relaxed);
   }
 }
 
@@ -569,6 +579,7 @@ void __host__ DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages
                                 size_t num_rows,
                                 size_t min_row,
                                 int level_type_size,
+                                int32_t* error_code,
                                 rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
@@ -577,11 +588,11 @@ void __host__ DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   if (level_type_size == 1) {
-    gpuDecodeDeltaBinary<uint8_t>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+    gpuDecodeDeltaBinary<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+      pages.device_ptr(), chunks, min_row, num_rows, error_code);
   } else {
-    gpuDecodeDeltaBinary<uint16_t>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+    gpuDecodeDeltaBinary<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+      pages.device_ptr(), chunks, min_row, num_rows, error_code);
   }
 }
 
