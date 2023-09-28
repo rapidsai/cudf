@@ -5953,7 +5953,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if axis == 2:
                 return getattr(as_column(result), op)(**kwargs)
             else:
-                # import pdb;pdb.set_trace()
                 source_dtypes = [c.dtype for c in source._data.columns]
                 common_dtype = find_common_type(source_dtypes)
                 if is_object_dtype(common_dtype) and any(
