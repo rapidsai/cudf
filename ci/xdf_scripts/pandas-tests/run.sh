@@ -19,7 +19,7 @@ rapids-logger "PR number: $RAPIDS_REF_NAME"
 
 
 if [[ "${PANDAS_TESTS_BRANCH}" == "main" ]]; then
-    git checkout main
+    git checkout branch-23.10-xdf
 fi
 
 pip install cudf_cu${RAPIDS_CUDA_VERSION%%.*}
