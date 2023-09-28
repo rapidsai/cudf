@@ -1,0 +1,65 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+import json
+import sys
+
+import pandas as pd
+
+
+def get_total_and_passed(results):
+    total_failed = 0
+    total_errored = 0
+    total_passed = 0
+    for module_name, row in results.items():
+        total_failed += row.get("failed", 0)
+        total_errored += row.get("errored", 0)
+        total_passed += row.get("passed", 0)
+    total_tests = total_failed + total_errored + total_passed
+    return total_tests, total_passed
+
+main_json = sys.argv[1]
+pr_json = sys.argv[2]
+
+# read the results of summarize-test-results.py --summary
+with open(main_json) as f:
+    main_results = json.load(f)
+main_total, main_passed = get_total_and_passed(main_results)
+
+with open(pr_json) as f:
+    pr_results = json.load(f)
+pr_total, pr_passed = get_total_and_passed(pr_results)
+
+passing_percentage = pr_passed / pr_total * 100
+pass_rate_change = abs(pr_passed - main_passed) / main_passed * 100
+rate_change_type = "a decrease" if pr_passed < main_passed else "an increase"
+
+comment = (
+    "Merging this PR would result in " +
+    f"{pr_passed}/{pr_total} ({passing_percentage:.2f}%) " +
+    "Pandas tests passing, " +
+    f"{rate_change_type} in the test pass rate by " +
+    f"{pass_rate_change:.2f}%."
+)
+
+# convert pr_results to a pandas DataFrame and then a markdown table
+df = pd.DataFrame.from_dict(pr_results, orient="index")
+df = df[["total", "passed", "failed", "skipped"]]
+df = df.rename_axis("Test module")
+
+df = df.rename(columns={"total": "Total tests", "passed": "Passed tests", "failed": "Failed tests", "skipped": "Skipped tests"})
+df = df.sort_values(by=["Failed tests", "Skipped tests"], ascending=False)
+
+print(comment)
+print()
+print("Here are the results of running the Pandas tests against this PR:")
+print()
+print(df.to_markdown())

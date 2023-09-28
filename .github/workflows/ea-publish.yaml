@@ -1,0 +1,58 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+name: early-access-publish
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  TARGET_REPO: rapidsai/xdf-early-access
+
+jobs:
+  wheel-build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    - name: Build & publish wheel
+      env:
+        GITHUB_TOKEN: ${{ secrets.XDF_RELEASE_TOKEN }}
+      run: |
+        GIT_NUM=$(git rev-list 0.1.0a0..HEAD --count)
+        VERSION="0.1.0a${GIT_NUM}"
+
+        ./ci/xdf_scripts/apply_wheel_modifications.sh "${VERSION}" "cu-dummy"
+
+        cd python/xdf/
+        python -m pip wheel . -w dist -vvv --no-deps --disable-pip-version-check
+
+        gh release create \
+          --repo $TARGET_REPO \
+          --title "v${VERSION}" \
+          --notes "" \
+          --target main \
+          --latest \
+          "v${VERSION}" dist/xdf-*.whl
