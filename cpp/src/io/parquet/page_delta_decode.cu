@@ -503,7 +503,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeDeltaByteArray(
 
     if (t < 96) {  // warp 0..2
       target_pos = min(src_pos + 2 * (batch_size), s->nz_count + s->first_row + batch_size);
-    } else {       // warp 3
+    } else {  // warp 3
       target_pos = min(s->nz_count, src_pos + batch_size);
     }
     __syncthreads();
@@ -604,6 +604,7 @@ void __host__ DecodeDeltaByteArray(cudf::detail::hostdevice_vector<PageInfo>& pa
                                    size_t num_rows,
                                    size_t min_row,
                                    int level_type_size,
+                                   int32_t* error_code,
                                    rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
