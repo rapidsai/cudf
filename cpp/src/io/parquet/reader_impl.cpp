@@ -163,6 +163,8 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   chunk_nested_valids.host_to_device_async(_stream);
   chunk_nested_data.host_to_device_async(_stream);
 
+  rmm::device_scalar<int32_t> error_code(0, _stream);
+
   // get the number of streams we need from the pool and tell them to wait on the H2D copies
   int const nkernels = std::bitset<32>(kernel_mask).count();
   auto streams       = cudf::detail::fork_streams(_stream, nkernels);
@@ -174,17 +176,20 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   if (has_strings) {
     auto& stream = streams[s_idx++];
     chunk_nested_str_data.host_to_device_async(stream);
-    gpu::DecodeStringPageData(pages, chunks, num_rows, skip_rows, level_type_size, stream);
+    gpu::DecodeStringPageData(
+      pages, chunks, num_rows, skip_rows, level_type_size, error_code.data(), stream);
   }
 
   // launch delta binary decoder
   if ((kernel_mask & gpu::KERNEL_MASK_DELTA_BINARY) != 0) {
-    gpu::DecodeDeltaBinary(pages, chunks, num_rows, skip_rows, level_type_size, streams[s_idx++]);
+    gpu::DecodeDeltaBinary(
+      pages, chunks, num_rows, skip_rows, level_type_size, error_code.data(), streams[s_idx++]);
   }
 
   // launch the catch-all page decoder
   if ((kernel_mask & gpu::KERNEL_MASK_GENERAL) != 0) {
-    gpu::DecodePageData(pages, chunks, num_rows, skip_rows, level_type_size, streams[s_idx++]);
+    gpu::DecodePageData(
+      pages, chunks, num_rows, skip_rows, level_type_size, error_code.data(), streams[s_idx++]);
   }
 
   // synchronize the streams
@@ -193,7 +198,13 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   pages.device_to_host_async(_stream);
   page_nesting.device_to_host_async(_stream);
   page_nesting_decode.device_to_host_async(_stream);
-  _stream.synchronize();
+
+  auto const decode_error = error_code.value(_stream);
+  if (decode_error != 0) {
+    std::stringstream stream;
+    stream << std::hex << decode_error;
+    CUDF_FAIL("Parquet data decode failed with code(s) 0x" + stream.str());
+  }
 
   // for list columns, add the final offset to every offset buffer.
   // TODO : make this happen in more efficiently. Maybe use thrust::for_each
