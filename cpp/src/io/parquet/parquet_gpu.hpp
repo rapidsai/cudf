@@ -97,23 +97,26 @@ using uleb128_t   = uint64_t;
 using zigzag128_t = int64_t;
 
 // TODO this is in C++23
-template <typename Enum>
+template <typename Enum, bool = std::is_enum_v<Enum>>
 struct is_scoped_enum {
-  static const bool value =
-    std::is_enum_v<Enum> and not std::is_convertible_v<Enum, std::underlying_type_t<Enum>>;
+  static const bool value = not std::is_convertible_v<Enum, std::underlying_type_t<Enum>>;
+};
+
+template <typename Enum>
+struct is_scoped_enum<Enum, false> {
+  static const bool value = false;
 };
 
 // helpers to do bit operations on scoped enums
-template <class Enum, typename std::enable_if_t<is_scoped_enum<Enum>::value, bool> = true>
-constexpr uint32_t BitAnd(Enum a, Enum b)
+template <class T1,
+          class T2,
+          typename std::enable_if_t<(is_scoped_enum<T1>::value and std::is_same_v<T1, T2>) or
+                                    (is_scoped_enum<T1>::value and std::is_same_v<uint32_t, T2>) or
+                                    (is_scoped_enum<T2>::value and std::is_same_v<uint32_t, T1>)>* =
+            nullptr>
+constexpr uint32_t BitAnd(T1 a, T2 b)
 {
   return static_cast<uint32_t>(a) & static_cast<uint32_t>(b);
-}
-
-template <class Enum, typename std::enable_if_t<is_scoped_enum<Enum>::value, bool> = true>
-constexpr uint32_t BitAnd(uint32_t a, Enum b)
-{
-  return a & static_cast<uint32_t>(b);
 }
 
 /**
