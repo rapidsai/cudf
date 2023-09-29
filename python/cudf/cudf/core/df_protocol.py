@@ -482,7 +482,9 @@ class _CuDFColumn:
             dtype = self._dtype_from_cudfdtype(col_data.dtype)
 
         elif self.dtype[0] == _DtypeKind.STRING:
-            col_data = self._col.children[1]
+            col_data = build_column(
+                data=self._col.data, dtype=np.dtype("int8")
+            )
             dtype = self._dtype_from_cudfdtype(col_data.dtype)
 
         else:
