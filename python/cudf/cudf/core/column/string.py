@@ -5666,19 +5666,19 @@ class StringColumn(column.ColumnBase):
             raise ValueError("Could not convert `None` value to datetime")
 
         is_nat = self == "NaT"
-        all_same_length = (
-            libstrings.count_characters(self).distinct_count(dropna=True) == 1
-        )
-        if not all_same_length:
-            # Unfortunately disables OK cases like:
-            # ["2020-01-01", "2020-01-01 00:00:00"]
-            # But currently incorrect for cases like (drops 10)
-            # ["2020-01-01", "2020-01-01 10:00:00"]
-            raise NotImplementedError(
-                "Cannot parse date-like strings with different formats"
-            )
-
         if dtype.kind == "M":
+            all_same_length = (
+                libstrings.count_characters(self).distinct_count(dropna=True)
+                == 1
+            )
+            if not all_same_length:
+                # Unfortunately disables OK cases like:
+                # ["2020-01-01", "2020-01-01 00:00:00"]
+                # But currently incorrect for cases like (drops 10):
+                # ["2020-01-01", "2020-01-01 10:00:00"]
+                raise NotImplementedError(
+                    "Cannot parse date-like strings with different formats"
+                )
             valid_ts = str_cast.istimestamp(self, format)
             valid = valid_ts | is_nat
             if not valid.all():
