@@ -121,10 +121,6 @@ def _shape_mismatch_error(x, y):
     )
 
 
-def testfunc():
-    pass
-
-
 class _DataFrameIndexer(_FrameIndexer):
     def __getitem__(self, arg):
         if (
