@@ -156,6 +156,12 @@ class delta_binary_packer {
     _dst += 4;
   }
 
+  // signed subtraction with defined wrapping behavior
+  inline __device__ zigzag128_t subtract(zigzag128_t a, zigzag128_t b)
+  {
+    return static_cast<zigzag128_t>(static_cast<uleb128_t>(a) - static_cast<uleb128_t>(b));
+  }
+
  public:
   inline __device__ auto num_values() const { return _num_values; }
 
@@ -212,10 +218,10 @@ class delta_binary_packer {
     if (_values_in_buffer <= 0) { return _dst; }
 
     // calculate delta for this thread
-    size_type const idx = _current_idx + t;
-    zigzag128_t const delta =
-      idx < _num_values ? _buffer[delta::rolling_idx(idx)] - _buffer[delta::rolling_idx(idx - 1)]
-                        : std::numeric_limits<zigzag128_t>::max();
+    size_type const idx     = _current_idx + t;
+    zigzag128_t const delta = idx < _num_values ? subtract(_buffer[delta::rolling_idx(idx)],
+                                                           _buffer[delta::rolling_idx(idx - 1)])
+                                                : std::numeric_limits<zigzag128_t>::max();
 
     // find min delta for the block
     auto const min_delta = delta::block_reduce(*_block_tmp).Reduce(delta, cub::Min());
@@ -224,7 +230,7 @@ class delta_binary_packer {
     __syncthreads();
 
     // compute frame of reference for the block
-    uleb128_t const norm_delta = idx < _num_values ? delta - block_min : 0;
+    uleb128_t const norm_delta = idx < _num_values ? subtract(delta, block_min) : 0;
 
     // get max normalized delta for each warp, and use that to determine how many bits to use
     // for the bitpacking of this warp
