@@ -94,7 +94,8 @@ namespace gpu {
 using uleb128_t   = uint64_t;
 using zigzag128_t = int64_t;
 
-// TODO this is in C++23
+// this is in C++23
+#if !defined(__cpp_lib_is_scoped_enum)
 template <typename Enum, bool = std::is_enum_v<Enum>>
 struct is_scoped_enum {
   static const bool value = not std::is_convertible_v<Enum, std::underlying_type_t<Enum>>;
@@ -104,6 +105,9 @@ template <typename Enum>
 struct is_scoped_enum<Enum, false> {
   static const bool value = false;
 };
+#else
+using std::is_scoped_enum;
+#endif
 
 // helpers to do bit operations on scoped enums
 template <class T1,
