@@ -296,17 +296,20 @@ template <typename T = uint8_t>
  * @brief Return the number of total pages from the given column chunks.
  *
  * @param chunks List of column chunk descriptors
+ * @param error_code Error code for kernel failures
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return The total number of pages
  */
 [[nodiscard]] size_t count_page_headers(
-  cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc>& chunks, rmm::cuda_stream_view stream)
+  cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
+  int32_t* error_code,
+  rmm::cuda_stream_view stream)
 {
   size_t total_pages = 0;
 
   chunks.host_to_device_async(stream);
-  gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), stream);
+  gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), error_code, stream);
   chunks.device_to_host_sync(stream);
 
   for (size_t c = 0; c < chunks.size(); c++) {
@@ -334,11 +337,13 @@ constexpr bool is_supported_encoding(Encoding enc)
  *
  * @param chunks List of column chunk descriptors
  * @param pages List of page information
+ * @param error_code Error code for kernel failures
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @returns The size in bytes of level type data required
  */
 int decode_page_headers(cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                         cudf::detail::hostdevice_vector<gpu::PageInfo>& pages,
+                        int32_t* error_code,
                         rmm::cuda_stream_view stream)
 {
   // IMPORTANT : if you change how pages are stored within a chunk (dist pages, then data pages),
@@ -350,7 +355,7 @@ int decode_page_headers(cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc>& c
   }
 
   chunks.host_to_device_async(stream);
-  gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), stream);
+  gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), error_code, stream);
 
   // compute max bytes needed for level data
   auto level_bit_size =
@@ -967,13 +972,31 @@ void reader::impl::load_and_decompress_data()
     task.wait();
   }
 
+  rmm::device_scalar<int32_t> error_code(0, _stream);
+
   // Process dataset chunk pages into output columns
-  auto const total_pages = count_page_headers(chunks, _stream);
+  auto const total_pages = count_page_headers(chunks, error_code.data(), _stream);
   if (total_pages <= 0) { return; }
+
+  auto decode_error = error_code.value(_stream);
+  if (decode_error != 0) {
+    std::stringstream stream;
+    stream << std::hex << decode_error;
+    CUDF_FAIL("Parquet header parsing failed with code(s) 0x" + stream.str());
+  }
+
   pages = cudf::detail::hostdevice_vector<gpu::PageInfo>(total_pages, total_pages, _stream);
 
   // decoding of column/page information
-  _pass_itm_data->level_type_size = decode_page_headers(chunks, pages, _stream);
+  _pass_itm_data->level_type_size = decode_page_headers(chunks, pages, error_code.data(), _stream);
+
+  decode_error = error_code.value(_stream);
+  if (decode_error != 0) {
+    std::stringstream stream;
+    stream << std::hex << decode_error;
+    CUDF_FAIL("Parquet header parsing failed with code(s) 0x" + stream.str());
+  }
+
   if (has_compressed_data) {
     decomp_page_data = decompress_page_data(chunks, pages, _stream);
     // Free compressed data

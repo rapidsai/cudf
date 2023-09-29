@@ -20,6 +20,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/atomic>
+
 namespace cudf {
 namespace io {
 namespace parquet {
@@ -343,16 +345,19 @@ struct gpuParsePageHeader {
  */
 // blockDim {128,1,1}
 __global__ void __launch_bounds__(128)
-  gpuDecodePageHeaders(ColumnChunkDesc* chunks, int32_t num_chunks)
+  gpuDecodePageHeaders(ColumnChunkDesc* chunks, int32_t num_chunks, int32_t* error_code)
 {
   gpuParsePageHeader parse_page_header;
   __shared__ byte_stream_s bs_g[4];
+  __shared__ int error[4];
 
   int lane_id             = threadIdx.x % 32;
+  int warp_id             = threadIdx.x / 32;
   int chunk               = (blockIdx.x * 4) + (threadIdx.x / 32);
   byte_stream_s* const bs = &bs_g[threadIdx.x / 32];
 
-  if (chunk < num_chunks and lane_id == 0) bs->ck = chunks[chunk];
+  if (chunk < num_chunks and lane_id == 0) { bs->ck = chunks[chunk]; }
+  if (lane_id == 0) { error[warp_id] = 0; }
   __syncthreads();
 
   if (chunk < num_chunks) {
@@ -427,6 +432,9 @@ __global__ void __launch_bounds__(128)
           }
           bs->page.page_data = const_cast<uint8_t*>(bs->cur);
           bs->cur += bs->page.compressed_page_size;
+          if (bs->cur > bs->end) {
+            error[warp_id] |= static_cast<int>(decode_error::DATA_STREAM_OVERRUN);
+          }
           bs->page.kernel_mask = kernel_mask_for_page(bs->page, bs->ck);
         } else {
           bs->cur = bs->end;
@@ -441,6 +449,10 @@ __global__ void __launch_bounds__(128)
     if (lane_id == 0) {
       chunks[chunk].num_data_pages = data_page_count;
       chunks[chunk].num_dict_pages = dictionary_page_count;
+      if (error[warp_id] != 0) {
+        cuda::atomic_ref<int32_t, cuda::thread_scope_device> ref{*error_code};
+        ref.fetch_or(error[warp_id], cuda::std::memory_order_relaxed);
+      }
     }
   }
 }
@@ -496,11 +508,12 @@ __global__ void __launch_bounds__(128)
 
 void __host__ DecodePageHeaders(ColumnChunkDesc* chunks,
                                 int32_t num_chunks,
+                                int32_t* error_code,
                                 rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
-  gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_chunks);
+  gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_chunks, error_code);
 }
 
 void __host__ BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
