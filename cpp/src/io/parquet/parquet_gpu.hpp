@@ -90,9 +90,7 @@ struct input_column_info {
 
 namespace gpu {
 
-// TODO: The delta encodings use ULEB128 integers, but for now we're only
-// using max 64 bits. Need to see what the performance impact is of using
-// __int128_t rather than int64_t.
+// The delta encodings use ULEB128 integers, but parquet only uses max 64 bits.
 using uleb128_t   = uint64_t;
 using zigzag128_t = int64_t;
 
