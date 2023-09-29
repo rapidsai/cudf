@@ -994,7 +994,7 @@ struct mask_filter {
   uint32_t mask;
 
   __device__ mask_filter(uint32_t m) : mask(m) {}
-  __device__ mask_filter(DecodeKernelMask m) : mask(static_cast<uint32_t>(m)) {}
+  __device__ mask_filter(decode_kernel_mask m) : mask(static_cast<uint32_t>(m)) {}
 
   __device__ inline bool operator()(PageInfo const& page)
   {

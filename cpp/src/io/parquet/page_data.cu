@@ -457,7 +457,7 @@ __global__ void __launch_bounds__(decode_block_size)
                           chunks,
                           min_row,
                           num_rows,
-                          mask_filter{DecodeKernelMask::GENERAL},
+                          mask_filter{decode_kernel_mask::GENERAL},
                           true)) {
     return;
   }

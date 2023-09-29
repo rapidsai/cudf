@@ -600,7 +600,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBou
         chunks,
         min_row,
         num_rows,
-        mask_filter{BitOr(DecodeKernelMask::STRING, DecodeKernelMask::DELTA_BYTE_ARRAY)},
+        mask_filter{BitOr(decode_kernel_mask::STRING, decode_kernel_mask::DELTA_BYTE_ARRAY)},
         true)) {
     return;
   }
@@ -647,8 +647,13 @@ __global__ void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageS
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
 
   // setup page info
-  if (!setupLocalPageInfo(
-        s, pp, chunks, min_row, num_rows, mask_filter{DecodeKernelMask::DELTA_BYTE_ARRAY}, true)) {
+  if (!setupLocalPageInfo(s,
+                          pp,
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{decode_kernel_mask::DELTA_BYTE_ARRAY},
+                          true)) {
     return;
   }
 
@@ -715,7 +720,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
 
   // setup page info
   if (!setupLocalPageInfo(
-        s, pp, chunks, min_row, num_rows, mask_filter{DecodeKernelMask::STRING}, true)) {
+        s, pp, chunks, min_row, num_rows, mask_filter{decode_kernel_mask::STRING}, true)) {
     return;
   }
 
@@ -813,7 +818,7 @@ __global__ void __launch_bounds__(decode_block_size)
                           chunks,
                           min_row,
                           num_rows,
-                          mask_filter{DecodeKernelMask::STRING},
+                          mask_filter{decode_kernel_mask::STRING},
                           true)) {
     return;
   }
@@ -1002,17 +1007,17 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
 
   // kernel mask may contain other kernels we don't need to count
   int count_mask =
-    kernel_mask & BitOr(DecodeKernelMask::DELTA_BYTE_ARRAY, DecodeKernelMask::STRING);
+    kernel_mask & BitOr(decode_kernel_mask::DELTA_BYTE_ARRAY, decode_kernel_mask::STRING);
   int nkernels = std::bitset<32>(count_mask).count();
   auto streams = cudf::detail::fork_streams(stream, nkernels);
 
   int s_idx = 0;
-  if (BitAnd(kernel_mask, DecodeKernelMask::DELTA_BYTE_ARRAY) != 0) {
+  if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_BYTE_ARRAY) != 0) {
     dim3 dim_delta(delta_preproc_block_size, 1);
     gpuComputeDeltaPageStringSizes<<<dim_grid, dim_delta, 0, streams[s_idx++].value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows);
   }
-  if (BitAnd(kernel_mask, DecodeKernelMask::STRING) != 0) {
+  if (BitAnd(kernel_mask, decode_kernel_mask::STRING) != 0) {
     gpuComputePageStringSizes<<<dim_grid, dim_block, 0, streams[s_idx++].value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows);
   }

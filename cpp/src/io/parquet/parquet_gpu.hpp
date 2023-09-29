@@ -154,7 +154,7 @@ enum level_type {
  *
  * Used to control which decode kernels to run.
  */
-enum class DecodeKernelMask {
+enum class decode_kernel_mask {
   NONE             = 0,
   GENERAL          = (1 << 0),  // Run catch-all decode kernel
   STRING           = (1 << 1),  // Run decode kernel for string data
@@ -285,7 +285,7 @@ struct PageInfo {
   int64_t temp_string_size;
   uint8_t* temp_string_buf;
 
-  DecodeKernelMask kernel_mask;
+  decode_kernel_mask kernel_mask;
 };
 
 /**

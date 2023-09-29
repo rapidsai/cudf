@@ -326,7 +326,7 @@ __global__ void __launch_bounds__(96)
                           chunks,
                           min_row,
                           num_rows,
-                          mask_filter{DecodeKernelMask::DELTA_BINARY},
+                          mask_filter{decode_kernel_mask::DELTA_BINARY},
                           true)) {
     return;
   }
@@ -461,7 +461,7 @@ __global__ void __launch_bounds__(decode_block_size)
                           chunks,
                           min_row,
                           num_rows,
-                          mask_filter{DecodeKernelMask::DELTA_BYTE_ARRAY},
+                          mask_filter{decode_kernel_mask::DELTA_BYTE_ARRAY},
                           true)) {
     return;
   }
