@@ -27,23 +27,6 @@ namespace gpu {
 // Minimal thrift implementation for parsing page headers
 // https://github.com/apache/thrift/blob/master/doc/specs/thrift-compact-protocol.md
 
-static const __device__ __constant__ uint8_t g_list2struct[16] = {0,
-                                                                  1,
-                                                                  2,
-                                                                  ST_FLD_BYTE,
-                                                                  ST_FLD_DOUBLE,
-                                                                  5,
-                                                                  ST_FLD_I16,
-                                                                  7,
-                                                                  ST_FLD_I32,
-                                                                  9,
-                                                                  ST_FLD_I64,
-                                                                  ST_FLD_BINARY,
-                                                                  ST_FLD_STRUCT,
-                                                                  ST_FLD_MAP,
-                                                                  ST_FLD_SET,
-                                                                  ST_FLD_LIST};
-
 struct byte_stream_s {
   uint8_t const* cur{};
   uint8_t const* end{};
@@ -142,12 +125,13 @@ __device__ void skip_struct_field(byte_stream_s* bs, int field_type)
       case ST_FLD_SET: {  // NOTE: skipping a list of lists is not handled
         auto const c = getb(bs);
         int n        = c >> 4;
-        if (n == 0xf) n = get_u32(bs);
-        field_type = g_list2struct[c & 0xf];
-        if (field_type == ST_FLD_STRUCT)
+        if (n == 0xf) { n = get_u32(bs); }
+        field_type = c & 0xf;
+        if (field_type == ST_FLD_STRUCT) {
           struct_depth += n;
-        else
+        } else {
           rep_cnt = n;
+        }
       } break;
       case ST_FLD_STRUCT: struct_depth++; break;
     }
