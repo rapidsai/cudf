@@ -239,7 +239,7 @@ class DeltaBinaryPacker {
     if (t == 0) { write_block_header(block_min); }
     __syncthreads();
 
-    // now each warp encodes it's data...can calculate starting offset with _mb_bits
+    // now each warp encodes its data...can calculate starting offset with _mb_bits
     uint8_t* mb_ptr = _dst;
     switch (warp_id) {
       case 3: mb_ptr += _mb_bits[2] * delta::values_per_mini_block / 8; [[fallthrough]];
