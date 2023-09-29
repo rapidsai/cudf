@@ -173,7 +173,7 @@ class DeltaBinaryPacker {
     _values_in_buffer = 0;
   }
 
-  // each thread calls this to add it's current value
+  // each thread calls this to add its current value
   inline __device__ void add_value(T value, bool is_valid)
   {
     // figure out the correct position for the given value
