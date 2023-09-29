@@ -123,7 +123,7 @@ inline __device__ void bitpack_mini_block(
 // to be written.
 // T is the input data type (either zigzag128_t or uleb128_t)
 template <typename T>
-class DeltaBinaryPacker {
+class delta_binary_packer {
  private:
   uint8_t* _dst;                             // sink to dump encoded values to
   size_type _current_idx;                    // index of first value in buffer
@@ -140,12 +140,12 @@ class DeltaBinaryPacker {
   void* _bitpack_tmp;  // pointer to shared scratch memory used in bitpacking
 
   // write the delta binary header. only call from thread 0
-  inline __device__ void write_header(T first_value)
+  inline __device__ void write_header()
   {
     delta::put_uleb128(_dst, delta::block_size);
     delta::put_uleb128(_dst, delta::num_mini_blocks);
     delta::put_uleb128(_dst, _num_values);
-    delta::put_zz128(_dst, first_value);
+    delta::put_zz128(_dst, _buffer[0]);
   }
 
   // write the block header. only call from thread 0
@@ -189,7 +189,7 @@ class DeltaBinaryPacker {
       _values_in_buffer += num_valid;
       // if first pass write header
       if (_current_idx == 0) {
-        write_header(_buffer[0]);
+        write_header();
         _current_idx = 1;
         _values_in_buffer -= 1;
       }
@@ -230,7 +230,7 @@ class DeltaBinaryPacker {
     // for the bitpacking of this warp
     zigzag128_t const warp_max =
       delta::warp_reduce(_warp_tmp[warp_id]).Reduce(norm_delta, cub::Max());
-    __syncthreads();
+    __syncwarp();
 
     if (lane_id == 0) { _mb_bits[warp_id] = sizeof(zigzag128_t) * 8 - __clzll(warp_max); }
     __syncthreads();
@@ -247,7 +247,7 @@ class DeltaBinaryPacker {
       case 1: mb_ptr += _mb_bits[0] * delta::values_per_mini_block / 8;
     }
 
-    // encoding happens here....will have to update pack literals to deal with larger numbers
+    // encoding happens here
     auto const warp_idx = _current_idx + warp_id * delta::values_per_mini_block;
     if (warp_idx < _num_values) {
       auto const num_enc = min(delta::values_per_mini_block, _num_values - warp_idx);

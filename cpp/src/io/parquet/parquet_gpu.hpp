@@ -477,7 +477,7 @@ constexpr uint32_t encoding_to_mask(Encoding encoding)
  *
  * Used to control which encode kernels to run.
  */
-enum class EncodeKernelMask {
+enum class encode_kernel_mask {
   PLAIN        = (1 << 0),  // Run plain encoding kernel
   DICTIONARY   = (1 << 1),  // Run dictionary encoding kernel
   DELTA_BINARY = (1 << 2)   // Run DELTA_BINARY_PACKED encoding kernel
@@ -541,11 +541,11 @@ struct EncPage {
   uint32_t num_leaf_values;  //!< Values in page. Different from num_rows in case of nested types
   uint32_t num_values;  //!< Number of def/rep level values in page. Includes null/empty elements in
                         //!< non-leaf levels
-  uint32_t def_lvl_bytes;        //!< Number of bytes of encoded definition level data (V2 only)
-  uint32_t rep_lvl_bytes;        //!< Number of bytes of encoded repetition level data (V2 only)
-  compression_result* comp_res;  //!< Ptr to compression result
-  uint32_t num_nulls;            //!< Number of null values (V2 only) (down here for alignment)
-  EncodeKernelMask kernel_mask;  //!< Mask used to control which encoding kernels to run
+  uint32_t def_lvl_bytes;          //!< Number of bytes of encoded definition level data (V2 only)
+  uint32_t rep_lvl_bytes;          //!< Number of bytes of encoded repetition level data (V2 only)
+  compression_result* comp_res;    //!< Ptr to compression result
+  uint32_t num_nulls;              //!< Number of null values (V2 only) (down here for alignment)
+  encode_kernel_mask kernel_mask;  //!< Mask used to control which encoding kernels to run
 };
 
 /**
