@@ -38,7 +38,9 @@ done
 if [ "$no_cudf" = true ]; then
     echo "Skipping cudf install"
 else
-    pip install cudf_cu${RAPIDS_CUDA_VERSION%%.*}
+    RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
+    RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
+    python -m pip install --no-deps ./local-cudf-dep/cudf*.whl
 fi
 cd python/xdf/
 python -m pip install .[test]

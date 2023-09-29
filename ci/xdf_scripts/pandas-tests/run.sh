@@ -18,11 +18,16 @@ rapids-logger "Using ${XDF_MODE} for import overrrides"
 rapids-logger "PR number: $RAPIDS_REF_NAME"
 
 
+WHEEL_NAME_PREFIX="cudf_"
 if [[ "${PANDAS_TESTS_BRANCH}" == "main" ]]; then
     git checkout branch-23.10-xdf
+    WHEEL_NAME_PREFIX="cudf_${PANDAS_TESTS_BRANCH}_"
 fi
 
-pip install cudf_cu${RAPIDS_CUDA_VERSION%%.*}
+RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
+RAPIDS_PY_WHEEL_NAME="${WHEEL_NAME_PREFIX}${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
+python -m pip install --no-deps ./local-cudf-dep/cudf*.whl
+
 cd python/xdf/
 pip install .[test]
 
