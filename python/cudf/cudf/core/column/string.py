@@ -5667,8 +5667,11 @@ class StringColumn(column.ColumnBase):
 
         is_nat = self == "NaT"
         if dtype.kind == "M":
+            without_nat = self.apply_boolean_mask(is_nat.unary_operator("not"))
             all_same_length = (
-                libstrings.count_characters(self).distinct_count(dropna=True)
+                libstrings.count_characters(without_nat).distinct_count(
+                    dropna=True
+                )
                 == 1
             )
             if not all_same_length:
