@@ -1286,6 +1286,11 @@ def test_parquet_reader_v2(tmpdir, simple_pdf):
     assert_eq(cudf.read_parquet(pdf_fname), simple_pdf)
 
 
+def test_parquet_delta_byte_array(datadir):
+    fname = datadir / "delta_byte_arr.parquet"
+    assert_eq(cudf.read_parquet(fname), pd.read_parquet(fname))
+
+
 @pytest.mark.parametrize("nrows", [1, 100000])
 @pytest.mark.parametrize("add_nulls", [True, False])
 def test_delta_binary(nrows, add_nulls, tmpdir):
