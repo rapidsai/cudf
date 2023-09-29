@@ -50,12 +50,38 @@ comment = (
     f"{pass_rate_change:.2f}%."
 )
 
+def emoji_passed(x):
+    if x > 0:
+        return f'{x}✅'
+    elif x < 0:
+        return f'{x}❌'
+    else:
+        return f'{x}'
+
+def emoji_failed(x):
+    if x > 0:
+        return f'{x}❌'
+    elif x < 0:
+        return f'{x}✅'
+    else:
+        return f'{x}'
+
 # convert pr_results to a pandas DataFrame and then a markdown table
-df = pd.DataFrame.from_dict(pr_results, orient="index")
-df = df[["total", "passed", "failed", "skipped"]]
+pr_df = pd.DataFrame.from_dict(pr_results, orient="index").sort_index()
+main_df = pd.DataFrame.from_dict(main_results, orient="index").sort_index()
+diff_df = pr_df - main_df
+
+pr_df = pr_df[["total", "passed", "failed", "skipped"]]
+diff_df = diff_df[["total", "passed", "failed", "skipped"]]
+diff_df.columns = diff_df.columns + "_diff"
+diff_df["passed_diff"] = diff_df["passed_diff"].map(emoji_passed)
+diff_df["failed_diff"] = diff_df["failed_diff"].map(emoji_failed)
+diff_df["skipped_diff"] = diff_df["skipped_diff"].map(emoji_failed)
+
+df = pd.concat([pr_df, diff_df], axis=1)
 df = df.rename_axis("Test module")
 
-df = df.rename(columns={"total": "Total tests", "passed": "Passed tests", "failed": "Failed tests", "skipped": "Skipped tests"})
+df = df.rename(columns={"total": "Total tests", "passed": "Passed tests", "failed": "Failed tests", "skipped": "Skipped tests", "total_diff": "Total delta", "passed_diff": "Passed delta", "failed_diff": "Failed delta", "skipped_diff": "Skipped delta"})
 df = df.sort_values(by=["Failed tests", "Skipped tests"], ascending=False)
 
 print(comment)
