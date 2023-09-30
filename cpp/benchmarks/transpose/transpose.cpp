@@ -27,7 +27,7 @@
 
 static void BM_transpose(benchmark::State& state)
 {
-  auto count = state.range(0);
+  auto count                    = state.range(0);
   constexpr auto column_type_id = cudf::type_id::INT32;
   auto int_column_generator =
     thrust::make_transform_iterator(thrust::counting_iterator(0), [count](int i) {
@@ -44,7 +44,8 @@ static void BM_transpose(benchmark::State& state)
   }
 
   // Collect memory statistics.
-  auto const bytes_read    = input.num_columns() * input.num_rows() * sizeof(cudf::id_to_type<column_type_id>);
+  auto const bytes_read =
+    input.num_columns() * input.num_rows() * sizeof(cudf::id_to_type<column_type_id>);
   auto const bytes_written = bytes_read;
   // Account for nullability in input and output.
   auto const null_bytes =
@@ -56,15 +57,12 @@ static void BM_transpose(benchmark::State& state)
 
 class Transpose : public cudf::benchmark {};
 
-#define TRANSPOSE_BM_BENCHMARK_DEFINE(name)                       \
-  BENCHMARK_DEFINE_F(Transpose, name)(::benchmark::State & state) \
-  {                                                               \
-    BM_transpose(state);                                          \
-  }                                                               \
-  BENCHMARK_REGISTER_F(Transpose, name)                           \
-    ->RangeMultiplier(4)                                          \
-    ->Range(4, 4 << 13)                                           \
-    ->UseManualTime()                                             \
+#define TRANSPOSE_BM_BENCHMARK_DEFINE(name)                                                \
+  BENCHMARK_DEFINE_F(Transpose, name)(::benchmark::State & state) { BM_transpose(state); } \
+  BENCHMARK_REGISTER_F(Transpose, name)                                                    \
+    ->RangeMultiplier(4)                                                                   \
+    ->Range(4, 4 << 13)                                                                    \
+    ->UseManualTime()                                                                      \
     ->Unit(benchmark::kMillisecond);
 
 TRANSPOSE_BM_BENCHMARK_DEFINE(transpose_simple);
