@@ -1688,8 +1688,8 @@ __global__ void __launch_bounds__(block_size, 8)
   // save RLE length if necessary
   if (s->rle_len_pos != nullptr && t < 32) {
     // size doesn't include the 4 bytes for the length
-    auto const rle_size = static_cast<uint32_t>(s->cur - s->rle_len_pos) - 4;
-    if (t < 4) { s->rle_len_pos[t] = rle_size >> (t * 8); }
+    auto const rle_size = static_cast<uint32_t>(s->cur - s->rle_len_pos) - RLE_LENGTH_FIELD_LEN;
+    if (t < RLE_LENGTH_FIELD_LEN) { s->rle_len_pos[t] = rle_size >> (t * 8); }
     __syncwarp();
   }
 
