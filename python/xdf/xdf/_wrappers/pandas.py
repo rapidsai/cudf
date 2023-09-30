@@ -737,7 +737,25 @@ def _df_eval_method(self, *args, local_dict=None, global_dict=None, **kwargs):
     )
 
 
+@nvtx.annotate(
+    "XDF_DATAFRAME_QUERY",
+    color=_XDF_NVTX_COLORS["EXECUTE_SLOW"],
+    domain="xdf_python",
+)
+def _df_query_method(self, *args, local_dict=None, global_dict=None, **kwargs):
+    # `query` API internally calls `eval`, hence we are making use of
+    # helps of `eval` to populate locals and globals dict.
+    level = kwargs.get("level", 0)
+    local_dict, global_dict = _get_eval_locals_and_globals(
+        level, local_dict, global_dict
+    )
+    return super(type(self), self).__getattr__("query")(
+        *args, local_dict=local_dict, global_dict=global_dict, **kwargs
+    )
+
+
 DataFrame.eval = _df_eval_method  # type: ignore
+DataFrame.query = _df_query_method  # type: ignore
 
 _JsonReader = make_intermediate_proxy_type(
     "_JsonReader",
