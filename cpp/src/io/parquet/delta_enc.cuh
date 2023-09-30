@@ -87,7 +87,6 @@ inline __device__ void bitpack_mini_block(
         val >>= 8;
       }
     }
-    __syncwarp();
     return;
   }
 
