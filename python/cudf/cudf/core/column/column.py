@@ -1938,6 +1938,9 @@ def as_column(
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         desc = arbitrary.__cuda_array_interface__
+        shape = desc["shape"]
+        if len(shape) > 1:
+            raise ValueError("Data must be 1-dimensional")
         current_dtype = np.dtype(desc["typestr"])
 
         arb_dtype = (

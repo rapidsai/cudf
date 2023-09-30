@@ -2328,6 +2328,12 @@ def test_series_count_invalid_param():
         s.count(skipna=True)
 
 
+def test_multi_dim_series_error():
+    arr = cp.array([(1, 2), (3, 4)])
+    with pytest.raises(ValueError):
+        cudf.Series(arr)
+
+
 def test_bool_series_mixed_dtype_error():
     ps = pd.Series([True, False, None])
     # ps now has `object` dtype, which
