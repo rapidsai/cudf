@@ -2061,14 +2061,9 @@ def as_column(
             )
         else:
             pyarrow_array = pa.array(arbitrary, from_pandas=nan_as_null)
-            if (
-                arbitrary.dtype == cudf.dtype("object")
-                and cudf.dtype(pyarrow_array.type.to_pandas_dtype())
-                != cudf.dtype(arbitrary.dtype)
-                and not is_bool_dtype(
-                    cudf.dtype(pyarrow_array.type.to_pandas_dtype())
-                )
-            ):
+            if arbitrary.dtype == cudf.dtype("object") and cudf.dtype(
+                pyarrow_array.type.to_pandas_dtype()
+            ) != cudf.dtype(arbitrary.dtype):
                 raise MixedTypeError("Cannot create column with mixed types")
             if isinstance(pyarrow_array.type, pa.Decimal128Type):
                 pyarrow_type = cudf.Decimal128Dtype.from_arrow(
@@ -2458,9 +2453,6 @@ def as_column(
                     and (
                         cudf.dtype(pyarrow_array.type.to_pandas_dtype())
                         != cudf.dtype(arbitrary.dtype)
-                        and not is_bool_dtype(
-                            cudf.dtype(pyarrow_array.type.to_pandas_dtype())
-                        )
                     )
                 ):
                     raise MixedTypeError(

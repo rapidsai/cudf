@@ -2205,7 +2205,7 @@ def test_series_mixed_dtype_error(dtype):
 @pytest.mark.parametrize("index", [None, [10, 20, 30]])
 def test_series_contains(data, index):
     ps = pd.Series(data, index=index)
-    gs = cudf.from_pandas(ps)
+    gs = cudf.Series(data, index=index)
 
     assert_eq(1 in ps, 1 in gs)
     assert_eq(10 in ps, 10 in gs)
@@ -2326,3 +2326,13 @@ def test_series_count_invalid_param():
     s = cudf.Series([], dtype="float64")
     with pytest.raises(TypeError):
         s.count(skipna=True)
+
+
+def test_bool_series_mixed_dtype_error():
+    ps = pd.Series([True, False, None])
+    # ps now has `object` dtype, which
+    # isn't supported by `cudf`.
+    with pytest.raises(TypeError):
+        cudf.Series(ps)
+    with pytest.raises(TypeError):
+        cudf.from_pandas(ps)
