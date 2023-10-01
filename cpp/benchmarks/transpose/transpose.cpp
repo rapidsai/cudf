@@ -44,8 +44,8 @@ static void BM_transpose(benchmark::State& state)
   }
 
   // Collect memory statistics.
-  auto const bytes_read =
-    input.num_columns() * input.num_rows() * sizeof(cudf::id_to_type<column_type_id>);
+  auto const bytes_read = static_cast<uint64_t>(input.num_columns()) * input.num_rows() *
+                          sizeof(cudf::id_to_type<column_type_id>);
   auto const bytes_written = bytes_read;
   // Account for nullability in input and output.
   auto const null_bytes =
