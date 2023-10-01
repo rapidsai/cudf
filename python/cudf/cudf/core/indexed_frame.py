@@ -5428,11 +5428,15 @@ def _drop_rows_by_labels(
 
         key_df = cudf.DataFrame(index=labels)
         if isinstance(obj, cudf.DataFrame):
-            return obj.join(key_df, how="leftanti")
+            res = obj.join(key_df, how="leftanti")
         else:
             res = obj.to_frame(name="tmp").join(key_df, how="leftanti")["tmp"]
             res.name = obj.name
-            return res
+        # Join changes the index to common type,
+        # but we need to preserve the type of
+        # index being returned, Hence this type-cast.
+        res._index = res.index.astype(obj.index.dtype)
+        return res
 
 
 def _is_same_dtype(lhs_dtype, rhs_dtype):
