@@ -2661,7 +2661,9 @@ class IndexedFrame(Frame):
             data=cudf.core.column_accessor.ColumnAccessor(
                 cols,
                 multiindex=self._data.multiindex,
-                level_names=self._data.level_names,
+                level_names=tuple(column_names.names)
+                if isinstance(column_names, pd.Index)
+                else None,
             ),
             index=index,
         )
@@ -5370,7 +5372,7 @@ def _drop_rows_by_labels(
     if not isinstance(labels, cudf.core.single_column_frame.SingleColumnFrame):
         labels = as_column(labels)
 
-    if isinstance(obj._index, cudf.MultiIndex):
+    if isinstance(obj.index, cudf.MultiIndex):
         if level is None:
             level = 0
 
@@ -5424,13 +5426,22 @@ def _drop_rows_by_labels(
         if errors == "raise" and not labels.isin(obj.index).all():
             raise KeyError("One or more values not found in axis")
 
-        key_df = cudf.DataFrame(index=labels)
+        key_df = cudf.DataFrame._from_data(
+            data={},
+            index=cudf.Index(
+                labels, name=getattr(labels, "name", obj.index.name)
+            ),
+        )
         if isinstance(obj, cudf.DataFrame):
-            return obj.join(key_df, how="leftanti")
+            res = obj.join(key_df, how="leftanti")
         else:
             res = obj.to_frame(name="tmp").join(key_df, how="leftanti")["tmp"]
             res.name = obj.name
-            return res
+        # Join changes the index to common type,
+        # but we need to preserve the type of
+        # index being returned, Hence this type-cast.
+        res._index = res.index.astype(obj.index.dtype)
+        return res
 
 
 def _is_same_dtype(lhs_dtype, rhs_dtype):

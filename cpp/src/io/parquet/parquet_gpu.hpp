@@ -55,6 +55,21 @@ constexpr int rolling_index(int index)
 }
 
 /**
+ * @brief Enum for the different types of errors that can occur during decoding.
+ *
+ * These values are used as bitmasks, so they must be powers of 2.
+ */
+enum class decode_error : int32_t {
+  DATA_STREAM_OVERRUN  = 0x1,
+  LEVEL_STREAM_OVERRUN = 0x2,
+  UNSUPPORTED_ENCODING = 0x4,
+  INVALID_LEVEL_RUN    = 0x8,
+  INVALID_DATA_TYPE    = 0x10,
+  EMPTY_PAGE           = 0x20,
+  INVALID_DICT_WIDTH   = 0x40,
+};
+
+/**
  * @brief Struct representing an input column in the file.
  */
 struct input_column_info {
@@ -228,7 +243,7 @@ struct PageInfo {
  * @brief Struct describing a particular chunk of column data
  */
 struct ColumnChunkDesc {
-  ColumnChunkDesc() = default;
+  constexpr ColumnChunkDesc() noexcept {};
   explicit ColumnChunkDesc(size_t compressed_size_,
                            uint8_t* compressed_data_,
                            size_t num_values_,
@@ -275,64 +290,105 @@ struct ColumnChunkDesc {
   {
   }
 
-  uint8_t const* compressed_data;                  // pointer to compressed column chunk data
-  size_t compressed_size;                          // total compressed data size for this chunk
-  size_t num_values;                               // total number of values in this column
-  size_t start_row;                                // starting row of this chunk
-  uint32_t num_rows;                               // number of rows in this chunk
-  int16_t max_level[level_type::NUM_LEVEL_TYPES];  // max definition/repetition level
-  int16_t max_nesting_depth;                       // max nesting depth of the output
-  uint16_t data_type;                              // basic column data type, ((type_length << 3) |
-                                                   // parquet::Type)
+  uint8_t const* compressed_data{};                  // pointer to compressed column chunk data
+  size_t compressed_size{};                          // total compressed data size for this chunk
+  size_t num_values{};                               // total number of values in this column
+  size_t start_row{};                                // starting row of this chunk
+  uint32_t num_rows{};                               // number of rows in this chunk
+  int16_t max_level[level_type::NUM_LEVEL_TYPES]{};  // max definition/repetition level
+  int16_t max_nesting_depth{};                       // max nesting depth of the output
+  uint16_t data_type{};  // basic column data type, ((type_length << 3) |
+                         // parquet::Type)
   uint8_t
-    level_bits[level_type::NUM_LEVEL_TYPES];  // bits to encode max definition/repetition levels
-  int32_t num_data_pages;                     // number of data pages
-  int32_t num_dict_pages;                     // number of dictionary pages
-  int32_t max_num_pages;                      // size of page_info array
-  PageInfo* page_info;                        // output page info for up to num_dict_pages +
-                                              // num_data_pages (dictionary pages first)
-  string_index_pair* str_dict_index;          // index for string dictionary
-  bitmask_type** valid_map_base;              // base pointers of valid bit map for this column
-  void** column_data_base;                    // base pointers of column data
-  void** column_string_base;                  // base pointers of column string data
-  int8_t codec;                               // compressed codec enum
-  int8_t converted_type;                      // converted type enum
-  LogicalType logical_type;                   // logical type
-  int8_t decimal_precision;                   // Decimal precision
-  int32_t ts_clock_rate;  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
+    level_bits[level_type::NUM_LEVEL_TYPES]{};  // bits to encode max definition/repetition levels
+  int32_t num_data_pages{};                     // number of data pages
+  int32_t num_dict_pages{};                     // number of dictionary pages
+  int32_t max_num_pages{};                      // size of page_info array
+  PageInfo* page_info{};                        // output page info for up to num_dict_pages +
+                                                // num_data_pages (dictionary pages first)
+  string_index_pair* str_dict_index{};          // index for string dictionary
+  bitmask_type** valid_map_base{};              // base pointers of valid bit map for this column
+  void** column_data_base{};                    // base pointers of column data
+  void** column_string_base{};                  // base pointers of column string data
+  int8_t codec{};                               // compressed codec enum
+  int8_t converted_type{};                      // converted type enum
+  LogicalType logical_type{};                   // logical type
+  int8_t decimal_precision{};                   // Decimal precision
+  int32_t ts_clock_rate{};  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 
-  int32_t src_col_index;   // my input column index
-  int32_t src_col_schema;  // my schema index in the file
+  int32_t src_col_index{};   // my input column index
+  int32_t src_col_schema{};  // my schema index in the file
 };
 
 /**
- * @brief Struct to store raw/intermediate file data before parsing.
+ * @brief The row_group_info class
+ */
+struct row_group_info {
+  size_type index;  // row group index within a file. aggregate_reader_metadata::get_row_group() is
+                    // called with index and source_index
+  size_t start_row;
+  size_type source_index;  // file index.
+
+  row_group_info() = default;
+
+  row_group_info(size_type index, size_t start_row, size_type source_index)
+    : index{index}, start_row{start_row}, source_index{source_index}
+  {
+  }
+};
+
+/**
+ * @brief Struct to store file-level data that remains constant for
+ * all passes/chunks for the file.
  */
 struct file_intermediate_data {
-  std::vector<std::unique_ptr<datasource::buffer>> raw_page_data;
-  rmm::device_buffer decomp_page_data;
-  cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc> chunks{};
-  cudf::detail::hostdevice_vector<gpu::PageInfo> pages_info{};
-  cudf::detail::hostdevice_vector<gpu::PageNestingInfo> page_nesting_info{};
-  cudf::detail::hostdevice_vector<gpu::PageNestingDecodeInfo> page_nesting_decode_info{};
+  // all row groups to read
+  std::vector<row_group_info> row_groups{};
 
-  rmm::device_buffer level_decode_data;
-  int level_type_size;
-};
+  // all chunks from the selected row groups. We may end up reading these chunks progressively
+  // instead of all at once
+  std::vector<gpu::ColumnChunkDesc> chunks{};
 
-/**
- * @brief Struct to store intermediate page data for parsing each chunk of rows in chunked reading.
- */
-struct chunk_intermediate_data {
-  rmm::device_uvector<int32_t> page_keys{0, rmm::cuda_stream_default};
-  rmm::device_uvector<int32_t> page_index{0, rmm::cuda_stream_default};
-  rmm::device_uvector<string_index_pair> str_dict_index{0, rmm::cuda_stream_default};
+  // skip_rows/num_rows values for the entire file. these need to be adjusted per-pass because we
+  // may not be visiting every row group that contains these bounds
+  size_t global_skip_rows;
+  size_t global_num_rows;
 };
 
 /**
  * @brief Structs to identify the reading row range for each chunk of rows in chunked reading.
  */
 struct chunk_read_info {
+  size_t skip_rows;
+  size_t num_rows;
+};
+
+/**
+ * @brief Struct to store pass-level data that remains constant for a single pass.
+ */
+struct pass_intermediate_data {
+  std::vector<std::unique_ptr<datasource::buffer>> raw_page_data;
+  rmm::device_buffer decomp_page_data;
+
+  // rowgroup, chunk and page information for the current pass.
+  std::vector<row_group_info> row_groups{};
+  cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc> chunks{};
+  cudf::detail::hostdevice_vector<gpu::PageInfo> pages_info{};
+  cudf::detail::hostdevice_vector<gpu::PageNestingInfo> page_nesting_info{};
+  cudf::detail::hostdevice_vector<gpu::PageNestingDecodeInfo> page_nesting_decode_info{};
+
+  rmm::device_uvector<int32_t> page_keys{0, rmm::cuda_stream_default};
+  rmm::device_uvector<int32_t> page_index{0, rmm::cuda_stream_default};
+  rmm::device_uvector<string_index_pair> str_dict_index{0, rmm::cuda_stream_default};
+
+  std::vector<gpu::chunk_read_info> output_chunk_read_info;
+  std::size_t current_output_chunk{0};
+
+  rmm::device_buffer level_decode_data{};
+  int level_type_size{0};
+
+  // skip_rows and num_rows values for this particular pass. these may be adjusted values from the
+  // global values stored in file_intermediate_data.
   size_t skip_rows;
   size_t num_rows;
 };
@@ -566,6 +622,7 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
 void DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
@@ -573,6 +630,7 @@ void DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
                     size_t num_rows,
                     size_t min_row,
                     int level_type_size,
+                    int32_t* error_code,
                     rmm::cuda_stream_view stream);
 
 /**
@@ -586,6 +644,7 @@ void DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
 void DecodeStringPageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
@@ -593,6 +652,7 @@ void DecodeStringPageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
                           size_t num_rows,
                           size_t min_row,
                           int level_type_size,
+                          int32_t* error_code,
                           rmm::cuda_stream_view stream);
 
 /**
@@ -606,6 +666,7 @@ void DecodeStringPageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use, default 0
  */
 void DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages,
@@ -613,6 +674,7 @@ void DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages,
                        size_t num_rows,
                        size_t min_row,
                        int level_type_size,
+                       int32_t* error_code,
                        rmm::cuda_stream_view stream);
 
 /**

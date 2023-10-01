@@ -680,7 +680,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                             len(self), dtype="object", masked=True
                         )
                         for k in columns
-                    }
+                    },
+                    level_names=tuple(columns.names)
+                    if isinstance(columns, pd.Index)
+                    else None,
                 )
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
@@ -727,6 +730,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
                     self._data = new_df._data
                     self._index = new_df._index
+                    self._data._level_names = (
+                        tuple(columns.names)
+                        if isinstance(columns, pd.Index)
+                        else self._data._level_names
+                    )
                 elif len(data) > 0 and isinstance(data[0], Series):
                     self._init_from_series_list(
                         data=data, columns=columns, index=index
@@ -849,6 +857,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     self._data[col_name] = column.column_empty(
                         row_count=len(self), dtype=None, masked=True
                     )
+            self._data._level_names = (
+                tuple(columns.names)
+                if isinstance(columns, pd.Index)
+                else self._data._level_names
+            )
             self._data = self._data.select_by_label(columns)
 
     @_cudf_nvtx_annotate
@@ -972,6 +985,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     data[col_name],
                     nan_as_null=nan_as_null,
                 )
+        self._data._level_names = (
+            tuple(columns.names)
+            if isinstance(columns, pd.Index)
+            else self._data._level_names
+        )
 
     @classmethod
     def _from_data(
@@ -5146,7 +5164,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
         df = cls._from_data(data, index)
-        df._data._level_names = list(dataframe.columns.names)
+        df._data._level_names = tuple(dataframe.columns.names)
 
         # Set columns only if it is a MultiIndex
         if isinstance(dataframe.columns, pd.MultiIndex):
@@ -5392,6 +5410,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             df = df.set_index(index)
         else:
             df._index = as_index(index)
+        if isinstance(columns, pd.Index):
+            df._data._level_names = tuple(columns.names)
         return df
 
     @classmethod
@@ -5449,7 +5469,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 data, nan_as_null=nan_as_null
             )
         if isinstance(columns, pd.Index):
-            df._data._level_names = list(columns.names)
+            df._data._level_names = tuple(columns.names)
 
         if index is None:
             df._index = RangeIndex(start=0, stop=len(data))

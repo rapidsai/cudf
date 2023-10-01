@@ -22,8 +22,12 @@ PACKAGE_CUDA_SUFFIX="-${RAPIDS_PY_CUDA_SUFFIX}"
 # Patch project metadata files to include the CUDA version suffix and version override.
 pyproject_file="${package_dir}/pyproject.toml"
 
-sed -i "s/^version = .*/version = \"${version_override}\"/g" ${pyproject_file}
-sed -i "s/name = \"${package_name}\"/name = \"${package_name}${PACKAGE_CUDA_SUFFIX}\"/g" ${pyproject_file}
+if [[ ${package_name} == "xdf" ]]; then
+    bash ci/xdf_scripts/apply_wheel_modifications.sh ${version_override} "${PACKAGE_CUDA_SUFFIX}"
+else
+    sed -i "s/^version = .*/version = \"${version_override}\"/g" ${pyproject_file}
+    sed -i "s/name = \"${package_name}\"/name = \"${package_name}${PACKAGE_CUDA_SUFFIX}\"/g" ${pyproject_file}
+fi
 
 # For nightlies we want to ensure that we're pulling in alphas as well. The
 # easiest way to do so is to augment the spec with a constraint containing a
@@ -36,7 +40,7 @@ fi
 
 if [[ ${package_name} == "dask_cudf" ]]; then
     sed -r -i "s/cudf==(.*)\"/cudf${PACKAGE_CUDA_SUFFIX}==\1${alpha_spec}\"/g" ${pyproject_file}
-else
+elif [[ ${package_name} == "cudf" ]]; then
     sed -r -i "s/rmm(.*)\"/rmm${PACKAGE_CUDA_SUFFIX}\1${alpha_spec}\"/g" ${pyproject_file}
     # ptxcompiler and cubinlinker aren't version constrained
     sed -r -i "s/ptxcompiler\"/ptxcompiler${PACKAGE_CUDA_SUFFIX}\"/g" ${pyproject_file}

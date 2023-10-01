@@ -453,7 +453,13 @@ def test_dataframe_basic():
 @pytest.mark.parametrize(
     "pdf",
     [
-        pd.DataFrame({"a": range(10), "b": range(10, 20), "c": range(1, 11)}),
+        pd.DataFrame(
+            {"a": range(10), "b": range(10, 20), "c": range(1, 11)},
+            index=pd.Index(
+                ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
+                name="custom_name",
+            ),
+        ),
         pd.DataFrame(
             {"a": range(10), "b": range(10, 20), "d": ["a", "v"] * 5}
         ),
@@ -481,7 +487,10 @@ def test_dataframe_drop_columns(pdf, columns, inplace):
 @pytest.mark.parametrize(
     "pdf",
     [
-        pd.DataFrame({"a": range(10), "b": range(10, 20), "c": range(1, 11)}),
+        pd.DataFrame(
+            {"a": range(10), "b": range(10, 20), "c": range(1, 11)},
+            index=pd.Index(list(range(10)), name="custom_name"),
+        ),
         pd.DataFrame(
             {"a": range(10), "b": range(10, 20), "d": ["a", "v"] * 5}
         ),
@@ -489,7 +498,15 @@ def test_dataframe_drop_columns(pdf, columns, inplace):
 )
 @pytest.mark.parametrize(
     "labels",
-    [[1], [0], 1, 5, [5, 9], pd.Index([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])],
+    [
+        [1],
+        [0],
+        1,
+        5,
+        [5, 9],
+        pd.Index([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
+        pd.Index([0, 1, 8, 9], name="new name"),
+    ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
 def test_dataframe_drop_labels_axis_0(pdf, labels, inplace):
@@ -512,6 +529,13 @@ def test_dataframe_drop_labels_axis_0(pdf, labels, inplace):
         pd.DataFrame({"a": range(10), "b": range(10, 20), "c": range(1, 11)}),
         pd.DataFrame(
             {"a": range(10), "b": range(10, 20), "d": ["a", "v"] * 5}
+        ),
+        pd.DataFrame(
+            {
+                "a": range(10),
+                "b": range(10, 20),
+            },
+            index=pd.Index(list(range(10)), dtype="uint64"),
         ),
     ],
 )
@@ -4029,7 +4053,7 @@ def test_any(data, axis):
     dtype = None if data else float
     if np.array(data).ndim <= 1:
         pdata = pd.Series(data=data, dtype=dtype)
-        gdata = cudf.Series.from_pandas(pdata)
+        gdata = cudf.Series(data=data, dtype=dtype)
 
         if axis == 1:
             with pytest.raises(NotImplementedError):
@@ -6394,6 +6418,7 @@ def test_df_series_dataframe_astype_dtype_dict(copy):
         ([range(100), range(100)], ["range" + str(i) for i in range(100)]),
         (((1, 2, 3), (1, 2, 3)), ["tuple0", "tuple1", "tuple2"]),
         ([[1, 2, 3]], ["list col1", "list col2", "list col3"]),
+        ([[1, 2, 3]], pd.Index(["col1", "col2", "col3"], name="rapids")),
         ([range(100)], ["range" + str(i) for i in range(100)]),
         (((1, 2, 3),), ["k1", "k2", "k3"]),
     ],
@@ -7969,6 +7994,7 @@ def test_series_empty(ps):
 @pytest.mark.parametrize(
     "data",
     [
+        None,
         [],
         [1],
         {"a": [10, 11, 12]},
@@ -7979,7 +8005,10 @@ def test_series_empty(ps):
         },
     ],
 )
-@pytest.mark.parametrize("columns", [["a"], ["another column name"], None])
+@pytest.mark.parametrize(
+    "columns",
+    [["a"], ["another column name"], None, pd.Index(["a"], name="index name")],
+)
 def test_dataframe_init_with_columns(data, columns):
     pdf = pd.DataFrame(data, columns=columns)
     gdf = cudf.DataFrame(data, columns=columns)
@@ -8047,7 +8076,16 @@ def test_dataframe_init_with_columns(data, columns):
     ],
 )
 @pytest.mark.parametrize(
-    "columns", [None, ["0"], [0], ["abc"], [144, 13], [2, 1, 0]]
+    "columns",
+    [
+        None,
+        ["0"],
+        [0],
+        ["abc"],
+        [144, 13],
+        [2, 1, 0],
+        pd.Index(["abc"], name="custom_name"),
+    ],
 )
 def test_dataframe_init_from_series_list(data, ignore_dtype, columns):
     gd_data = [cudf.from_pandas(obj) for obj in data]
@@ -8935,8 +8973,10 @@ def test_agg_for_dataframe_with_string_columns(aggs):
             "c": pd.Series([2, np.nan, 5.0], index=[2, 3, 4]),
         },
         {
-            "a": [True, np.nan, True],
-            "d": pd.Series([False, True, np.nan], index=[0, 1, 3]),
+            "a": pd.Series([True, None, True], dtype=pd.BooleanDtype()),
+            "d": pd.Series(
+                [False, True, None], index=[0, 1, 3], dtype=pd.BooleanDtype()
+            ),
         },
     ],
 )
@@ -10239,14 +10279,21 @@ def test_dataframe_binop_with_datetime_index():
 
 
 @pytest.mark.parametrize(
-    "columns", ([], ["c", "a"], ["a", "d", "b", "e", "c"], ["a", "b", "c"])
+    "columns",
+    (
+        [],
+        ["c", "a"],
+        ["a", "d", "b", "e", "c"],
+        ["a", "b", "c"],
+        pd.Index(["b", "a", "c"], name="custom_name"),
+    ),
 )
 @pytest.mark.parametrize("index", (None, [4, 5, 6]))
 def test_dataframe_dict_like_with_columns(columns, index):
     data = {"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}
     expect = pd.DataFrame(data, columns=columns, index=index)
     actual = cudf.DataFrame(data, columns=columns, index=index)
-    if index is None and columns == []:
+    if index is None and len(columns) == 0:
         # We make an empty range index, pandas makes an empty index
         expect = expect.reset_index(drop=True)
     assert_eq(expect, actual)
