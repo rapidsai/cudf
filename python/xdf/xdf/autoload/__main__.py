@@ -69,7 +69,7 @@ def main():
     parser.add_argument(
         "--line-profile",
         action="store_true",
-        help="Perform per-function profiling of this script.",
+        help="Perform per-line profiling of this script.",
     )
     parser.add_argument(
         "args",
