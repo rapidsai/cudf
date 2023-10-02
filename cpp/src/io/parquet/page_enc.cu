@@ -257,15 +257,15 @@ struct delta_enc {
   uint64_t* const buffer;
   void* const temp_space;
 
-  __device__ thrust::pair<bool, size_type> calc_idx_and_validity(uint32_t cur_val_idx)
+  __device__ thrust::pair<bool, size_type> calc_validity_and_idx(uint32_t cur_val_idx)
   {
     size_type const val_idx_in_block    = cur_val_idx + threadIdx.x;
     size_type const val_idx_in_leaf_col = s->page_start_val + val_idx_in_block;
 
-    uint32_t const is_valid = (val_idx_in_leaf_col < s->col.leaf_column->size() &&
-                               val_idx_in_block < s->page.num_leaf_values)
-                                ? s->col.leaf_column->is_valid(val_idx_in_leaf_col)
-                                : 0;
+    bool const is_valid = (val_idx_in_leaf_col < s->col.leaf_column->size() &&
+                           val_idx_in_block < s->page.num_leaf_values)
+                            ? s->col.leaf_column->is_valid(val_idx_in_leaf_col)
+                            : false;
 
     return {is_valid, val_idx_in_leaf_col};
   }
@@ -287,7 +287,7 @@ struct delta_enc {
     for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
       uint32_t nvals = min(s->page.num_leaf_values - cur_val_idx, delta::block_size);
 
-      auto [is_valid, val_idx] = calc_idx_and_validity(cur_val_idx);
+      auto [is_valid, val_idx] = calc_validity_and_idx(cur_val_idx);
       cur_val_idx += nvals;
 
       output_type v = s->col.leaf_column->element<I>(val_idx);
