@@ -100,6 +100,8 @@ struct page_enc_state_s {
   uint32_t vals[rle_buf_size];
 };
 
+using rle_page_enc_state_s = page_enc_state_s<rle_buffer_size>;
+
 /**
  * @brief Returns the size of the type in the Parquet file.
  */
@@ -905,9 +907,8 @@ inline __device__ void PackLiterals(
  * @param[in] flush nonzero if last batch in block
  * @param[in] t thread id (0..127)
  */
-template <typename state_buf>
 static __device__ void RleEncode(
-  state_buf* s, uint32_t numvals, uint32_t nbits, uint32_t flush, uint32_t t)
+  rle_page_enc_state_s* s, uint32_t numvals, uint32_t nbits, uint32_t flush, uint32_t t)
 {
   using cudf::detail::warp_size;
   auto const lane_id = t % warp_size;
@@ -1050,8 +1051,10 @@ static __device__ void RleEncode(
  * @param[in] flush nonzero if last batch in block
  * @param[in] t thread id (0..127)
  */
-template <typename state_buf>
-static __device__ void PlainBoolEncode(state_buf* s, uint32_t numvals, uint32_t flush, uint32_t t)
+static __device__ void PlainBoolEncode(rle_page_enc_state_s* s,
+                                       uint32_t numvals,
+                                       uint32_t flush,
+                                       uint32_t t)
 {
   uint32_t rle_pos = s->rle_pos;
   uint8_t* dst     = s->rle_out;
@@ -1120,13 +1123,13 @@ template <int block_size, encode_kernel_mask kernel_mask>
 __global__ void __launch_bounds__(block_size, 8)
   gpuEncodePageLevels(device_span<gpu::EncPage> pages, bool write_v2_headers)
 {
-  __shared__ __align__(8) page_enc_state_s<rle_buffer_size> state_g;
+  __shared__ __align__(8) rle_page_enc_state_s state_g;
 
   auto* const s    = &state_g;
   uint32_t const t = threadIdx.x;
 
   if (t == 0) {
-    state_g = page_enc_state_s<rle_buffer_size>{};
+    state_g = rle_page_enc_state_s{};
     s->page = pages[blockIdx.x];
     s->ck   = *s->page.chunk;
     s->col  = *s->ck.col_desc;
@@ -1566,7 +1569,7 @@ __global__ void __launch_bounds__(block_size, 8)
                      device_span<compression_result> comp_results,
                      bool write_v2_headers)
 {
-  __shared__ __align__(8) page_enc_state_s<rle_buffer_size> state_g;
+  __shared__ __align__(8) rle_page_enc_state_s state_g;
   using block_reduce = cub::BlockReduce<uint32_t, block_size>;
   using block_scan   = cub::BlockScan<uint32_t, block_size>;
   __shared__ union {
@@ -1578,7 +1581,7 @@ __global__ void __launch_bounds__(block_size, 8)
   uint32_t t    = threadIdx.x;
 
   if (t == 0) {
-    state_g        = page_enc_state_s<rle_buffer_size>{};
+    state_g        = rle_page_enc_state_s{};
     s->page        = pages[blockIdx.x];
     s->ck          = *s->page.chunk;
     s->col         = *s->ck.col_desc;
