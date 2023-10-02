@@ -41,7 +41,7 @@ profiler.print_stats()
 
 
 @contextmanager
-def make_module_for_line_profiling(profile, line_profile, fn):
+def profile(function_profile, line_profile, fn):
     if line_profile:
         with open(fn) as f_original:
             original_lines = f_original.readlines()
@@ -58,14 +58,14 @@ def make_module_for_line_profiling(profile, line_profile, fn):
             file_contents = profile_text.format(
                 original_lines=indented_lines,
                 function_profile_printer="profiler.print_per_func_stats()"
-                if profile
+                if function_profile
                 else "",
             )
             f.write(file_contents.encode())
             f.seek(0)
 
             yield f.name
-    elif profile:
+    elif function_profile:
         with Profiler() as profiler:
             yield fn
         profiler.print_per_func_stats()
@@ -108,9 +108,7 @@ def main():
     args = parser.parse_args()
 
     install()
-    with make_module_for_line_profiling(
-        args.profile, args.line_profile, args.args[0]
-    ) as fn:
+    with profile(args.profile, args.line_profile, args.args[0]) as fn:
         args.args[0] = fn
         if args.module:
             (module,) = args.module
