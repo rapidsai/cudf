@@ -26,7 +26,9 @@ class XDFMagics(Magics):
     @cell_magic
     def xdf_line_profile(self, _, cell):
         cell_split = cell.split("\n")
-        cell_split = ["\t" + line for line in cell_split]
+        cell_split = [
+            " " * 4 + line.replace("\t", " " * 4) for line in cell_split
+        ]
         cell_split.insert(0, "from xdf.profiler import Profiler")
         cell_split.insert(1, "with Profiler() as profiler:")
         cell_split.append("profiler.print_stats()")

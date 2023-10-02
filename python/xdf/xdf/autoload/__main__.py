@@ -27,18 +27,8 @@ from . import install
 
 
 @contextmanager
-def profile(use_profiler):
-    if use_profiler:
-        with Profiler() as profiler:
-            yield
-        profiler.print_per_func_stats()
-    else:
-        yield
-
-
-@contextmanager
-def make_module_for_line_profiling(use_profiler, fn):
-    if use_profiler:
+def make_module_for_line_profiling(profile, line_profile, fn):
+    if line_profile:
         with open(fn) as f_original:
             original_lines = f_original.readlines()
 
@@ -46,7 +36,8 @@ def make_module_for_line_profiling(use_profiler, fn):
             f.write("from xdf.profiler import Profiler\n".encode())
             f.write("with Profiler() as profiler:\n".encode())
             for line in original_lines:
-                # TODO: For now assuming spaces instead of tabs
+                # Make sure to have consistent spaces instead of tabs
+                line.replace("\t", " " * 4)
                 f.write((" " * 4).encode() + line.encode())
             f.write("new_results = {}\n".encode())
             f.write(
@@ -57,9 +48,15 @@ def make_module_for_line_profiling(use_profiler, fn):
             )
             f.write("profiler._results = new_results\n".encode())
             f.write("profiler.print_stats()\n".encode())
+            if profile:
+                f.write("profiler.print_per_func_stats()\n".encode())
             f.seek(0)
 
             yield f.name
+    elif profile:
+        with Profiler() as profiler:
+            yield fn
+        profiler.print_per_func_stats()
     else:
         yield fn
 
@@ -98,24 +95,21 @@ def main():
 
     args = parser.parse_args()
 
-    if args.line_profile:
-        if args.module:
-            raise ValueError("Cannot use --line-profile with -m")
-
     install()
-    with make_module_for_line_profiling(args.line_profile, args.args[0]) as fn:
+    with make_module_for_line_profiling(
+        args.profile, args.line_profile, args.args[0]
+    ) as fn:
         args.args[0] = fn
-        with profile(args.profile):
-            if args.module:
-                (module,) = args.module
-                # run the module passing the remaining arguments
-                # as if it were run with python -m <module> <args>
-                sys.argv[:] = [module] + args.args  # not thread safe?
-                runpy.run_module(module, run_name="__main__")
-            elif len(args.args) >= 1:
-                # Remove ourself from argv and continue
-                sys.argv[:] = args.args
-                runpy.run_path(args.args[0], run_name="__main__")
+        if args.module:
+            (module,) = args.module
+            # run the module passing the remaining arguments
+            # as if it were run with python -m <module> <args>
+            sys.argv[:] = [module] + args.args  # not thread safe?
+            runpy.run_module(module, run_name="__main__")
+        elif len(args.args) >= 1:
+            # Remove ourself from argv and continue
+            sys.argv[:] = args.args
+            runpy.run_path(args.args[0], run_name="__main__")
 
 
 if __name__ == "__main__":
