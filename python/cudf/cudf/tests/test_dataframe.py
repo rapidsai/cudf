@@ -10472,3 +10472,15 @@ def test_data_frame_values_no_cols_but_index():
     result = cudf.DataFrame(index=range(5)).values
     expected = pd.DataFrame(index=range(5)).values
     assert_eq(result, expected)
+
+
+def test_dataframe_reduction_error():
+    gdf = cudf.DataFrame(
+        {
+            "a": cudf.Series([1, 2, 3], dtype="float"),
+            "d": cudf.Series([10, 20, 30], dtype="timedelta64[ns]"),
+        }
+    )
+
+    with pytest.raises(TypeError):
+        gdf.sum()
