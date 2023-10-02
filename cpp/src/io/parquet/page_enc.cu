@@ -1119,9 +1119,11 @@ __device__ auto julian_days_with_time(int64_t v)
 // for the state buffer. encode kernels that don't use the RLE buffer can get started while
 // the level data is encoded.
 // blockDim(128, 1, 1)
-template <int block_size, encode_kernel_mask kernel_mask>
+template <int block_size>
 __global__ void __launch_bounds__(block_size, 8)
-  gpuEncodePageLevels(device_span<gpu::EncPage> pages, bool write_v2_headers)
+  gpuEncodePageLevels(device_span<gpu::EncPage> pages,
+                      bool write_v2_headers,
+                      encode_kernel_mask kernel_mask)
 {
   __shared__ __align__(8) rle_page_enc_state_s state_g;
 
@@ -2734,22 +2736,22 @@ void EncodePages(device_span<gpu::EncPage> pages,
   int s_idx = 0;
   if (BitAnd(kernel_mask, encode_kernel_mask::PLAIN) != 0) {
     auto const strm = streams[s_idx++];
-    gpuEncodePageLevels<encode_block_size, encode_kernel_mask::PLAIN>
-      <<<num_pages, encode_block_size, 0, strm.value()>>>(pages, write_v2_headers);
+    gpuEncodePageLevels<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
+      pages, write_v2_headers, encode_kernel_mask::PLAIN);
     gpuEncodePages<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
       pages, comp_in, comp_out, comp_results, write_v2_headers);
   }
   if (BitAnd(kernel_mask, encode_kernel_mask::DELTA_BINARY) != 0) {
     auto const strm = streams[s_idx++];
-    gpuEncodePageLevels<encode_block_size, encode_kernel_mask::DELTA_BINARY>
-      <<<num_pages, encode_block_size, 0, strm.value()>>>(pages, write_v2_headers);
+    gpuEncodePageLevels<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
+      pages, write_v2_headers, encode_kernel_mask::DELTA_BINARY);
     gpuEncodeDeltaBinaryPages<encode_block_size>
       <<<num_pages, encode_block_size, 0, strm.value()>>>(pages, comp_in, comp_out, comp_results);
   }
   if (BitAnd(kernel_mask, encode_kernel_mask::DICTIONARY) != 0) {
     auto const strm = streams[s_idx++];
-    gpuEncodePageLevels<encode_block_size, encode_kernel_mask::DICTIONARY>
-      <<<num_pages, encode_block_size, 0, strm.value()>>>(pages, write_v2_headers);
+    gpuEncodePageLevels<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
+      pages, write_v2_headers, encode_kernel_mask::DICTIONARY);
     gpuEncodeDictPages<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
       pages, comp_in, comp_out, comp_results, write_v2_headers);
   }
