@@ -19,6 +19,7 @@ python -m xdf.autoload -m module <args>
 import argparse
 import runpy
 import sys
+import tempfile
 from contextlib import contextmanager
 
 from ..profiler import Profiler
@@ -57,12 +58,42 @@ def main():
         help="Perform per-function profiling of this script.",
     )
     parser.add_argument(
+        "--line-profile",
+        action="store_true",
+        help="Perform per-function profiling of this script.",
+    )
+    parser.add_argument(
         "args",
         nargs=argparse.REMAINDER,
         help="Arguments to pass on to the script",
     )
 
     args = parser.parse_args()
+
+    if args.line_profile:
+        if args.module:
+            raise ValueError("Cannot use --line-profile with -m")
+        with open(args.args[0]) as f_original:
+            original_lines = f_original.readlines()
+
+        f = tempfile.NamedTemporaryFile(mode="w+b", suffix=".py", delete=False)
+        with f:
+            f.write("from xdf.profiler import Profiler\n".encode())
+            f.write("with Profiler() as profiler:\n".encode())
+            for line in original_lines:
+                # TODO: For now assuming spaces instead of tabs
+                f.write((" " * 4).encode() + line.encode())
+            f.write("new_results = {}\n".encode())
+            f.write(
+                "for (lineno, currfile, line), v in profiler._results.items():\n".encode()  # noqa: E501
+            )
+            f.write(
+                "    new_results[(lineno - 2, currfile, line)] = v\n".encode()
+            )
+            f.write("profiler._results = new_results\n".encode())
+            f.write("profiler.print_stats()\n".encode())
+        args.args[0] = f.name
+        # TODO: delete the file after running it
 
     install()
     with profile(args.profile):
