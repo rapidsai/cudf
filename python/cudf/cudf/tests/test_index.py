@@ -2804,3 +2804,17 @@ def test_index_to_frame(data, data_name, index, name):
         actual = gidx.to_frame(index=index, name=name)
 
     assert_eq(expected, actual)
+
+
+def test_period_index_error():
+    pidx = pd.PeriodIndex(year=[2000, 2002], quarter=[1, 3])
+    with pytest.raises(NotImplementedError):
+        cudf.from_pandas(pidx)
+    with pytest.raises(NotImplementedError):
+        cudf.Index(pidx)
+    with pytest.raises(NotImplementedError):
+        cudf.Series(pidx)
+    with pytest.raises(NotImplementedError):
+        cudf.Series(pd.Series(pidx))
+    with pytest.raises(NotImplementedError):
+        cudf.Series(pd.array(pidx))

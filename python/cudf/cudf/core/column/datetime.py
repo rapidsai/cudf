@@ -94,6 +94,107 @@ _DATETIME_NAMES = [
 ]
 
 
+def infer_format(element: str, **kwargs) -> str:
+    """
+    Infers datetime format from a string, also takes cares for `ms` and `ns`
+    """
+    fmt = _guess_datetime_format(element, **kwargs)
+
+    if fmt is not None:
+        if "%z" in fmt or "%Z" in fmt:
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
+        return fmt
+
+    element_parts = element.split(".")
+    if len(element_parts) != 2:
+        raise ValueError("Given date string not likely a datetime.")
+
+    # There is possibility that the element is of following format
+    # '00:00:03.333333 2016-01-01'
+    second_parts = re.split(r"(\D+)", element_parts[1], maxsplit=1)
+    subsecond_fmt = ".%" + str(len(second_parts[0])) + "f"
+
+    first_part = _guess_datetime_format(element_parts[0], **kwargs)
+    # For the case where first_part is '00:00:03'
+    if first_part is None:
+        tmp = "1970-01-01 " + element_parts[0]
+        first_part = _guess_datetime_format(tmp, **kwargs).split(" ", 1)[1]
+    if first_part is None:
+        raise ValueError("Unable to infer the timestamp format from the data")
+
+    if len(second_parts) > 1:
+        # We may have a non-digit, timezone-like component
+        # like Z, UTC-3, +01:00
+        if any(re.search(r"\D", part) for part in second_parts):
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
+        second_part = "".join(second_parts[1:])
+
+        if len(second_part) > 1:
+            # Only infer if second_parts is not an empty string.
+            second_part = _guess_datetime_format(second_part, **kwargs)
+    else:
+        second_part = ""
+
+    try:
+        fmt = first_part + subsecond_fmt + second_part
+    except Exception:
+        raise ValueError("Unable to infer the timestamp format from the data")
+
+    return fmt
+
+
+def _resolve_mixed_dtypes(
+    lhs: ColumnBinaryOperand, rhs: ColumnBinaryOperand, base_type: str
+) -> Dtype:
+    units = ["s", "ms", "us", "ns"]
+    lhs_time_unit = cudf.utils.dtypes.get_time_unit(lhs)
+    lhs_unit = units.index(lhs_time_unit)
+    rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
+    rhs_unit = units.index(rhs_time_unit)
+    return cudf.dtype(f"{base_type}[{units[max(lhs_unit, rhs_unit)]}]")
+
+
+def _get_datetime_format(col, dtype, time_unit):
+    format = _dtype_to_format_conversion.get(dtype.name, "%Y-%m-%d %H:%M:%S")
+    if format.endswith("f"):
+        sub_second_res_len = 3
+    else:
+        sub_second_res_len = 0
+
+    has_nanos = time_unit in {"ns"} and col.get_dt_field("nanosecond").any()
+    has_micros = (
+        time_unit in {"ns", "us"} and col.get_dt_field("microsecond").any()
+    )
+    has_millis = (
+        time_unit in {"ns", "us", "ms"}
+        and col.get_dt_field("millisecond").any()
+    )
+    has_seconds = col.get_dt_field("second").any()
+    has_minutes = col.get_dt_field("minute").any()
+    has_hours = col.get_dt_field("hour").any()
+    if sub_second_res_len:
+        if has_nanos:
+            # format should be intact and rest of the
+            # following conditions shouldn't execute.
+            pass
+        elif has_micros:
+            format = format[:-sub_second_res_len] + "%6f"
+        elif has_millis:
+            format = format[:-sub_second_res_len] + "%3f"
+        elif has_seconds or has_minutes or has_hours:
+            format = format[:-4]
+        else:
+            format = format.split(" ")[0]
+    else:
+        if not (has_seconds or has_minutes or has_hours):
+            format = format.split(" ")[0]
+    return format
+
+
 class DatetimeColumn(column.ColumnBase):
     """
     A Column implementation for Date-time types.
@@ -346,6 +447,10 @@ class DatetimeColumn(column.ColumnBase):
             format = _dtype_to_format_conversion.get(
                 self.dtype.name, "%Y-%m-%d %H:%M:%S"
             )
+            if cudf.get_option("mode.pandas_compatible"):
+                format = _get_datetime_format(
+                    self, dtype=self.dtype, time_unit=self.time_unit
+                )
         if format in _DATETIME_SPECIAL_FORMATS:
             names = as_column(_DATETIME_NAMES)
         else:
@@ -627,67 +732,3 @@ class DatetimeTZColumn(DatetimeColumn):
             f"{arr.to_string()}\n"
             f"dtype: {self.dtype}"
         )
-
-
-def infer_format(element: str, **kwargs) -> str:
-    """
-    Infers datetime format from a string, also takes cares for `ms` and `ns`
-    """
-    fmt = _guess_datetime_format(element, **kwargs)
-
-    if fmt is not None:
-        if "%z" in fmt or "%Z" in fmt:
-            raise NotImplementedError(
-                "cuDF does not yet support timezone-aware datetimes"
-            )
-        return fmt
-
-    element_parts = element.split(".")
-    if len(element_parts) != 2:
-        raise ValueError("Given date string not likely a datetime.")
-
-    # There is possibility that the element is of following format
-    # '00:00:03.333333 2016-01-01'
-    second_parts = re.split(r"(\D+)", element_parts[1], maxsplit=1)
-    subsecond_fmt = ".%" + str(len(second_parts[0])) + "f"
-
-    first_part = _guess_datetime_format(element_parts[0], **kwargs)
-    # For the case where first_part is '00:00:03'
-    if first_part is None:
-        tmp = "1970-01-01 " + element_parts[0]
-        first_part = _guess_datetime_format(tmp, **kwargs).split(" ", 1)[1]
-    if first_part is None:
-        raise ValueError("Unable to infer the timestamp format from the data")
-
-    if len(second_parts) > 1:
-        # We may have a non-digit, timezone-like component
-        # like Z, UTC-3, +01:00
-        if any(re.search(r"\D", part) for part in second_parts):
-            raise NotImplementedError(
-                "cuDF does not yet support timezone-aware datetimes"
-            )
-        second_part = "".join(second_parts[1:])
-
-        if len(second_part) > 1:
-            # Only infer if second_parts is not an empty string.
-            second_part = _guess_datetime_format(second_part, **kwargs)
-    else:
-        second_part = ""
-
-    try:
-        fmt = first_part + subsecond_fmt + second_part
-    except Exception:
-        raise ValueError("Unable to infer the timestamp format from the data")
-
-    return fmt
-
-
-def _resolve_mixed_dtypes(
-    lhs: ColumnBinaryOperand, rhs: ColumnBinaryOperand, base_type: str
-) -> Dtype:
-    units = ["s", "ms", "us", "ns"]
-    lhs_time_unit = cudf.utils.dtypes.get_time_unit(lhs)
-    lhs_unit = units.index(lhs_time_unit)
-    rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
-    rhs_unit = units.index(rhs_time_unit)
-    return cudf.dtype(f"{base_type}[{units[max(lhs_unit, rhs_unit)]}]")
