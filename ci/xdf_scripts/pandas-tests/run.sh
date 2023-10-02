@@ -26,7 +26,7 @@ fi
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 RAPIDS_PY_WHEEL_NAME="${WHEEL_NAME_PREFIX}${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
-python -m pip install --no-deps ./local-cudf-dep/cudf*.whl
+python -m pip install ./local-cudf-dep/cudf*.whl
 
 cd python/xdf/
 pip install .[test]

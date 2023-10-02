@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import builtins
 import pickle
-import warnings
 from collections import abc
 from functools import cached_property
 from itertools import chain
@@ -973,7 +972,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if self.dtype == dtype:
             return self
         if is_categorical_dtype(dtype):
-            return self.as_categorical_column(dtype, **kwargs)
+            return self.as_categorical_column(dtype)
 
         dtype = (
             pandas_dtypes_alias_to_cudf_alias.get(dtype, dtype)
@@ -983,7 +982,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if _is_non_decimal_numeric_dtype(dtype):
             return self.as_numerical_column(dtype, **kwargs)
         elif is_categorical_dtype(dtype):
-            return self.as_categorical_column(dtype, **kwargs)
+            return self.as_categorical_column(dtype)
         elif cudf.dtype(dtype).type in {
             np.str_,
             np.object_,
@@ -1020,9 +1019,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         else:
             return self.as_numerical_column(dtype, **kwargs)
 
-    def as_categorical_column(self, dtype, **kwargs) -> ColumnBase:
-        if "ordered" in kwargs:
-            ordered = kwargs["ordered"]
+    def as_categorical_column(self, dtype) -> ColumnBase:
+        if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
+            ordered = dtype.ordered
         else:
             ordered = False
 
@@ -1035,11 +1034,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             and dtype.categories is not None
         ):
             labels = self._label_encoding(cats=as_column(dtype.categories))
-            if "ordered" in kwargs:
-                warnings.warn(
-                    "Ignoring the `ordered` parameter passed in `**kwargs`, "
-                    "will be using `ordered` parameter of CategoricalDtype"
-                )
 
             return build_categorical_column(
                 categories=as_column(dtype.categories),
@@ -1938,6 +1932,9 @@ def as_column(
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         desc = arbitrary.__cuda_array_interface__
+        shape = desc["shape"]
+        if len(shape) > 1:
+            raise ValueError("Data must be 1-dimensional")
         current_dtype = np.dtype(desc["typestr"])
 
         arb_dtype = (
@@ -2059,16 +2056,15 @@ def as_column(
             data = as_column(
                 cupy.asarray(arbitrary), nan_as_null=nan_as_null, dtype=dtype
             )
+        elif isinstance(arbitrary.dtype, pd.PeriodDtype):
+            raise NotImplementedError(
+                "cuDF does not yet support `PeriodDtype`"
+            )
         else:
             pyarrow_array = pa.array(arbitrary, from_pandas=nan_as_null)
-            if (
-                arbitrary.dtype == cudf.dtype("object")
-                and cudf.dtype(pyarrow_array.type.to_pandas_dtype())
-                != cudf.dtype(arbitrary.dtype)
-                and not is_bool_dtype(
-                    cudf.dtype(pyarrow_array.type.to_pandas_dtype())
-                )
-            ):
+            if arbitrary.dtype == cudf.dtype("object") and cudf.dtype(
+                pyarrow_array.type.to_pandas_dtype()
+            ) != cudf.dtype(arbitrary.dtype):
                 raise MixedTypeError("Cannot create column with mixed types")
             if isinstance(pyarrow_array.type, pa.Decimal128Type):
                 pyarrow_type = cudf.Decimal128Dtype.from_arrow(
@@ -2294,6 +2290,12 @@ def as_column(
         raise NotImplementedError(
             "cuDF does not yet support timezone-aware datetimes"
         )
+    elif isinstance(
+        arbitrary, (pd.core.arrays.period.PeriodArray, pd.PeriodIndex)
+    ):
+        raise NotImplementedError(
+            f"cuDF does not yet support {type(arbitrary).__name__}"
+        )
     elif (
         cudf.get_option("mode.pandas_compatible")
         and isinstance(arbitrary, (pd.DatetimeIndex, pd.TimedeltaIndex))
@@ -2458,9 +2460,6 @@ def as_column(
                     and (
                         cudf.dtype(pyarrow_array.type.to_pandas_dtype())
                         != cudf.dtype(arbitrary.dtype)
-                        and not is_bool_dtype(
-                            cudf.dtype(pyarrow_array.type.to_pandas_dtype())
-                        )
                     )
                 ):
                     raise MixedTypeError(

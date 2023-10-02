@@ -53,6 +53,7 @@ from cudf.api.types import (
     is_list_dtype,
     is_list_like,
     is_numeric_dtype,
+    is_object_dtype,
     is_scalar,
     is_string_dtype,
     is_struct_dtype,
@@ -111,6 +112,20 @@ _cupy_nan_methods_map = {
     "std": "nanstd",
     "var": "nanvar",
 }
+
+_numeric_reduction_ops = (
+    "mean",
+    "min",
+    "max",
+    "sum",
+    "product",
+    "prod",
+    "std",
+    "var",
+    "kurtosis",
+    "kurt",
+    "skew",
+)
 
 
 def _shape_mismatch_error(x, y):
@@ -5931,21 +5946,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     for col in source._data.names
                 ]
             except AttributeError:
-                numeric_ops = (
-                    "mean",
-                    "min",
-                    "max",
-                    "sum",
-                    "product",
-                    "prod",
-                    "std",
-                    "var",
-                    "kurtosis",
-                    "kurt",
-                    "skew",
-                )
-
-                if numeric_only is None and op in numeric_ops:
+                if numeric_only is None and op in _numeric_reduction_ops:
                     # Do not remove until pandas 2.0 support is added.
                     warnings.warn(
                         f"The default value of numeric_only in DataFrame.{op} "
@@ -5981,8 +5982,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if axis == 2:
                 return getattr(as_column(result), op)(**kwargs)
             else:
+                source_dtypes = [c.dtype for c in source._data.columns]
+                common_dtype = find_common_type(source_dtypes)
+                if is_object_dtype(common_dtype) and any(
+                    not is_object_dtype(dtype) for dtype in source_dtypes
+                ):
+                    raise TypeError(
+                        "Columns must all have the same dtype to "
+                        f"perform {op=} with {axis=}"
+                    )
                 return Series._from_data(
-                    {None: result}, as_index(source._data.names)
+                    {None: as_column(result)}, as_index(source._data.names)
                 )
         elif axis == 1:
             return source._apply_cupy_method_axis_1(op, **kwargs)
