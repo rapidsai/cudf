@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import builtins
 import pickle
-import warnings
 from collections import abc
 from functools import cached_property
 from itertools import chain
@@ -973,7 +972,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if self.dtype == dtype:
             return self
         if is_categorical_dtype(dtype):
-            return self.as_categorical_column(dtype, **kwargs)
+            return self.as_categorical_column(dtype)
 
         dtype = (
             pandas_dtypes_alias_to_cudf_alias.get(dtype, dtype)
@@ -983,7 +982,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if _is_non_decimal_numeric_dtype(dtype):
             return self.as_numerical_column(dtype, **kwargs)
         elif is_categorical_dtype(dtype):
-            return self.as_categorical_column(dtype, **kwargs)
+            return self.as_categorical_column(dtype)
         elif cudf.dtype(dtype).type in {
             np.str_,
             np.object_,
@@ -1020,9 +1019,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         else:
             return self.as_numerical_column(dtype, **kwargs)
 
-    def as_categorical_column(self, dtype, **kwargs) -> ColumnBase:
-        if "ordered" in kwargs:
-            ordered = kwargs["ordered"]
+    def as_categorical_column(self, dtype) -> ColumnBase:
+        if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
+            ordered = dtype.ordered
         else:
             ordered = False
 
@@ -1035,11 +1034,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             and dtype.categories is not None
         ):
             labels = self._label_encoding(cats=as_column(dtype.categories))
-            if "ordered" in kwargs:
-                warnings.warn(
-                    "Ignoring the `ordered` parameter passed in `**kwargs`, "
-                    "will be using `ordered` parameter of CategoricalDtype"
-                )
 
             return build_categorical_column(
                 categories=as_column(dtype.categories),

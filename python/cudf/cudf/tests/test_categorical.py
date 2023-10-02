@@ -936,3 +936,16 @@ def test_categorical_index_with_dtype():
     assert_eq(gi, pi)
     assert_eq(gi.dtype, pi.dtype)
     assert_eq(gi.dtype.categories, pi.dtype.categories)
+
+
+@pytest.mark.parametrize("ordered", [True, False])
+def test_empty_series_category_cast(ordered):
+    dtype = cudf.CategoricalDtype(ordered=ordered)
+    ps = pd.Series([], dtype="str")
+    gs = cudf.from_pandas(ps)
+
+    expected = ps.astype(dtype.to_pandas())
+    actual = gs.astype(dtype)
+
+    assert_eq(expected, actual)
+    assert_eq(expected.dtype.ordered, actual.dtype.ordered)
