@@ -6764,4 +6764,28 @@ TYPED_TEST(ParquetWriterDeltaTest, SupportedDeltaTestTypes)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
+TYPED_TEST(ParquetWriterDeltaTest, SupportedDeltaTestTypesSliced)
+{
+  using T                = TypeParam;
+  constexpr int num_rows = 4'000;
+  auto col0              = testdata::ascending<T>();
+  auto col1              = testdata::unordered<T>();
+
+  auto const expected = table_view{{col0, col1}};
+  auto expected_slice = cudf::slice(expected, {num_rows, 2 * num_rows});
+  ASSERT_EQ(expected_slice[0].num_rows(), num_rows);
+
+  auto const filepath = temp_env->get_temp_filepath("DeltaBinaryPackedSliced.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected_slice)
+      .write_v2_headers(true)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(in_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_slice, result.tbl->view());
+}
+
 CUDF_TEST_PROGRAM_MAIN()
