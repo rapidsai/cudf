@@ -40,7 +40,6 @@ struct delta_byte_array_decoder {
 
   delta_binary_decoder prefixes;  // state of decoder for prefix lengths
   delta_binary_decoder suffixes;  // state of decoder for suffix lengths
-  // size_type offset[non_zero_buffer_size];  // circular buffer for string output offsets
 
   // initialize the prefixes and suffixes blocks
   __device__ void init(uint8_t const* start, uint8_t const* end, uint32_t start_idx, uint8_t* temp)
@@ -137,7 +136,7 @@ struct delta_byte_array_decoder {
     auto p_temp_out    = temp_buf;
 
     auto copy_batch = [&](uint8_t* out, uint32_t idx, uint32_t end) {
-      uint32_t ln_idx = idx + lane_id;
+      uint32_t const ln_idx = idx + lane_id;
 
       // calculate offsets into suffix data
       uint32_t const src_idx    = rolling_index<delta_rolling_buf_size>(ln_idx);
@@ -145,7 +144,7 @@ struct delta_byte_array_decoder {
       uint64_t suffix_off       = 0;
       WarpScan(scan_temp).ExclusiveSum(suffix_len, suffix_off);
 
-      // calculate offsets into string data and save in string_offsets
+      // calculate offsets into string data
       uint64_t const prefix_len = ln_idx < end ? prefixes.value[src_idx] : 0;
       uint64_t const string_len = prefix_len + suffix_len;
 
@@ -505,7 +504,7 @@ __global__ void __launch_bounds__(decode_block_size)
     uint32_t target_pos;
     uint32_t const src_pos = s->src_pos;
 
-    if (t < 96) {  // warp 0..2
+    if (t < 3 * warp_size) {  // warp 0..2
       target_pos = min(src_pos + 2 * (batch_size), s->nz_count + s->first_row + batch_size);
     } else {  // warp 3
       target_pos = min(s->nz_count, src_pos + batch_size);
@@ -515,18 +514,18 @@ __global__ void __launch_bounds__(decode_block_size)
     // warp0 will decode the rep/def levels, warp1 will unpack a mini-batch of prefixes, warp 2 will
     // unpack a mini-batch of suffixes. warp3 waits one cycle for warps 0-2 to produce a batch, and
     // then stuffs values into the proper location in the output.
-    if (t < 32) {
+    if (t < warp_size) {
       // decode repetition and definition levels.
       // - update validity vectors
       // - updates offsets (for nested columns)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
       gpuDecodeLevels<delta_rolling_buf_size, level_t>(s, sb, target_pos, rep, def, t);
 
-    } else if (t < 64) {
+    } else if (t < 2 * warp_size) {
       // warp 1
       prefix_db->decode_batch();
 
-    } else if (t < 96) {
+    } else if (t < 3 * warp_size) {
       // warp 2
       suffix_db->decode_batch();
 
