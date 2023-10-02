@@ -25,6 +25,20 @@ from contextlib import contextmanager
 from ..profiler import Profiler
 from . import install
 
+profile_text = """
+from xdf.profiler import Profiler
+with Profiler() as profiler:
+{original_lines}
+new_results = {{}}
+
+for (lineno, currfile, line), v in profiler._results.items():
+    new_results[(lineno - 3, currfile, line)] = v
+
+profiler._results = new_results
+profiler.print_stats()
+{function_profile_printer}
+"""
+
 
 @contextmanager
 def make_module_for_line_profiling(profile, line_profile, fn):
@@ -32,24 +46,22 @@ def make_module_for_line_profiling(profile, line_profile, fn):
         with open(fn) as f_original:
             original_lines = f_original.readlines()
 
+        # Make sure to have consistent spaces instead of tabs
+        indented_lines = "".join(
+            [
+                (" " * 4) + line.replace("\t", " " * 4)
+                for line in original_lines
+            ]
+        )
+
         with tempfile.NamedTemporaryFile(mode="w+b", suffix=".py") as f:
-            f.write("from xdf.profiler import Profiler\n".encode())
-            f.write("with Profiler() as profiler:\n".encode())
-            for line in original_lines:
-                # Make sure to have consistent spaces instead of tabs
-                line.replace("\t", " " * 4)
-                f.write((" " * 4).encode() + line.encode())
-            f.write("new_results = {}\n".encode())
-            f.write(
-                "for (lineno, currfile, line), v in profiler._results.items():\n".encode()  # noqa: E501
+            file_contents = profile_text.format(
+                original_lines=indented_lines,
+                function_profile_printer="profiler.print_per_func_stats()"
+                if profile
+                else "",
             )
-            f.write(
-                "    new_results[(lineno - 2, currfile, line)] = v\n".encode()
-            )
-            f.write("profiler._results = new_results\n".encode())
-            f.write("profiler.print_stats()\n".encode())
-            if profile:
-                f.write("profiler.print_per_func_stats()\n".encode())
+            f.write(file_contents.encode())
             f.seek(0)
 
             yield f.name
