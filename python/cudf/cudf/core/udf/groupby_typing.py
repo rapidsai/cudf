@@ -199,9 +199,8 @@ class GroupOpBase(AbstractTemplate):
                     "may be used through the \nGroupBy.apply() JIT engine: "
                     f"{[str(x) for x in SUPPORTED_GROUPBY_NUMPY_TYPES]}"
                 )
-        fname = self.key.__name__
-        if fname in call_cuda_functions:
-            for sig in call_cuda_functions[fname].keys():
+        if (funcs := call_cuda_funcs.get(self.key.__name__)):
+            for sig in funcs.keys():
                 if all(
                     arg.group_scalar_type == ty for arg, ty in zip(args, sig)
                 ):
