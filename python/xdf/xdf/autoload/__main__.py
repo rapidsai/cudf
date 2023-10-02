@@ -29,6 +29,9 @@ profile_text = """
 from xdf.profiler import Profiler
 with Profiler() as profiler:
 {original_lines}
+
+# Patch the results to shift the line numbers back to the original before the
+# profiler injection.
 new_results = {{}}
 
 for (lineno, currfile, line), v in profiler._results.items():
@@ -43,16 +46,11 @@ profiler.print_stats()
 @contextmanager
 def profile(function_profile, line_profile, fn):
     if line_profile:
-        with open(fn) as f_original:
-            original_lines = f_original.readlines()
-
-        # Make sure to have consistent spaces instead of tabs
-        indented_lines = "".join(
-            [
-                (" " * 4) + line.replace("\t", " " * 4)
-                for line in original_lines
-            ]
-        )
+        with open(fn) as f:
+            # Make sure to have consistent spaces instead of tabs
+            indented_lines = "".join(
+                [(" " * 4) + line.replace("\t", " " * 4) for line in f]
+            )
 
         with tempfile.NamedTemporaryFile(mode="w+b", suffix=".py") as f:
             file_contents = profile_text.format(
