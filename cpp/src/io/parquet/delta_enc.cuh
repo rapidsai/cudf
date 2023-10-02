@@ -245,12 +245,13 @@ class delta_binary_packer {
     __syncthreads();
 
     // now each warp encodes its data...can calculate starting offset with _mb_bits
-    uint8_t* mb_ptr = _dst;
+    int cumulative_bits = 0;
     switch (warp_id) {
-      case 3: mb_ptr += _mb_bits[2] * delta::values_per_mini_block / 8; [[fallthrough]];
-      case 2: mb_ptr += _mb_bits[1] * delta::values_per_mini_block / 8; [[fallthrough]];
-      case 1: mb_ptr += _mb_bits[0] * delta::values_per_mini_block / 8;
+      case 3: cumulative_bits += _mb_bits[2]; [[fallthrough]];
+      case 2: cumulative_bits += _mb_bits[1]; [[fallthrough]];
+      case 1: cumulative_bits += _mb_bits[0];
     }
+    uint8_t* const mb_ptr = _dst + cumulative_bits * delta::values_per_mini_block / 8;
 
     // encoding happens here
     auto const warp_idx = _current_idx + warp_id * delta::values_per_mini_block;
