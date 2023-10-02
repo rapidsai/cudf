@@ -2056,6 +2056,10 @@ def as_column(
             data = as_column(
                 cupy.asarray(arbitrary), nan_as_null=nan_as_null, dtype=dtype
             )
+        elif isinstance(arbitrary.dtype, pd.PeriodDtype):
+            raise NotImplementedError(
+                "cuDF does not yet support `PeriodDtype`"
+            )
         else:
             pyarrow_array = pa.array(arbitrary, from_pandas=nan_as_null)
             if arbitrary.dtype == cudf.dtype("object") and cudf.dtype(
@@ -2285,6 +2289,12 @@ def as_column(
     ):
         raise NotImplementedError(
             "cuDF does not yet support timezone-aware datetimes"
+        )
+    elif isinstance(
+        arbitrary, (pd.core.arrays.period.PeriodArray, pd.PeriodIndex)
+    ):
+        raise NotImplementedError(
+            f"cuDF does not yet support {type(arbitrary).__name__}"
         )
     elif (
         cudf.get_option("mode.pandas_compatible")
