@@ -12,19 +12,7 @@
 
 from IPython.core.magic import Magics, cell_magic, magics_class
 
-from .profiler import Profiler
-
-profile_patch_text = """
-# Patch the results to shift the line numbers back to the original before the
-# profiler injection.
-new_results = {}
-
-for (lineno, currfile, line), v in profiler._results.items():
-    new_results[(lineno - 2, currfile, line)] = v
-
-profiler._results = new_results
-profiler.print_stats()
-"""
+from .profiler import Profiler, make_profile_text
 
 
 @magics_class
@@ -37,13 +25,7 @@ class XDFMagics(Magics):
 
     @cell_magic
     def xdf_line_profile(self, _, cell):
-        cell_split = cell.split("\n")
-        cell_split = [
-            " " * 4 + line.replace("\t", " " * 4) for line in cell_split
-        ]
-        cell_split.insert(0, "from xdf.profiler import Profiler")
-        cell_split.insert(1, "with Profiler() as profiler:")
-        new_cell = "\n".join(cell_split) + "\n" + profile_patch_text
+        new_cell = make_profile_text(cell.split("\n"))
         get_ipython().run_cell(new_cell)  # noqa: F821
 
 

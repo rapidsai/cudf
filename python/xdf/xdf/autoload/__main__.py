@@ -22,43 +22,18 @@ import sys
 import tempfile
 from contextlib import contextmanager
 
-from ..profiler import Profiler
+from ..profiler import Profiler, make_profile_text
 from . import install
-
-profile_text = """
-from xdf.profiler import Profiler
-with Profiler() as profiler:
-{original_lines}
-
-# Patch the results to shift the line numbers back to the original before the
-# profiler injection.
-new_results = {{}}
-
-for (lineno, currfile, line), v in profiler._results.items():
-    new_results[(lineno - 3, currfile, line)] = v
-
-profiler._results = new_results
-profiler.print_stats()
-{function_profile_printer}
-"""
 
 
 @contextmanager
 def profile(function_profile, line_profile, fn):
     if line_profile:
         with open(fn) as f:
-            # Make sure to have consistent spaces instead of tabs
-            indented_lines = "".join(
-                [(" " * 4) + line.replace("\t", " " * 4) for line in f]
-            )
+            lines = [line.rstrip("\n") for line in f]
 
         with tempfile.NamedTemporaryFile(mode="w+b", suffix=".py") as f:
-            file_contents = profile_text.format(
-                original_lines=indented_lines,
-                function_profile_printer="profiler.print_per_func_stats()"
-                if function_profile
-                else "",
-            )
+            file_contents = make_profile_text(lines, function_profile)
             f.write(file_contents.encode())
             f.seek(0)
 
