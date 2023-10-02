@@ -44,10 +44,16 @@ inline __device__ void put_zz128(uint8_t*& p, zigzag128_t v)
 
 // a block size of 128, with 4 mini-blocks of 32 values each fits nicely without consuming
 // too much shared memory.
+// the parquet spec requires block_size to be a multiple of 128, and values_per_mini_block
+// to be a multiple of 32.
 constexpr int block_size            = 128;
 constexpr int num_mini_blocks       = 4;
 constexpr int values_per_mini_block = block_size / num_mini_blocks;
 constexpr int buffer_size           = 2 * block_size;
+
+// extra sanity checks to enforce compliance with the parquet specification
+static_assert(block_size % 128 == 0);
+static_assert(values_per_mini_block % 32 == 0);
 
 using block_reduce = cub::BlockReduce<zigzag128_t, block_size>;
 using warp_reduce  = cub::WarpReduce<uleb128_t>;
@@ -245,6 +251,8 @@ class delta_binary_packer {
     __syncthreads();
 
     // now each warp encodes its data...can calculate starting offset with _mb_bits
+    // NOTE: using a switch here rather than a loop because the compiler produces code that
+    // uses fewer registers.
     int cumulative_bits = 0;
     switch (warp_id) {
       case 3: cumulative_bits += _mb_bits[2]; [[fallthrough]];
