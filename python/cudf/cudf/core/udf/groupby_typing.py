@@ -199,7 +199,7 @@ class GroupOpBase(AbstractTemplate):
                     "may be used through the \nGroupBy.apply() JIT engine: "
                     f"{[str(x) for x in SUPPORTED_GROUPBY_NUMPY_TYPES]}"
                 )
-        if (funcs := call_cuda_funcs.get(self.key.__name__)):
+        if funcs := call_cuda_functions.get(self.key.__name__):
             for sig in funcs.keys():
                 if all(
                     arg.group_scalar_type == ty for arg, ty in zip(args, sig)
@@ -235,12 +235,14 @@ class GroupAttrBase(AbstractTemplate):
                     f"{[str(x) for x in SUPPORTED_GROUPBY_NUMPY_TYPES]}"
                 )
         fname = self.key.split(".")[-1]
-        for sig in call_cuda_functions[fname].keys():
-            retty, selfty, *argtys = sig
-            if self.this.group_scalar_type == selfty and all(
-                arg.group_scalar_type == ty for arg, ty in zip(args, argtys)
-            ):
-                return nb_signature(retty, *args, recvr=self.this)
+        if funcs := call_cuda_functions.get(fname):
+            for sig in funcs.keys():
+                retty, selfty, *argtys = sig
+                if self.this.group_scalar_type == selfty and all(
+                    arg.group_scalar_type == ty
+                    for arg, ty in zip(args, argtys)
+                ):
+                    return nb_signature(retty, *args, recvr=self.this)
         raise UDFError(self.make_error_string(args))
 
 
@@ -301,16 +303,6 @@ class GroupIdxMin(AbstractTemplate):
 
 class GroupCorr(GroupBinaryAttrBase):
     key = "GroupType.corr"
-
-
-def _make_unsupported_dataframe_attr(attrname):
-    def _attr(self, mod):
-        raise UDFError(
-            f"JIT GroupBy.apply() does not support DataFrame.{attrname}(). "
-            f"To see what's available, visit {_UDF_DOC_URL}"
-        )
-
-    return _attr
 
 
 class DataFrameAttributeTemplate(AttributeTemplate):
