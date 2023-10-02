@@ -23,6 +23,16 @@ class XDFMagics(Magics):
             get_ipython().run_cell(cell)  # noqa: F821
         profiler.print_per_func_stats()
 
+    @cell_magic
+    def xdf_line_profile(self, _, cell):
+        cell_split = cell.split("\n")
+        cell_split = ["\t" + line for line in cell_split]
+        cell_split.insert(0, "from xdf.profiler import Profiler")
+        cell_split.insert(1, "with Profiler() as profiler:")
+        cell_split.append("profiler.print_stats()")
+        new_cell = "\n".join(cell_split)
+        get_ipython().run_cell(new_cell)  # noqa: F821
+
 
 def load_ipython_extension(ip):
     import xdf.autoload
