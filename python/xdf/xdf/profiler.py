@@ -42,7 +42,8 @@ profiler.print_stats()
 """
 
 
-def make_profile_text(lines, print_function_profile=False):
+def lines_with_profiling(lines, print_function_profile=False):
+    """Inject profiling code into the given lines of code."""
     cleaned_lines = "\n".join(
         [(" " * 4) + line.replace("\t", " " * 4) for line in lines]
     )

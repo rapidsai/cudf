@@ -12,7 +12,7 @@
 
 from IPython.core.magic import Magics, cell_magic, magics_class
 
-from .profiler import Profiler, make_profile_text
+from .profiler import Profiler, lines_with_profiling
 
 
 @magics_class
@@ -25,7 +25,7 @@ class XDFMagics(Magics):
 
     @cell_magic
     def xdf_line_profile(self, _, cell):
-        new_cell = make_profile_text(cell.split("\n"))
+        new_cell = lines_with_profiling(cell.split("\n"))
         get_ipython().run_cell(new_cell)  # noqa: F821
 
 

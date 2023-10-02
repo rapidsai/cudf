@@ -22,7 +22,7 @@ import sys
 import tempfile
 from contextlib import contextmanager
 
-from ..profiler import Profiler, make_profile_text
+from ..profiler import Profiler, lines_with_profiling
 from . import install
 
 
@@ -30,11 +30,10 @@ from . import install
 def profile(function_profile, line_profile, fn):
     if line_profile:
         with open(fn) as f:
-            lines = [line.rstrip("\n") for line in f]
+            lines = f.readlines()
 
         with tempfile.NamedTemporaryFile(mode="w+b", suffix=".py") as f:
-            file_contents = make_profile_text(lines, function_profile)
-            f.write(file_contents.encode())
+            f.write(lines_with_profiling(lines, function_profile).encode())
             f.seek(0)
 
             yield f.name
