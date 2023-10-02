@@ -1035,3 +1035,19 @@ def test_pickle(obj, comp):
         copy = pickle.load(f)
 
     assert comp(obj, copy)
+
+
+def test_dataframe_query():
+    xdf_df = xpd.DataFrame({"foo": [1, 2, 3], "bar": [4, 5, 6]})
+    pd_df = pd.DataFrame({"foo": [1, 2, 3], "bar": [4, 5, 6]})
+
+    actual = xdf_df.query("foo > 2")
+    expected = pd_df.query("foo > 2")
+
+    tm.assert_equal(actual, expected)
+
+    bizz = 2  # noqa: F841
+    actual = xdf_df.query("foo > @bizz")
+    expected = pd_df.query("foo > @bizz")
+
+    tm.assert_equal(actual, expected)
