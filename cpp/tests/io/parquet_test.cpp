@@ -6788,4 +6788,48 @@ TYPED_TEST(ParquetWriterDeltaTest, SupportedDeltaTestTypesSliced)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_slice, result.tbl->view());
 }
 
+TYPED_TEST(ParquetWriterDeltaTest, SupportedDeltaListSliced)
+{
+  using T = TypeParam;
+
+  constexpr int num_slice = 4'000;
+  constexpr int num_rows  = 32 * 1024;
+
+  std::mt19937 gen(6542);
+  std::bernoulli_distribution bn(0.7f);
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
+  auto values = thrust::make_counting_iterator(0);
+
+  // list<T>
+  constexpr int vals_per_row = 4;
+  auto c1_offset_iter        = cudf::detail::make_counting_transform_iterator(
+    0, [vals_per_row](cudf::size_type idx) { return idx * vals_per_row; });
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> c1_offsets(c1_offset_iter,
+                                                                     c1_offset_iter + num_rows + 1);
+  cudf::test::fixed_width_column_wrapper<T> c1_vals(
+    values, values + (num_rows * vals_per_row), valids);
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
+
+  auto _c1 = cudf::make_lists_column(
+    num_rows, c1_offsets.release(), c1_vals.release(), null_count, std::move(null_mask));
+  auto c1 = cudf::purge_nonempty_nulls(*_c1);
+
+  auto const expected = table_view{{*c1}};
+  auto expected_slice = cudf::slice(expected, {num_slice, 2 * num_slice});
+  ASSERT_EQ(expected_slice[0].num_rows(), num_slice);
+
+  auto const filepath = temp_env->get_temp_filepath("DeltaBinaryPackedListSliced.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected_slice)
+      .write_v2_headers(true)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(in_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_slice, result.tbl->view());
+}
+
 CUDF_TEST_PROGRAM_MAIN()
