@@ -403,13 +403,13 @@ __device__ size_t delta_data_len(parquet::Type physical_type,
 
   auto const vals_per_block = delta::block_size;
   size_t const num_blocks   = util::div_rounding_up_unsafe(num_values, vals_per_block);
-  // need max dtype_len_in + 1 bytes for min_delta
+  // need max dtype_len + 1 bytes for min_delta
   // one byte per mini block for the bitwidth
-  // and block_size * dtype_len_in bytes for the actual encoded data
+  // and block_size * dtype_len bytes for the actual encoded data
   auto const block_size = dtype_len + 1 + delta::num_mini_blocks + vals_per_block * dtype_len;
 
   // delta header is 2 bytes for the block_size, 1 byte for number of mini-blocks,
-  // max 5 bytes for number of values, and max dtype_len_in + 1 for first value.
+  // max 5 bytes for number of values, and max dtype_len + 1 for first value.
   auto const header_size = 2 + 1 + 5 + dtype_len + 1;
 
   return header_size + num_blocks * block_size;
