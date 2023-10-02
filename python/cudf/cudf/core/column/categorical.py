@@ -1287,9 +1287,7 @@ class CategoricalColumn(column.ColumnBase):
     def is_monotonic_decreasing(self) -> bool:
         return bool(self.ordered) and self.as_numerical.is_monotonic_decreasing
 
-    def as_categorical_column(
-        self, dtype: Dtype, **kwargs
-    ) -> CategoricalColumn:
+    def as_categorical_column(self, dtype: Dtype) -> CategoricalColumn:
         if isinstance(dtype, str) and dtype == "category":
             return self
         if (

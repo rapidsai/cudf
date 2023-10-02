@@ -1098,11 +1098,24 @@ def test_series_mask_mixed_dtypes_error():
     [
         pd.Series(["a"] * 20, index=range(0, 20)),
         pd.Series(["b", None] * 10, index=range(0, 20), name="ASeries"),
+        pd.Series(
+            ["b", None] * 5,
+            index=pd.Index(list(range(10)), dtype="uint64"),
+            name="BSeries",
+        ),
     ],
 )
 @pytest.mark.parametrize(
     "labels",
-    [[1], [0], 1, 5, [5, 9], pd.Index([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])],
+    [
+        [1],
+        [0],
+        1,
+        5,
+        [5, 9],
+        pd.Index([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
+        pd.Index([0, 1, 2, 3, 4], dtype="float32"),
+    ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
 def test_series_drop_labels(ps, labels, inplace):
@@ -2205,7 +2218,7 @@ def test_series_mixed_dtype_error(dtype):
 @pytest.mark.parametrize("index", [None, [10, 20, 30]])
 def test_series_contains(data, index):
     ps = pd.Series(data, index=index)
-    gs = cudf.from_pandas(ps)
+    gs = cudf.Series(data, index=index)
 
     assert_eq(1 in ps, 1 in gs)
     assert_eq(10 in ps, 10 in gs)
@@ -2326,3 +2339,19 @@ def test_series_count_invalid_param():
     s = cudf.Series([], dtype="float64")
     with pytest.raises(TypeError):
         s.count(skipna=True)
+
+
+def test_multi_dim_series_error():
+    arr = cp.array([(1, 2), (3, 4)])
+    with pytest.raises(ValueError):
+        cudf.Series(arr)
+
+
+def test_bool_series_mixed_dtype_error():
+    ps = pd.Series([True, False, None])
+    # ps now has `object` dtype, which
+    # isn't supported by `cudf`.
+    with pytest.raises(TypeError):
+        cudf.Series(ps)
+    with pytest.raises(TypeError):
+        cudf.from_pandas(ps)

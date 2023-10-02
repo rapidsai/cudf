@@ -126,7 +126,9 @@ class NumericalColumn(NumericalBaseColumn):
             and np.isnan(value)
         ):
             return column.as_column(
-                cp.argwhere(cp.isnan(self.data_array_view(mode="read"))),
+                cp.argwhere(
+                    cp.isnan(self.data_array_view(mode="read"))
+                ).flatten(),
                 dtype=size_type_dtype,
             )
         else:
