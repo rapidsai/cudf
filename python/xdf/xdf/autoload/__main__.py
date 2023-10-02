@@ -19,8 +19,20 @@ python -m xdf.autoload -m module <args>
 import argparse
 import runpy
 import sys
+from contextlib import contextmanager
 
+from ..profiler import Profiler
 from . import install
+
+
+@contextmanager
+def profile(use_profiler):
+    if use_profiler:
+        with Profiler() as profiler:
+            yield
+        profiler.print_per_func_stats()
+    else:
+        yield
 
 
 def main():
@@ -40,6 +52,11 @@ def main():
         nargs=1,
     )
     parser.add_argument(
+        "--profile",
+        action="store_true",
+        help="Perform per-function profiling of this script.",
+    )
+    parser.add_argument(
         "args",
         nargs=argparse.REMAINDER,
         help="Arguments to pass on to the script",
@@ -48,16 +65,17 @@ def main():
     args = parser.parse_args()
 
     install()
-    if args.module:
-        (module,) = args.module
-        # run the module passing the remaining arguments
-        # as if it were run with python -m <module> <args>
-        sys.argv[:] = [module] + args.args  # not thread safe?
-        runpy.run_module(module, run_name="__main__")
-    elif len(args.args) >= 1:
-        # Remove ourself from argv and continue
-        sys.argv[:] = args.args
-        runpy.run_path(args.args[0], run_name="__main__")
+    with profile(args.profile):
+        if args.module:
+            (module,) = args.module
+            # run the module passing the remaining arguments
+            # as if it were run with python -m <module> <args>
+            sys.argv[:] = [module] + args.args  # not thread safe?
+            runpy.run_module(module, run_name="__main__")
+        elif len(args.args) >= 1:
+            # Remove ourself from argv and continue
+            sys.argv[:] = args.args
+            runpy.run_path(args.args[0], run_name="__main__")
 
 
 if __name__ == "__main__":
