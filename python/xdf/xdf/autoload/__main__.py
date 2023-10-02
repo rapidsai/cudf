@@ -36,6 +36,34 @@ def profile(use_profiler):
         yield
 
 
+@contextmanager
+def make_module_for_line_profiling(use_profiler, fn):
+    if use_profiler:
+        with open(fn) as f_original:
+            original_lines = f_original.readlines()
+
+        with tempfile.NamedTemporaryFile(mode="w+b", suffix=".py") as f:
+            f.write("from xdf.profiler import Profiler\n".encode())
+            f.write("with Profiler() as profiler:\n".encode())
+            for line in original_lines:
+                # TODO: For now assuming spaces instead of tabs
+                f.write((" " * 4).encode() + line.encode())
+            f.write("new_results = {}\n".encode())
+            f.write(
+                "for (lineno, currfile, line), v in profiler._results.items():\n".encode()  # noqa: E501
+            )
+            f.write(
+                "    new_results[(lineno - 2, currfile, line)] = v\n".encode()
+            )
+            f.write("profiler._results = new_results\n".encode())
+            f.write("profiler.print_stats()\n".encode())
+            f.seek(0)
+
+            yield f.name
+    else:
+        yield fn
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="python -m xdf.autoload",
@@ -73,40 +101,21 @@ def main():
     if args.line_profile:
         if args.module:
             raise ValueError("Cannot use --line-profile with -m")
-        with open(args.args[0]) as f_original:
-            original_lines = f_original.readlines()
-
-        f = tempfile.NamedTemporaryFile(mode="w+b", suffix=".py", delete=False)
-        with f:
-            f.write("from xdf.profiler import Profiler\n".encode())
-            f.write("with Profiler() as profiler:\n".encode())
-            for line in original_lines:
-                # TODO: For now assuming spaces instead of tabs
-                f.write((" " * 4).encode() + line.encode())
-            f.write("new_results = {}\n".encode())
-            f.write(
-                "for (lineno, currfile, line), v in profiler._results.items():\n".encode()  # noqa: E501
-            )
-            f.write(
-                "    new_results[(lineno - 2, currfile, line)] = v\n".encode()
-            )
-            f.write("profiler._results = new_results\n".encode())
-            f.write("profiler.print_stats()\n".encode())
-        args.args[0] = f.name
-        # TODO: delete the file after running it
 
     install()
-    with profile(args.profile):
-        if args.module:
-            (module,) = args.module
-            # run the module passing the remaining arguments
-            # as if it were run with python -m <module> <args>
-            sys.argv[:] = [module] + args.args  # not thread safe?
-            runpy.run_module(module, run_name="__main__")
-        elif len(args.args) >= 1:
-            # Remove ourself from argv and continue
-            sys.argv[:] = args.args
-            runpy.run_path(args.args[0], run_name="__main__")
+    with make_module_for_line_profiling(args.line_profile, args.args[0]) as fn:
+        args.args[0] = fn
+        with profile(args.profile):
+            if args.module:
+                (module,) = args.module
+                # run the module passing the remaining arguments
+                # as if it were run with python -m <module> <args>
+                sys.argv[:] = [module] + args.args  # not thread safe?
+                runpy.run_module(module, run_name="__main__")
+            elif len(args.args) >= 1:
+                # Remove ourself from argv and continue
+                sys.argv[:] = args.args
+                runpy.run_path(args.args[0], run_name="__main__")
 
 
 if __name__ == "__main__":
