@@ -1287,7 +1287,6 @@ __device__ void finish_page_encode(state_buf* s,
     uint8_t const* const base   = s->page.page_data + s->page.max_hdr_size;
     auto const actual_data_size = static_cast<uint32_t>(end_ptr - base);
     if (actual_data_size > s->page.max_data_size) {
-      printf("data corruption %d %d\n", actual_data_size, s->page.max_data_size);
       CUDF_UNREACHABLE("detected possible page data corruption");
     }
     s->page.max_data_size = actual_data_size;
