@@ -2272,3 +2272,11 @@ def test_datetime_to_str(data, dtype):
     expected = ps.astype("string")
 
     assert_eq(actual.to_pandas(nullable=True), expected)
+
+
+def test_dateimeindex_from_noniso_string():
+    data = ["20160920", "20160925"]
+    gdti = cudf.DatetimeIndex(data)
+    pdti = pd.DatetimeIndex(data)
+
+    assert_eq(gdti, pdti)
