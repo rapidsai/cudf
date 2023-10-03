@@ -1051,3 +1051,12 @@ def test_dataframe_query():
     expected = pd_df.query("foo > @bizz")
 
     tm.assert_equal(actual, expected)
+
+
+def test_numpy_var():
+    np.random.seed(42)
+    data = np.random.rand(1000)
+    psr = pd.Series(data)
+    sr = xpd.Series(data)
+
+    tm.assert_almost_equal(np.var(psr), np.var(sr))

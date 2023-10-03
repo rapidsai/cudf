@@ -581,9 +581,6 @@ class _FastSlowProxy:
             return
         return _FastSlowAttribute("__setattr__").__get__(self)(name, value)
 
-    def __array_function__(self, func, types, args, kwargs):
-        return _fast_slow_function_call(func, *args, **kwargs)[0]
-
     def __add__(self, other):
         return _fast_slow_function_call(operator.add, self, other)[0]
 

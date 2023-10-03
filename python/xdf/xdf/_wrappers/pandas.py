@@ -26,6 +26,7 @@ from ..fast_slow_proxy import (
     register_proxy_func,
 )
 from .common import (
+    array_function_method,
     array_method,
     arrow_array_method,
     cuda_array_interface,
@@ -130,6 +131,7 @@ Series = make_final_proxy_type(
     slow_to_fast=cudf.from_pandas,
     additional_attributes={
         "__array__": array_method,
+        "__array_function__": array_function_method,
         "__arrow_array__": arrow_array_method,
         "__cuda_array_interface__": cuda_array_interface,
         "__iter__": custom_iter,
@@ -147,6 +149,7 @@ Index = make_final_proxy_type(
     slow_to_fast=cudf.from_pandas,
     additional_attributes={
         "__array__": array_method,
+        "__array_function__": array_function_method,
         "__arrow_array__": arrow_array_method,
         "__cuda_array_interface__": cuda_array_interface,
         "dt": _AccessorAttr(DatetimeProperties),
@@ -162,12 +165,6 @@ RangeIndex = make_final_proxy_type(
     pd.RangeIndex,
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
-    additional_attributes={
-        "__array__": array_method,
-        "__arrow_array__": arrow_array_method,
-        "__cuda_array_interface__": cuda_array_interface,
-        "__iter__": custom_iter,
-    },
     bases=(Index,),
 )
 
@@ -194,12 +191,6 @@ CategoricalIndex = make_final_proxy_type(
     pd.CategoricalIndex,
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
-    additional_attributes={
-        "__array__": array_method,
-        "__arrow_array__": arrow_array_method,
-        "__cuda_array_interface__": cuda_array_interface,
-        "__iter__": custom_iter,
-    },
     bases=(Index,),
 )
 
@@ -226,12 +217,6 @@ DatetimeIndex = make_final_proxy_type(
     pd.DatetimeIndex,
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
-    additional_attributes={
-        "__array__": array_method,
-        "__arrow_array__": arrow_array_method,
-        "__cuda_array_interface__": cuda_array_interface,
-        "__iter__": custom_iter,
-    },
     bases=(Index,),
 )
 
@@ -267,12 +252,6 @@ TimedeltaIndex = make_final_proxy_type(
     pd.TimedeltaIndex,
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
-    additional_attributes={
-        "__array__": array_method,
-        "__arrow_array__": arrow_array_method,
-        "__cuda_array_interface__": cuda_array_interface,
-        "__iter__": custom_iter,
-    },
     bases=(Index,),
 )
 
@@ -333,10 +312,6 @@ MultiIndex = make_final_proxy_type(
     pd.MultiIndex,
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
-    additional_attributes={
-        "__array__": array_method,
-        "__iter__": custom_iter,
-    },
     bases=(Index,),
 )
 
@@ -486,12 +461,6 @@ IntervalIndex = make_final_proxy_type(
     pd.IntervalIndex,
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
-    additional_attributes={
-        "__array__": array_method,
-        "__arrow_array__": arrow_array_method,
-        "__cuda_array_interface__": cuda_array_interface,
-        "__iter__": custom_iter,
-    },
     bases=(Index,),
 )
 

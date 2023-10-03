@@ -10,11 +10,33 @@
 # its affiliates is strictly prohibited.
 
 # Utility custom overrides for special methods/properties
-from ..fast_slow_proxy import _FastSlowProxy
+from ..fast_slow_proxy import (
+    _FastSlowAttribute,
+    _FastSlowProxy,
+    _maybe_wrap_result,
+    _slow_arg,
+)
 
 
 def array_method(self: _FastSlowProxy, *args, **kwargs):
     return self._xdf_slow.__array__(*args, **kwargs)
+
+
+def array_function_method(self, func, types, args, kwargs):
+    try:
+        return _FastSlowAttribute("__array_function__").__get__(self)(
+            func, types, args, kwargs
+        )
+    except Exception:
+        # if something went wrong with __array_function__ we
+        # attempt to call the function directly on the slow
+        # object.  This ensures that the function call is
+        # handled in the same way as if the slow object was
+        # passed directly to the function.
+        slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
+        return _maybe_wrap_result(
+            func(*slow_args, **slow_kwargs), func, *args, **kwargs
+        )
 
 
 def arrow_array_method(self: _FastSlowProxy, *args, **kwargs):
