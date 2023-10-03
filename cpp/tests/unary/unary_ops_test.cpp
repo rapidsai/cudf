@@ -372,4 +372,35 @@ TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryFloorLarge)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TYPED_TEST(FixedPointUnaryTests, ValidateCeilFloorPrecision)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  // This test is designed to protect against floating point conversion
+  // introducing errors in fixed-point arithmetic. The rounding that occurs
+  // during ceil/floor should only use fixed-precision math. Realistically,
+  // we are only able to show precision failures due to floating conversion in
+  // a few very specific circumstances where dividing by specific powers of 10
+  // works against us.  Some examples: 10^23, 10^25, 10^26, 10^27, 10^30,
+  // 10^32, 10^36. See https://godbolt.org/z/cP1MddP8P for a derivation. For
+  // completeness and to ensure that we are not missing any other cases, we
+  // test all scales representable in the range of each decimal type.
+  constexpr auto min_scale = -cuda::std::numeric_limits<RepType>::digits10;
+  for (int input_scale = 0; input_scale >= min_scale; --input_scale) {
+    RepType input_value = 1;
+    for (int k = 0; k > input_scale; --k) {
+      input_value *= 10;
+    }
+    auto const input       = fp_wrapper{{input_value}, scale_type{input_scale}};
+    auto const expected    = fp_wrapper{{input_value}, scale_type{input_scale}};
+    auto const ceil_result = cudf::unary_operation(input, cudf::unary_operator::CEIL);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, ceil_result->view());
+    auto const floor_result = cudf::unary_operation(input, cudf::unary_operator::FLOOR);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, floor_result->view());
+  }
+}
+
 CUDF_TEST_PROGRAM_MAIN()
