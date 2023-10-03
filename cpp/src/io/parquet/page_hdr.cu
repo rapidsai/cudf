@@ -353,8 +353,8 @@ __global__ void __launch_bounds__(128)
 
   int lane_id             = threadIdx.x % 32;
   int warp_id             = threadIdx.x / 32;
-  int chunk               = (blockIdx.x * 4) + (threadIdx.x / 32);
-  byte_stream_s* const bs = &bs_g[threadIdx.x / 32];
+  int chunk               = (blockIdx.x * 4) + warp_id;
+  byte_stream_s* const bs = &bs_g[warp_id];
 
   if (chunk < num_chunks and lane_id == 0) { bs->ck = chunks[chunk]; }
   if (lane_id == 0) { error[warp_id] = 0; }
