@@ -48,8 +48,8 @@ static void BM_transpose(benchmark::State& state)
                           sizeof(cudf::id_to_type<column_type_id>);
   auto const bytes_written = bytes_read;
   // Account for nullability in input and output.
-  auto const null_bytes =
-    2 * static_cast<uint64_t>(input.num_columns()) * cudf::bitmask_allocation_size_bytes(input.num_rows());
+  auto const null_bytes = 2 * static_cast<uint64_t>(input.num_columns()) *
+                          cudf::bitmask_allocation_size_bytes(input.num_rows());
 
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) *
                           (bytes_read + bytes_written + null_bytes));
