@@ -976,14 +976,15 @@ void reader::impl::load_and_decompress_data()
 
   // Process dataset chunk pages into output columns
   auto const total_pages = count_page_headers(chunks, error_code.data(), _stream);
-  if (total_pages <= 0) { return; }
-
-  auto decode_error = error_code.value(_stream);
+  auto decode_error      = error_code.value(_stream);
   if (decode_error != 0) {
     std::stringstream stream;
     stream << std::hex << decode_error;
     CUDF_FAIL("Parquet header parsing failed with code(s) 0x" + stream.str());
   }
+
+  // check this after checking for errors
+  if (total_pages <= 0) { return; }
 
   pages = cudf::detail::hostdevice_vector<gpu::PageInfo>(total_pages, total_pages, _stream);
 
