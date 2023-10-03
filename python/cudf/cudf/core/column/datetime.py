@@ -31,7 +31,7 @@ from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.dtypes import _get_base_dtype
-from cudf.utils.utils import _all_bools_with_nulls, _fillna_natwise
+from cudf.utils.utils import _all_bools_with_nulls
 
 _guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
 
@@ -308,13 +308,16 @@ class DatetimeColumn(column.ColumnBase):
         nullable: bool = False,
         **kwargs,
     ) -> "cudf.Series":
-        # Workaround until following issue is fixed:
+        # `copy=True` workaround until following issue is fixed:
         # https://issues.apache.org/jira/browse/ARROW-9772
 
-        # Pandas supports only `datetime64[ns]`, hence the cast.
+        # Pandas only supports `datetime64[ns]` dtype
+        # and conversion to this type is necessary to make
+        # arrow to pandas conversion happen for large values.
         return pd.Series(
-            self.astype("datetime64[ns]").fillna("NaT").values_host,
-            copy=False,
+            self.astype("datetime64[ns]").to_arrow(),
+            copy=True,
+            dtype=self.dtype,
             index=index,
         )
 
@@ -590,7 +593,7 @@ class DatetimeColumn(column.ColumnBase):
     ) -> DatetimeColumn:
         if fill_value is not None:
             if cudf.utils.utils._isnat(fill_value):
-                return _fillna_natwise(self)
+                return self.copy(deep=True)
             if is_scalar(fill_value):
                 if not isinstance(fill_value, cudf.Scalar):
                     fill_value = cudf.Scalar(fill_value, dtype=self.dtype)

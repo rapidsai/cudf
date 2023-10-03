@@ -2341,6 +2341,32 @@ def test_series_count_invalid_param():
         s.count(skipna=True)
 
 
+@pytest.mark.parametrize(
+    "data", [[0, 1, 2], ["a", "b", "c"], [0.324, 32.32, 3243.23]]
+)
+def test_series_setitem_nat_with_non_datetimes(data):
+    s = cudf.Series(data)
+    with pytest.raises(TypeError):
+        s[0] = cudf.NaT
+
+
+def test_series_string_setitem():
+    gs = cudf.Series(["abc", "def", "ghi", "xyz", "pqr"])
+    ps = gs.to_pandas()
+
+    gs[0] = "NaT"
+    gs[1] = "NA"
+    gs[2] = "<NA>"
+    gs[3] = "NaN"
+
+    ps[0] = "NaT"
+    ps[1] = "NA"
+    ps[2] = "<NA>"
+    ps[3] = "NaN"
+
+    assert_eq(gs, ps)
+
+
 def test_multi_dim_series_error():
     arr = cp.array([(1, 2), (3, 4)])
     with pytest.raises(ValueError):
