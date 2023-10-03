@@ -1158,6 +1158,7 @@ def test_datetime_invalid_ops():
         np.datetime64("2005-02-25"),
         np.datetime64("2005-02-25T03:30"),
         np.datetime64("nat"),
+        "NaT",
     ],
 )
 def test_datetime_fillna(data, dtype, fill_value):

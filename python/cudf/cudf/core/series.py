@@ -82,6 +82,7 @@ from cudf.core.indexed_frame import (
 from cudf.core.resample import SeriesResampler
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.core.udf.scalar_function import _get_scalar_kernel
+from cudf.errors import MixedTypeError
 from cudf.utils import docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -211,6 +212,27 @@ class _SeriesIlocIndexer(_FrameIndexer):
         # coerce value into a scalar or column
         if is_scalar(value):
             value = to_cudf_compatible_scalar(value)
+            if (
+                not isinstance(
+                    self._frame._column,
+                    (
+                        cudf.core.column.DatetimeColumn,
+                        cudf.core.column.TimeDeltaColumn,
+                    ),
+                )
+                and cudf.utils.utils._isnat(value)
+                and not (
+                    isinstance(
+                        self._frame._column, cudf.core.column.StringColumn
+                    )
+                    and isinstance(value, str)
+                )
+            ):
+                raise MixedTypeError(
+                    f"Cannot assign {value=} to non-datetime/non-timedelta "
+                    "columns"
+                )
+
         elif not (
             isinstance(value, (list, dict))
             and isinstance(

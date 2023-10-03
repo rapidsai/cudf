@@ -10,6 +10,7 @@ from functools import partial
 from typing import FrozenSet, Set, Union
 
 import numpy as np
+import pandas as pd
 from nvtx import annotate
 
 import rmm
@@ -264,26 +265,15 @@ def pa_mask_buffer_to_mask(mask_buf, size):
 
 def _isnat(val):
     """Wraps np.isnat to return False instead of error on invalid inputs."""
-    if not isinstance(val, (np.datetime64, np.timedelta64, str)):
+    if val is pd.NaT:
+        return True
+    elif not isinstance(val, (np.datetime64, np.timedelta64, str)):
         return False
     else:
-        return val in {"NaT", "NAT"} or np.isnat(val)
-
-
-def _fillna_natwise(col):
-    # If the value we are filling is np.datetime64("NAT")
-    # we set the same mask as current column.
-    # However where there are "<NA>" in the
-    # columns, their corresponding locations
-    nat = cudf._lib.scalar._create_proxy_nat_scalar(col.dtype)
-    result = cudf._lib.replace.replace_nulls(col, nat)
-    return column.build_column(
-        data=result.base_data,
-        dtype=result.dtype,
-        size=result.size,
-        offset=result.offset,
-        children=result.base_children,
-    )
+        try:
+            return val in {"NaT", "NAT"} or np.isnat(val)
+        except TypeError:
+            return False
 
 
 def search_range(x: int, ri: range, *, side: str) -> int:
