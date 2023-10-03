@@ -2009,3 +2009,10 @@ def test_multiindex_to_frame_allow_duplicates(
                 )
 
             assert_eq(expected, actual)
+
+
+def test_multiindex_values_pandas_compatible():
+    midx = cudf.MultiIndex.from_tuples([(10, 12), (8, 9), (3, 4)])
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            midx.values
