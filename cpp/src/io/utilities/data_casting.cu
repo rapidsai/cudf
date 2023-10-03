@@ -534,8 +534,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
          char_index < cudf::util::round_up_safe(in_end - in_begin, static_cast<long>(BLOCK_SIZE));
          char_index += BLOCK_SIZE) {
       bool const is_within_bounds = char_index < (in_end - in_begin);
-      auto const MASK   = is_warp ? __ballot_sync(0xffffffff, is_within_bounds) : 0xffffffff;
-      auto const c      = is_within_bounds ? in_begin[char_index] : '\0';
+      auto const c                = is_within_bounds ? in_begin[char_index] : '\0';
       auto const prev_c = (char_index > 0 and is_within_bounds) ? in_begin[char_index - 1] : '\0';
       auto const escaped_char = get_escape_char(c);
 
@@ -571,7 +570,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
         __shared__ typename SlashScan::TempStorage temp_slash[num_warps];
         SlashScan(temp_slash[warp_id]).InclusiveScan(curr, scanned, composite_op);
         is_escaping_backslash = scanned.get(init_state);
-        init_state            = __shfl_sync(MASK, is_escaping_backslash, BLOCK_SIZE - 1);
+        init_state            = __shfl_sync(~0u, is_escaping_backslash, BLOCK_SIZE - 1);
         __syncwarp();
         is_slash.shift(warp_id);
         is_slash.set_bits(warp_id, is_escaping_backslash);
@@ -604,7 +603,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
       }
       // Make sure all threads have no errors before continuing
       if constexpr (is_warp) {
-        error = __any_sync(MASK, error);
+        error = __any_sync(~0u, error);
       } else {
         using ErrorReduce = cub::BlockReduce<bool, BLOCK_SIZE>;
         __shared__ typename ErrorReduce::TempStorage temp_storage_error;
@@ -932,13 +931,8 @@ std::unique_ptr<column> parse_data(
   auto str_tuples = thrust::make_transform_iterator(offset_length_begin, to_string_view_pair{data});
 
   if (col_type == cudf::data_type{cudf::type_id::STRING}) {
-    return parse_string(str_tuples,
-                        col_size,
-                        std::forward<rmm::device_buffer>(null_mask),
-                        d_null_count,
-                        options,
-                        stream,
-                        mr);
+    return parse_string(
+      str_tuples, col_size, std::move(null_mask), d_null_count, options, stream, mr);
   }
 
   auto out_col =
