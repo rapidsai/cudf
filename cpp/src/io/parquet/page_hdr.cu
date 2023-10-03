@@ -441,8 +441,9 @@ __global__ void __launch_bounds__(128)
         }
       }
       index_out = shuffle(index_out);
-      if (index_out >= 0 && index_out < max_num_pages && lane_id == 0)
+      if (index_out >= 0 && index_out < max_num_pages && lane_id == 0) {
         page_info[index_out] = bs->page;
+      }
       num_values = shuffle(num_values);
       __syncwarp();
     }
