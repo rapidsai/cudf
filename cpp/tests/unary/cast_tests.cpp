@@ -17,7 +17,6 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/literals.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
@@ -30,6 +29,8 @@
 
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
+
+#include <cuda/std/limits>
 
 #include <type_traits>
 #include <vector>
@@ -968,49 +969,42 @@ TYPED_TEST(FixedPointTests, Decimal128ToDecimalXXWithLargerScale)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TEST_F(FixedPointTestSingleType, Decimal128ValidateRescalePrecision)
+TYPED_TEST(FixedPointTests, ValidateCastRescalePrecision)
 {
   using namespace numeric;
-  using namespace cudf::test::literals;
-  using RepType    = cudf::device_storage_type_t<decimal128>;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
   // This test is designed to protect against floating point conversion
   // introducing errors in fixed-point arithmetic. The rescaling that occurs
-  // during scale changes should only use fixed-precision math. Realistically,
-  // we are only able to show precision failures due to floating conversion in
-  // a few very specific circumstances where dividing by specific powers of 10
-  // works against us.  Some examples: 10^23, 10^25, 10^26, 10^27, 10^30,
-  // 10^32, 10^36. See https://godbolt.org/z/cP1MddP8P for a derivation. For
-  // completeness and to ensure that we are not missing any other cases, we
-  // test casting to/from all scales from -1 to -37.
-  for (int input_scale = -1; input_scale >= -37; input_scale--) {
-    for (int result_scale = -1; result_scale >= -37; result_scale--) {
-      __int128_t input_value = 10;
-      for (int k = 1; k < -input_scale; k++) {
+  // during casting to different scales should only use fixed-precision math.
+  // Realistically, we are only able to show precision failures due to floating
+  // conversion in a few very specific circumstances where dividing by specific
+  // powers of 10 works against us.  Some examples: 10^23, 10^25, 10^26, 10^27,
+  // 10^30, 10^32, 10^36. See https://godbolt.org/z/cP1MddP8P for a derivation.
+  // For completeness and to ensure that we are not missing any other cases, we
+  // test casting to/from all scales in the range of each decimal type. Values
+  // that are powers of ten show this error more readily than non-powers of 10
+  // because the rescaling factor is a power of 10, meaning that errors in
+  // division are more visible.
+  constexpr auto min_scale = -cuda::std::numeric_limits<RepType>::digits10;
+  for (int input_scale = 0; input_scale >= min_scale; --input_scale) {
+    for (int result_scale = 0; result_scale >= min_scale; --result_scale) {
+      RepType input_value = 1;
+      for (int k = 0; k > input_scale; --k) {
         input_value *= 10;
       }
-      __int128_t result_value = 10;
-      for (int k = 1; k < -result_scale; k++) {
+      RepType result_value = 1;
+      for (int k = 0; k > result_scale; --k) {
         result_value *= 10;
       }
       auto const input    = fp_wrapper{{input_value}, scale_type{input_scale}};
       auto const expected = fp_wrapper{{result_value}, scale_type{result_scale}};
-      auto const result   = cudf::cast(input, make_fixed_point_data_type<decimal128>(result_scale));
+      auto const result   = cudf::cast(input, make_fixed_point_data_type<decimalXX>(result_scale));
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
     }
   }
-
-  // As a specific example of the above test, and to reinforce its coverage, we
-  // test a hardcoded value with a scale difference known to cause problems
-  // (10^23). Values that are powers of ten show this error more readily than
-  // non-powers of 10 because the rescaling factor is a power of 10, meaning
-  // that errors in division are more visible.
-  auto const input = fp_wrapper{{10000000000000000000000000000000000000_int128_t}, scale_type{-37}};
-  auto const expected = fp_wrapper{{100000000000000_int128_t}, scale_type{-14}};
-  auto const result   = cudf::cast(input, make_fixed_point_data_type<decimal128>(-14));
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
 TYPED_TEST(FixedPointTests, Decimal32ToDecimalXXWithLargerScaleAndNullMask)

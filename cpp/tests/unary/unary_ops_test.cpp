@@ -24,6 +24,8 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
+#include <cuda/std/limits>
+
 template <typename T>
 cudf::test::fixed_width_column_wrapper<T> create_fixed_columns(cudf::size_type start,
                                                                cudf::size_type size,
