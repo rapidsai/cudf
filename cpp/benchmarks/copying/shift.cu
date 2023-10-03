@@ -57,10 +57,8 @@ static void BM_shift(benchmark::State& state)
   cudf::size_type offset = size * (static_cast<double>(shift_factor) / 100.0);
 
   auto constexpr column_type_id = cudf::type_to_id<int>();
-  auto const input_table =
-    create_sequence_table({column_type_id},
-                          row_count{size},
-                          use_validity ? std::optional<double>{1.0} : std::nullopt);
+  auto const input_table        = create_sequence_table(
+    {column_type_id}, row_count{size}, use_validity ? std::optional<double>{1.0} : std::nullopt);
   cudf::column_view input{input_table->get_column(0)};
 
   auto fill = use_validity ? make_scalar<int>() : make_scalar<int>(777);
