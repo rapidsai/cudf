@@ -214,8 +214,8 @@ dependencies:
     common:
       - output_types: [conda, requirements]
         packages:
-          - librmm==23.10.*
-          - libkvikio==23.10.*
+          - librmm==23.12.*
+          - libkvikio==23.12.*
       - output_types: conda
         packages:
           - aws-sdk-cpp<1.11
@@ -227,25 +227,9 @@ dependencies:
           # in sync with the version pinned in get_arrow.cmake.
           - libarrow==12.0.1.*
           - librdkafka>=1.9.0,<1.10.0a0
+          # Align nvcomp version with rapids-cmake
+          - nvcomp==2.6.1
           - spdlog>=1.11.0,<1.12
-    specific:
-      - output_types: conda
-        matrices:
-          - matrix:
-              arch: x86_64
-            packages:
-              # Align nvcomp version with rapids-cmake
-              # TODO: not yet available for aarch64 CUDA 12
-              - &nvcomp nvcomp==2.6.1
-          - matrix:
-              arch: aarch64
-              cuda: "11.8"
-            packages:
-              - *nvcomp
-          # TODO: Fallback matrix for aarch64 CUDA 12. After migrating to nvcomp 3,
-          # all CUDA/arch combinations should be supported by existing packages.
-          - matrix:
-            packages:
   build_wheels:
     common:
       - output_types: pyproject
@@ -267,7 +251,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - scikit-build>=0.13.1
-          - rmm==23.10.*
+          - rmm==23.12.*
       - output_types: conda
         packages:
           - &protobuf protobuf>=4.21,<5
@@ -386,7 +370,7 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-          - dask-cuda==23.10.*
+          - dask-cuda==23.12.*
           - *doxygen
           - make
           - myst-nb
@@ -438,7 +422,7 @@ dependencies:
           - &numba numba>=0.57,<0.58
           - nvtx>=0.2.1
           - packaging
-          - rmm==23.10.*
+          - rmm==23.12.*
           - typing_extensions>=4.0.0
           - *protobuf
       - output_types: conda
@@ -491,15 +475,15 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - dask>=2023.7.1
-          - distributed>=2023.7.1
+          - dask==2023.9.2
+          - distributed==2023.9.2
       - output_types: conda
         packages:
           - cupy>=12.0.0
-          - dask-core>=2023.7.1  # dask-core in conda is the actual package & dask is the meta package
+          - dask-core==2023.9.2  # dask-core in conda is the actual package & dask is the meta package
       - output_types: pyproject
         packages:
-          - &cudf cudf==23.10.*
+          - &cudf cudf==23.12.*
           - *cupy_pip
   run_cudf_kafka:
     common:
@@ -518,7 +502,7 @@ dependencies:
         packages:
           - confluent-kafka>=1.9.0,<1.10.0a0
           - *cudf
-          - cudf_kafka==23.10.*
+          - cudf_kafka==23.12.*
   test_cpp:
     common:
       - output_types: conda
@@ -600,5 +584,5 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - dask-cuda==23.10.*
+          - dask-cuda==23.12.*
           - *numba
