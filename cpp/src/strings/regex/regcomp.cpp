@@ -1035,19 +1035,36 @@ void reprog::finalize() { build_start_ids(); }
 
 void reprog::collapse_nops()
 {
-  // treat non-capturing LBRAs/RBRAs as NOP
-  std::transform(_insts.begin(), _insts.end(), _insts.begin(), [](auto inst) {
-    if ((inst.type == LBRA || inst.type == RBRA) && (inst.u1.subid < 1)) { inst.type = NOP; }
-    return inst;
-  });
-
   // functor for finding the next valid op
-  auto find_next_op = [insts = _insts](int id) {
+  auto find_next_op = [&insts = _insts](int id) {
     while (insts[id].type == NOP) {
       id = insts[id].u2.next_id;
     }
     return id;
   };
+
+  // remove unneeded ANY instruction if present
+  // one pattern would be: ANY <--> OR -> END  ('abc.*' == 'abc')
+  for (auto idx = 0; idx < static_cast<int32_t>(_insts.size()); ++idx) {
+    auto& inst = _insts[idx];
+    if ((inst.type != OR) || (inst.u2.left_id != inst.u2.next_id)) { continue; }
+    auto& right = _insts[inst.u1.right_id];
+    // check right points to ANY and that points back to this OR
+    if (right.u2.next_id == idx && (right.type == ANY || right.type == ANYNL)) {
+      auto const next_id = find_next_op(inst.u2.next_id);
+      // if right is the first instruction or OR's next is the END instruction
+      if (inst.u1.right_id == 0 || _insts[next_id].type == END) {
+        right.type = NOP;  // remove this ANY instruction
+        inst.type  = NOP;  // and this OR instruction
+      }
+    }
+  }
+
+  // treat non-capturing LBRAs/RBRAs as NOP
+  std::transform(_insts.begin(), _insts.end(), _insts.begin(), [](auto& inst) {
+    if ((inst.type == LBRA || inst.type == RBRA) && (inst.u1.subid < 1)) { inst.type = NOP; }
+    return inst;
+  });
 
   // create new routes around NOP chains
   std::transform(_insts.begin(), _insts.end(), _insts.begin(), [find_next_op](auto inst) {
@@ -1252,10 +1269,9 @@ void reprog::print(regex_flags const flags)
       }
       if ((j + 1) < size) { printf(", "); }
     }
-    printf("\n");
     if (cls.builtins) {
       int mask = cls.builtins;
-      printf("   builtins(x%02X):", static_cast<unsigned>(mask));
+      printf("\n   builtins(x%02X):", static_cast<unsigned>(mask));
       if (mask & CCLASS_W) printf(" \\w");
       if (mask & CCLASS_S) printf(" \\s");
       if (mask & CCLASS_D) printf(" \\d");
