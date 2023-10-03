@@ -11,7 +11,8 @@ export SKBUILD_CONFIGURE_OPTIONS="-DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF"
 CUDF_BUILD_BRANCH=${1:-""}
 WHEEL_NAME_PREFIX="cudf_"
 if [[ "${CUDF_BUILD_BRANCH}" == "main" ]]; then
-    git checkout branch-23.10-xdf
+    MAIN_COMMIT=$(git merge-base HEAD origin/branch-23.10-xdf)
+    git checkout $MAIN_COMMIT
     WHEEL_NAME_PREFIX="cudf_${CUDF_BUILD_BRANCH}_"
 fi
 
