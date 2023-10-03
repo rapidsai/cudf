@@ -116,14 +116,13 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
         auto cur_schema = md.get_schema(schema_idx);
         if (cur_schema.max_repetition_level == r) {
           // if this is a repeated field, map it one level deeper
-          shallowest =
-            cur_schema.is_stub(md.get_schema(cur_schema.parent_idx)) ? cur_depth + 1 : cur_depth;
+          shallowest = cur_schema.is_stub() ? cur_depth + 1 : cur_depth;
         }
         // if it's one-level encoding list
         else if (cur_schema.is_one_level_list(md.get_schema(cur_schema.parent_idx))) {
           shallowest = cur_depth - 1;
         }
-        if (!cur_schema.is_stub(md.get_schema(cur_schema.parent_idx))) { cur_depth--; }
+        if (!cur_schema.is_stub()) { cur_depth--; }
         schema_idx = cur_schema.parent_idx;
       }
       return shallowest;
@@ -141,9 +140,8 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
         SchemaElement cur_schema = md.get_schema(schema_idx);
         if (cur_schema.max_definition_level == d) {
           // if this is a repeated field, map it one level deeper
-          r1 = cur_schema.is_stub(md.get_schema(cur_schema.parent_idx))
-                 ? prev_schema.max_repetition_level
-                 : cur_schema.max_repetition_level;
+          r1 = cur_schema.is_stub() ? prev_schema.max_repetition_level
+                                    : cur_schema.max_repetition_level;
           break;
         }
         prev_schema = cur_schema;
@@ -158,10 +156,10 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
         SchemaElement cur_schema = md.get_schema(schema_idx);
         if (cur_schema.max_repetition_level == r1) {
           // if this is a repeated field, map it one level deeper
-          depth = cur_schema.is_stub(md.get_schema(cur_schema.parent_idx)) ? depth + 1 : depth;
+          depth = cur_schema.is_stub() ? depth + 1 : depth;
           break;
         }
-        if (!cur_schema.is_stub(md.get_schema(cur_schema.parent_idx))) { depth--; }
+        if (!cur_schema.is_stub()) { depth--; }
         prev_schema = cur_schema;
         schema_idx  = cur_schema.parent_idx;
       }
@@ -652,7 +650,7 @@ void reader::impl::allocate_nesting_info()
     while (schema_idx > 0) {
       // stub columns (basically the inner field of a list scheme element) are not real columns.
       // we can ignore them for the purposes of output nesting info
-      if (!cur_schema.is_stub(_metadata->get_schema(cur_schema.parent_idx))) {
+      if (!cur_schema.is_stub()) {
         // initialize each page within the chunk
         for (int p_idx = 0; p_idx < chunks[idx].num_data_pages; p_idx++) {
           gpu::PageNestingInfo* pni =

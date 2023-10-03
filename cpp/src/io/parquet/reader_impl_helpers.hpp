@@ -138,7 +138,7 @@ class aggregate_reader_metadata {
     // walk upwards, skipping repeated fields
     while (schema_index > 0) {
       auto const& elm = pfm.schema[schema_index];
-      if (!elm.is_stub(pfm.schema[elm.parent_idx])) { depth++; }
+      if (!elm.is_stub()) { depth++; }
       // schema of one-level encoding list doesn't contain nesting information, so we need to
       // manually add an extra nesting level
       if (elm.is_one_level_list(pfm.schema[elm.parent_idx])) { depth++; }

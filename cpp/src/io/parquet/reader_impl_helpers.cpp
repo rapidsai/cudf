@@ -513,7 +513,7 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
 
       // if schema_elem is a stub then it does not exist in the column_name_info and column_buffer
       // hierarchy. So continue on
-      if (schema_elem.is_stub(get_schema(schema_elem.parent_idx))) {
+      if (schema_elem.is_stub()) {
         // is this legit?
         CUDF_EXPECTS(schema_elem.num_children == 1, "Unexpected number of children for stub");
         auto child_col_name_info = (col_name_info) ? &col_name_info->children[0] : nullptr;

@@ -863,7 +863,7 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
   std::vector<uint8_t> r_nullability;
   curr_schema_node = schema_node;
   while (curr_schema_node.parent_idx != -1) {
-    if (not curr_schema_node.is_stub(schema_tree[curr_schema_node.parent_idx])) {
+    if (not curr_schema_node.is_stub()) {
       r_nullability.push_back(curr_schema_node.repetition_type == FieldRepetitionType::OPTIONAL);
     }
     curr_schema_node = schema_tree[curr_schema_node.parent_idx];
