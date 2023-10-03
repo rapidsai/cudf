@@ -187,10 +187,7 @@ struct SchemaElement {
   //     required int32 num;
   //  };
   // }
-  [[nodiscard]] bool is_stub(SchemaElement const& parent) const
-  {
-    return repetition_type == REPEATED && num_children == 1 && parent.converted_type == LIST;
-  }
+  [[nodiscard]] bool is_stub() const { return repetition_type == REPEATED && num_children == 1; }
 
   // https://github.com/apache/parquet-cpp/blob/642da05/src/parquet/schema.h#L49-L50
   // One-level LIST encoding: Only allows required lists with required cells:
@@ -201,11 +198,7 @@ struct SchemaElement {
   }
 
   // returns true if the element is a list
-  [[nodiscard]] bool is_list() const
-  {
-    return converted_type == LIST ||
-           (type == UNDEFINED_TYPE && num_children == 1 && repetition_type == REPEATED);
-  }
+  [[nodiscard]] bool is_list() const { return converted_type == LIST; }
 
   // in parquet terms, a group is a level of nesting in the schema. a group
   // can be a struct or a list

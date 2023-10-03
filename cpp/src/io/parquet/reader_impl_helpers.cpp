@@ -206,8 +206,9 @@ void metadata::sanitize_schema()
     if (schema_idx < 0) { return; }
     auto& schema_elem = schema[schema_idx];
     if (schema_idx != 0 && schema_elem.type == UNDEFINED_TYPE) {
-      if (schema_elem.type == UNDEFINED_TYPE && schema_elem.repetition_type == REPEATED &&
-          schema_elem.num_children > 1) {
+      auto const parent_type = schema[schema_elem.parent_idx].converted_type;
+      if (schema_elem.repetition_type == REPEATED && schema_elem.num_children > 1 &&
+          parent_type != LIST && parent_type != MAP) {
         // This is a list of structs, so we need to mark this as a list, but also
         // add a struct child and move this element's children to the struct
         schema_elem.converted_type  = LIST;
