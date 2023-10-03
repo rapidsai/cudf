@@ -30,6 +30,8 @@
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 
+#include <cuda/std/limits>
+
 #include <type_traits>
 #include <vector>
 
@@ -965,6 +967,44 @@ TYPED_TEST(FixedPointTests, Decimal128ToDecimalXXWithLargerScale)
   auto const result   = cudf::cast(input, make_fixed_point_data_type<decimalXX>(0));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTests, ValidateCastRescalePrecision)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  // This test is designed to protect against floating point conversion
+  // introducing errors in fixed-point arithmetic. The rescaling that occurs
+  // during casting to different scales should only use fixed-precision math.
+  // Realistically, we are only able to show precision failures due to floating
+  // conversion in a few very specific circumstances where dividing by specific
+  // powers of 10 works against us.  Some examples: 10^23, 10^25, 10^26, 10^27,
+  // 10^30, 10^32, 10^36. See https://godbolt.org/z/cP1MddP8P for a derivation.
+  // For completeness and to ensure that we are not missing any other cases, we
+  // test casting to/from all scales in the range of each decimal type. Values
+  // that are powers of ten show this error more readily than non-powers of 10
+  // because the rescaling factor is a power of 10, meaning that errors in
+  // division are more visible.
+  constexpr auto min_scale = -cuda::std::numeric_limits<RepType>::digits10;
+  for (int input_scale = 0; input_scale >= min_scale; --input_scale) {
+    for (int result_scale = 0; result_scale >= min_scale; --result_scale) {
+      RepType input_value = 1;
+      for (int k = 0; k > input_scale; --k) {
+        input_value *= 10;
+      }
+      RepType result_value = 1;
+      for (int k = 0; k > result_scale; --k) {
+        result_value *= 10;
+      }
+      auto const input    = fp_wrapper{{input_value}, scale_type{input_scale}};
+      auto const expected = fp_wrapper{{result_value}, scale_type{result_scale}};
+      auto const result   = cudf::cast(input, make_fixed_point_data_type<decimalXX>(result_scale));
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+    }
+  }
 }
 
 TYPED_TEST(FixedPointTests, Decimal32ToDecimalXXWithLargerScaleAndNullMask)
