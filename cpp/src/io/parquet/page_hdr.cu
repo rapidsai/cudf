@@ -451,7 +451,7 @@ __global__ void __launch_bounds__(128)
     if (lane_id == 0) {
       chunks[chunk].num_data_pages = data_page_count;
       chunks[chunk].num_dict_pages = dictionary_page_count;
-      set_error(error[warp_id], error_code);
+      if (error[warp_id] != 0) { set_error(error[warp_id], error_code); }
     }
   }
 }
