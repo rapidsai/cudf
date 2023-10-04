@@ -19,10 +19,7 @@ jobs:
       - wheel-tests-cudf
       - wheel-build-dask-cudf
       - wheel-tests-dask-cudf
-      - wheel-build-xdf
       - unit-tests-xdf
-      - unit-tests-xdf-no-cudf
-      - unit-tests-xdf-macos-windows
       - pandas-tests-xdf-main
       - pandas-tests-xdf-pr
       - pandas-tests-xdf-diff
@@ -95,14 +92,6 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
       script: ci/test_wheel_dask_cudf.sh
-  #wheel-build-xdf:
-  #  needs: checks
-  #  secrets: inherit
-  #  uses: rapidsai/shared-action-workflows/.github/workflows/wheels-build.yaml@branch-23.10
-  #  with:
-  #    matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
-  #    build_type: pull-request
-  #    script: ci/build_wheel_xdf.sh
   unit-tests-xdf:
     needs: [wheel-build-xdf, wheel-build-cudf]
     secrets: inherit
@@ -111,40 +100,6 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
       script: ci/xdf_scripts/run_tests.sh
-  #unit-tests-xdf-no-cudf:
-  #  needs: wheel-build-xdf
-  #  secrets: inherit
-  #  uses: rapidsai/shared-action-workflows/.github/workflows/wheels-test.yaml@branch-23.10
-  #  with:
-  #    matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
-  #    build_type: pull-request
-  #    script: ci/xdf_scripts/run_tests.sh --no-cudf
-  #unit-tests-xdf-macos-windows:
-  #  needs: checks
-  #  strategy:
-  #    matrix:
-  #      os: [macos-latest, windows-latest]
-  #      python-version: ["3.10"]
-  #  runs-on: ${{ matrix.os }}
-  #  name: ${{ format('{0} {1}', matrix.os, matrix.python-version) }}
-  #  steps:
-  #    - uses: actions/checkout@v3
-  #    - name: Set up Python ${{ matrix.python-version }}
-  #      uses: actions/setup-python@v4
-  #      with:
-  #        python-version: ${{ matrix.python-version }}
-  #    - name: Install dependencies
-  #      run: |
-  #        cd python/xdf/
-  #        python -m pip install .[test]
-  #    - name: Run tests in normal mode
-  #      run: |
-  #        cd python/xdf/
-  #        python -m pytest ./tests
-  #    - name: Run tests in transparent mode
-  #      run: |
-  #        cd python/xdf/
-  #        python -m pytest -p xdf.autoload ./tests
   pandas-tests-xdf-main:
     # run the Pandas unit tests using xdf (main branch)
     needs: wheel-build-cudf-main
