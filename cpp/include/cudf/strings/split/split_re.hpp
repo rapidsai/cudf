@@ -127,13 +127,13 @@ std::unique_ptr<table> split_re(
  *
  * @throw cudf::logic_error if `pattern` is empty.
  *
- * @param input A column of string elements to be split.
+ * @param input A column of string elements to be split
  * @param prog Regex program instance
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned result's device memory.
- * @return A table of columns of strings.
+ * @param mr Device memory resource used to allocate the returned result's device memory
+ * @return A table of columns of strings
  */
 std::unique_ptr<table> rsplit_re(
   strings_column_view const& input,
@@ -191,7 +191,7 @@ std::unique_ptr<table> rsplit_re(
  *        Default of -1 indicates all possible splits on each string.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned result's device memory
- * @return Lists column of strings.
+ * @return Lists column of strings
  */
 std::unique_ptr<column> split_record_re(
   strings_column_view const& input,
