@@ -452,13 +452,9 @@ __global__ void __launch_bounds__(decode_block_size)
   int out_thread0;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  if (!setupLocalPageInfo(s,
-                          &pages[page_idx],
-                          chunks,
-                          min_row,
-                          num_rows,
-                          mask_filter{decode_kernel_mask::GENERAL},
-                          true)) {
+  auto const mask = decode_kernel_mask::GENERAL;
+  if (!setupLocalPageInfo(
+        s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{mask}, true)) {
     return;
   }
 
