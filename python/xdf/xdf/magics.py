@@ -15,6 +15,9 @@ from IPython.core.magic import Magics, cell_magic, magics_class
 from .profiler import Profiler, lines_with_profiling
 
 
+# TODO: What should we name these magics now that they are also aliased into
+# the cudf.pandas namespace? Should we just drop the xdf_ prefix? That seems
+# somewhat generic and I worry about conflicts with generic `profile` magics.
 @magics_class
 class XDFMagics(Magics):
     @cell_magic
