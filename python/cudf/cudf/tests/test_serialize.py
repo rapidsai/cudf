@@ -1,5 +1,6 @@
 # Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
+import itertools
 import pickle
 
 import msgpack
@@ -115,6 +116,7 @@ from cudf.testing._utils import assert_eq
             ]
         ),
     ],
+    ids=itertools.count(),
 )
 @pytest.mark.parametrize("to_host", [True, False])
 def test_serialize(df, to_host):

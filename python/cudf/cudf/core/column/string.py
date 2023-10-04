@@ -5932,7 +5932,7 @@ class StringColumn(column.ColumnBase):
         ) * char_dtype_size
 
         to_view = column.build_column(
-            self.data,  # self.base_children[1].data,
+            self.base_data,  # self.base_children[1].data,
             dtype=cudf.api.types.dtype("int8"),  # self.base_children[1].dtype,
             offset=str_byte_offset,
             size=n_bytes_to_view,
