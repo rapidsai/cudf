@@ -104,13 +104,34 @@ std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
   return merge_pairs_map;
 }
 
+std::unique_ptr<detail::merge_pairs_map_type2> initialize_mp_table_map(
+  cudf::column_device_view const& input, rmm::cuda_stream_view stream)
+{
+  auto mp_table_map = std::make_unique<merge_pairs_map_type2>(
+    static_cast<size_t>(input.size()),
+    cuco::empty_key{-1},
+    cuco::empty_value{-1},
+    table_equal{input},
+    probe_scheme2{table_hasher{input}},
+    hash_table_allocator_type{default_allocator<char>{}, stream},
+    stream.value());
+
+  auto iter = cudf::detail::make_counting_transform_iterator(
+    0, [] __device__(cudf::size_type idx) { return cuco::make_pair(idx, idx); });
+
+  mp_table_map->insert_async(iter, iter + input.size(), stream.value());
+
+  return mp_table_map;
+}
+
 std::unique_ptr<bpe_merge_pairs::bpe_merge_pairs_impl> create_bpe_merge_pairs_impl(
   std::unique_ptr<cudf::column>&& input, rmm::cuda_stream_view stream)
 {
-  auto d_input     = cudf::column_device_view::create(input->view(), stream);
-  auto merge_pairs = initialize_merge_pairs_map(*d_input, stream);
+  auto d_input      = cudf::column_device_view::create(input->view(), stream);
+  auto merge_pairs  = initialize_merge_pairs_map(*d_input, stream);
+  auto mp_table_map = initialize_mp_table_map(*d_input, stream);
   return std::make_unique<nvtext::bpe_merge_pairs::bpe_merge_pairs_impl>(
-    std::move(input), std::move(d_input), std::move(merge_pairs));
+    std::move(input), std::move(d_input), std::move(merge_pairs), std::move(mp_table_map));
 }
 
 std::unique_ptr<bpe_merge_pairs::bpe_merge_pairs_impl> create_bpe_merge_pairs_impl(
@@ -163,10 +184,12 @@ bpe_merge_pairs::bpe_merge_pairs_impl::bpe_merge_pairs_impl(
   std::unique_ptr<cudf::column>&& merge_pairs,
   std::unique_ptr<cudf::column_device_view, std::function<void(cudf::column_device_view*)>>&&
     d_merge_pairs,
-  std::unique_ptr<detail::merge_pairs_map_type>&& merge_pairs_map)
+  std::unique_ptr<detail::merge_pairs_map_type>&& merge_pairs_map,
+  std::unique_ptr<detail::merge_pairs_map_type2>&& mp_table_map)
   : merge_pairs(std::move(merge_pairs)),
     d_merge_pairs(std::move(d_merge_pairs)),
-    merge_pairs_map(std::move(merge_pairs_map))
+    merge_pairs_map(std::move(merge_pairs_map)),
+    mp_table_map(std::move(mp_table_map))
 {
 }
 

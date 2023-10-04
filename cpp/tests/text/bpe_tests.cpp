@@ -54,8 +54,7 @@ TEST_F(TextBPETokenize, BytePairEncoding)
     validity);
   auto sv = cudf::strings_column_view(input);
 
-  auto results = nvtext::byte_pair_encoding(sv, *merge_pairs);
-
+  auto results  = nvtext::byte_pair_encoding(sv, *merge_pairs);
   auto expected = cudf::test::strings_column_wrapper({"this is it",
                                                       "this is   test - sent ence - 1",
                                                       "this is test sent ence - 2",
@@ -67,8 +66,8 @@ TEST_F(TextBPETokenize, BytePairEncoding)
 
   auto sliced          = cudf::slice(input, {1, 4}).front();
   auto sliced_expected = cudf::slice(expected, {1, 4}).front();
-  sv                   = cudf::strings_column_view(sliced);
 
+  sv      = cudf::strings_column_view(sliced);
   results = nvtext::byte_pair_encoding(sv, *merge_pairs);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), sliced_expected);
 }

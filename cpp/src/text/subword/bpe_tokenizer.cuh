@@ -46,6 +46,8 @@ using hash_value_type    = uint32_t;
 using string_hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>;
 using merge_pair_type    = thrust::pair<cudf::string_view, cudf::string_view>;
 
+using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
+
 /**
  * @brief Hasher function used for building and using the cuco static-map
  *
@@ -93,8 +95,6 @@ struct bpe_equal {
   }
 };
 
-using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
-
 using probe_scheme = cuco::experimental::linear_probing<1, bpe_hasher>;
 
 using merge_pairs_map_type = cuco::experimental::static_map<cudf::size_type,
@@ -104,6 +104,56 @@ using merge_pairs_map_type = cuco::experimental::static_map<cudf::size_type,
                                                             bpe_equal,
                                                             probe_scheme,
                                                             hash_table_allocator_type>;
+
+struct table_hasher {
+  cudf::column_device_view const d_strings;
+  string_hasher_type hasher{};
+  // used by insert
+  __device__ hash_value_type operator()(cudf::size_type index) const
+  {
+    auto const d_str = d_strings.element<cudf::string_view>(index);
+    return hasher(d_str);
+  }
+  // used by find
+  __device__ hash_value_type operator()(cudf::string_view const& d_str) const
+  {
+    return hasher(d_str);
+  }
+};
+
+/**
+ * @brief Equal function used for building and using the cuco static-map
+ *
+ * This takes advantage of heterogeneous lookup feature in cuco static-map which
+ * allows inserting with one type (index) and looking up with a different type (string).
+ */
+struct table_equal {
+  cudf::column_device_view const d_strings;
+  // used by insert
+  __device__ bool operator()(cudf::size_type lhs, cudf::size_type rhs) const noexcept
+  {
+    auto const left  = d_strings.element<cudf::string_view>(lhs);
+    auto const right = d_strings.element<cudf::string_view>(rhs);
+    return left == right;
+  }
+  // used by find
+  __device__ bool operator()(cudf::size_type lhs, cudf::string_view const& rhs) const noexcept
+  {
+    auto const left = d_strings.element<cudf::string_view>(lhs);
+    return left == rhs;
+  }
+};
+
+using probe_scheme2 = cuco::experimental::linear_probing<1, table_hasher>;
+
+using merge_pairs_map_type2 =
+  cuco::experimental::static_map<cudf::size_type,
+                                 cudf::size_type,
+                                 cuco::experimental::extent<std::size_t>,
+                                 cuda::thread_scope_device,
+                                 table_equal,
+                                 probe_scheme2,
+                                 hash_table_allocator_type>;
 
 }  // namespace detail
 
@@ -118,12 +168,17 @@ struct bpe_merge_pairs::bpe_merge_pairs_impl {
   col_device_view const d_merge_pairs;
   std::unique_ptr<detail::merge_pairs_map_type> merge_pairs_map;
 
+  std::unique_ptr<detail::merge_pairs_map_type2> mp_table_map;
+
   bpe_merge_pairs_impl(std::unique_ptr<cudf::column>&& merge_pairs,
                        col_device_view&& d_merge_pairs,
-                       std::unique_ptr<detail::merge_pairs_map_type>&& merge_pairs_map);
+                       std::unique_ptr<detail::merge_pairs_map_type>&& merge_pairs_map,
+                       std::unique_ptr<detail::merge_pairs_map_type2>&& mp_table_map);
 
   auto const get_merge_pairs() const { return *d_merge_pairs; }
   auto get_merge_pairs_ref() const { return merge_pairs_map->ref(cuco::experimental::op::find); }
+
+  auto get_mp_table_ref() const { return mp_table_map->ref(cuco::experimental::op::find); }
 };
 
 }  // namespace nvtext

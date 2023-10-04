@@ -42,6 +42,7 @@
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/merge.h>
+#include <thrust/remove.h>
 #include <thrust/transform.h>
 
 namespace nvtext {
@@ -49,6 +50,45 @@ namespace detail {
 namespace {
 
 constexpr int block_size = 512;
+
+template <typename MapRefType>
+__global__ void bpe_up_offsets_fn(char const* d_chars,
+                                  cudf::size_type chars_size,
+                                  cudf::size_type offset,
+                                  MapRefType const d_map,
+                                  cudf::size_type* d_offsets)
+{
+  auto const idx = static_cast<cudf::size_type>(cudf::detail::grid_1d::global_thread_id());
+  if (idx >= chars_size) { return; }
+  if (!cudf::strings::detail::is_begin_utf8_char(d_chars[idx])) {
+    d_offsets[idx] = 0;
+    return;
+  }
+
+  auto next_substr = [d_chars, end = d_chars + chars_size](char const* begin) {
+    auto const next = thrust::find_if(thrust::seq, begin + 1, end, [](auto v) {
+      return cudf::strings::detail::is_begin_utf8_char(v);
+    });
+    auto const size = static_cast<cudf::size_type>(thrust::distance(begin, next));
+    return cudf::string_view(begin, size);
+  };
+
+  auto const itr      = d_chars + idx;
+  auto const end      = d_chars + chars_size;
+  auto const lhs      = next_substr(itr);
+  auto const next_itr = itr + lhs.size_bytes();
+  auto output         = 0;
+  if (next_itr < end) {
+    auto const rhs = next_substr(next_itr);
+    if (!rhs.empty()) {
+      // see if both halves exist anywhere in the table
+      if (d_map.find(lhs) == d_map.end() && d_map.find(rhs) == d_map.end()) {
+        output = idx + lhs.size_bytes() + offset;  // candidate for artificial boundary
+      }
+    }
+  }
+  d_offsets[idx] = output;
+}
 
 template <typename MapRefType>
 __global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
@@ -77,13 +117,13 @@ __global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
   auto const end_ranks   = d_min_ranks + d_str.size_bytes();
   auto const d_rerank    = d_rerank_in + offset;
   auto const end_rerank  = d_rerank + d_str.size_bytes();
-  auto const num_valid   = block_size < d_str.size_bytes() ? block_size : d_str.size_bytes();
 
   auto constexpr max_rank = cuda::std::numeric_limits<cudf::size_type>::max();
 
   __shared__ cudf::size_type block_min_rank;
   using block_reduce = cub::BlockReduce<cudf::size_type, block_size>;
   __shared__ typename block_reduce::TempStorage temp_storage;
+  auto const num_valid = block_size < d_str.size_bytes() ? block_size : d_str.size_bytes();
 
   auto next_substr = [d_str, d_spaces, end = end_spaces](int8_t* begin) {
     auto const next = thrust::find_if(thrust::seq, begin + 1, end, [](auto v) { return v != 0; });
@@ -284,11 +324,51 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
   rmm::device_uvector<int8_t> d_spaces(chars_size, stream);
   rmm::device_uvector<cudf::size_type> d_ranks(chars_size, stream);  // rank per string pair;
   rmm::device_uvector<int8_t> d_rerank(chars_size, stream);          // re-ranking identifiers
-  auto const map_ref = merge_pairs.impl->get_merge_pairs_ref();
+  auto const map_ref  = merge_pairs.impl->get_merge_pairs_ref();
+  auto const map_ref2 = merge_pairs.impl->get_mp_table_ref();
 
-  bpe_parallel_fn<decltype(map_ref)><<<input.size(), block_size, 0, stream.value()>>>(
-    *d_strings, map_ref, d_spaces.data(), d_ranks.data(), d_rerank.data());
-  // this could probably be re-fused into the above kernel
+  if ((input.offset() == 0) && (input.size() == input.offsets().size() - 1)) {
+    // TODO: this fails for sliced columns for some reason;
+    //       we could get ride of the else{} if this was fixed
+
+    // this path locates unpairable sections of code to create artificial string row boundaries;
+    // the boundary values are recorded as offsets and stored temporarily in the d_ranks vector
+    auto const block_count = (chars_size + block_size - 1) / block_size;
+    bpe_up_offsets_fn<decltype(map_ref2)><<<block_count, block_size, 0, stream.value()>>>(
+      d_input_chars, chars_size, input.offset(), map_ref2, d_ranks.data());
+    auto const end   = thrust::remove(rmm::exec_policy(stream), d_ranks.begin(), d_ranks.end(), 0);
+    auto const total = thrust::distance(d_ranks.begin(), end);  // number of unpairables
+
+    // the new boundaries are combined with the existing offsets to build a temporary column
+    auto tmp_offsets = rmm::device_uvector<cudf::size_type>(total + input.size() + 1, stream);
+    thrust::merge(rmm::exec_policy(stream),
+                  input.offsets_begin(),
+                  input.offsets_end(),
+                  d_ranks.begin(),
+                  end,
+                  tmp_offsets.begin());
+
+    // the temp column is used for the encoding functions which is much faster
+    // on a larger number of smaller strings
+    auto const col_offsets =
+      cudf::column_view(cudf::device_span<cudf::size_type const>(tmp_offsets));
+    auto const tmp_input     = cudf::column_view(input.parent().type(),
+                                             static_cast<cudf::size_type>(input.size() + total),
+                                             nullptr,
+                                             nullptr,
+                                             0,
+                                             0,
+                                                 {col_offsets, input.chars()});
+    auto const d_tmp_strings = cudf::column_device_view::create(tmp_input, stream);
+
+    bpe_parallel_fn<decltype(map_ref)><<<tmp_input.size(), block_size, 0, stream.value()>>>(
+      *d_tmp_strings, map_ref, d_spaces.data(), d_ranks.data(), d_rerank.data());
+  } else {
+    bpe_parallel_fn<decltype(map_ref)><<<input.size(), block_size, 0, stream.value()>>>(
+      *d_strings, map_ref, d_spaces.data(), d_ranks.data(), d_rerank.data());
+  }
+
+  // compute the output sizes into the d_offsets vector
   bpe_finalize<<<input.size(), block_size, 0, stream.value()>>>(
     *d_strings, d_spaces.data(), d_offsets);
 
