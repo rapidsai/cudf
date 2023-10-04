@@ -344,7 +344,7 @@ std::vector<std::string> aggregate_reader_metadata::get_pandas_index_names() con
   return names;
 }
 
-std::tuple<int64_t, size_type, std::vector<row_group_info>>
+std::tuple<int64_t, size_type, std::vector<gpu::row_group_info>>
 aggregate_reader_metadata::select_row_groups(
   host_span<std::vector<size_type> const> row_group_indices,
   int64_t skip_rows_opt,
@@ -362,7 +362,7 @@ aggregate_reader_metadata::select_row_groups(
         host_span<std::vector<size_type> const>(filtered_row_group_indices.value());
     }
   }
-  std::vector<row_group_info> selection;
+  std::vector<gpu::row_group_info> selection;
   auto [rows_to_skip, rows_to_read] = [&]() {
     if (not row_group_indices.empty()) { return std::pair<int64_t, size_type>{}; }
     auto const from_opts = cudf::io::detail::skip_rows_num_rows_from_options(
