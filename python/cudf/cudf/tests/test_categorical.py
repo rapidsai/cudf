@@ -938,6 +938,12 @@ def test_categorical_index_with_dtype():
     assert_eq(gi.dtype.categories, pi.dtype.categories)
 
 
+def test_cat_iterate_error():
+    s = cudf.Series([1, 2, 3], dtype="category")
+    with pytest.raises(TypeError):
+        iter(s.cat)
+
+
 @pytest.mark.parametrize("ordered", [True, False])
 def test_empty_series_category_cast(ordered):
     dtype = cudf.CategoricalDtype(ordered=ordered)

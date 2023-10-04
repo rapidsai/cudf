@@ -1296,6 +1296,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         >>> type(midx.values)
         <class 'cupy...ndarray'>
         """
+        if cudf.get_option("mode.pandas_compatible"):
+            raise NotImplementedError(
+                "Unable to create a cupy array with tuples."
+            )
         return self.to_frame(index=False).values
 
     @classmethod
