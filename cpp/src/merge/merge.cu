@@ -150,11 +150,11 @@ void materialize_bitmask(column_view const& left_col,
   CUDF_CHECK_CUDA(stream.value());
 }
 
-// struct side_index_generator {
-//   side _side;
+struct side_index_generator {
+  side _side;
 
-//   __device__ index_type operator()(size_type i) const noexcept { return index_type{_side, i}; }
-// };
+  __device__ index_type operator()(size_type i) const noexcept { return index_type{_side, i}; }
+};
 
 /**
  * @brief Generates the row indices and source side (left or right) in accordance with the index
@@ -173,66 +173,66 @@ void materialize_bitmask(column_view const& left_col,
  *
  * @return A device_uvector of merged indices
  */
-// index_vector generate_merged_indices(table_view const& left_table,
-//                                      table_view const& right_table,
-//                                      std::vector<order> const& column_order,
-//                                      std::vector<null_order> const& null_precedence,
-//                                      bool nullable,
-//                                      rmm::cuda_stream_view stream)
-// {
-//   size_type const left_size  = left_table.num_rows();
-//   size_type const right_size = right_table.num_rows();
-//   size_type const total_size = left_size + right_size;
+index_vector generate_merged_indices(table_view const& left_table,
+                                     table_view const& right_table,
+                                     std::vector<order> const& column_order,
+                                     std::vector<null_order> const& null_precedence,
+                                     bool nullable,
+                                     rmm::cuda_stream_view stream)
+{
+  size_type const left_size  = left_table.num_rows();
+  size_type const right_size = right_table.num_rows();
+  size_type const total_size = left_size + right_size;
 
-//   auto left_gen    = side_index_generator{side::LEFT};
-//   auto right_gen   = side_index_generator{side::RIGHT};
-//   auto left_begin  = cudf::detail::make_counting_transform_iterator(0, left_gen);
-//   auto right_begin = cudf::detail::make_counting_transform_iterator(0, right_gen);
+  auto left_gen    = side_index_generator{side::LEFT};
+  auto right_gen   = side_index_generator{side::RIGHT};
+  auto left_begin  = cudf::detail::make_counting_transform_iterator(0, left_gen);
+  auto right_begin = cudf::detail::make_counting_transform_iterator(0, right_gen);
 
-//   index_vector merged_indices(total_size, stream);
+  index_vector merged_indices(total_size, stream);
 
-//   auto lhs_device_view = table_device_view::create(left_table, stream);
-//   auto rhs_device_view = table_device_view::create(right_table, stream);
+  auto lhs_device_view = table_device_view::create(left_table, stream);
+  auto rhs_device_view = table_device_view::create(right_table, stream);
 
-//   auto d_column_order = cudf::detail::make_device_uvector_async(
-//     column_order, stream, rmm::mr::get_current_device_resource());
+  auto d_column_order = cudf::detail::make_device_uvector_async(
+    column_order, stream, rmm::mr::get_current_device_resource());
 
-//   if (nullable) {
-//     auto d_null_precedence = cudf::detail::make_device_uvector_async(
-//       null_precedence, stream, rmm::mr::get_current_device_resource());
+  if (nullable) {
+    auto d_null_precedence = cudf::detail::make_device_uvector_async(
+      null_precedence, stream, rmm::mr::get_current_device_resource());
 
-//     auto ineq_op = detail::row_lexicographic_tagged_comparator<true>(
-//       *lhs_device_view, *rhs_device_view, d_column_order.data(), d_null_precedence.data());
-//     thrust::merge(rmm::exec_policy(stream),
-//                   left_begin,
-//                   left_begin + left_size,
-//                   right_begin,
-//                   right_begin + right_size,
-//                   merged_indices.begin(),
-//                   ineq_op);
-//   } else {
-//     auto ineq_op = detail::row_lexicographic_tagged_comparator<false>(
-//       *lhs_device_view, *rhs_device_view, d_column_order.data());
-//     thrust::merge(rmm::exec_policy(stream),
-//                   left_begin,
-//                   left_begin + left_size,
-//                   right_begin,
-//                   right_begin + right_size,
-//                   merged_indices.begin(),
-//                   ineq_op);
-//   }
+    auto ineq_op = detail::row_lexicographic_tagged_comparator<true>(
+      *lhs_device_view, *rhs_device_view, d_column_order.data(), d_null_precedence.data());
+    thrust::merge(rmm::exec_policy(stream),
+                  left_begin,
+                  left_begin + left_size,
+                  right_begin,
+                  right_begin + right_size,
+                  merged_indices.begin(),
+                  ineq_op);
+  } else {
+    auto ineq_op = detail::row_lexicographic_tagged_comparator<false>(
+      *lhs_device_view, *rhs_device_view, d_column_order.data());
+    thrust::merge(rmm::exec_policy(stream),
+                  left_begin,
+                  left_begin + left_size,
+                  right_begin,
+                  right_begin + right_size,
+                  merged_indices.begin(),
+                  ineq_op);
+  }
 
-//   CUDF_CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
 
-//   return merged_indices;
-// }
+  return merged_indices;
+}
 
-index_vector generate_new_merged_indices(table_view const& left_table,
-                                         table_view const& right_table,
-                                         std::vector<order> const& column_order,
-                                         std::vector<null_order> const& null_precedence,
-                                         bool nullable,
-                                         rmm::cuda_stream_view stream)
+index_vector generate_merged_indices_nested(table_view const& left_table,
+                                            table_view const& right_table,
+                                            std::vector<order> const& column_order,
+                                            std::vector<null_order> const& null_precedence,
+                                            bool nullable,
+                                            rmm::cuda_stream_view stream)
 {
   size_type const left_size  = left_table.num_rows();
   size_type const right_size = right_table.num_rows();
@@ -491,8 +491,15 @@ table_ptr_type merge(cudf::table_view const& left_table,
 
   // extract merged row order according to indices:
   //
-  auto const merged_indices = generate_new_merged_indices(
-    index_left_view, index_right_view, column_order, null_precedence, nullable, stream);
+  index_vector merged_indices(0, stream);
+  if (cudf::detail::has_nested_columns(left_table) or
+      cudf::detail::has_nested_columns(right_table)) {
+    merged_indices = generate_merged_indices_nested(
+      index_left_view, index_right_view, column_order, null_precedence, nullable, stream);
+  } else {
+    merged_indices = generate_merged_indices(
+      index_left_view, index_right_view, column_order, null_precedence, nullable, stream);
+  }
 
   // create merged table:
   //
