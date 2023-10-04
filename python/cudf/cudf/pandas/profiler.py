@@ -25,7 +25,7 @@ from .fast_slow_proxy import _FunctionProxy, _MethodProxy
 # original code. The profiler is injected at the top of the cell, so the line
 # numbers in the profiler results are offset by 2.
 _profile_injection_text = """\
-from xdf.profiler import Profiler
+from cudf.pandas import Profiler
 with Profiler() as profiler:
 {original_lines}
 
