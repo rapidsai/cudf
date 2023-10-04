@@ -99,9 +99,7 @@ class _PickleConstructor:
         self._type = type_
 
     def __call__(self):
-        # If for some reason _FastSlowProxy ever overrides __new__ this may
-        # fail and we would need to call object.__new__ instead.
-        return self._type.__new__(self._type)
+        return object.__new__(self._type)
 
 
 def make_final_proxy_type(
