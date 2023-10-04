@@ -22,7 +22,7 @@ def ipython_magics_gpu_test():
     c.HistoryManager.hist_file = ":memory:"
 
     ip = InteractiveShell(config=c)
-    ip.run_line_magic("load_ext", "xdf")
+    ip.run_line_magic("load_ext", "cudf.pandas")
 
     # Directly check for private xdf attribute
     ip.run_cell("import pandas as pd; s = pd.Series(range(5))")

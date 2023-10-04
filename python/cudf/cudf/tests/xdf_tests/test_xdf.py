@@ -22,13 +22,13 @@ import numpy as np
 import pyarrow as pa
 import pytest
 
-from xdf.autoload import LOADED
+from cudf.pandas import LOADED
 
 if not LOADED:
     import pandas as pd
 
-    import xdf.pandas as xpd
-    import xdf.pandas._testing as tm
+    import cudf.pandas.pandas as xpd
+    import cudf.pandas.pandas._testing as tm
 else:
     import pandas as xpd
     import pandas._testing as tm
@@ -36,7 +36,7 @@ else:
     # Transparent-provided pandas has the real pandas module as an attribute
     pd = xpd._xdf_slow
 
-from xdf import Profiler
+from cudf.pandas import Profiler
 
 
 @pytest.fixture

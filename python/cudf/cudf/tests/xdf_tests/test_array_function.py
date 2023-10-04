@@ -12,15 +12,15 @@
 import numpy as np
 import pytest
 
-from xdf._wrappers.common import array_function_method
-from xdf.autoload import LOADED
+from cudf.pandas import LOADED
+from cudf.pandas._wrappers.common import array_function_method
 
 if not LOADED:
-    import xdf.pandas._testing as tm
+    import cudf.pandas.pandas._testing as tm
 else:
     import pandas._testing as tm
 
-from xdf.fast_slow_proxy import make_final_proxy_type
+from cudf.pandas.fast_slow_proxy import make_final_proxy_type
 
 
 class Slow:
