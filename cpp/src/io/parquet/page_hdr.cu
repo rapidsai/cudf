@@ -20,8 +20,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <cuda/atomic>
-
 namespace cudf {
 namespace io {
 namespace parquet {
@@ -450,10 +448,7 @@ __global__ void __launch_bounds__(128)
     if (lane_id == 0) {
       chunks[chunk].num_data_pages = data_page_count;
       chunks[chunk].num_dict_pages = dictionary_page_count;
-      if (error[warp_id] != 0) {
-        cuda::atomic_ref<int32_t, cuda::thread_scope_device> ref{*error_code};
-        ref.fetch_or(error[warp_id], cuda::std::memory_order_relaxed);
-      }
+      set_error(error[warp_id], error_code);
     }
   }
 }

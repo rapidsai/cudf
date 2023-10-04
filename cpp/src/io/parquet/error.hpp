@@ -47,20 +47,13 @@ int32_t get_error_code();
 std::string get_error_string();
 
 /**
- * @brief Reset the global error scalar to 0.
+ * @brief Reset the global error scalar to 0 and set the stream used for error reporting.
  *
- * This will use the stream set in `set_error_stream`.
+ * This should be called before passing the error code to a kernel since this is a shared
+ * resource.
+ *
+ * @param stream CUDA stream to use for error reporting.
  */
-void reset_error_code();
-
-/**
- * @brief Set the stream to use for error handling.
- *
- * Call this if errors will be retrieved for a stream different than
- * `cudf::detail::default_stream_value`.
- *
- * @param stream CUDA stream to use.
- */
-void set_error_stream(rmm::cuda_stream_view stream);
+void reset_error_code(rmm::cuda_stream_view stream);
 
 }  // namespace cudf::io::parquet

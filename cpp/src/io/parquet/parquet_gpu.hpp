@@ -31,6 +31,8 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/atomic>
+
 #include <cuda_runtime.h>
 
 #include <vector>
@@ -52,6 +54,14 @@ template <int rolling_size>
 constexpr int rolling_index(int index)
 {
   return index % rolling_size;
+}
+
+inline __device__ void set_error(int32_t error, int32_t* error_code)
+{
+  if (error != 0) {
+    cuda::atomic_ref<int32_t, cuda::thread_scope_device> ref{*error_code};
+    ref.fetch_or(error, cuda::std::memory_order_relaxed);
+  }
 }
 
 /**

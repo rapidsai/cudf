@@ -41,8 +41,10 @@ std::string get_error_string()
   return " 0x" + sstream.str();
 }
 
-void reset_error_code() { error_code.set_value_to_zero_async(error_code.stream()); }
-
-void set_error_stream(rmm::cuda_stream_view stream) { error_code.set_stream(stream); }
+void reset_error_code(rmm::cuda_stream_view stream)
+{
+  error_code.set_stream(stream);
+  error_code.set_value_to_zero_async(error_code.stream());
+}
 
 }  // namespace cudf::io::parquet

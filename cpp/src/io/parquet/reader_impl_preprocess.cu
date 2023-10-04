@@ -306,7 +306,7 @@ template <typename T = uint8_t>
 {
   size_t total_pages = 0;
 
-  set_error_stream(stream);
+  reset_error_code(stream);
   chunks.host_to_device_async(stream);
   gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), get_error(), stream);
   chunks.device_to_host_sync(stream);
@@ -355,7 +355,7 @@ int decode_page_headers(cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc>& c
     page_count += chunks[c].max_num_pages;
   }
 
-  set_error_stream(stream);
+  reset_error_code(stream);
   chunks.host_to_device_async(stream);
   gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), get_error(), stream);
 
