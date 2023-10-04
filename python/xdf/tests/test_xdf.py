@@ -1061,7 +1061,7 @@ def test_numpy_var():
 
     tm.assert_almost_equal(np.var(psr), np.var(sr))
 
-    
+
 def test_index_new():
     expected = pd.Index.__new__(pd.Index, [1, 2, 3])
     got = xpd.Index.__new__(xpd.Index, [1, 2, 3])
