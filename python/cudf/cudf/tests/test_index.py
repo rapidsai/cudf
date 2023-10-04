@@ -2806,6 +2806,18 @@ def test_index_to_frame(data, data_name, index, name):
     assert_eq(expected, actual)
 
 
+@pytest.mark.parametrize("data", [[1, 2, 3], range(0, 10)])
+@pytest.mark.parametrize("dtype", ["str", "int64", "float64"])
+def test_index_with_index_dtype(data, dtype):
+    pidx = pd.Index(data)
+    gidx = cudf.Index(data)
+
+    expected = pd.Index(pidx, dtype=dtype)
+    actual = cudf.Index(gidx, dtype=dtype)
+
+    assert_eq(expected, actual)
+
+
 def test_period_index_error():
     pidx = pd.PeriodIndex(year=[2000, 2002], quarter=[1, 3])
     with pytest.raises(NotImplementedError):

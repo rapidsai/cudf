@@ -66,7 +66,6 @@ from cudf.utils.dtypes import (
 )
 from cudf.utils.utils import (
     _cudf_nvtx_annotate,
-    _is_same_name,
     _warn_no_dask_cudf,
     search_range,
 )
@@ -3317,9 +3316,39 @@ class StringIndex(GenericIndex):
 
 
 @_cudf_nvtx_annotate
-def as_index(arbitrary, nan_as_null=None, **kwargs) -> BaseIndex:
+def as_index(
+    arbitrary, nan_as_null=None, copy=False, name=no_default, dtype=None
+) -> BaseIndex:
     """Create an Index from an arbitrary object
 
+    Parameters
+    ----------
+    arbitrary : object
+        Object to construct the Index from. See *Notes*.
+    nan_as_null : bool, optional, default None
+        If None (default), treats NaN values in arbitrary as null.
+        If True, combines the mask and NaNs to
+        form a new validity mask. If False, leaves NaN values as is.
+    copy : bool, default False
+        If True, Make copies of `arbitrary` if possible and create an
+        Index out of it.
+        If False, `arbitrary` will be shallow-copied if it is a
+        device-object to construct an Index.
+    name : object, optional
+        Name of the index being created, by default it is `None`.
+    dtype : optional
+        Optionally typecast the constructed Index to the given
+        dtype.
+
+    Returns
+    -------
+    result : subclass of Index
+        - CategoricalIndex for Categorical input.
+        - DatetimeIndex for Datetime input.
+        - GenericIndex for all other inputs.
+
+    Notes
+    -----
     Currently supported inputs are:
 
     * ``Column``
@@ -3330,48 +3359,63 @@ def as_index(arbitrary, nan_as_null=None, **kwargs) -> BaseIndex:
     * numpy array
     * pyarrow array
     * pandas.Categorical
-
-    Returns
-    -------
-    result : subclass of Index
-        - CategoricalIndex for Categorical input.
-        - DatetimeIndex for Datetime input.
-        - GenericIndex for all other inputs.
     """
 
-    kwargs = _setdefault_name(arbitrary, **kwargs)
+    if name is no_default:
+        name = getattr(arbitrary, "name", None)
+
     if isinstance(arbitrary, cudf.MultiIndex):
-        return arbitrary
+        if dtype is not None:
+            raise TypeError(
+                "dtype must be `None` for inputs of type: "
+                f"{type(arbitrary).__name__}, found {dtype=} "
+            )
+        return arbitrary.copy(deep=copy)
     elif isinstance(arbitrary, BaseIndex):
-        if _is_same_name(arbitrary.name, kwargs["name"]):
-            return arbitrary
-        idx = arbitrary.copy(deep=False)
-        idx.rename(kwargs["name"], inplace=True)
-        return idx
+        idx = arbitrary.copy(deep=copy).rename(name)
     elif isinstance(arbitrary, ColumnBase):
-        res = _index_from_data({kwargs.get("name", None): arbitrary})
-        if (dtype := kwargs.get("dtype")) is not None:
-            res = res.astype(dtype)
-        return res
+        idx = _index_from_data({name: arbitrary})
     elif isinstance(arbitrary, cudf.Series):
-        return as_index(arbitrary._column, nan_as_null=nan_as_null, **kwargs)
+        return as_index(
+            arbitrary._column,
+            nan_as_null=nan_as_null,
+            copy=copy,
+            name=name,
+            dtype=dtype,
+        )
     elif isinstance(arbitrary, (pd.RangeIndex, range)):
-        return RangeIndex(
+        idx = RangeIndex(
             start=arbitrary.start,
             stop=arbitrary.stop,
             step=arbitrary.step,
-            **kwargs,
+            name=name,
         )
     elif isinstance(arbitrary, pd.MultiIndex):
-        return cudf.MultiIndex.from_pandas(arbitrary, nan_as_null=nan_as_null)
+        if dtype is not None:
+            raise TypeError(
+                "dtype must be `None` for inputs of type: "
+                f"{type(arbitrary).__name__}, found {dtype=} "
+            )
+        return cudf.MultiIndex.from_pandas(
+            arbitrary.copy(deep=copy), nan_as_null=nan_as_null
+        )
     elif isinstance(arbitrary, cudf.DataFrame):
-        return cudf.MultiIndex.from_frame(arbitrary)
-    return as_index(
-        column.as_column(
-            arbitrary, dtype=kwargs.get("dtype", None), nan_as_null=nan_as_null
-        ),
-        **kwargs,
-    )
+        if dtype is not None:
+            raise TypeError(
+                "dtype must be `None` for inputs of type: "
+                f"{type(arbitrary).__name__}, found {dtype=} "
+            )
+        return cudf.MultiIndex.from_frame(arbitrary.copy(deep=copy))
+    else:
+        return as_index(
+            column.as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null),
+            copy=copy,
+            name=name,
+            dtype=dtype,
+        )
+    if dtype is not None:
+        idx = idx.astype(dtype)
+    return idx
 
 
 _dtype_to_index: Dict[Any, Type[NumericIndex]] = {
@@ -3455,7 +3499,7 @@ class Index(BaseIndex, metaclass=IndexMeta):
         data=None,
         dtype=None,
         copy=False,
-        name=None,
+        name=no_default,
         tupleize_cols=True,
         nan_as_null=True,
         **kwargs,
