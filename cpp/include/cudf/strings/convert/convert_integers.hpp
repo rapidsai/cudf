@@ -172,7 +172,7 @@ std::unique_ptr<column> hex_to_integers(
  *
  * @code{.pseudo}
  * Example:
- * s = ['1234', '-456', '', 'AGE', '+17EA', '0x9EF' '123ABC']
+ * s = ['123', '-456', '', 'AGE', '+17EA', '0x9EF' '123ABC']
  * b = is_hex(s)
  * b is [true, false, false, false, false, true, true]
  * @endcode
