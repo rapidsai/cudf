@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -68,7 +68,9 @@ abstract class Aggregation {
         DENSE_RANK(29),
         PERCENT_RANK(30),
         TDIGEST(31), // This can take a delta argument for accuracy level
-        MERGE_TDIGEST(32); // This can take a delta argument for accuracy level
+        MERGE_TDIGEST(32), // This can take a delta argument for accuracy level
+        HISTOGRAM(33),
+        MERGE_HISTOGRAM(34);
 
         final int nativeId;
 
@@ -916,6 +918,26 @@ abstract class Aggregation {
 
     static TDigestAggregation mergeTDigest(int delta) {
         return new TDigestAggregation(Kind.MERGE_TDIGEST, delta);
+    }
+
+    static final class HistogramAggregation extends NoParamAggregation {
+        private HistogramAggregation() {
+            super(Kind.HISTOGRAM);
+        }
+    }
+
+    static final class MergeHistogramAggregation extends NoParamAggregation {
+        private MergeHistogramAggregation() {
+            super(Kind.MERGE_HISTOGRAM);
+        }
+    }
+
+    static HistogramAggregation histogram() {
+        return new HistogramAggregation();
+    }
+
+    static MergeHistogramAggregation mergeHistogram() {
+        return new MergeHistogramAggregation();
     }
 
     /**
