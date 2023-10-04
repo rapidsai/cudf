@@ -2016,3 +2016,13 @@ def test_multiindex_values_pandas_compatible():
     with cudf.option_context("mode.pandas_compatible", True):
         with pytest.raises(NotImplementedError):
             midx.values
+
+
+def test_mulitindex_dtype_error():
+    midx = cudf.MultiIndex.from_tuples([(10, 12), (8, 9), (3, 4)])
+    with pytest.raises(TypeError):
+        cudf.Index(midx, dtype="int64")
+    with pytest.raises(TypeError):
+        cudf.Index(midx.to_pandas(), dtype="int64")
+    with pytest.raises(TypeError):
+        cudf.Index(midx.to_frame(), dtype="int64")
