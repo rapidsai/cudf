@@ -51,7 +51,7 @@ class kernel_error {
   /**
    * @brief Return a pointer to the device memory for the error
    */
-  auto data() { return _error_code.data(); }
+  [[nodiscard]] auto data() { return _error_code.data(); }
 
   /**
    * @brief Return the current value of the error
@@ -59,14 +59,14 @@ class kernel_error {
    * This uses the stream used to create this instance. This does a synchronize on the stream
    * this object was instantiated with.
    */
-  auto value() const { return _error_code.value(_error_code.stream()); }
+  [[nodiscard]] auto value() const { return _error_code.value(_error_code.stream()); }
 
   /**
    * @brief Return a hexadecimal string representation of the current error code
    *
    * Returned string will have "0x" prepended.
    */
-  std::string str() const
+  [[nodiscard]] std::string str() const
   {
     std::stringstream sstream;
     sstream << std::hex << value();
