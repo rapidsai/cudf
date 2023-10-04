@@ -27,10 +27,7 @@
 
 #include <bitset>
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace gpu {
+namespace cudf::io::parquet::gpu {
 
 namespace {
 
@@ -601,17 +598,10 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBou
   __shared__ rle_run<level_t> rep_runs[rle_run_buffer_size];
   rle_stream<level_t, preprocess_block_size> decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs},
                                                                                       {rep_runs}};
+
   // setup page info
-  if (!setupLocalPageInfo(
-        s,
-        pp,
-        chunks,
-        min_row,
-        num_rows,
-        mask_filter{BitOr(decode_kernel_mask::STRING, decode_kernel_mask::DELTA_BYTE_ARRAY)},
-        true)) {
-    return;
-  }
+  auto const mask = BitOr(decode_kernel_mask::STRING, decode_kernel_mask::DELTA_BYTE_ARRAY);
+  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, mask_filter{mask}, true)) { return; }
 
   bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
 
@@ -655,15 +645,8 @@ __global__ void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageS
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
 
   // setup page info
-  if (!setupLocalPageInfo(s,
-                          pp,
-                          chunks,
-                          min_row,
-                          num_rows,
-                          mask_filter{decode_kernel_mask::DELTA_BYTE_ARRAY},
-                          true)) {
-    return;
-  }
+  auto const mask = decode_kernel_mask::DELTA_BYTE_ARRAY;
+  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, mask_filter{mask}, true)) { return; }
 
   auto const start_value = pp->start_val;
 
@@ -821,13 +804,9 @@ __global__ void __launch_bounds__(decode_block_size)
   int const lane_id     = t % warp_size;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  if (!setupLocalPageInfo(s,
-                          &pages[page_idx],
-                          chunks,
-                          min_row,
-                          num_rows,
-                          mask_filter{decode_kernel_mask::STRING},
-                          true)) {
+  auto const mask = decode_kernel_mask::STRING;
+  if (!setupLocalPageInfo(
+        s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{mask}, true)) {
     return;
   }
 
@@ -1003,8 +982,8 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
                             uint32_t kernel_mask,
                             rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(preprocess_block_size, 1);
-  dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
+  dim3 const dim_block(preprocess_block_size, 1);
+  dim3 const dim_grid(pages.size(), 1);  // 1 threadblock per page
   if (level_type_size == 1) {
     gpuComputeStringPageBounds<uint8_t>
       <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
@@ -1014,10 +993,10 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
   }
 
   // kernel mask may contain other kernels we don't need to count
-  int count_mask =
+  int const count_mask =
     kernel_mask & BitOr(decode_kernel_mask::DELTA_BYTE_ARRAY, decode_kernel_mask::STRING);
-  int nkernels = std::bitset<32>(count_mask).count();
-  auto streams = cudf::detail::fork_streams(stream, nkernels);
+  int const nkernels = std::bitset<32>(count_mask).count();
+  auto const streams = cudf::detail::fork_streams(stream, nkernels);
 
   int s_idx = 0;
   if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_BYTE_ARRAY) != 0) {
@@ -1093,7 +1072,4 @@ void __host__ DecodeStringPageData(cudf::detail::hostdevice_vector<PageInfo>& pa
   }
 }
 
-}  // namespace gpu
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::gpu
