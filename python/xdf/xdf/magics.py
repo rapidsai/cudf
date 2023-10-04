@@ -10,7 +10,27 @@
 # its affiliates is strictly prohibited.
 
 
+from IPython.core.magic import Magics, cell_magic, magics_class
+
+from .profiler import Profiler, lines_with_profiling
+
+
+@magics_class
+class XDFMagics(Magics):
+    @cell_magic("cudf.pandas.profile")
+    def xdf_profile(self, _, cell):
+        with Profiler() as profiler:
+            get_ipython().run_cell(cell)  # noqa: F821
+        profiler.print_per_func_stats()
+
+    @cell_magic("cudf.pandas.line_profile")
+    def xdf_line_profile(self, _, cell):
+        new_cell = lines_with_profiling(cell.split("\n"))
+        get_ipython().run_cell(new_cell)  # noqa: F821
+
+
 def load_ipython_extension(ip):
     import xdf.autoload
 
     xdf.autoload.install()
+    ip.register_magics(XDFMagics)
