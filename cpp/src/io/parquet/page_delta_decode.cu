@@ -320,13 +320,9 @@ __global__ void __launch_bounds__(96)
   auto* const db        = &db_state;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  if (!setupLocalPageInfo(s,
-                          &pages[page_idx],
-                          chunks,
-                          min_row,
-                          num_rows,
-                          mask_filter{decode_kernel_mask::DELTA_BINARY},
-                          true)) {
+  auto const mask = decode_kernel_mask::DELTA_BINARY;
+  if (!setupLocalPageInfo(
+        s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{mask}, true)) {
     return;
   }
 
@@ -455,13 +451,9 @@ __global__ void __launch_bounds__(decode_block_size)
   auto* const dba       = &db_state;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  if (!setupLocalPageInfo(s,
-                          &pages[page_idx],
-                          chunks,
-                          min_row,
-                          num_rows,
-                          mask_filter{decode_kernel_mask::DELTA_BYTE_ARRAY},
-                          true)) {
+  auto const mask = decode_kernel_mask::DELTA_BYTE_ARRAY;
+  if (!setupLocalPageInfo(
+        s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{mask}, true)) {
     return;
   }
 
@@ -532,7 +524,7 @@ __global__ void __launch_bounds__(decode_block_size)
     } else if (src_pos < target_pos) {
       // warp 3
 
-      int nproc = min(batch_size, s->page.end_val - string_pos);
+      int const nproc = min(batch_size, s->page.end_val - string_pos);
       strings_data += use_char_ll
                         ? dba->calculate_string_values_cp(strings_data, string_pos, nproc, lane_id)
                         : dba->calculate_string_values(strings_data, string_pos, nproc, lane_id);
@@ -547,7 +539,7 @@ __global__ void __launch_bounds__(decode_block_size)
         if (!has_repetition) { dst_pos -= s->first_row; }
 
         if (dst_pos >= 0 && sp < target_pos) {
-          auto offptr =
+          auto const offptr =
             reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out) + dst_pos;
           auto const src_idx = rolling_index<delta_rolling_buf_size>(sp + skipped_leaf_values);
           *offptr            = prefix_db->value[src_idx] + suffix_db->value[src_idx];
@@ -617,8 +609,8 @@ void __host__ DecodeDeltaByteArray(cudf::detail::hostdevice_vector<PageInfo>& pa
 {
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
 
-  dim3 dim_block(decode_block_size, 1);
-  dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
+  dim3 const dim_block(decode_block_size, 1);
+  dim3 const dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   if (level_type_size == 1) {
     gpuDecodeDeltaByteArray<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
