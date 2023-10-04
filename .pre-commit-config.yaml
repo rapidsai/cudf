@@ -54,8 +54,8 @@ repos:
                 args: ["--config=pyproject.toml"]
                 exclude: |
                   (?x)^(
-                    ^python/xdf/scripts/.*|
-                    ^python/xdf/tests/.*
+                    ^python/cudf/cudf/pandas/scripts/.*|
+                    ^python/cudf/cudf/tests/xdf_tests/.*
                   )
       - repo: https://github.com/nbQA-dev/nbQA
         rev: 1.6.3
