@@ -20,7 +20,8 @@ rapids-logger "PR number: $RAPIDS_REF_NAME"
 
 WHEEL_NAME_PREFIX="cudf_"
 if [[ "${PANDAS_TESTS_BRANCH}" == "main" ]]; then
-    git checkout branch-23.10-xdf
+    MAIN_COMMIT=$(git merge-base HEAD origin/branch-23.10-xdf)
+    git checkout $MAIN_COMMIT
     WHEEL_NAME_PREFIX="cudf_${PANDAS_TESTS_BRANCH}_"
 fi
 

@@ -1060,3 +1060,17 @@ def test_numpy_var():
     sr = xpd.Series(data)
 
     tm.assert_almost_equal(np.var(psr), np.var(sr))
+
+    
+def test_index_new():
+    expected = pd.Index.__new__(pd.Index, [1, 2, 3])
+    got = xpd.Index.__new__(xpd.Index, [1, 2, 3])
+    tm.assert_equal(expected, got)
+
+    expected = pd.Index.__new__(pd.Index, [1, 2, 3], dtype="int8")
+    got = xpd.Index.__new__(xpd.Index, [1, 2, 3], dtype="int8")
+    tm.assert_equal(expected, got)
+
+    expected = pd.RangeIndex.__new__(pd.RangeIndex, 0, 10, 2)
+    got = xpd.RangeIndex.__new__(xpd.RangeIndex, 0, 10, 2)
+    tm.assert_equal(expected, got)

@@ -2541,6 +2541,7 @@ def _construct_array(
                     raise NotImplementedError(
                         "cuDF does not yet support timezone-aware datetimes"
                     )
+                return pd_arbitrary.to_numpy()
             except pd.errors.OutOfBoundsDatetime:
                 # https://github.com/pandas-dev/pandas/issues/55096
                 pass

@@ -141,6 +141,13 @@ Series = make_final_proxy_type(
     },
 )
 
+
+def Index__new__(cls, *args, **kwargs):
+    obj = object.__new__(cls)
+    obj.__init__(*args, **kwargs)
+    return obj
+
+
 Index = make_final_proxy_type(
     "Index",
     cudf.Index,
@@ -156,6 +163,7 @@ Index = make_final_proxy_type(
         "str": _AccessorAttr(StringMethods),
         "cat": _AccessorAttr(_CategoricalAccessor),
         "__iter__": custom_iter,
+        "__new__": Index__new__,
     },
 )
 
