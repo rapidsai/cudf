@@ -347,8 +347,8 @@ __global__ void __launch_bounds__(128)
 {
   gpuParsePageHeader parse_page_header;
   __shared__ byte_stream_s bs_g[4];
-  __shared__ int error[4];
 
+  int error[4]            = {0};
   int lane_id             = threadIdx.x % 32;
   int warp_id             = threadIdx.x / 32;
   int chunk               = (blockIdx.x * 4) + warp_id;
@@ -366,7 +366,7 @@ __global__ void __launch_bounds__(128)
     int32_t num_dict_pages = bs->ck.num_dict_pages;
     PageInfo* page_info;
 
-    if (!lane_id) {
+    if (lane_id == 0) {
       bs->base = bs->cur      = bs->ck.compressed_data;
       bs->end                 = bs->base + bs->ck.compressed_size;
       bs->page.chunk_idx      = chunk;
