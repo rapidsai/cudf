@@ -1053,6 +1053,15 @@ def test_dataframe_query():
     tm.assert_equal(actual, expected)
 
 
+def test_numpy_var():
+    np.random.seed(42)
+    data = np.random.rand(1000)
+    psr = pd.Series(data)
+    sr = xpd.Series(data)
+
+    tm.assert_almost_equal(np.var(psr), np.var(sr))
+
+
 def test_index_new():
     expected = pd.Index.__new__(pd.Index, [1, 2, 3])
     got = xpd.Index.__new__(xpd.Index, [1, 2, 3])
