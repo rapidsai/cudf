@@ -108,13 +108,13 @@ fi
 
 if [[ "${XDF_MODE}" == "--rewrite-imports" ]]; then
     # Substitute `xdf` for `pandas` in the tests
-    find pandas-tests/ -iname "*.py" | xargs sed -i 's/import\ pandas/import\ xdf.pandas/g'
-    find pandas-tests/ -iname "*.py" | xargs sed -i 's/from\ pandas/from\ xdf.pandas/g'
-    find pandas-tests/ -iname "*.py" | xargs sed -i 's/xdf.pandas_dtype/pandas_dtype/g'
+    find pandas-tests/ -iname "*.py" | xargs sed -i 's/import\ pandas/import\ cudf.pandas.pandas/g'
+    find pandas-tests/ -iname "*.py" | xargs sed -i 's/from\ pandas/from\ cudf.pandas.pandas/g'
+    find pandas-tests/ -iname "*.py" | xargs sed -i 's/cudf.pandas.pandas_dtype/pandas_dtype/g'
 
     EXTRA_PYTEST_ARGS=""
 elif [[ "${XDF_MODE}" == "--transparent" ]]; then
-    EXTRA_PYTEST_ARGS="-p xdf.autoload"
+    EXTRA_PYTEST_ARGS="-p cudf.pandas"
 else
     echo "Unknown XDF mode ${XDF_MODE}, expecting '--rewrite-imports' or '--transparent'"
     exit 1

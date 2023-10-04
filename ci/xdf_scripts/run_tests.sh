@@ -42,9 +42,7 @@ else
     RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
     python -m pip install ./local-cudf-dep/cudf*.whl
 fi
-cd python/xdf/
-python -m pip install .[test]
 
-python -m pytest ./tests
+python -m pytest ./python/cudf/cudf/tests/xdf_tests/
 
-python -m pytest -p xdf.autoload ./tests
+python -m pytest -p cudf.pandas ./python/cudf/cudf/tests/xdf_tests/
