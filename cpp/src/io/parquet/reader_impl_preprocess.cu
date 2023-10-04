@@ -306,13 +306,13 @@ template <typename T = uint8_t>
 {
   size_t total_pages = 0;
 
-  reset_error_code(stream);
+  kernel_error error_code(stream);
   chunks.host_to_device_async(stream);
-  gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), get_error(), stream);
+  gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), error_code.data(), stream);
   chunks.device_to_host_sync(stream);
 
-  if (get_error_code() != 0) {
-    CUDF_FAIL("Parquet header parsing failed with code(s)" + get_error_string());
+  if (error_code.value() != 0) {
+    CUDF_FAIL("Parquet header parsing failed with code(s) " + error_code.str());
   }
 
   for (size_t c = 0; c < chunks.size(); c++) {
@@ -342,13 +342,13 @@ int decode_page_headers(cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc>& c
     page_count += chunks[c].max_num_pages;
   }
 
-  reset_error_code(stream);
+  kernel_error error_code(stream);
   chunks.host_to_device_async(stream);
-  gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), get_error(), stream);
+  gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), error_code.data(), stream);
 
-  if (get_error_code() != 0) {
+  if (error_code.value() != 0) {
     // TODO(ets): if an unsupported encoding was detected, do extra work to figure out which one
-    CUDF_FAIL("Parquet header parsing failed with code(s)" + get_error_string());
+    CUDF_FAIL("Parquet header parsing failed with code(s)" + error_code.str());
   }
 
   // compute max bytes needed for level data

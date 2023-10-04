@@ -164,7 +164,8 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   chunk_nested_valids.host_to_device_async(_stream);
   chunk_nested_data.host_to_device_async(_stream);
 
-  reset_error_code(_stream);
+  // create this before we fork streams
+  kernel_error error_code(_stream);
 
   // get the number of streams we need from the pool and tell them to wait on the H2D copies
   int const nkernels = std::bitset<32>(kernel_mask).count();
@@ -178,19 +179,19 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
     auto& stream = streams[s_idx++];
     chunk_nested_str_data.host_to_device_async(stream);
     gpu::DecodeStringPageData(
-      pages, chunks, num_rows, skip_rows, level_type_size, get_error(), stream);
+      pages, chunks, num_rows, skip_rows, level_type_size, error_code.data(), stream);
   }
 
   // launch delta binary decoder
   if ((kernel_mask & gpu::KERNEL_MASK_DELTA_BINARY) != 0) {
     gpu::DecodeDeltaBinary(
-      pages, chunks, num_rows, skip_rows, level_type_size, get_error(), streams[s_idx++]);
+      pages, chunks, num_rows, skip_rows, level_type_size, error_code.data(), streams[s_idx++]);
   }
 
   // launch the catch-all page decoder
   if ((kernel_mask & gpu::KERNEL_MASK_GENERAL) != 0) {
     gpu::DecodePageData(
-      pages, chunks, num_rows, skip_rows, level_type_size, get_error(), streams[s_idx++]);
+      pages, chunks, num_rows, skip_rows, level_type_size, error_code.data(), streams[s_idx++]);
   }
 
   // synchronize the streams
@@ -200,8 +201,8 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   page_nesting.device_to_host_async(_stream);
   page_nesting_decode.device_to_host_async(_stream);
 
-  if (get_error_code() != 0) {
-    CUDF_FAIL("Parquet data decode failed with code(s)" + get_error_string());
+  if (error_code.value() != 0) {
+    CUDF_FAIL("Parquet data decode failed with code(s) " + error_code.str());
   }
 
   // for list columns, add the final offset to every offset buffer.

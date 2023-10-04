@@ -17,43 +17,61 @@
 #pragma once
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_scalar.hpp>
 
 #include <cstdint>
+#include <sstream>
 
 namespace cudf::io::parquet {
 
 /**
- * @brief Return a pointer to the global error scalar.
+ * @brief Wrapper around a `rmm::device_scalar` for use in reporting errors that occur in
+ * kernel calls.
  *
- * This pointer is valid only on the device.
- *
- * @return Device pointer to the global error scalar.
+ * The `kernel_error` object is created with a `rmm::cuda_stream_view` which is used throughout
+ * the object's lifetime.
  */
-int32_t* get_error();
+class kernel_error {
+ private:
+  rmm::device_scalar<int32_t> _error_code;
 
-/**
- * @brief Return the value stored in the global error scalar.
- *
- * This will use the stream set in `set_error_stream`.
- *
- * @return The value of the global error scalar.
- */
-int32_t get_error_code();
+ public:
+  /**
+   * @brief Construct a new `kernel_error` with an initial value of 0.
+   *
+   * Note: setting the initial value is done asynchronously.
+   *
+   * @throws `rmm::bad_alloc` if allocating the device memory for `initial_value` fails.
+   * @throws `rmm::cuda_error` if copying `initial_value` to device memory fails.
+   *
+   * @param CUDA stream to use
+   */
+  kernel_error(rmm::cuda_stream_view stream) : _error_code{0, stream} {}
 
-/**
- * @brief Returns the current error value as a hex string.
- * @return The current error value as a hext string.
- */
-std::string get_error_string();
+  /**
+   * @brief Return a pointer to the device memory for the error
+   */
+  auto data() { return _error_code.data(); }
 
-/**
- * @brief Reset the global error scalar to 0 and set the stream used for error reporting.
- *
- * This should be called before passing the error code to a kernel since this is a shared
- * resource.
- *
- * @param stream CUDA stream to use for error reporting.
- */
-void reset_error_code(rmm::cuda_stream_view stream);
+  /**
+   * @brief Return the current value of the error
+   *
+   * This uses the stream used to create this instance. This does a synchronize on the stream
+   * this object was instantiated with.
+   */
+  auto value() const { return _error_code.value(_error_code.stream()); }
+
+  /**
+   * @brief Return a hexadecimal string representation of the current error code
+   *
+   * Returned string will have "0x" prepended.
+   */
+  std::string str() const
+  {
+    std::stringstream sstream;
+    sstream << std::hex << value();
+    return "0x" + sstream.str();
+  }
+};
 
 }  // namespace cudf::io::parquet
