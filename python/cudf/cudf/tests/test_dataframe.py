@@ -10413,6 +10413,12 @@ def test_dataframe_nlargest_nsmallest_str_error(attr):
     )
 
 
+def test_dictlike_data_column_length_mismatch():
+    ser = cudf.Series(range(5))
+    with pytest.raises(ValueError):
+        cudf.DataFrame(ser, columns=[1, 2])
+
+
 @pytest.mark.parametrize("digits", [0, 1, 3, 4, 10])
 def test_dataframe_round_builtin(digits):
     pdf = pd.DataFrame(
