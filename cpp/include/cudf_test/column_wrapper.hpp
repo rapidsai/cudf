@@ -21,6 +21,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
@@ -1534,8 +1535,12 @@ class lists_column_wrapper : public detail::column_wrapper {
                        rmm::device_buffer&& null_mask)
   {
     // construct the list column
-    wrapped = make_lists_column(
-      num_rows, std::move(offsets), std::move(values), null_count, std::move(null_mask));
+    wrapped = make_lists_column(num_rows,
+                                std::move(offsets),
+                                std::move(values),
+                                null_count,
+                                std::move(null_mask),
+                                cudf::test::get_default_stream());
   }
 
   /**
@@ -1610,8 +1615,12 @@ class lists_column_wrapper : public detail::column_wrapper {
     }();
 
     // construct the list column
-    wrapped = make_lists_column(
-      cols.size(), std::move(offsets), std::move(data), null_count, std::move(null_mask));
+    wrapped = make_lists_column(cols.size(),
+                                std::move(offsets),
+                                std::move(data),
+                                null_count,
+                                std::move(null_mask),
+                                cudf::test::get_default_stream());
   }
 
   /**
@@ -1639,8 +1648,12 @@ class lists_column_wrapper : public detail::column_wrapper {
     depth = 0;
 
     size_type num_elements = offsets->size() == 0 ? 0 : offsets->size() - 1;
-    wrapped =
-      make_lists_column(num_elements, std::move(offsets), std::move(c), 0, rmm::device_buffer{});
+    wrapped                = make_lists_column(num_elements,
+                                std::move(offsets),
+                                std::move(c),
+                                0,
+                                rmm::device_buffer{},
+                                cudf::test::get_default_stream());
   }
 
   /**
@@ -1689,12 +1702,16 @@ class lists_column_wrapper : public detail::column_wrapper {
     }
 
     lists_column_view lcv(col);
-    return make_lists_column(col.size(),
-                             std::make_unique<column>(lcv.offsets()),
-                             normalize_column(lists_column_view(col).child(),
-                                              lists_column_view(expected_hierarchy).child()),
-                             col.null_count(),
-                             copy_bitmask(col));
+    return make_lists_column(
+      col.size(),
+      std::make_unique<column>(lcv.offsets()),
+      normalize_column(lists_column_view(col).child(),
+                       lists_column_view(expected_hierarchy).child()),
+      col.null_count(),
+      cudf::detail::copy_bitmask(
+        col, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource()),
+      //  copy_bitmask(col),
+      cudf::test::get_default_stream());
   }
 
   std::pair<std::vector<column_view>, std::vector<std::unique_ptr<column>>> preprocess_columns(
