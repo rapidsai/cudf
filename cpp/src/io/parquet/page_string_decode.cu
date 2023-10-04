@@ -463,12 +463,19 @@ __device__ size_t totalPlainEntriesSize(uint8_t const* data,
 /**
  * @brief Compute string size information for DELTA_BYTE_ARRAY encoded strings.
  *
- * Called with 64 threads
+ * This traverses the packed prefix and suffix lengths, summing them to obtain the total
+ * number of bytes needed for the decoded string data. It also calculates an upper bound
+ * for the largest string length to obtain an upper bound on temporary space needed if
+ * rows will be skipped.
+ *
+ * Called with 64 threads.
  *
  * @param data Pointer to the start of the page data stream
  * @param end Pointer to the end of the page data stream
  * @param start_value Do not count values that occur before this index
  * @param end_value Do not count values that occur after this index
+ * @return A pair of `size_t` values representing the total string size and temp buffer size
+ * required for decoding
  */
 __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* data,
                                                                 uint8_t const* end,
@@ -540,13 +547,14 @@ __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* d
     cudf::detail::single_lane_block_sum_reduce<delta_preproc_block_size, 0>(total_bytes);
 
   // sum up prefix and suffix max lengths
-  auto final_max = cudf::detail::single_lane_block_sum_reduce<delta_preproc_block_size, 0>(max_len);
+  auto temp_bytes =
+    cudf::detail::single_lane_block_sum_reduce<delta_preproc_block_size, 0>(max_len);
   if (t == 0) {
     // save enough for one mimi-block plus some extra to save the last_string
-    final_max *= db->values_per_mb + 1;
+    temp_bytes *= db->values_per_mb + 1;
   }
 
-  return {final_bytes, final_max};
+  return {final_bytes, temp_bytes};
 }
 
 /**
@@ -680,14 +688,14 @@ __global__ void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageS
     uint8_t const* const end = s->data_end;
     auto const end_value     = pp->end_val;
 
-    auto const [len, max] = totalDeltaByteArraySize(data, end, start_value, end_value);
+    auto const [len, temp_bytes] = totalDeltaByteArraySize(data, end, start_value, end_value);
 
     if (t == 0) {
       // TODO check for overflow
       pp->str_bytes = len;
 
       // only need temp space if we're skipping values
-      if (start_value > 0) { pp->temp_string_size = max; }
+      if (start_value > 0) { pp->temp_string_size = temp_bytes; }
     }
   }
 }
