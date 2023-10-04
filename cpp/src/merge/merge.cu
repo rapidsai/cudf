@@ -45,8 +45,6 @@
 #include <queue>
 #include <vector>
 
-#include <cudf_test/print_utilities.cuh>
-
 namespace cudf {
 namespace detail {
 namespace {
@@ -244,15 +242,15 @@ index_vector generate_merged_indices_nested(table_view const& left_table,
                merged_indices.end(),
                thrust::make_pair(side::RIGHT, 1));
 
-  auto left_indices_col =
+  auto const left_indices_col =
     cudf::lower_bound(right_table, left_table, column_order, null_precedence, stream);
-  auto left_indices               = left_indices_col->view();
+  auto const left_indices         = left_indices_col->view();
   auto left_indices_mutable       = left_indices_col->mutable_view();
-  auto left_indices_begin         = left_indices.begin<cudf::size_type>();
-  auto left_indices_end           = left_indices.end<cudf::size_type>();
+  auto const left_indices_begin   = left_indices.begin<cudf::size_type>();
+  auto const left_indices_end     = left_indices.end<cudf::size_type>();
   auto left_indices_mutable_begin = left_indices_mutable.begin<cudf::size_type>();
 
-  auto left_counter = thrust::make_counting_iterator(0);
+  auto const left_counter = thrust::make_counting_iterator(0);
   thrust::for_each(
     rmm::exec_policy_nosync(stream),
     left_counter,
@@ -263,13 +261,13 @@ index_vector generate_merged_indices_nested(table_view const& left_table,
     });
 
   rmm::device_uvector<cudf::size_type> right_mask(total_size, stream);
-  auto total_counter = thrust::make_counting_iterator(0);
+  auto const total_counter = thrust::make_counting_iterator(0);
   thrust::for_each(
     rmm::exec_policy_nosync(stream),
     total_counter,
     total_counter + total_size,
-    [merged = merged_indices.data(), right = right_mask.data()] __device__(auto idx) {
-      auto [side, val] = merged[idx];
+    [merged = merged_indices.data(), right = right_mask.data()] __device__(auto const idx) {
+      auto const [side, val] = merged[idx];
       if (side == side::LEFT) {
         right[idx] = 0;
       } else {
@@ -281,7 +279,7 @@ index_vector generate_merged_indices_nested(table_view const& left_table,
   thrust::exclusive_scan(
     rmm::exec_policy_nosync(stream), right_mask.begin(), right_mask.end(), right_indices.begin());
 
-  auto right_counter = thrust::make_counting_iterator(0);
+  auto const right_counter = thrust::make_counting_iterator(0);
   thrust::for_each(rmm::exec_policy_nosync(stream),
                    right_counter,
                    right_counter + total_size,
