@@ -69,6 +69,9 @@ constexpr bool is_supported_encoding(Encoding enc)
   }
 }
 
+/**
+ * @brief Atomically OR `error` into `error_code`.
+ */
 constexpr void set_error(int32_t error, int32_t* error_code)
 {
   if (error != 0) {
