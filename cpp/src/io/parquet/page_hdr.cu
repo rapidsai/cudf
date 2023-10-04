@@ -402,6 +402,9 @@ __global__ void __launch_bounds__(128)
         bs->page.lvl_bytes[level_type::DEFINITION] = 0;
         bs->page.lvl_bytes[level_type::REPETITION] = 0;
         if (parse_page_header(bs) && bs->page.compressed_page_size >= 0) {
+          if (not is_supported_encoding(bs->page.encoding)) {
+            error[warp_id] |= static_cast<int>(decode_error::UNSUPPORTED_ENCODING);
+          }
           switch (bs->page_type) {
             case PageType::DATA_PAGE:
               index_out = num_dict_pages + data_page_count;

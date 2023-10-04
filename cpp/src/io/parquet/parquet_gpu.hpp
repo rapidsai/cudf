@@ -56,7 +56,20 @@ constexpr int rolling_index(int index)
   return index % rolling_size;
 }
 
-inline __device__ void set_error(int32_t error, int32_t* error_code)
+// see setupLocalPageInfo() in page_decode.cuh for supported page encodings
+constexpr bool is_supported_encoding(Encoding enc)
+{
+  switch (enc) {
+    case Encoding::PLAIN:
+    case Encoding::PLAIN_DICTIONARY:
+    case Encoding::RLE:
+    case Encoding::RLE_DICTIONARY:
+    case Encoding::DELTA_BINARY_PACKED: return true;
+    default: return false;
+  }
+}
+
+constexpr void set_error(int32_t error, int32_t* error_code)
 {
   if (error != 0) {
     cuda::atomic_ref<int32_t, cuda::thread_scope_device> ref{*error_code};
