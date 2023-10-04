@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <tests/binaryop/util/runtime_support.h>
+
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -60,7 +62,15 @@ TEST_F(BinaryopTest, ScalarColumn)
                          cudf::test::get_default_stream());
 }
 
-TEST_F(BinaryopTest, ColumnColumnPTX)
+class BinaryopPTXTest : public BinaryopTest {
+ protected:
+  void SetUp() override
+  {
+    if (!can_do_runtime_jit()) { GTEST_SKIP() << "Skipping tests that require 11.5 runtime"; }
+  }
+};
+
+TEST_F(BinaryopPTXTest, ColumnColumnPTX)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> lhs{10, 20, 30, 40, 50};
   cudf::test::fixed_width_column_wrapper<int64_t> rhs{15, 25, 35, 45, 55};
