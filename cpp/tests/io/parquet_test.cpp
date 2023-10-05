@@ -4156,8 +4156,8 @@ TEST_P(ParquetV2Test, LargeColumnIndex)
       // check trunc(page.min) <= stats.min && trun(page.max) >= stats.max
       auto const ptype = fmd.schema[c + 1].type;
       auto const ctype = fmd.schema[c + 1].converted_type;
-      EXPECT_TRUE(stats.min_value.has_value());
-      EXPECT_TRUE(stats.max_value.has_value());
+      ASSERT_TRUE(stats.min_value.has_value());
+      ASSERT_TRUE(stats.max_value.has_value());
       EXPECT_TRUE(compare_binary(ci.min_values[0], stats.min_value.value(), ptype, ctype) <= 0);
       EXPECT_TRUE(compare_binary(ci.max_values[0], stats.max_value.value(), ptype, ctype) >= 0);
     }
@@ -4239,8 +4239,8 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndex)
       auto const ci    = read_column_index(source, chunk);
       auto const stats = get_statistics(chunk);
 
-      EXPECT_TRUE(stats.min_value.has_value());
-      EXPECT_TRUE(stats.max_value.has_value());
+      ASSERT_TRUE(stats.min_value.has_value());
+      ASSERT_TRUE(stats.max_value.has_value());
 
       // schema indexing starts at 1
       auto const ptype = fmd.schema[c + 1].type;
@@ -4344,9 +4344,9 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNulls)
       auto const stats = get_statistics(chunk);
 
       // should be half nulls, except no nulls in column 0
-      EXPECT_TRUE(stats.min_value.has_value());
-      EXPECT_TRUE(stats.max_value.has_value());
-      EXPECT_TRUE(stats.null_count.has_value());
+      ASSERT_TRUE(stats.min_value.has_value());
+      ASSERT_TRUE(stats.max_value.has_value());
+      ASSERT_TRUE(stats.null_count.has_value());
       EXPECT_EQ(stats.null_count.value(), c == 0 ? 0 : num_rows / 2);
 
       // schema indexing starts at 1
@@ -4440,10 +4440,10 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNullColumn)
 
       // there should be no nulls except column 1 which is all nulls
       if (c != 1) {
-        EXPECT_TRUE(stats.min_value.has_value());
-        EXPECT_TRUE(stats.max_value.has_value());
+        ASSERT_TRUE(stats.min_value.has_value());
+        ASSERT_TRUE(stats.max_value.has_value());
       }
-      EXPECT_TRUE(stats.null_count.has_value());
+      ASSERT_TRUE(stats.null_count.has_value());
       EXPECT_EQ(stats.null_count.value(), c == 1 ? num_rows : 0);
 
       // schema indexing starts at 1
@@ -4541,8 +4541,8 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStruct)
       auto const ci    = read_column_index(source, chunk);
       auto const stats = get_statistics(chunk);
 
-      EXPECT_TRUE(stats.min_value.has_value());
-      EXPECT_TRUE(stats.max_value.has_value());
+      ASSERT_TRUE(stats.min_value.has_value());
+      ASSERT_TRUE(stats.max_value.has_value());
 
       auto const ptype = fmd.schema[colidx].type;
       auto const ctype = fmd.schema[colidx].converted_type;
@@ -4840,8 +4840,8 @@ TEST_F(ParquetWriterTest, CheckColumnIndexTruncation)
       auto const ci    = read_column_index(source, chunk);
       auto const stats = get_statistics(chunk);
 
-      EXPECT_TRUE(stats.min_value.has_value());
-      EXPECT_TRUE(stats.max_value.has_value());
+      ASSERT_TRUE(stats.min_value.has_value());
+      ASSERT_TRUE(stats.max_value.has_value());
 
       // check trunc(page.min) <= stats.min && trun(page.max) >= stats.max
       auto const ptype = fmd.schema[c + 1].type;
@@ -4904,8 +4904,8 @@ TEST_F(ParquetWriterTest, BinaryColumnIndexTruncation)
       // check trunc(page.min) <= stats.min && trun(page.max) >= stats.max
       auto const ptype = fmd.schema[c + 1].type;
       auto const ctype = fmd.schema[c + 1].converted_type;
-      EXPECT_TRUE(stats.min_value.has_value());
-      EXPECT_TRUE(stats.max_value.has_value());
+      ASSERT_TRUE(stats.min_value.has_value());
+      ASSERT_TRUE(stats.max_value.has_value());
       EXPECT_TRUE(compare_binary(ci.min_values[0], stats.min_value.value(), ptype, ctype) <= 0);
       EXPECT_TRUE(compare_binary(ci.max_values[0], stats.max_value.value(), ptype, ctype) >= 0);
 
@@ -6768,17 +6768,19 @@ TEST_F(ParquetWriterTest, EmptyMinStringStatistics)
 
   auto const source = cudf::io::datasource::create(filepath);
   cudf::io::parquet::FileMetaData fmd;
-
   read_footer(source, &fmd);
 
+  ASSERT_TRUE(fmd.row_groups.size() > 0);
+  ASSERT_TRUE(fmd.row_groups[0].columns.size() > 0);
   auto const& chunk = fmd.row_groups[0].columns[0];
   auto const stats  = get_statistics(chunk);
 
-  EXPECT_TRUE(stats.min_value.has_value());
-  EXPECT_TRUE(stats.max_value.has_value());
-  auto const min_value = std::string();
-  auto const max_value =
-    std::string(reinterpret_cast<char const*>(stats.max_value.value().data()), strlen(max_val));
+  ASSERT_TRUE(stats.min_value.has_value());
+  ASSERT_TRUE(stats.max_value.has_value());
+  auto const min_value = std::string{reinterpret_cast<char const*>(stats.min_value.value().data()),
+                                     stats.min_value.value().size()};
+  auto const max_value = std::string{reinterpret_cast<char const*>(stats.max_value.value().data()),
+                                     stats.max_value.value().size()};
   EXPECT_EQ(min_value, std::string(min_val));
   EXPECT_EQ(max_value, std::string(max_val));
 }
