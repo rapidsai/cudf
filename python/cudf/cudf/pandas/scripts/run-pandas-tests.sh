@@ -87,7 +87,7 @@ markers = [
 ]
 EOF
     # append the contents of patch-confest.py to conftest.py
-    cat ./conftest-patch.py >> pandas-tests/conftest.py
+    cat ../python/cudf/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftest.py
 
     # Substitute `pandas.tests` with a relative import.
     # This will depend on the location of the test module relative to
@@ -121,7 +121,7 @@ else
 fi
 
 # append the contents of patch-confest.py to conftest.py
-cat ../scripts/conftest-patch.py >> pandas-tests/conftest.py
+cat ../python/cudf/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftest.py
 
 echo -n "${XDF_MODE}" > pandas-tests/.xdf-run-mode
 
@@ -129,7 +129,7 @@ echo -n "${XDF_MODE}" > pandas-tests/.xdf-run-mode
 cd pandas-tests/
 
 # TODO: Get a postgres & mysql container set up on the CI
-PANDAS_CI="1" pytest -m "not single_cpu and not db" --durations=50 --import-mode=importlib -o xfail_strict=True ${PYTEST_IGNORES} ${EXTRA_PYTEST_ARGS} $@
+PANDAS_CI="1" python -m pytest -m "not single_cpu and not db" --durations=50 --import-mode=importlib -o xfail_strict=True ${PYTEST_IGNORES} ${EXTRA_PYTEST_ARGS} $@
 
 mv *.json ..
 cd ..

@@ -95,6 +95,7 @@ pandas_tests = [
     "pymysql",
     "pyreadstat",
     "pytest-asyncio",
+    "python-reportlog",
     "python-snappy",
     "pyxlsb",
     "s3fs",

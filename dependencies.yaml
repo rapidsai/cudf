@@ -650,6 +650,7 @@ dependencies:
           - pyreadstat
           - pytest-asyncio
           - python-snappy
+          - python-reportlog
           - pyxlsb
           - s3fs
           - scipy
