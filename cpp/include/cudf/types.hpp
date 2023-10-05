@@ -69,7 +69,7 @@ template <typename T> class duration_scalar_device_view;
 
 class table;
 class table_view;
-class mutable_table_view;
+// class mutable_table_view;
 
 /**
  * @addtogroup utility_types
