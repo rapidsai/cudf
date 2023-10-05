@@ -6394,6 +6394,7 @@ def test_df_series_dataframe_astype_dtype_dict(copy):
         ([range(100), range(100)], ["range" + str(i) for i in range(100)]),
         (((1, 2, 3), (1, 2, 3)), ["tuple0", "tuple1", "tuple2"]),
         ([[1, 2, 3]], ["list col1", "list col2", "list col3"]),
+        ([[1, 2, 3]], pd.Index(["col1", "col2", "col3"], name="rapids")),
         ([range(100)], ["range" + str(i) for i in range(100)]),
         (((1, 2, 3),), ["k1", "k2", "k3"]),
     ],
@@ -7969,6 +7970,7 @@ def test_series_empty(ps):
 @pytest.mark.parametrize(
     "data",
     [
+        None,
         [],
         [1],
         {"a": [10, 11, 12]},
@@ -7979,7 +7981,10 @@ def test_series_empty(ps):
         },
     ],
 )
-@pytest.mark.parametrize("columns", [["a"], ["another column name"], None])
+@pytest.mark.parametrize(
+    "columns",
+    [["a"], ["another column name"], None, pd.Index(["a"], name="index name")],
+)
 def test_dataframe_init_with_columns(data, columns):
     pdf = pd.DataFrame(data, columns=columns)
     gdf = cudf.DataFrame(data, columns=columns)
@@ -8047,7 +8052,16 @@ def test_dataframe_init_with_columns(data, columns):
     ],
 )
 @pytest.mark.parametrize(
-    "columns", [None, ["0"], [0], ["abc"], [144, 13], [2, 1, 0]]
+    "columns",
+    [
+        None,
+        ["0"],
+        [0],
+        ["abc"],
+        [144, 13],
+        [2, 1, 0],
+        pd.Index(["abc"], name="custom_name"),
+    ],
 )
 def test_dataframe_init_from_series_list(data, ignore_dtype, columns):
     gd_data = [cudf.from_pandas(obj) for obj in data]
@@ -10239,14 +10253,21 @@ def test_dataframe_binop_with_datetime_index():
 
 
 @pytest.mark.parametrize(
-    "columns", ([], ["c", "a"], ["a", "d", "b", "e", "c"], ["a", "b", "c"])
+    "columns",
+    (
+        [],
+        ["c", "a"],
+        ["a", "d", "b", "e", "c"],
+        ["a", "b", "c"],
+        pd.Index(["b", "a", "c"], name="custom_name"),
+    ),
 )
 @pytest.mark.parametrize("index", (None, [4, 5, 6]))
 def test_dataframe_dict_like_with_columns(columns, index):
     data = {"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}
     expect = pd.DataFrame(data, columns=columns, index=index)
     actual = cudf.DataFrame(data, columns=columns, index=index)
-    if index is None and columns == []:
+    if index is None and len(columns) == 0:
         # We make an empty range index, pandas makes an empty index
         expect = expect.reset_index(drop=True)
     assert_eq(expect, actual)
@@ -10406,6 +10427,19 @@ def test_dataframe_init_from_nested_dict():
     pdf = pd.DataFrame(regular_dict)
     gdf = cudf.DataFrame(regular_dict)
     assert_eq(pdf, gdf)
+
+
+def test_init_from_2_categoricalindex_series_diff_categories():
+    s1 = cudf.Series(
+        [39, 6, 4], index=cudf.CategoricalIndex(["female", "male", "unknown"])
+    )
+    s2 = cudf.Series(
+        [2, 152, 2, 242, 150],
+        index=cudf.CategoricalIndex(["f", "female", "m", "male", "unknown"]),
+    )
+    result = cudf.DataFrame([s1, s2])
+    expected = pd.DataFrame([s1.to_pandas(), s2.to_pandas()])
+    assert_eq(result, expected, check_dtype=False)
 
 
 def test_data_frame_values_no_cols_but_index():
