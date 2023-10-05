@@ -91,6 +91,22 @@ files:
     includes:
       - test_python_common
       - test_python_cudf
+  py_test_pandas_cudf:
+    output: pyproject
+    pyproject_dir: python/cudf
+    extras:
+      table: project.optional-dependencies
+      key: pandas_tests
+    includes:
+      - test_python_pandas_cudf
+  py_test_xdf_cudf:
+    output: pyproject
+    pyproject_dir: python/cudf
+    extras:
+      table: project.optional-dependencies
+      key: xdf_tests
+    includes:
+      - test_python_xdf_cudf
   py_build_dask_cudf:
     output: pyproject
     pyproject_dir: python/dask_cudf
@@ -603,3 +619,49 @@ dependencies:
         packages:
           - dask-cuda==23.10.*
           - *numba
+  test_python_pandas_cudf:
+    common:
+      - output_types: pyproject
+        packages:
+          # dependencies to run pandas tests
+          # https://github.com/pandas-dev/pandas/blob/main/environment.yml
+          # TODO: When pandas 2.0 is the minimum version, can just specify pandas[all]
+          - beautifulsoup4
+          - blosc
+          - brotlipy
+          - bottleneck
+          - fastparquet
+          - fsspec
+          - html5lib
+          - hypothesis
+          - gcsfs
+          - ipython
+          - jinja2
+          - lxml
+          - matplotlib
+          - numba
+          - numexpr
+          - openpyxl
+          - odfpy
+          - py
+          - psycopg2-binary
+          - pyarrow
+          - pymysql
+          - pyreadstat
+          - pytest-asyncio
+          - python-snappy
+          - pyxlsb
+          - s3fs
+          - scipy
+          - sqlalchemy
+          - tables
+          - tabulate
+          - xarray
+          - xlrd
+          - xlsxwriter
+          - zstandard
+  test_python_xdf_cudf:
+    common:
+      - output_types: pyproject
+        packages:
+          - ipython
