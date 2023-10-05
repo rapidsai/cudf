@@ -666,3 +666,4 @@ dependencies:
       - output_types: pyproject
         packages:
           - ipython
+          - openpyxl
