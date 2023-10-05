@@ -18,16 +18,18 @@ rapids-logger "Using ${XDF_MODE} for import overrrides"
 rapids-logger "PR number: $RAPIDS_REF_NAME"
 
 
+COMMIT=$(git rev-parse HEAD)
 WHEEL_NAME_PREFIX="cudf_"
 if [[ "${PANDAS_TESTS_BRANCH}" == "main" ]]; then
-    MAIN_COMMIT=$(git merge-base HEAD origin/branch-23.10-xdf)
-    git checkout $MAIN_COMMIT
+    COMMIT=$(git merge-base HEAD origin/branch-23.10-xdf)
     WHEEL_NAME_PREFIX="cudf_${PANDAS_TESTS_BRANCH}_"
 fi
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 RAPIDS_PY_WHEEL_NAME="${WHEEL_NAME_PREFIX}${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
 python -m pip install ./local-cudf-dep/cudf*.whl[test,pandas-tests]
+
+git checkout $COMMIT
 
 bash scripts/run-pandas-tests.sh ${XDF_MODE} \
   -n 10 \
