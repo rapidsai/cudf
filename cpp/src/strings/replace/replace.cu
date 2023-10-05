@@ -97,7 +97,7 @@ struct replace_row_parallel_fn {
       } else {
         bytes += d_repl.size_bytes() - d_target.size_bytes();
       }
-      position = d_str.find(d_target, position + d_target.size_bytes());
+      position = d_str.find(d_target, position + d_target.length());
       --max_n;
     }
     if (out_ptr)  // copy whats left (or right depending on your point of view)
