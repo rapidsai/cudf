@@ -12,7 +12,6 @@
 from .magics import load_ipython_extension
 from .profiler import Profiler
 
-__version__ = "0.1.0a0"
 __all__ = ["Profiler", "load_ipython_extension", "install"]
 
 
