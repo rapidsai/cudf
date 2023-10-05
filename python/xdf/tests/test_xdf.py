@@ -53,6 +53,14 @@ def series(dataframe):
 
 
 @pytest.fixture
+def index():
+    return (
+        pd.Index(["a", "b", "c", "d", "e"]),
+        xpd.Index(["a", "b", "c", "d", "e"]),
+    )
+
+
+@pytest.fixture
 def multiindex(dataframe):
     pdf, df = dataframe
     pmi = pd.MultiIndex.from_frame(pdf)
@@ -1074,3 +1082,15 @@ def test_index_new():
     expected = pd.RangeIndex.__new__(pd.RangeIndex, 0, 10, 2)
     got = xpd.RangeIndex.__new__(xpd.RangeIndex, 0, 10, 2)
     tm.assert_equal(expected, got)
+
+
+def test_constructor_properties(dataframe, series, index):
+    _, df = dataframe
+    _, sr = series
+    _, idx = index
+
+    assert df._constructor is xpd.DataFrame
+    assert sr._constructor is xpd.Series
+    assert idx._constructor is xpd.Index
+    assert sr._constructor_expanddim is xpd.DataFrame
+    assert df._constructor_sliced is xpd.Series

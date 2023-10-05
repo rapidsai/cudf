@@ -119,6 +119,8 @@ DataFrame = make_final_proxy_type(
     additional_attributes={
         "__array__": array_method,
         "__dir__": _DataFrame__dir__,
+        "_constructor": _FastSlowAttribute("_constructor"),
+        "_constructor_sliced": _FastSlowAttribute("_constructor_sliced"),
     },
 )
 
@@ -138,6 +140,8 @@ Series = make_final_proxy_type(
         "dt": _AccessorAttr(DatetimeProperties),
         "str": _AccessorAttr(StringMethods),
         "cat": _AccessorAttr(_CategoricalAccessor),
+        "_constructor": _FastSlowAttribute("_constructor"),
+        "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
     },
 )
 
@@ -164,6 +168,7 @@ Index = make_final_proxy_type(
         "cat": _AccessorAttr(_CategoricalAccessor),
         "__iter__": custom_iter,
         "__new__": Index__new__,
+        "_constructor": _FastSlowAttribute("_constructor"),
     },
 )
 
