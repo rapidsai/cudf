@@ -92,7 +92,7 @@ std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
     cuco::empty_key{-1},
     cuco::empty_value{-1},
     bpe_equal{input},
-    probe_scheme{bpe_hasher{input}},
+    bpe_probe_scheme{bpe_hasher{input}},
     hash_table_allocator_type{default_allocator<char>{}, stream},
     stream.value());
 
@@ -104,15 +104,15 @@ std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
   return merge_pairs_map;
 }
 
-std::unique_ptr<detail::merge_pairs_map_type2> initialize_mp_table_map(
+std::unique_ptr<detail::mp_table_map_type> initialize_mp_table_map(
   cudf::column_device_view const& input, rmm::cuda_stream_view stream)
 {
-  auto mp_table_map = std::make_unique<merge_pairs_map_type2>(
+  auto mp_table_map = std::make_unique<mp_table_map_type>(
     static_cast<size_t>(input.size()),
     cuco::empty_key{-1},
     cuco::empty_value{-1},
-    table_equal{input},
-    probe_scheme2{table_hasher{input}},
+    mp_equal{input},
+    mp_probe_scheme{mp_hasher{input}},
     hash_table_allocator_type{default_allocator<char>{}, stream},
     stream.value());
 
@@ -185,7 +185,7 @@ bpe_merge_pairs::bpe_merge_pairs_impl::bpe_merge_pairs_impl(
   std::unique_ptr<cudf::column_device_view, std::function<void(cudf::column_device_view*)>>&&
     d_merge_pairs,
   std::unique_ptr<detail::merge_pairs_map_type>&& merge_pairs_map,
-  std::unique_ptr<detail::merge_pairs_map_type2>&& mp_table_map)
+  std::unique_ptr<detail::mp_table_map_type>&& mp_table_map)
   : merge_pairs(std::move(merge_pairs)),
     d_merge_pairs(std::move(d_merge_pairs)),
     merge_pairs_map(std::move(merge_pairs_map)),

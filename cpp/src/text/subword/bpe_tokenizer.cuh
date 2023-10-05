@@ -42,8 +42,8 @@
 namespace nvtext {
 namespace detail {
 
-using hash_value_type    = uint32_t;
 using string_hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>;
+using hash_value_type    = string_hasher_type::result_type;
 using merge_pair_type    = thrust::pair<cudf::string_view, cudf::string_view>;
 
 using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
@@ -52,7 +52,10 @@ using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allo
  * @brief Hasher function used for building and using the cuco static-map
  *
  * This takes advantage of heterogeneous lookup feature in cuco static-map which
- * allows inserting with one type (index) and looking up with a different type (string).
+ * allows inserting with one type (index) and looking up with a different type (merge_pair_type).
+ *
+ * The merge-pairs are in adjacent rows so each index will access two rows of string values.
+ * The hash of each string is combined for the returned result.
  */
 struct bpe_hasher {
   cudf::column_device_view const d_strings;
@@ -76,7 +79,10 @@ struct bpe_hasher {
  * @brief Equal function used for building and using the cuco static-map
  *
  * This takes advantage of heterogeneous lookup feature in cuco static-map which
- * allows inserting with one type (index) and looking up with a different type (string).
+ * allows inserting with one type (index) and looking up with a different type (merge_pair_type).
+ *
+ * The merge-pairs are in adjacent rows so each index will access two rows of string values.
+ * All rows from the input merge-pairs are unique.
  */
 struct bpe_equal {
   cudf::column_device_view const d_strings;
@@ -95,17 +101,25 @@ struct bpe_equal {
   }
 };
 
-using probe_scheme = cuco::experimental::linear_probing<1, bpe_hasher>;
+using bpe_probe_scheme = cuco::experimental::linear_probing<1, bpe_hasher>;
 
 using merge_pairs_map_type = cuco::experimental::static_map<cudf::size_type,
                                                             cudf::size_type,
                                                             cuco::experimental::extent<std::size_t>,
                                                             cuda::thread_scope_device,
                                                             bpe_equal,
-                                                            probe_scheme,
+                                                            bpe_probe_scheme,
                                                             hash_table_allocator_type>;
 
-struct table_hasher {
+/**
+ * @brief Hasher function used for building and using the cuco static-map
+ *
+ * This takes advantage of heterogeneous lookup feature in cuco static-map which
+ * allows inserting with one type (index) and looking up with a different type (merge_pair_type).
+ *
+ * Each component of the merge-pairs (left and right) are stored individually in the map.
+ */
+struct mp_hasher {
   cudf::column_device_view const d_strings;
   string_hasher_type hasher{};
   // used by insert
@@ -127,7 +141,7 @@ struct table_hasher {
  * This takes advantage of heterogeneous lookup feature in cuco static-map which
  * allows inserting with one type (index) and looking up with a different type (string).
  */
-struct table_equal {
+struct mp_equal {
   cudf::column_device_view const d_strings;
   // used by insert
   __device__ bool operator()(cudf::size_type lhs, cudf::size_type rhs) const noexcept
@@ -144,16 +158,15 @@ struct table_equal {
   }
 };
 
-using probe_scheme2 = cuco::experimental::linear_probing<1, table_hasher>;
+using mp_probe_scheme = cuco::experimental::linear_probing<1, mp_hasher>;
 
-using merge_pairs_map_type2 =
-  cuco::experimental::static_map<cudf::size_type,
-                                 cudf::size_type,
-                                 cuco::experimental::extent<std::size_t>,
-                                 cuda::thread_scope_device,
-                                 table_equal,
-                                 probe_scheme2,
-                                 hash_table_allocator_type>;
+using mp_table_map_type = cuco::experimental::static_map<cudf::size_type,
+                                                         cudf::size_type,
+                                                         cuco::experimental::extent<std::size_t>,
+                                                         cuda::thread_scope_device,
+                                                         mp_equal,
+                                                         mp_probe_scheme,
+                                                         hash_table_allocator_type>;
 
 }  // namespace detail
 
@@ -166,18 +179,16 @@ using col_device_view = std::invoke_result_t<decltype(&cudf::column_device_view:
 struct bpe_merge_pairs::bpe_merge_pairs_impl {
   std::unique_ptr<cudf::column> const merge_pairs;
   col_device_view const d_merge_pairs;
-  std::unique_ptr<detail::merge_pairs_map_type> merge_pairs_map;
-
-  std::unique_ptr<detail::merge_pairs_map_type2> mp_table_map;
+  std::unique_ptr<detail::merge_pairs_map_type> merge_pairs_map;  // for BPE
+  std::unique_ptr<detail::mp_table_map_type> mp_table_map;        // for locating unpairables
 
   bpe_merge_pairs_impl(std::unique_ptr<cudf::column>&& merge_pairs,
                        col_device_view&& d_merge_pairs,
                        std::unique_ptr<detail::merge_pairs_map_type>&& merge_pairs_map,
-                       std::unique_ptr<detail::merge_pairs_map_type2>&& mp_table_map);
+                       std::unique_ptr<detail::mp_table_map_type>&& mp_table_map);
 
   auto const get_merge_pairs() const { return *d_merge_pairs; }
   auto get_merge_pairs_ref() const { return merge_pairs_map->ref(cuco::experimental::op::find); }
-
   auto get_mp_table_ref() const { return mp_table_map->ref(cuco::experimental::op::find); }
 };
 
