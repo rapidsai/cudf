@@ -21,6 +21,7 @@ from io import BytesIO, StringIO
 import numpy as np
 import pyarrow as pa
 import pytest
+from numba import NumbaDeprecationWarning
 
 from cudf.pandas import LOADED
 
@@ -268,8 +269,9 @@ def test_rename_categories():
 def test_rename_categories_inplace():
     psr = pd.Series([1, 2, 3], dtype="category")
     sr = xpd.Series([1, 2, 3], dtype="category")
-    psr.cat.rename_categories({1: 5}, inplace=True)
-    sr.cat.rename_categories({1: 5}, inplace=True)
+    with pytest.warns(FutureWarning):
+        psr.cat.rename_categories({1: 5}, inplace=True)
+        sr.cat.rename_categories({1: 5}, inplace=True)
     tm.assert_series_equal(psr, sr)
 
 
@@ -279,7 +281,8 @@ def test_rename_categories_inplace_after_copying_parent():
     # so this copies `s` from device to host:
     rename_categories = s.cat.rename_categories
     _ = len(s)  # trigger a copy of `s` from host to device:
-    rename_categories([5, 2, 3], inplace=True)
+    with pytest.warns(FutureWarning):
+        rename_categories([5, 2, 3], inplace=True)
     assert s.cat.categories.tolist() == [5, 2, 3]
 
 
@@ -513,7 +516,8 @@ def test_binop_array_series(series):
 def test_array_ufunc(series):
     psr, sr = series
     expect = np.ufunc.reduce(np.subtract, psr)
-    got = np.ufunc.reduce(np.subtract, sr)
+    with pytest.warns(DeprecationWarning):
+        got = np.ufunc.reduce(np.subtract, sr)
     tm.assert_equal(expect, got)
 
 
@@ -654,7 +658,8 @@ def test_rolling_win_type():
     pdf = pd.DataFrame(range(5))
     df = xpd.DataFrame(range(5))
     result = df.rolling(2, win_type="boxcar").mean()
-    expected = pdf.rolling(2, win_type="boxcar").mean()
+    with pytest.warns(DeprecationWarning):
+        expected = pdf.rolling(2, win_type="boxcar").mean()
     tm.assert_equal(result, expected)
 
 
@@ -667,9 +672,10 @@ def test_rolling_apply_numba_engine():
     pdf = pd.DataFrame([[1, 2, 0.6], [2, 3, 0.4], [3, 4, 0.2], [4, 5, 0.7]])
     df = xpd.DataFrame([[1, 2, 0.6], [2, 3, 0.4], [3, 4, 0.2], [4, 5, 0.7]])
 
-    expect = pdf.rolling(2, method="table", min_periods=0).apply(
-        weighted_mean, raw=True, engine="numba"
-    )
+    with pytest.warns(NumbaDeprecationWarning):
+        expect = pdf.rolling(2, method="table", min_periods=0).apply(
+            weighted_mean, raw=True, engine="numba"
+        )
     got = df.rolling(2, method="table", min_periods=0).apply(
         weighted_mean, raw=True, engine="numba"
     )

@@ -34,7 +34,7 @@ def ipython_magics_gpu_test():
         ip.run_cell(
             "import pandas as pd; s = pd.Series(range(5)); print(type(s))"
         )
-    assert output.stdout == "<class 'xdf._wrappers.pandas.Series'>\n"
+    assert output.stdout == "<class 'cudf.pandas._wrappers.pandas.Series'>\n"
 
 
 if __name__ == "__main__":
