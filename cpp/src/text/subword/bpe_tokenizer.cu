@@ -324,18 +324,14 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
   rmm::device_uvector<int8_t> d_spaces(chars_size, stream);
   rmm::device_uvector<cudf::size_type> d_ranks(chars_size, stream);  // rank per string pair;
   rmm::device_uvector<int8_t> d_rerank(chars_size, stream);          // re-ranking identifiers
-  auto const map_ref  = merge_pairs.impl->get_merge_pairs_ref();
-  auto const map_ref2 = merge_pairs.impl->get_mp_table_ref();
 
-  if ((input.offset() == 0) && (input.size() == input.offsets().size() - 1)) {
-    // TODO: this fails for sliced columns for some reason;
-    //       we could get ride of the else{} if this was fixed
-
+  {
+    auto const map_ref2 = merge_pairs.impl->get_mp_table_ref();
     // this path locates unpairable sections of code to create artificial string row boundaries;
     // the boundary values are recorded as offsets and stored temporarily in the d_ranks vector
     auto const block_count = (chars_size + block_size - 1) / block_size;
     bpe_up_offsets_fn<decltype(map_ref2)><<<block_count, block_size, 0, stream.value()>>>(
-      d_input_chars, chars_size, input.offset(), map_ref2, d_ranks.data());
+      d_input_chars, chars_size, first_offset, map_ref2, d_ranks.data());
     auto const end   = thrust::remove(rmm::exec_policy(stream), d_ranks.begin(), d_ranks.end(), 0);
     auto const total = thrust::distance(d_ranks.begin(), end);  // number of unpairables
 
@@ -361,11 +357,9 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
                                                  {col_offsets, input.chars()});
     auto const d_tmp_strings = cudf::column_device_view::create(tmp_input, stream);
 
+    auto const map_ref = merge_pairs.impl->get_merge_pairs_ref();
     bpe_parallel_fn<decltype(map_ref)><<<tmp_input.size(), block_size, 0, stream.value()>>>(
       *d_tmp_strings, map_ref, d_spaces.data(), d_ranks.data(), d_rerank.data());
-  } else {
-    bpe_parallel_fn<decltype(map_ref)><<<input.size(), block_size, 0, stream.value()>>>(
-      *d_strings, map_ref, d_spaces.data(), d_ranks.data(), d_rerank.data());
   }
 
   // compute the output sizes into the d_offsets vector
