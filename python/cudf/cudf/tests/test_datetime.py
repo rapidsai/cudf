@@ -2291,3 +2291,9 @@ def test_dateimeindex_from_noniso_string():
     pdti = pd.DatetimeIndex(data)
 
     assert_eq(gdti, pdti)
+
+
+@pytest.mark.parametrize("errors", ["coerce", "ignore"])
+def test_to_datetime_errors_non_scalar_not_implemented(errors):
+    with pytest.raises(NotImplementedError):
+        cudf.to_datetime([1, ""], unit="s", errors=errors)

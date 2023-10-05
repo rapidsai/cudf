@@ -131,6 +131,10 @@ def to_datetime(
             f"{['ignore', 'raise', 'coerce', 'warn']}, found: "
             f"{errors}"
         )
+    elif errors in {"ignore", "coerce"} and not is_scalar(arg):
+        raise NotImplementedError(
+            f"{errors=} is not implemented when arg is not scalar-like"
+        )
 
     if arg is None:
         return None
