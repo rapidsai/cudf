@@ -110,6 +110,9 @@ pandas_tests = [
     "xlsxwriter",
     "zstandard",
 ]
+xdf_tests = [
+    "ipython"
+]
 
 [project.urls]
 Homepage = "https://github.com/rapidsai/cudf"
