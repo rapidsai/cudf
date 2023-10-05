@@ -77,7 +77,7 @@ public class ParquetChunkedReader implements AutoCloseable {
   }
 
   /**
-   * Construct a reader instance from a
+   * Construct a reader instance from a DataSource
    * @param chunkSizeByteLimit Limit on total number of bytes to be returned per read,
    *                           or 0 if there is no limit.
    * @param opts The options for Parquet reading.

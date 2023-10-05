@@ -26,7 +26,7 @@ namespace {
 jclass DataSource_jclass;
 jmethodID hostRead_method;
 jmethodID hostReadBuff_method;
-jmethodID hostReadBuffDone_method;
+jmethodID onHostBufferDone_method;
 jmethodID deviceRead_method;
 
 } // anonymous namespace
@@ -39,24 +39,24 @@ bool cache_data_source_jni(JNIEnv *env) {
     return false;
   }
 
-  hostRead_method = env->GetStaticMethodID(cls, "hostRead", "(L" DATA_SOURCE_CLASS ";JJJ)J");
+  hostRead_method = env->GetMethodID(cls, "hostRead", "(JJJ)J");
   if (hostRead_method == nullptr) {
     return false;
   }
 
   hostReadBuff_method =
-      env->GetStaticMethodID(cls, "hostReadBuff", "(L" DATA_SOURCE_CLASS ";JJ)[J");
+      env->GetMethodID(cls, "hostReadBuff", "(JJ)[J");
   if (hostReadBuff_method == nullptr) {
     return false;
   }
 
-  hostReadBuffDone_method =
-      env->GetStaticMethodID(cls, "hostReadBuffDone", "(L" DATA_SOURCE_CLASS ";J)V");
-  if (hostRead_method == nullptr) {
+  onHostBufferDone_method =
+      env->GetMethodID(cls, "onHostBufferDone", "(J)V");
+  if (onHostBufferDone_method == nullptr) {
     return false;
   }
 
-  deviceRead_method = env->GetStaticMethodID(cls, "deviceRead", "(L" DATA_SOURCE_CLASS ";JJJJ)J");
+  deviceRead_method = env->GetMethodID(cls, "deviceRead", "(JJJJ)J");
   if (deviceRead_method == nullptr) {
     return false;
   }
@@ -97,7 +97,7 @@ public:
       // We cannot throw an exception in the destructor, so this is really best effort
       JNIEnv *env = nullptr;
       if (jvm->GetEnv(reinterpret_cast<void **>(&env), cudf::jni::MINIMUM_JNI_VERSION) == JNI_OK) {
-        env->CallStaticVoidMethod(DataSource_jclass, hostReadBuffDone_method, this->ds, id);
+        env->CallVoidMethod(this->ds, onHostBufferDone_method, id);
       }
     }
   }
@@ -134,8 +134,8 @@ public:
       throw cudf::jni::jni_exception("Could not load JNIEnv");
     }
 
-    jlongArray jbuffer_info = static_cast<jlongArray>(env->CallStaticObjectMethod(
-        DataSource_jclass, hostReadBuff_method, this->ds, offset, size));
+    jlongArray jbuffer_info = static_cast<jlongArray>(env->CallObjectMethod(
+        this->ds, hostReadBuff_method, offset, size));
     if (env->ExceptionOccurred()) {
       throw cudf::jni::jni_exception("Java exception in hostRead");
     }
@@ -156,8 +156,8 @@ public:
       throw cudf::jni::jni_exception("Could not load JNIEnv");
     }
 
-    jlong amount_read = env->CallStaticLongMethod(DataSource_jclass, hostRead_method, this->ds,
-                                                  offset, size, reinterpret_cast<jlong>(dst));
+    jlong amount_read = env->CallLongMethod(this->ds, hostRead_method, offset,
+                                            size, reinterpret_cast<jlong>(dst));
     if (env->ExceptionOccurred()) {
       throw cudf::jni::jni_exception("Java exception in hostRead");
     }
@@ -179,9 +179,9 @@ public:
       throw cudf::jni::jni_exception("Could not load JNIEnv");
     }
 
-    jlong amount_read = env->CallStaticLongMethod(DataSource_jclass, deviceRead_method, this->ds,
-                                                  offset, size, reinterpret_cast<jlong>(dst),
-                                                  reinterpret_cast<jlong>(stream.value()));
+    jlong amount_read = env->CallLongMethod(this->ds, deviceRead_method,
+                                            offset, size, reinterpret_cast<jlong>(dst),
+                                            reinterpret_cast<jlong>(stream.value()));
     if (env->ExceptionOccurred()) {
       throw cudf::jni::jni_exception("Java exception in deviceRead");
     }

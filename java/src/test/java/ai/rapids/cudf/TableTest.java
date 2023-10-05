@@ -645,7 +645,7 @@ public class TableTest extends CudfTestBase {
         long at = 0;
         while (at < len) {
           int amount = fin.read(tmp);
-          buffer.copyFromArray(at, tmp, 0, amount);
+          buffer.setBytes(at, tmp, 0, amount);
           at += amount;
         }
       }
@@ -656,7 +656,7 @@ public class TableTest extends CudfTestBase {
   public static MultiBufferDataSource sourceFrom(byte[] data) {
     long len = data.length;
     try (HostMemoryBuffer buffer = HostMemoryBuffer.allocate(len)) {
-      buffer.copyFromArray(0, data, 0, len);
+      buffer.setBytes(0, data, 0, len);
       return new MultiBufferDataSource(buffer);
     }
   }
@@ -667,7 +667,7 @@ public class TableTest extends CudfTestBase {
       for (int i = 0; i < data.length; i++) {
         byte[] subData = data[i];
         buffers[i] = HostMemoryBuffer.allocate(subData.length);
-        buffers[i].copyFromArray(0, subData, 0, subData.length);
+        buffers[i].setBytes(0, subData, 0, subData.length);
       }
       return new MultiBufferDataSource(buffers);
     } finally {

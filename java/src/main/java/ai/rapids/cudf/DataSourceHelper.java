@@ -26,7 +26,7 @@ package ai.rapids.cudf;
  * library is loaded and the JNI library cannot load until the class is loaded
  * and cached. This breaks the loop.
  */
-public class DataSourceHelper {
+class DataSourceHelper {
     static {
         NativeDepsLoader.loadNativeDeps();
     }

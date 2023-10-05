@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -238,13 +238,6 @@ public class HostMemoryBuffer extends MemoryBuffer {
     srcData.addressOutOfBoundsCheck(srcData.address + srcOffset, length, "copy from source");
     UnsafeMemoryAccessor.copyMemory(null, srcData.address + srcOffset, null,
         address + destOffset, length);
-  }
-
-  public final void copyFromArray(long destOffset, byte[] srcData, long srcOffset, long length) {
-    addressOutOfBoundsCheck(address + destOffset, length, "copy from dest");
-    assert srcOffset + length <= srcData.length : "Out of range copy " + srcOffset +
-            " " + length + " " + srcData.length;
-    UnsafeMemoryAccessor.setBytes(address + destOffset, srcData, srcOffset, length);
   }
 
   /**
