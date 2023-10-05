@@ -40,7 +40,7 @@ bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh ${XDF_MODE} \
   --report-log=${PANDAS_TESTS_BRANCH}.json 2>&1
 
 # summarize the results and save them to artifacts:
-python scripts/summarize-test-results.py --output json pandas-testing/${PANDAS_TESTS_BRANCH}.json > pandas-testing/${PANDAS_TESTS_BRANCH}-results.json
+python python/cudf/cudf/pandas/scripts/summarize-test-results.py --output json pandas-testing/${PANDAS_TESTS_BRANCH}.json > pandas-testing/${PANDAS_TESTS_BRANCH}-results.json
 RAPIDS_ARTIFACTS_DIR=${RAPIDS_ARTIFACTS_DIR:-"${PWD}/artifacts"}
 mkdir -p "${RAPIDS_ARTIFACTS_DIR}"
 mv pandas-testing/${PANDAS_TESTS_BRANCH}-results.json ${RAPIDS_ARTIFACTS_DIR}/
