@@ -44,14 +44,12 @@ bool cache_data_source_jni(JNIEnv *env) {
     return false;
   }
 
-  hostReadBuff_method =
-      env->GetMethodID(cls, "hostReadBuff", "(JJ)[J");
+  hostReadBuff_method = env->GetMethodID(cls, "hostReadBuff", "(JJ)[J");
   if (hostReadBuff_method == nullptr) {
     return false;
   }
 
-  onHostBufferDone_method =
-      env->GetMethodID(cls, "onHostBufferDone", "(J)V");
+  onHostBufferDone_method = env->GetMethodID(cls, "onHostBufferDone", "(J)V");
   if (onHostBufferDone_method == nullptr) {
     return false;
   }
@@ -134,8 +132,8 @@ public:
       throw cudf::jni::jni_exception("Could not load JNIEnv");
     }
 
-    jlongArray jbuffer_info = static_cast<jlongArray>(env->CallObjectMethod(
-        this->ds, hostReadBuff_method, offset, size));
+    jlongArray jbuffer_info =
+        static_cast<jlongArray>(env->CallObjectMethod(this->ds, hostReadBuff_method, offset, size));
     if (env->ExceptionOccurred()) {
       throw cudf::jni::jni_exception("Java exception in hostRead");
     }
@@ -156,8 +154,8 @@ public:
       throw cudf::jni::jni_exception("Could not load JNIEnv");
     }
 
-    jlong amount_read = env->CallLongMethod(this->ds, hostRead_method, offset,
-                                            size, reinterpret_cast<jlong>(dst));
+    jlong amount_read =
+        env->CallLongMethod(this->ds, hostRead_method, offset, size, reinterpret_cast<jlong>(dst));
     if (env->ExceptionOccurred()) {
       throw cudf::jni::jni_exception("Java exception in hostRead");
     }
@@ -179,9 +177,9 @@ public:
       throw cudf::jni::jni_exception("Could not load JNIEnv");
     }
 
-    jlong amount_read = env->CallLongMethod(this->ds, deviceRead_method,
-                                            offset, size, reinterpret_cast<jlong>(dst),
-                                            reinterpret_cast<jlong>(stream.value()));
+    jlong amount_read =
+        env->CallLongMethod(this->ds, deviceRead_method, offset, size, reinterpret_cast<jlong>(dst),
+                            reinterpret_cast<jlong>(stream.value()));
     if (env->ExceptionOccurred()) {
       throw cudf::jni::jni_exception("Java exception in deviceRead");
     }
