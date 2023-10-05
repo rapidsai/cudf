@@ -649,8 +649,8 @@ dependencies:
           - pymysql
           - pyreadstat
           - pytest-asyncio
+          - pytest-reportlog
           - python-snappy
-          - python-reportlog
           - pyxlsb
           - s3fs
           - scipy
