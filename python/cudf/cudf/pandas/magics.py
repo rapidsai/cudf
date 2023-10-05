@@ -3,7 +3,7 @@
 
 def load_ipython_extension(ip):
     import xdf.autoload
-    from xdf.xdf.magics import XDFMagics
+    from xdf.magics import XDFMagics
 
     xdf.autoload.install()
     ip.register_magics(XDFMagics)
