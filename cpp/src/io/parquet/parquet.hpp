@@ -214,12 +214,18 @@ struct SchemaElement {
  * @brief Thrift-derived struct describing column chunk statistics
  */
 struct Statistics {
-  std::vector<uint8_t> max;        // deprecated max value in signed comparison order
-  std::vector<uint8_t> min;        // deprecated min value in signed comparison order
-  int64_t null_count     = -1;     // count of null values in the column
-  int64_t distinct_count = -1;     // count of distinct values occurring
-  std::vector<uint8_t> max_value;  // max value for column determined by ColumnOrder
-  std::vector<uint8_t> min_value;  // min value for column determined by ColumnOrder
+  // deprecated max value in signed comparison order
+  thrust::optional<std::vector<uint8_t>> max = thrust::nullopt;
+  // deprecated min value in signed comparison order
+  thrust::optional<std::vector<uint8_t>> min = thrust::nullopt;
+  // count of null values in the column
+  thrust::optional<int64_t> null_count = thrust::nullopt;
+  // count of distinct values occurring
+  thrust::optional<int64_t> distinct_count = thrust::nullopt;
+  // max value for column determined by ColumnOrder
+  thrust::optional<std::vector<uint8_t>> max_value = thrust::nullopt;
+  // min value for column determined by ColumnOrder
+  thrust::optional<std::vector<uint8_t>> min_value = thrust::nullopt;
 };
 
 /**
