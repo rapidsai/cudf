@@ -27,11 +27,11 @@ fi
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 RAPIDS_PY_WHEEL_NAME="${WHEEL_NAME_PREFIX}${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
-python -m pip install ./local-cudf-dep/cudf*.whl[test,pandas-tests]
+python -m pip install $(ls ./local-cudf-dep/cudf*.whl)[test,pandas_tests]
 
 git checkout $COMMIT
 
-bash scripts/run-pandas-tests.sh ${XDF_MODE} \
+bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh ${XDF_MODE} \
   -n 10 \
   --tb=line \
   --skip-slow \

@@ -13,5 +13,5 @@ python -m pip install $(echo ./dist/cudf*.whl)[test]
 if [[ "$(arch)" == "aarch64" && ${RAPIDS_BUILD_TYPE} == "pull-request" ]]; then
     python ./ci/wheel_smoke_test_cudf.py
 else
-    python -m pytest -n 8 ./python/cudf/cudf/tests -k 'not xdf_tests'
+    python -m pytest -n 8 ./python/cudf/cudf/tests --ignore=./python/cudf/cudf/tests/xdf_tests
 fi
