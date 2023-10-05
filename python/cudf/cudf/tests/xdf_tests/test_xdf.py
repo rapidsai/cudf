@@ -225,7 +225,6 @@ def test_ewm():
     tm.assert_equal(result, expected)
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/12397")
 def test_setitem_frame(dataframe):
     pdf, df = dataframe
     pdf[pdf > 1] = -pdf
@@ -457,12 +456,6 @@ def test_groupby_grouper_fallback(dataframe, groupby_udf):
     )
 
 
-@pytest.mark.xfail(
-    reason="""
-Fails becaue .options is a module in cudf and a
-dict-like in Pandas. Need to figure out how to
-handle that"""
-)
 def test_options_mode():
     assert xpd.options.mode.copy_on_write == pd.options.mode.copy_on_write
 
