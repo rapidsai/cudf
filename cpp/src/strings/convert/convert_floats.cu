@@ -120,10 +120,11 @@ std::unique_ptr<column> to_floats(strings_column_view const& strings,
 
 std::unique_ptr<column> to_floats(strings_column_view const& strings,
                                   data_type output_type,
+                                  rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_floats(strings, output_type, cudf::get_default_stream(), mr);
+  return detail::to_floats(strings, output_type, stream, mr);
 }
 
 namespace detail {
@@ -436,10 +437,12 @@ std::unique_ptr<column> from_floats(column_view const& floats,
 }  // namespace detail
 
 // external API
-std::unique_ptr<column> from_floats(column_view const& floats, rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> from_floats(column_view const& floats,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_floats(floats, cudf::get_default_stream(), mr);
+  return detail::from_floats(floats, stream, mr);
 }
 
 namespace detail {
@@ -473,11 +476,12 @@ std::unique_ptr<column> is_float(strings_column_view const& strings,
 }  // namespace detail
 
 // external API
-std::unique_ptr<column> is_float(strings_column_view const& strings,
+std::unique_ptr<column> is_float(strings_column_view const& input,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_float(strings, cudf::get_default_stream(), mr);
+  return detail::is_float(input, stream, mr);
 }
 
 }  // namespace strings

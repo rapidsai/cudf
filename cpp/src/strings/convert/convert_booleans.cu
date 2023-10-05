@@ -80,12 +80,13 @@ std::unique_ptr<column> to_booleans(strings_column_view const& strings,
 }  // namespace detail
 
 // external API
-std::unique_ptr<column> to_booleans(strings_column_view const& strings,
+std::unique_ptr<column> to_booleans(strings_column_view const& input,
                                     string_scalar const& true_string,
+                                    rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_booleans(strings, true_string, cudf::get_default_stream(), mr);
+  return detail::to_booleans(input, true_string, stream, mr);
 }
 
 namespace detail {
@@ -156,10 +157,11 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
 std::unique_ptr<column> from_booleans(column_view const& booleans,
                                       string_scalar const& true_string,
                                       string_scalar const& false_string,
+                                      rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_booleans(booleans, true_string, false_string, cudf::get_default_stream(), mr);
+  return detail::from_booleans(booleans, true_string, false_string, stream, mr);
 }
 
 }  // namespace strings

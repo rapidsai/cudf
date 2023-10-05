@@ -721,19 +721,21 @@ std::unique_ptr<column> to_durations(strings_column_view const& strings,
 
 std::unique_ptr<column> from_durations(column_view const& durations,
                                        std::string_view format,
+                                       rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_durations(durations, format, cudf::get_default_stream(), mr);
+  return detail::from_durations(durations, format, stream, mr);
 }
 
-std::unique_ptr<column> to_durations(strings_column_view const& strings,
+std::unique_ptr<column> to_durations(strings_column_view const& input,
                                      data_type duration_type,
                                      std::string_view format,
+                                     rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_durations(strings, duration_type, format, cudf::get_default_stream(), mr);
+  return detail::to_durations(input, duration_type, format, stream, mr);
 }
 
 }  // namespace strings

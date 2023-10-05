@@ -149,10 +149,11 @@ std::unique_ptr<column> url_encode(strings_column_view const& input,
 
 // external API
 std::unique_ptr<column> url_encode(strings_column_view const& strings,
+                                   rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::url_encode(strings, cudf::get_default_stream(), mr);
+  return detail::url_encode(strings, stream, mr);
 }
 
 namespace detail {
@@ -429,10 +430,11 @@ std::unique_ptr<column> url_decode(strings_column_view const& strings,
 // external API
 
 std::unique_ptr<column> url_decode(strings_column_view const& strings,
+                                   rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::url_decode(strings, cudf::get_default_stream(), mr);
+  return detail::url_decode(strings, stream, mr);
 }
 
 }  // namespace strings

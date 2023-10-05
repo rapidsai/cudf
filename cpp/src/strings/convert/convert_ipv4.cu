@@ -103,10 +103,11 @@ std::unique_ptr<column> ipv4_to_integers(strings_column_view const& strings,
 
 // external API
 std::unique_ptr<column> ipv4_to_integers(strings_column_view const& strings,
+                                         rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::ipv4_to_integers(strings, cudf::get_default_stream(), mr);
+  return detail::ipv4_to_integers(strings, stream, mr);
 }
 
 namespace detail {
@@ -223,17 +224,19 @@ std::unique_ptr<column> is_ipv4(strings_column_view const& strings,
 // external API
 
 std::unique_ptr<column> integers_to_ipv4(column_view const& integers,
+                                         rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::integers_to_ipv4(integers, cudf::get_default_stream(), mr);
+  return detail::integers_to_ipv4(integers, stream, mr);
 }
 
 std::unique_ptr<column> is_ipv4(strings_column_view const& strings,
+                                rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_ipv4(strings, cudf::get_default_stream(), mr);
+  return detail::is_ipv4(strings, stream, mr);
 }
 
 }  // namespace strings

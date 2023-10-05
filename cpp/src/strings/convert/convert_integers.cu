@@ -203,18 +203,20 @@ std::unique_ptr<column> is_integer(strings_column_view const& strings,
 
 // external APIs
 std::unique_ptr<column> is_integer(strings_column_view const& strings,
+                                   rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_integer(strings, cudf::get_default_stream(), mr);
+  return detail::is_integer(strings, stream, mr);
 }
 
 std::unique_ptr<column> is_integer(strings_column_view const& strings,
                                    data_type int_type,
+                                   rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_integer(strings, int_type, cudf::get_default_stream(), mr);
+  return detail::is_integer(strings, int_type, stream, mr);
 }
 
 namespace detail {
@@ -304,10 +306,11 @@ std::unique_ptr<column> to_integers(strings_column_view const& strings,
 // external API
 std::unique_ptr<column> to_integers(strings_column_view const& strings,
                                     data_type output_type,
+                                    rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_integers(strings, output_type, cudf::get_default_stream(), mr);
+  return detail::to_integers(strings, output_type, stream, mr);
 }
 
 namespace detail {
@@ -407,10 +410,11 @@ std::unique_ptr<column> from_integers(column_view const& integers,
 
 // external API
 std::unique_ptr<column> from_integers(column_view const& integers,
+                                      rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_integers(integers, cudf::get_default_stream(), mr);
+  return detail::from_integers(integers, stream, mr);
 }
 
 }  // namespace strings
