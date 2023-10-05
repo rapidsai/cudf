@@ -15,7 +15,6 @@ try:
 
     from .profiler import Profiler, lines_with_profiling
 
-
     @magics_class
     class CudfPandasMagics(Magics):
         @cell_magic("cudf.pandas.profile")
@@ -28,7 +27,6 @@ try:
         def line_profile(self, _, cell):
             new_cell = lines_with_profiling(cell.split("\n"))
             get_ipython().run_cell(new_cell)  # noqa: F821
-
 
     def load_ipython_extension(ip):
         from . import install
