@@ -1137,9 +1137,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_merge(JNIEnv *env, jclass
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSVFromDataSource(
     JNIEnv *env, jclass, jobjectArray col_names, jintArray j_types, jintArray j_scales,
-    jobjectArray filter_col_names,
-    jint header_row, jbyte delim, jint j_quote_style, jbyte quote, jbyte comment,
-    jobjectArray null_values, jobjectArray true_values, jobjectArray false_values,
+    jobjectArray filter_col_names, jint header_row, jbyte delim, jint j_quote_style, jbyte quote,
+    jbyte comment, jobjectArray null_values, jobjectArray true_values, jobjectArray false_values,
     jlong ds_handle) {
   JNI_NULL_CHECK(env, null_values, "null_values must be supplied, even if it is empty", NULL);
   JNI_NULL_CHECK(env, ds_handle, "no data source handle given", NULL);
@@ -1618,8 +1617,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquetFromDataSource(
-    JNIEnv *env, jclass, jobjectArray filter_col_names, jbooleanArray j_col_binary_read,
-    jint unit, jlong ds_handle) {
+    JNIEnv *env, jclass, jobjectArray filter_col_names, jbooleanArray j_col_binary_read, jint unit,
+    jlong ds_handle) {
 
   JNI_NULL_CHECK(env, ds_handle, "no data source handle given", 0);
   JNI_NULL_CHECK(env, j_col_binary_read, "null col_binary_read", 0);
@@ -1693,10 +1692,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
   CATCH_STD(env, NULL);
 }
 
-
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readAvroFromDataSource(JNIEnv *env, jclass,
-                                                                jobjectArray filter_col_names,
-                                                                jlong ds_handle) {
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readAvroFromDataSource(
+    JNIEnv *env, jclass, jobjectArray filter_col_names, jlong ds_handle) {
 
   JNI_NULL_CHECK(env, ds_handle, "no data source handle given", 0);
 
@@ -1715,7 +1712,6 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readAvroFromDataSource(JN
   }
   CATCH_STD(env, NULL);
 }
-
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readAvro(JNIEnv *env, jclass,
                                                                 jobjectArray filter_col_names,
@@ -1898,8 +1894,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeParquetEnd(JNIEnv *env, jc
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readORCFromDataSource(
-    JNIEnv *env, jclass, jobjectArray filter_col_names, jboolean usingNumPyTypes, 
-    jint unit, jobjectArray dec128_col_names, jlong ds_handle) {
+    JNIEnv *env, jclass, jobjectArray filter_col_names, jboolean usingNumPyTypes, jint unit,
+    jobjectArray dec128_col_names, jlong ds_handle) {
 
   JNI_NULL_CHECK(env, ds_handle, "no data source handle given", 0);
 
