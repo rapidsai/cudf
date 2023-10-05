@@ -1283,7 +1283,7 @@ template <typename T, typename SourceElementT = T>
 class lists_column_wrapper : public detail::column_wrapper {
  public:
   /**
-   * @brief Cast to dictionary_column_view
+   * @brief Cast to lists_column_view
    */
   operator lists_column_view() const { return cudf::lists_column_view{wrapped->view()}; }
 
