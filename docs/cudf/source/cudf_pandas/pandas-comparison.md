@@ -1,6 +1,10 @@
 # Comparison of cuDF and Pandas
 
-## Known limitations
+Needs to be populated
 
 ## Pandas Unit Testing
+Description of testing
 
+current coverage
+
+known failures

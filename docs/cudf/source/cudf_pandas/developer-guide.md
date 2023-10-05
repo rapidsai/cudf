@@ -1,7 +1,9 @@
 # Developer Guide
 
-## How cudf.pandas works
+## How Pandas Accelerator Mode works
 
-## How to use cuDF.pandas in 3rd party libraries
+### Understanding Performance
+
+## How to use in 3rd party libraries
 
 
