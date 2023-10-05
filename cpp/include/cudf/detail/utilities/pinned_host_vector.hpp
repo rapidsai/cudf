@@ -173,7 +173,7 @@ class pinned_allocator {
   {
     auto dealloc_worked = cudaFreeHost(p);
     (void)dealloc_worked;
-    assert(status__ == cudaSuccess);
+    assert(dealloc_worked == cudaSuccess);
   }
 
   /**
