@@ -1275,6 +1275,11 @@ template <typename T, typename SourceElementT = T>
 class lists_column_wrapper : public detail::column_wrapper {
  public:
   /**
+   * @brief Cast to dictionary_column_view
+   */
+  operator lists_column_view() const { return cudf::lists_column_view{wrapped->view()}; }
+
+  /**
    * @brief Construct a lists column containing a single list of fixed-width
    * type from an initializer list of values.
    *
@@ -1710,7 +1715,6 @@ class lists_column_wrapper : public detail::column_wrapper {
       col.null_count(),
       cudf::detail::copy_bitmask(
         col, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource()),
-      //  copy_bitmask(col),
       cudf::test::get_default_stream());
   }
 
