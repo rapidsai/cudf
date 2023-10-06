@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#include <cudf/lists/combine.hpp>
-#include <cudf/lists/contains.hpp>
-#include <cudf/lists/count_elements.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+
+#include <cudf/lists/combine.hpp>
+#include <cudf/lists/contains.hpp>
+#include <cudf/lists/count_elements.hpp>
 
 class ListTest : public cudf::test::BaseFixture {};
 
