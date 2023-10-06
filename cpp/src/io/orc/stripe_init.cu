@@ -30,14 +30,14 @@ namespace orc {
 namespace gpu {
 
 struct comp_in_out {
-  uint8_t const* in_ptr;
-  size_t in_size;
-  uint8_t* out_ptr;
-  size_t out_size;
+  uint8_t const* in_ptr{};
+  size_t in_size{};
+  uint8_t* out_ptr{};
+  size_t out_size{};
 };
 struct compressed_stream_s {
-  CompressedStreamInfo info;
-  comp_in_out ctl;
+  CompressedStreamInfo info{};
+  comp_in_out ctl{};
 };
 
 // blockDim {128,1,1}
@@ -208,14 +208,15 @@ __global__ void __launch_bounds__(128, 8)
  * @brief Shared mem state for gpuParseRowGroupIndex
  */
 struct rowindex_state_s {
-  ColumnDesc chunk;
-  uint32_t rowgroup_start;
-  uint32_t rowgroup_end;
-  int is_compressed;
-  uint32_t row_index_entry[3][CI_PRESENT];  // NOTE: Assumes CI_PRESENT follows CI_DATA and CI_DATA2
-  CompressedStreamInfo strm_info[2];
-  RowGroup rowgroups[128];
-  uint32_t compressed_offset[128][2];
+  ColumnDesc chunk{};
+  uint32_t rowgroup_start{};
+  uint32_t rowgroup_end{};
+  int is_compressed{};
+  uint32_t row_index_entry[3]
+                          [CI_PRESENT]{};  // NOTE: Assumes CI_PRESENT follows CI_DATA and CI_DATA2
+  CompressedStreamInfo strm_info[2]{};
+  RowGroup rowgroups[128]{};
+  uint32_t compressed_offset[128][2]{};
 };
 
 enum row_entry_state_e {
@@ -498,7 +499,7 @@ __global__ void __launch_bounds__(128, 8) gpuParseRowGroupIndex(RowGroup* row_gr
           : row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].start_row;
       for (int j = t4; j < rowgroup_size4; j += 4) {
         ((uint32_t*)&row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x])[j] =
-          ((volatile uint32_t*)&s->rowgroups[i])[j];
+          ((uint32_t*)&s->rowgroups[i])[j];
       }
       row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].num_rows = num_rows;
       // Updating in case of struct

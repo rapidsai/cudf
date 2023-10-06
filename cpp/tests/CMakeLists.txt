@@ -116,6 +116,7 @@ ConfigureTest(
   groupby/covariance_tests.cpp
   groupby/groupby_test_util.cpp
   groupby/groups_tests.cpp
+  groupby/histogram_tests.cpp
   groupby/keys_tests.cpp
   groupby/lists_tests.cpp
   groupby/m2_tests.cpp
@@ -621,6 +622,7 @@ ConfigureTest(
   STREAM_IDENTIFICATION_TEST identify_stream_usage/test_default_stream_identification.cu
 )
 
+ConfigureTest(STREAM_BINARYOP_TEST streams/binaryop_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_CONCATENATE_TEST streams/concatenate_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_COPYING_TEST streams/copying_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_FILLING_TEST streams/filling_test.cpp STREAM_MODE testing)

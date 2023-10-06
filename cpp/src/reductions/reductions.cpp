@@ -23,6 +23,7 @@
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/reduction.hpp>
+#include <cudf/reduction/detail/histogram.hpp>
 #include <cudf/reduction/detail/reduction_functions.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/structs/structs_column_view.hpp>
@@ -59,6 +60,8 @@ struct reduce_dispatch_functor {
       case aggregation::MAX: return max(col, output_dtype, init, stream, mr);
       case aggregation::ANY: return any(col, output_dtype, init, stream, mr);
       case aggregation::ALL: return all(col, output_dtype, init, stream, mr);
+      case aggregation::HISTOGRAM: return histogram(col, stream, mr);
+      case aggregation::MERGE_HISTOGRAM: return merge_histogram(col, stream, mr);
       case aggregation::SUM_OF_SQUARES: return sum_of_squares(col, output_dtype, stream, mr);
       case aggregation::MEAN: return mean(col, output_dtype, stream, mr);
       case aggregation::VARIANCE: {
@@ -163,6 +166,15 @@ std::unique_ptr<scalar> reduce(column_view const& col,
   if (col.size() <= col.null_count()) {
     if (agg.kind == aggregation::TDIGEST || agg.kind == aggregation::MERGE_TDIGEST) {
       return tdigest::detail::make_empty_tdigest_scalar(stream, mr);
+    }
+
+    if (agg.kind == aggregation::HISTOGRAM) {
+      return std::make_unique<list_scalar>(
+        std::move(*reduction::detail::make_empty_histogram_like(col)), true, stream, mr);
+    }
+    if (agg.kind == aggregation::MERGE_HISTOGRAM) {
+      return std::make_unique<list_scalar>(
+        std::move(*reduction::detail::make_empty_histogram_like(col.child(0))), true, stream, mr);
     }
 
     if (output_dtype.id() == type_id::LIST) {
