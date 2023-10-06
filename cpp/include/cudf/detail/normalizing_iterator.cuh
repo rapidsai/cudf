@@ -204,7 +204,7 @@ struct base_normalator {
 
  private:
   struct integer_sizeof_fn {
-    template <typename T, std::enable_if_t<not cudf::is_integral<T>()>* = nullptr>
+    template <typename T, std::enable_if_t<not cudf::is_index_type<T>()>* = nullptr>
     constexpr int operator()() const
     {
 #ifndef __CUDA_ARCH__
@@ -213,7 +213,7 @@ struct base_normalator {
       CUDF_UNREACHABLE("only integral types are supported");
 #endif
     }
-    template <typename T, std::enable_if_t<is_integral<T>()>* = nullptr>
+    template <typename T, std::enable_if_t<cudf::is_index_type<T>()>* = nullptr>
     constexpr int operator()() const noexcept
     {
       return sizeof(T);
