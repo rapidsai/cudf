@@ -697,7 +697,9 @@ auto get_transition_table(json_format_cfg_t format)
 
 /**
  * @brief Getting the translation table
- * @param recover_from_error Whether or not the tokenizer should recover from invalid lines
+ * @param recover_from_error Whether or not the tokenizer should recover from invalid lines. If
+ * `recover_from_error` is true, invalid JSON lines end with the token sequence (`ErrorBegin`,
+ * `LineEn`) and incomplete JSON lines (e.g., `{"a":123\n`) are treated as invalid lines.
  */
 auto get_translation_table(bool recover_from_error)
 {
@@ -716,8 +718,11 @@ auto get_translation_table(bool recover_from_error)
   constexpr auto ErrorBegin        = token_t::ErrorBegin;
 
   /**
-   * @brief If and only if `recover_from_error` is true, `recovering_tokens` are returned along with
-   * a token_t::LineEnd token, otherwise `regular_tokens` is returned.
+   * @brief Instead of specifying the verbose translation tables twice (i.e., once when
+   * `recover_from_error` is true and once when it is false), we use `nl_tokens` to specialize the
+   * translation table where it differs depending on the `recover_from_error` option. If and only if
+   * `recover_from_error` is true, `recovering_tokens` are returned along with a token_t::LineEnd
+   * token, otherwise `regular_tokens` is returned.
    */
   auto nl_tokens = [recover_from_error](std::vector<char> regular_tokens,
                                         std::vector<char> recovering_tokens) {
