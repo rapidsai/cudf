@@ -23,6 +23,7 @@ jobs:
       - pandas-tests-xdf-main
       - pandas-tests-xdf-pr
       - pandas-tests-xdf-diff
+      - wheel-publish-cudf
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/pr-builder.yaml@branch-23.10
   checks:
