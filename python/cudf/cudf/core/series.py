@@ -75,7 +75,6 @@ from cudf.core.index import BaseIndex, DatetimeIndex, RangeIndex, as_index
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
-    _get_label_range_or_mask,
     _indices_from_labels,
     doc_reset_index_template,
 )
@@ -246,8 +245,18 @@ class _SeriesLocIndexer(_FrameIndexer):
     Label-based selection
     """
 
+    _frame: Series
+
     @_cudf_nvtx_annotate
     def __getitem__(self, arg: Any) -> Union[ScalarLike, DataFrameOrSeries]:
+        if not isinstance(self._frame.index, cudf.MultiIndex):
+            indexing_spec = indexing_utils.parse_row_loc_indexer(
+                indexing_utils.destructure_series_loc_indexer(
+                    arg, self._frame
+                ),
+                self._frame.index,
+            )
+            return self._frame._getitem_preprocessed(indexing_spec)
         if isinstance(arg, pd.MultiIndex):
             arg = cudf.from_pandas(arg)
 
@@ -321,9 +330,15 @@ class _SeriesLocIndexer(_FrameIndexer):
                 raise KeyError("Label scalar is out of bounds")
 
         elif isinstance(arg, slice):
-            return _get_label_range_or_mask(
-                self._frame.index, arg.start, arg.stop, arg.step
+            indexer = indexing_utils.find_label_range_or_mask(
+                arg, self._frame.index
             )
+            if isinstance(indexer, indexing_utils.EmptyIndexer):
+                return slice(0, 0, 1)
+            elif isinstance(indexer, indexing_utils.SliceIndexer):
+                return indexer.key
+            else:
+                return indexer.key.column
         elif isinstance(arg, (cudf.MultiIndex, pd.MultiIndex)):
             if isinstance(arg, pd.MultiIndex):
                 arg = cudf.MultiIndex.from_pandas(arg)
@@ -1385,6 +1400,17 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @_cudf_nvtx_annotate
     def __getitem__(self, arg):
         if isinstance(arg, slice):
+            return self.iloc[arg]
+        elif is_integer(arg) and self.index.dtype.kind not in {"i", "u", "f"}:
+            # Series getitem looks up integers by position if the
+            # index is non-numeric, but is deprecated in pandas 2
+            # https://github.com/pandas-dev/pandas/issues/50617
+            # warnings.warn(
+            #     "Treating integer keys positionally is deprecated and "
+            #     "will be removed in a future version. To find a value "
+            #     "by position use ser.iloc[pos] instead",
+            #     FutureWarning,
+            # )
             return self.iloc[arg]
         else:
             return self.loc[arg]

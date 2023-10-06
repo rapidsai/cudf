@@ -75,7 +75,6 @@ from cudf.core.index import BaseIndex, RangeIndex, _index_from_data, as_index
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
-    _get_label_range_or_mask,
     _indices_from_labels,
     doc_reset_index_template,
 )
@@ -122,21 +121,7 @@ def _shape_mismatch_error(x, y):
 
 
 class _DataFrameIndexer(_FrameIndexer):
-    def __getitem__(self, arg):
-        if (
-            isinstance(self._frame.index, MultiIndex)
-            or self._frame._data.multiindex
-        ):
-            # This try/except block allows the use of pandas-like
-            # tuple arguments into MultiIndex dataframes.
-            try:
-                return self._getitem_tuple_arg(arg)
-            except (TypeError, KeyError, IndexError, ValueError):
-                return self._getitem_tuple_arg((arg, slice(None)))
-        else:
-            if not isinstance(arg, tuple):
-                arg = (arg, slice(None))
-            return self._getitem_tuple_arg(arg)
+    _frame: DataFrame
 
     def __setitem__(self, key, value):
         if not isinstance(key, tuple):
@@ -229,14 +214,30 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
     For selection by label.
     """
 
-    @_cudf_nvtx_annotate
-    def _getitem_scalar(self, arg):
-        return self._frame[arg[1]].loc[arg[0]]
+    def __getitem__(self, arg):
+        if isinstance(self._frame.index, cudf.MultiIndex):
+            # This try/except block allows the use of pandas-like
+            # tuple arguments into MultiIndex dataframes.
+            try:
+                return self._getitem_tuple_arg(arg)
+            except (TypeError, KeyError, IndexError, ValueError):
+                return self._getitem_tuple_arg((arg, slice(None)))
+        else:
+            row_key, (
+                col_is_scalar,
+                ca,
+            ) = indexing_utils.destructure_dataframe_loc_indexer(
+                arg, self._frame
+            )
+            row_spec = indexing_utils.parse_row_loc_indexer(
+                row_key, self._frame.index
+            )
+            return self._frame._getitem_preprocessed(
+                row_spec, col_is_scalar, ca
+            )
 
     @_cudf_nvtx_annotate
     def _getitem_tuple_arg(self, arg):
-        from uuid import uuid4
-
         # Step 1: Gather columns
         if isinstance(arg, tuple):
             columns_df = self._frame._get_columns_by_label(arg[1])
@@ -262,64 +263,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     row_arg = arg
                 return columns_df.index._get_row_major(columns_df, row_arg)
         else:
-            if isinstance(arg[0], slice):
-                out = _get_label_range_or_mask(
-                    columns_df.index, arg[0].start, arg[0].stop, arg[0].step
-                )
-                if isinstance(out, slice):
-                    df = columns_df._slice(out)
-                else:
-                    df = columns_df._apply_boolean_mask(
-                        BooleanMask.from_column_unchecked(
-                            cudf.core.column.as_column(out)
-                        )
-                    )
-            else:
-                tmp_arg = arg
-                if is_scalar(arg[0]):
-                    # If a scalar, there is possibility of having duplicates.
-                    # Join would get all the duplicates. So, converting it to
-                    # an array kind.
-                    tmp_arg = ([tmp_arg[0]], tmp_arg[1])
-                if len(tmp_arg[0]) == 0:
-                    return columns_df._empty_like(keep_index=True)
-                tmp_arg = (as_column(tmp_arg[0]), tmp_arg[1])
-
-                if is_bool_dtype(tmp_arg[0]):
-                    df = columns_df._apply_boolean_mask(
-                        BooleanMask(tmp_arg[0], len(columns_df))
-                    )
-                else:
-                    tmp_col_name = str(uuid4())
-                    cantor_name = "_" + "_".join(
-                        map(str, columns_df._data.names)
-                    )
-                    if columns_df._data.multiindex:
-                        # column names must be appropriate length tuples
-                        extra = tuple(
-                            "" for _ in range(columns_df._data.nlevels - 1)
-                        )
-                        tmp_col_name = (tmp_col_name, *extra)
-                        cantor_name = (cantor_name, *extra)
-                    other_df = DataFrame(
-                        {tmp_col_name: column.arange(len(tmp_arg[0]))},
-                        index=as_index(tmp_arg[0]),
-                    )
-                    columns_df[cantor_name] = column.arange(len(columns_df))
-                    df = other_df.join(columns_df, how="inner")
-                    # as join is not assigning any names to index,
-                    # update it over here
-                    df.index.name = columns_df.index.name
-                    df = df.sort_values(by=[tmp_col_name, cantor_name])
-                    df.drop(columns=[tmp_col_name, cantor_name], inplace=True)
-                    # There were no indices found
-                    if len(df) == 0:
-                        raise KeyError(arg)
-
-        # Step 3: Downcast
-        if self._can_downcast_to_series(df, arg):
-            return self._downcast_to_series(df, arg)
-        return df
+            raise RuntimeError("Should have been handled by now")
 
     @_cudf_nvtx_annotate
     def _setitem_tuple_arg(self, key, value):
@@ -336,10 +280,16 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             columns_df = self._frame._get_columns_by_label(key[1])
         except KeyError:
             if not self._frame.empty and isinstance(key[0], slice):
-                pos_range = _get_label_range_or_mask(
-                    self._frame.index, key[0].start, key[0].stop, key[0].step
+                indexer = indexing_utils.find_label_range_or_mask(
+                    key[0], self._frame.index
                 )
-                idx = self._frame.index[pos_range]
+                index = self._frame.index
+                if isinstance(indexer, indexing_utils.EmptyIndexer):
+                    idx = index[0:0:1]
+                elif isinstance(indexer, indexing_utils.SliceIndexer):
+                    idx = index[indexer.key]
+                else:
+                    idx = index[indexer.key.column]
             elif self._frame.empty and isinstance(key[0], slice):
                 idx = None
             else:
@@ -416,55 +366,15 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     For selection by index.
     """
 
-    _frame: DataFrame
-
     def __getitem__(self, arg):
         row_key, (
             col_is_scalar,
-            column_names,
+            ca,
         ) = indexing_utils.destructure_dataframe_iloc_indexer(arg, self._frame)
         row_spec = indexing_utils.parse_row_iloc_indexer(
             row_key, len(self._frame)
         )
-        ca = self._frame._data
-        index = self._frame.index
-        if col_is_scalar:
-            s = Series._from_data(
-                ca._select_by_names(column_names), index=index
-            )
-            return s._getitem_preprocessed(row_spec)
-        if column_names != list(self._frame._column_names):
-            frame = self._frame._from_data(
-                ca._select_by_names(column_names), index=index
-            )
-        else:
-            frame = self._frame
-        if isinstance(row_spec, indexing_utils.MapIndexer):
-            return frame._gather(row_spec.key, keep_index=True)
-        elif isinstance(row_spec, indexing_utils.MaskIndexer):
-            return frame._apply_boolean_mask(row_spec.key, keep_index=True)
-        elif isinstance(row_spec, indexing_utils.SliceIndexer):
-            return frame._slice(row_spec.key)
-        elif isinstance(row_spec, indexing_utils.ScalarIndexer):
-            result = frame._gather(row_spec.key, keep_index=True)
-            # Attempt to turn into series.
-            try:
-                # Behaviour difference from pandas, which will merrily
-                # turn any heterogeneous set of columns into a series if
-                # you only ask for one row.
-                new_name = result.index[0]
-                result = Series._concat(
-                    [result[name] for name in column_names],
-                    index=result.keys(),
-                )
-                result.name = new_name
-                return result
-            except TypeError:
-                # Couldn't find a common type, just return a 1xN dataframe.
-                return result
-        elif isinstance(row_spec, indexing_utils.EmptyIndexer):
-            return frame._empty_like(keep_index=True)
-        assert_never(row_spec)
+        return self._frame._getitem_preprocessed(row_spec, col_is_scalar, ca)
 
     @_cudf_nvtx_annotate
     def _setitem_tuple_arg(self, key, value):
@@ -982,7 +892,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         data: MutableMapping,
         index: Optional[BaseIndex] = None,
         columns: Any = None,
-    ) -> DataFrame:
+    ) -> Self:
         out = super()._from_data(data=data, index=index)
         if columns is not None:
             out.columns = columns
@@ -1140,6 +1050,67 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             super().__setattr__(key, col)
         else:
             super().__setattr__(key, col)
+
+    def _getitem_preprocessed(
+        self,
+        spec: indexing_utils.IndexingSpec,
+        col_is_scalar: bool,
+        ca: ColumnAccessor,
+    ) -> Union[Self, Series]:
+        """Get a subset of rows and columns given structured data
+
+        Parameters
+        ----------
+        spec
+            Indexing specification for the rows
+        col_is_scalar
+            Was the indexer of the columns a scalar (return a Series)
+        ca
+            ColumnAccessor representing the subsetted column data
+
+        Returns
+        -------
+        Subsetted DataFrame or Series (if a scalar row is requested
+        and the concatenation of the column types is possible)
+
+        Notes
+        -----
+        This function performs no bounds-checking or massaging of the
+        inputs.
+        """
+        if col_is_scalar:
+            series = Series._from_data(ca, index=self.index)
+            return series._getitem_preprocessed(spec)
+        if ca.names != self._data.names:
+            frame = self._from_data(ca, index=self.index)
+        else:
+            frame = self
+        if isinstance(spec, indexing_utils.MapIndexer):
+            return frame._gather(spec.key, keep_index=True)
+        elif isinstance(spec, indexing_utils.MaskIndexer):
+            return frame._apply_boolean_mask(spec.key, keep_index=True)
+        elif isinstance(spec, indexing_utils.SliceIndexer):
+            return frame._slice(spec.key)
+        elif isinstance(spec, indexing_utils.ScalarIndexer):
+            result = frame._gather(spec.key, keep_index=True)
+            # Attempt to turn into series.
+            try:
+                # Behaviour difference from pandas, which will merrily
+                # turn any heterogeneous set of columns into a series if
+                # you only ask for one row.
+                new_name = result.index[0]
+                result = Series._concat(
+                    [result[name] for name in frame._data.names],
+                    index=result.keys(),
+                )
+                result.name = new_name
+                return result
+            except TypeError:
+                # Couldn't find a common type, just return a 1xN dataframe.
+                return result
+        elif isinstance(spec, indexing_utils.EmptyIndexer):
+            return frame._empty_like(keep_index=True)
+        assert_never(spec)
 
     @_cudf_nvtx_annotate
     def __getitem__(self, arg):
