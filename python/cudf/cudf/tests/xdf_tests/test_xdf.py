@@ -1099,3 +1099,22 @@ def test_pos():
     xser = +xpd.Series([-1])
     ser = +pd.Series([-1])
     tm.assert_equal(xser, ser)
+
+
+def test_from_dataframe():
+    cudf = pytest.importorskip("cudf")
+    from cudf.testing._utils import assert_eq
+
+    data = {"foo": [1, 2, 3], "bar": [4, 5, 6]}
+
+    xdf_df = xpd.DataFrame(data)
+    cudf_df = cudf.DataFrame(data)
+
+    # test construction of a cuDF DataFrame from an xdf DataFrame
+    assert_eq(cudf_df, cudf.DataFrame.from_pandas(xdf_df))
+    assert_eq(cudf_df, cudf.from_dataframe(xdf_df))
+
+    # ideally the below would work as well, but currently segfaults
+
+    # pd_df = pd.DataFrame(data)
+    # assert_eq(pd_df, pd.api.interchange.from_dataframe(xdf_df))
