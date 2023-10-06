@@ -324,7 +324,7 @@ std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
 }
 
 using pointer_type = gather_column_buffer;
-using string_type  = cudf::io::detail::inline_column_buffer;
+using string_type  = inline_column_buffer;
 
 using pointer_column_buffer = column_buffer_base<pointer_type>;
 using string_column_buffer  = column_buffer_base<string_type>;
