@@ -127,3 +127,12 @@ jobs:
       node_type: cpu4
       build_type: pull-request
       run_script: ci/xdf_scripts/pandas-tests/diff.sh
+  # TODO: This step is here for testing, but should be removed before the PR is
+  # merge (only actually publish on nightly builds, not PR builds).
+  wheel-publish-cudf:
+    needs: wheel-build-cudf
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-publish.yaml@branch-23.10
+    with:
+      build_type: ${{ inputs.build_type || 'branch' }}
+      package-name: cudf_private
