@@ -924,7 +924,8 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return any(self._range)
 
     def append(self, other):
-        return self._as_int_index().append(other)
+        result = self._as_int_index().append(other)
+        return self._try_reconstruct_range_index(result)
 
     def _indices_of(self, value) -> cudf.core.column.NumericalColumn:
         try:

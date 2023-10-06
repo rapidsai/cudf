@@ -2523,6 +2523,16 @@ def test_rangeindex_where_user_option(default_integer_bitwidth):
     assert_eq(expected, actual)
 
 
+def test_rangeindex_append_return_rangeindex():
+    idx = cudf.RangeIndex(0, 10)
+    result = idx.append([])
+    assert_eq(idx, result)
+
+    result = idx.append(cudf.Index([10]))
+    expected = cudf.RangeIndex(0, 11)
+    assert_eq(result, expected)
+
+
 index_data = [
     range(np.random.randint(0, 100)),
     range(0, 10, -2),
