@@ -445,7 +445,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
     size_type index       = element_index + offset();  // account for this view's _offset
     char const* d_strings = d_children[strings_column_view::chars_column_index].data<char>();
     auto const offsets    = d_children[strings_column_view::offsets_column_index];
-    auto const itr        = cudf::detail::input_offsetsalator(offsets.head(), offsets.type());
+    auto const itr        = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
     auto const offset     = itr[index];
     return string_view{d_strings + offset, static_cast<cudf::size_type>(itr[index + 1] - offset)};
   }
