@@ -349,14 +349,14 @@ void reader::impl::prepare_data(int64_t skip_rows,
         not _input_columns.empty()) {
       // fills in chunk information without physically loading or decompressing
       // the associated data
-      load_global_chunk_info();
+      create_global_chunk_info();
 
       // compute schedule of input reads. Each rowgroup contains 1 chunk per column. For now
       // we will read an entire row group at a time. However, it is possible to do
       // sub-rowgroup reads if we made some estimates on individual chunk sizes (tricky) and
       // changed the high level structure such that we weren't always reading an entire table's
       // worth of columns at once.
-      compute_input_pass_row_group_info();
+      compute_input_passes();
     }
 
     _file_preprocessed = true;
@@ -364,7 +364,7 @@ void reader::impl::prepare_data(int64_t skip_rows,
 
   // if we have to start a new pass, do that now
   if (!_pass_preprocessed) {
-    auto const num_passes = _input_pass_row_group_offsets.size() - 1;
+    auto const num_passes = _file_itm_data.input_pass_row_group_offsets.size() - 1;
 
     // always create the pass struct, even if we end up with no passes.
     // this will also cause the previous pass information to be deleted
@@ -373,7 +373,7 @@ void reader::impl::prepare_data(int64_t skip_rows,
     if (_file_itm_data.global_num_rows > 0 && not _file_itm_data.row_groups.empty() &&
         not _input_columns.empty() && _current_input_pass < num_passes) {
       // setup the pass_intermediate_info for this pass.
-      setup_pass();
+      setup_next_pass();
 
       load_and_decompress_data();
       preprocess_pages(uses_custom_row_bounds, _output_chunk_read_limit);
@@ -541,8 +541,8 @@ bool reader::impl::has_next()
                {} /*row_group_indices, empty means read all row groups*/,
                std::nullopt /*filter*/);
 
-  auto const num_input_passes =
-    _input_pass_row_group_offsets.size() == 0 ? 0 : _input_pass_row_group_offsets.size() - 1;
+  size_t const num_input_passes = std::max(
+    int64_t{0}, static_cast<int64_t>(_file_itm_data.input_pass_row_group_offsets.size()) - 1);
   return (_pass_itm_data->current_output_chunk < _pass_itm_data->output_chunk_read_info.size()) ||
          (_current_input_pass < num_input_passes);
 }
