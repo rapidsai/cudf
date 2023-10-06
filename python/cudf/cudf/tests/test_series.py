@@ -2381,3 +2381,163 @@ def test_bool_series_mixed_dtype_error():
         cudf.Series(ps)
     with pytest.raises(TypeError):
         cudf.from_pandas(ps)
+
+
+@pytest.mark.parametrize(
+    "pandas_type",
+    [
+        pd.ArrowDtype(pa.int8()),
+        pd.ArrowDtype(pa.int16()),
+        pd.ArrowDtype(pa.int32()),
+        pd.ArrowDtype(pa.int64()),
+        pd.ArrowDtype(pa.uint8()),
+        pd.ArrowDtype(pa.uint16()),
+        pd.ArrowDtype(pa.uint32()),
+        pd.ArrowDtype(pa.uint64()),
+        pd.ArrowDtype(pa.float32()),
+        pd.ArrowDtype(pa.float64()),
+        pd.Int8Dtype(),
+        pd.Int16Dtype(),
+        pd.Int32Dtype(),
+        pd.Int64Dtype(),
+        pd.UInt8Dtype(),
+        pd.UInt16Dtype(),
+        pd.UInt32Dtype(),
+        pd.UInt64Dtype(),
+        pd.Float32Dtype(),
+        pd.Float64Dtype(),
+    ],
+)
+def test_series_arrow_numeric_types_roundtrip(pandas_type):
+    ps = pd.Series([1, 2, 3], dtype=pandas_type)
+    pi = pd.Index(ps)
+    pdf = ps.to_frame()
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(ps)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(pi)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(pdf)
+
+
+@pytest.mark.parametrize(
+    "pandas_type", [pd.ArrowDtype(pa.bool_()), pd.BooleanDtype()]
+)
+def test_series_arrow_bool_types_roundtrip(pandas_type):
+    ps = pd.Series([True, False, None], dtype=pandas_type)
+    pi = pd.Index(ps)
+    pdf = ps.to_frame()
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(ps)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(pi)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(pdf)
+
+
+@pytest.mark.parametrize(
+    "pandas_type", [pd.ArrowDtype(pa.string()), pd.StringDtype()]
+)
+def test_series_arrow_string_types_roundtrip(pandas_type):
+    ps = pd.Series(["abc", None, "xyz"], dtype=pandas_type)
+    pi = pd.Index(ps)
+    pdf = ps.to_frame()
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(ps)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(pi)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(pdf)
+
+
+def test_series_arrow_category_types_roundtrip():
+    pa_array = pa.array(pd.Series([1, 2, 3], dtype="category"))
+    ps = pd.Series([1, 2, 3], dtype=pd.ArrowDtype(pa_array.type))
+    pi = pd.Index(ps)
+    pdf = pi.to_frame()
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(ps)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(pi)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(pdf)
+
+
+@pytest.mark.parametrize(
+    "pa_type",
+    [pa.decimal128(10, 2), pa.decimal128(5, 2), pa.decimal128(20, 2)],
+)
+def test_series_arrow_decimal_types_roundtrip(pa_type):
+    ps = pd.Series(
+        [
+            decimal.Decimal("1.2"),
+            decimal.Decimal("20.56"),
+            decimal.Decimal("3"),
+        ],
+        dtype=pd.ArrowDtype(pa_type),
+    )
+    pdf = ps.to_frame()
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(ps)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(pdf)
+
+
+def test_series_arrow_struct_types_roundtrip():
+    ps = pd.Series(
+        [{"a": 1}, {"b": "abc"}],
+        dtype=pd.ArrowDtype(pa.struct({"a": pa.int64(), "b": pa.string()})),
+    )
+    pdf = ps.to_frame()
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(ps)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(pdf)
+
+
+def test_series_arrow_list_types_roundtrip():
+    ps = pd.Series([[1], [2], [4]], dtype=pd.ArrowDtype(pa.list_(pa.int64())))
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(ps)
+    pdf = ps.to_frame()
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(ps)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(pdf)
