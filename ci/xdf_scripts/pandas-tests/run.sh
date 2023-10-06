@@ -26,7 +26,7 @@ if [[ "${PANDAS_TESTS_BRANCH}" == "main" ]]; then
 fi
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
-RAPIDS_PY_WHEEL_NAME="${WHEEL_NAME_PREFIX}_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
+RAPIDS_PY_WHEEL_NAME="${WHEEL_NAME}_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
 python -m pip install $(ls ./local-cudf-dep/cudf*.whl)[test,pandas_tests]
 
 git checkout $COMMIT
