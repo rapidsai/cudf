@@ -13,6 +13,7 @@ import sys
 import textwrap
 import warnings
 from collections import abc, defaultdict
+from collections.abc import Iterator
 from typing import (
     Any,
     Callable,
@@ -729,6 +730,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             self._index = new_df._index
             self._check_data_index_length_match()
         else:
+            if isinstance(data, Iterator):
+                data = list(data)
             if is_list_like(data):
                 if len(data) > 0 and is_scalar(data[0]):
                     if columns is not None:
