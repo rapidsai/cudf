@@ -34,7 +34,7 @@ namespace detail {
  */
 template <class Derived, typename Integer>
 struct base_normalator {
-  static_assert(std::is_integral_v<Integer>);
+  static_assert(cudf::is_index_type<Integer>());
   using difference_type   = std::ptrdiff_t;
   using value_type        = Integer;
   using pointer           = Integer*;
@@ -204,7 +204,7 @@ struct base_normalator {
 
  private:
   struct integer_sizeof_fn {
-    template <typename T, std::enable_if_t<not cudf::is_integral<T>()>* = nullptr>
+    template <typename T, std::enable_if_t<not cudf::is_index_type<T>()>* = nullptr>
     constexpr int operator()() const
     {
 #ifndef __CUDA_ARCH__
@@ -213,7 +213,7 @@ struct base_normalator {
       CUDF_UNREACHABLE("only integral types are supported");
 #endif
     }
-    template <typename T, std::enable_if_t<is_integral<T>()>* = nullptr>
+    template <typename T, std::enable_if_t<cudf::is_index_type<T>()>* = nullptr>
     constexpr int operator()() const noexcept
     {
       return sizeof(T);
@@ -265,12 +265,12 @@ struct input_normalator : base_normalator<input_normalator<Integer>, Integer> {
    * @brief Dispatch functor for resolving a Integer value from any integer type
    */
   struct normalize_type {
-    template <typename T, std::enable_if_t<cuda::std::is_integral_v<T>>* = nullptr>
+    template <typename T, std::enable_if_t<cudf::is_index_type<T>()>* = nullptr>
     __device__ Integer operator()(void const* tp)
     {
       return static_cast<Integer>(*static_cast<T const*>(tp));
     }
-    template <typename T, std::enable_if_t<not cuda::std::is_integral_v<T>>* = nullptr>
+    template <typename T, std::enable_if_t<not cudf::is_index_type<T>()>* = nullptr>
     __device__ Integer operator()(void const*)
     {
       CUDF_UNREACHABLE("only integral types are supported");
@@ -349,12 +349,12 @@ struct output_normalator : base_normalator<output_normalator<Integer>, Integer> 
    * @brief Dispatch functor for setting the index value from a size_type value.
    */
   struct normalize_type {
-    template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+    template <typename T, std::enable_if_t<cudf::is_index_type<T>()>* = nullptr>
     __device__ void operator()(void* tp, Integer const value)
     {
       (*static_cast<T*>(tp)) = static_cast<T>(value);
     }
-    template <typename T, std::enable_if_t<not std::is_integral_v<T>>* = nullptr>
+    template <typename T, std::enable_if_t<not cudf::is_index_type<T>()>* = nullptr>
     __device__ void operator()(void*, Integer const)
     {
       CUDF_UNREACHABLE("only index types are supported");
