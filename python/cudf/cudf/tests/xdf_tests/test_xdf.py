@@ -1093,3 +1093,22 @@ def test_constructor_properties(dataframe, series, index):
     assert idx._constructor is xpd.Index
     assert sr._constructor_expanddim is xpd.DataFrame
     assert df._constructor_sliced is xpd.Series
+
+
+def test_from_dataframe():
+    cudf = pytest.importorskip("cudf")
+    from cudf.testing._utils import assert_eq
+
+    data = {"foo": [1, 2, 3], "bar": [4, 5, 6]}
+
+    xdf_df = xpd.DataFrame(data)
+    cudf_df = cudf.DataFrame(data)
+
+    # test construction of a cuDF DataFrame from an xdf DataFrame
+    assert_eq(cudf_df, cudf.DataFrame.from_pandas(xdf_df))
+    assert_eq(cudf_df, cudf.from_dataframe(xdf_df))
+
+    # ideally the below would work as well, but currently segfaults
+
+    # pd_df = pd.DataFrame(data)
+    # assert_eq(pd_df, pd.api.interchange.from_dataframe(xdf_df))

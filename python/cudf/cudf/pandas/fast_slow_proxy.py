@@ -1059,6 +1059,7 @@ _SPECIAL_METHODS: Set[str] = {
     "__next__",
     "__copy__",
     "__deepcopy__",
+    "__dataframe__",
     # Added on a per-proxy basis
     # https://github.com/rapidsai/xdf/pull/306#pullrequestreview-1636155428
     # "__hash__",
