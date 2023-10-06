@@ -36,7 +36,7 @@ fi
 
 if [[ ${package_name} == "dask_cudf" ]]; then
     sed -r -i "s/cudf==(.*)\"/cudf${PACKAGE_CUDA_SUFFIX}==\1${alpha_spec}\"/g" ${pyproject_file}
-elif [[ ${package_name} == "cudf_private" ]]; then
+else
     sed -r -i "s/rmm(.*)\"/rmm${PACKAGE_CUDA_SUFFIX}\1${alpha_spec}\"/g" ${pyproject_file}
     # ptxcompiler and cubinlinker aren't version constrained
     sed -r -i "s/ptxcompiler\"/ptxcompiler${PACKAGE_CUDA_SUFFIX}\"/g" ${pyproject_file}
