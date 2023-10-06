@@ -147,12 +147,18 @@ public abstract class DataSource implements AutoCloseable {
   }
 
   private long hostRead(long offset, long amount, long dst) throws IOException {
+    if (amount < 0) {
+      throw new IllegalArgumentException("Cannot allocate more than " + Long.MAX_VALUE + " bytes");
+    }
     try (HostMemoryBuffer dstBuffer = new HostMemoryBuffer(dst, amount, cleaner)) {
       return hostRead(offset, dstBuffer);
     }
   }
 
   private long[] hostReadBuff(long offset, long amount) throws IOException {
+    if (amount < 0) {
+      throw new IllegalArgumentException("Cannot read more than " + Long.MAX_VALUE + " bytes");
+    }
     HostMemoryBuffer buff = hostRead(offset, amount);
     long[] ret = new long[3];
     if (buff != null) {
@@ -168,6 +174,9 @@ public abstract class DataSource implements AutoCloseable {
   }
 
   private long deviceRead(long offset, long amount, long dst, long stream) throws IOException {
+    if (amount < 0) {
+      throw new IllegalArgumentException("Cannot read more than " + Long.MAX_VALUE + " bytes");
+    }
     Cuda.Stream strm = Cuda.Stream.wrap(stream);
     try (DeviceMemoryBuffer dstBuffer = new DeviceMemoryBuffer(dst, amount, cleaner)) {
       return deviceRead(offset, dstBuffer, strm);
