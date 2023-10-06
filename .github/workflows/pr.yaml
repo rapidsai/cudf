@@ -135,5 +135,5 @@ jobs:
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-publish.yaml@branch-23.10
     with:
-      build_type: ${{ inputs.build_type || 'branch' }}
+      build_type: pull-request
       package-name: cudf_private
