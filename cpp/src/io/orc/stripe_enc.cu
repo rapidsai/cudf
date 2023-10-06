@@ -24,6 +24,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 
@@ -1260,6 +1261,39 @@ __global__ void __launch_bounds__(1024)
   }
 }
 
+struct decimal_column_element_sizes {
+  uint32_t col_idx;
+  device_span<uint32_t> sizes;
+  decimal_column_element_sizes(uint32_t col_idx, device_span<uint32_t> sizes)
+    : col_idx(col_idx), sizes(sizes)
+  {
+  }
+};
+
+template <int block_size>
+__global__ void decimal_sizes_to_offsets_kernel(device_2dspan<rowgroup_rows const> rg_bounds,
+                                                device_span<decimal_column_element_sizes> sizes)
+{
+  using block_scan = cub::BlockScan<uint32_t, block_size>;
+  __shared__ typename block_scan::TempStorage scan_storage;
+  int const t = threadIdx.x;
+
+  auto const& col_elem_sizes = sizes[blockIdx.x];
+  auto const& row_group      = rg_bounds[blockIdx.y][col_elem_sizes.col_idx];
+  auto const elem_sizes      = col_elem_sizes.sizes.data() + row_group.begin;
+
+  uint32_t initial_value = 0;
+  // do a series of block sums, storing results in the array as we go
+  for (int pos = 0; pos < row_group.size(); pos += block_size) {
+    auto const tidx    = pos + t;
+    auto tval          = tidx < row_group.size() ? elem_sizes[tidx] : 0u;
+    uint32_t block_sum = 0;
+    block_scan(scan_storage).InclusiveSum(tval, tval, block_sum);
+    if (tidx < row_group.size()) { elem_sizes[tidx] = tval + initial_value; }
+    initial_value += block_sum;
+  }
+}
+
 void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
                          device_2dspan<encoder_chunk_streams> streams,
                          rmm::cuda_stream_view stream)
@@ -1366,6 +1400,27 @@ std::optional<writer_compression_statistics> CompressOrcDataStreams(
   } else {
     return std::nullopt;
   }
+}
+
+void decimal_sizes_to_offsets(device_2dspan<rowgroup_rows const> rg_bounds,
+                              std::map<uint32_t, rmm::device_uvector<uint32_t>>& elem_sizes,
+                              rmm::cuda_stream_view stream)
+{
+  if (rg_bounds.count() == 0) return;
+  std::vector<decimal_column_element_sizes> h_sizes;
+  h_sizes.reserve(elem_sizes.size());
+  for (auto& [col_idx, current_sizes] : elem_sizes) {
+    h_sizes.emplace_back(col_idx, current_sizes);
+  }
+
+  auto d_sizes = cudf::detail::make_device_uvector_async<decimal_column_element_sizes>(
+    h_sizes, stream, rmm::mr::get_current_device_resource());
+
+  constexpr int block_size = 256;
+  dim3 const grid_size{static_cast<unsigned int>(elem_sizes.size()),        // num decimal columns
+                       static_cast<unsigned int>(rg_bounds.size().first)};  // num rowgroups
+  decimal_sizes_to_offsets_kernel<block_size>
+    <<<grid_size, block_size, 0, stream.value()>>>(rg_bounds, d_sizes);
 }
 
 }  // namespace gpu
