@@ -25,10 +25,7 @@
 #include <utility>
 #include <vector>
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace detail {
+namespace cudf::io::parquet::detail {
 
 /**
  * @brief Class for parsing Parquet's Thrift Compact Protocol encoded metadata
@@ -149,7 +146,4 @@ class CompactProtocolReader {
   friend class parquet_field_struct_blob;
 };
 
-}  // namespace detail
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

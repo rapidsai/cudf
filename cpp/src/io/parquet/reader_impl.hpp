@@ -285,8 +285,8 @@ class reader::impl {
   // Within a pass, we produce one or more chunks of output, whose maximum total
   // byte size is controlled by _output_chunk_read_limit.
 
-  cudf::io::parquet::detail::file_intermediate_data _file_itm_data;
-  std::unique_ptr<cudf::io::parquet::detail::pass_intermediate_data> _pass_itm_data;
+  file_intermediate_data _file_itm_data;
+  std::unique_ptr<pass_intermediate_data> _pass_itm_data;
 
   // an array of offsets into _file_itm_data::global_chunks. Each pair of offsets represents
   // the start/end of the chunks to be loaded for a given pass.

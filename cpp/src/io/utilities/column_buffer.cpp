@@ -51,21 +51,19 @@ std::unique_ptr<column> gather_column_buffer::make_string_column_impl(rmm::cuda_
   return make_strings_column(*_strings, stream, _mr);
 }
 
-void cudf::io::detail::inline_column_buffer::allocate_strings_data(rmm::cuda_stream_view stream)
+void inline_column_buffer::allocate_strings_data(rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(type.id() == type_id::STRING, "allocate_strings_data called for non-string column");
   // size + 1 for final offset. _string_data will be initialized later.
   _data = create_data(data_type{type_id::INT32}, size + 1, stream, _mr);
 }
 
-void cudf::io::detail::inline_column_buffer::create_string_data(size_t num_bytes,
-                                                                rmm::cuda_stream_view stream)
+void inline_column_buffer::create_string_data(size_t num_bytes, rmm::cuda_stream_view stream)
 {
   _string_data = rmm::device_buffer(num_bytes, stream, _mr);
 }
 
-std::unique_ptr<column> cudf::io::detail::inline_column_buffer::make_string_column_impl(
-  rmm::cuda_stream_view stream)
+std::unique_ptr<column> inline_column_buffer::make_string_column_impl(rmm::cuda_stream_view stream)
 {
   // no need for copies, just transfer ownership of the data_buffers to the columns
   auto const state = mask_state::UNALLOCATED;

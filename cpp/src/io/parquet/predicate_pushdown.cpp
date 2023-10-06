@@ -62,17 +62,13 @@ struct stats_caster {
 
   // uses storage type as T
   template <typename T, CUDF_ENABLE_IF(cudf::is_dictionary<T>() or cudf::is_nested<T>())>
-  static T convert(uint8_t const* stats_val,
-                   size_t stats_size,
-                   cudf::io::parquet::detail::Type const type)
+  static T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
   {
     CUDF_FAIL("unsupported type for stats casting");
   }
 
   template <typename T, CUDF_ENABLE_IF(cudf::is_boolean<T>())>
-  static T convert(uint8_t const* stats_val,
-                   size_t stats_size,
-                   cudf::io::parquet::detail::Type const type)
+  static T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
   {
     CUDF_EXPECTS(type == BOOLEAN, "Invalid type and stats combination");
     return targetType<T>(*reinterpret_cast<bool const*>(stats_val));
@@ -82,9 +78,7 @@ struct stats_caster {
   template <typename T,
             CUDF_ENABLE_IF((cudf::is_integral<T>() and !cudf::is_boolean<T>()) or
                            cudf::is_fixed_point<T>() or cudf::is_chrono<T>())>
-  static T convert(uint8_t const* stats_val,
-                   size_t stats_size,
-                   cudf::io::parquet::detail::Type const type)
+  static T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
   {
     switch (type) {
       case INT32: return targetType<T>(*reinterpret_cast<int32_t const*>(stats_val));
@@ -109,9 +103,7 @@ struct stats_caster {
   }
 
   template <typename T, CUDF_ENABLE_IF(cudf::is_floating_point<T>())>
-  static T convert(uint8_t const* stats_val,
-                   size_t stats_size,
-                   cudf::io::parquet::detail::Type const type)
+  static T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
   {
     switch (type) {
       case FLOAT: return targetType<T>(*reinterpret_cast<float const*>(stats_val));
@@ -121,9 +113,7 @@ struct stats_caster {
   }
 
   template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, string_view>)>
-  static T convert(uint8_t const* stats_val,
-                   size_t stats_size,
-                   cudf::io::parquet::detail::Type const type)
+  static T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
   {
     switch (type) {
       case BYTE_ARRAY: [[fallthrough]];

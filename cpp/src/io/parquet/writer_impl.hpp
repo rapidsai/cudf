@@ -38,10 +38,7 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace detail {
+namespace cudf::io::parquet::detail {
 
 // Forward internal classes
 struct aggregate_writer_metadata;
@@ -180,7 +177,4 @@ class writer::impl {
   bool _closed                = false;  // To track if the output has been written to sink.
 };
 
-}  // namespace detail
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail
