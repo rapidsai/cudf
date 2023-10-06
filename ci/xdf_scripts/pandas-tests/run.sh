@@ -19,14 +19,14 @@ rapids-logger "PR number: $RAPIDS_REF_NAME"
 
 
 COMMIT=$(git rev-parse HEAD)
-WHEEL_NAME_PREFIX="cudf_"
+WHEEL_NAME="cudf_private"
 if [[ "${PANDAS_TESTS_BRANCH}" == "main" ]]; then
     COMMIT=$(git merge-base HEAD origin/branch-23.10-xdf)
-    WHEEL_NAME_PREFIX="cudf_${PANDAS_TESTS_BRANCH}_"
+    WHEEL_NAME="${WHEEL_NAME}_${PANDAS_TESTS_BRANCH}"
 fi
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
-RAPIDS_PY_WHEEL_NAME="${WHEEL_NAME_PREFIX}${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
+RAPIDS_PY_WHEEL_NAME="${WHEEL_NAME}_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
 python -m pip install $(ls ./local-cudf-dep/cudf*.whl)[test,pandas_tests]
 
 git checkout $COMMIT
