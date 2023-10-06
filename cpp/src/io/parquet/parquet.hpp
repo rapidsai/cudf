@@ -204,7 +204,6 @@ struct SchemaElement {
   // can be a struct or a list
   [[nodiscard]] bool is_struct() const
   {
-    // this assumption might be a little weak.
     return type == UNDEFINED_TYPE &&
            // this assumption might be a little weak.
            ((repetition_type != REPEATED) || (repetition_type == REPEATED && num_children > 1));
