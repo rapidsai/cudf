@@ -24,6 +24,7 @@
 namespace cudf {
 namespace io {
 namespace parquet {
+namespace detail {
 
 /**
  * @brief Base class for parquet field functors.
@@ -870,6 +871,7 @@ int CompactProtocolReader::WalkSchema(
   }
 }
 
+}  // namespace detail
 }  // namespace parquet
 }  // namespace io
 }  // namespace cudf

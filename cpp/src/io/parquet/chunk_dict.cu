@@ -27,7 +27,7 @@
 namespace cudf {
 namespace io {
 namespace parquet {
-namespace gpu {
+namespace detail {
 namespace {
 constexpr int DEFAULT_BLOCK_SIZE = 256;
 }
@@ -101,7 +101,7 @@ struct map_find_fn {
 
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  populate_chunk_hash_maps_kernel(cudf::detail::device_2dspan<gpu::PageFragment const> frags)
+  populate_chunk_hash_maps_kernel(cudf::detail::device_2dspan<PageFragment const> frags)
 {
   auto col_idx = blockIdx.y;
   auto block_x = blockIdx.x;
@@ -226,7 +226,7 @@ __global__ void __launch_bounds__(block_size)
 
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  get_dictionary_indices_kernel(cudf::detail::device_2dspan<gpu::PageFragment const> frags)
+  get_dictionary_indices_kernel(cudf::detail::device_2dspan<PageFragment const> frags)
 {
   auto col_idx = blockIdx.y;
   auto block_x = blockIdx.x;
@@ -276,7 +276,7 @@ void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_st
     <<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
 }
 
-void populate_chunk_hash_maps(cudf::detail::device_2dspan<gpu::PageFragment const> frags,
+void populate_chunk_hash_maps(cudf::detail::device_2dspan<PageFragment const> frags,
                               rmm::cuda_stream_view stream)
 {
   dim3 const dim_grid(frags.size().second, frags.size().first);
@@ -290,14 +290,14 @@ void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_vi
   collect_map_entries_kernel<block_size><<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
 }
 
-void get_dictionary_indices(cudf::detail::device_2dspan<gpu::PageFragment const> frags,
+void get_dictionary_indices(cudf::detail::device_2dspan<PageFragment const> frags,
                             rmm::cuda_stream_view stream)
 {
   dim3 const dim_grid(frags.size().second, frags.size().first);
   get_dictionary_indices_kernel<DEFAULT_BLOCK_SIZE>
     <<<dim_grid, DEFAULT_BLOCK_SIZE, 0, stream.value()>>>(frags);
 }
-}  // namespace gpu
+}  // namespace detail
 }  // namespace parquet
 }  // namespace io
 }  // namespace cudf

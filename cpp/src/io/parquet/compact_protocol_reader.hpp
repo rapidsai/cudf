@@ -28,6 +28,8 @@
 namespace cudf {
 namespace io {
 namespace parquet {
+namespace detail {
+
 /**
  * @brief Class for parsing Parquet's Thrift Compact Protocol encoded metadata
  *
@@ -147,6 +149,7 @@ class CompactProtocolReader {
   friend class parquet_field_struct_blob;
 };
 
+}  // namespace detail
 }  // namespace parquet
 }  // namespace io
 }  // namespace cudf

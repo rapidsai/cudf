@@ -26,7 +26,7 @@
 namespace cudf {
 namespace io {
 namespace parquet {
-namespace gpu {
+namespace detail {
 
 namespace {
 
@@ -411,7 +411,7 @@ void ComputePageSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
   }
 }
 
-}  // namespace gpu
+}  // namespace detail
 }  // namespace parquet
 }  // namespace io
 }  // namespace cudf

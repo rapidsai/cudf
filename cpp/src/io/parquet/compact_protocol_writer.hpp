@@ -28,6 +28,7 @@
 namespace cudf {
 namespace io {
 namespace parquet {
+namespace detail {
 
 /**
  * @brief Class for parsing Parquet's Thrift Compact Protocol encoded metadata
@@ -115,6 +116,7 @@ class CompactProtocolFieldWriter {
   inline void set_current_field(int const& field);
 };
 
+}  // namespace detail
 }  // namespace parquet
 }  // namespace io
 }  // namespace cudf

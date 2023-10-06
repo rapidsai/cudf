@@ -19,6 +19,7 @@
 namespace cudf {
 namespace io {
 namespace parquet {
+namespace detail {
 
 /**
  * @brief Parquet CompactProtocolWriter class
@@ -391,6 +392,7 @@ inline void CompactProtocolFieldWriter::set_current_field(int const& field)
   current_field_value = field;
 }
 
+}  // namespace detail
 }  // namespace parquet
 }  // namespace io
 }  // namespace cudf

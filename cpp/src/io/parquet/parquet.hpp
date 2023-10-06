@@ -28,6 +28,8 @@
 namespace cudf {
 namespace io {
 namespace parquet {
+namespace detail {
+
 constexpr uint32_t parquet_magic = (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24));
 
 /**
@@ -405,6 +407,7 @@ static inline int CountLeadingZeros32(uint32_t value)
 #endif
 }
 
+}  // namespace detail
 }  // namespace parquet
 }  // namespace io
 }  // namespace cudf

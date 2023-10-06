@@ -21,6 +21,8 @@
 namespace cudf {
 namespace io {
 namespace parquet {
+namespace detail {
+
 // Max decimal precisions according to the parquet spec:
 // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#decimal
 auto constexpr MAX_DECIMAL32_PRECISION  = 9;
@@ -156,6 +158,7 @@ enum FieldType {
   ST_FLD_STRUCT = 12,
 };
 
+}  // namespace detail
 }  // namespace parquet
 }  // namespace io
 }  // namespace cudf
