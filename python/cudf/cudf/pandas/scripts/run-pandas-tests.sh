@@ -87,7 +87,7 @@ markers = [
 ]
 EOF
     # append the contents of patch-confest.py to conftest.py
-    cat ../cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftest.py
+    cat ../python/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftest.py
 
     # Substitute `pandas.tests` with a relative import.
     # This will depend on the location of the test module relative to
@@ -121,7 +121,7 @@ else
 fi
 
 # append the contents of patch-confest.py to conftest.py
-cat ../cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftest.py
+cat ../python/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftest.py
 
 echo -n "${XDF_MODE}" > pandas-tests/.xdf-run-mode
 
