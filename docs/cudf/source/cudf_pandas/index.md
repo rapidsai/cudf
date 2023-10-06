@@ -2,11 +2,13 @@
 
 <h2 style="color: #9234eb;">OPEN BETA: ACCELERATING PANDAS WITH ZERO CODE CHANGE</h2>
 
-**Try it now**
+**CTA: Try it now on Colab**
 
 <h3>cuDF Pandas Accelerator Mode</h3>
 A unified CPU/GPU experience that brings best-in-class performance to your
-Pandas workflows
+Pandas workflows,  Designed for Pandas users who want to keep using Pandas as
+data sizes grow into the GBs and performance degrades.
+
 
 <br/>
 <style type="text/css">
@@ -36,7 +38,8 @@ Pandas workflows
 
 <h3>Bringing the Speed of cuDF to Every Pandas User</h3>
 
-``cudf.pandas`` can be usinged with IPython or Jupyter Notebooks or in standard Python scripts:
+``cudf.pandas`` can be used with Jupyter Notebooks or any Python script:
+
 
 <table class="tg">
 <thead>
@@ -78,36 +81,30 @@ df.rolling(window=3).sum()
 
 <br/>
 
-Loreum Ipsum Unlock the speed of NVIDIA GPUs and cuDF for Pandas workflows
 
-![Fake](../_static/fake.png)
-
-
-
-## How it works
-
-- A unified CPU/GPU experience that brings best-in-class performance to your
-Pandas code
-- Enabling people who love Pandas to go faster when Pandas gets slow with zero
-code change
-
-- Provides all of the Pandas API
-  - Uses the GPU for supported operations
-  - Uses the CPU otherwise
+With cuDF’s Pandas Accelerator Mode, you can take Pandas from worst-to-first on
+the DuckDB dataset benchmarks without changing any code (0.5 GB and 5 GB
+scales).
 
 
-- Fallback to CPU if the GPU runs out of memory
-- Currently compatible with most third-party libraries
-**Try it now**
+![duckb benchmark](../_static/cudf.pandas-duckdb.png)
 
-## How is this different from other DataFrame-like libraries?
+Learn more about these benchmark results and how to reproduce them in the
+[announcement blog].
+
+## Getting Started
+
+
+Try It Now on Colab
+Take cuDF’s new Pandas Accelerator Mode for a test-drive in a free GPU-enabled
+notebook environment using your Google account.
+
+Visit the [RAPIDS Quick Start](https://rapids.ai/#quick-start) to get up-and-running on every other platform.
+
 
 ```{toctree}
 :maxdepth: 1
 
-pandas-comparison
-best-practices
+how-it-works
 faq
-developer-guide
-example-notebook
 ```
