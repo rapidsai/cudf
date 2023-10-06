@@ -87,7 +87,7 @@ markers = [
 ]
 EOF
     # append the contents of patch-confest.py to conftest.py
-    cat ../scripts/conftest-patch.py >> pandas-tests/conftest.py
+    cat ../python/cudf/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftest.py
 
     # Substitute `pandas.tests` with a relative import.
     # This will depend on the location of the test module relative to
@@ -108,20 +108,20 @@ fi
 
 if [[ "${XDF_MODE}" == "--rewrite-imports" ]]; then
     # Substitute `xdf` for `pandas` in the tests
-    find pandas-tests/ -iname "*.py" | xargs sed -i 's/import\ pandas/import\ xdf.pandas/g'
-    find pandas-tests/ -iname "*.py" | xargs sed -i 's/from\ pandas/from\ xdf.pandas/g'
-    find pandas-tests/ -iname "*.py" | xargs sed -i 's/xdf.pandas_dtype/pandas_dtype/g'
+    find pandas-tests/ -iname "*.py" | xargs sed -i 's/import\ pandas/import\ cudf.pandas.pandas/g'
+    find pandas-tests/ -iname "*.py" | xargs sed -i 's/from\ pandas/from\ cudf.pandas.pandas/g'
+    find pandas-tests/ -iname "*.py" | xargs sed -i 's/cudf.pandas.pandas_dtype/pandas_dtype/g'
 
     EXTRA_PYTEST_ARGS=""
 elif [[ "${XDF_MODE}" == "--transparent" ]]; then
-    EXTRA_PYTEST_ARGS="-p xdf.autoload"
+    EXTRA_PYTEST_ARGS="-p cudf.pandas"
 else
     echo "Unknown XDF mode ${XDF_MODE}, expecting '--rewrite-imports' or '--transparent'"
     exit 1
 fi
 
 # append the contents of patch-confest.py to conftest.py
-cat ../scripts/conftest-patch.py >> pandas-tests/conftest.py
+cat ../python/cudf/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftest.py
 
 echo -n "${XDF_MODE}" > pandas-tests/.xdf-run-mode
 
@@ -129,7 +129,7 @@ echo -n "${XDF_MODE}" > pandas-tests/.xdf-run-mode
 cd pandas-tests/
 
 # TODO: Get a postgres & mysql container set up on the CI
-PANDAS_CI="1" pytest -m "not single_cpu and not db" --durations=50 --import-mode=importlib -o xfail_strict=True ${PYTEST_IGNORES} ${EXTRA_PYTEST_ARGS} $@
+PANDAS_CI="1" python -m pytest -m "not single_cpu and not db" --durations=50 --import-mode=importlib -o xfail_strict=True ${PYTEST_IGNORES} ${EXTRA_PYTEST_ARGS} $@
 
 mv *.json ..
 cd ..

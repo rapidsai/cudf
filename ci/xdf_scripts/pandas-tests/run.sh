@@ -18,21 +18,20 @@ rapids-logger "Using ${XDF_MODE} for import overrrides"
 rapids-logger "PR number: $RAPIDS_REF_NAME"
 
 
+COMMIT=$(git rev-parse HEAD)
 WHEEL_NAME_PREFIX="cudf_"
 if [[ "${PANDAS_TESTS_BRANCH}" == "main" ]]; then
-    MAIN_COMMIT=$(git merge-base HEAD origin/branch-23.10-xdf)
-    git checkout $MAIN_COMMIT
+    COMMIT=$(git merge-base HEAD origin/branch-23.10-xdf)
     WHEEL_NAME_PREFIX="cudf_${PANDAS_TESTS_BRANCH}_"
 fi
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 RAPIDS_PY_WHEEL_NAME="${WHEEL_NAME_PREFIX}${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
-python -m pip install ./local-cudf-dep/cudf*.whl
+python -m pip install $(ls ./local-cudf-dep/cudf*.whl)[test,pandas_tests]
 
-cd python/xdf/
-pip install .[test]
+git checkout $COMMIT
 
-bash scripts/run-pandas-tests.sh ${XDF_MODE} \
+bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh ${XDF_MODE} \
   -n 10 \
   --tb=line \
   --skip-slow \
@@ -41,7 +40,7 @@ bash scripts/run-pandas-tests.sh ${XDF_MODE} \
   --report-log=${PANDAS_TESTS_BRANCH}.json 2>&1
 
 # summarize the results and save them to artifacts:
-python scripts/summarize-test-results.py --output json pandas-testing/${PANDAS_TESTS_BRANCH}.json > pandas-testing/${PANDAS_TESTS_BRANCH}-results.json
+python python/cudf/cudf/pandas/scripts/summarize-test-results.py --output json pandas-testing/${PANDAS_TESTS_BRANCH}.json > pandas-testing/${PANDAS_TESTS_BRANCH}-results.json
 RAPIDS_ARTIFACTS_DIR=${RAPIDS_ARTIFACTS_DIR:-"${PWD}/artifacts"}
 mkdir -p "${RAPIDS_ARTIFACTS_DIR}"
 mv pandas-testing/${PANDAS_TESTS_BRANCH}-results.json ${RAPIDS_ARTIFACTS_DIR}/

@@ -30,7 +30,7 @@ from typing import (
     Type,
 )
 
-from xdf.annotation import nvtx
+from .annotation import nvtx
 
 _XDF_NVTX_COLORS = {
     "COPY_SLOW_TO_FAST": 0xCA0020,
