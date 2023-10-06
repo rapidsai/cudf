@@ -215,17 +215,17 @@ struct SchemaElement {
  */
 struct Statistics {
   // deprecated max value in signed comparison order
-  thrust::optional<std::vector<uint8_t>> max = thrust::nullopt;
+  thrust::optional<std::vector<uint8_t>> max;
   // deprecated min value in signed comparison order
-  thrust::optional<std::vector<uint8_t>> min = thrust::nullopt;
+  thrust::optional<std::vector<uint8_t>> min;
   // count of null values in the column
-  thrust::optional<int64_t> null_count = thrust::nullopt;
+  thrust::optional<int64_t> null_count;
   // count of distinct values occurring
-  thrust::optional<int64_t> distinct_count = thrust::nullopt;
+  thrust::optional<int64_t> distinct_count;
   // max value for column determined by ColumnOrder
-  thrust::optional<std::vector<uint8_t>> max_value = thrust::nullopt;
+  thrust::optional<std::vector<uint8_t>> max_value;
   // min value for column determined by ColumnOrder
-  thrust::optional<std::vector<uint8_t>> min_value = thrust::nullopt;
+  thrust::optional<std::vector<uint8_t>> min_value;
 };
 
 /**
