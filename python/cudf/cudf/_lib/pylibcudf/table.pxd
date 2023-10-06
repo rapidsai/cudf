@@ -1,6 +1,7 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
+from pyarrow cimport lib as pa
 
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
@@ -16,3 +17,5 @@ cdef class Table:
     cdef Table from_libcudf(unique_ptr[table] libcudf_tbl)
 
     cpdef list columns(self)
+
+    cpdef pa.Table to_arrow(self, list metadata)

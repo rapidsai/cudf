@@ -58,6 +58,7 @@ using namespace cudf::io::parquet;
  */
 struct metadata : public FileMetaData {
   explicit metadata(datasource* source);
+  void sanitize_schema();
 };
 
 class aggregate_reader_metadata {
