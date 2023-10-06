@@ -1045,6 +1045,7 @@ _SPECIAL_METHODS: Set[str] = {
     "__ne__",
     "__gt__",
     "__ge__",
+    "__pos__",
     "__neg__",
     "__invert__",
     "__abs__",

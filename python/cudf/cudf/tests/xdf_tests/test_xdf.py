@@ -1095,6 +1095,12 @@ def test_constructor_properties(dataframe, series, index):
     assert df._constructor_sliced is xpd.Series
 
 
+def test_pos():
+    xser = +xpd.Series([-1])
+    ser = +pd.Series([-1])
+    tm.assert_equal(xser, ser)
+
+
 def test_from_dataframe():
     cudf = pytest.importorskip("cudf")
     from cudf.testing._utils import assert_eq
