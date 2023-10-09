@@ -10432,6 +10432,10 @@ def test_series_data_with_name_with_columns_matching():
     assert_eq(gdf, pdf)
 
 
+@pytest.mark.xfail(
+    version.parse(pd.__version__) < version.parse("2.0"),
+    reason="pandas returns Index[object] instead of RangeIndex",
+)
 def test_series_data_with_name_with_columns_not_matching():
     gdf = cudf.DataFrame(cudf.Series([1], name=2), columns=[1])
     pdf = pd.DataFrame(pd.Series([1], name=2), columns=[1])
