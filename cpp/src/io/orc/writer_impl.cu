@@ -1933,7 +1933,6 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
 
     rg_sizes[col_idx] = cudf::detail::make_std_vector_async(d_tmp_rowgroup_sizes, stream);
   }
-  stream.synchronize();
 
   return {std::move(elem_sizes), std::move(rg_sizes)};
 }
