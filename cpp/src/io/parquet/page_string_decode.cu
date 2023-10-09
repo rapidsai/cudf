@@ -583,6 +583,9 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBou
   if (t == 0) {
     s->page.num_nulls  = 0;
     s->page.num_valids = 0;
+    // reset str_bytes to 0 in case it's already been calculated (esp needed for chunked reads).
+    // TODO: need to rethink this once str_bytes is in the statistics
+    pp->str_bytes = 0;
   }
 
   // whether or not we have repetition levels (lists)
@@ -644,12 +647,6 @@ __global__ void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageS
   // setup page info
   auto const mask = decode_kernel_mask::DELTA_BYTE_ARRAY;
   if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, mask_filter{mask}, true)) { return; }
-
-  if (t == 0) {
-    // reset str_bytes to 0 in case it's already been calculated
-    // TODO: need to rethink this once str_bytes is in the statistics
-    pp->str_bytes = 0;
-  }
 
   auto const start_value = pp->start_val;
 
@@ -714,12 +711,6 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
   if (!setupLocalPageInfo(
         s, pp, chunks, min_row, num_rows, mask_filter{decode_kernel_mask::STRING}, true)) {
     return;
-  }
-
-  if (t == 0) {
-    // reset str_bytes to 0 in case it's already been calculated
-    // TODO: need to rethink this once str_bytes is in the statistics
-    pp->str_bytes = 0;
   }
 
   bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
