@@ -247,14 +247,6 @@ class reader::impl {
    */
   void decode_page_data(size_t skip_rows, size_t num_rows);
 
-  /*
-   *
-   *
-    Functions related to computing chunks and passes (reader_impl_chunking.cu)
-   *
-   *
-   */
-
   /**
    * @brief Creates file-wide parquet chunk information.
    *
