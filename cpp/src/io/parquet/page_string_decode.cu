@@ -555,12 +555,13 @@ __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* d
 }
 
 /**
- * @brief Kernel for computing string page output size information.
+ * @brief Kernel for computing string page bounds information.
  *
- * String columns need accurate data size information to preallocate memory in the column buffer to
- * store the char data. This calls a kernel to calculate information needed by the string decoding
- * kernel. On exit, the `str_bytes`, `num_nulls`, and `num_valids` fields of the PageInfo struct
- * are updated. This call ignores non-string columns.
+ * This kernel traverses the repetition and definition level data to determ start and end values
+ * for pages with string-like data. Also calculates the number of null and valid values in the
+ * page. Does nothing if the page mask is neither `STRING` nor `DELTA_BYTE_ARRAY`. On exit the
+ * `num_nulls`, `num_valids`, `start_val` and `end_val` fields of the `PageInfo` struct will be
+ * populated. Also fills in the `temp_string_size` field if rows are to be skipped.
  *
  * @param pages All pages to be decoded
  * @param chunks All chunks to be decoded
@@ -582,8 +583,6 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBou
   if (t == 0) {
     s->page.num_nulls  = 0;
     s->page.num_valids = 0;
-    // reset str_bytes to 0 in case it's already been calculated
-    pp->str_bytes = 0;
   }
 
   // whether or not we have repetition levels (lists)
@@ -621,10 +620,8 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBou
 /**
  * @brief Kernel for computing string page output size information for delta_byte_array encoding.
  *
- * String columns need accurate data size information to preallocate memory in the column buffer to
- * store the char data. This calls a kernel to calculate information needed by the string decoding
- * kernel. On exit, the `str_bytes`, `num_nulls`, and `num_valids` fields of the PageInfo struct
- * are updated. This call ignores non-string columns.
+ * This call ignores columns that are not DELTA_BYTE_ARRAY encoded. On exit the `str_bytes` field
+ * of the `PageInfo` struct will be populated.
  *
  * @param pages All pages to be decoded
  * @param chunks All chunks to be decoded
@@ -647,6 +644,12 @@ __global__ void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageS
   // setup page info
   auto const mask = decode_kernel_mask::DELTA_BYTE_ARRAY;
   if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, mask_filter{mask}, true)) { return; }
+
+  if (t == 0) {
+    // reset str_bytes to 0 in case it's already been calculated
+    // TODO: need to rethink this once str_bytes is in the statistics
+    pp->str_bytes = 0;
+  }
 
   auto const start_value = pp->start_val;
 
@@ -686,10 +689,8 @@ __global__ void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageS
 /**
  * @brief Kernel for computing string page output size information.
  *
- * String columns need accurate data size information to preallocate memory in the column buffer to
- * store the char data. This calls a kernel to calculate information needed by the string decoding
- * kernel. On exit, the `str_bytes`, `num_nulls`, and `num_valids` fields of the PageInfo struct
- * are updated. This call ignores non-string columns.
+ * This call ignores non-string columns. On exit the `str_bytes` field of the `PageInfo` struct will
+ * be populated.
  *
  * @param pages All pages to be decoded
  * @param chunks All chunks to be decoded
@@ -713,6 +714,12 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
   if (!setupLocalPageInfo(
         s, pp, chunks, min_row, num_rows, mask_filter{decode_kernel_mask::STRING}, true)) {
     return;
+  }
+
+  if (t == 0) {
+    // reset str_bytes to 0 in case it's already been calculated
+    // TODO: need to rethink this once str_bytes is in the statistics
+    pp->str_bytes = 0;
   }
 
   bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
