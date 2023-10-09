@@ -107,7 +107,9 @@ class ColumnAccessor(abc.MutableMapping):
         data: Union[abc.MutableMapping, ColumnAccessor, None] = None,
         multiindex: bool = False,
         level_names=None,
+        rangeindex: bool = False,
     ):
+        self.rangeindex = rangeindex
         if data is None:
             data = {}
         # TODO: we should validate the keys of `data`
@@ -117,12 +119,11 @@ class ColumnAccessor(abc.MutableMapping):
             self._data = data._data
             self.multiindex = multiindex
             self._level_names = level_names
-            self._return_ri: bool = data._return_ri
+            self.rangeindex = data.rangeindex
         else:
             # This code path is performance-critical for copies and should be
             # modified with care.
             self._data = {}
-            self._return_ri = False
             if data:
                 data = dict(data)
                 # Faster than next(iter(data.values()))
@@ -270,8 +271,10 @@ class ColumnAccessor(abc.MutableMapping):
                 )
         else:
             # Determine if we can return a RangeIndex
-            # TODO: Only take this path if columns weren't passed/inferred
-            if cudf.api.types.infer_dtype(self.names) == "integer":
+            if (
+                self.rangeindex
+                and cudf.api.types.infer_dtype(self.names) == "integer"
+            ):
                 uniques = cupy.unique(cupy.diff(cupy.array(self.names)))
                 if len(uniques) == 1 and uniques[0].get() != 0:
                     diff = uniques[0].get()
