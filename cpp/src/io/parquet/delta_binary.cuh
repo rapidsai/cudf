@@ -18,7 +18,7 @@
 
 #include "page_decode.cuh"
 
-namespace cudf::io::parquet::gpu {
+namespace cudf::io::parquet::detail {
 
 // DELTA_XXX encoding support
 //
@@ -291,4 +291,4 @@ struct delta_binary_decoder {
   }
 };
 
-}  // namespace cudf::io::parquet::gpu
+}  // namespace cudf::io::parquet::detail

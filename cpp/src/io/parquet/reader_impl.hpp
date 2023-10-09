@@ -35,7 +35,7 @@
 #include <optional>
 #include <vector>
 
-namespace cudf::io::detail::parquet {
+namespace cudf::io::parquet::detail {
 
 /**
  * @brief Implementation for Parquet reader
@@ -261,10 +261,10 @@ class reader::impl {
   std::vector<input_column_info> _input_columns;
 
   // Buffers for generating output columns
-  std::vector<inline_column_buffer> _output_buffers;
+  std::vector<cudf::io::detail::inline_column_buffer> _output_buffers;
 
   // Buffers copied from `_output_buffers` after construction for reuse
-  std::vector<inline_column_buffer> _output_buffers_template;
+  std::vector<cudf::io::detail::inline_column_buffer> _output_buffers_template;
 
   // _output_buffers associated schema indices
   std::vector<int> _output_column_schemas;
@@ -285,8 +285,8 @@ class reader::impl {
   // Within a pass, we produce one or more chunks of output, whose maximum total
   // byte size is controlled by _output_chunk_read_limit.
 
-  cudf::io::parquet::gpu::file_intermediate_data _file_itm_data;
-  std::unique_ptr<cudf::io::parquet::gpu::pass_intermediate_data> _pass_itm_data;
+  file_intermediate_data _file_itm_data;
+  std::unique_ptr<pass_intermediate_data> _pass_itm_data;
 
   // an array of offsets into _file_itm_data::global_chunks. Each pair of offsets represents
   // the start/end of the chunks to be loaded for a given pass.
@@ -301,4 +301,4 @@ class reader::impl {
   bool _file_preprocessed{false};
 };
 
-}  // namespace cudf::io::detail::parquet
+}  // namespace cudf::io::parquet::detail
