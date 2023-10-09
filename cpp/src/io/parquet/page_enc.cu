@@ -45,10 +45,7 @@
 
 #include <bitset>
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace gpu {
+namespace cudf::io::parquet::detail {
 
 namespace {
 
@@ -380,9 +377,7 @@ __global__ void __launch_bounds__(128)
   }
 }
 
-__device__ size_t delta_data_len(parquet::Type physical_type,
-                                 cudf::type_id type_id,
-                                 uint32_t num_values)
+__device__ size_t delta_data_len(Type physical_type, cudf::type_id type_id, uint32_t num_values)
 {
   auto const dtype_len_out = physical_type_len(physical_type, type_id);
   auto const dtype_len     = [&]() -> uint32_t {
@@ -408,7 +403,7 @@ __device__ size_t delta_data_len(parquet::Type physical_type,
 // blockDim {128,1,1}
 __global__ void __launch_bounds__(128)
   gpuInitPages(device_2dspan<EncColumnChunk> chunks,
-               device_span<gpu::EncPage> pages,
+               device_span<EncPage> pages,
                device_span<size_type> page_sizes,
                device_span<size_type> comp_page_sizes,
                device_span<parquet_column_device_view const> col_desc,
@@ -1108,10 +1103,9 @@ __device__ auto julian_days_with_time(int64_t v)
 // the level data is encoded.
 // blockDim(128, 1, 1)
 template <int block_size>
-__global__ void __launch_bounds__(block_size, 8)
-  gpuEncodePageLevels(device_span<gpu::EncPage> pages,
-                      bool write_v2_headers,
-                      encode_kernel_mask kernel_mask)
+__global__ void __launch_bounds__(block_size, 8) gpuEncodePageLevels(device_span<EncPage> pages,
+                                                                     bool write_v2_headers,
+                                                                     encode_kernel_mask kernel_mask)
 {
   __shared__ __align__(8) rle_page_enc_state_s state_g;
 
@@ -1262,7 +1256,7 @@ template <int block_size, typename state_buf>
 __device__ void finish_page_encode(state_buf* s,
                                    uint32_t valid_count,
                                    uint8_t const* end_ptr,
-                                   device_span<gpu::EncPage> pages,
+                                   device_span<EncPage> pages,
                                    device_span<device_span<uint8_t const>> comp_in,
                                    device_span<device_span<uint8_t>> comp_out,
                                    device_span<compression_result> comp_results,
@@ -1309,7 +1303,7 @@ __device__ void finish_page_encode(state_buf* s,
 // blockDim(128, 1, 1)
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 8)
-  gpuEncodePages(device_span<gpu::EncPage> pages,
+  gpuEncodePages(device_span<EncPage> pages,
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
                  device_span<compression_result> comp_results,
@@ -1552,7 +1546,7 @@ __global__ void __launch_bounds__(block_size, 8)
 // blockDim(128, 1, 1)
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 8)
-  gpuEncodeDictPages(device_span<gpu::EncPage> pages,
+  gpuEncodeDictPages(device_span<EncPage> pages,
                      device_span<device_span<uint8_t const>> comp_in,
                      device_span<device_span<uint8_t>> comp_out,
                      device_span<compression_result> comp_results,
@@ -1693,7 +1687,7 @@ __global__ void __launch_bounds__(block_size, 8)
 // blockDim(128, 1, 1)
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 8)
-  gpuEncodeDeltaBinaryPages(device_span<gpu::EncPage> pages,
+  gpuEncodeDeltaBinaryPages(device_span<EncPage> pages,
                             device_span<device_span<uint8_t const>> comp_in,
                             device_span<device_span<uint8_t>> comp_out,
                             device_span<compression_result> comp_results)
@@ -2380,7 +2374,7 @@ __global__ void __launch_bounds__(128)
 
 // blockDim(1024, 1, 1)
 __global__ void __launch_bounds__(1024)
-  gpuGatherPages(device_span<EncColumnChunk> chunks, device_span<gpu::EncPage const> pages)
+  gpuGatherPages(device_span<EncColumnChunk> chunks, device_span<EncPage const> pages)
 {
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
@@ -2662,7 +2656,7 @@ void InitFragmentStatistics(device_span<statistics_group> groups,
 }
 
 void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
-                      device_span<gpu::EncPage> pages,
+                      device_span<EncPage> pages,
                       device_span<size_type> page_sizes,
                       device_span<size_type> comp_page_sizes,
                       device_span<parquet_column_device_view const> col_desc,
@@ -2691,7 +2685,7 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                                                                    write_v2_headers);
 }
 
-void EncodePages(device_span<gpu::EncPage> pages,
+void EncodePages(device_span<EncPage> pages,
                  bool write_v2_headers,
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
@@ -2758,7 +2752,7 @@ void EncodePageHeaders(device_span<EncPage> pages,
 }
 
 void GatherPages(device_span<EncColumnChunk> chunks,
-                 device_span<gpu::EncPage const> pages,
+                 device_span<EncPage const> pages,
                  rmm::cuda_stream_view stream)
 {
   gpuGatherPages<<<chunks.size(), 1024, 0, stream.value()>>>(chunks, pages);
@@ -2773,7 +2767,4 @@ void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,
     chunks, column_stats, column_index_truncate_length);
 }
 
-}  // namespace gpu
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail
