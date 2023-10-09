@@ -752,8 +752,8 @@ def test_multiindex_copy_sem(data, levels, codes, names):
 
     for glv, plv in zip(gmi_copy.levels, pmi_copy.levels):
         assert all(glv.values_host == plv.values)
-    for (_, gval), pval in zip(gmi.codes._data._data.items(), pmi.codes):
-        assert all(gval.values_host == pval.astype(np.int64))
+    for gval, pval in zip(gmi.codes, pmi.codes):
+        assert_eq(gval, pval)
     assert_eq(gmi_copy.names, pmi_copy.names)
 
     # Test same behavior when used on DataFrame
@@ -2033,6 +2033,15 @@ def test_multiindex_dtype_error():
         cudf.Index(midx.to_pandas(), dtype="int64")
     with pytest.raises(TypeError):
         cudf.Index(midx.to_frame(), dtype="int64")
+
+
+def test_multiindex_codes():
+    midx = cudf.MultiIndex.from_tuples(
+        [("a", "b"), ("a", "c"), ("b", "c")], names=["A", "Z"]
+    )
+
+    for p_array, g_array in zip(midx.to_pandas().codes, midx.codes):
+        assert_eq(p_array, g_array)
 
 
 def test_multiindex_union_error():
