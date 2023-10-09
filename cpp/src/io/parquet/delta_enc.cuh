@@ -23,7 +23,7 @@
 
 #include <cub/cub.cuh>
 
-namespace cudf::io::parquet::gpu {
+namespace cudf::io::parquet::detail {
 
 namespace delta {
 
@@ -287,4 +287,4 @@ class delta_binary_packer {
   }
 };
 
-}  // namespace cudf::io::parquet::gpu
+}  // namespace cudf::io::parquet::detail
