@@ -159,6 +159,20 @@ def test_tz_localize():
     )
 
 
+def test_index_tz_localize():
+    pti = pd.Index(pd.date_range("2020-01-01", periods=3, freq="D"))
+    xti = xpd.Index(xpd.date_range("2020-01-01", periods=3, freq="D"))
+    pti = pti.tz_localize("UTC")
+    xti = xti.tz_localize("UTC")
+    tm.assert_equal(pti, xti)
+
+
+def test_index_generator():
+    pi = pd.Index(iter(range(10)))
+    xi = xpd.Index(iter(range(10)))
+    tm.assert_equal(pi, xi)
+
+
 def test_groupby_apply_fallback(dataframe, groupby_udf):
     pdf, df = dataframe
     tm.assert_equal(
@@ -1081,6 +1095,29 @@ def test_index_new():
     expected = pd.RangeIndex.__new__(pd.RangeIndex, 0, 10, 2)
     got = xpd.RangeIndex.__new__(xpd.RangeIndex, 0, 10, 2)
     tm.assert_equal(expected, got)
+
+
+@pytest.mark.xfail(not LOADED, reason="Should not fail in transparent mode")
+def test_groupby_apply_callable_referencing_pandas(dataframe):
+
+    pdf, df = dataframe
+
+    class Callable1:
+        def __call__(self, df):
+            if not isinstance(df, pd.DataFrame):
+                raise TypeError
+            return 1
+
+    class Callable2:
+        def __call__(self, df):
+            if not isinstance(df, xpd.DataFrame):
+                raise TypeError
+            return 1
+
+    expect = pdf.groupby("a").apply(Callable1())
+    got = df.groupby("a").apply(Callable2())
+
+    tm.assert_equal(expect, got)
 
 
 def test_constructor_properties(dataframe, series, index):

@@ -10,6 +10,7 @@
 # its affiliates is strictly prohibited.
 
 import sys
+from typing import Iterator
 
 import pandas as pd
 
@@ -17,7 +18,9 @@ import cudf
 
 from ..annotation import nvtx
 from ..fast_slow_proxy import (
+    _DELETE,
     _XDF_NVTX_COLORS,
+    _fast_slow_function_call,
     _FastSlowAttribute,
     _FunctionProxy,
     _Unusable,
@@ -147,9 +150,29 @@ Series = make_final_proxy_type(
 
 
 def Index__new__(cls, *args, **kwargs):
-    obj = object.__new__(cls)
-    obj.__init__(*args, **kwargs)
-    return obj
+    # Avoid consuming generators twice
+    # This is a "good enough" solution for this specific use case.
+    args = tuple(
+        list(arg) if isinstance(arg, Iterator) else arg for arg in args
+    )
+    kwargs = {
+        k: list(v) if isinstance(v, Iterator) else v for k, v in kwargs.items()
+    }
+    # Make the object
+    self, _ = _fast_slow_function_call(
+        lambda cls, *args, **kwargs: cls.__new__(cls, *args, **kwargs),
+        cls,
+        *args,
+        **kwargs,
+    )
+    # Call init
+    _fast_slow_function_call(
+        lambda self, *args, **kwargs: self.__init__(*args, **kwargs),
+        self,
+        *args,
+        **kwargs,
+    )
+    return self
 
 
 Index = make_final_proxy_type(
@@ -167,6 +190,7 @@ Index = make_final_proxy_type(
         "str": _AccessorAttr(StringMethods),
         "cat": _AccessorAttr(_CategoricalAccessor),
         "__iter__": custom_iter,
+        "__init__": _DELETE,
         "__new__": Index__new__,
         "_constructor": _FastSlowAttribute("_constructor"),
     },
@@ -179,6 +203,7 @@ RangeIndex = make_final_proxy_type(
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
     bases=(Index,),
+    additional_attributes={"__init__": _DELETE},
 )
 
 SparseDtype = make_final_proxy_type(
@@ -205,6 +230,7 @@ CategoricalIndex = make_final_proxy_type(
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
     bases=(Index,),
+    additional_attributes={"__init__": _DELETE},
 )
 
 Categorical = make_final_proxy_type(
@@ -231,6 +257,7 @@ DatetimeIndex = make_final_proxy_type(
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
     bases=(Index,),
+    additional_attributes={"__init__": _DELETE},
 )
 
 DatetimeArray = make_final_proxy_type(
@@ -266,6 +293,7 @@ TimedeltaIndex = make_final_proxy_type(
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
     bases=(Index,),
+    additional_attributes={"__init__": _DELETE},
 )
 
 TimedeltaArray = make_final_proxy_type(
@@ -292,6 +320,7 @@ PeriodIndex = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     bases=(Index,),
+    additional_attributes={"__init__": _DELETE},
 )
 
 PeriodArray = make_final_proxy_type(
@@ -326,6 +355,7 @@ MultiIndex = make_final_proxy_type(
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
     bases=(Index,),
+    additional_attributes={"__init__": _DELETE},
 )
 
 TimeGrouper = make_intermediate_proxy_type(
@@ -475,6 +505,7 @@ IntervalIndex = make_final_proxy_type(
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
     bases=(Index,),
+    additional_attributes={"__init__": _DELETE},
 )
 
 IntervalArray = make_final_proxy_type(
