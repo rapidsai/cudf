@@ -287,7 +287,7 @@ std::unique_ptr<column> index_of(lists_column_view const& lists,
   }
 
   auto search_key_col = cudf::make_column_from_scalar(search_key, lists.size(), stream, mr);
-  return index_of(lists, search_key_col->view(), find_option, stream, mr);
+  return detail::index_of(lists, search_key_col->view(), find_option, stream, mr);
 }
 
 std::unique_ptr<column> index_of(lists_column_view const& lists,
@@ -306,11 +306,11 @@ std::unique_ptr<column> contains(lists_column_view const& lists,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  auto key_indices = index_of(lists,
-                              search_key,
-                              duplicate_find_option::FIND_FIRST,
-                              stream,
-                              rmm::mr::get_current_device_resource());
+  auto key_indices = detail::index_of(lists,
+                                      search_key,
+                                      duplicate_find_option::FIND_FIRST,
+                                      stream,
+                                      rmm::mr::get_current_device_resource());
   return to_contains(std::move(key_indices), stream, mr);
 }
 
@@ -322,11 +322,11 @@ std::unique_ptr<column> contains(lists_column_view const& lists,
   CUDF_EXPECTS(search_keys.size() == lists.size(),
                "Number of search keys must match list column size.");
 
-  auto key_indices = index_of(lists,
-                              search_keys,
-                              duplicate_find_option::FIND_FIRST,
-                              stream,
-                              rmm::mr::get_current_device_resource());
+  auto key_indices = detail::index_of(lists,
+                                      search_keys,
+                                      duplicate_find_option::FIND_FIRST,
+                                      stream,
+                                      rmm::mr::get_current_device_resource());
   return to_contains(std::move(key_indices), stream, mr);
 }
 
@@ -364,43 +364,48 @@ std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
 
 std::unique_ptr<column> contains(lists_column_view const& lists,
                                  cudf::scalar const& search_key,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(lists, search_key, cudf::get_default_stream(), mr);
+  return detail::contains(lists, search_key, stream, mr);
 }
 
 std::unique_ptr<column> contains(lists_column_view const& lists,
                                  column_view const& search_keys,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(lists, search_keys, cudf::get_default_stream(), mr);
+  return detail::contains(lists, search_keys, stream, mr);
 }
 
 std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
+                                       rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains_nulls(lists, cudf::get_default_stream(), mr);
+  return detail::contains_nulls(lists, stream, mr);
 }
 
 std::unique_ptr<column> index_of(lists_column_view const& lists,
                                  cudf::scalar const& search_key,
                                  duplicate_find_option find_option,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::index_of(lists, search_key, find_option, cudf::get_default_stream(), mr);
+  return detail::index_of(lists, search_key, find_option, stream, mr);
 }
 
 std::unique_ptr<column> index_of(lists_column_view const& lists,
                                  column_view const& search_keys,
                                  duplicate_find_option find_option,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::index_of(lists, search_keys, find_option, cudf::get_default_stream(), mr);
+  return detail::index_of(lists, search_keys, find_option, stream, mr);
 }
 
 }  // namespace cudf::lists
