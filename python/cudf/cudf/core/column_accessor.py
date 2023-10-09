@@ -17,6 +17,7 @@ from typing import (
     Union,
 )
 
+import cupy
 import pandas as pd
 from packaging.version import Version
 from pandas.api.types import is_bool
@@ -116,10 +117,12 @@ class ColumnAccessor(abc.MutableMapping):
             self._data = data._data
             self.multiindex = multiindex
             self._level_names = level_names
+            self._return_ri: bool = data._return_ri
         else:
             # This code path is performance-critical for copies and should be
             # modified with care.
             self._data = {}
+            self._return_ri = False
             if data:
                 data = dict(data)
                 # Faster than next(iter(data.values()))
@@ -266,6 +269,16 @@ class ColumnAccessor(abc.MutableMapping):
                     ),
                 )
         else:
+            # Determine if we can return a RangeIndex
+            # TODO: Only take this path if columns weren't passed/inferred
+            if cudf.api.types.infer_dtype(self.names) == "integer":
+                uniques = cupy.unique(cupy.diff(cupy.array(self.names)))
+                if len(uniques) == 1 and uniques[0].get() != 0:
+                    diff = uniques[0].get()
+                    new_range = range(
+                        self.names[0], self.names[-1] + diff, diff
+                    )
+                    return pd.RangeIndex(new_range, name=self.name)
             result = pd.Index(self.names, name=self.name, tupleize_cols=False)
         return result
 
