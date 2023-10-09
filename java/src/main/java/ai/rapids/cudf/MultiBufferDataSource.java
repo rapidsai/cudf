@@ -70,6 +70,8 @@ public class MultiBufferDataSource extends DataSource {
   }
 
   private int getStartBufferIndexForOffset(long offset) {
+    assert (offset >= 0);
+
     // It is super common to read from the start or end of a file (the header or footer)
     // so special case them
     if (offset == 0) {
@@ -107,6 +109,8 @@ public class MultiBufferDataSource extends DataSource {
   }
 
   private <T extends MemoryBuffer> long read(long offset, T dest, DoCopy<T> doCopy) {
+    assert (offset >= 0);
+    assert (amount >= 0);
     long realOffset = Math.min(offset, sizeInBytes);
     long realAmount = Math.min(sizeInBytes - realOffset, dest.getLength());
 
@@ -138,6 +142,8 @@ public class MultiBufferDataSource extends DataSource {
 
   @Override
   public HostMemoryBuffer hostRead(long offset, long amount) {
+    assert (offset >= 0);
+    assert (amount >= 0);
     long realOffset = Math.min(offset, sizeInBytes);
     long realAmount = Math.min(sizeInBytes - realOffset, amount);
 
