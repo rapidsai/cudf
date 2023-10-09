@@ -25,7 +25,7 @@
 #include <bitset>
 #include <numeric>
 
-namespace cudf::io::detail::parquet {
+namespace cudf::io::parquet::detail {
 
 void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 {
@@ -38,7 +38,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
 
   size_t const sum_max_depths = std::accumulate(
-    chunks.begin(), chunks.end(), 0, [&](size_t cursum, gpu::ColumnChunkDesc const& chunk) {
+    chunks.begin(), chunks.end(), 0, [&](size_t cursum, ColumnChunkDesc const& chunk) {
       return cursum + _metadata->get_output_nesting_depth(chunk.src_col_schema);
     });
 
@@ -51,10 +51,10 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   // doing a gather operation later on.
   // TODO: This step is somewhat redundant if size info has already been calculated (nested schema,
   // chunked reader).
-  auto const has_strings = (kernel_mask & gpu::KERNEL_MASK_STRING) != 0;
+  auto const has_strings = (kernel_mask & KERNEL_MASK_STRING) != 0;
   std::vector<size_t> col_sizes(_input_columns.size(), 0L);
   if (has_strings) {
-    gpu::ComputePageStringSizes(
+    ComputePageStringSizes(
       pages, chunks, skip_rows, num_rows, _pass_itm_data->level_type_size, _stream);
 
     col_sizes = calculate_page_string_offsets();
@@ -176,19 +176,19 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   if (has_strings) {
     auto& stream = streams[s_idx++];
     chunk_nested_str_data.host_to_device_async(stream);
-    gpu::DecodeStringPageData(
+    DecodeStringPageData(
       pages, chunks, num_rows, skip_rows, level_type_size, error_code.data(), stream);
   }
 
   // launch delta binary decoder
-  if ((kernel_mask & gpu::KERNEL_MASK_DELTA_BINARY) != 0) {
-    gpu::DecodeDeltaBinary(
+  if ((kernel_mask & KERNEL_MASK_DELTA_BINARY) != 0) {
+    DecodeDeltaBinary(
       pages, chunks, num_rows, skip_rows, level_type_size, error_code.data(), streams[s_idx++]);
   }
 
   // launch the catch-all page decoder
-  if ((kernel_mask & gpu::KERNEL_MASK_GENERAL) != 0) {
-    gpu::DecodePageData(
+  if ((kernel_mask & KERNEL_MASK_GENERAL) != 0) {
+    DecodePageData(
       pages, chunks, num_rows, skip_rows, level_type_size, error_code.data(), streams[s_idx++]);
   }
 
@@ -248,13 +248,13 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 
   // update null counts in the final column buffers
   for (size_t idx = 0; idx < pages.size(); idx++) {
-    gpu::PageInfo* pi = &pages[idx];
-    if (pi->flags & gpu::PAGEINFO_FLAGS_DICTIONARY) { continue; }
-    gpu::ColumnChunkDesc* col          = &chunks[pi->chunk_idx];
+    PageInfo* pi = &pages[idx];
+    if (pi->flags & PAGEINFO_FLAGS_DICTIONARY) { continue; }
+    ColumnChunkDesc* col               = &chunks[pi->chunk_idx];
     input_column_info const& input_col = _input_columns[col->src_col_index];
 
-    int index                        = pi->nesting_decode - page_nesting_decode.device_ptr();
-    gpu::PageNestingDecodeInfo* pndi = &page_nesting_decode[index];
+    int index                   = pi->nesting_decode - page_nesting_decode.device_ptr();
+    PageNestingDecodeInfo* pndi = &page_nesting_decode[index];
 
     auto* cols = &_output_buffers;
     for (size_t l_idx = 0; l_idx < input_col.nesting_depth(); l_idx++) {
@@ -320,7 +320,7 @@ reader::impl::impl(std::size_t chunk_read_limit,
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
   for (auto const& buff : _output_buffers) {
-    _output_buffers_template.emplace_back(inline_column_buffer::empty_like(buff));
+    _output_buffers_template.emplace_back(cudf::io::detail::inline_column_buffer::empty_like(buff));
   }
 }
 
@@ -368,7 +368,7 @@ void reader::impl::prepare_data(int64_t skip_rows,
 
     // always create the pass struct, even if we end up with no passes.
     // this will also cause the previous pass information to be deleted
-    _pass_itm_data = std::make_unique<cudf::io::parquet::gpu::pass_intermediate_data>();
+    _pass_itm_data = std::make_unique<pass_intermediate_data>();
 
     if (_file_itm_data.global_num_rows > 0 && not _file_itm_data.row_groups.empty() &&
         not _input_columns.empty() && _current_input_pass < num_passes) {
@@ -521,7 +521,7 @@ table_with_metadata reader::impl::read_chunk()
   if (_chunk_count > 0) {
     _output_buffers.resize(0);
     for (auto const& buff : _output_buffers_template) {
-      _output_buffers.emplace_back(inline_column_buffer::empty_like(buff));
+      _output_buffers.emplace_back(cudf::io::detail::inline_column_buffer::empty_like(buff));
     }
   }
 
@@ -571,4 +571,4 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
                           metadata.get_key_value_metadata()[0]};
 }
 
-}  // namespace cudf::io::detail::parquet
+}  // namespace cudf::io::parquet::detail
