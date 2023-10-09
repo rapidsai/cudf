@@ -677,7 +677,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
         # If all the above optimizations don't cater to the inputs,
         # we materialize RangeIndexes into integer indexes and
         # then perform `union`.
-        return self._as_int_index()._union(other, sort=sort)
+        return self._try_reconstruct_range_index(
+            self._as_int_index()._union(other, sort=sort)
+        )
 
     @_cudf_nvtx_annotate
     def _intersection(self, other, sort=False):
