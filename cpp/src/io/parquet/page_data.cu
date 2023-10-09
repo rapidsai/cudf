@@ -23,10 +23,7 @@
 #include <rmm/exec_policy.hpp>
 #include <thrust/reduce.h>
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace gpu {
+namespace cudf::io::parquet::detail {
 
 namespace {
 
@@ -621,7 +618,7 @@ uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_vector<PageInfo>
 }
 
 /**
- * @copydoc cudf::io::parquet::gpu::DecodePageData
+ * @copydoc cudf::io::parquet::detail::DecodePageData
  */
 void __host__ DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
                              cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
@@ -645,7 +642,4 @@ void __host__ DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
   }
 }
 
-}  // namespace gpu
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail
