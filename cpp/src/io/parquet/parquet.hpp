@@ -18,14 +18,15 @@
 
 #include "parquet_common.hpp"
 
+#include <thrust/optional.h>
+
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
-namespace parquet {
+namespace cudf::io::parquet::detail {
+
 constexpr uint32_t parquet_magic = (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24));
 
 /**
@@ -119,6 +120,16 @@ struct LogicalType {
 };
 
 /**
+ * Union to specify the order used for the min_value and max_value fields for a column.
+ */
+struct ColumnOrder {
+  enum Type { UNDEFINED, TYPE_ORDER };
+  Type type;
+
+  operator Type() const { return type; }
+};
+
+/**
  * @brief Struct for describing an element/field in the Parquet format schema
  *
  * Parquet is a strongly-typed format so the file layout can be interpreted as
@@ -135,7 +146,7 @@ struct SchemaElement {
   int32_t num_children                = 0;
   int32_t decimal_scale               = 0;
   int32_t decimal_precision           = 0;
-  std::optional<int32_t> field_id     = std::nullopt;
+  thrust::optional<int32_t> field_id  = thrust::nullopt;
   bool output_as_byte_array           = false;
 
   // The following fields are filled in later during schema initialization
@@ -194,7 +205,7 @@ struct SchemaElement {
   {
     return type == UNDEFINED_TYPE &&
            // this assumption might be a little weak.
-           ((repetition_type != REPEATED) || (repetition_type == REPEATED && num_children == 2));
+           ((repetition_type != REPEATED) || (repetition_type == REPEATED && num_children > 1));
   }
 };
 
@@ -284,8 +295,8 @@ struct FileMetaData {
   int64_t num_rows = 0;
   std::vector<RowGroup> row_groups;
   std::vector<KeyValue> key_value_metadata;
-  std::string created_by         = "";
-  uint32_t column_order_listsize = 0;
+  std::string created_by = "";
+  thrust::optional<std::vector<ColumnOrder>> column_orders;
 };
 
 /**
@@ -365,8 +376,8 @@ struct ColumnIndex {
   std::vector<std::vector<uint8_t>> min_values;  // lower bound for values in each page
   std::vector<std::vector<uint8_t>> max_values;  // upper bound for values in each page
   BoundaryOrder boundary_order =
-    BoundaryOrder::UNORDERED;                    // Indicates if min and max values are ordered
-  std::vector<int64_t> null_counts;              // Optional count of null values per page
+    BoundaryOrder::UNORDERED;        // Indicates if min and max values are ordered
+  std::vector<int64_t> null_counts;  // Optional count of null values per page
 };
 
 // bit space we are reserving in column_buffer::user_data
@@ -393,6 +404,4 @@ static inline int CountLeadingZeros32(uint32_t value)
 #endif
 }
 
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

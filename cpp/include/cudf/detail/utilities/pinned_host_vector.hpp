@@ -169,7 +169,12 @@ class pinned_allocator {
    *        It is the responsibility of the caller to destroy
    *        the objects stored at \p p.
    */
-  __host__ inline void deallocate(pointer p, size_type /*cnt*/) { CUDF_CUDA_TRY(cudaFreeHost(p)); }
+  __host__ inline void deallocate(pointer p, size_type /*cnt*/)
+  {
+    auto dealloc_worked = cudaFreeHost(p);
+    (void)dealloc_worked;
+    assert(dealloc_worked == cudaSuccess);
+  }
 
   /**
    * @brief This method returns the maximum size of the \c cnt parameter
