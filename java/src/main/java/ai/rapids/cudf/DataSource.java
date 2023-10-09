@@ -136,6 +136,7 @@ public abstract class DataSource implements AutoCloseable {
   }
   private static final NoopCleaner cleaner = new NoopCleaner();
 
+  // Called from JNI
   private void onHostBufferDone(long bufferId) {
     HostMemoryBuffer hmb = cachedBuffers.remove(bufferId);
     if (hmb != null) {
@@ -146,6 +147,7 @@ public abstract class DataSource implements AutoCloseable {
     }
   }
 
+  // Called from JNI
   private long hostRead(long offset, long amount, long dst) throws IOException {
     if (amount < 0) {
       throw new IllegalArgumentException("Cannot allocate more than " + Long.MAX_VALUE + " bytes");
@@ -155,6 +157,7 @@ public abstract class DataSource implements AutoCloseable {
     }
   }
 
+  // Called from JNI
   private long[] hostReadBuff(long offset, long amount) throws IOException {
     if (amount < 0) {
       throw new IllegalArgumentException("Cannot read more than " + Long.MAX_VALUE + " bytes");
@@ -173,6 +176,7 @@ public abstract class DataSource implements AutoCloseable {
     return ret;
   }
 
+  // Called from JNI
   private long deviceRead(long offset, long amount, long dst, long stream) throws IOException {
     if (amount < 0) {
       throw new IllegalArgumentException("Cannot read more than " + Long.MAX_VALUE + " bytes");
