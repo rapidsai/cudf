@@ -1750,7 +1750,7 @@ class parquet_chunked_writer {
     std::vector<std::string> const& column_chunks_file_paths = {});
 
   /// Unique pointer to impl writer class
-  std::unique_ptr<cudf::io::parquet::detail::writer> writer;
+  std::unique_ptr<parquet::detail::writer> writer;
 };
 
 /** @} */  // end of group

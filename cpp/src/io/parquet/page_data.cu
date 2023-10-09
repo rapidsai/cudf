@@ -23,10 +23,7 @@
 #include <rmm/exec_policy.hpp>
 #include <thrust/reduce.h>
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace detail {
+namespace cudf::io::parquet::detail {
 
 namespace {
 
@@ -648,7 +645,4 @@ void __host__ DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
   }
 }
 
-}  // namespace detail
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

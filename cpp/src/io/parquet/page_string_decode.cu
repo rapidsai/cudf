@@ -20,10 +20,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/gather.cuh>
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace detail {
+namespace cudf::io::parquet::detail {
 
 namespace {
 
@@ -802,7 +799,4 @@ void __host__ DecodeStringPageData(cudf::detail::hostdevice_vector<PageInfo>& pa
   }
 }
 
-}  // namespace detail
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

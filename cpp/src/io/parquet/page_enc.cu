@@ -41,10 +41,7 @@
 #include <thrust/scatter.h>
 #include <thrust/tuple.h>
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace detail {
+namespace cudf::io::parquet::detail {
 
 namespace {
 
@@ -2343,7 +2340,4 @@ void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,
     chunks, column_stats, column_index_truncate_length);
 }
 
-}  // namespace detail
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

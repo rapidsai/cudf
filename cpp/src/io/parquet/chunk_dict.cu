@@ -24,10 +24,8 @@
 
 #include <cuda/atomic>
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace detail {
+namespace cudf::io::parquet::detail {
+
 namespace {
 constexpr int DEFAULT_BLOCK_SIZE = 256;
 }
@@ -297,7 +295,4 @@ void get_dictionary_indices(cudf::detail::device_2dspan<PageFragment const> frag
   get_dictionary_indices_kernel<DEFAULT_BLOCK_SIZE>
     <<<dim_grid, DEFAULT_BLOCK_SIZE, 0, stream.value()>>>(frags);
 }
-}  // namespace detail
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

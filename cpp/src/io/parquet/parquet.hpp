@@ -25,10 +25,7 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace detail {
+namespace cudf::io::parquet::detail {
 
 constexpr uint32_t parquet_magic = (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24));
 
@@ -208,7 +205,7 @@ struct SchemaElement {
   {
     return type == UNDEFINED_TYPE &&
            // this assumption might be a little weak.
-           ((repetition_type != REPEATED) || (repetition_type == REPEATED && num_children == 2));
+           ((repetition_type != REPEATED) || (repetition_type == REPEATED && num_children > 1));
   }
 };
 
@@ -407,7 +404,4 @@ static inline int CountLeadingZeros32(uint32_t value)
 #endif
 }
 
-}  // namespace detail
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

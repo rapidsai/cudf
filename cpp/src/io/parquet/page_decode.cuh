@@ -753,7 +753,7 @@ __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value
           // for nested schemas, it's more complicated.  This warp will visit 32 incoming values,
           // however not all of them will necessarily represent a value at this nesting level. so
           // the validity bit for thread t might actually represent output value t-6. the correct
-          // position for thread t's bit is cur_value_count. for cuda 11 we could use
+          // position for thread t's bit is thread_value_count. for cuda 11 we could use
           // __reduce_or_sync(), but until then we have to do a warp reduce.
           WarpReduceOr32(is_valid << thread_value_count);
 

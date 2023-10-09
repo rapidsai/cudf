@@ -54,10 +54,7 @@
 #include <numeric>
 #include <utility>
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace detail {
+namespace cudf::io::parquet::detail {
 
 using namespace cudf::io::detail;
 
@@ -2391,7 +2388,4 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_row_group_metadata(
   return std::make_unique<std::vector<uint8_t>>(std::move(output));
 }
 
-}  // namespace detail
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail
