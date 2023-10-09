@@ -25,9 +25,7 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
-namespace parquet {
+namespace cudf::io::parquet::detail {
 
 /**
  * @brief Class for parsing Parquet's Thrift Compact Protocol encoded metadata
@@ -115,6 +113,4 @@ class CompactProtocolFieldWriter {
   inline void set_current_field(int const& field);
 };
 
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

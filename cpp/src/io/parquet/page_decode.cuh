@@ -24,7 +24,7 @@
 #include <cuda/atomic>
 #include <cuda/std/tuple>
 
-namespace cudf::io::parquet::gpu {
+namespace cudf::io::parquet::detail {
 
 struct page_state_s {
   constexpr page_state_s() noexcept {}
@@ -1384,4 +1384,4 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
   return true;
 }
 
-}  // namespace cudf::io::parquet::gpu
+}  // namespace cudf::io::parquet::detail
