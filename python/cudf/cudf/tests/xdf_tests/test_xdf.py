@@ -159,6 +159,20 @@ def test_tz_localize():
     )
 
 
+def test_index_tz_localize():
+    pti = pd.Index(pd.date_range("2020-01-01", periods=3, freq="D"))
+    xti = xpd.Index(xpd.date_range("2020-01-01", periods=3, freq="D"))
+    pti = pti.tz_localize("UTC")
+    xti = xti.tz_localize("UTC")
+    tm.assert_equal(pti, xti)
+
+
+def test_index_generator():
+    pi = pd.Index(iter(range(10)))
+    xi = xpd.Index(iter(range(10)))
+    tm.assert_equal(pi, xi)
+
+
 def test_groupby_apply_fallback(dataframe, groupby_udf):
     pdf, df = dataframe
     tm.assert_equal(
