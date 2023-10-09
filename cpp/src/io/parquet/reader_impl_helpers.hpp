@@ -32,9 +32,7 @@
 #include <tuple>
 #include <vector>
 
-namespace cudf::io::detail::parquet {
-
-using namespace cudf::io::parquet;
+namespace cudf::io::parquet::detail {
 
 /**
  * @brief Function that translates Parquet datatype to cuDF type enum
@@ -182,7 +180,7 @@ class aggregate_reader_metadata {
    * @return A tuple of corrected row_start, row_count and list of row group indexes and its
    *         starting row
    */
-  [[nodiscard]] std::tuple<int64_t, size_type, std::vector<gpu::row_group_info>> select_row_groups(
+  [[nodiscard]] std::tuple<int64_t, size_type, std::vector<row_group_info>> select_row_groups(
     host_span<std::vector<size_type> const> row_group_indices,
     int64_t row_start,
     std::optional<size_type> const& row_count,
@@ -202,12 +200,13 @@ class aggregate_reader_metadata {
    * @return input column information, output column information, list of output column schema
    * indices
    */
-  [[nodiscard]] std::
-    tuple<std::vector<input_column_info>, std::vector<inline_column_buffer>, std::vector<size_type>>
-    select_columns(std::optional<std::vector<std::string>> const& use_names,
-                   bool include_index,
-                   bool strings_to_categorical,
-                   type_id timestamp_type_id) const;
+  [[nodiscard]] std::tuple<std::vector<input_column_info>,
+                           std::vector<cudf::io::detail::inline_column_buffer>,
+                           std::vector<size_type>>
+  select_columns(std::optional<std::vector<std::string>> const& use_names,
+                 bool include_index,
+                 bool strings_to_categorical,
+                 type_id timestamp_type_id) const;
 };
 
 /**
@@ -276,4 +275,4 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
   std::list<ast::operation> _operators;
 };
 
-}  // namespace cudf::io::detail::parquet
+}  // namespace cudf::io::parquet::detail
