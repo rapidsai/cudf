@@ -110,7 +110,6 @@ public class MultiBufferDataSource extends DataSource {
 
   private <T extends MemoryBuffer> long read(long offset, T dest, DoCopy<T> doCopy) {
     assert (offset >= 0);
-    assert (amount >= 0);
     long realOffset = Math.min(offset, sizeInBytes);
     long realAmount = Math.min(sizeInBytes - realOffset, dest.getLength());
 
