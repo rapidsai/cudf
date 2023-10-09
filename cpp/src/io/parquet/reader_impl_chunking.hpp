@@ -84,4 +84,4 @@ struct pass_intermediate_data {
   size_t num_rows;
 };
 
-} // namespace cudf::io::parquet::detail
+}  // namespace cudf::io::parquet::detail

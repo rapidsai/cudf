@@ -75,10 +75,9 @@ void print_cumulative_page_info(cudf::detail::hostdevice_vector<PageInfo>& pages
   }
 }
 
-void print_cumulative_row_info(
-  host_span<cumulative_row_info const> sizes,
-  std::string const& label,
-  std::optional<std::vector<chunk_read_info>> splits = std::nullopt)
+void print_cumulative_row_info(host_span<cumulative_row_info const> sizes,
+                               std::string const& label,
+                               std::optional<std::vector<chunk_read_info>> splits = std::nullopt)
 {
   if (splits.has_value()) {
     printf("------------\nSplits\n");
@@ -251,8 +250,8 @@ struct row_total_size {
  * @param chunk_read_limit Limit on total number of bytes to be returned per read, for all columns
  */
 std::vector<chunk_read_info> find_splits(std::vector<cumulative_row_info> const& sizes,
-                                              size_t num_rows,
-                                              size_t chunk_read_limit)
+                                         size_t num_rows,
+                                         size_t chunk_read_limit)
 {
   // now we have an array of {row_count, real output bytes}. just walk through it and generate
   // splits.
@@ -341,7 +340,7 @@ template <typename T = uint8_t>
 }
 
 struct row_count_compare {
-  __device__ bool operator()(cumulative_row_info const& a, cumulative_row_info const& b) 
+  __device__ bool operator()(cumulative_row_info const& a, cumulative_row_info const& b)
   {
     return a.row_count < b.row_count;
   }
@@ -381,24 +380,24 @@ void reader::impl::create_global_chunk_info()
                         schema.type_length);
 
       chunks.push_back(ColumnChunkDesc(col_meta.total_compressed_size,
-                                            nullptr,
-                                            col_meta.num_values,
-                                            schema.type,
-                                            type_width,
-                                            row_group_start,
-                                            row_group_rows,
-                                            schema.max_definition_level,
-                                            schema.max_repetition_level,
-                                            _metadata->get_output_nesting_depth(col.schema_idx),
-                                            required_bits(schema.max_definition_level),
-                                            required_bits(schema.max_repetition_level),
-                                            col_meta.codec,
-                                            converted_type,
-                                            schema.logical_type,
-                                            schema.decimal_precision,
-                                            clock_rate,
-                                            i,
-                                            col.schema_idx));
+                                       nullptr,
+                                       col_meta.num_values,
+                                       schema.type,
+                                       type_width,
+                                       row_group_start,
+                                       row_group_rows,
+                                       schema.max_definition_level,
+                                       schema.max_repetition_level,
+                                       _metadata->get_output_nesting_depth(col.schema_idx),
+                                       required_bits(schema.max_definition_level),
+                                       required_bits(schema.max_repetition_level),
+                                       col_meta.codec,
+                                       converted_type,
+                                       schema.logical_type,
+                                       schema.decimal_precision,
+                                       clock_rate,
+                                       i,
+                                       col.schema_idx));
     }
 
     remaining_rows -= row_group_rows;
@@ -485,8 +484,7 @@ void reader::impl::setup_next_pass()
   auto chunk_start = _file_itm_data.chunks.begin() + (row_group_start * chunks_per_rowgroup);
   auto chunk_end   = _file_itm_data.chunks.begin() + (row_group_end * chunks_per_rowgroup);
 
-  _pass_itm_data->chunks =
-    cudf::detail::hostdevice_vector<ColumnChunkDesc>(num_chunks, _stream);
+  _pass_itm_data->chunks = cudf::detail::hostdevice_vector<ColumnChunkDesc>(num_chunks, _stream);
   std::copy(chunk_start, chunk_end, _pass_itm_data->chunks.begin());
 
   // adjust skip_rows and num_rows by what's available in the row groups we are processing
@@ -496,29 +494,32 @@ void reader::impl::setup_next_pass()
   } else {
     auto const global_start_row = _file_itm_data.global_skip_rows;
     auto const global_end_row   = global_start_row + _file_itm_data.global_num_rows;
-    auto const start_row = std::max(_file_itm_data.input_pass_row_count[_current_input_pass], global_start_row);
-    auto const end_row   = std::min(_file_itm_data.input_pass_row_count[_current_input_pass + 1], global_end_row);
+    auto const start_row =
+      std::max(_file_itm_data.input_pass_row_count[_current_input_pass], global_start_row);
+    auto const end_row =
+      std::min(_file_itm_data.input_pass_row_count[_current_input_pass + 1], global_end_row);
 
     // skip_rows is always global in the sense that it is relative to the first row of
     // everything we will be reading, regardless of what pass we are on.
     // num_rows is how many rows we are reading this pass.
-    _pass_itm_data->skip_rows = global_start_row + _file_itm_data.input_pass_row_count[_current_input_pass];
-    _pass_itm_data->num_rows  = end_row - start_row;
+    _pass_itm_data->skip_rows =
+      global_start_row + _file_itm_data.input_pass_row_count[_current_input_pass];
+    _pass_itm_data->num_rows = end_row - start_row;
   }
 }
 
 void reader::impl::compute_splits_for_pass()
 {
   auto const skip_rows = _pass_itm_data->skip_rows;
-  auto const num_rows = _pass_itm_data->num_rows;
+  auto const num_rows  = _pass_itm_data->num_rows;
 
   // simple case : no chunk size, no splits
-  if(_output_chunk_read_limit <= 0){
+  if (_output_chunk_read_limit <= 0) {
     _pass_itm_data->output_chunk_read_info = std::vector<chunk_read_info>{{skip_rows, num_rows}};
     return;
   }
 
-  auto& pages          = _pass_itm_data->pages_info;
+  auto& pages = _pass_itm_data->pages_info;
 
   auto const& page_keys  = _pass_itm_data->page_keys;
   auto const& page_index = _pass_itm_data->page_index;
@@ -539,10 +540,8 @@ void reader::impl::compute_splits_for_pass()
 
   // sort by row count
   rmm::device_uvector<cumulative_row_info> c_info_sorted{c_info, _stream};
-  thrust::sort(rmm::exec_policy(_stream),
-               c_info_sorted.begin(),
-               c_info_sorted.end(),
-               row_count_compare{});
+  thrust::sort(
+    rmm::exec_policy(_stream), c_info_sorted.begin(), c_info_sorted.end(), row_count_compare{});
 
   // std::vector<cumulative_row_info> h_c_info_sorted(c_info_sorted.size());
   // CUDF_CUDA_TRY(cudaMemcpy(h_c_info_sorted.data(),
@@ -592,7 +591,8 @@ void reader::impl::compute_splits_for_pass()
   _stream.synchronize();
 
   // generate the actual splits
-  _pass_itm_data->output_chunk_read_info = find_splits(h_aggregated_info, num_rows, _output_chunk_read_limit);
+  _pass_itm_data->output_chunk_read_info =
+    find_splits(h_aggregated_info, num_rows, _output_chunk_read_limit);
 }
 
 }  // namespace cudf::io::parquet::detail
