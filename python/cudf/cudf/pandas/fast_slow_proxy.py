@@ -807,6 +807,8 @@ def _fast_slow_function_call(func: Callable, /, *args, **kwargs) -> Any:
     Wrap the result in a fast-slow proxy if it is a type we know how
     to wrap.
     """
+    from .module_finder import disable_transparent_mode_if_enabled
+
     fast = False
     try:
         with nvtx.annotate(
@@ -827,7 +829,8 @@ def _fast_slow_function_call(func: Callable, /, *args, **kwargs) -> Any:
             domain="xdf_python",
         ):
             slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
-            result = func(*slow_args, **slow_kwargs)
+            with disable_transparent_mode_if_enabled():
+                result = func(*slow_args, **slow_kwargs)
     return _maybe_wrap_result(result, func, *args, **kwargs), fast
 
 

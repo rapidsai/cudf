@@ -1083,6 +1083,29 @@ def test_index_new():
     tm.assert_equal(expected, got)
 
 
+@pytest.mark.xfail(not LOADED, reason="Should not fail in transparent mode")
+def test_groupby_apply_callable_referencing_pandas(dataframe):
+
+    pdf, df = dataframe
+
+    class Callable1:
+        def __call__(self, df):
+            if not isinstance(df, pd.DataFrame):
+                raise TypeError
+            return 1
+
+    class Callable2:
+        def __call__(self, df):
+            if not isinstance(df, xpd.DataFrame):
+                raise TypeError
+            return 1
+
+    expect = pdf.groupby("a").apply(Callable1())
+    got = df.groupby("a").apply(Callable2())
+
+    tm.assert_equal(expect, got)
+
+
 def test_constructor_properties(dataframe, series, index):
     _, df = dataframe
     _, sr = series
