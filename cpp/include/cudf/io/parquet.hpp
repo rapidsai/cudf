@@ -499,7 +499,7 @@ class chunked_parquet_reader {
   [[nodiscard]] table_with_metadata read_chunk() const;
 
  private:
-  std::unique_ptr<cudf::io::detail::parquet::chunked_reader> reader;
+  std::unique_ptr<cudf::io::parquet::detail::chunked_reader> reader;
 };
 
 /** @} */  // end of group
@@ -1750,7 +1750,7 @@ class parquet_chunked_writer {
     std::vector<std::string> const& column_chunks_file_paths = {});
 
   /// Unique pointer to impl writer class
-  std::unique_ptr<cudf::io::detail::parquet::writer> writer;
+  std::unique_ptr<parquet::detail::writer> writer;
 };
 
 /** @} */  // end of group
