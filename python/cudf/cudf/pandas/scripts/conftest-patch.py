@@ -37,15 +37,6 @@ def null_assert_warnings(*args, **kwargs):
 
 @pytest.fixture(scope="session", autouse=True)  # type: ignore
 def patch_testing_functions():
-    tm.assert_produces_warning = replace_kwargs({"check_stacklevel": False})(
-        tm.assert_produces_warning
-    )
-    tm.assert_series_equal = replace_kwargs({"check_dtype": False})(
-        tm.assert_series_equal
-    )
-    tm.assert_frame_equal = replace_kwargs({"check_dtype": False})(
-        tm.assert_frame_equal
-    )
     tm.assert_produces_warning = null_assert_warnings
 
 

@@ -23,7 +23,7 @@ PACKAGE_CUDA_SUFFIX="-${RAPIDS_PY_CUDA_SUFFIX}"
 pyproject_file="${package_dir}/pyproject.toml"
 
 sed -i "s/^version = .*/version = \"${version_override}\"/g" ${pyproject_file}
-sed -i "s/name = \"${package_name}\"/name = \"${package_name}${PACKAGE_CUDA_SUFFIX}\"/g" ${pyproject_file}
+sed -i "s/^name = .*/name = \"${package_name}${PACKAGE_CUDA_SUFFIX}\"/g" ${pyproject_file}
 
 # For nightlies we want to ensure that we're pulling in alphas as well. The
 # easiest way to do so is to augment the spec with a constraint containing a
@@ -36,7 +36,7 @@ fi
 
 if [[ ${package_name} == "dask_cudf" ]]; then
     sed -r -i "s/cudf==(.*)\"/cudf${PACKAGE_CUDA_SUFFIX}==\1${alpha_spec}\"/g" ${pyproject_file}
-elif [[ ${package_name} == "cudf" ]]; then
+else
     sed -r -i "s/rmm(.*)\"/rmm${PACKAGE_CUDA_SUFFIX}\1${alpha_spec}\"/g" ${pyproject_file}
     # ptxcompiler and cubinlinker aren't version constrained
     sed -r -i "s/ptxcompiler\"/ptxcompiler${PACKAGE_CUDA_SUFFIX}\"/g" ${pyproject_file}

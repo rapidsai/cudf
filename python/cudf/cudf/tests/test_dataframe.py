@@ -10517,6 +10517,12 @@ def test_dataframe_reduction_error():
         gdf.sum()
 
 
+def test_dataframe_from_generator():
+    pdf = pd.DataFrame((i for i in range(5)))
+    gdf = cudf.DataFrame((i for i in range(5)))
+    assert_eq(pdf, gdf)
+
+
 def test_dataframe_from_ndarray_dup_columns():
     with pytest.raises(ValueError):
         cudf.DataFrame(np.eye(2), columns=["A", "A"])

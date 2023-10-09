@@ -1978,6 +1978,30 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         ]
 
     @_cudf_nvtx_annotate
+    def union(self, other, sort=None):
+        if not isinstance(other, MultiIndex):
+            msg = "other must be a MultiIndex or a list of tuples"
+            try:
+                other = MultiIndex.from_tuples(other, names=self.names)
+            except (ValueError, TypeError) as err:
+                # ValueError raised by tuples_to_object_array if we
+                #  have non-object dtype
+                raise TypeError(msg) from err
+
+        if sort not in {None, False}:
+            raise ValueError(
+                f"The 'sort' keyword only takes the values of "
+                f"None or False; {sort} was passed."
+            )
+
+        if not len(other) or self.equals(other):
+            return self._get_reconciled_name_object(other)
+        elif not len(self):
+            return other._get_reconciled_name_object(self)
+
+        return self._union(other, sort=sort)
+
+    @_cudf_nvtx_annotate
     def _union(self, other, sort=None):
         # TODO: When to_frame is refactored to return a
         # deep copy in future, we should push most of the common

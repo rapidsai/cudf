@@ -2084,6 +2084,18 @@ def test_range_index_concat(objs):
             pd.IntervalIndex.from_tuples([(0, 2), (0, 2), (2, 4)]),
             pd.IntervalIndex.from_tuples([(0, 2), (2, 4)]),
         ),
+        (pd.RangeIndex(0, 10), pd.Index([8, 1, 2, 4])),
+        (pd.Index([8, 1, 2, 4], name="a"), pd.Index([8, 1, 2, 4], name="b")),
+        (
+            pd.Index([8, 1, 2, 4], name="a"),
+            pd.Index([], name="b", dtype="int64"),
+        ),
+        (pd.Index([], dtype="int64", name="a"), pd.Index([10, 12], name="b")),
+        (pd.Index([True, True, True], name="a"), pd.Index([], dtype="bool")),
+        (
+            pd.Index([True, True, True]),
+            pd.Index([False, True], dtype="bool", name="b"),
+        ),
     ],
 )
 @pytest.mark.parametrize("sort", [None, False])
@@ -2096,6 +2108,24 @@ def test_union_index(idx1, idx2, sort):
     actual = idx1.union(idx2, sort=sort)
 
     assert_eq(expected, actual)
+
+
+def test_union_bool_with_other():
+    idx1 = cudf.Index([True, True, True])
+    idx2 = cudf.Index([0, 1], name="b")
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(cudf.errors.MixedTypeError):
+            idx1.union(idx2)
+
+
+@pytest.mark.parametrize("dtype1", ["int8", "int32", "int32"])
+@pytest.mark.parametrize("dtype2", ["uint32", "uint64"])
+def test_union_unsigned_vs_signed(dtype1, dtype2):
+    idx1 = cudf.Index([10, 20, 30], dtype=dtype1)
+    idx2 = cudf.Index([0, 1], dtype=dtype2)
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(cudf.errors.MixedTypeError):
+            idx1.union(idx2)
 
 
 @pytest.mark.parametrize(
@@ -2521,6 +2551,16 @@ def test_rangeindex_where_user_option(default_integer_bitwidth):
         dtype=f"int{default_integer_bitwidth}",
     )
     assert_eq(expected, actual)
+
+
+def test_rangeindex_append_return_rangeindex():
+    idx = cudf.RangeIndex(0, 10)
+    result = idx.append([])
+    assert_eq(idx, result)
+
+    result = idx.append(cudf.Index([10]))
+    expected = cudf.RangeIndex(0, 11)
+    assert_eq(result, expected)
 
 
 index_data = [
