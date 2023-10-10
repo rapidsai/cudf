@@ -92,6 +92,16 @@ struct LogicalType {
   thrust::optional<TimeType> time_type;
   thrust::optional<TimestampType> timestamp_type;
   thrust::optional<IntType> int_type;
+
+  constexpr bool is_time_nanos() const
+  {
+    return type == TIME and time_type->unit.type == TimeUnit::NANOS;
+  }
+
+  constexpr bool is_timestamp_nanos() const
+  {
+    return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::NANOS;
+  }
 };
 
 /**

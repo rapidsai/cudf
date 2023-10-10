@@ -142,17 +142,13 @@ type_id to_type_id(SchemaElement const& schema,
     default: break;
   }
 
-  if (inferred_converted_type == UNKNOWN and physical == INT64 and logical_type.has_value() and
-      logical_type->type == LogicalType::TIMESTAMP and
-      logical_type->timestamp_type->unit.type == TimeUnit::NANOS) {
-    return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
-                                                 : type_id::TIMESTAMP_NANOSECONDS;
-  }
-
-  if (inferred_converted_type == UNKNOWN and physical == INT64 and logical_type.has_value() and
-      logical_type->type == LogicalType::TIME and
-      logical_type->time_type->unit.type == TimeUnit::NANOS) {
-    return type_id::DURATION_NANOSECONDS;
+  if (inferred_converted_type == UNKNOWN and physical == INT64 and logical_type.has_value()) {
+    if (logical_type->is_timestamp_nanos()) {
+      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
+                                                   : type_id::TIMESTAMP_NANOSECONDS;
+    } else if (logical_type->is_time_nanos()) {
+      return type_id::DURATION_NANOSECONDS;
+    }
   }
 
   // is it simply a struct?
