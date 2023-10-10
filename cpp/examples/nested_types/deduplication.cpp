@@ -153,15 +153,21 @@ int main(int argc, char const** argv)
 
   auto st = std::chrono::steady_clock::now();
 
+  auto count_st                            = std::chrono::steady_clock::now();
   auto count                               = count_aggregate(tbl->view());
-  std::chrono::duration<double> count_time = std::chrono::steady_clock::now() - st;
+  std::chrono::duration<double> count_time = std::chrono::steady_clock::now() - count_st;
   std::cout << "Wall time: " << count_time.count() << " seconds\n";
+
+  auto combined_st                            = std::chrono::steady_clock::now();
   auto combined                               = join_count(tbl->view(), count->view());
-  std::chrono::duration<double> combined_time = std::chrono::steady_clock::now() - st;
+  std::chrono::duration<double> combined_time = std::chrono::steady_clock::now() - combined_st;
   std::cout << "Wall time: " << combined_time.count() << " seconds\n";
+
+  auto sorted_st                            = std::chrono::steady_clock::now();
   auto sorted                               = sort_keys(combined->view());
-  std::chrono::duration<double> sorted_time = std::chrono::steady_clock::now() - st;
+  std::chrono::duration<double> sorted_time = std::chrono::steady_clock::now() - sorted_st;
   std::cout << "Wall time: " << sorted_time.count() << " seconds\n";
+
   metadata.schema_info.emplace_back("count");
 
   std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - st;
