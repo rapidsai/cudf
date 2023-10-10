@@ -6772,7 +6772,7 @@ TEST_F(ParquetWriterTest, EmptyMinStringStatistics)
   cudf::io::write_parquet(out_opts);
 
   auto const source = cudf::io::datasource::create(filepath);
-  cudf::io::parquet::FileMetaData fmd;
+  cudf::io::parquet::detail::FileMetaData fmd;
   read_footer(source, &fmd);
 
   ASSERT_TRUE(fmd.row_groups.size() > 0);
