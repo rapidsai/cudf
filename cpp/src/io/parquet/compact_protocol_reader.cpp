@@ -21,9 +21,7 @@
 #include <functional>
 #include <tuple>
 
-namespace cudf {
-namespace io {
-namespace parquet {
+namespace cudf::io::parquet::detail {
 
 /**
  * @brief Base class for parquet field functors.
@@ -870,6 +868,4 @@ int CompactProtocolReader::WalkSchema(
   }
 }
 
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail
