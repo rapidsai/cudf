@@ -401,6 +401,7 @@ add_library(
   src/io/parquet/predicate_pushdown.cpp
   src/io/parquet/reader.cpp
   src/io/parquet/reader_impl.cpp
+  src/io/parquet/reader_impl_chunking.cu
   src/io/parquet/reader_impl_helpers.cpp
   src/io/parquet/reader_impl_preprocess.cu
   src/io/parquet/writer_impl.cu
