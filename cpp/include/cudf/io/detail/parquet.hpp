@@ -38,7 +38,7 @@ class parquet_reader_options;
 class parquet_writer_options;
 class chunked_parquet_writer_options;
 
-namespace detail::parquet {
+namespace parquet::detail {
 
 /**
  * @brief Class to read Parquet dataset data into columns.
@@ -186,7 +186,7 @@ class writer {
    */
   explicit writer(std::vector<std::unique_ptr<data_sink>> sinks,
                   parquet_writer_options const& options,
-                  single_write_mode mode,
+                  cudf::io::detail::single_write_mode mode,
                   rmm::cuda_stream_view stream);
 
   /**
@@ -201,7 +201,7 @@ class writer {
    */
   explicit writer(std::vector<std::unique_ptr<data_sink>> sinks,
                   chunked_parquet_writer_options const& options,
-                  single_write_mode mode,
+                  cudf::io::detail::single_write_mode mode,
                   rmm::cuda_stream_view stream);
 
   /**
@@ -250,5 +250,5 @@ class writer {
  * metadata.
  */
 parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> const> sources);
-}  // namespace detail::parquet
+}  // namespace parquet::detail
 }  // namespace cudf::io
