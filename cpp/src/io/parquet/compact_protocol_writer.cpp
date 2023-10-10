@@ -46,13 +46,11 @@ size_t CompactProtocolWriter::write(DecimalType const& decimal)
 size_t CompactProtocolWriter::write(TimeUnit const& time_unit)
 {
   CompactProtocolFieldWriter c(*this);
-  auto const isset = time_unit.isset;
-  if (isset.MILLIS) {
-    c.field_struct(1, time_unit.MILLIS);
-  } else if (isset.MICROS) {
-    c.field_struct(2, time_unit.MICROS);
-  } else if (isset.NANOS) {
-    c.field_struct(3, time_unit.NANOS);
+  switch (time_unit.type) {
+    case TimeUnit::MILLIS: c.field_empty_struct(TimeUnit::MILLIS); break;
+    case TimeUnit::MICROS: c.field_empty_struct(TimeUnit::MICROS); break;
+    case TimeUnit::NANOS: c.field_empty_struct(TimeUnit::NANOS); break;
+    default: break;
   }
   return c.value();
 }
@@ -84,31 +82,28 @@ size_t CompactProtocolWriter::write(IntType const& integer)
 size_t CompactProtocolWriter::write(LogicalType const& logical_type)
 {
   CompactProtocolFieldWriter c(*this);
-  auto const isset = logical_type.isset;
-  if (isset.STRING) {
-    c.field_struct(1, logical_type.STRING);
-  } else if (isset.MAP) {
-    c.field_struct(2, logical_type.MAP);
-  } else if (isset.LIST) {
-    c.field_struct(3, logical_type.LIST);
-  } else if (isset.ENUM) {
-    c.field_struct(4, logical_type.ENUM);
-  } else if (isset.DECIMAL) {
-    c.field_struct(5, logical_type.DECIMAL);
-  } else if (isset.DATE) {
-    c.field_struct(6, logical_type.DATE);
-  } else if (isset.TIME) {
-    c.field_struct(7, logical_type.TIME);
-  } else if (isset.TIMESTAMP) {
-    c.field_struct(8, logical_type.TIMESTAMP);
-  } else if (isset.INTEGER) {
-    c.field_struct(10, logical_type.INTEGER);
-  } else if (isset.UNKNOWN) {
-    c.field_struct(11, logical_type.UNKNOWN);
-  } else if (isset.JSON) {
-    c.field_struct(12, logical_type.JSON);
-  } else if (isset.BSON) {
-    c.field_struct(13, logical_type.BSON);
+  switch (logical_type.type) {
+    case LogicalType::STRING: c.field_empty_struct(LogicalType::STRING); break;
+    case LogicalType::MAP: c.field_empty_struct(LogicalType::MAP); break;
+    case LogicalType::LIST: c.field_empty_struct(LogicalType::LIST); break;
+    case LogicalType::ENUM: c.field_empty_struct(LogicalType::ENUM); break;
+    case LogicalType::DECIMAL:
+      c.field_struct(LogicalType::DECIMAL, logical_type.decimal_type.value());
+      break;
+    case LogicalType::DATE: c.field_empty_struct(LogicalType::DATE); break;
+    case LogicalType::TIME:
+      c.field_struct(LogicalType::TIME, logical_type.time_type.value());
+      break;
+    case LogicalType::TIMESTAMP:
+      c.field_struct(LogicalType::TIMESTAMP, logical_type.timestamp_type.value());
+      break;
+    case LogicalType::INTEGER:
+      c.field_struct(LogicalType::INTEGER, logical_type.int_type.value());
+      break;
+    case LogicalType::UNKNOWN: c.field_empty_struct(LogicalType::UNKNOWN); break;
+    case LogicalType::JSON: c.field_empty_struct(LogicalType::JSON); break;
+    case LogicalType::BSON: c.field_empty_struct(LogicalType::BSON); break;
+    default: break;
   }
   return c.value();
 }
@@ -124,20 +119,15 @@ size_t CompactProtocolWriter::write(SchemaElement const& s)
   c.field_string(4, s.name);
 
   if (s.type == UNDEFINED_TYPE) { c.field_int(5, s.num_children); }
-  if (s.converted_type != UNKNOWN) {
-    c.field_int(6, s.converted_type);
+  if (s.converted_type.has_value()) {
+    c.field_int(6, s.converted_type.value());
     if (s.converted_type == DECIMAL) {
       c.field_int(7, s.decimal_scale);
       c.field_int(8, s.decimal_precision);
     }
   }
-  if (s.field_id) { c.field_int(9, s.field_id.value()); }
-  auto const isset = s.logical_type.isset;
-  // TODO: add handling for all logical types
-  // if (isset.STRING or isset.MAP or isset.LIST or isset.ENUM or isset.DECIMAL or isset.DATE or
-  //    isset.TIME or isset.TIMESTAMP or isset.INTEGER or isset.UNKNOWN or isset.JSON or isset.BSON)
-  //    {
-  if (isset.TIMESTAMP or isset.TIME) { c.field_struct(10, s.logical_type); }
+  if (s.field_id.has_value()) { c.field_int(9, s.field_id.value()); }
+  if (s.logical_type.has_value()) { c.field_struct(10, s.logical_type.value()); }
   return c.value();
 }
 
@@ -223,7 +213,7 @@ size_t CompactProtocolWriter::write(OffsetIndex const& s)
 size_t CompactProtocolWriter::write(ColumnOrder const& co)
 {
   CompactProtocolFieldWriter c(*this);
-  switch (co) {
+  switch (co.type) {
     case ColumnOrder::TYPE_ORDER: c.field_empty_struct(1); break;
     default: break;
   }

@@ -339,61 +339,6 @@ struct parquet_field_struct_list : public parquet_field_list<T> {
   }
 };
 
-// TODO(ets): replace current union handling (which mirrors thrift) to use std::optional fields
-// in a struct
-/**
- * @brief Functor to read a union member from CompactProtocolReader
- *
- * @tparam is_empty True if tparam `T` type is empty type, else false.
- *
- * @return True if field types mismatch or if the process of reading a
- * union member fails
- */
-template <typename T, bool is_empty = false>
-class ParquetFieldUnionFunctor : public parquet_field {
-  bool& is_set;
-  T& val;
-
- public:
-  ParquetFieldUnionFunctor(int f, bool& b, T& v) : parquet_field(f), is_set(b), val(v) {}
-
-  inline bool operator()(CompactProtocolReader* cpr, int field_type)
-  {
-    if (field_type != ST_FLD_STRUCT) {
-      return true;
-    } else {
-      is_set = true;
-      return !cpr->read(&val);
-    }
-  }
-};
-
-template <typename T>
-class ParquetFieldUnionFunctor<T, true> : public parquet_field {
-  bool& is_set;
-  T& val;
-
- public:
-  ParquetFieldUnionFunctor(int f, bool& b, T& v) : parquet_field(f), is_set(b), val(v) {}
-
-  inline bool operator()(CompactProtocolReader* cpr, int field_type)
-  {
-    if (field_type != ST_FLD_STRUCT) {
-      return true;
-    } else {
-      is_set = true;
-      cpr->skip_struct_field(field_type);
-      return false;
-    }
-  }
-};
-
-template <typename T>
-ParquetFieldUnionFunctor<T, std::is_empty_v<T>> ParquetFieldUnion(int f, bool& b, T& v)
-{
-  return ParquetFieldUnionFunctor<T, std::is_empty_v<T>>(f, b, v);
-}
-
 /**
  * @brief Functor to read a binary from CompactProtocolReader
  *
@@ -595,34 +540,38 @@ bool CompactProtocolReader::read(FileMetaData* f)
 
 bool CompactProtocolReader::read(SchemaElement* s)
 {
+  using optional_converted_type =
+    parquet_field_optional<ConvertedType, parquet_field_enum<ConvertedType>>;
+  using optional_logical_type =
+    parquet_field_optional<LogicalType, parquet_field_struct<LogicalType>>;
   auto op = std::make_tuple(parquet_field_enum<Type>(1, s->type),
                             parquet_field_int32(2, s->type_length),
                             parquet_field_enum<FieldRepetitionType>(3, s->repetition_type),
                             parquet_field_string(4, s->name),
                             parquet_field_int32(5, s->num_children),
-                            parquet_field_enum<ConvertedType>(6, s->converted_type),
+                            optional_converted_type(6, s->converted_type),
                             parquet_field_int32(7, s->decimal_scale),
                             parquet_field_int32(8, s->decimal_precision),
                             parquet_field_optional<int32_t, parquet_field_int32>(9, s->field_id),
-                            parquet_field_struct(10, s->logical_type));
+                            optional_logical_type(10, s->logical_type));
   return function_builder(this, op);
 }
 
 bool CompactProtocolReader::read(LogicalType* l)
 {
-  auto op =
-    std::make_tuple(ParquetFieldUnion(1, l->isset.STRING, l->STRING),
-                    ParquetFieldUnion(2, l->isset.MAP, l->MAP),
-                    ParquetFieldUnion(3, l->isset.LIST, l->LIST),
-                    ParquetFieldUnion(4, l->isset.ENUM, l->ENUM),
-                    ParquetFieldUnion(5, l->isset.DECIMAL, l->DECIMAL),  // read the struct
-                    ParquetFieldUnion(6, l->isset.DATE, l->DATE),
-                    ParquetFieldUnion(7, l->isset.TIME, l->TIME),            //  read the struct
-                    ParquetFieldUnion(8, l->isset.TIMESTAMP, l->TIMESTAMP),  //  read the struct
-                    ParquetFieldUnion(10, l->isset.INTEGER, l->INTEGER),     //  read the struct
-                    ParquetFieldUnion(11, l->isset.UNKNOWN, l->UNKNOWN),
-                    ParquetFieldUnion(12, l->isset.JSON, l->JSON),
-                    ParquetFieldUnion(13, l->isset.BSON, l->BSON));
+  auto op = std::make_tuple(
+    parquet_field_union_enumerator(1, l->type),
+    parquet_field_union_enumerator(2, l->type),
+    parquet_field_union_enumerator(3, l->type),
+    parquet_field_union_enumerator(4, l->type),
+    parquet_field_union_struct<LogicalType::Type, DecimalType>(5, l->type, l->decimal_type),
+    parquet_field_union_enumerator(6, l->type),
+    parquet_field_union_struct<LogicalType::Type, TimeType>(7, l->type, l->time_type),
+    parquet_field_union_struct<LogicalType::Type, TimestampType>(8, l->type, l->timestamp_type),
+    parquet_field_union_struct<LogicalType::Type, IntType>(10, l->type, l->int_type),
+    parquet_field_union_enumerator(11, l->type),
+    parquet_field_union_enumerator(12, l->type),
+    parquet_field_union_enumerator(13, l->type));
   return function_builder(this, op);
 }
 
@@ -648,9 +597,9 @@ bool CompactProtocolReader::read(TimestampType* t)
 
 bool CompactProtocolReader::read(TimeUnit* u)
 {
-  auto op = std::make_tuple(ParquetFieldUnion(1, u->isset.MILLIS, u->MILLIS),
-                            ParquetFieldUnion(2, u->isset.MICROS, u->MICROS),
-                            ParquetFieldUnion(3, u->isset.NANOS, u->NANOS));
+  auto op = std::make_tuple(parquet_field_union_enumerator(1, u->type),
+                            parquet_field_union_enumerator(2, u->type),
+                            parquet_field_union_enumerator(3, u->type));
   return function_builder(this, op);
 }
 

@@ -4160,7 +4160,8 @@ TEST_P(ParquetV2Test, LargeColumnIndex)
 
       // check trunc(page.min) <= stats.min && trun(page.max) >= stats.max
       auto const ptype = fmd.schema[c + 1].type;
-      auto const ctype = fmd.schema[c + 1].converted_type;
+      auto const ctype =
+        fmd.schema[c + 1].converted_type.value_or(cudf::io::parquet::detail::UNKNOWN);
       EXPECT_TRUE(compare_binary(ci.min_values[0], stats.min_value, ptype, ctype) <= 0);
       EXPECT_TRUE(compare_binary(ci.max_values[0], stats.max_value, ptype, ctype) >= 0);
     }
@@ -4244,7 +4245,8 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndex)
 
       // schema indexing starts at 1
       auto const ptype = fmd.schema[c + 1].type;
-      auto const ctype = fmd.schema[c + 1].converted_type;
+      auto const ctype =
+        fmd.schema[c + 1].converted_type.value_or(cudf::io::parquet::detail::UNKNOWN);
       for (size_t p = 0; p < ci.min_values.size(); p++) {
         // null_pages should always be false
         EXPECT_FALSE(ci.null_pages[p]);
@@ -4348,7 +4350,8 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNulls)
 
       // schema indexing starts at 1
       auto const ptype = fmd.schema[c + 1].type;
-      auto const ctype = fmd.schema[c + 1].converted_type;
+      auto const ctype =
+        fmd.schema[c + 1].converted_type.value_or(cudf::io::parquet::detail::UNKNOWN);
       for (size_t p = 0; p < ci.min_values.size(); p++) {
         EXPECT_FALSE(ci.null_pages[p]);
         if (c > 0) {  // first column has no nulls
@@ -4440,7 +4443,8 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNullColumn)
 
       // schema indexing starts at 1
       auto const ptype = fmd.schema[c + 1].type;
-      auto const ctype = fmd.schema[c + 1].converted_type;
+      auto const ctype =
+        fmd.schema[c + 1].converted_type.value_or(cudf::io::parquet::detail::UNKNOWN);
       for (size_t p = 0; p < ci.min_values.size(); p++) {
         // check tnat null_pages is true for column 1
         if (c == 1) {
@@ -4534,7 +4538,8 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStruct)
       auto const stats = get_statistics(chunk);
 
       auto const ptype = fmd.schema[colidx].type;
-      auto const ctype = fmd.schema[colidx].converted_type;
+      auto const ctype =
+        fmd.schema[colidx].converted_type.value_or(cudf::io::parquet::detail::UNKNOWN);
       for (size_t p = 0; p < ci.min_values.size(); p++) {
         EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
       }
@@ -4831,7 +4836,8 @@ TEST_F(ParquetWriterTest, CheckColumnIndexTruncation)
 
       // check trunc(page.min) <= stats.min && trun(page.max) >= stats.max
       auto const ptype = fmd.schema[c + 1].type;
-      auto const ctype = fmd.schema[c + 1].converted_type;
+      auto const ctype =
+        fmd.schema[c + 1].converted_type.value_or(cudf::io::parquet::detail::UNKNOWN);
       EXPECT_TRUE(compare_binary(ci.min_values[0], stats.min_value, ptype, ctype) <= 0);
       EXPECT_TRUE(compare_binary(ci.max_values[0], stats.max_value, ptype, ctype) >= 0);
 
@@ -4889,7 +4895,8 @@ TEST_F(ParquetWriterTest, BinaryColumnIndexTruncation)
 
       // check trunc(page.min) <= stats.min && trun(page.max) >= stats.max
       auto const ptype = fmd.schema[c + 1].type;
-      auto const ctype = fmd.schema[c + 1].converted_type;
+      auto const ctype =
+        fmd.schema[c + 1].converted_type.value_or(cudf::io::parquet::detail::UNKNOWN);
       EXPECT_TRUE(compare_binary(ci.min_values[0], stats.min_value, ptype, ctype) <= 0);
       EXPECT_TRUE(compare_binary(ci.max_values[0], stats.max_value, ptype, ctype) >= 0);
 
