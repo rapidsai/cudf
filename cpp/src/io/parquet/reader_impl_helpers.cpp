@@ -213,7 +213,7 @@ void metadata::sanitize_schema()
         // add a struct child and move this element's children to the struct
         schema_elem.converted_type  = LIST;
         schema_elem.repetition_type = OPTIONAL;
-        auto const struct_node_idx  = schema.size();
+        auto const struct_node_idx  = static_cast<size_type>(schema.size());
 
         SchemaElement struct_elem;
         struct_elem.name            = "struct_node";
