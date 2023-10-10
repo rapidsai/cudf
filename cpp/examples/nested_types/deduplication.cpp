@@ -18,6 +18,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/hashing.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/join.hpp>
@@ -25,6 +26,7 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <memory>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
@@ -74,6 +76,15 @@ void write_json(cudf::table_view tbl, cudf::io::table_metadata metadata, std::st
   cudf::io::write_json(options2);
 }
 
+void write_json(cudf::table_view tbl, std::string filepath)
+{
+  // write the data for inspection
+  auto sink_info = cudf::io::sink_info(filepath);
+  auto builder2  = cudf::io::json_writer_options::builder(sink_info, tbl).lines(true);
+  auto options2  = builder2.build();
+  cudf::io::write_json(options2);
+}
+
 std::unique_ptr<cudf::table> count_aggregate(cudf::table_view tbl)
 {
   // Get count for each key
@@ -115,6 +126,19 @@ std::unique_ptr<cudf::table> sort_keys(cudf::table_view tbl)
 {
   auto sort_order = cudf::sorted_order(cudf::table_view{{tbl.column(0)}});
   return cudf::gather(tbl, *sort_order);
+}
+
+std::unique_ptr<cudf::table> hash_keys(cudf::table_view tbl)
+{
+  auto col = cudf::hash(cudf::table_view{{tbl.column(0)}});
+  std::vector<std::unique_ptr<cudf::column>> col_v;
+  col_v.emplace_back(std::move(col));
+  return std::make_unique<cudf::table>(std::move(col_v));
+}
+
+std::unique_ptr<cudf::table> unique_keys(cudf::table_view tbl)
+{
+  return cudf::unique(tbl, {0}, cudf::duplicate_keep_option::KEEP_ANY);
 }
 
 /**
@@ -167,6 +191,18 @@ int main(int argc, char const** argv)
   auto sorted                               = sort_keys(combined->view());
   std::chrono::duration<double> sorted_time = std::chrono::steady_clock::now() - sorted_st;
   std::cout << "Wall time: " << sorted_time.count() << " seconds\n";
+
+  auto hashed_st                            = std::chrono::steady_clock::now();
+  auto hashed                               = hash_keys(sorted->view());
+  std::chrono::duration<double> hashed_time = std::chrono::steady_clock::now() - hashed_st;
+  std::cout << "Wall time: " << hashed_time.count() << " seconds\n";
+  write_json(hashed->view(), "hashed.json");
+
+  auto unique_st                            = std::chrono::steady_clock::now();
+  auto unique                               = unique_keys(sorted->view());
+  std::chrono::duration<double> unique_time = std::chrono::steady_clock::now() - unique_st;
+  std::cout << "Wall time: " << unique_time.count() << " seconds\n";
+  write_json(unique->view(), "unique.json");
 
   metadata.schema_info.emplace_back("count");
 
