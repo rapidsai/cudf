@@ -25,10 +25,10 @@ function(find_and_configure_kvikio VERSION)
     OPTIONS "KvikIO_BUILD_EXAMPLES OFF"
   )
 
-  if(KvikIO_BINARY_DIR)
-    include("${rapids-cmake-dir}/export/find_package_root.cmake")
-    rapids_export_find_package_root(BUILD KvikIO "${KvikIO_BINARY_DIR}" cudf-exports)
-  endif()
+  include("${rapids-cmake-dir}/export/find_package_root.cmake")
+  rapids_export_find_package_root(BUILD KvikIO "${KvikIO_BINARY_DIR}"
+    EXPORT_SET cudf-exports
+    CONDITION KvikIO_BINARY_DIR)
 
 endfunction()
 
