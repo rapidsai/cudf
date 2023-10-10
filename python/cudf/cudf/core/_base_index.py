@@ -1569,6 +1569,8 @@ class BaseIndex(Serializable):
                     (1, 2)],
                    names=['a', 'b'])
         """
+        if return_indexers is not False:
+            raise NotImplementedError("return_indexers is not implemented")
         self_is_multi = isinstance(self, cudf.MultiIndex)
         other_is_multi = isinstance(other, cudf.MultiIndex)
         if level is not None:
