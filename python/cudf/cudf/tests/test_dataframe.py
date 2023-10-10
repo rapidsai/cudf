@@ -4521,7 +4521,7 @@ def test_create_dataframe_column():
         np.eye(2),
         cupy.eye(2),
         None,
-        [1, 2, 3],
+        [[1, 0], [0, 1]],
         [cudf.Series([0, 1]), cudf.Series([1, 0])],
     ],
 )
@@ -4534,6 +4534,12 @@ def test_dataframe_columns_returns_rangeindex(data, columns):
         pytest.skip(f"{data=} and {columns=} not relevant.")
     result = cudf.DataFrame(data=data, columns=columns).columns
     expected = pd.RangeIndex(range(2))
+    assert_eq(result, expected)
+
+
+def test_dataframe_columns_returns_rangeindex_single_col():
+    result = cudf.DataFrame([1, 2, 3]).columns
+    expected = pd.RangeIndex(range(1))
     assert_eq(result, expected)
 
 
