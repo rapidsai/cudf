@@ -214,7 +214,7 @@ size_t CompactProtocolWriter::write(ColumnOrder const& co)
 {
   CompactProtocolFieldWriter c(*this);
   switch (co.type) {
-    case ColumnOrder::TYPE_ORDER: c.field_empty_struct(1); break;
+    case ColumnOrder::TYPE_ORDER: c.field_empty_struct(ColumnOrder::TYPE_ORDER); break;
     default: break;
   }
   return c.value();
