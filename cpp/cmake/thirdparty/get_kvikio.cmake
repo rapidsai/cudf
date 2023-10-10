@@ -26,9 +26,11 @@ function(find_and_configure_kvikio VERSION)
   )
 
   include("${rapids-cmake-dir}/export/find_package_root.cmake")
-  rapids_export_find_package_root(BUILD KvikIO "${KvikIO_BINARY_DIR}"
+  rapids_export_find_package_root(
+    BUILD KvikIO "${KvikIO_BINARY_DIR}"
     EXPORT_SET cudf-exports
-    CONDITION KvikIO_BINARY_DIR)
+    CONDITION KvikIO_BINARY_DIR
+  )
 
 endfunction()
 
