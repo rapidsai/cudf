@@ -26,7 +26,12 @@ from cudf.core import column
 from cudf.core._compat import PANDAS_GE_150
 from cudf.core.frame import Frame
 from cudf.core.index import BaseIndex, _lexsorted_equal_range, as_index
-from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate, _is_same_name
+from cudf.utils.utils import (
+    NotIterable,
+    _cudf_nvtx_annotate,
+    _external_only_api,
+    _is_same_name,
+)
 
 
 def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:
@@ -560,7 +565,14 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         data_output = "\n".join(lines)
         return output_prefix + data_output
 
+    @property
+    def _codes_frame(self):
+        if self._codes is None:
+            self._compute_levels_and_codes()
+        return self._codes
+
     @property  # type: ignore
+    @_external_only_api("Use ._codes_frame instead")
     @_cudf_nvtx_annotate
     def codes(self):
         """
@@ -570,11 +582,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         --------
         >>> import cudf
         >>> df = cudf.DataFrame({'a':[1, 2, 3], 'b':[10, 11, 12]})
-        >>> cudf.MultiIndex.from_frame(df)
-        MultiIndex([(1, 10),
-                    (2, 11),
-                    (3, 12)],
-                names=['a', 'b'])
         >>> midx = cudf.MultiIndex.from_frame(df)
         >>> midx
         MultiIndex([(1, 10),
@@ -582,14 +589,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                     (3, 12)],
                 names=['a', 'b'])
         >>> midx.codes
-           a  b
-        0  0  0
-        1  1  1
-        2  2  2
+        FrozenList([[0, 1, 2], [0, 1, 2]])
         """
-        if self._codes is None:
-            self._compute_levels_and_codes()
-        return self._codes
+        return pd.core.indexes.frozen.FrozenList(
+            col.values for col in self._codes_frame._columns
+        )
 
     def get_slice_bound(self, label, side, kind=None):
         raise NotImplementedError()
@@ -904,7 +908,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 result.names = index.names[size:]
             index = MultiIndex(
                 levels=index.levels[size:],
-                codes=index.codes.iloc[:, size:],
+                codes=index._codes_frame.iloc[:, size:],
                 names=index.names[size:],
             )
 
@@ -1028,8 +1032,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         if flatten:
             return result.to_pandas()[0]
 
-        if self._codes is not None:
-            result._codes = self._codes.take(index)
+        if self._codes_frame is not None:
+            result._codes = self._codes_frame.take(index)
         if self._levels is not None:
             result._levels = self._levels
         return result
@@ -1717,8 +1721,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         if self.levels:
             for level in self.levels:
                 usage += level.memory_usage(deep=deep)
-        if self.codes:
-            for col in self.codes._data.columns:
+        if self._codes_frame:
+            for col in self._codes_frame._data.columns:
                 usage += col.memory_usage
         return usage
 

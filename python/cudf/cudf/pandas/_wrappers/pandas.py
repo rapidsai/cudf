@@ -10,7 +10,6 @@
 # its affiliates is strictly prohibited.
 
 import sys
-from typing import Iterator
 
 import pandas as pd
 
@@ -150,25 +149,13 @@ Series = make_final_proxy_type(
 
 
 def Index__new__(cls, *args, **kwargs):
-    # Avoid consuming generators twice
-    # This is a "good enough" solution for this specific use case.
-    args = tuple(
-        list(arg) if isinstance(arg, Iterator) else arg for arg in args
-    )
-    kwargs = {
-        k: list(v) if isinstance(v, Iterator) else v for k, v in kwargs.items()
-    }
-    # Make the object
+    # Call fast/slow constructor
+    # This takes care of running __init__ as well, but must be paired
+    # with a removal of the defaulted __init__ that
+    # make_final_proxy_type provides.
     self, _ = _fast_slow_function_call(
-        lambda cls, *args, **kwargs: cls.__new__(cls, *args, **kwargs),
+        lambda cls, *args, **kwargs: cls(*args, **kwargs),
         cls,
-        *args,
-        **kwargs,
-    )
-    # Call init
-    _fast_slow_function_call(
-        lambda self, *args, **kwargs: self.__init__(*args, **kwargs),
-        self,
         *args,
         **kwargs,
     )
