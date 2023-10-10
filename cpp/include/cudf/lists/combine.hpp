@@ -57,6 +57,7 @@ enum class concatenate_null_policy { IGNORE, NULLIFY_OUTPUT_ROW };
  * @param input Table of lists to be concatenated.
  * @param null_policy The parameter to specify whether a null list element will be ignored from
  *        concatenation, or any concatenation involving a null element will result in a null list.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return A new column in which each row is a list resulted from concatenating all list elements in
  *         the corresponding row of the input table.
@@ -64,6 +65,7 @@ enum class concatenate_null_policy { IGNORE, NULLIFY_OUTPUT_ROW };
 std::unique_ptr<column> concatenate_rows(
   table_view const& input,
   concatenate_null_policy null_policy = concatenate_null_policy::IGNORE,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -86,6 +88,7 @@ std::unique_ptr<column> concatenate_rows(
  * @param input The lists column containing lists of list elements to concatenate.
  * @param null_policy The parameter to specify whether a null list element will be ignored from
  *        concatenation, or any concatenation involving a null element will result in a null list.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return A new column in which each row is a list resulted from concatenating all list elements in
  *         the corresponding row of the input lists column.
@@ -93,6 +96,7 @@ std::unique_ptr<column> concatenate_rows(
 std::unique_ptr<column> concatenate_list_elements(
   column_view const& input,
   concatenate_null_policy null_policy = concatenate_null_policy::IGNORE,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
