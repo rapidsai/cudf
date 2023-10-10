@@ -16,9 +16,9 @@
 
 #pragma once
 
-#include <cudf/types.hpp>
-
 #include "reader_impl_helpers.hpp"
+
+#include <cudf/types.hpp>
 
 namespace cudf::io::parquet::detail {
 
