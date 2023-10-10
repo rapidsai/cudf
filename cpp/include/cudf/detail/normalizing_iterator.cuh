@@ -205,7 +205,7 @@ struct base_normalator {
  private:
   struct integer_sizeof_fn {
     template <typename T, std::enable_if_t<not cudf::is_index_type<T>()>* = nullptr>
-    constexpr int operator()() const
+    CUDF_HOST_DEVICE constexpr std::size_t operator()() const
     {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("only integral types are supported");
@@ -214,7 +214,7 @@ struct base_normalator {
 #endif
     }
     template <typename T, std::enable_if_t<cudf::is_index_type<T>()>* = nullptr>
-    constexpr int operator()() const noexcept
+    CUDF_HOST_DEVICE constexpr std::size_t operator()() const noexcept
     {
       return sizeof(T);
     }
@@ -226,10 +226,10 @@ struct base_normalator {
    */
   explicit CUDF_HOST_DEVICE base_normalator(data_type dtype) : dtype_(dtype)
   {
-    width_ = type_dispatcher(dtype, integer_sizeof_fn{});
+    width_ = static_cast<int32_t>(type_dispatcher(dtype, integer_sizeof_fn{}));
   }
 
-  int width_;        /// integer type width = 1,2,4, or 8
+  int32_t width_;    /// integer type width = 1,2,4, or 8
   data_type dtype_;  /// for type-dispatcher calls
 };
 
