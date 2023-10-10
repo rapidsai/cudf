@@ -116,11 +116,11 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
 std::unique_ptr<column> segmented_gather(lists_column_view const& source_column,
                                          lists_column_view const& gather_map_list,
                                          out_of_bounds_policy bounds_policy,
+                                         rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::segmented_gather(
-    source_column, gather_map_list, bounds_policy, cudf::get_default_stream(), mr);
+  return detail::segmented_gather(source_column, gather_map_list, bounds_policy, stream, mr);
 }
 
 }  // namespace lists

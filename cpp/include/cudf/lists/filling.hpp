@@ -57,12 +57,14 @@ namespace cudf::lists {
  *
  * @param starts First values in the result sequences.
  * @param sizes Numbers of values in the result sequences.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return The result column containing generated sequences.
  */
 std::unique_ptr<column> sequences(
   column_view const& starts,
   column_view const& sizes,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -96,6 +98,7 @@ std::unique_ptr<column> sequences(
  * @param starts First values in the result sequences.
  * @param steps Increment values for the result sequences.
  * @param sizes Numbers of values in the result sequences.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return The result column containing generated sequences.
  */
@@ -103,6 +106,7 @@ std::unique_ptr<column> sequences(
   column_view const& starts,
   column_view const& steps,
   column_view const& sizes,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
