@@ -36,27 +36,27 @@ ConvertedType logical_type_to_converted_type(thrust::optional<LogicalType> const
     case LogicalType::DECIMAL: return DECIMAL;  // TODO use decimal scale/precision
     case LogicalType::DATE: return DATE;
     case LogicalType::TIME: {
-      if (logical->time_type->unit.type == TimeUnit::MILLIS) {
+      if (logical->is_time_millis()) {
         return TIME_MILLIS;
-      } else if (logical->time_type->unit.type == TimeUnit::MICROS) {
+      } else if (logical->is_time_micros()) {
         return TIME_MICROS;
       }
       break;
     }
     case LogicalType::TIMESTAMP: {
-      if (logical->timestamp_type->unit.type == TimeUnit::MILLIS) {
+      if (logical->is_timestamp_millis()) {
         return TIMESTAMP_MILLIS;
-      } else if (logical->timestamp_type->unit.type == TimeUnit::MICROS) {
+      } else if (logical->is_timestamp_micros()) {
         return TIMESTAMP_MICROS;
       }
       break;
     }
     case LogicalType::INTEGER:
-      switch (logical->int_type->bitWidth) {
-        case 8: return logical->int_type->isSigned ? INT_8 : UINT_8;
-        case 16: return logical->int_type->isSigned ? INT_16 : UINT_16;
-        case 32: return logical->int_type->isSigned ? INT_32 : UINT_32;
-        case 64: return logical->int_type->isSigned ? INT_64 : UINT_64;
+      switch (logical->bit_width()) {
+        case 8: return logical->is_signed() ? INT_8 : UINT_8;
+        case 16: return logical->is_signed() ? INT_16 : UINT_16;
+        case 32: return logical->is_signed() ? INT_32 : UINT_32;
+        case 64: return logical->is_signed() ? INT_64 : UINT_64;
         default: break;
       }
     case LogicalType::UNKNOWN: return NA;
@@ -87,9 +87,7 @@ type_id to_type_id(SchemaElement const& schema,
   // is superseded by 'logical' type whenever available.
   auto const inferred_converted_type = logical_type_to_converted_type(logical_type);
   if (inferred_converted_type != UNKNOWN) { converted_type = inferred_converted_type; }
-  if (inferred_converted_type == DECIMAL) {
-    decimal_precision = schema.logical_type->decimal_type->precision;
-  }
+  if (inferred_converted_type == DECIMAL) { decimal_precision = schema.logical_type->precision(); }
 
   switch (converted_type.value_or(UNKNOWN)) {
     case UINT_8: return type_id::UINT8;
