@@ -25,8 +25,7 @@ function(find_and_configure_libcudacxx)
   # Store where CMake can find our custom Thrust install
   include("${rapids-cmake-dir}/export/find_package_root.cmake")
   rapids_export_find_package_root(
-    INSTALL
-    libcudacxx
+    INSTALL libcudacxx
     [=[${CMAKE_CURRENT_LIST_DIR}/../../../include/libcudf/lib/rapids/cmake/libcudacxx]=]
     EXPORT_SET cudf-exports
     CONDITION libcudacxx_SOURCE_DIR
