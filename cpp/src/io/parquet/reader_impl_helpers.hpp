@@ -35,6 +35,23 @@
 namespace cudf::io::parquet::detail {
 
 /**
+ * @brief The row_group_info class
+ */
+struct row_group_info {
+  size_type index;  // row group index within a file. aggregate_reader_metadata::get_row_group() is
+                    // called with index and source_index
+  size_t start_row;
+  size_type source_index;  // file index.
+
+  row_group_info() = default;
+
+  row_group_info(size_type index, size_t start_row, size_type source_index)
+    : index{index}, start_row{start_row}, source_index{source_index}
+  {
+  }
+};
+
+/**
  * @brief Function that translates Parquet datatype to cuDF type enum
  */
 [[nodiscard]] type_id to_type_id(SchemaElement const& schema,
