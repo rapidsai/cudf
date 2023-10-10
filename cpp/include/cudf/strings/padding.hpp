@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,6 +51,7 @@ namespace strings {
  *        Default is pad right (left justify)
  * @param fill_char Single UTF-8 character to use for padding;
  *        Default is the space character
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column with padded strings
  */
@@ -59,6 +60,7 @@ std::unique_ptr<column> pad(
   size_type width,
   side_type side                      = side_type::RIGHT,
   std::string_view fill_char          = " ",
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -79,14 +81,16 @@ std::unique_ptr<column> pad(
  * r is now ['001234','-09876','+00.34','-342567', '0002+2']
  * @endcode
  *
- * @param input Strings instance for this operation.
- * @param width The minimum number of characters for each string.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New column of strings.
+ * @param input Strings instance for this operation
+ * @param width The minimum number of characters for each string
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New column of strings
  */
 std::unique_ptr<column> zfill(
   strings_column_view const& input,
   size_type width,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
