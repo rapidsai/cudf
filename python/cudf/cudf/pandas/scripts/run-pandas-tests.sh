@@ -92,7 +92,7 @@ EOF
     # Substitute `pandas.tests` with a relative import.
     # This will depend on the location of the test module relative to
     # the pandas-tests directory.
-    for hit in $(find . -iname *.py | xargs grep "pandas.tests" | cut -d ":" -f 1 | sort | uniq); do
+    for hit in $(find . -iname '*.py' | xargs grep "pandas.tests" | cut -d ":" -f 1 | sort | uniq); do
         # Get the relative path to the test module
         test_module=$(echo $hit | cut -d "/" -f 2-)
         # Get the number of directories to go up
