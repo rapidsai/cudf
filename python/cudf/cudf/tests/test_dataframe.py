@@ -4526,9 +4526,12 @@ def test_create_dataframe_column():
     ],
 )
 @pytest.mark.parametrize(
-    "columns", [None, range(2), pd.RangeIndex(2), cudf.RangeIndex(2)]
+    "columns",
+    [None, range(2), pd.RangeIndex(2), cudf.RangeIndex(2)],
 )
 def test_dataframe_columns_returns_rangeindex(data, columns):
+    if data is None and columns is None:
+        pytest.skip(f"{data=} and {columns=} not relevant.")
     result = cudf.DataFrame(data=data, columns=columns).columns
     expected = pd.RangeIndex(range(2))
     assert_eq(result, expected)

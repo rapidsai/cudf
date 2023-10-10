@@ -778,7 +778,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         if isinstance(columns, pd.Index)
                         else self._data._level_names
                     )
-                    self._data.rangeindex = True
+                    self._data.rangeindex = rangeindex
                 elif len(data) > 0 and isinstance(data[0], Series):
                     self._init_from_series_list(
                         data=data, columns=columns, index=index

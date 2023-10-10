@@ -275,6 +275,13 @@ class ColumnAccessor(abc.MutableMapping):
                 self.rangeindex
                 and cudf.api.types.infer_dtype(self.names) == "integer"
             ):
+                if len(self.names) == 1:
+                    start = self.names[0]
+                    end = start + 1
+                    diff = 1
+                    return pd.RangeIndex(
+                        start=start, stop=end, step=1, name=self.name
+                    )
                 uniques = cupy.unique(cupy.diff(cupy.array(self.names)))
                 if len(uniques) == 1 and uniques[0].get() != 0:
                     diff = uniques[0].get()
