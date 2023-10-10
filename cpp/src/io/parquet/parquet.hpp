@@ -18,6 +18,8 @@
 
 #include "parquet_common.hpp"
 
+#include <cudf/types.hpp>
+
 #include <thrust/optional.h>
 
 #include <cstdint>
@@ -152,8 +154,8 @@ struct SchemaElement {
   // The following fields are filled in later during schema initialization
   int max_definition_level = 0;
   int max_repetition_level = 0;
-  int parent_idx           = 0;
-  std::vector<size_t> children_idx;
+  size_type parent_idx     = 0;
+  std::vector<size_type> children_idx;
 
   bool operator==(SchemaElement const& other) const
   {
