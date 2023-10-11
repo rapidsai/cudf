@@ -91,10 +91,10 @@ def factorize(values, sort=False, use_na_sentinel=True, size_hint=None):
 
     if use_na_sentinel:
         na_sentinel = Scalar(-1)
-        cats = values._column.dropna()
+        cats = values.dropna()
     else:
         na_sentinel = Scalar(None, dtype=values.dtype)
-        cats = values._column
+        cats = values
 
     cats = cats.unique().astype(values.dtype)
 
