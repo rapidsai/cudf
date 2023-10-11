@@ -83,14 +83,17 @@ size_t CompactProtocolWriter::write(LogicalType const& logical_type)
 {
   CompactProtocolFieldWriter c(*this);
   switch (logical_type.type) {
-    case LogicalType::STRING: c.field_empty_struct(LogicalType::STRING); break;
-    case LogicalType::MAP: c.field_empty_struct(LogicalType::MAP); break;
-    case LogicalType::LIST: c.field_empty_struct(LogicalType::LIST); break;
-    case LogicalType::ENUM: c.field_empty_struct(LogicalType::ENUM); break;
+    case LogicalType::STRING:
+    case LogicalType::MAP:
+    case LogicalType::LIST:
+    case LogicalType::ENUM:
+    case LogicalType::DATE:
+    case LogicalType::UNKNOWN:
+    case LogicalType::JSON:
+    case LogicalType::BSON: c.field_empty_struct(logical_type.type); break;
     case LogicalType::DECIMAL:
       c.field_struct(LogicalType::DECIMAL, logical_type.decimal_type.value());
       break;
-    case LogicalType::DATE: c.field_empty_struct(LogicalType::DATE); break;
     case LogicalType::TIME:
       c.field_struct(LogicalType::TIME, logical_type.time_type.value());
       break;
@@ -100,9 +103,6 @@ size_t CompactProtocolWriter::write(LogicalType const& logical_type)
     case LogicalType::INTEGER:
       c.field_struct(LogicalType::INTEGER, logical_type.int_type.value());
       break;
-    case LogicalType::UNKNOWN: c.field_empty_struct(LogicalType::UNKNOWN); break;
-    case LogicalType::JSON: c.field_empty_struct(LogicalType::JSON); break;
-    case LogicalType::BSON: c.field_empty_struct(LogicalType::BSON); break;
     default: break;
   }
   return c.value();

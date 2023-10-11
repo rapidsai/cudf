@@ -95,6 +95,12 @@ struct LogicalType {
   thrust::optional<TimestampType> timestamp_type;
   thrust::optional<IntType> int_type;
 
+  LogicalType(Type tp = UNDEFINED) : type(tp) {}
+  LogicalType(DecimalType&& dt) : type(DECIMAL), decimal_type(dt) {}
+  LogicalType(TimeType&& tt) : type(TIME), time_type(tt) {}
+  LogicalType(TimestampType&& tst) : type(TIMESTAMP), timestamp_type(tst) {}
+  LogicalType(IntType&& it) : type(INTEGER), int_type(it) {}
+
   constexpr bool is_time_millis() const
   {
     return type == TIME and time_type->unit.type == TimeUnit::MILLIS;

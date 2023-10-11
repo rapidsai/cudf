@@ -290,21 +290,19 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, int8_t>, void> operator()()
   {
-    col_schema.type                   = Type::INT32;
-    col_schema.converted_type         = ConvertedType::INT_8;
-    col_schema.stats_dtype            = statistics_dtype::dtype_int8;
-    col_schema.logical_type           = LogicalType{LogicalType::INTEGER};
-    col_schema.logical_type->int_type = IntType{8, true};
+    col_schema.type           = Type::INT32;
+    col_schema.converted_type = ConvertedType::INT_8;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int8;
+    col_schema.logical_type   = LogicalType{IntType{8, true}};
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, int16_t>, void> operator()()
   {
-    col_schema.type                   = Type::INT32;
-    col_schema.converted_type         = ConvertedType::INT_16;
-    col_schema.stats_dtype            = statistics_dtype::dtype_int16;
-    col_schema.logical_type           = LogicalType{LogicalType::INTEGER};
-    col_schema.logical_type->int_type = IntType{16, true};
+    col_schema.type           = Type::INT32;
+    col_schema.converted_type = ConvertedType::INT_16;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int16;
+    col_schema.logical_type   = LogicalType{IntType{16, true}};
   }
 
   template <typename T>
@@ -326,41 +324,37 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, uint8_t>, void> operator()()
   {
-    col_schema.type                   = Type::INT32;
-    col_schema.converted_type         = ConvertedType::UINT_8;
-    col_schema.stats_dtype            = statistics_dtype::dtype_int8;
-    col_schema.logical_type           = LogicalType{LogicalType::INTEGER};
-    col_schema.logical_type->int_type = IntType{8, false};
+    col_schema.type           = Type::INT32;
+    col_schema.converted_type = ConvertedType::UINT_8;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int8;
+    col_schema.logical_type   = LogicalType{IntType{8, false}};
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, uint16_t>, void> operator()()
   {
-    col_schema.type                   = Type::INT32;
-    col_schema.converted_type         = ConvertedType::UINT_16;
-    col_schema.stats_dtype            = statistics_dtype::dtype_int16;
-    col_schema.logical_type           = LogicalType{LogicalType::INTEGER};
-    col_schema.logical_type->int_type = IntType{16, false};
+    col_schema.type           = Type::INT32;
+    col_schema.converted_type = ConvertedType::UINT_16;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int16;
+    col_schema.logical_type   = LogicalType{IntType{16, false}};
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, uint32_t>, void> operator()()
   {
-    col_schema.type                   = Type::INT32;
-    col_schema.converted_type         = ConvertedType::UINT_32;
-    col_schema.stats_dtype            = statistics_dtype::dtype_int32;
-    col_schema.logical_type           = LogicalType{LogicalType::INTEGER};
-    col_schema.logical_type->int_type = IntType{32, false};
+    col_schema.type           = Type::INT32;
+    col_schema.converted_type = ConvertedType::UINT_32;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int32;
+    col_schema.logical_type   = LogicalType{IntType{32, false}};
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, uint64_t>, void> operator()()
   {
-    col_schema.type                   = Type::INT64;
-    col_schema.converted_type         = ConvertedType::UINT_64;
-    col_schema.stats_dtype            = statistics_dtype::dtype_int64;
-    col_schema.logical_type           = LogicalType{LogicalType::INTEGER};
-    col_schema.logical_type->int_type = IntType{64, false};
+    col_schema.type           = Type::INT64;
+    col_schema.converted_type = ConvertedType::UINT_64;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int64;
+    col_schema.logical_type   = LogicalType{IntType{64, false}};
   }
 
   template <typename T>
@@ -409,9 +403,8 @@ struct leaf_schema_fn {
     col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
     col_schema.ts_scale    = 1000;
     if (not timestamp_is_int96) {
-      col_schema.converted_type               = ConvertedType::TIMESTAMP_MILLIS;
-      col_schema.logical_type                 = LogicalType{LogicalType::TIMESTAMP};
-      col_schema.logical_type->timestamp_type = TimestampType{false, TimeUnit::MILLIS};
+      col_schema.converted_type = ConvertedType::TIMESTAMP_MILLIS;
+      col_schema.logical_type   = LogicalType{TimestampType{false, TimeUnit::MILLIS}};
     }
   }
 
@@ -421,9 +414,8 @@ struct leaf_schema_fn {
     col_schema.type        = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
     if (not timestamp_is_int96) {
-      col_schema.converted_type               = ConvertedType::TIMESTAMP_MILLIS;
-      col_schema.logical_type                 = LogicalType{LogicalType::TIMESTAMP};
-      col_schema.logical_type->timestamp_type = TimestampType{false, TimeUnit::MILLIS};
+      col_schema.converted_type = ConvertedType::TIMESTAMP_MILLIS;
+      col_schema.logical_type   = LogicalType{TimestampType{false, TimeUnit::MILLIS}};
     }
   }
 
@@ -433,9 +425,8 @@ struct leaf_schema_fn {
     col_schema.type        = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
     if (not timestamp_is_int96) {
-      col_schema.converted_type               = ConvertedType::TIMESTAMP_MICROS;
-      col_schema.logical_type                 = LogicalType{LogicalType::TIMESTAMP};
-      col_schema.logical_type->timestamp_type = TimestampType{false, TimeUnit::MICROS};
+      col_schema.converted_type = ConvertedType::TIMESTAMP_MICROS;
+      col_schema.logical_type   = LogicalType{TimestampType{false, TimeUnit::MICROS}};
     }
   }
 
@@ -450,8 +441,7 @@ struct leaf_schema_fn {
     }
     // set logical type if it's not int96
     else {
-      col_schema.logical_type                 = LogicalType{LogicalType::TIMESTAMP};
-      col_schema.logical_type->timestamp_type = TimestampType{false, TimeUnit::NANOS};
+      col_schema.logical_type = LogicalType{TimestampType{false, TimeUnit::NANOS}};
     }
   }
 
@@ -459,77 +449,69 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_D>, void> operator()()
   {
-    col_schema.type                    = Type::INT32;
-    col_schema.converted_type          = ConvertedType::TIME_MILLIS;
-    col_schema.stats_dtype             = statistics_dtype::dtype_int32;
-    col_schema.ts_scale                = 24 * 60 * 60 * 1000;
-    col_schema.logical_type            = LogicalType{LogicalType::TIME};
-    col_schema.logical_type->time_type = TimeType{false, TimeUnit::MILLIS};
+    col_schema.type           = Type::INT32;
+    col_schema.converted_type = ConvertedType::TIME_MILLIS;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int32;
+    col_schema.ts_scale       = 24 * 60 * 60 * 1000;
+    col_schema.logical_type   = LogicalType{TimeType{false, TimeUnit::MILLIS}};
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_s>, void> operator()()
   {
-    col_schema.type                    = Type::INT32;
-    col_schema.converted_type          = ConvertedType::TIME_MILLIS;
-    col_schema.stats_dtype             = statistics_dtype::dtype_int32;
-    col_schema.ts_scale                = 1000;
-    col_schema.logical_type            = LogicalType{LogicalType::TIME};
-    col_schema.logical_type->time_type = TimeType{false, TimeUnit::MILLIS};
+    col_schema.type           = Type::INT32;
+    col_schema.converted_type = ConvertedType::TIME_MILLIS;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int32;
+    col_schema.ts_scale       = 1000;
+    col_schema.logical_type   = LogicalType{TimeType{false, TimeUnit::MILLIS}};
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_ms>, void> operator()()
   {
-    col_schema.type                    = Type::INT32;
-    col_schema.converted_type          = ConvertedType::TIME_MILLIS;
-    col_schema.stats_dtype             = statistics_dtype::dtype_int32;
-    col_schema.logical_type            = LogicalType{LogicalType::TIME};
-    col_schema.logical_type->time_type = TimeType{false, TimeUnit::MILLIS};
+    col_schema.type           = Type::INT32;
+    col_schema.converted_type = ConvertedType::TIME_MILLIS;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int32;
+    col_schema.logical_type   = LogicalType{TimeType{false, TimeUnit::MILLIS}};
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_us>, void> operator()()
   {
-    col_schema.type                    = Type::INT64;
-    col_schema.converted_type          = ConvertedType::TIME_MICROS;
-    col_schema.stats_dtype             = statistics_dtype::dtype_int64;
-    col_schema.logical_type            = LogicalType{LogicalType::TIME};
-    col_schema.logical_type->time_type = TimeType{false, TimeUnit::MICROS};
+    col_schema.type           = Type::INT64;
+    col_schema.converted_type = ConvertedType::TIME_MICROS;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int64;
+    col_schema.logical_type   = LogicalType{TimeType{false, TimeUnit::MICROS}};
   }
 
   //  unsupported outside cudf for parquet 1.0.
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_ns>, void> operator()()
   {
-    col_schema.type                    = Type::INT64;
-    col_schema.stats_dtype             = statistics_dtype::dtype_int64;
-    col_schema.logical_type            = LogicalType{LogicalType::TIME};
-    col_schema.logical_type->time_type = TimeType{false, TimeUnit::NANOS};
+    col_schema.type         = Type::INT64;
+    col_schema.stats_dtype  = statistics_dtype::dtype_int64;
+    col_schema.logical_type = LogicalType{TimeType{false, TimeUnit::NANOS}};
   }
 
   template <typename T>
   std::enable_if_t<cudf::is_fixed_point<T>(), void> operator()()
   {
     if (std::is_same_v<T, numeric::decimal32>) {
-      col_schema.type                       = Type::INT32;
-      col_schema.stats_dtype                = statistics_dtype::dtype_int32;
-      col_schema.decimal_precision          = MAX_DECIMAL32_PRECISION;
-      col_schema.logical_type               = LogicalType{LogicalType::DECIMAL};
-      col_schema.logical_type->decimal_type = DecimalType{0, MAX_DECIMAL32_PRECISION};
+      col_schema.type              = Type::INT32;
+      col_schema.stats_dtype       = statistics_dtype::dtype_int32;
+      col_schema.decimal_precision = MAX_DECIMAL32_PRECISION;
+      col_schema.logical_type      = LogicalType{DecimalType{0, MAX_DECIMAL32_PRECISION}};
     } else if (std::is_same_v<T, numeric::decimal64>) {
-      col_schema.type                       = Type::INT64;
-      col_schema.stats_dtype                = statistics_dtype::dtype_decimal64;
-      col_schema.decimal_precision          = MAX_DECIMAL64_PRECISION;
-      col_schema.logical_type               = LogicalType{LogicalType::DECIMAL};
-      col_schema.logical_type->decimal_type = DecimalType{0, MAX_DECIMAL64_PRECISION};
+      col_schema.type              = Type::INT64;
+      col_schema.stats_dtype       = statistics_dtype::dtype_decimal64;
+      col_schema.decimal_precision = MAX_DECIMAL64_PRECISION;
+      col_schema.logical_type      = LogicalType{DecimalType{0, MAX_DECIMAL64_PRECISION}};
     } else if (std::is_same_v<T, numeric::decimal128>) {
-      col_schema.type                       = Type::FIXED_LEN_BYTE_ARRAY;
-      col_schema.type_length                = sizeof(__int128_t);
-      col_schema.stats_dtype                = statistics_dtype::dtype_decimal128;
-      col_schema.decimal_precision          = MAX_DECIMAL128_PRECISION;
-      col_schema.logical_type               = LogicalType{LogicalType::DECIMAL};
-      col_schema.logical_type->decimal_type = DecimalType{0, MAX_DECIMAL128_PRECISION};
+      col_schema.type              = Type::FIXED_LEN_BYTE_ARRAY;
+      col_schema.type_length       = sizeof(__int128_t);
+      col_schema.stats_dtype       = statistics_dtype::dtype_decimal128;
+      col_schema.decimal_precision = MAX_DECIMAL128_PRECISION;
+      col_schema.logical_type      = LogicalType{DecimalType{0, MAX_DECIMAL128_PRECISION}};
     } else {
       CUDF_FAIL("Unsupported fixed point type for parquet writer");
     }
