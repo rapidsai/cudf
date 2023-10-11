@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,6 +70,40 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ParquetChunkedReader_create(
                             cudf::io::source_info(reinterpret_cast<char *>(buffer),
                                                   static_cast<std::size_t>(buffer_length)) :
                             cudf::io::source_info(filename.get());
+
+    auto opts_builder = cudf::io::parquet_reader_options::builder(source);
+    if (n_filter_col_names.size() > 0) {
+      opts_builder = opts_builder.columns(n_filter_col_names.as_cpp_vector());
+    }
+    auto const read_opts = opts_builder.convert_strings_to_categories(false)
+                               .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
+                               .build();
+
+    return reinterpret_cast<jlong>(new cudf::io::chunked_parquet_reader(
+        static_cast<std::size_t>(chunk_read_limit), read_opts));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ParquetChunkedReader_createWithDataSource(
+    JNIEnv *env, jclass, jlong chunk_read_limit, jobjectArray filter_col_names,
+    jbooleanArray j_col_binary_read, jint unit, jlong ds_handle) {
+  JNI_NULL_CHECK(env, j_col_binary_read, "Null col_binary_read", 0);
+  JNI_NULL_CHECK(env, ds_handle, "Null DataSouurce", 0);
+
+  try {
+    cudf::jni::auto_set_device(env);
+
+    cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
+
+    // TODO: This variable is unused now, but we still don't know what to do with it yet.
+    // As such, it needs to stay here for a little more time before we decide to use it again,
+    // or remove it completely.
+    cudf::jni::native_jbooleanArray n_col_binary_read(env, j_col_binary_read);
+    (void)n_col_binary_read;
+
+    auto ds = reinterpret_cast<cudf::io::datasource *>(ds_handle);
+    cudf::io::source_info source{ds};
 
     auto opts_builder = cudf::io::parquet_reader_options::builder(source);
     if (n_filter_col_names.size() > 0) {
