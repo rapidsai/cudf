@@ -2054,3 +2054,16 @@ def test_multiindex_union_error():
         lfunc_args_and_kwargs=(["a"],),
         rfunc_args_and_kwargs=(["b"],),
     )
+
+
+@pytest.mark.parametrize("idx_get", [(0, 0), (0, 1), (1, 0), (1, 1)])
+@pytest.mark.parametrize("cols_get", [0, 1, [0, 1], [1, 0], [1], [0]])
+def test_multiindex_loc_scalar(idx_get, cols_get):
+    idx = cudf.MultiIndex.from_tuples([(0, 0), (0, 1), (1, 0), (1, 1)])
+    df = cudf.DataFrame({0: range(4), 1: range(10, 50, 10)}, index=idx)
+    pdf = df.to_pandas()
+
+    actual = df.loc[idx_get, cols_get]
+    expected = pdf.loc[idx_get, cols_get]
+
+    assert_eq(actual, expected)
