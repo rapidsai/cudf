@@ -134,5 +134,13 @@ void auto_set_device(JNIEnv *env);
  */
 void device_memset_async(JNIEnv *env, rmm::device_buffer &buf, char value);
 
+//
+// DataSource APIs
+//
+
+bool cache_data_source_jni(JNIEnv *env);
+
+void release_data_source_jni(JNIEnv *env);
+
 } // namespace jni
 } // namespace cudf
