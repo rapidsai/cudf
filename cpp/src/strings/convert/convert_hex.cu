@@ -107,12 +107,12 @@ struct dispatch_hex_to_integers_fn {
                       d_results,
                       hex_to_integer_fn<IntegerType>{strings_column});
   }
-  // non-integral types throw an exception
+  // non-integer types throw an exception
   template <typename T, typename... Args>
   std::enable_if_t<not std::is_integral_v<T> or std::is_same_v<T, bool>, void> operator()(
     Args&&...) const
   {
-    CUDF_FAIL("Output for hex_to_integers must be an integral type.");
+    CUDF_FAIL("Output for hex_to_integers must be an integer type.");
   }
 };
 
@@ -192,12 +192,12 @@ struct dispatch_integers_to_hex_fn {
                                input.null_count(),
                                cudf::detail::copy_bitmask(input, stream, mr));
   }
-  // non-integral types throw an exception
+  // non-integer types throw an exception
   template <typename T, typename... Args>
   std::enable_if_t<not std::is_integral_v<T> or std::is_same_v<T, bool>, std::unique_ptr<column>>
   operator()(Args...) const
   {
-    CUDF_FAIL("integers_to_hex only supports integral type columns");
+    CUDF_FAIL("integers_to_hex only supports integer type columns");
   }
 };
 
