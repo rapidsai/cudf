@@ -41,6 +41,7 @@ from pandas.core.resample import (  # isort: skip
     Resampler as pd_Resampler,
     TimeGrouper as pd_TimeGrouper,
 )
+from pandas.io.formats.style import Styler as pd_Styler  # isort: skip
 
 
 generate_numpy_wrappers()
@@ -682,6 +683,14 @@ ExcelWriter = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+Styler = make_final_proxy_type(
+    "Styler",
+    _Unusable,
+    pd_Styler,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
 )
 
 _eval_func = _FunctionProxy(_Unusable(), pd.eval)
