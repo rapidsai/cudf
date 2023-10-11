@@ -132,7 +132,7 @@ TEST_F(StringsConvertTest, URLs)
   cudf::strings::url_decode(values->view(), cudf::test::get_default_stream());
 }
 
-TEST_F(StringsConvertTest, DISABLED_ListsFormat)  // depends on PR 14248
+TEST_F(StringsConvertTest, ListsFormat)
 {
   using STR_LISTS = cudf::test::lists_column_wrapper<cudf::string_view>;
   auto const input =
