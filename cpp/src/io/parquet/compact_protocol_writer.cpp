@@ -16,6 +16,8 @@
 
 #include "compact_protocol_writer.hpp"
 
+#include <cudf/utilities/error.hpp>
+
 namespace cudf::io::parquet::detail {
 
 /**
@@ -103,7 +105,7 @@ size_t CompactProtocolWriter::write(LogicalType const& logical_type)
     case LogicalType::INTEGER:
       c.field_struct(LogicalType::INTEGER, logical_type.int_type.value());
       break;
-    default: break;
+    default: CUDF_FAIL("Trying to write invalid LogicalType " + std::to_string(logical_type.type));
   }
   return c.value();
 }
