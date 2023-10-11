@@ -49,10 +49,10 @@ size_t CompactProtocolWriter::write(TimeUnit const& time_unit)
 {
   CompactProtocolFieldWriter c(*this);
   switch (time_unit.type) {
-    case TimeUnit::MILLIS: c.field_empty_struct(TimeUnit::MILLIS); break;
-    case TimeUnit::MICROS: c.field_empty_struct(TimeUnit::MICROS); break;
-    case TimeUnit::NANOS: c.field_empty_struct(TimeUnit::NANOS); break;
-    default: break;
+    case TimeUnit::MILLIS:
+    case TimeUnit::MICROS:
+    case TimeUnit::NANOS: c.field_empty_struct(time_unit.type); break;
+    default: CUDF_FAIL("Trying to write an invalid TimeUnit " + std::to_string(time_unit.type));
   }
   return c.value();
 }
@@ -105,7 +105,8 @@ size_t CompactProtocolWriter::write(LogicalType const& logical_type)
     case LogicalType::INTEGER:
       c.field_struct(LogicalType::INTEGER, logical_type.int_type.value());
       break;
-    default: CUDF_FAIL("Trying to write invalid LogicalType " + std::to_string(logical_type.type));
+    default:
+      CUDF_FAIL("Trying to write an invalid LogicalType " + std::to_string(logical_type.type));
   }
   return c.value();
 }
@@ -216,8 +217,8 @@ size_t CompactProtocolWriter::write(ColumnOrder const& co)
 {
   CompactProtocolFieldWriter c(*this);
   switch (co.type) {
-    case ColumnOrder::TYPE_ORDER: c.field_empty_struct(ColumnOrder::TYPE_ORDER); break;
-    default: break;
+    case ColumnOrder::TYPE_ORDER: c.field_empty_struct(co.type); break;
+    default: CUDF_FAIL("Trying to write an invalid ColumnOrder " + std::to_string(co.type));
   }
   return c.value();
 }
