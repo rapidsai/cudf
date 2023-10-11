@@ -135,6 +135,7 @@ add_library(
   src/ColumnViewJni.cu
   src/CompiledExpression.cpp
   src/ContiguousTableJni.cpp
+  src/DataSourceHelperJni.cpp
   src/HashJoinJni.cpp
   src/HostMemoryBufferNativeUtilsJni.cpp
   src/NvcompJni.cpp
