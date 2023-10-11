@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/default_stream.hpp>
+
 #include <cudf/strings/convert/convert_booleans.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/convert/convert_durations.hpp>
@@ -23,10 +27,6 @@
 #include <cudf/strings/convert/convert_ipv4.hpp>
 #include <cudf/strings/convert/convert_lists.hpp>
 #include <cudf/strings/convert/convert_urls.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/default_stream.hpp>
 
 #include <string>
 
