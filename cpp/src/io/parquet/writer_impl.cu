@@ -405,12 +405,10 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_s>, void> operator()()
   {
-    col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
-    col_schema.converted_type =
-      (timestamp_is_int96) ? ConvertedType::UNKNOWN : ConvertedType::TIMESTAMP_MILLIS;
-    col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
-    col_schema.ts_scale    = 1000;
+    col_schema.type     = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
+    col_schema.ts_scale = 1000;
     if (not timestamp_is_int96) {
+      col_schema.converted_type               = ConvertedType::TIMESTAMP_MILLIS;
       col_schema.logical_type                 = LogicalType{LogicalType::TIMESTAMP};
       col_schema.logical_type->timestamp_type = TimestampType{false, TimeUnit::MILLIS};
     }
@@ -419,11 +417,10 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_ms>, void> operator()()
   {
-    col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
-    col_schema.converted_type =
-      (timestamp_is_int96) ? ConvertedType::UNKNOWN : ConvertedType::TIMESTAMP_MILLIS;
+    col_schema.type        = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
     if (not timestamp_is_int96) {
+      col_schema.converted_type               = ConvertedType::TIMESTAMP_MILLIS;
       col_schema.logical_type                 = LogicalType{LogicalType::TIMESTAMP};
       col_schema.logical_type->timestamp_type = TimestampType{false, TimeUnit::MILLIS};
     }
@@ -432,11 +429,10 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_us>, void> operator()()
   {
-    col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
-    col_schema.converted_type =
-      (timestamp_is_int96) ? ConvertedType::UNKNOWN : ConvertedType::TIMESTAMP_MICROS;
+    col_schema.type        = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
     if (not timestamp_is_int96) {
+      col_schema.converted_type               = ConvertedType::TIMESTAMP_MICROS;
       col_schema.logical_type                 = LogicalType{LogicalType::TIMESTAMP};
       col_schema.logical_type->timestamp_type = TimestampType{false, TimeUnit::MICROS};
     }
@@ -446,7 +442,7 @@ struct leaf_schema_fn {
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_ns>, void> operator()()
   {
     col_schema.type           = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
-    col_schema.converted_type = ConvertedType::UNKNOWN;
+    col_schema.converted_type = thrust::nullopt;
     col_schema.stats_dtype    = statistics_dtype::dtype_timestamp64;
     if (timestamp_is_int96) {
       col_schema.ts_scale = -1000;  // negative value indicates division by absolute value
@@ -632,7 +628,7 @@ std::vector<schema_tree_node> construct_schema_tree(
 
         schema_tree_node col_schema{};
         col_schema.type            = Type::BYTE_ARRAY;
-        col_schema.converted_type  = ConvertedType::UNKNOWN;
+        col_schema.converted_type  = thrust::nullopt;
         col_schema.stats_dtype     = statistics_dtype::dtype_byte_array;
         col_schema.repetition_type = col_nullable ? OPTIONAL : REQUIRED;
         col_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
