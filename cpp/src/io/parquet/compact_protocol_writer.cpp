@@ -16,9 +16,7 @@
 
 #include "compact_protocol_writer.hpp"
 
-namespace cudf {
-namespace io {
-namespace parquet {
+namespace cudf::io::parquet::detail {
 
 /**
  * @brief Parquet CompactProtocolWriter class
@@ -197,12 +195,12 @@ size_t CompactProtocolWriter::write(ColumnChunkMetaData const& s)
 size_t CompactProtocolWriter::write(Statistics const& s)
 {
   CompactProtocolFieldWriter c(*this);
-  if (not s.max.empty()) { c.field_binary(1, s.max); }
-  if (not s.min.empty()) { c.field_binary(2, s.min); }
-  if (s.null_count != -1) { c.field_int(3, s.null_count); }
-  if (s.distinct_count != -1) { c.field_int(4, s.distinct_count); }
-  if (not s.max_value.empty()) { c.field_binary(5, s.max_value); }
-  if (not s.min_value.empty()) { c.field_binary(6, s.min_value); }
+  if (s.max.has_value()) { c.field_binary(1, s.max.value()); }
+  if (s.min.has_value()) { c.field_binary(2, s.min.value()); }
+  if (s.null_count.has_value()) { c.field_int(3, s.null_count.value()); }
+  if (s.distinct_count.has_value()) { c.field_int(4, s.distinct_count.value()); }
+  if (s.max_value.has_value()) { c.field_binary(5, s.max_value.value()); }
+  if (s.min_value.has_value()) { c.field_binary(6, s.min_value.value()); }
   return c.value();
 }
 
@@ -391,6 +389,4 @@ inline void CompactProtocolFieldWriter::set_current_field(int const& field)
   current_field_value = field;
 }
 
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

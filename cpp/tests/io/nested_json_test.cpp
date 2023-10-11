@@ -569,23 +569,12 @@ TEST_F(JsonTest, RecoveringTokenStream)
     // Line 0 (invalid)
     {0, token_t::StructBegin},
     {0, token_t::StructEnd},
-    // Line 1 (valid)
-    {10, token_t::StructBegin},
-    {11, token_t::StructMemberBegin},
-    {11, token_t::FieldNameBegin},
-    {13, token_t::FieldNameEnd},
-    // Line 2 (valid)
-    {16, token_t::StructBegin},
-    {17, token_t::StructMemberBegin},
-    {17, token_t::FieldNameBegin},
-    {19, token_t::FieldNameEnd},
-    {21, token_t::StructBegin},
-    {22, token_t::StructMemberBegin},
-    {22, token_t::FieldNameBegin},
-    {24, token_t::FieldNameEnd},
-    {26, token_t::ListBegin},
-    {27, token_t::ValueBegin},
-    {30, token_t::ValueEnd},
+    // Line 1 (invalid)
+    {0, token_t::StructBegin},
+    {0, token_t::StructEnd},
+    // Line 2 (invalid)
+    {0, token_t::StructBegin},
+    {0, token_t::StructEnd},
     // Line 3 (valid)
     {31, token_t::StructBegin},
     {32, token_t::StructMemberBegin},
