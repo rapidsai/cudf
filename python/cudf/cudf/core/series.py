@@ -305,7 +305,28 @@ class _SeriesLocIndexer(_FrameIndexer):
                 and not isinstance(self._frame.index, cudf.MultiIndex)
                 and is_scalar(value)
             ):
-                _append_new_row_inplace(self._frame.index._values, key)
+                # TODO: Modifying index in place is bad because
+                # our index are immutable, but columns are not (which
+                # means our index are mutable with internal APIs).
+                # Get rid of the deep copy once columns too are
+                # immutable.
+                idx_copy = self._frame._index.copy(deep=True)
+                if (
+                    isinstance(idx_copy, cudf.RangeIndex)
+                    and isinstance(key, int)
+                    and (key == idx_copy[-1] + idx_copy.step)
+                ):
+                    idx_copy = cudf.RangeIndex(
+                        start=idx_copy.start,
+                        stop=idx_copy.stop + idx_copy.step,
+                        step=idx_copy.step,
+                        name=idx_copy.name,
+                    )
+                else:
+                    if isinstance(idx_copy, cudf.RangeIndex):
+                        idx_copy = idx_copy._as_int_index()
+                    _append_new_row_inplace(idx_copy._values, key)
+                self._frame._index = idx_copy
                 _append_new_row_inplace(self._frame._column, value)
                 return
             else:

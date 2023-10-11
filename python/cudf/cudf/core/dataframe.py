@@ -278,7 +278,15 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     row_arg = (arg,)
                 else:
                     row_arg = arg
-                return columns_df.index._get_row_major(columns_df, row_arg)
+                result = columns_df.index._get_row_major(columns_df, row_arg)
+                if (
+                    len(result) == 1
+                    and isinstance(arg, tuple)
+                    and len(arg) > 1
+                    and is_scalar(arg[1])
+                ):
+                    return result._data.columns[0].element_indexing(0)
+                return result
         else:
             if isinstance(arg[0], slice):
                 out = _get_label_range_or_mask(
@@ -680,16 +688,23 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if isinstance(data, pd.Series):
                 data = cudf.Series.from_pandas(data, nan_as_null=nan_as_null)
 
-            if (
-                columns is not None
-                and data.name not in columns
-                and len(data) != len(columns)
-            ):
-                raise ValueError(
-                    f"Length of values ({len(data)}) does not "
-                    f"match length of columns ({len(columns)})"
-                )
-            name = data.name or 0
+            # Series.name is not None and Series.name in columns
+            #   -> align
+            # Series.name is not None and Series.name not in columns
+            #   -> return empty DataFrame
+            # Series.name is None and no columns
+            #   -> return 1 column DataFrame
+            # Series.name is None and columns
+            #   -> return 1 column DataFrame if len(columns) in {0, 1}
+            if data.name is None and columns is not None:
+                if len(columns) > 1:
+                    raise ValueError(
+                        "Length of columns must be less than 2 if "
+                        f"{type(data).__name__}.name is None."
+                    )
+                name = columns[0]
+            else:
+                name = data.name or 0
             self._init_from_dict_like(
                 {name: data},
                 index=index,
