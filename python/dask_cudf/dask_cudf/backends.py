@@ -20,11 +20,14 @@ from dask.dataframe.core import get_parallel_type, meta_nonempty
 from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
     concat_dispatch,
+    from_pyarrow_table_dispatch,
     group_split_dispatch,
     grouper_dispatch,
     hash_object_dispatch,
     is_categorical_dtype_dispatch,
     make_meta_dispatch,
+    pyarrow_schema_dispatch,
+    to_pyarrow_table_dispatch,
     tolist_dispatch,
     union_categoricals_dispatch,
 )
@@ -318,16 +321,6 @@ def get_grouper_cudf(obj):
 
 
 try:
-    from dask.dataframe.dispatch import pyarrow_schema_dispatch
-
-    @pyarrow_schema_dispatch.register((cudf.DataFrame,))
-    def get_pyarrow_schema_cudf(obj):
-        return obj.to_arrow().schema
-
-except ImportError:
-    pass
-
-try:
     try:
         from dask.array.dispatch import percentile_lookup
     except ImportError:
@@ -378,35 +371,60 @@ try:
 except ImportError:
     pass
 
-try:
-    # Requires dask>2023.6.0
-    from dask.dataframe.dispatch import (
-        from_pyarrow_table_dispatch,
-        to_pyarrow_table_dispatch,
-    )
 
-    @to_pyarrow_table_dispatch.register(cudf.DataFrame)
-    def _cudf_to_table(obj, preserve_index=True, **kwargs):
-        if kwargs:
-            warnings.warn(
-                "Ignoring the following arguments to "
-                f"`to_pyarrow_table_dispatch`: {list(kwargs)}"
-            )
-        return obj.to_arrow(preserve_index=preserve_index)
+@pyarrow_schema_dispatch.register((cudf.DataFrame,))
+def _get_pyarrow_schema_cudf(obj, preserve_index=None, **kwargs):
+    if kwargs:
+        warnings.warn(
+            "Ignoring the following arguments to "
+            f"`pyarrow_schema_dispatch`: {list(kwargs)}"
+        )
 
-    @from_pyarrow_table_dispatch.register(cudf.DataFrame)
-    def _table_to_cudf(obj, table, self_destruct=None, **kwargs):
-        # cudf ignores self_destruct.
-        kwargs.pop("self_destruct", None)
-        if kwargs:
-            warnings.warn(
-                f"Ignoring the following arguments to "
-                f"`from_pyarrow_table_dispatch`: {list(kwargs)}"
-            )
-        return obj.from_arrow(table)
+    return _cudf_to_table(
+        meta_nonempty(obj), preserve_index=preserve_index
+    ).schema
 
-except ImportError:
-    pass
+
+@to_pyarrow_table_dispatch.register(cudf.DataFrame)
+def _cudf_to_table(obj, preserve_index=None, **kwargs):
+    if kwargs:
+        warnings.warn(
+            "Ignoring the following arguments to "
+            f"`to_pyarrow_table_dispatch`: {list(kwargs)}"
+        )
+
+    # TODO: Remove this logic when cudf#14159 is resolved
+    # (see: https://github.com/rapidsai/cudf/issues/14159)
+    if preserve_index and isinstance(obj.index, cudf.RangeIndex):
+        obj = obj.copy()
+        obj.index.name = (
+            obj.index.name
+            if obj.index.name is not None
+            else "__index_level_0__"
+        )
+        obj.index = obj.index._as_int_index()
+
+    return obj.to_arrow(preserve_index=preserve_index)
+
+
+@from_pyarrow_table_dispatch.register(cudf.DataFrame)
+def _table_to_cudf(obj, table, self_destruct=None, **kwargs):
+    # cudf ignores self_destruct.
+    kwargs.pop("self_destruct", None)
+    if kwargs:
+        warnings.warn(
+            f"Ignoring the following arguments to "
+            f"`from_pyarrow_table_dispatch`: {list(kwargs)}"
+        )
+    result = obj.from_arrow(table)
+
+    # TODO: Remove this logic when cudf#14159 is resolved
+    # (see: https://github.com/rapidsai/cudf/issues/14159)
+    if "__index_level_0__" in result.index.names:
+        assert len(result.index.names) == 1
+        result.index.name = None
+
+    return result
 
 
 @union_categoricals_dispatch.register((cudf.Series, cudf.BaseIndex))

@@ -4,11 +4,13 @@ import warnings
 import cupy as cp
 import numpy as np
 
+from cudf.core.column import as_column
 from cudf.core.copy_types import BooleanMask
-from cudf.core.index import Index, RangeIndex
+from cudf.core.index import RangeIndex, as_index
 from cudf.core.indexed_frame import IndexedFrame
 from cudf.core.scalar import Scalar
-from cudf.core.series import Series
+from cudf.options import get_option
+from cudf.utils.dtypes import can_convert_to_column
 
 
 def factorize(values, sort=False, use_na_sentinel=True, size_hint=None):
@@ -76,7 +78,13 @@ def factorize(values, sort=False, use_na_sentinel=True, size_hint=None):
 
     return_cupy_array = isinstance(values, cp.ndarray)
 
-    values = Series(values)
+    if not can_convert_to_column(values):
+        raise TypeError(
+            "'values' can only be a Series, Index, or CuPy array, "
+            f"got {type(values)}"
+        )
+
+    values = as_column(values)
 
     if size_hint:
         warnings.warn("size_hint is not applicable for cudf.factorize")
@@ -93,11 +101,13 @@ def factorize(values, sort=False, use_na_sentinel=True, size_hint=None):
     if sort:
         cats = cats.sort_values()
 
-    labels = values._column._label_encoding(
-        cats=cats, na_sentinel=na_sentinel
+    labels = values._label_encoding(
+        cats=cats,
+        na_sentinel=na_sentinel,
+        dtype="int64" if get_option("mode.pandas_compatible") else None,
     ).values
 
-    return labels, cats.values if return_cupy_array else Index(cats)
+    return labels, cats.values if return_cupy_array else as_index(cats)
 
 
 def _linear_interpolation(column, index=None):

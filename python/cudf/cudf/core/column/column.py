@@ -291,7 +291,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def dropna(self, drop_nan: bool = False) -> ColumnBase:
         # The drop_nan argument is only used for numerical columns.
-        return drop_nulls([self])[0]
+        return drop_nulls([self])[0]._with_type_metadata(self.dtype)
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
@@ -715,7 +715,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         return libcudf.replace.replace_nulls(
             input_col=self, replacement=value, method=method, dtype=dtype
-        )
+        )._with_type_metadata(self.dtype)
 
     def isnull(self) -> ColumnBase:
         """Identify missing values in a Column."""
@@ -1162,7 +1162,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         Get unique values in the data
         """
-        return drop_duplicates([self], keep="first")[0]
+        return drop_duplicates([self], keep="first")[0]._with_type_metadata(
+            self.dtype
+        )
 
     def serialize(self) -> Tuple[dict, list]:
         # data model:
@@ -1388,20 +1390,19 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         except ValueError:
             return _return_sentinel_column()
 
-        codes = arange(len(cats), dtype=dtype)
         left_gather_map, right_gather_map = cpp_join(
             [self], [cats], how="left"
         )
-        codes = codes.take(
-            right_gather_map, nullify=True, check_bounds=False
-        ).fillna(na_sentinel.value)
-
+        codes = libcudf.copying.gather(
+            [arange(len(cats), dtype=dtype)], right_gather_map, nullify=True
+        )
+        del right_gather_map
         # reorder `codes` so that its values correspond to the
         # values of `self`:
-        order = arange(len(self))
-        order = order.take(left_gather_map, check_bounds=False).argsort()
-        codes = codes.take(order)
-        return codes
+        (codes,) = libcudf.sort.sort_by_key(
+            codes, [left_gather_map], [True], ["last"], stable=True
+        )
+        return codes.fillna(na_sentinel.value)
 
 
 def column_empty_like(
@@ -1994,18 +1995,27 @@ def as_column(
         col = ColumnBase.from_arrow(arbitrary)
 
         if isinstance(arbitrary, pa.NullArray):
-            new_dtype = cudf.dtype(arbitrary.type.to_pandas_dtype())
             if dtype is not None:
                 # Cast the column to the `dtype` if specified.
-                col = col.astype(dtype)
+                new_dtype = dtype
             elif len(arbitrary) == 0:
                 # If the column is empty, it has to be
                 # a `float64` dtype.
-                col = col.astype("float64")
+                new_dtype = cudf.dtype("float64")
             else:
                 # If the null column is not empty, it has to
                 # be of `object` dtype.
-                col = col.astype(new_dtype)
+                new_dtype = cudf.dtype(arbitrary.type.to_pandas_dtype())
+
+            if cudf.get_option(
+                "mode.pandas_compatible"
+            ) and new_dtype == cudf.dtype("O"):
+                # We internally raise if we do `astype("object")`, hence
+                # need to cast to `str` since this is safe to do so because
+                # it is a null-array.
+                new_dtype = "str"
+
+            col = col.astype(new_dtype)
 
         return col
 
@@ -2022,9 +2032,19 @@ def as_column(
                     f"{arbitrary.dtype} is not supported. Convert first to "
                     f"{arbitrary.dtype.subtype}."
                 )
-        if is_categorical_dtype(arbitrary):
+        if is_categorical_dtype(arbitrary.dtype):
+            if isinstance(
+                arbitrary.dtype.categories.dtype, pd.DatetimeTZDtype
+            ):
+                raise NotImplementedError(
+                    "cuDF does not yet support timezone-aware datetimes"
+                )
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif is_interval_dtype(arbitrary.dtype):
+            if isinstance(arbitrary.dtype.subtype, pd.DatetimeTZDtype):
+                raise NotImplementedError(
+                    "cuDF does not yet support timezone-aware datetimes"
+                )
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif arbitrary.dtype == np.bool_:
             data = as_column(cupy.asarray(arbitrary), dtype=arbitrary.dtype)
@@ -2041,10 +2061,15 @@ def as_column(
             )
         else:
             pyarrow_array = pa.array(arbitrary, from_pandas=nan_as_null)
-            if arbitrary.dtype == cudf.dtype("object") and isinstance(
-                pyarrow_array, (pa.DurationArray, pa.TimestampArray)
+            if (
+                arbitrary.dtype == cudf.dtype("object")
+                and cudf.dtype(pyarrow_array.type.to_pandas_dtype())
+                != cudf.dtype(arbitrary.dtype)
+                and not is_bool_dtype(
+                    cudf.dtype(pyarrow_array.type.to_pandas_dtype())
+                )
             ):
-                raise TypeError("Cannot create column with mixed types")
+                raise MixedTypeError("Cannot create column with mixed types")
             if isinstance(pyarrow_array.type, pa.Decimal128Type):
                 pyarrow_type = cudf.Decimal128Dtype.from_arrow(
                     pyarrow_array.type
@@ -2250,8 +2275,21 @@ def as_column(
         data = ColumnBase.from_scalar(arbitrary, length if length else 1)
     elif isinstance(arbitrary, pd.core.arrays.masked.BaseMaskedArray):
         data = as_column(pa.Array.from_pandas(arbitrary), dtype=dtype)
-    elif isinstance(arbitrary, pd.DatetimeIndex) and isinstance(
-        arbitrary.dtype, pd.DatetimeTZDtype
+    elif (
+        (
+            isinstance(arbitrary, pd.DatetimeIndex)
+            and isinstance(arbitrary.dtype, pd.DatetimeTZDtype)
+        )
+        or (
+            isinstance(arbitrary, pd.IntervalIndex)
+            and is_datetime64tz_dtype(arbitrary.dtype.subtype)
+        )
+        or (
+            isinstance(arbitrary, pd.CategoricalIndex)
+            and isinstance(
+                arbitrary.dtype.categories.dtype, pd.DatetimeTZDtype
+            )
+        )
     ):
         raise NotImplementedError(
             "cuDF does not yet support timezone-aware datetimes"
@@ -2411,10 +2449,29 @@ def as_column(
                 )
 
                 if (
+                    isinstance(pyarrow_array, pa.NullArray)
+                    and pa_type is None
+                    and dtype is None
+                    and getattr(arbitrary, "dtype", None)
+                    == cudf.dtype("object")
+                ):
+                    # pa.array constructor returns a NullArray
+                    # for empty arrays, instead of a StringArray.
+                    # This issue is only specific to this dtype,
+                    # all other dtypes, result in their corresponding
+                    # arrow array creation.
+                    dtype = cudf.dtype("str")
+                    pyarrow_array = pyarrow_array.cast(np_to_pa_dtype(dtype))
+
+                if (
                     isinstance(arbitrary, pd.Index)
                     and arbitrary.dtype == cudf.dtype("object")
-                    and isinstance(
-                        pyarrow_array, (pa.DurationArray, pa.TimestampArray)
+                    and (
+                        cudf.dtype(pyarrow_array.type.to_pandas_dtype())
+                        != cudf.dtype(arbitrary.dtype)
+                        and not is_bool_dtype(
+                            cudf.dtype(pyarrow_array.type.to_pandas_dtype())
+                        )
                     )
                 ):
                     raise MixedTypeError(
@@ -2464,25 +2521,43 @@ def as_column(
 
 def _construct_array(
     arbitrary: Any, dtype: Optional[Dtype]
-) -> Union[np.ndarray, cupy.ndarray]:
+) -> Union[np.ndarray, cupy.ndarray, pd.api.extensions.ExtensionArray]:
     """
-    Construct a CuPy or NumPy array from `arbitrary`
+    Construct a CuPy/NumPy/Pandas array from `arbitrary`
     """
     try:
         dtype = dtype if dtype is None else cudf.dtype(dtype)
         arbitrary = cupy.asarray(arbitrary, dtype=dtype)
     except (TypeError, ValueError):
         native_dtype = dtype
+        inferred_dtype = infer_dtype(arbitrary, skipna=False)
         if (
             dtype is None
             and not cudf._lib.scalar._is_null_host_scalar(arbitrary)
-            and infer_dtype(arbitrary, skipna=False)
+            and inferred_dtype
             in (
                 "mixed",
                 "mixed-integer",
             )
         ):
             native_dtype = "object"
+        if inferred_dtype == "interval":
+            # Only way to construct an Interval column.
+            return pd.array(arbitrary)
+        elif (
+            inferred_dtype == "string" and getattr(dtype, "kind", None) == "M"
+        ):
+            # We may have date-like strings with timezones
+            try:
+                pd_arbitrary = pd.to_datetime(arbitrary)
+                if isinstance(pd_arbitrary.dtype, pd.DatetimeTZDtype):
+                    raise NotImplementedError(
+                        "cuDF does not yet support timezone-aware datetimes"
+                    )
+            except pd.errors.OutOfBoundsDatetime:
+                # https://github.com/pandas-dev/pandas/issues/55096
+                pass
+
         arbitrary = np.asarray(
             arbitrary,
             dtype=native_dtype

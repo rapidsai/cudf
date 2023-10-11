@@ -75,6 +75,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TableTest extends CudfTestBase {
+  private static final HostMemoryAllocator hostMemoryAllocator = DefaultHostMemoryAllocator.get();
+
   private static final File TEST_PARQUET_FILE = TestUtils.getResourceAsFile("acq.parquet");
   private static final File TEST_PARQUET_FILE_CHUNKED_READ = TestUtils.getResourceAsFile("splittable.parquet");
   private static final File TEST_PARQUET_FILE_BINARY = TestUtils.getResourceAsFile("binary.parquet");
@@ -84,6 +86,7 @@ public class TableTest extends CudfTestBase {
   private static final File TEST_ALL_TYPES_PLAIN_AVRO_FILE = TestUtils.getResourceAsFile("alltypes_plain.avro");
   private static final File TEST_SIMPLE_CSV_FILE = TestUtils.getResourceAsFile("simple.csv");
   private static final File TEST_SIMPLE_JSON_FILE = TestUtils.getResourceAsFile("people.json");
+  private static final File TEST_JSON_ERROR_FILE = TestUtils.getResourceAsFile("people_with_invalid_lines.json");
 
   private static final Schema CSV_DATA_BUFFER_SCHEMA = Schema.builder()
       .column(DType.INT32, "A")
@@ -325,6 +328,39 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testReadJSONFileWithInvalidLines() {
+    Schema schema = Schema.builder()
+            .column(DType.STRING, "name")
+            .column(DType.INT32, "age")
+            .build();
+
+    // test with recoverWithNulls=true
+    {
+      JSONOptions opts = JSONOptions.builder()
+              .withLines(true)
+              .withRecoverWithNull(true)
+              .build();
+      try (Table expected = new Table.TestBuilder()
+              .column("Michael", "Andy", null, "Justin")
+              .column(null, 30, null, 19)
+              .build();
+           Table table = Table.readJSON(schema, opts, TEST_JSON_ERROR_FILE)) {
+        assertTablesAreEqual(expected, table);
+      }
+    }
+
+    // test with recoverWithNulls=false
+    {
+      JSONOptions opts = JSONOptions.builder()
+              .withLines(true)
+              .withRecoverWithNull(false)
+              .build();
+      assertThrows(CudfException.class, () ->
+        Table.readJSON(schema, opts, TEST_JSON_ERROR_FILE));
+    }
+  }
+
+  @Test
   void testReadJSONFileWithDifferentColumnOrder() {
     Schema schema = Schema.builder()
         .column(DType.INT32, "age")
@@ -440,7 +476,7 @@ public class TableTest extends CudfTestBase {
             "{ \"A\": 3, \"B\": 6, \"C\": \"Z\"}\n" +
             "{ \"A\": 4, \"B\": 8, \"C\": \"W\"}\n").getBytes(StandardCharsets.UTF_8);
     final int numBytes = data.length;
-    try (HostMemoryBuffer hostbuf = HostMemoryBuffer.allocate(numBytes)) {
+    try (HostMemoryBuffer hostbuf = hostMemoryAllocator.allocate(numBytes)) {
       hostbuf.setBytes(0, data, 0, numBytes);
       try (Table expected = new Table.TestBuilder()
               .column(1L, 2L, 3L, 4L)
@@ -3465,7 +3501,7 @@ public class TableTest extends CudfTestBase {
         do {
           head = new JCudfSerialization.SerializedTableHeader(din);
           if (head.wasInitialized()) {
-            HostMemoryBuffer buff = HostMemoryBuffer.allocate(head.getDataLen());
+            HostMemoryBuffer buff = hostMemoryAllocator.allocate(head.getDataLen());
             buffers.add(buff);
             JCudfSerialization.readTableIntoBuffer(din, head, buff);
             assert head.wasDataRead();
@@ -3624,7 +3660,7 @@ public class TableTest extends CudfTestBase {
           do {
             head = new JCudfSerialization.SerializedTableHeader(din);
             if (head.wasInitialized()) {
-              HostMemoryBuffer buff = HostMemoryBuffer.allocate(100 * 1024);
+              HostMemoryBuffer buff = hostMemoryAllocator.allocate(100 * 1024);
               buffers.add(buff);
               JCudfSerialization.readTableIntoBuffer(din, head, buff);
               assert head.wasDataRead();
@@ -3665,7 +3701,7 @@ public class TableTest extends CudfTestBase {
     JCudfSerialization.SerializedTableHeader header =
             new JCudfSerialization.SerializedTableHeader(din);
     assertTrue(header.wasInitialized());
-    try (HostMemoryBuffer buffer = HostMemoryBuffer.allocate(header.getDataLen())) {
+    try (HostMemoryBuffer buffer = hostMemoryAllocator.allocate(header.getDataLen())) {
       JCudfSerialization.readTableIntoBuffer(din, header, buffer);
       assertTrue(header.wasDataRead());
       HostColumnVector[] hostColumns =
@@ -3727,7 +3763,7 @@ public class TableTest extends CudfTestBase {
       DataInputStream in = new DataInputStream(new ByteArrayInputStream(out.toByteArray()));
       JCudfSerialization.SerializedTableHeader header = new JCudfSerialization.SerializedTableHeader(in);
       assert header.wasInitialized();
-      try (HostMemoryBuffer buff = HostMemoryBuffer.allocate(header.getDataLen())) {
+      try (HostMemoryBuffer buff = hostMemoryAllocator.allocate(header.getDataLen())) {
         JCudfSerialization.readTableIntoBuffer(in, header, buff);
         assert header.wasDataRead();
         try (Table result = JCudfSerialization.readAndConcat(
@@ -3758,7 +3794,7 @@ public class TableTest extends CudfTestBase {
           do {
             head = new JCudfSerialization.SerializedTableHeader(din);
             if (head.wasInitialized()) {
-              HostMemoryBuffer buff = HostMemoryBuffer.allocate(100 * 1024);
+              HostMemoryBuffer buff = hostMemoryAllocator.allocate(100 * 1024);
               buffers.add(buff);
               JCudfSerialization.readTableIntoBuffer(din, head, buff);
               assert head.wasDataRead();
@@ -4093,6 +4129,115 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  @Test
+  void testGroupbyHistogram() {
+    StructType histogramStruct = new StructType(false,
+        new BasicType(false, DType.INT32), // values
+        new BasicType(false, DType.INT64)); // frequencies
+    ListType histogramList = new ListType(false, histogramStruct);
+
+    // key = 0: values = [2, 2, -3, -2, 2]
+    // key = 1: values = [2, 0, 5, 2, 1]
+    // key = 2: values = [-3, 1, 1, 2, 2]
+    try (Table input = new Table.TestBuilder()
+        .column(2, 0, 2, 1, 1, 1, 0, 0, 0, 1, 2, 2, 1, 0, 2)
+        .column(-3, 2, 1, 2, 0, 5, 2, -3, -2, 2, 1, 2, 1, 2, 2)
+        .build();
+         Table result = input.groupBy(0)
+             .aggregate(GroupByAggregation.histogram().onColumn(1));
+         Table sortedResult = result.orderBy(OrderByArg.asc(0));
+         ColumnVector sortedOutHistograms = sortedResult.getColumn(1).listSortRows(false, false);
+
+         ColumnVector expectedKeys = ColumnVector.fromInts(0, 1, 2);
+         ColumnVector expectedHistograms = ColumnVector.fromLists(histogramList,
+             Arrays.asList(new StructData(-3, 1L), new StructData(-2, 1L), new StructData(2, 3L)),
+             Arrays.asList(new StructData(0, 1L), new StructData(1, 1L), new StructData(2, 2L),
+                 new StructData(5, 1L)),
+             Arrays.asList(new StructData(-3, 1L), new StructData(1, 2L), new StructData(2, 2L)))
+    ) {
+      assertColumnsAreEqual(expectedKeys, sortedResult.getColumn(0));
+      assertColumnsAreEqual(expectedHistograms, sortedOutHistograms);
+    }
+  }
+
+  @Test
+  void testGroupbyMergeHistogram() {
+    StructType histogramStruct = new StructType(false,
+        new BasicType(false, DType.INT32), // values
+        new BasicType(false, DType.INT64)); // frequencies
+    ListType histogramList = new ListType(false, histogramStruct);
+
+    // key = 0: histograms = [[<-3, 1>, <-2, 1>, <2, 3>], [<0, 1>, <1, 1>], [<-3, 3>, <0, 1>, <1, 2>]]
+    // key = 1: histograms = [[<-2, 1>, <1, 3>, <2, 2>], [<0, 2>, <1, 1>, <2, 2>]]
+    try (Table input = new Table.TestBuilder()
+        .column(0, 1, 0, 1, 0)
+        .column(histogramStruct,
+            new StructData[]{new StructData(-3, 1L), new StructData(-2, 1L), new StructData(2, 3L)},
+            new StructData[]{new StructData(-2, 1L), new StructData(1, 3L), new StructData(2, 2L)},
+            new StructData[]{new StructData(0, 1L), new StructData(1, 1L)},
+            new StructData[]{new StructData(0, 2L), new StructData(1, 1L), new StructData(2, 2L)},
+            new StructData[]{new StructData(-3, 3L), new StructData(0, 1L), new StructData(1, 2L)})
+        .build();
+         Table result = input.groupBy(0)
+             .aggregate(GroupByAggregation.mergeHistogram().onColumn(1));
+         Table sortedResult = result.orderBy(OrderByArg.asc(0));
+         ColumnVector sortedOutHistograms = sortedResult.getColumn(1).listSortRows(false, false);
+
+         ColumnVector expectedKeys = ColumnVector.fromInts(0, 1);
+         ColumnVector expectedHistograms = ColumnVector.fromLists(histogramList,
+             Arrays.asList(new StructData(-3, 4L), new StructData(-2, 1L), new StructData(0, 2L),
+                           new StructData(1, 3L), new StructData(2, 3L)),
+             Arrays.asList(new StructData(-2, 1L), new StructData(0, 2L), new StructData(1, 4L),
+                           new StructData(2, 4L)))
+    ) {
+      assertColumnsAreEqual(expectedKeys, sortedResult.getColumn(0));
+      assertColumnsAreEqual(expectedHistograms, sortedOutHistograms);
+    }
+  }
+
+  @Test
+  void testReductionHistogram() {
+    StructType histogramStruct = new StructType(false,
+        new BasicType(false, DType.INT32), // values
+        new BasicType(false, DType.INT64)); // frequencies
+
+    try (ColumnVector input = ColumnVector.fromInts(-3, 2, 1, 2, 0, 5, 2, -3, -2, 2, 1);
+         Scalar result = input.reduce(ReductionAggregation.histogram(), DType.LIST);
+         ColumnVector resultCV = result.getListAsColumnView().copyToColumnVector();
+         Table resultTable = new Table(resultCV);
+         Table sortedResult = resultTable.orderBy(OrderByArg.asc(0));
+
+         ColumnVector expectedHistograms = ColumnVector.fromStructs(histogramStruct,
+             new StructData(-3, 2L), new StructData(-2, 1L), new StructData(0, 1L),
+             new StructData(1, 2L), new StructData(2, 4L), new StructData(5, 1L))
+    ) {
+      assertColumnsAreEqual(expectedHistograms, sortedResult.getColumn(0));
+    }
+  }
+
+  @Test
+  void testReductionMergeHistogram() {
+    StructType histogramStruct = new StructType(false,
+        new BasicType(false, DType.INT32), // values
+        new BasicType(false, DType.INT64)); // frequencies
+
+    try (ColumnVector input = ColumnVector.fromStructs(histogramStruct,
+             new StructData(-3, 2L), new StructData(2, 1L), new StructData(1, 1L),
+             new StructData(2, 2L), new StructData(0, 4L), new StructData(5, 1L),
+             new StructData(2, 2L), new StructData(-3, 3L), new StructData(-2, 5L),
+             new StructData(2, 3L), new StructData(1, 4L));
+         Scalar result = input.reduce(ReductionAggregation.mergeHistogram(), DType.LIST);
+         ColumnVector resultCV = result.getListAsColumnView().copyToColumnVector();
+         Table resultTable = new Table(resultCV);
+         Table sortedResult = resultTable.orderBy(OrderByArg.asc(0));
+
+         ColumnVector expectedHistograms = ColumnVector.fromStructs(histogramStruct,
+             new StructData(-3, 5L), new StructData(-2, 5L), new StructData(0, 4L),
+             new StructData(1, 5L), new StructData(2, 8L), new StructData(5, 1L))
+    ) {
+      assertColumnsAreEqual(expectedHistograms, sortedResult.getColumn(0));
+    }
+  }
   @Test
   void testGroupByMinMaxDecimal() {
     try (Table t1 = new Table.TestBuilder()
@@ -7985,7 +8130,7 @@ public class TableTest extends CudfTestBase {
     long offset = 0;
 
     public MyBufferConsumer() {
-      buffer = HostMemoryBuffer.allocate(10 * 1024 * 1024);
+      buffer = hostMemoryAllocator.allocate(10 * 1024 * 1024);
     }
 
     @Override
@@ -8062,7 +8207,8 @@ public class TableTest extends CudfTestBase {
     ParquetWriterOptions options = ParquetWriterOptions.builder()
         .withMapColumn(mapColumn("my_map",
             new ColumnWriterOptions("key0", false),
-            new ColumnWriterOptions("value0"))).build();
+            new ColumnWriterOptions("value0"),
+            true)).build();
     File f = File.createTempFile("test-map", ".parquet");
     List<HostColumnVector.StructData> list1 =
         Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
@@ -8560,7 +8706,8 @@ public class TableTest extends CudfTestBase {
     ORCWriterOptions options = ORCWriterOptions.builder()
             .withMapColumn(mapColumn("my_map",
                     new ColumnWriterOptions("key0", false),
-                    new ColumnWriterOptions("value0"))).build();
+                    new ColumnWriterOptions("value0"),
+                    true)).build();
     File f = File.createTempFile("test-map", ".parquet");
     List<HostColumnVector.StructData> list1 =
             Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));

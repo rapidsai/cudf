@@ -21,7 +21,7 @@ fi
 export INSTALL_DASK_MAIN=0
 
 # Dask version to install when `INSTALL_DASK_MAIN=0`
-export DASK_STABLE_VERSION="2023.7.1"
+export DASK_STABLE_VERSION="2023.9.2"
 
 # Install the conda-forge or nightly version of dask and distributed
 if [[ "${INSTALL_DASK_MAIN}" == 1 ]]; then

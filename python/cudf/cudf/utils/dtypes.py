@@ -427,6 +427,11 @@ def get_min_float_dtype(col):
 
 
 def is_mixed_with_object_dtype(lhs, rhs):
+    if cudf.api.types.is_categorical_dtype(lhs.dtype):
+        return is_mixed_with_object_dtype(lhs.dtype.categories, rhs)
+    elif cudf.api.types.is_categorical_dtype(rhs.dtype):
+        return is_mixed_with_object_dtype(lhs, rhs.dtype.categories)
+
     return (lhs.dtype == "object" and rhs.dtype != "object") or (
         rhs.dtype == "object" and lhs.dtype != "object"
     )
@@ -457,24 +462,6 @@ def _get_nan_for_dtype(dtype):
         return dtype.type("nan")
     else:
         return np.float64("nan")
-
-
-def _decimal_to_int64(decimal: Decimal) -> int:
-    """
-    Scale a Decimal such that the result is the integer
-    that would result from removing the decimal point.
-
-    Examples
-    --------
-    >>> _decimal_to_int64(Decimal('1.42'))
-    142
-    >>> _decimal_to_int64(Decimal('0.0042'))
-    42
-    >>> _decimal_to_int64(Decimal('-1.004201'))
-    -1004201
-
-    """
-    return int(f"{decimal:0f}".replace(".", ""))
 
 
 def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
@@ -628,6 +615,16 @@ def find_common_type(dtypes):
     if common_dtype == np.dtype("float16"):
         return cudf.dtype("float32")
     return cudf.dtype(common_dtype)
+
+
+def _dtype_pandas_compatible(dtype):
+    """
+    A utility function, that returns `str` instead of `object`
+    dtype when pandas comptibility mode is enabled.
+    """
+    if cudf.get_option("mode.pandas_compatible") and dtype == cudf.dtype("O"):
+        return "str"
+    return dtype
 
 
 def _can_cast(from_dtype, to_dtype):

@@ -22,6 +22,9 @@ gbench_version:
 gtest_version:
   - ">=1.13.0"
 
+aws_sdk_cpp_version:
+  - "<1.11"
+
 libarrow_version:
   - "=12"
 
@@ -40,6 +43,8 @@ spdlog_version:
 nvcomp_version:
   - "=2.6.1"
 
+zlib_version:
+  - ">=1.2.13"
 # The CTK libraries below are missing from the conda-forge::cudatoolkit package
 # for CUDA 11. The "*_host_*" version specifiers correspond to `11.8` packages
 # and the "*_run_*" version specifiers correspond to `11.x` packages.

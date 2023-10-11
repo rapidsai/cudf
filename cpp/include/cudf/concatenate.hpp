@@ -17,6 +17,7 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
@@ -40,10 +41,12 @@ namespace cudf {
  *
  * @param views Column views whose bitmasks will be concatenated
  * @param mr Device memory resource used for allocating the returned memory
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return Bitmasks of all the column views in the views vector
  */
 rmm::device_buffer concatenate_masks(
   host_span<column_view const> views,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -53,12 +56,14 @@ rmm::device_buffer concatenate_masks(
  * @throws std::overflow_error If the total number of output rows exceeds cudf::size_type
  *
  * @param columns_to_concat Column views to be concatenated into a single column
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return A single column having all the rows from the elements of `columns_to_concat` respectively
  * in the same order.
  */
 std::unique_ptr<column> concatenate(
   host_span<column_view const> columns_to_concat,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -80,12 +85,14 @@ std::unique_ptr<column> concatenate(
  * @throws std::overflow_error If the total number of output rows exceeds cudf::size_type
  *
  * @param tables_to_concat Table views to be concatenated into a single table
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return A single table having all the rows from the elements of
  * `tables_to_concat` respectively in the same order.
  */
 std::unique_ptr<table> concatenate(
   host_span<table_view const> tables_to_concat,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

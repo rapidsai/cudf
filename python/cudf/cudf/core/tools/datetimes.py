@@ -153,8 +153,13 @@ def to_datetime(
     if utc:
         raise NotImplementedError("utc is not yet implemented")
 
-    if format is not None and "%f" in format:
-        format = format.replace("%f", "%9f")
+    if format is not None:
+        if "%Z" in format or "%z" in format:
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
+        elif "%f" in format:
+            format = format.replace("%f", "%9f")
 
     try:
         if isinstance(arg, cudf.DataFrame):
@@ -295,12 +300,8 @@ def to_datetime(
 def _process_col(col, unit, dayfirst, infer_datetime_format, format):
     if col.dtype.kind == "M":
         return col
-    elif col.dtype.kind == "m":
-        raise TypeError(
-            f"dtype {col.dtype} cannot be converted to {_unit_dtype_map[unit]}"
-        )
 
-    if col.dtype.kind in ("f"):
+    elif col.dtype.kind in ("f"):
         if unit not in (None, "ns"):
             factor = cudf.Scalar(
                 column.datetime._unit_to_nanoseconds_conversion[unit]
@@ -326,8 +327,9 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
             )
         else:
             col = col.as_datetime_column(dtype="datetime64[ns]")
+        return col
 
-    if col.dtype.kind in ("i"):
+    elif col.dtype.kind in ("i"):
         if unit in ("D", "h", "m"):
             factor = cudf.Scalar(
                 column.datetime._unit_to_nanoseconds_conversion[unit]
@@ -341,6 +343,7 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
             )
         else:
             col = col.as_datetime_column(dtype=_unit_dtype_map[unit])
+        return col
 
     elif col.dtype.kind in ("O"):
         if unit not in (None, "ns") or col.null_count == len(col):
@@ -356,20 +359,23 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
                 format=format,
             )
         else:
-            if infer_datetime_format and format is None:
+            if format is None:
+                if not infer_datetime_format and dayfirst:
+                    raise NotImplementedError(
+                        f"{dayfirst=} not implemented "
+                        f"when {format=} and {infer_datetime_format=}."
+                    )
                 format = column.datetime.infer_format(
                     element=col.element_indexing(0),
                     dayfirst=dayfirst,
                 )
-            elif format is None:
-                format = column.datetime.infer_format(
-                    element=col.element_indexing(0)
-                )
-            col = col.as_datetime_column(
+            return col.as_datetime_column(
                 dtype=_unit_dtype_map[unit],
                 format=format,
             )
-    return col
+    raise TypeError(
+        f"dtype {col.dtype} cannot be converted to {_unit_dtype_map[unit]}"
+    )
 
 
 def get_units(value):

@@ -185,6 +185,16 @@ def test_groupby_as_index_single_agg(pdf, gdf, as_index):
     assert_groupby_results_equal(pdf, gdf)
 
 
+@pytest.mark.parametrize("engine", ["cudf", "jit"])
+@pytest.mark.parametrize("as_index", [True, False])
+def test_groupby_as_index_apply(pdf, gdf, as_index, engine):
+    gdf = gdf.groupby("y", as_index=as_index).apply(
+        lambda df: df["x"].mean(), engine=engine
+    )
+    pdf = pdf.groupby("y", as_index=as_index).apply(lambda df: df["x"].mean())
+    assert_groupby_results_equal(pdf, gdf)
+
+
 @pytest.mark.parametrize("as_index", [True, False])
 def test_groupby_as_index_multiindex(pdf, gdf, as_index):
     pdf = pd.DataFrame(
@@ -452,6 +462,38 @@ def test_groupby_apply_jit_correlation(groupby_jit_data, dtype):
         return group["val3"].corr(group["val4"])
 
     run_groupby_apply_jit_test(groupby_jit_data, func, keys)
+
+
+@pytest.mark.parametrize("dtype", ["int32", "int64"])
+def test_groupby_apply_jit_correlation_zero_variance(dtype):
+    # pearson correlation is undefined when the variance of either
+    # variable is zero. This test ensures that the jit implementation
+    # returns the same result as pandas in this case.
+    data = DataFrame(
+        {"a": [0, 0, 0, 0, 0], "b": [1, 1, 1, 1, 1], "c": [2, 2, 2, 2, 2]}
+    )
+
+    def func(group):
+        return group["b"].corr(group["c"])
+
+    run_groupby_apply_jit_test(data, func, ["a"])
+
+
+@pytest.mark.parametrize("dtype", ["int32"])
+def test_groupby_apply_jit_sum_integer_overflow(dtype):
+    max = np.iinfo(dtype).max
+
+    data = DataFrame(
+        {
+            "a": [0, 0, 0],
+            "b": [max, max, max],
+        }
+    )
+
+    def func(group):
+        return group["b"].sum()
+
+    run_groupby_apply_jit_test(data, func, ["a"])
 
 
 @pytest.mark.parametrize("dtype", ["float64"])
@@ -3366,3 +3408,176 @@ def test_group_by_pandas_sort_order(groups, sort):
             pdf.groupby(groups, sort=sort).sum(),
             df.groupby(groups, sort=sort).sum(),
         )
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    ["int32", "int64", "float64", "datetime64[ns]", "timedelta64[ns]", "bool"],
+)
+@pytest.mark.parametrize(
+    "reduce_op",
+    [
+        "min",
+        "max",
+        "idxmin",
+        "idxmax",
+        "first",
+        "last",
+    ],
+)
+def test_group_by_empty_reduction(dtype, reduce_op):
+    gdf = cudf.DataFrame({"a": [], "b": [], "c": []}, dtype=dtype)
+    pdf = gdf.to_pandas()
+
+    gg = gdf.groupby("a")["c"]
+    pg = pdf.groupby("a")["c"]
+
+    assert_eq(
+        getattr(gg, reduce_op)(), getattr(pg, reduce_op)(), check_dtype=True
+    )
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    ["int32", "int64", "float64", "datetime64[ns]", "timedelta64[ns]", "bool"],
+)
+@pytest.mark.parametrize(
+    "apply_op",
+    ["sum", "min", "max", "idxmax"],
+)
+def test_group_by_empty_apply(request, dtype, apply_op):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(dtype == "datetime64[ns]" and apply_op == "sum"),
+            reason=("sum isn't supported for datetime64[ns]"),
+        )
+    )
+
+    gdf = cudf.DataFrame({"a": [], "b": [], "c": []}, dtype=dtype)
+    pdf = gdf.to_pandas()
+
+    gg = gdf.groupby("a")["c"]
+    pg = pdf.groupby("a")["c"]
+
+    assert_eq(
+        gg.apply(apply_op),
+        pg.apply(apply_op),
+        check_dtype=True,
+        check_index_type=True,
+    )
+
+
+def test_groupby_consecutive_operations():
+    df = cudf.DataFrame([[1, np.nan], [1, 4], [5, 6]], columns=["A", "B"])
+    pdf = df.to_pandas()
+
+    gg = df.groupby("A")
+    pg = pdf.groupby("A")
+
+    actual = gg.nth(-1)
+    expected = pg.nth(-1)
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+    actual = gg.nth(0)
+    expected = pg.nth(0)
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+    actual = gg.cumsum()
+    expected = pg.cumsum()
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+    actual = gg.cumcount()
+    expected = pg.cumcount()
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+    actual = gg.cumsum()
+    expected = pg.cumsum()
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+
+def test_categorical_grouping_pandas_compatibility():
+    gdf = cudf.DataFrame(
+        {
+            "key": cudf.Series([2, 1, 3, 1, 1], dtype="category"),
+            "a": [0, 1, 3, 2, 3],
+        }
+    )
+    pdf = gdf.to_pandas()
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        actual = gdf.groupby("key", sort=False).sum()
+    expected = pdf.groupby("key", sort=False).sum()
+
+    assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize("normalize", [True, False])
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize("ascending", [True, False])
+@pytest.mark.parametrize("dropna", [True, False])
+@pytest.mark.parametrize("as_index", [True, False])
+def test_group_by_value_counts(normalize, sort, ascending, dropna, as_index):
+    # From Issue#12789
+    df = cudf.DataFrame(
+        {
+            "gender": ["male", "male", "female", "male", "female", "male"],
+            "education": ["low", "medium", np.nan, "low", "high", "low"],
+            "country": ["US", "FR", "US", "FR", "FR", "FR"],
+        }
+    )
+    pdf = df.to_pandas()
+
+    actual = df.groupby("gender", as_index=as_index).value_counts(
+        normalize=normalize, sort=sort, ascending=ascending, dropna=dropna
+    )
+    expected = pdf.groupby("gender", as_index=as_index).value_counts(
+        normalize=normalize, sort=sort, ascending=ascending, dropna=dropna
+    )
+
+    # TODO: Remove `check_names=False` once testing against `pandas>=2.0.0`
+    assert_groupby_results_equal(
+        actual, expected, check_names=False, check_index_type=False
+    )
+
+
+def test_group_by_value_counts_subset():
+    # From Issue#12789
+    df = cudf.DataFrame(
+        {
+            "gender": ["male", "male", "female", "male", "female", "male"],
+            "education": ["low", "medium", "high", "low", "high", "low"],
+            "country": ["US", "FR", "US", "FR", "FR", "FR"],
+        }
+    )
+    pdf = df.to_pandas()
+
+    actual = df.groupby("gender").value_counts(["education"])
+    expected = pdf.groupby("gender").value_counts(["education"])
+
+    # TODO: Remove `check_names=False` once testing against `pandas>=2.0.0`
+    assert_groupby_results_equal(
+        actual, expected, check_names=False, check_index_type=False
+    )
+
+
+def test_group_by_value_counts_clash_with_subset():
+    df = cudf.DataFrame({"a": [1, 5, 3], "b": [2, 5, 2]})
+    with pytest.raises(ValueError):
+        df.groupby("a").value_counts(["a"])
+
+
+def test_group_by_value_counts_subset_not_exists():
+    df = cudf.DataFrame({"a": [1, 5, 3], "b": [2, 5, 2]})
+    with pytest.raises(ValueError):
+        df.groupby("a").value_counts(["c"])
+
+
+def test_group_by_value_counts_with_count_column():
+    df = cudf.DataFrame({"a": [1, 5, 3], "count": [2, 5, 2]})
+    with pytest.raises(ValueError):
+        df.groupby("a", as_index=False).value_counts()

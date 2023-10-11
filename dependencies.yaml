@@ -179,6 +179,7 @@ dependencies:
           - c-compiler
           - cxx-compiler
           - dlpack>=0.5,<0.6.0a0
+          - zlib>=1.2.13
     specific:
       - output_types: conda
         matrices:
@@ -217,6 +218,7 @@ dependencies:
           - libkvikio==23.10.*
       - output_types: conda
         packages:
+          - aws-sdk-cpp<1.11
           - fmt>=9.1.0,<10
           - &gbench benchmark==1.8.0
           - &gtest gtest>=1.13.0
@@ -240,6 +242,10 @@ dependencies:
               cuda: "11.8"
             packages:
               - *nvcomp
+          # TODO: Fallback matrix for aarch64 CUDA 12. After migrating to nvcomp 3,
+          # all CUDA/arch combinations should be supported by existing packages.
+          - matrix:
+            packages:
   build_wheels:
     common:
       - output_types: pyproject
@@ -254,7 +260,8 @@ dependencies:
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
           - pyarrow==12.0.1.*
-          - numpy>=1.21
+          # TODO: Pin to numpy<1.25 until cudf requires pandas 2
+          - &numpy numpy>=1.21,<1.25
   build_python:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -289,12 +296,14 @@ dependencies:
               - cuda-version=12.0
               - cuda-cudart-dev
               - cuda-nvrtc-dev
+              - cuda-nvtx-dev
               - libcurand-dev
           - matrix:
               cuda: "11.8"
             packages:
               - cuda-version=11.8
               - cudatoolkit
+              - cuda-nvtx=11.8
               - libcurand-dev=10.3.0.86
               - libcurand=10.3.0.86
           - matrix:
@@ -302,6 +311,7 @@ dependencies:
             packages:
               - cuda-version=11.5
               - cudatoolkit
+              - cuda-nvtx=11.5
                 # Can't hard pin the version since 11.x is missing many
                 # packages for specific versions
               - libcurand-dev>=10.2.6.48,<=10.2.7.107
@@ -311,6 +321,7 @@ dependencies:
             packages:
               - cuda-version=11.4
               - cudatoolkit
+              - &cudanvtx114 cuda-nvtx=11.4
               - &libcurand_dev114 libcurand-dev>=10.2.5.43,<=10.2.5.120
               - &libcurand114 libcurand>=10.2.5.43,<=10.2.5.120
           - matrix:
@@ -321,6 +332,7 @@ dependencies:
                 # The NVIDIA channel doesn't publish pkgs older than 11.4 for
                 # these libs, so 11.2 uses 11.4 packages (the oldest
                 # available).
+              - *cudanvtx114
               - *libcurand_dev114
               - *libcurand114
       - output_types: conda
@@ -369,13 +381,13 @@ dependencies:
           - identify>=2.5.20
       - output_types: conda
         packages:
-          - doxygen=1.8.20 # pre-commit hook needs a specific version.
+          - &doxygen doxygen=1.9.1 # pre-commit hook needs a specific version.
   docs:
     common:
       - output_types: [conda]
         packages:
           - dask-cuda==23.10.*
-          - doxygen=1.8.20
+          - *doxygen
           - make
           - myst-nb
           - nbsphinx
@@ -415,14 +427,15 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          - numpy>=1.21
+          - *numpy
           - pandas>=1.3,<1.6.0dev0
   run_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - &numba numba>=0.57
+          # TODO: Pin to numba<0.58 until #14160 is resolved
+          - &numba numba>=0.57,<0.58
           - nvtx>=0.2.1
           - packaging
           - rmm==23.10.*
@@ -478,12 +491,12 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - dask==2023.7.1
-          - distributed==2023.7.1
+          - dask==2023.9.2
+          - distributed==2023.9.2
       - output_types: conda
         packages:
           - cupy>=12.0.0
-          - dask-core==2023.7.1  # dask-core in conda is the actual package & dask is the meta package
+          - dask-core==2023.9.2  # dask-core in conda is the actual package & dask is the meta package
       - output_types: pyproject
         packages:
           - &cudf cudf==23.10.*
@@ -535,22 +548,6 @@ dependencies:
           - *cmake_ver
           - maven
           - openjdk=8.*
-    specific:
-      - output_types: conda
-        matrices:
-          - matrix:
-              cuda: "12.0"
-            packages:
-              - cuda-version=12.0
-              - cuda-nvtx
-          - matrix:
-              cuda: "11.8"
-            packages:
-              - cuda-nvtx=11.8
-          - matrix:
-              cuda: "11.5"
-            packages:
-              - cuda-nvtx=11.5
   test_python_common:
     common:
       - output_types: [conda, requirements, pyproject]

@@ -6,9 +6,19 @@ import functools
 import inspect
 import pickle
 import textwrap
+import warnings
 from collections import abc
 from shutil import get_terminal_size
-from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Union
+from typing import (
+    Any,
+    Dict,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+)
 
 import cupy
 import numpy as np
@@ -499,6 +509,18 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         copy=False,
         nan_as_null=True,
     ):
+        if (
+            isinstance(data, Sequence)
+            and len(data) == 0
+            and dtype is None
+            and getattr(data, "dtype", None) is None
+        ):
+            warnings.warn(
+                "The default dtype for empty Series will be 'object' instead "
+                "of 'float64' in a future version. Specify a dtype explicitly "
+                "to silence this warning.",
+                FutureWarning,
+            )
         if isinstance(data, pd.Series):
             if name is None:
                 name = data.name
@@ -604,10 +626,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         cls,
         data: MutableMapping,
         index: Optional[BaseIndex] = None,
-        name: Any = None,
+        name: Any = no_default,
     ) -> Series:
         out = super()._from_data(data=data, index=index)
-        if name is not None:
+        if name is not no_default:
             out.name = name
         return out
 
@@ -655,7 +677,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3     NaN
         dtype: float64
         """
-        return cls(s, nan_as_null=nan_as_null)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            result = cls(s, nan_as_null=nan_as_null)
+        return result
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -796,17 +821,17 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return obj
 
-    def _get_columns_by_label(self, labels, downcast=False):
+    def _get_columns_by_label(self, labels, *, downcast=False) -> Self:
         """Return the column specified by `labels`
 
         For cudf.Series, either the column, or an empty series is returned.
         Parameter `downcast` does not have effects.
         """
-        new_data = super()._get_columns_by_label(labels, downcast)
+        ca = self._data.select_by_label(labels)
 
         return (
-            self.__class__._from_data(data=new_data, index=self.index)
-            if len(new_data) > 0
+            self.__class__._from_data(data=ca, index=self.index)
+            if len(ca) > 0
             else self.__class__(dtype=self.dtype, name=self.name)
         )
 
@@ -2557,7 +2582,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if len(val_counts) > 0:
             val_counts = val_counts[val_counts == val_counts.iloc[0]]
 
-        return Series(val_counts.index.sort_values(), name=self.name)
+        return Series._from_data(
+            {self.name: val_counts.index.sort_values()}, name=self.name
+        )
 
     @_cudf_nvtx_annotate
     def round(self, decimals=0, how="half_even"):
@@ -2885,6 +2912,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: object
         """
         res = self._column.unique()
+        if cudf.get_option("mode.pandas_compatible"):
+            return res.values
         return Series(res, name=self.name)
 
     @_cudf_nvtx_annotate
@@ -3045,8 +3074,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         interpolation : {'linear', 'lower', 'higher', 'midpoint', 'nearest'}
             This optional parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j:
-        columns : list of str
-            List of column names to include.
+
+                * linear: `i + (j - i) * fraction`, where `fraction` is the
+                  fractional part of the index surrounded by `i` and `j`.
+                * lower: `i`.
+                * higher: `j`.
+                * nearest: `i` or `j` whichever is nearest.
+                * midpoint: (`i` + `j`) / 2.
         exact : boolean
             Whether to use approximate or exact quantile algorithm.
         quant_index : boolean

@@ -5,13 +5,14 @@ from . cimport copying
 from .column cimport Column
 from .gpumemoryview cimport gpumemoryview
 from .table cimport Table
-from .types cimport DataType, TypeId
+# TODO: cimport type_id once
+# https://github.com/cython/cython/issues/5609 is resolved
+from .types cimport DataType
 
 __all__ = [
     "Column",
     "DataType",
     "Table",
-    "TypeId",
     "copying",
     "gpumemoryview",
 ]

@@ -9,7 +9,10 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140, PANDAS_GE_200
-from cudf.testing._utils import _create_pandas_series, assert_eq
+from cudf.testing._utils import (
+    _create_pandas_series_float64_default,
+    assert_eq,
+)
 from cudf.testing.dataset_generator import rand_dataframe
 
 
@@ -55,7 +58,7 @@ def test_rolling_series_basic(data, index, agg, nulls, center):
         elif nulls == "all":
             data = [np.nan] * len(data)
 
-    psr = _create_pandas_series(data, index=index)
+    psr = _create_pandas_series_float64_default(data, index=index)
     gsr = cudf.Series(psr)
     for window_size in range(1, len(data) + 1):
         for min_periods in range(1, window_size + 1):
@@ -313,7 +316,7 @@ def test_rolling_getitem_window():
 @pytest.mark.parametrize("center", [True, False])
 def test_rollling_series_numba_udf_basic(data, index, center):
 
-    psr = _create_pandas_series(data, index=index)
+    psr = _create_pandas_series_float64_default(data, index=index)
     gsr = cudf.from_pandas(psr)
 
     def some_func(A):

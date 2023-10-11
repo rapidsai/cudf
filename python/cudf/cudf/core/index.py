@@ -28,6 +28,7 @@ from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
 from cudf._lib.types import size_type_dtype
+from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_categorical_dtype,
@@ -121,7 +122,7 @@ def _lexsorted_equal_range(
     return lower_bound, upper_bound, sort_inds
 
 
-def _index_from_data(data: MutableMapping, name: Any = None):
+def _index_from_data(data: MutableMapping, name: Any = no_default):
     """Construct an index of the appropriate type from some data."""
 
     if len(data) == 0:
@@ -152,7 +153,7 @@ def _index_from_data(data: MutableMapping, name: Any = None):
 
 
 def _index_from_columns(
-    columns: List[cudf.core.column.ColumnBase], name: Any = None
+    columns: List[cudf.core.column.ColumnBase], name: Any = no_default
 ):
     """Construct an index from ``columns``, with levels named 0, 1, 2..."""
     return _index_from_data(dict(zip(range(len(columns)), columns)), name=name)
@@ -666,7 +667,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_cudf_nvtx_annotate
     def _intersection(self, other, sort=None):
         if not isinstance(other, RangeIndex):
-            return super()._intersection(other, sort=sort)
+            return self._try_reconstruct_range_index(
+                super()._intersection(other, sort=sort)
+            )
 
         if not len(self) or not len(other):
             return RangeIndex(0)
@@ -707,7 +710,29 @@ class RangeIndex(BaseIndex, BinaryOperand):
         if sort in {None, True}:
             new_index = new_index.sort_values()
 
-        return new_index
+        return self._try_reconstruct_range_index(new_index)
+
+    @_cudf_nvtx_annotate
+    def difference(self, other, sort=None):
+        if isinstance(other, RangeIndex) and self.equals(other):
+            return self[:0]._get_reconciled_name_object(other)
+
+        return self._try_reconstruct_range_index(
+            super().difference(other, sort=sort)
+        )
+
+    def _try_reconstruct_range_index(self, index):
+        if isinstance(index, RangeIndex) or index.dtype.kind == "f":
+            return index
+        # Evenly spaced values can return a
+        # RangeIndex instead of a materialized Index.
+        if not index._column.has_nulls():
+            uniques = cupy.unique(cupy.diff(index.values))
+            if len(uniques) == 1 and uniques[0].get() != 0:
+                diff = uniques[0].get()
+                new_range = range(index[0], index[-1] + diff, diff)
+                return type(self)(new_range, name=index.name)
+        return index
 
     def sort_values(
         self,
@@ -979,9 +1004,9 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @classmethod
     @_cudf_nvtx_annotate
-    def _from_data(cls, data: MutableMapping, name: Any = None) -> Self:
+    def _from_data(cls, data: MutableMapping, name: Any = no_default) -> Self:
         out = super()._from_data(data=data)
-        if name is not None:
+        if name is not no_default:
             out.name = name
         return out
 
@@ -993,7 +1018,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         except TypeError:
             # Try interpreting object as a MultiIndex before failing.
             return cudf.MultiIndex.from_arrow(obj)
-    
+
     @cached_property
     def is_monotonic_increasing(self):
         return super().is_monotonic_increasing
@@ -1029,10 +1054,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         # pandas returns numpy arrays when the outputs are boolean. We
         # explicitly _do not_ use isinstance here: we want only boolean
         # Indexes, not dtype-specific subclasses.
-        if (
-            isinstance(ret, (Index, cudf.Series))
-            and ret.dtype.kind == "b"
-        ):
+        if isinstance(ret, (Index, cudf.Series)) and ret.dtype.kind == "b":
             if ret._column.has_nulls():
                 ret = ret.fillna(op == "__ne__")
 
@@ -2738,7 +2760,7 @@ class IntervalIndex(Index):
         >>> import cudf
         >>> import pandas as pd
         >>> cudf.IntervalIndex.from_breaks([0, 1, 2, 3])
-        IntervalIndex([(0, 1], (1, 2], (2, 3]], dtype='interval')
+        IntervalIndex([(0, 1], (1, 2], (2, 3]], dtype='interval[int64, right]')
         """
         if copy:
             breaks = column.as_column(breaks, dtype=dtype).copy()
@@ -2761,6 +2783,9 @@ class IntervalIndex(Index):
 
     def _is_boolean(self):
         return False
+
+    def _clean_nulls_from_index(self):
+        return self
 
 
 @_cudf_nvtx_annotate
@@ -2785,6 +2810,7 @@ def as_index(arbitrary, nan_as_null=None, **kwargs) -> BaseIndex:
         - DatetimeIndex for Datetime input.
         - Index for all other inputs.
     """
+
     kwargs = _setdefault_name(arbitrary, **kwargs)
     if isinstance(arbitrary, cudf.MultiIndex):
         return arbitrary

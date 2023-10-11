@@ -45,13 +45,13 @@ static const __device__ __constant__ uint8_t g_list2struct[16] = {0,
                                                                   ST_FLD_LIST};
 
 struct byte_stream_s {
-  uint8_t const* cur;
-  uint8_t const* end;
-  uint8_t const* base;
+  uint8_t const* cur{};
+  uint8_t const* end{};
+  uint8_t const* base{};
   // Parsed symbols
-  PageType page_type;
-  PageInfo page;
-  ColumnChunkDesc ck;
+  PageType page_type{};
+  PageInfo page{};
+  ColumnChunkDesc ck{};
 };
 
 /**
@@ -152,6 +152,28 @@ __device__ void skip_struct_field(byte_stream_s* bs, int field_type)
       case ST_FLD_STRUCT: struct_depth++; break;
     }
   } while (rep_cnt || struct_depth);
+}
+
+/**
+ * @brief Determine which decode kernel to run for the given page.
+ *
+ * @param page The page to decode
+ * @param chunk Column chunk the page belongs to
+ * @return `kernel_mask_bits` value for the given page
+ */
+__device__ uint32_t kernel_mask_for_page(gpu::PageInfo const& page,
+                                         gpu::ColumnChunkDesc const& chunk)
+{
+  if (page.flags & PAGEINFO_FLAGS_DICTIONARY) { return 0; }
+
+  if (page.encoding == Encoding::DELTA_BINARY_PACKED) {
+    return KERNEL_MASK_DELTA_BINARY;
+  } else if (is_string_col(chunk)) {
+    return KERNEL_MASK_STRING;
+  }
+
+  // non-string, non-delta
+  return KERNEL_MASK_GENERAL;
 }
 
 /**
@@ -370,6 +392,7 @@ __global__ void __launch_bounds__(128)
       bs->page.skipped_values      = -1;
       bs->page.skipped_leaf_values = 0;
       bs->page.str_bytes           = 0;
+      bs->page.kernel_mask         = 0;
     }
     num_values     = bs->ck.num_values;
     page_info      = bs->ck.page_info;
@@ -420,6 +443,7 @@ __global__ void __launch_bounds__(128)
           }
           bs->page.page_data = const_cast<uint8_t*>(bs->cur);
           bs->cur += bs->page.compressed_page_size;
+          bs->page.kernel_mask = kernel_mask_for_page(bs->page, bs->ck);
         } else {
           bs->cur = bs->end;
         }

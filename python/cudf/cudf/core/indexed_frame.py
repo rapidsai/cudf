@@ -358,6 +358,12 @@ class IndexedFrame(Frame):
             override_dtypes=override_dtypes,
         )
 
+    def __round__(self, digits=0):
+        # Shouldn't be added to BinaryOperand
+        # because pandas Index doesn't implement
+        # this method.
+        return self.round(decimals=digits)
+
     def _mimic_inplace(
         self, result: Self, inplace: bool = False
     ) -> Optional[Self]:
@@ -822,11 +828,7 @@ class IndexedFrame(Frame):
             ) = _get_replacement_values_for_columns(
                 to_replace=to_replace,
                 value=value,
-                # TODO: This should be replaced with `DataFrame._dtypes` once
-                # that is moved up to `Frame`.
-                columns_dtype_map={
-                    col: self._data[col].dtype for col in self._data
-                },
+                columns_dtype_map=self._dtypes,
             )
 
             for name, col in self._data.items():
@@ -1530,7 +1532,9 @@ class IndexedFrame(Frame):
         na_position : {'first', 'last'}, default 'last'
             Puts NaNs at the beginning if first; last puts NaNs at the end.
         sort_remaining : bool, default True
-            Not yet supported
+            When sorting a multiindex on a subset of its levels,
+            should entries be lexsorted by the remaining
+            (non-specified) levels as well?
         ignore_index : bool, default False
             if True, index will be replaced with RangeIndex.
         key : callable, optional
@@ -1596,11 +1600,6 @@ class IndexedFrame(Frame):
         if kind is not None:
             raise NotImplementedError("kind is not yet supported")
 
-        if not sort_remaining:
-            raise NotImplementedError(
-                "sort_remaining == False is not yet supported"
-            )
-
         if key is not None:
             raise NotImplementedError("key is not yet supported.")
 
@@ -1613,16 +1612,22 @@ class IndexedFrame(Frame):
                 if level is not None:
                     # Pandas doesn't handle na_position in case of MultiIndex.
                     na_position = "first" if ascending is True else "last"
-                    labels = [
-                        idx._get_level_label(lvl)
-                        for lvl in (level if is_list_like(level) else (level,))
-                    ]
-                    # Explicitly construct a Frame rather than using type(self)
-                    # to avoid constructing a SingleColumnFrame (e.g. Series).
-                    idx = Frame._from_data(idx._data.select_by_label(labels))
+                    if not is_list_like(level):
+                        level = [level]
+                    by = list(map(idx._get_level_label, level))
+                    if sort_remaining:
+                        handled = set(by)
+                        by.extend(
+                            filter(
+                                lambda n: n not in handled,
+                                self.index._data.names,
+                            )
+                        )
+                else:
+                    by = list(idx._data.names)
 
                 inds = idx._get_sorted_inds(
-                    ascending=ascending, na_position=na_position
+                    by=by, ascending=ascending, na_position=na_position
                 )
                 out = self._gather(
                     GatherMap.from_column_unchecked(
@@ -1962,6 +1967,11 @@ class IndexedFrame(Frame):
         ignore_index: bool, default False
             If True, the resulting axis will be labeled 0, 1, ..., n - 1.
         """
+        if not isinstance(ignore_index, (np.bool_, bool)):
+            raise ValueError(
+                f"{ignore_index=} must be bool, "
+                f"not {type(ignore_index).__name__}"
+            )
         subset = self._preprocess_subset(subset)
         subset_cols = [name for name in self._column_names if name in subset]
         if len(subset_cols) == 0:
@@ -2465,6 +2475,20 @@ class IndexedFrame(Frame):
         if isinstance(columns, str):
             columns = [columns]
 
+        method = "nlargest" if largest else "nsmallest"
+        for col in columns:
+            if isinstance(self._data[col], cudf.core.column.StringColumn):
+                if isinstance(self, cudf.DataFrame):
+                    error_msg = (
+                        f"Column '{col}' has dtype {self._data[col].dtype}, "
+                        f"cannot use method '{method}' with this dtype"
+                    )
+                else:
+                    error_msg = (
+                        f"Cannot use method '{method}' with "
+                        f"dtype {self._data[col].dtype}"
+                    )
+                raise TypeError(error_msg)
         if len(self) == 0:
             return self
 
@@ -2582,10 +2606,12 @@ class IndexedFrame(Frame):
 
         df = self
         if index is not None:
-            index = cudf.core.index.as_index(index)
+            index = cudf.core.index.as_index(
+                index, name=getattr(index, "name", self._index.name)
+            )
 
             idx_dtype_match = (df.index.nlevels == index.nlevels) and all(
-                left_dtype == right_dtype
+                _is_same_dtype(left_dtype, right_dtype)
                 for left_dtype, right_dtype in zip(
                     (col.dtype for col in df.index._data.columns),
                     (col.dtype for col in index._data.columns),
@@ -2635,7 +2661,9 @@ class IndexedFrame(Frame):
             data=cudf.core.column_accessor.ColumnAccessor(
                 cols,
                 multiindex=self._data.multiindex,
-                level_names=self._data.level_names,
+                level_names=tuple(column_names.names)
+                if isinstance(column_names, pd.Index)
+                else None,
             ),
             index=index,
         )
@@ -5382,3 +5410,31 @@ def _drop_rows_by_labels(
             res = obj.to_frame(name="tmp").join(key_df, how="leftanti")["tmp"]
             res.name = obj.name
             return res
+
+
+def _is_same_dtype(lhs_dtype, rhs_dtype):
+    # Utility specific to `_reindex` to check
+    # for matching column dtype.
+    if lhs_dtype == rhs_dtype:
+        return True
+    elif (
+        is_categorical_dtype(lhs_dtype)
+        and is_categorical_dtype(rhs_dtype)
+        and lhs_dtype.categories.dtype == rhs_dtype.categories.dtype
+    ):
+        # OK if categories are not all the same
+        return True
+    elif (
+        is_categorical_dtype(lhs_dtype)
+        and not is_categorical_dtype(rhs_dtype)
+        and lhs_dtype.categories.dtype == rhs_dtype
+    ):
+        return True
+    elif (
+        is_categorical_dtype(rhs_dtype)
+        and not is_categorical_dtype(lhs_dtype)
+        and rhs_dtype.categories.dtype == lhs_dtype
+    ):
+        return True
+    else:
+        return False

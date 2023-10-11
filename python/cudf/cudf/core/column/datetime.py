@@ -657,6 +657,10 @@ def infer_format(element: str, **kwargs) -> str:
     fmt = _guess_datetime_format(element, **kwargs)
 
     if fmt is not None:
+        if "%z" in fmt or "%Z" in fmt:
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
         if ".%f" in fmt:
             # For context read:
             # https://github.com/pandas-dev/pandas/issues/52418
@@ -685,11 +689,9 @@ def infer_format(element: str, **kwargs) -> str:
         raise ValueError("Unable to infer the timestamp format from the data")
 
     if len(second_parts) > 1:
-        if "Z" in second_parts:
-            # "Z" indicates Zulu time(widely used in aviation) - Which is
-            # UTC timezone that currently cudf only supports. Having any other
-            # unsupported timezone will let the code fail below
-            # with a ValueError.
+        # We may have a non-digit, timezone-like component
+        # like Z, UTC-3, +01:00
+        if any(re.search(r"\D", part) for part in second_parts):
             raise NotImplementedError(
                 "cuDF does not yet support timezone-aware datetimes"
             )
