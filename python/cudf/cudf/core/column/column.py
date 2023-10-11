@@ -2490,8 +2490,7 @@ def as_column(
 
                 if (
                     cudf.get_option("mode.pandas_compatible")
-                    and cudf.dtype(pyarrow_array.type.to_pandas_dtype()).kind
-                    == "i"
+                    and pa.types.is_integer(pyarrow_array.type)
                     and pyarrow_array.null_count
                 ):
                     pyarrow_array = pyarrow_array.cast("float64").fill_null(
