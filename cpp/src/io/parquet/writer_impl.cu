@@ -405,8 +405,9 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_s>, void> operator()()
   {
-    col_schema.type     = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
-    col_schema.ts_scale = 1000;
+    col_schema.type        = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
+    col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
+    col_schema.ts_scale    = 1000;
     if (not timestamp_is_int96) {
       col_schema.converted_type               = ConvertedType::TIMESTAMP_MILLIS;
       col_schema.logical_type                 = LogicalType{LogicalType::TIMESTAMP};
