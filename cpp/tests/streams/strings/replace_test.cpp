@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#include <cudf/strings/regex/regex_program.hpp>
-#include <cudf/strings/replace.hpp>
-#include <cudf/strings/replace_re.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+
+#include <cudf/strings/regex/regex_program.hpp>
+#include <cudf/strings/replace.hpp>
+#include <cudf/strings/replace_re.hpp>
 
 #include <string>
 

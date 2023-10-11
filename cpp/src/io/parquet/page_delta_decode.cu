@@ -23,7 +23,7 @@
 #include <rmm/exec_policy.hpp>
 #include <thrust/transform_scan.h>
 
-namespace cudf::io::parquet::gpu {
+namespace cudf::io::parquet::detail {
 
 namespace {
 
@@ -160,7 +160,7 @@ __global__ void __launch_bounds__(96)
 }  // anonymous namespace
 
 /**
- * @copydoc cudf::io::parquet::gpu::DecodeDeltaBinary
+ * @copydoc cudf::io::parquet::detail::DecodeDeltaBinary
  */
 void __host__ DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages,
                                 cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
@@ -184,4 +184,4 @@ void __host__ DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages
   }
 }
 
-}  // namespace cudf::io::parquet::gpu
+}  // namespace cudf::io::parquet::detail
