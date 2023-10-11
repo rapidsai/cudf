@@ -173,7 +173,7 @@ ConfigureBench(ITERATOR_BENCH iterator/iterator.cu)
 # ##################################################################################################
 # * search benchmark ------------------------------------------------------------------------------
 ConfigureBench(SEARCH_BENCH search/search.cpp)
-ConfigureNVBench(SEARCH_NVBENCH search/contains.cpp)
+ConfigureNVBench(SEARCH_NVBENCH search/contains_scalar.cpp search/contains_table.cpp)
 
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
@@ -276,8 +276,8 @@ ConfigureBench(BINARYOP_BENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.c
 ConfigureBench(TEXT_BENCH text/ngrams.cpp text/subword.cpp)
 
 ConfigureNVBench(
-  TEXT_NVBENCH text/hash_ngrams.cpp text/jaccard.cpp text/minhash.cpp text/normalize.cpp
-  text/replace.cpp text/tokenize.cpp
+  TEXT_NVBENCH text/edit_distance.cpp text/hash_ngrams.cpp text/jaccard.cpp text/minhash.cpp
+  text/normalize.cpp text/replace.cpp text/tokenize.cpp
 )
 
 # ##################################################################################################

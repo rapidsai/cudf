@@ -63,7 +63,7 @@ repos:
                 # Explicitly specify the pyproject.toml at the repo root, not per-project.
                 args: ["--config=pyproject.toml"]
       - repo: https://github.com/pre-commit/mirrors-clang-format
-        rev: v16.0.1
+        rev: v16.0.6
         hooks:
               - id: clang-format
                 types_or: [c, c++, cuda]
@@ -128,18 +128,6 @@ repos:
                 language: system
                 pass_filenames: false
                 verbose: true
-              - id: headers-recipe-check
-                name: headers-recipe-check
-                entry: ./ci/checks/headers_test.sh
-                files: |
-                  (?x)^(
-                    ^cpp/include/|
-                    ^conda/.*/meta.yaml
-                  )
-                types_or: [file]
-                language: system
-                pass_filenames: false
-                verbose: false
       - repo: https://github.com/codespell-project/codespell
         rev: v2.2.2
         hooks:

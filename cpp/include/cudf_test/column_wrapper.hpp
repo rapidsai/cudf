@@ -944,8 +944,10 @@ class dictionary_column_wrapper : public detail::column_wrapper {
   template <typename InputIterator>
   dictionary_column_wrapper(InputIterator begin, InputIterator end) : column_wrapper{}
   {
-    wrapped = cudf::dictionary::encode(
-      fixed_width_column_wrapper<KeyElementTo, SourceElementT>(begin, end));
+    wrapped =
+      cudf::dictionary::encode(fixed_width_column_wrapper<KeyElementTo, SourceElementT>(begin, end),
+                               cudf::data_type{type_id::UINT32},
+                               cudf::test::get_default_stream());
   }
 
   /**
@@ -978,7 +980,9 @@ class dictionary_column_wrapper : public detail::column_wrapper {
     : column_wrapper{}
   {
     wrapped = cudf::dictionary::encode(
-      fixed_width_column_wrapper<KeyElementTo, SourceElementT>(begin, end, v));
+      fixed_width_column_wrapper<KeyElementTo, SourceElementT>(begin, end, v),
+      cudf::data_type{type_id::UINT32},
+      cudf::test::get_default_stream());
   }
 
   /**
@@ -1134,7 +1138,9 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
   template <typename StringsIterator>
   dictionary_column_wrapper(StringsIterator begin, StringsIterator end) : column_wrapper{}
   {
-    wrapped = cudf::dictionary::encode(strings_column_wrapper(begin, end));
+    wrapped = cudf::dictionary::encode(strings_column_wrapper(begin, end),
+                                       cudf::data_type{type_id::UINT32},
+                                       cudf::test::get_default_stream());
   }
 
   /**
@@ -1169,7 +1175,9 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
   dictionary_column_wrapper(StringsIterator begin, StringsIterator end, ValidityIterator v)
     : column_wrapper{}
   {
-    wrapped = cudf::dictionary::encode(strings_column_wrapper(begin, end, v));
+    wrapped = cudf::dictionary::encode(strings_column_wrapper(begin, end, v),
+                                       cudf::data_type{type_id::UINT32},
+                                       cudf::test::get_default_stream());
   }
 
   /**
@@ -1507,7 +1515,7 @@ class lists_column_wrapper : public detail::column_wrapper {
    */
   static lists_column_wrapper<T> make_one_empty_row_column(bool valid = true)
   {
-    cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets{0, 0};
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets{0, 0};
     cudf::test::fixed_width_column_wrapper<int> values{};
     return lists_column_wrapper<T>(
       1,
@@ -1596,12 +1604,10 @@ class lists_column_wrapper : public detail::column_wrapper {
     thrust::copy_if(
       std::cbegin(cols), std::cend(cols), valids, std::back_inserter(children), thrust::identity{});
 
-    // TODO: Once the public concatenate API exposes streams, use that instead.
-    auto data =
-      children.empty()
-        ? cudf::empty_like(expected_hierarchy)
-        : cudf::detail::concatenate(
-            children, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
+    auto data = children.empty() ? cudf::empty_like(expected_hierarchy)
+                                 : cudf::concatenate(children,
+                                                     cudf::test::get_default_stream(),
+                                                     rmm::mr::get_current_device_resource());
 
     // increment depth
     depth = expected_depth + 1;

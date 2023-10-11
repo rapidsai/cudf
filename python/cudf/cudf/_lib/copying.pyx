@@ -4,16 +4,16 @@ import pickle
 
 from libc.stdint cimport int32_t, uint8_t, uintptr_t
 from libcpp cimport bool
-from libcpp.memory cimport make_shared, make_unique, shared_ptr, unique_ptr
+from libcpp.memory cimport make_shared, shared_ptr, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from rmm._lib.device_buffer cimport DeviceBuffer
 
 import cudf
+from cudf._lib import pylibcudf
 from cudf.core.buffer import Buffer, acquire_spill_lock, as_buffer
 
-from cudf._lib cimport pylibcudf
 from cudf._lib.column cimport Column
 
 from cudf._lib.scalar import as_device_scalar
@@ -29,6 +29,7 @@ cimport cudf._lib.cpp.copying as cpp_copying
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
 from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
+from cudf._lib.cpp.libcpp.memory cimport make_unique
 from cudf._lib.cpp.lists.gather cimport (
     segmented_gather as cpp_segmented_gather,
 )
@@ -80,7 +81,6 @@ def copy_column(Column input_column):
     Deep copied column
     """
     cdef unique_ptr[column] c_result
-
     cdef column_view input_column_view = input_column.view()
     with nogil:
         c_result = move(make_unique[column](input_column_view))
@@ -174,7 +174,7 @@ def gather(
     Column gather_map,
     bool nullify=False
 ):
-    cdef pylibcudf.Table tbl = pylibcudf.copying.gather(
+    tbl = pylibcudf.copying.gather(
         pylibcudf.Table([col.to_pylibcudf(mode="read") for col in columns]),
         gather_map.to_pylibcudf(mode="read"),
         pylibcudf.copying.OutOfBoundsPolicy.NULLIFY if nullify

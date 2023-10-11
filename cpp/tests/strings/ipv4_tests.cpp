@@ -72,7 +72,8 @@ TEST_F(StringsConvertTest, IntegersToIPv4)
 
 TEST_F(StringsConvertTest, ZeroSizeStringsColumnIPV4)
 {
-  cudf::column_view zero_size_column(cudf::data_type{cudf::type_id::INT64}, 0, nullptr, nullptr, 0);
+  auto const zero_size_column = cudf::make_empty_column(cudf::type_id::INT64)->view();
+
   auto results = cudf::strings::integers_to_ipv4(zero_size_column);
   cudf::test::expect_column_empty(results->view());
   results = cudf::strings::ipv4_to_integers(results->view());

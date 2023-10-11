@@ -288,8 +288,9 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const& filepath
 {
   if (cufile_integration::is_gds_enabled()) {
     try {
-      auto const cufile_in = std::make_unique<cufile_input_impl>(filepath);
+      auto cufile_in = std::make_unique<cufile_input_impl>(filepath);
       CUDF_LOG_INFO("File successfully opened for reading with GDS.");
+      return cufile_in;
     } catch (...) {
       if (cufile_integration::is_always_enabled()) {
         CUDF_LOG_ERROR(
@@ -302,15 +303,16 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const& filepath
         "buffer (possible performance impact).");
     }
   }
-  return nullptr;
+  return {};
 }
 
 std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const& filepath)
 {
   if (cufile_integration::is_gds_enabled()) {
     try {
-      auto const cufile_out = std::make_unique<cufile_output_impl>(filepath);
+      auto cufile_out = std::make_unique<cufile_output_impl>(filepath);
       CUDF_LOG_INFO("File successfully opened for writing with GDS.");
+      return cufile_out;
     } catch (...) {
       if (cufile_integration::is_always_enabled()) {
         CUDF_LOG_ERROR(
@@ -323,7 +325,7 @@ std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const& filepa
         "buffer (possible performance impact).");
     }
   }
-  return nullptr;
+  return {};
 }
 
 std::vector<file_io_slice> make_file_io_slices(size_t size, size_t max_slice_size)

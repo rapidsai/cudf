@@ -16,6 +16,7 @@ DartConfiguration.tcl
 *.spec
 .nfs*
 .clangd
+compile_commands.json
 
 ## Python build directories & artifacts
 dask-worker-space/

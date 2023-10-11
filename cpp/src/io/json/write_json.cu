@@ -20,6 +20,7 @@
  */
 
 #include <io/csv/durations.hpp>
+#include <io/utilities/parsing_utils.cuh>
 #include <lists/utilities.hpp>
 
 #include <cudf/column/column_device_view.cuh>
@@ -27,9 +28,9 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/data_sink.hpp>
-#include <cudf/io/detail/data_casting.cuh>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -75,10 +76,10 @@ namespace {
 struct escape_strings_fn {
   column_device_view const d_column;
   bool const append_colon{false};
-  offset_type* d_offsets{};
+  size_type* d_offsets{};
   char* d_chars{};
 
-  __device__ void write_char(char_utf8 chr, char*& d_buffer, offset_type& bytes)
+  __device__ void write_char(char_utf8 chr, char*& d_buffer, size_type& bytes)
   {
     if (d_buffer)
       d_buffer += cudf::strings::detail::from_char_utf8(chr, d_buffer);
@@ -91,7 +92,7 @@ struct escape_strings_fn {
     return nibble < 10 ? '0' + nibble : 'a' + nibble - 10;
   }
 
-  __device__ void write_utf8_codepoint(uint16_t codepoint, char*& d_buffer, offset_type& bytes)
+  __device__ void write_utf8_codepoint(uint16_t codepoint, char*& d_buffer, size_type& bytes)
   {
     if (d_buffer) {
       d_buffer[0] = '\\';
@@ -106,7 +107,7 @@ struct escape_strings_fn {
     }
   }
 
-  __device__ void write_utf16_codepoint(uint32_t codepoint, char*& d_buffer, offset_type& bytes)
+  __device__ void write_utf16_codepoint(uint32_t codepoint, char*& d_buffer, size_type& bytes)
   {
     constexpr uint16_t UTF16_HIGH_SURROGATE_BEGIN = 0xD800;
     constexpr uint16_t UTF16_LOW_SURROGATE_BEGIN  = 0xDC00;
@@ -130,8 +131,8 @@ struct escape_strings_fn {
     constexpr char_utf8 const quote = '\"';  // wrap quotes
     bool constexpr quote_row        = true;
 
-    char* d_buffer    = d_chars ? d_chars + d_offsets[idx] : nullptr;
-    offset_type bytes = 0;
+    char* d_buffer  = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    size_type bytes = 0;
 
     if (quote_row) write_char(quote, d_buffer, bytes);
     for (auto utf8_char : d_str) {
@@ -148,7 +149,7 @@ struct escape_strings_fn {
         }
         continue;
       }
-      auto escaped_chars = cudf::io::json::experimental::detail::get_escaped_char(utf8_char);
+      auto escaped_chars = get_escaped_char(utf8_char);
       if (escaped_chars.first == '\0') {
         write_char(escaped_chars.second, d_buffer, bytes);
       } else {
@@ -582,7 +583,7 @@ struct column_to_strings_fn {
     return cudf::strings::detail::from_timestamps(
       column,
       format,
-      strings_column_view(column_view{data_type{type_id::STRING}, 0, nullptr, nullptr, 0}),
+      strings_column_view(make_empty_column(type_id::STRING)->view()),
       stream_,
       mr_);
   }

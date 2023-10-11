@@ -383,7 +383,7 @@ TEST_F(PercentileApproxTest, EmptyInput)
   cudf::tdigest::tdigest_column_view tdv(*empty);
   auto result = cudf::percentile_approx(tdv, percentiles);
 
-  cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets{0, 0, 0, 0};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets{0, 0, 0, 0};
   std::vector<bool> nulls{0, 0, 0};
   auto [null_mask, null_count] = cudf::test::detail::make_null_mask(nulls.begin(), nulls.end());
 
@@ -415,7 +415,7 @@ TEST_F(PercentileApproxTest, EmptyPercentiles)
   cudf::tdigest::tdigest_column_view tdv(*tdigest_column.second[0].results[0]);
   auto result = cudf::percentile_approx(tdv, percentiles);
 
-  cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets{0, 0, 0};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets{0, 0, 0};
   std::vector<bool> nulls{0, 0};
   auto [null_mask, null_count] = cudf::test::detail::make_null_mask(nulls.begin(), nulls.end());
 

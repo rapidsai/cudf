@@ -446,6 +446,30 @@ class chunked_parquet_reader {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
+   * @brief Constructor for chunked reader.
+   *
+   * This constructor requires the same `parquet_reader_option` parameter as in
+   * `cudf::read_parquet()`, with additional parameters to specify the size byte limit of the
+   * output table for each reading, and a byte limit on the amount of temporary memory to use
+   * when reading. pass_read_limit affects how many row groups we can read at a time by limiting
+   * the amount of memory dedicated to decompression space. pass_read_limit is a hint, not an
+   * absolute limit - if a single row group cannot fit within the limit given, it will still be
+   * loaded.
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
+   * or `0` if there is no limit
+   * @param pass_read_limit Limit on the amount of memory used for reading and decompressing data or
+   * `0` if there is no limit
+   * @param options The options used to read Parquet file
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  chunked_parquet_reader(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    parquet_reader_options const& options,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+  /**
    * @brief Destructor, destroying the internal reader instance.
    *
    * Since the declaration of the internal `reader` object does not exist in this header, this
@@ -528,6 +552,8 @@ class parquet_writer_options {
   std::optional<size_type> _max_page_fragment_size;
   // Optional compression statistics
   std::shared_ptr<writer_compression_statistics> _compression_stats;
+  // write V2 page headers?
+  bool _v2_page_headers = false;
 
   /**
    * @brief Constructor from sink and table.
@@ -713,6 +739,13 @@ class parquet_writer_options {
   }
 
   /**
+   * @brief Returns `true` if V2 page headers should be written.
+   *
+   * @return `true` if V2 page headers should be written.
+   */
+  [[nodiscard]] auto is_enabled_write_v2_headers() const { return _v2_page_headers; }
+
+  /**
    * @brief Sets partitions.
    *
    * @param partitions Partitions of input table in {start_row, num_rows} pairs. If specified, must
@@ -829,6 +862,13 @@ class parquet_writer_options {
   {
     _compression_stats = std::move(comp_stats);
   }
+
+  /**
+   * @brief Sets preference for V2 page headers. Write V2 page headers if set to `true`.
+   *
+   * @param val Boolean value to enable/disable writing of V2 page headers.
+   */
+  void enable_write_v2_headers(bool val) { _v2_page_headers = val; }
 };
 
 /**
@@ -1061,6 +1101,14 @@ class parquet_writer_options_builder {
   }
 
   /**
+   * @brief Set to true if V2 page headers are to be written.
+   *
+   * @param enabled Boolean value to enable/disable writing of V2 page headers.
+   * @return this for chaining
+   */
+  parquet_writer_options_builder& write_v2_headers(bool enabled);
+
+  /**
    * @brief move parquet_writer_options member once it's built.
    */
   operator parquet_writer_options&&() { return std::move(options); }
@@ -1141,6 +1189,8 @@ class chunked_parquet_writer_options {
   std::optional<size_type> _max_page_fragment_size;
   // Optional compression statistics
   std::shared_ptr<writer_compression_statistics> _compression_stats;
+  // write V2 page headers?
+  bool _v2_page_headers = false;
 
   /**
    * @brief Constructor from sink.
@@ -1282,6 +1332,13 @@ class chunked_parquet_writer_options {
   }
 
   /**
+   * @brief Returns `true` if V2 page headers should be written.
+   *
+   * @return `true` if V2 page headers should be written.
+   */
+  [[nodiscard]] auto is_enabled_write_v2_headers() const { return _v2_page_headers; }
+
+  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata
@@ -1385,6 +1442,13 @@ class chunked_parquet_writer_options {
   }
 
   /**
+   * @brief Sets preference for V2 page headers. Write V2 page headers if set to `true`.
+   *
+   * @param val Boolean value to enable/disable writing of V2 page headers.
+   */
+  void enable_write_v2_headers(bool val) { _v2_page_headers = val; }
+
+  /**
    * @brief creates builder to build chunked_parquet_writer_options.
    *
    * @param sink sink to use for writer output
@@ -1474,6 +1538,14 @@ class chunked_parquet_writer_options_builder {
     options._write_timestamps_as_int96 = enabled;
     return *this;
   }
+
+  /**
+   * @brief Set to true if V2 page headers are to be written.
+   *
+   * @param enabled Boolean value to enable/disable writing of V2 page headers.
+   * @return this for chaining
+   */
+  chunked_parquet_writer_options_builder& write_v2_headers(bool enabled);
 
   /**
    * @brief Sets the maximum row group size, in bytes.

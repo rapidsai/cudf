@@ -123,7 +123,7 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
     0,
     [row_indices = row_indices.begin<size_type>(),
      validity    = c.null_mask(),
-     offsets     = c.offsets().begin<offset_type>(),
+     offsets     = c.offsets().begin<size_type>(),
      offset      = c.offset()] __device__(int index) {
       // both null mask and offsets data are not pre-sliced. so we need to add the column offset to
       // every incoming index.
@@ -168,9 +168,9 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   auto output_row_iter = cudf::detail::make_counting_transform_iterator(
     0,
     [row_indices  = row_indices.begin<size_type>(),
-     offsets      = c.offsets().begin<offset_type>(),
+     offsets      = c.offsets().begin<size_type>(),
      offset       = c.offset(),
-     first_offset = cudf::detail::get_value<offset_type>(
+     first_offset = cudf::detail::get_value<size_type>(
        c.offsets(), c.offset(), cudf::test::get_default_stream())] __device__(int index) {
       auto const true_index = row_indices[index] + offset;
       return offsets[true_index] - first_offset;
@@ -440,7 +440,7 @@ class corresponding_rows_not_equivalent {
 
         // Must handle inf and nan separately
         if (std::isinf(x) || std::isinf(y)) {
-          return x != y;                          // comparison of (inf==inf) returns true
+          return x != y;  // comparison of (inf==inf) returns true
         } else if (std::isnan(x) || std::isnan(y)) {
           return std::isnan(x) != std::isnan(y);  // comparison of (nan==nan) returns false
         } else {
@@ -1091,7 +1091,7 @@ struct column_view_printer {
     if (col.is_empty()) return;
     auto h_data = cudf::test::to_host<std::string>(col);
 
-    // explicitly replace '\r' and '\n' characters with "\r" and "\n" strings respectively.
+    // explicitly replace some special whitespace characters with their literal equivalents
     auto cleaned = [](std::string_view in) {
       std::string out(in);
       auto replace_char = [](std::string& out, char c, std::string_view repl) {
@@ -1099,8 +1099,13 @@ struct column_view_printer {
           out.replace(pos, 1, repl);
         }
       };
+      replace_char(out, '\a', "\\a");
+      replace_char(out, '\b', "\\b");
+      replace_char(out, '\f', "\\f");
       replace_char(out, '\r', "\\r");
+      replace_char(out, '\t', "\\t");
       replace_char(out, '\n', "\\n");
+      replace_char(out, '\v', "\\v");
       return out;
     };
 

@@ -191,7 +191,7 @@ struct from_durations_fn {
   column_device_view d_durations;
   format_item const* d_format_items;
   size_type items_count;
-  offset_type* d_offsets{};
+  size_type* d_offsets{};
   char* d_chars{};
 
   __device__ int8_t format_length(char format_char, duration_component const* const timeparts) const
@@ -576,7 +576,7 @@ struct parse_duration {
           item_length++;  // :
           timeparts->second = parse_second(ptr + item_length, item_length);
           break;
-        case 'r':         // hh:MM:SS AM/PM
+        case 'r':  // hh:MM:SS AM/PM
           timeparts->hour = parse_hour(ptr, item_length);
           item_length++;  // :
           timeparts->minute = parse_minute(ptr + item_length, item_length);

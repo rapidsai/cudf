@@ -15,6 +15,7 @@
  */
 
 #include <benchmarks/io/cuio_common.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/logger.hpp>
 
 #include <cstdio>
@@ -141,17 +142,18 @@ std::vector<std::string> select_column_names(std::vector<std::string> const& col
   return col_names_to_read;
 }
 
-std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks, int chunk)
+std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks, int chunk_idx)
 {
   CUDF_EXPECTS(num_segments >= num_chunks,
                "Number of chunks cannot be greater than the number of segments in the file");
-  auto start_segment = [num_segments, num_chunks](int chunk) {
-    return num_segments * chunk / num_chunks;
-  };
-  std::vector<cudf::size_type> selected_segments;
-  for (auto segment = start_segment(chunk); segment < start_segment(chunk + 1); ++segment) {
-    selected_segments.push_back(segment);
-  }
+  CUDF_EXPECTS(chunk_idx < num_chunks,
+               "Chunk index must be smaller than the number of chunks in the file");
+
+  auto const segments_in_chunk = cudf::util::div_rounding_up_unsafe(num_segments, num_chunks);
+  auto const begin_segment     = std::min(chunk_idx * segments_in_chunk, num_segments);
+  auto const end_segment       = std::min(begin_segment + segments_in_chunk, num_segments);
+  std::vector<cudf::size_type> selected_segments(end_segment - begin_segment);
+  std::iota(selected_segments.begin(), selected_segments.end(), begin_segment);
 
   return selected_segments;
 }
