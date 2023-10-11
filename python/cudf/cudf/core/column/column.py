@@ -2487,6 +2487,17 @@ def as_column(
                     raise MixedTypeError(
                         "Cannot create column with mixed types"
                     )
+
+                if (
+                    cudf.get_option("mode.pandas_compatible")
+                    and cudf.dtype(pyarrow_array.type.to_pandas_dtype()).kind
+                    == "i"
+                    and pyarrow_array.null_count
+                ):
+                    pyarrow_array = pyarrow_array.cast("float64").fill_null(
+                        np.nan
+                    )
+
                 data = as_column(
                     pyarrow_array,
                     dtype=dtype,
