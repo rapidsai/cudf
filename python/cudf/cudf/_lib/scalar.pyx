@@ -1,7 +1,5 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
-cimport cython
-
 import copy
 
 import numpy as np
@@ -13,16 +11,16 @@ from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from rmm._lib.memory_resource cimport get_current_device_resource
-
 import cudf
+from cudf._lib import pylibcudf
 from cudf._lib.types import LIBCUDF_TO_SUPPORTED_NUMPY_TYPES
-from cudf.core.dtypes import ListDtype, StructDtype
+from cudf.core.dtypes import (
+    ListDtype,
+    StructDtype,
+    is_list_dtype,
+    is_struct_dtype,
+)
 from cudf.core.missing import NA, NaT
-
-from cudf._lib.types cimport dtype_from_column_view, underlying_type_t_type_id
-
-from cudf._lib.interop import from_arrow_scalar, to_arrow_scalar
 
 cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.cpp.scalar.scalar cimport (
@@ -44,6 +42,7 @@ from cudf._lib.cpp.wrappers.timestamps cimport (
     timestamp_s,
     timestamp_us,
 )
+from cudf._lib.types cimport dtype_from_column_view, underlying_type_t_type_id
 
 
 def _replace_nested(obj, check, replacement):
@@ -61,15 +60,44 @@ def _replace_nested(obj, check, replacement):
                 _replace_nested(v, check, replacement)
 
 
-# The DeviceMemoryResource attribute could be released prematurely
-# by the gc if the DeviceScalar is in a reference cycle. Removing
-# the tp_clear function with the no_gc_clear decoration prevents that.
-# See https://github.com/rapidsai/rmm/pull/931 for details.
-@cython.no_gc_clear
+def gather_metadata(dtypes):
+    """Convert a dict of dtypes to a list of ColumnMetadata objects.
+
+    The metadata is constructed recursively so that nested types are
+    represented as nested ColumnMetadata objects.
+
+    Parameters
+    ----------
+    dtypes : dict
+        A dict mapping column names to dtypes.
+
+    Returns
+    -------
+    List[ColumnMetadata]
+        A list of ColumnMetadata objects.
+    """
+    out = []
+    for name, dtype in dtypes.items():
+        v = pylibcudf.interop.ColumnMetadata(name)
+        if is_struct_dtype(dtype):
+            v.children_meta = gather_metadata(dtype.fields)
+        elif is_list_dtype(dtype):
+            # Offsets column is unnamed and has no children
+            v.children_meta.append(pylibcudf.interop.ColumnMetadata(""))
+            v.children_meta.extend(
+                gather_metadata({"": dtype.element_type})
+            )
+        out.append(v)
+    return out
+
+
 cdef class DeviceScalar:
 
+    # TODO: I think this should be removable, except that currently the way
+    # that from_unique_ptr is implemented is probably dereferencing this in an
+    # invalid state. See what the best way to fix that is.
     def __cinit__(self, *args, **kwargs):
-        self.mr = get_current_device_resource()
+        self.c_value = pylibcudf.Scalar()
 
     def __init__(self, value, dtype):
         """
@@ -85,7 +113,7 @@ cdef class DeviceScalar:
         dtype : dtype
             A NumPy dtype.
         """
-        self._dtype = dtype if dtype.kind != 'U' else cudf.dtype('object')
+        dtype = dtype if dtype.kind != 'U' else cudf.dtype('object')
 
         if cudf.utils.utils.is_na_like(value):
             value = None
@@ -108,10 +136,17 @@ cdef class DeviceScalar:
 
         pa_scalar = pa.scalar(value, type=pa_type)
 
-        # Note: This factory-like behavior in __init__ will be removed when
-        # migrating to pylibcudf.
-        cdef DeviceScalar obj = from_arrow_scalar(pa_scalar, self._dtype)
-        self.c_value.swap(obj.c_value)
+        data_type = None
+        if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
+            tid = pylibcudf.TypeId.DECIMAL128
+            if isinstance(dtype, cudf.core.dtypes.Decimal32Dtype):
+                tid = pylibcudf.TypeId.DECIMAL32
+            elif isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
+                tid = pylibcudf.TypeId.DECIMAL64
+            data_type = pylibcudf.DataType(tid, -dtype.scale)
+
+        self.c_value = pylibcudf.Scalar.from_arrow(pa_scalar, data_type)
+        self._dtype = dtype
 
     def _to_host_scalar(self):
         is_datetime = self.dtype.kind == "M"
@@ -119,7 +154,8 @@ cdef class DeviceScalar:
 
         null_type = NaT if is_datetime or is_timedelta else NA
 
-        ps = to_arrow_scalar(self)
+        metadata = gather_metadata({"": self.dtype})[0]
+        ps = self.c_value.to_arrow(metadata)
         if not ps.is_valid:
             return null_type
 
@@ -158,13 +194,13 @@ cdef class DeviceScalar:
         return self._to_host_scalar()
 
     cdef const scalar* get_raw_ptr(self) except *:
-        return self.c_value.get()
+        return self.c_value.c_obj.get()
 
     cpdef bool is_valid(self):
         """
         Returns if the Scalar is valid or not(i.e., <NA>).
         """
-        return self.get_raw_ptr()[0].is_valid()
+        return self.c_value.is_valid()
 
     def __repr__(self):
         if cudf.utils.utils.is_na_like(self.value):
@@ -183,7 +219,7 @@ cdef class DeviceScalar:
         cdef DeviceScalar s = DeviceScalar.__new__(DeviceScalar)
         cdef libcudf_types.data_type cdtype
 
-        s.c_value = move(ptr)
+        s.c_value = pylibcudf.Scalar.from_libcudf(move(ptr))
         cdtype = s.get_raw_ptr()[0].type()
 
         if dtype is not None:
@@ -310,9 +346,9 @@ def _create_proxy_nat_scalar(dtype):
     if dtype.char in 'mM':
         nat = dtype.type('NaT').astype(dtype)
         if dtype.type == np.datetime64:
-            _set_datetime64_from_np_scalar(result.c_value, nat, dtype, True)
+            _set_datetime64_from_np_scalar(result.c_value.c_obj, nat, dtype, True)
         elif dtype.type == np.timedelta64:
-            _set_timedelta64_from_np_scalar(result.c_value, nat, dtype, True)
+            _set_timedelta64_from_np_scalar(result.c_value.c_obj, nat, dtype, True)
         return result
     else:
         raise TypeError('NAT only valid for datetime and timedelta')
