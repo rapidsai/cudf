@@ -55,7 +55,7 @@ repos:
                 exclude: |
                   (?x)^(
                     ^python/cudf/cudf/pandas/scripts/.*|
-                    ^python/cudf/cudf/tests/xdf_tests/.*
+                    ^python/cudf/xdf_tests/.*
                   )
       - repo: https://github.com/nbQA-dev/nbQA
         rev: 1.6.3
