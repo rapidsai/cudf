@@ -284,8 +284,8 @@ class ColumnAccessor(abc.MutableMapping):
                         start=start, stop=start + 1, step=1, name=self.name
                     )
                 uniques = np.unique(np.diff(np.array(self.names)))
-                if len(uniques) == 1 and uniques[0].get() != 0:
-                    diff = uniques[0].get()
+                if len(uniques) == 1 and uniques[0] != 0:
+                    diff = uniques[0]
                     new_range = range(
                         self.names[0], self.names[-1] + diff, diff
                     )
