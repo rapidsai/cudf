@@ -17,7 +17,7 @@ from typing import (
     Union,
 )
 
-import cupy
+import numpy as np
 import pandas as pd
 from packaging.version import Version
 from pandas.api.types import is_bool
@@ -96,6 +96,9 @@ class ColumnAccessor(abc.MutableMapping):
         Tuple containing names for each of the levels.
         For a non-hierarchical index, a tuple of size 1
         may be passe.
+    rangeindex : bool, optional
+        Whether the keys should be returned as a RangeIndex
+        in `to_pandas_index` (default=False).
     """
 
     _data: "Dict[Any, ColumnBase]"
@@ -280,7 +283,7 @@ class ColumnAccessor(abc.MutableMapping):
                     return pd.RangeIndex(
                         start=start, stop=start + 1, step=1, name=self.name
                     )
-                uniques = cupy.unique(cupy.diff(cupy.array(self.names)))
+                uniques = np.unique(np.diff(np.array(self.names)))
                 if len(uniques) == 1 and uniques[0].get() != 0:
                     diff = uniques[0].get()
                     new_range = range(
