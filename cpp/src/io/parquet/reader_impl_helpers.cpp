@@ -35,22 +35,20 @@ ConvertedType logical_type_to_converted_type(thrust::optional<LogicalType> const
     case LogicalType::ENUM: return ENUM;
     case LogicalType::DECIMAL: return DECIMAL;  // TODO use decimal scale/precision
     case LogicalType::DATE: return DATE;
-    case LogicalType::TIME: {
+    case LogicalType::TIME:
       if (logical->is_time_millis()) {
         return TIME_MILLIS;
       } else if (logical->is_time_micros()) {
         return TIME_MICROS;
       }
       break;
-    }
-    case LogicalType::TIMESTAMP: {
+    case LogicalType::TIMESTAMP:
       if (logical->is_timestamp_millis()) {
         return TIMESTAMP_MILLIS;
       } else if (logical->is_timestamp_micros()) {
         return TIMESTAMP_MICROS;
       }
       break;
-    }
     case LogicalType::INTEGER:
       switch (logical->bit_width()) {
         case 8: return logical->is_signed() ? INT_8 : UINT_8;
