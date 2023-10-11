@@ -22,6 +22,7 @@
 #pragma once
 
 #include "parquet_gpu.hpp"
+#include "reader_impl_chunking.hpp"
 #include "reader_impl_helpers.hpp"
 
 #include <cudf/io/datasource.hpp>
@@ -35,7 +36,7 @@
 #include <optional>
 #include <vector>
 
-namespace cudf::io::detail::parquet {
+namespace cudf::io::parquet::detail {
 
 /**
  * @brief Implementation for Parquet reader
@@ -135,10 +136,6 @@ class reader::impl {
                     bool uses_custom_row_bounds,
                     host_span<std::vector<size_type> const> row_group_indices,
                     std::optional<std::reference_wrapper<ast::expression const>> filter);
-
-  void load_global_chunk_info();
-  void compute_input_pass_row_group_info();
-  void setup_pass();
 
   /**
    * @brief Create chunk information and start file reads
@@ -250,6 +247,31 @@ class reader::impl {
    */
   void decode_page_data(size_t skip_rows, size_t num_rows);
 
+  /**
+   * @brief Creates file-wide parquet chunk information.
+   *
+   * Creates information about all chunks in the file, storing it in
+   * the file-wide _file_itm_data structure.
+   */
+  void create_global_chunk_info();
+
+  /**
+   * @brief Computes all of the passes we will perform over the file.
+   */
+  void compute_input_passes();
+
+  /**
+   * @brief Close out the existing pass (if any) and prepare for the next pass.
+   */
+  void setup_next_pass();
+
+  /**
+   * @brief Given a set of pages that have had their sizes computed by nesting level and
+   * a limit on total read size, generate a set of {skip_rows, num_rows} pairs representing
+   * a set of reads that will generate output columns of total size <= `chunk_read_limit` bytes.
+   */
+  void compute_splits_for_pass();
+
  private:
   rmm::cuda_stream_view _stream;
   rmm::mr::device_memory_resource* _mr = nullptr;
@@ -261,10 +283,10 @@ class reader::impl {
   std::vector<input_column_info> _input_columns;
 
   // Buffers for generating output columns
-  std::vector<inline_column_buffer> _output_buffers;
+  std::vector<cudf::io::detail::inline_column_buffer> _output_buffers;
 
   // Buffers copied from `_output_buffers` after construction for reuse
-  std::vector<inline_column_buffer> _output_buffers_template;
+  std::vector<cudf::io::detail::inline_column_buffer> _output_buffers_template;
 
   // _output_buffers associated schema indices
   std::vector<int> _output_column_schemas;
@@ -278,27 +300,24 @@ class reader::impl {
 
   // chunked reading happens in 2 parts:
   //
-  // At the top level there is the "pass" in which we try and limit the
+  // At the top level, the entire file is divided up into "passes" omn which we try and limit the
   // total amount of temporary memory (compressed data, decompressed data) in use
   // via _input_pass_read_limit.
   //
   // Within a pass, we produce one or more chunks of output, whose maximum total
   // byte size is controlled by _output_chunk_read_limit.
 
-  cudf::io::parquet::gpu::file_intermediate_data _file_itm_data;
-  std::unique_ptr<cudf::io::parquet::gpu::pass_intermediate_data> _pass_itm_data;
-
-  // an array of offsets into _file_itm_data::global_chunks. Each pair of offsets represents
-  // the start/end of the chunks to be loaded for a given pass.
-  std::vector<std::size_t> _input_pass_row_group_offsets{};
-  std::vector<std::size_t> _input_pass_row_count{};
-  std::size_t _current_input_pass{0};
-  std::size_t _chunk_count{0};
-
-  std::size_t _output_chunk_read_limit{0};
-  std::size_t _input_pass_read_limit{0};
-  bool _pass_preprocessed{false};
+  file_intermediate_data _file_itm_data;
   bool _file_preprocessed{false};
+
+  std::unique_ptr<pass_intermediate_data> _pass_itm_data;
+  bool _pass_preprocessed{false};
+
+  std::size_t _output_chunk_read_limit{0};  // output chunk size limit in bytes
+  std::size_t _input_pass_read_limit{0};    // input pass memory usage limit in bytes
+
+  std::size_t _current_input_pass{0};  // current input pass index
+  std::size_t _chunk_count{0};         // how many output chunks we have produced
 };
 
-}  // namespace cudf::io::detail::parquet
+}  // namespace cudf::io::parquet::detail

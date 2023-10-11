@@ -20,10 +20,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/gather.cuh>
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace gpu {
+namespace cudf::io::parquet::detail {
 
 namespace {
 
@@ -757,7 +754,7 @@ __global__ void __launch_bounds__(decode_block_size)
 }  // anonymous namespace
 
 /**
- * @copydoc cudf::io::parquet::gpu::ComputePageStringSizes
+ * @copydoc cudf::io::parquet::detail::ComputePageStringSizes
  */
 void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
                             cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
@@ -778,7 +775,7 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
 }
 
 /**
- * @copydoc cudf::io::parquet::gpu::DecodeStringPageData
+ * @copydoc cudf::io::parquet::detail::DecodeStringPageData
  */
 void __host__ DecodeStringPageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
                                    cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
@@ -802,7 +799,4 @@ void __host__ DecodeStringPageData(cudf::detail::hostdevice_vector<PageInfo>& pa
   }
 }
 
-}  // namespace gpu
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

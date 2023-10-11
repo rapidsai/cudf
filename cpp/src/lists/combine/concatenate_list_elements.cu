@@ -271,10 +271,11 @@ std::unique_ptr<column> concatenate_list_elements(column_view const& input,
  */
 std::unique_ptr<column> concatenate_list_elements(column_view const& input,
                                                   concatenate_null_policy null_policy,
+                                                  rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate_list_elements(input, null_policy, cudf::get_default_stream(), mr);
+  return detail::concatenate_list_elements(input, null_policy, stream, mr);
 }
 
 }  // namespace lists
