@@ -67,7 +67,7 @@ from cudf.api.types import (
     is_string_dtype,
     is_struct_dtype,
 )
-from cudf.core._compat import PANDAS_GE_150
+from cudf.core._compat import PANDAS_GE_150, PANDAS_GE_210
 from cudf.core.abc import Serializable
 from cudf.core.buffer import (
     Buffer,
@@ -100,6 +100,11 @@ if PANDAS_GE_150:
     from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 else:
     from pandas.core.arrays._arrow_utils import ArrowIntervalType
+
+if PANDAS_GE_210:
+    NumpyExtensionArray = pd.arrays.NumpyExtensionArray
+else:
+    NumpyExtensionArray = pd.arrays.PandasArray
 
 
 class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
@@ -2213,7 +2218,7 @@ def as_column(
         if delayed_cast:
             data = data.astype(cudf.dtype(dtype))
 
-    elif isinstance(arbitrary, pd.arrays.PandasArray):
+    elif isinstance(arbitrary, NumpyExtensionArray):
         if is_categorical_dtype(arbitrary.dtype):
             arb_dtype = arbitrary.dtype
         else:
