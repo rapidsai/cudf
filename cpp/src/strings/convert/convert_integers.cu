@@ -111,8 +111,7 @@ inline __device__ bool is_integer(string_view const& d_str)
  * @brief The dispatch functions for checking if strings are valid integers.
  */
 struct dispatch_is_integer_fn {
-  template <typename T,
-            std::enable_if_t<std::is_integral_v<T> and not std::is_same_v<T, bool>>* = nullptr>
+  template <typename T, std::enable_if_t<cudf::is_integral_not_bool<T>()>* = nullptr>
   std::unique_ptr<column> operator()(strings_column_view const& strings,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
@@ -146,8 +145,7 @@ struct dispatch_is_integer_fn {
     return results;
   }
 
-  template <typename T,
-            std::enable_if_t<not std::is_integral_v<T> or std::is_same_v<T, bool>>* = nullptr>
+  template <typename T, std::enable_if_t<not cudf::is_integral_not_bool<T>()>* = nullptr>
   std::unique_ptr<column> operator()(strings_column_view const&,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*) const
@@ -246,8 +244,7 @@ struct string_to_integer_fn {
  */
 struct dispatch_to_integers_fn {
   template <typename IntegerType,
-            std::enable_if_t<std::is_integral_v<IntegerType> and
-                             not std::is_same_v<IntegerType, bool>>* = nullptr>
+            std::enable_if_t<cudf::is_integral_not_bool<IntegerType>()>* = nullptr>
   void operator()(column_device_view const& strings_column,
                   mutable_column_view& output_column,
                   rmm::cuda_stream_view stream) const
@@ -259,8 +256,7 @@ struct dispatch_to_integers_fn {
                       string_to_integer_fn<IntegerType>{strings_column});
   }
   // non-integer types throw an exception
-  template <typename T,
-            std::enable_if_t<not std::is_integral_v<T> or std::is_same_v<T, bool>>* = nullptr>
+  template <typename T, std::enable_if_t<not cudf::is_integral_not_bool<T>()>* = nullptr>
   void operator()(column_device_view const&, mutable_column_view&, rmm::cuda_stream_view) const
   {
     CUDF_FAIL("Output for to_integers must be an integer type.");
@@ -349,8 +345,7 @@ struct from_integers_fn {
  */
 struct dispatch_from_integers_fn {
   template <typename IntegerType,
-            std::enable_if_t<std::is_integral_v<IntegerType> and
-                             not std::is_same_v<IntegerType, bool>>* = nullptr>
+            std::enable_if_t<cudf::is_integral_not_bool<IntegerType>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& integers,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
@@ -373,8 +368,7 @@ struct dispatch_from_integers_fn {
   }
 
   // non-integer types throw an exception
-  template <typename T,
-            std::enable_if_t<not std::is_integral_v<T> or std::is_same_v<T, bool>>* = nullptr>
+  template <typename T, std::enable_if_t<not cudf::is_integral_not_bool<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const&,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*) const

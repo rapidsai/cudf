@@ -94,8 +94,7 @@ struct hex_to_integer_fn {
  */
 struct dispatch_hex_to_integers_fn {
   template <typename IntegerType,
-            std::enable_if_t<std::is_integral_v<IntegerType> and
-                             not std::is_same_v<IntegerType, bool>>* = nullptr>
+            std::enable_if_t<cudf::is_integral_not_bool<IntegerType>()>* = nullptr>
   void operator()(column_device_view const& strings_column,
                   mutable_column_view& output_column,
                   rmm::cuda_stream_view stream) const
@@ -109,8 +108,7 @@ struct dispatch_hex_to_integers_fn {
   }
   // non-integer types throw an exception
   template <typename T, typename... Args>
-  std::enable_if_t<not std::is_integral_v<T> or std::is_same_v<T, bool>, void> operator()(
-    Args&&...) const
+  std::enable_if_t<not cudf::is_integral_not_bool<T>(), void> operator()(Args&&...) const
   {
     CUDF_FAIL("Output for hex_to_integers must be an integer type.");
   }
@@ -175,8 +173,7 @@ struct integer_to_hex_fn {
 
 struct dispatch_integers_to_hex_fn {
   template <typename IntegerType,
-            std::enable_if_t<std::is_integral_v<IntegerType> and
-                             not std::is_same_v<IntegerType, bool>>* = nullptr>
+            std::enable_if_t<cudf::is_integral_not_bool<IntegerType>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& input,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
@@ -194,8 +191,8 @@ struct dispatch_integers_to_hex_fn {
   }
   // non-integer types throw an exception
   template <typename T, typename... Args>
-  std::enable_if_t<not std::is_integral_v<T> or std::is_same_v<T, bool>, std::unique_ptr<column>>
-  operator()(Args...) const
+  std::enable_if_t<not cudf::is_integral_not_bool<T>(), std::unique_ptr<column>> operator()(
+    Args...) const
   {
     CUDF_FAIL("integers_to_hex only supports integer type columns");
   }
