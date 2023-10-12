@@ -274,22 +274,24 @@ class ColumnAccessor(abc.MutableMapping):
                 )
         else:
             # Determine if we can return a RangeIndex
-            if (
-                self.rangeindex
-                and cudf.api.types.infer_dtype(self.names) == "integer"
-            ):
-                if len(self.names) == 1:
-                    start = self.names[0]
+            if self.rangeindex:
+                if not self.names:
                     return pd.RangeIndex(
-                        start=start, stop=start + 1, step=1, name=self.name
+                        start=0, stop=0, step=1, name=self.name
                     )
-                uniques = np.unique(np.diff(np.array(self.names)))
-                if len(uniques) == 1 and uniques[0] != 0:
-                    diff = uniques[0]
-                    new_range = range(
-                        self.names[0], self.names[-1] + diff, diff
-                    )
-                    return pd.RangeIndex(new_range, name=self.name)
+                elif cudf.api.types.infer_dtype(self.names) == "integer":
+                    if len(self.names) == 1:
+                        start = self.names[0]
+                        return pd.RangeIndex(
+                            start=start, stop=start + 1, step=1, name=self.name
+                        )
+                    uniques = np.unique(np.diff(np.array(self.names)))
+                    if len(uniques) == 1 and uniques[0] != 0:
+                        diff = uniques[0]
+                        new_range = range(
+                            self.names[0], self.names[-1] + diff, diff
+                        )
+                        return pd.RangeIndex(new_range, name=self.name)
             result = pd.Index(self.names, name=self.name, tupleize_cols=False)
         return result
 

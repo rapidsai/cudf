@@ -126,7 +126,6 @@ def test_init_via_list_of_empty_tuples(rows):
         pdf,
         gdf,
         check_like=True,
-        check_column_type=False,
         check_index_type=False,
     )
 
