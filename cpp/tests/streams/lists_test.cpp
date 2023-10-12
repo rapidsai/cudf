@@ -21,6 +21,12 @@
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/contains.hpp>
 #include <cudf/lists/count_elements.hpp>
+#include <cudf/lists/extract.hpp>
+#include <cudf/lists/filling.hpp>
+#include <cudf/lists/gather.hpp>
+#include <cudf/lists/reverse.hpp>
+#include <cudf/lists/sorting.hpp>
+#include <cudf/lists/stream_compaction.hpp>
 
 class ListTest : public cudf::test::BaseFixture {};
 
@@ -84,4 +90,79 @@ TEST_F(ListTest, CountElements)
 {
   cudf::test::lists_column_wrapper<int> list_col{{0, 1}, {2, 3, 7}, {4, 5}};
   cudf::lists::count_elements(list_col, cudf::test::get_default_stream());
+}
+
+TEST_F(ListTest, ExtractListElementFromIndex)
+{
+  cudf::test::lists_column_wrapper<int> list_col{{0, 1}, {2, 3, 7}, {4, 5}};
+  cudf::lists::extract_list_element(list_col, -1, cudf::test::get_default_stream());
+}
+
+TEST_F(ListTest, ExtractListElementFromIndices)
+{
+  cudf::test::lists_column_wrapper<int> list_col{{0, 1}, {2, 3, 7}, {4, 5}};
+  cudf::test::fixed_width_column_wrapper<int> indices({-1, -2, -1});
+  cudf::lists::extract_list_element(list_col, indices, cudf::test::get_default_stream());
+}
+
+TEST_F(ListTest, SegmentedGather)
+{
+  cudf::test::lists_column_wrapper<int> list_col{{0, 1}, {2, 3, 7, 8}, {4, 5}};
+  cudf::test::lists_column_wrapper<int> gather_map_list{{0}, {1, 2}, {1}};
+  cudf::lists::segmented_gather(list_col,
+                                gather_map_list,
+                                cudf::out_of_bounds_policy::DONT_CHECK,
+                                cudf::test::get_default_stream());
+}
+
+TEST_F(ListTest, Sequences)
+{
+  cudf::test::fixed_width_column_wrapper<int> starts({0, 1, 2, 3, 4});
+  cudf::test::fixed_width_column_wrapper<int> sizes({0, 1, 2, 2, 1});
+  cudf::lists::sequences(starts, sizes, cudf::test::get_default_stream());
+}
+
+TEST_F(ListTest, SequencesWithSteps)
+{
+  cudf::test::fixed_width_column_wrapper<int> starts({0, 1, 2, 3, 4});
+  cudf::test::fixed_width_column_wrapper<int> steps({2, 1, 1, 1, -3});
+  cudf::test::fixed_width_column_wrapper<int> sizes({0, 1, 2, 2, 1});
+  cudf::lists::sequences(starts, steps, sizes, cudf::test::get_default_stream());
+}
+
+TEST_F(ListTest, Reverse)
+{
+  cudf::test::lists_column_wrapper<int> list_col{{0, 1}, {2, 3, 7, 8}, {4, 5}};
+  cudf::lists::reverse(list_col, cudf::test::get_default_stream());
+}
+
+TEST_F(ListTest, SortLists)
+{
+  cudf::test::lists_column_wrapper<int> list_col{{0, 1}, {2, 3, 7, 8}, {4, 5}};
+  cudf::lists::sort_lists(
+    list_col, cudf::order::DESCENDING, cudf::null_order::AFTER, cudf::test::get_default_stream());
+}
+
+TEST_F(ListTest, StableSortLists)
+{
+  cudf::test::lists_column_wrapper<int> list_col{{0, 1}, {2, 3, 7, 8}, {4, 5}};
+  cudf::lists::stable_sort_lists(
+    list_col, cudf::order::DESCENDING, cudf::null_order::AFTER, cudf::test::get_default_stream());
+}
+
+TEST_F(ListTest, ApplyBooleanMask)
+{
+  cudf::test::lists_column_wrapper<int> list_col{{0, 1}, {2, 3, 7, 8}, {4, 5}};
+  cudf::test::lists_column_wrapper<bool> boolean_mask{{0, 1}, {1, 1, 1, 0}, {0, 1}};
+  cudf::lists::apply_boolean_mask(list_col, boolean_mask, cudf::test::get_default_stream());
+}
+
+TEST_F(ListTest, Distinct)
+{
+  cudf::test::lists_column_wrapper<int> list_col{{0, 1}, {2, 3, 7, 8}, {4, 5}};
+  cudf::test::lists_column_wrapper<int> boolean_mask{{0, 1}, {1, 1, 1, 0}, {0, 1}};
+  cudf::lists::distinct(list_col,
+                        cudf::null_equality::EQUAL,
+                        cudf::nan_equality::ALL_EQUAL,
+                        cudf::test::get_default_stream());
 }
