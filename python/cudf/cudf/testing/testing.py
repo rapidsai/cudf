@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import cupy as cp
 import numpy as np
-import pandas as pd
 
 import cudf
+import pandas as pd
 from cudf._lib.unary import is_nan
 from cudf.api.types import (
     _is_categorical_dtype,
+    _is_interval_dtype,
     is_decimal_dtype,
-    is_interval_dtype,
     is_list_dtype,
     is_numeric_dtype,
     is_string_dtype,
@@ -28,7 +28,7 @@ def dtype_can_compare_equal_to_other(dtype):
         or is_list_dtype(dtype)
         or is_struct_dtype(dtype)
         or is_decimal_dtype(dtype)
-        or is_interval_dtype(dtype)
+        or _is_interval_dtype(dtype)
     )
 
 

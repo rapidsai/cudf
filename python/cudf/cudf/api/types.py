@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import warnings
 from collections import abc
 from functools import wraps
 from inspect import isclass
@@ -11,14 +12,14 @@ from typing import List, Union
 
 import cupy as cp
 import numpy as np
-import pandas as pd
-from pandas.api import types as pd_types
 
 import cudf
+import pandas as pd
 from cudf.core.dtypes import (  # noqa: F401
     _BaseDtype,
-    dtype,
     _is_categorical_dtype,
+    _is_interval_dtype,
+    dtype,
     is_decimal32_dtype,
     is_decimal64_dtype,
     is_decimal128_dtype,
@@ -27,6 +28,7 @@ from cudf.core.dtypes import (  # noqa: F401
     is_list_dtype,
     is_struct_dtype,
 )
+from pandas.api import types as pd_types
 
 
 def is_numeric_dtype(obj):
@@ -116,7 +118,7 @@ def is_string_dtype(obj):
             and not is_decimal_dtype(obj)
             and not is_list_dtype(obj)
             and not is_struct_dtype(obj)
-            and not is_interval_dtype(obj)
+            and not _is_interval_dtype(obj)
         )
     )
 
@@ -451,6 +453,22 @@ def is_any_real_numeric_dtype(arr_or_dtype) -> bool:
     )
 
 
+def _is_datetime64tz_dtype(obj):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return _wrap_pandas_is_dtype_api(pd_types.is_datetime64tz_dtype)(obj)
+
+
+def is_datetime64tz_dtype(obj):
+    # Do not remove until pandas 3.0 support is added.
+    warnings.warn(
+        "is_datetime64tz_dtype is deprecated and will be removed in a future "
+        "version.",
+        FutureWarning,
+    )
+    return _is_datetime64tz_dtype(obj)
+
+
 # TODO: The below alias is removed for now since improving cudf categorical
 # support is ongoing and we don't want to introduce any ambiguities. The above
 # method _union_categoricals will take its place once exposed.
@@ -464,9 +482,6 @@ is_datetime64_any_dtype = pd_types.is_datetime64_any_dtype
 is_datetime64_dtype = _wrap_pandas_is_dtype_api(pd_types.is_datetime64_dtype)
 is_datetime64_ns_dtype = _wrap_pandas_is_dtype_api(
     pd_types.is_datetime64_ns_dtype
-)
-is_datetime64tz_dtype = _wrap_pandas_is_dtype_api(
-    pd_types.is_datetime64tz_dtype
 )
 is_extension_array_dtype = pd_types.is_extension_array_dtype
 is_int64_dtype = pd_types.is_int64_dtype

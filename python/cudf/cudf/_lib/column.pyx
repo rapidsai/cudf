@@ -11,7 +11,7 @@ import rmm
 import cudf
 import cudf._lib as libcudf
 from cudf._lib import pylibcudf
-from cudf.api.types import _is_categorical_dtype, is_datetime64tz_dtype
+from cudf.api.types import _is_categorical_dtype, _is_datetime64tz_dtype
 from cudf.core.buffer import (
     Buffer,
     ExposureTrackedBuffer,
@@ -334,7 +334,7 @@ cdef class Column:
         if _is_categorical_dtype(self.dtype):
             col = self.base_children[0]
             data_dtype = col.dtype
-        elif is_datetime64tz_dtype(self.dtype):
+        elif _is_datetime64tz_dtype(self.dtype):
             col = self
             data_dtype = _get_base_dtype(col.dtype)
         else:
@@ -397,7 +397,7 @@ cdef class Column:
         if _is_categorical_dtype(self.dtype):
             col = self.base_children[0]
             data_dtype = col.dtype
-        elif is_datetime64tz_dtype(self.dtype):
+        elif _is_datetime64tz_dtype(self.dtype):
             col = self
             data_dtype = _get_base_dtype(col.dtype)
         else:

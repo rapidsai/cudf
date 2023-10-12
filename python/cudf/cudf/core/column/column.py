@@ -23,7 +23,6 @@ from typing import (
 
 import cupy
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 from numba import cuda
 from typing_extensions import Self
@@ -31,6 +30,7 @@ from typing_extensions import Self
 import rmm
 
 import cudf
+import pandas as pd
 from cudf import _lib as libcudf
 from cudf._lib.column import Column
 from cudf._lib.null_mask import (
@@ -50,18 +50,18 @@ from cudf._lib.types import size_type_dtype
 from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
     _is_categorical_dtype,
+    _is_datetime64tz_dtype,
+    _is_interval_dtype,
     _is_non_decimal_numeric_dtype,
     infer_dtype,
     is_bool_dtype,
     is_datetime64_dtype,
-    is_datetime64tz_dtype,
     is_decimal32_dtype,
     is_decimal64_dtype,
     is_decimal128_dtype,
     is_decimal_dtype,
     is_dtype_equal,
     is_integer_dtype,
-    is_interval_dtype,
     is_list_dtype,
     is_scalar,
     is_string_dtype,
@@ -1014,7 +1014,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                     "Casting struct columns not currently supported"
                 )
             return self
-        elif is_interval_dtype(self.dtype):
+        elif _is_interval_dtype(self.dtype):
             return self.as_interval_column(dtype, **kwargs)
         elif is_decimal_dtype(dtype):
             return self.as_decimal_column(dtype, **kwargs)
@@ -1579,7 +1579,7 @@ def build_column(
             offset=offset,
             null_count=null_count,
         )
-    elif is_datetime64tz_dtype(dtype):
+    elif _is_datetime64tz_dtype(dtype):
         if data is None:
             raise TypeError("Must specify data buffer")
         return cudf.core.column.datetime.DatetimeTZColumn(
@@ -1618,7 +1618,7 @@ def build_column(
             null_count=null_count,
             children=children,
         )
-    elif is_interval_dtype(dtype):
+    elif _is_interval_dtype(dtype):
         return cudf.core.column.IntervalColumn(
             dtype=dtype,
             mask=mask,
@@ -1675,7 +1675,7 @@ def build_column(
             null_count=null_count,
             children=children,
         )
-    elif is_interval_dtype(dtype):
+    elif _is_interval_dtype(dtype):
         return cudf.core.column.IntervalColumn(
             dtype=dtype,
             mask=mask,
@@ -2045,7 +2045,7 @@ def as_column(
                     "cuDF does not yet support timezone-aware datetimes"
                 )
             data = as_column(pa.array(arbitrary, from_pandas=True))
-        elif is_interval_dtype(arbitrary.dtype):
+        elif _is_interval_dtype(arbitrary.dtype):
             if isinstance(arbitrary.dtype.subtype, pd.DatetimeTZDtype):
                 raise NotImplementedError(
                     "cuDF does not yet support timezone-aware datetimes"
@@ -2287,7 +2287,7 @@ def as_column(
         )
         or (
             isinstance(arbitrary, pd.IntervalIndex)
-            and is_datetime64tz_dtype(arbitrary.dtype.subtype)
+            and _is_datetime64tz_dtype(arbitrary.dtype.subtype)
         )
         or (
             isinstance(arbitrary, pd.CategoricalIndex)
@@ -2347,11 +2347,11 @@ def as_column(
             np_type = None
             try:
                 if dtype is not None:
-                    if _is_categorical_dtype(dtype) or is_interval_dtype(
+                    if _is_categorical_dtype(dtype) or _is_interval_dtype(
                         dtype
                     ):
                         raise TypeError
-                    if is_datetime64tz_dtype(dtype):
+                    if _is_datetime64tz_dtype(dtype):
                         raise NotImplementedError(
                             "Use `tz_localize()` to construct "
                             "timezone aware data."
@@ -2499,7 +2499,7 @@ def as_column(
                 elif np_type == np.str_:
                     sr = pd.Series(arbitrary, dtype="str")
                     data = as_column(sr, nan_as_null=nan_as_null)
-                elif is_interval_dtype(dtype):
+                elif _is_interval_dtype(dtype):
                     sr = pd.Series(arbitrary, dtype="interval")
                     data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
                 elif (

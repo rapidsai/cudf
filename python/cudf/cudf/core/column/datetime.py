@@ -22,8 +22,8 @@ from cudf._typing import (
     ScalarLike,
 )
 from cudf.api.types import (
+    _is_datetime64tz_dtype,
     is_datetime64_dtype,
-    is_datetime64tz_dtype,
     is_scalar,
     is_timedelta64_dtype,
 )
@@ -566,7 +566,7 @@ class DatetimeColumn(column.ColumnBase):
             return False
 
     def _with_type_metadata(self, dtype):
-        if is_datetime64tz_dtype(dtype):
+        if _is_datetime64tz_dtype(dtype):
             return DatetimeTZColumn(
                 data=self.base_data,
                 dtype=dtype,

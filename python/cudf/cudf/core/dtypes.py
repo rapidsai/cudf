@@ -9,21 +9,21 @@ from functools import cached_property
 from typing import Any, Callable, Dict, List, Tuple, Type, Union
 
 import numpy as np
-import pandas as pd
 import pyarrow as pa
+
+import cudf
+import pandas as pd
+from cudf._typing import Dtype
+from cudf.core._compat import PANDAS_GE_150
+from cudf.core.abc import Serializable
+from cudf.core.buffer import Buffer
+from cudf.utils.docutils import doc_apply
 from pandas.api import types as pd_types
 from pandas.api.extensions import ExtensionDtype
 from pandas.core.dtypes.dtypes import (
     CategoricalDtype as pd_CategoricalDtype,
     CategoricalDtypeType as pd_CategoricalDtypeType,
 )
-
-import cudf
-from cudf._typing import Dtype
-from cudf.core._compat import PANDAS_GE_150
-from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer
-from cudf.utils.docutils import doc_apply
 
 if PANDAS_GE_150:
     from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
@@ -261,7 +261,7 @@ class CategoricalDtype(_BaseDtype):
     def _init_categories(self, categories: Any):
         if categories is None:
             return categories
-        if len(categories) == 0 and not is_interval_dtype(categories):
+        if len(categories) == 0 and not _is_interval_dtype(categories):
             dtype = "object"  # type: Any
         else:
             dtype = None
@@ -1107,21 +1107,7 @@ def is_decimal_dtype(obj):
     )
 
 
-def is_interval_dtype(obj):
-    """Check whether an array-like or dtype is of the interval dtype.
-
-    Parameters
-    ----------
-    obj : array-like or dtype
-        The array-like or dtype to check.
-
-    Returns
-    -------
-    bool
-        Whether or not the array-like or dtype is of the interval dtype.
-    """
-    # TODO: Should there be any branch in this function that calls
-    # pd.api.types.is_interval_dtype?
+def _is_interval_dtype(obj):
     return (
         isinstance(
             obj,
@@ -1135,8 +1121,29 @@ def is_interval_dtype(obj):
         or (
             isinstance(obj, str) and obj == cudf.core.dtypes.IntervalDtype.name
         )
-        or (hasattr(obj, "dtype") and is_interval_dtype(obj.dtype))
+        or (hasattr(obj, "dtype") and _is_interval_dtype(obj.dtype))
     )
+
+
+def is_interval_dtype(obj):
+    """Check whether an array-like or dtype is of the interval dtype.
+
+    Parameters
+    ----------
+    obj : array-like or dtype
+        The array-like or dtype to check.
+
+    Returns
+    -------
+    bool
+        Whether or not the array-like or dtype is of the interval dtype.
+    """
+    warnings.warn(
+        "is_interval_dtype is deprecated and will be removed in a "
+        "future version. Use `isinstance(dtype, cudf.IntervalDtype)` instead",
+        FutureWarning,
+    )
+    return _is_interval_dtype(obj)
 
 
 def is_decimal32_dtype(obj):

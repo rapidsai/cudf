@@ -1,11 +1,11 @@
 # Copyright (c) 2018-2023, NVIDIA CORPORATION.
 from typing import Optional
 
-import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf.api.types import _is_categorical_dtype, is_interval_dtype
+import pandas as pd
+from cudf.api.types import _is_categorical_dtype, _is_interval_dtype
 from cudf.core.column import StructColumn
 from cudf.core.dtypes import IntervalDtype
 
@@ -101,11 +101,11 @@ class IntervalColumn(StructColumn):
         )
 
     def as_interval_column(self, dtype, **kwargs):
-        if is_interval_dtype(dtype):
+        if _is_interval_dtype(dtype):
             if _is_categorical_dtype(self):
                 new_struct = self._get_decategorized_column()
                 return IntervalColumn.from_struct_column(new_struct)
-            if is_interval_dtype(dtype):
+            if _is_interval_dtype(dtype):
                 # a user can directly input the string `interval` as the dtype
                 # when creating an interval series or interval dataframe
                 if dtype == "interval":
