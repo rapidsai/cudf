@@ -4,6 +4,7 @@ import decimal
 import operator
 import pickle
 import textwrap
+import warnings
 from functools import cached_property
 from typing import Any, Callable, Dict, List, Tuple, Type, Union
 
@@ -957,19 +958,7 @@ class IntervalDtype(StructDtype):
         return klass(subtype, closed=closed)
 
 
-def is_categorical_dtype(obj):
-    """Check whether an array-like or dtype is of the Categorical dtype.
-
-    Parameters
-    ----------
-    obj : array-like or dtype
-        The array-like or dtype to check.
-
-    Returns
-    -------
-    bool
-        Whether or not the array-like or dtype is of a categorical dtype.
-    """
+def _is_categorical_dtype(obj):
     if obj is None:
         return False
 
@@ -1013,13 +1002,40 @@ def is_categorical_dtype(obj):
             pd.Series,
         ),
     ):
-        return is_categorical_dtype(obj.dtype)
+        return _is_categorical_dtype(obj.dtype)
     if hasattr(obj, "type"):
         if obj.type is pd_CategoricalDtypeType:
             return True
     # TODO: A lot of the above checks are probably redundant and should be
     # farmed out to this function here instead.
-    return pd_types.is_categorical_dtype(obj)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return pd_types.is_categorical_dtype(obj)
+
+
+def is_categorical_dtype(obj):
+    """Check whether an array-like or dtype is of the Categorical dtype.
+
+    .. deprecated:: 23.12
+       Use isinstance(dtype, cudf.CategoricalDtype) instead
+
+    Parameters
+    ----------
+    obj : array-like or dtype
+        The array-like or dtype to check.
+
+    Returns
+    -------
+    bool
+        Whether or not the array-like or dtype is of a categorical dtype.
+    """
+    # Do not remove until pandas 3.0 support is added.
+    warnings.warn(
+        "is_categorical_dtype is deprecated and will be removed in a future "
+        "version. Use isinstance(dtype, cudf.CategoricalDtype) instead",
+        FutureWarning,
+    )
+    return _is_categorical_dtype(obj)
 
 
 def is_list_dtype(obj):
