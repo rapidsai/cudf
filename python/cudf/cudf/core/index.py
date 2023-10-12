@@ -3170,13 +3170,14 @@ class IntervalIndex(GenericIndex):
             data = data
         elif isinstance(data, pd.Series) and (is_interval_dtype(data.dtype)):
             data = column.as_column(data, data.dtype)
-        elif isinstance(data, (pd._libs.interval.Interval, pd.IntervalIndex)):
+        elif isinstance(data, (pd.Interval, pd.IntervalIndex)):
             data = column.as_column(
                 data,
                 dtype=dtype,
             )
-        elif not data:
-            dtype = IntervalDtype("int64", closed)
+        elif len(data) == 0:
+            subtype = getattr(data, "dtype", "int64")
+            dtype = IntervalDtype(subtype, closed)
             data = column.column_empty_like_same_mask(
                 column.as_column(data), dtype
             )
