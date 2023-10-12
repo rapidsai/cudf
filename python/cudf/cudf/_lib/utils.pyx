@@ -23,7 +23,7 @@ except ImportError:
     import json
 
 from cudf.api.types import (
-    is_categorical_dtype,
+    _is_categorical_dtype,
     is_decimal_dtype,
     is_list_dtype,
     is_struct_dtype,
@@ -92,7 +92,7 @@ cpdef generate_pandas_metadata(table, index):
     # Columns
     for name, col in table._data.items():
         col_names.append(name)
-        if is_categorical_dtype(col):
+        if _is_categorical_dtype(col):
             raise ValueError(
                 "'category' column dtypes are currently not "
                 + "supported by the gpu accelerated parquet writer"
@@ -147,7 +147,7 @@ cpdef generate_pandas_metadata(table, index):
                         level=level,
                         column_names=col_names
                     )
-                if is_categorical_dtype(idx):
+                if _is_categorical_dtype(idx):
                     raise ValueError(
                         "'category' column dtypes are currently not "
                         + "supported by the gpu accelerated parquet writer"

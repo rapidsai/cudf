@@ -18,7 +18,7 @@ import cudf
 from cudf.core.dtypes import (  # noqa: F401
     _BaseDtype,
     dtype,
-    is_categorical_dtype,
+    _is_categorical_dtype,
     is_decimal32_dtype,
     is_decimal64_dtype,
     is_decimal128_dtype,
@@ -112,7 +112,7 @@ def is_string_dtype(obj):
         or (
             pd.api.types.is_string_dtype(obj)
             # Reject all cudf extension types.
-            and not is_categorical_dtype(obj)
+            and not _is_categorical_dtype(obj)
             and not is_decimal_dtype(obj)
             and not is_list_dtype(obj)
             and not is_struct_dtype(obj)
@@ -486,6 +486,7 @@ is_named_tuple = pd_types.is_named_tuple
 is_iterator = pd_types.is_iterator
 is_bool = pd_types.is_bool
 is_categorical = pd_types.is_categorical_dtype
+# TODO
 is_complex = pd_types.is_complex
 is_float = pd_types.is_float
 is_hashable = pd_types.is_hashable

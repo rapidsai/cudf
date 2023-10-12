@@ -9,7 +9,7 @@ import pandas as pd
 import cudf
 from cudf._lib.unary import is_nan
 from cudf.api.types import (
-    is_categorical_dtype,
+    _is_categorical_dtype,
     is_decimal_dtype,
     is_interval_dtype,
     is_list_dtype,
@@ -86,7 +86,7 @@ def _check_types(
     if (
         exact
         and not isinstance(left, cudf.MultiIndex)
-        and is_categorical_dtype(left)
+        and _is_categorical_dtype(left)
     ):
         if left.dtype != right.dtype:
             raise_assert_detail(
@@ -144,8 +144,8 @@ def assert_column_equal(
     """
     if check_dtype is True:
         if (
-            is_categorical_dtype(left)
-            and is_categorical_dtype(right)
+            _is_categorical_dtype(left)
+            and _is_categorical_dtype(right)
             and not check_categorical
         ):
             pass
@@ -173,7 +173,7 @@ def assert_column_equal(
             return
 
     if check_exact and check_categorical:
-        if is_categorical_dtype(left) and is_categorical_dtype(right):
+        if _is_categorical_dtype(left) and _is_categorical_dtype(right):
             left_cat = left.categories
             right_cat = right.categories
 
@@ -207,8 +207,8 @@ def assert_column_equal(
 
     if (
         not check_dtype
-        and is_categorical_dtype(left)
-        and is_categorical_dtype(right)
+        and _is_categorical_dtype(left)
+        and _is_categorical_dtype(right)
     ):
         left = left.astype(left.categories.dtype)
         right = right.astype(right.categories.dtype)
@@ -254,7 +254,7 @@ def assert_column_equal(
                 raise e
             else:
                 columns_equal = False
-            if is_categorical_dtype(left) and is_categorical_dtype(right):
+            if _is_categorical_dtype(left) and _is_categorical_dtype(right):
                 left = left.astype(left.categories.dtype)
                 right = right.astype(right.categories.dtype)
     if not columns_equal:

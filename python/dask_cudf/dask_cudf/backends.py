@@ -312,7 +312,7 @@ def tolist_cudf(obj):
 )
 @_dask_cudf_nvtx_annotate
 def is_categorical_dtype_cudf(obj):
-    return cudf.api.types.is_categorical_dtype(obj)
+    return cudf.api.types._is_categorical_dtype(obj)
 
 
 @grouper_dispatch.register((cudf.Series, cudf.DataFrame))
@@ -341,7 +341,7 @@ try:
         if isinstance(q, Iterator):
             q = list(q)
 
-        if cudf.api.types.is_categorical_dtype(a.dtype):
+        if cudf.api.types._is_categorical_dtype(a.dtype):
             result = cp.percentile(a.cat.codes, q, interpolation=interpolation)
 
             return (

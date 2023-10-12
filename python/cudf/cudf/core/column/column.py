@@ -49,10 +49,10 @@ from cudf._lib.transform import bools_to_mask
 from cudf._lib.types import size_type_dtype
 from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
+    _is_categorical_dtype,
     _is_non_decimal_numeric_dtype,
     infer_dtype,
     is_bool_dtype,
-    is_categorical_dtype,
     is_datetime64_dtype,
     is_datetime64tz_dtype,
     is_decimal32_dtype,
@@ -977,7 +977,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def astype(self, dtype: Dtype, **kwargs) -> ColumnBase:
         if self.dtype == dtype:
             return self
-        if is_categorical_dtype(dtype):
+        if _is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
 
         dtype = (
@@ -987,7 +987,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         )
         if _is_non_decimal_numeric_dtype(dtype):
             return self.as_numerical_column(dtype, **kwargs)
-        elif is_categorical_dtype(dtype):
+        elif _is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
         elif cudf.dtype(dtype).type in {
             np.str_,
@@ -1423,7 +1423,7 @@ def column_empty_like(
 
     if (
         hasattr(column, "dtype")
-        and is_categorical_dtype(column.dtype)
+        and _is_categorical_dtype(column.dtype)
         and dtype == column.dtype
     ):
         catcolumn = cast("cudf.core.column.CategoricalColumn", column)
@@ -1476,7 +1476,7 @@ def column_empty(
             full(row_count + 1, 0, dtype=libcudf.types.size_type_dtype),
             column_empty(row_count, dtype=dtype.element_type),
         )
-    elif is_categorical_dtype(dtype):
+    elif _is_categorical_dtype(dtype):
         data = None
         children = (
             build_column(
@@ -1553,7 +1553,7 @@ def build_column(
             offset=offset,
             null_count=null_count,
         )
-    if is_categorical_dtype(dtype):
+    if _is_categorical_dtype(dtype):
         if not len(children) == 1:
             raise ValueError(
                 "Must specify exactly one child column for CategoricalColumn"
@@ -2037,7 +2037,7 @@ def as_column(
                     f"{arbitrary.dtype} is not supported. Convert first to "
                     f"{arbitrary.dtype.subtype}."
                 )
-        if is_categorical_dtype(arbitrary.dtype):
+        if _is_categorical_dtype(arbitrary.dtype):
             if isinstance(
                 arbitrary.dtype.categories.dtype, pd.DatetimeTZDtype
             ):
@@ -2219,7 +2219,7 @@ def as_column(
             data = data.astype(cudf.dtype(dtype))
 
     elif isinstance(arbitrary, NumpyExtensionArray):
-        if is_categorical_dtype(arbitrary.dtype):
+        if _is_categorical_dtype(arbitrary.dtype):
             arb_dtype = arbitrary.dtype
         else:
             if arbitrary.dtype == pd.StringDtype():
@@ -2347,7 +2347,9 @@ def as_column(
             np_type = None
             try:
                 if dtype is not None:
-                    if is_categorical_dtype(dtype) or is_interval_dtype(dtype):
+                    if _is_categorical_dtype(dtype) or is_interval_dtype(
+                        dtype
+                    ):
                         raise TypeError
                     if is_datetime64tz_dtype(dtype):
                         raise NotImplementedError(
@@ -2491,7 +2493,7 @@ def as_column(
             except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError) as e:
                 if isinstance(e, MixedTypeError):
                     raise TypeError(str(e))
-                if is_categorical_dtype(dtype):
+                if _is_categorical_dtype(dtype):
                     sr = pd.Series(arbitrary, dtype="category")
                     data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
                 elif np_type == np.str_:
@@ -2774,7 +2776,7 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     # ColumnBase._concat so that all subclasses can override necessary
     # behavior. However, at the moment it's not clear what that API should look
     # like, so CategoricalColumn simply implements a minimal working API.
-    if all(is_categorical_dtype(o.dtype) for o in objs):
+    if all(_is_categorical_dtype(o.dtype) for o in objs):
         return cudf.core.column.categorical.CategoricalColumn._concat(
             cast(
                 MutableSequence[

@@ -8,8 +8,8 @@ import numpy as np
 import cudf
 from cudf._typing import ScalarLike
 from cudf.api.types import (
+    _is_categorical_dtype,
     _is_non_decimal_numeric_dtype,
-    is_categorical_dtype,
     is_scalar,
 )
 from cudf.core.column import ColumnBase
@@ -45,7 +45,7 @@ def _check_and_cast_columns_with_other(
 ) -> Tuple[ColumnBase, Union[ScalarLike, ColumnBase]]:
     # Returns type-casted `source_col` & `other` based on `inplace`.
     source_dtype = source_col.dtype
-    if is_categorical_dtype(source_dtype):
+    if _is_categorical_dtype(source_dtype):
         return _normalize_categorical(source_col, other)
 
     other_is_scalar = is_scalar(other)

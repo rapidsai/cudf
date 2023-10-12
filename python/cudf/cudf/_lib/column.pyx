@@ -11,7 +11,7 @@ import rmm
 import cudf
 import cudf._lib as libcudf
 from cudf._lib import pylibcudf
-from cudf.api.types import is_categorical_dtype, is_datetime64tz_dtype
+from cudf.api.types import _is_categorical_dtype, is_datetime64tz_dtype
 from cudf.core.buffer import (
     Buffer,
     ExposureTrackedBuffer,
@@ -331,7 +331,7 @@ cdef class Column:
             )
 
     cdef mutable_column_view mutable_view(self) except *:
-        if is_categorical_dtype(self.dtype):
+        if _is_categorical_dtype(self.dtype):
             col = self.base_children[0]
             data_dtype = col.dtype
         elif is_datetime64tz_dtype(self.dtype):
@@ -394,7 +394,7 @@ cdef class Column:
         return self._view(c_null_count)
 
     cdef column_view _view(self, libcudf_types.size_type null_count) except *:
-        if is_categorical_dtype(self.dtype):
+        if _is_categorical_dtype(self.dtype):
             col = self.base_children[0]
             data_dtype = col.dtype
         elif is_datetime64tz_dtype(self.dtype):
@@ -469,7 +469,7 @@ cdef class Column:
         # categoricals because cudf supports ordered and unordered categoricals
         # while libcudf supports only unordered categoricals (see
         # https://github.com/rapidsai/cudf/pull/8567).
-        if is_categorical_dtype(self.dtype):
+        if _is_categorical_dtype(self.dtype):
             col = self.base_children[0]
         else:
             col = self
@@ -635,7 +635,7 @@ cdef class Column:
         """
         column_owner = isinstance(owner, Column)
         mask_owner = owner
-        if column_owner and is_categorical_dtype(owner.dtype):
+        if column_owner and _is_categorical_dtype(owner.dtype):
             owner = owner.base_children[0]
 
         size = cv.size()
