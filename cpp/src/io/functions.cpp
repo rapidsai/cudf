@@ -470,8 +470,8 @@ void orc_chunked_writer::close()
   writer->close();
 }
 
-using namespace cudf::io::detail::parquet;
-namespace detail_parquet = cudf::io::detail::parquet;
+using namespace cudf::io::parquet::detail;
+namespace detail_parquet = cudf::io::parquet::detail;
 
 table_with_metadata read_parquet(parquet_reader_options const& options,
                                  rmm::mr::device_memory_resource* mr)
