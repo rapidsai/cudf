@@ -1962,7 +1962,31 @@ TEST_F(JsonReaderTest, JSONLinesRecovering)
     "\n"
     "\n"
     // 4 -> a: 123 (valid)
-    R"({"a":123})";
+    R"({"a":4})"
+    "\n"
+    // 5 -> (invalid)
+    R"({"a":5)"
+    "\n"
+    // 6 -> (invalid)
+    R"({"a":6 )"
+    "\n"
+    // 7 -> (invalid)
+    R"({"b":[7 )"
+    "\n"
+    // 8 -> a: 8 (valid)
+    R"({"a":8})"
+    "\n"
+    // 9 -> (invalid)
+    R"({"d":{"unterminated_field_name)"
+    "\n"
+    // 10 -> (invalid)
+    R"({"d":{)"
+    "\n"
+    // 11 -> (invalid)
+    R"({"d":{"123",)"
+    "\n"
+    // 12 -> a: 12 (valid)
+    R"({"a":12})";
 
   auto filepath = temp_env->get_temp_dir() + "RecoveringLines.json";
   {
@@ -1978,17 +2002,22 @@ TEST_F(JsonReaderTest, JSONLinesRecovering)
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
   EXPECT_EQ(result.tbl->num_columns(), 2);
-  EXPECT_EQ(result.tbl->num_rows(), 5);
+  EXPECT_EQ(result.tbl->num_rows(), 13);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
   EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
 
-  std::vector<bool> a_validity{true, false, false, false, true};
-  std::vector<bool> c_validity{false, false, false, true, false};
+  std::vector<bool> a_validity{
+    true, false, false, false, true, false, false, false, true, false, false, false, true};
+  std::vector<bool> c_validity{
+    false, false, false, true, false, false, false, false, false, false, false, false, false};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
-                                 int64_wrapper{{-2, 0, 0, 0, 123}, a_validity.cbegin()});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
-                                 float64_wrapper{{0.0, 0.0, 0.0, 1.2, 0.0}, c_validity.cbegin()});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    result.tbl->get_column(0),
+    int64_wrapper{{-2, 0, 0, 0, 4, 0, 0, 0, 8, 0, 0, 0, 12}, a_validity.cbegin()});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    result.tbl->get_column(1),
+    float64_wrapper{{0.0, 0.0, 0.0, 1.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+                    c_validity.cbegin()});
 }
 
 CUDF_TEST_PROGRAM_MAIN()
