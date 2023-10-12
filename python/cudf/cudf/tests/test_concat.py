@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 import cudf as gd
-from cudf.api.types import is_categorical_dtype
+from cudf.api.types import _is_categorical_dtype
 from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140, PANDAS_GE_200
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
@@ -582,8 +582,8 @@ def test_concat_empty_dataframes(df, other, ignore_index):
     actual = gd.concat(other_gd, ignore_index=ignore_index)
     if expected.shape != df.shape:
         for key, col in actual[actual.columns].items():
-            if is_categorical_dtype(col.dtype):
-                if not is_categorical_dtype(expected[key].dtype):
+            if _is_categorical_dtype(col.dtype):
+                if not _is_categorical_dtype(expected[key].dtype):
                     # TODO: Pandas bug:
                     # https://github.com/pandas-dev/pandas/issues/42840
                     expected[key] = expected[key].fillna("-1").astype("str")
@@ -1213,8 +1213,8 @@ def test_concat_join_empty_dataframes(
     if expected.shape != df.shape:
         if axis == 0:
             for key, col in actual[actual.columns].items():
-                if is_categorical_dtype(col.dtype):
-                    if not is_categorical_dtype(expected[key].dtype):
+                if _is_categorical_dtype(col.dtype):
+                    if not _is_categorical_dtype(expected[key].dtype):
                         # TODO: Pandas bug:
                         # https://github.com/pandas-dev/pandas/issues/42840
                         expected[key] = (
@@ -1336,7 +1336,7 @@ def test_concat_join_empty_dataframes_axis_1(
     if expected.shape != df.shape:
         if axis == 0:
             for key, col in actual[actual.columns].items():
-                if is_categorical_dtype(col.dtype):
+                if _is_categorical_dtype(col.dtype):
                     expected[key] = expected[key].fillna("-1")
                     actual[key] = col.astype("str").fillna("-1")
             # if not expected.empty:

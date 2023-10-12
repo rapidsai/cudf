@@ -1,16 +1,15 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
-from pandas.core.groupby.groupby import DataError
-
 from cudf.api.types import (
-    is_categorical_dtype,
-    is_decimal_dtype,
+    _is_categorical_dtype,
     _is_interval_dtype,
+    is_decimal_dtype,
     is_list_dtype,
     is_string_dtype,
     is_struct_dtype,
 )
 from cudf.core.buffer import acquire_spill_lock
+from pandas.core.groupby.groupby import DataError
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -189,7 +188,7 @@ cdef class GroupBy:
             valid_aggregations = (
                 _LIST_AGGS if is_list_dtype(dtype)
                 else _STRING_AGGS if is_string_dtype(dtype)
-                else _CATEGORICAL_AGGS if is_categorical_dtype(dtype)
+                else _CATEGORICAL_AGGS if _is_categorical_dtype(dtype)
                 else _STRUCT_AGGS if is_struct_dtype(dtype)
                 else _INTERVAL_AGGS if _is_interval_dtype(dtype)
                 else _DECIMAL_AGGS if is_decimal_dtype(dtype)
@@ -260,7 +259,7 @@ cdef class GroupBy:
             valid_aggregations = (
                 _LIST_AGGS if is_list_dtype(dtype)
                 else _STRING_AGGS if is_string_dtype(dtype)
-                else _CATEGORICAL_AGGS if is_categorical_dtype(dtype)
+                else _CATEGORICAL_AGGS if _is_categorical_dtype(dtype)
                 else _STRUCT_AGGS if is_struct_dtype(dtype)
                 else _INTERVAL_AGGS if _is_interval_dtype(dtype)
                 else _DECIMAL_AGGS if is_decimal_dtype(dtype)

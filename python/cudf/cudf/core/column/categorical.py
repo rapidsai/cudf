@@ -7,16 +7,16 @@ from functools import cached_property
 from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Tuple, cast
 
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 from numba import cuda
 from typing_extensions import Self
 
 import cudf
+import pandas as pd
 from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
-from cudf.api.types import _is_interval_dtype, is_categorical_dtype
+from cudf.api.types import _is_categorical_dtype, _is_interval_dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
@@ -98,7 +98,7 @@ class CategoricalAccessor(ColumnMethods):
     _column: CategoricalColumn
 
     def __init__(self, parent: SeriesOrSingleColumnIndex):
-        if not is_categorical_dtype(parent.dtype):
+        if not _is_categorical_dtype(parent.dtype):
             raise AttributeError(
                 "Can only use .cat accessor with a 'category' dtype"
             )

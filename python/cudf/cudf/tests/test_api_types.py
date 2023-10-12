@@ -116,7 +116,7 @@ from cudf.api import types
     ),
 )
 def test_is_categorical_dtype(obj, expect):
-    assert types.is_categorical_dtype(obj) == expect
+    assert types._is_categorical_dtype(obj) == expect
 
 
 @pytest.mark.parametrize(
@@ -1036,9 +1036,10 @@ def test_is_decimal_dtype(obj, expect):
     ),
 )
 def test_pandas_agreement(obj):
-    assert types.is_categorical_dtype(obj) == pd_types.is_categorical_dtype(
-        obj
-    )
+    with pytest.warns(FutureWarning):
+        assert types.is_categorical_dtype(
+            obj
+        ) == pd_types.is_categorical_dtype(obj)
     assert types.is_numeric_dtype(obj) == pd_types.is_numeric_dtype(obj)
     assert types.is_integer_dtype(obj) == pd_types.is_integer_dtype(obj)
     assert types.is_integer(obj) == pd_types.is_integer(obj)

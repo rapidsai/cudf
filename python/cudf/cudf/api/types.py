@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import warnings
-
 from collections import abc
 from functools import wraps
 from inspect import isclass
@@ -13,23 +12,23 @@ from typing import List, Union
 
 import cupy as cp
 import numpy as np
-import pandas as pd
-from pandas.api import types as pd_types
 
 import cudf
+import pandas as pd
 from cudf.core.dtypes import (  # noqa: F401
     _BaseDtype,
+    _is_categorical_dtype,
+    _is_interval_dtype,
     dtype,
-    is_categorical_dtype,
     is_decimal32_dtype,
     is_decimal64_dtype,
     is_decimal128_dtype,
     is_decimal_dtype,
-    _is_interval_dtype,
     is_interval_dtype,
     is_list_dtype,
     is_struct_dtype,
 )
+from pandas.api import types as pd_types
 
 
 def is_numeric_dtype(obj):
@@ -115,7 +114,7 @@ def is_string_dtype(obj):
         or (
             pd.api.types.is_string_dtype(obj)
             # Reject all cudf extension types.
-            and not is_categorical_dtype(obj)
+            and not _is_categorical_dtype(obj)
             and not is_decimal_dtype(obj)
             and not is_list_dtype(obj)
             and not is_struct_dtype(obj)
@@ -502,6 +501,7 @@ is_named_tuple = pd_types.is_named_tuple
 is_iterator = pd_types.is_iterator
 is_bool = pd_types.is_bool
 is_categorical = pd_types.is_categorical_dtype
+# TODO
 is_complex = pd_types.is_complex
 is_float = pd_types.is_float
 is_hashable = pd_types.is_hashable

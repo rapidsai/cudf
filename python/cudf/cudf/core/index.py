@@ -7,22 +7,14 @@ import pickle
 import warnings
 from functools import cache, cached_property
 from numbers import Number
-from typing import (
-    Any,
-    List,
-    MutableMapping,
-    Optional,
-    Tuple,
-    Union,
-)
+from typing import Any, List, MutableMapping, Optional, Tuple, Union
 
 import cupy
 import numpy as np
-import pandas as pd
-from pandas._config import get_option
 from typing_extensions import Self
 
 import cudf
+import pandas as pd
 from cudf import _lib as libcudf
 from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
@@ -30,10 +22,10 @@ from cudf._lib.search import search_sorted
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import (
-    _is_non_decimal_numeric_dtype,
-    is_categorical_dtype,
-    is_dtype_equal,
+    _is_categorical_dtype,
     _is_interval_dtype,
+    _is_non_decimal_numeric_dtype,
+    is_dtype_equal,
     is_list_like,
     is_scalar,
 )
@@ -70,6 +62,7 @@ from cudf.utils.utils import (
     _warn_no_dask_cudf,
     search_range,
 )
+from pandas._config import get_option
 
 
 class IndexMeta(type):
@@ -2496,7 +2489,7 @@ class CategoricalIndex(Index):
         if isinstance(data, CategoricalColumn):
             data = data
         elif isinstance(data, pd.Series) and (
-            is_categorical_dtype(data.dtype)
+            _is_categorical_dtype(data.dtype)
         ):
             codes_data = column.as_column(data.cat.codes.values)
             data = column.build_categorical_column(

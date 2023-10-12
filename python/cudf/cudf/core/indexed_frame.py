@@ -41,8 +41,8 @@ from cudf._typing import (
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
+    _is_categorical_dtype,
     is_bool_dtype,
-    is_categorical_dtype,
     is_decimal_dtype,
     is_dict_like,
     is_list_dtype,
@@ -170,7 +170,7 @@ def _indices_from_labels(obj, labels):
     if not isinstance(labels, cudf.MultiIndex):
         labels = cudf.core.column.as_column(labels)
 
-        if is_categorical_dtype(obj.index):
+        if _is_categorical_dtype(obj.index):
             labels = labels.astype("category")
             codes = labels.codes.astype(obj.index._values.codes.dtype)
             labels = cudf.core.column.build_categorical_column(
@@ -5418,21 +5418,21 @@ def _is_same_dtype(lhs_dtype, rhs_dtype):
     if lhs_dtype == rhs_dtype:
         return True
     elif (
-        is_categorical_dtype(lhs_dtype)
-        and is_categorical_dtype(rhs_dtype)
+        _is_categorical_dtype(lhs_dtype)
+        and _is_categorical_dtype(rhs_dtype)
         and lhs_dtype.categories.dtype == rhs_dtype.categories.dtype
     ):
         # OK if categories are not all the same
         return True
     elif (
-        is_categorical_dtype(lhs_dtype)
-        and not is_categorical_dtype(rhs_dtype)
+        _is_categorical_dtype(lhs_dtype)
+        and not _is_categorical_dtype(rhs_dtype)
         and lhs_dtype.categories.dtype == rhs_dtype
     ):
         return True
     elif (
-        is_categorical_dtype(rhs_dtype)
-        and not is_categorical_dtype(lhs_dtype)
+        _is_categorical_dtype(rhs_dtype)
+        and not _is_categorical_dtype(lhs_dtype)
         and rhs_dtype.categories.dtype == lhs_dtype
     ):
         return True
