@@ -5,7 +5,7 @@ from pandas.core.groupby.groupby import DataError
 from cudf.api.types import (
     is_categorical_dtype,
     is_decimal_dtype,
-    is_interval_dtype,
+    _is_interval_dtype,
     is_list_dtype,
     is_string_dtype,
     is_struct_dtype,
@@ -191,7 +191,7 @@ cdef class GroupBy:
                 else _STRING_AGGS if is_string_dtype(dtype)
                 else _CATEGORICAL_AGGS if is_categorical_dtype(dtype)
                 else _STRUCT_AGGS if is_struct_dtype(dtype)
-                else _INTERVAL_AGGS if is_interval_dtype(dtype)
+                else _INTERVAL_AGGS if _is_interval_dtype(dtype)
                 else _DECIMAL_AGGS if is_decimal_dtype(dtype)
                 else "ALL"
             )
@@ -262,7 +262,7 @@ cdef class GroupBy:
                 else _STRING_AGGS if is_string_dtype(dtype)
                 else _CATEGORICAL_AGGS if is_categorical_dtype(dtype)
                 else _STRUCT_AGGS if is_struct_dtype(dtype)
-                else _INTERVAL_AGGS if is_interval_dtype(dtype)
+                else _INTERVAL_AGGS if _is_interval_dtype(dtype)
                 else _DECIMAL_AGGS if is_decimal_dtype(dtype)
                 else "ALL"
             )

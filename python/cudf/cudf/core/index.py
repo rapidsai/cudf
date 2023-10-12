@@ -33,7 +33,7 @@ from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_categorical_dtype,
     is_dtype_equal,
-    is_interval_dtype,
+    _is_interval_dtype,
     is_list_like,
     is_scalar,
 )
@@ -2713,7 +2713,7 @@ class IntervalIndex(Index):
 
         if isinstance(data, IntervalColumn):
             data = data
-        elif isinstance(data, pd.Series) and (is_interval_dtype(data.dtype)):
+        elif isinstance(data, pd.Series) and (_is_interval_dtype(data.dtype)):
             data = column.as_column(data, data.dtype)
         elif isinstance(data, (pd._libs.interval.Interval, pd.IntervalIndex)):
             data = column.as_column(

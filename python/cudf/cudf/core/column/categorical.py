@@ -16,7 +16,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
-from cudf.api.types import is_categorical_dtype, is_interval_dtype
+from cudf.api.types import _is_interval_dtype, is_categorical_dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
@@ -802,7 +802,7 @@ class CategoricalColumn(column.ColumnBase):
             .fillna(_DEFAULT_CATEGORICAL_VALUE)
             .values_host
         )
-        if is_interval_dtype(col.categories.dtype):
+        if _is_interval_dtype(col.categories.dtype):
             # leaving out dropna because it temporarily changes an interval
             # index into a struct and throws off results.
             # TODO: work on interval index dropna
