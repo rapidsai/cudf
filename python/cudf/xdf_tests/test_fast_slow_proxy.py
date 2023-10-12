@@ -14,7 +14,7 @@ from io import StringIO
 import numpy as np
 import pytest
 
-from xdf.fast_slow_proxy import (
+from cudf.pandas.fast_slow_proxy import (
     _fast_arg,
     _FunctionProxy,
     _slow_arg,

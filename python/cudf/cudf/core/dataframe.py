@@ -13,6 +13,7 @@ import sys
 import textwrap
 import warnings
 from collections import abc, defaultdict
+from collections.abc import Iterator
 from typing import (
     Any,
     Callable,
@@ -186,7 +187,9 @@ class _DataFrameIndexer(_FrameIndexer):
                     return True
             dtypes = df.dtypes.values.tolist()
             all_numeric = all(is_numeric_dtype(t) for t in dtypes)
-            if all_numeric:
+            if all_numeric or (
+                len(dtypes) and all(t == dtypes[0] for t in dtypes)
+            ):
                 return True
             if isinstance(arg[1], tuple):
                 return True
@@ -275,7 +278,15 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     row_arg = (arg,)
                 else:
                     row_arg = arg
-                return columns_df.index._get_row_major(columns_df, row_arg)
+                result = columns_df.index._get_row_major(columns_df, row_arg)
+                if (
+                    len(result) == 1
+                    and isinstance(arg, tuple)
+                    and len(arg) > 1
+                    and is_scalar(arg[1])
+                ):
+                    return result._data.columns[0].element_indexing(0)
+                return result
         else:
             if isinstance(arg[0], slice):
                 out = _get_label_range_or_mask(
@@ -295,6 +306,15 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     # If a scalar, there is possibility of having duplicates.
                     # Join would get all the duplicates. So, converting it to
                     # an array kind.
+                    if cudf.get_option("mode.pandas_compatible"):
+                        if any(
+                            c.dtype != columns_df._columns[0].dtype
+                            for c in columns_df._columns
+                        ):
+                            raise TypeError(
+                                "All columns need to be of same type, please "
+                                "typecast to common dtype."
+                            )
                     tmp_arg = ([tmp_arg[0]], tmp_arg[1])
                 if len(tmp_arg[0]) == 0:
                     return columns_df._empty_like(keep_index=True)
@@ -475,7 +495,14 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 result.name = new_name
                 return result
             except TypeError:
-                # Couldn't find a common type, just return a 1xN dataframe.
+                # Couldn't find a common type, Hence:
+                # Raise in pandas compatibility mode,
+                # or just return a 1xN dataframe otherwise
+                if cudf.get_option("mode.pandas_compatible"):
+                    raise TypeError(
+                        "All columns need to be of same type, please "
+                        "typecast to common dtype."
+                    )
                 return result
         elif isinstance(row_spec, indexing_utils.EmptyIndexer):
             return frame._empty_like(keep_index=True)
@@ -661,7 +688,23 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if isinstance(data, pd.Series):
                 data = cudf.Series.from_pandas(data, nan_as_null=nan_as_null)
 
-            name = data.name or 0
+            # Series.name is not None and Series.name in columns
+            #   -> align
+            # Series.name is not None and Series.name not in columns
+            #   -> return empty DataFrame
+            # Series.name is None and no columns
+            #   -> return 1 column DataFrame
+            # Series.name is None and columns
+            #   -> return 1 column DataFrame if len(columns) in {0, 1}
+            if data.name is None and columns is not None:
+                if len(columns) > 1:
+                    raise ValueError(
+                        "Length of columns must be less than 2 if "
+                        f"{type(data).__name__}.name is None."
+                    )
+                name = columns[0]
+            else:
+                name = data.name or 0
             self._init_from_dict_like(
                 {name: data},
                 index=index,
@@ -720,6 +763,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             self._index = new_df._index
             self._check_data_index_length_match()
         else:
+            if isinstance(data, Iterator):
+                data = list(data)
             if is_list_like(data):
                 if len(data) > 0 and is_scalar(data[0]):
                     if columns is not None:
@@ -5133,44 +5178,50 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         1  1  2
         2  3  4
         """
-        if not isinstance(dataframe, pd.DataFrame):
-            raise TypeError("not a pandas.DataFrame")
+        if isinstance(dataframe, pd.DataFrame):
 
-        if not dataframe.columns.is_unique:
-            raise ValueError("Duplicate column names are not allowed")
+            if not dataframe.columns.is_unique:
+                raise ValueError("Duplicate column names are not allowed")
 
-        # Set columns
-        data = {}
-        for col_name, col_value in dataframe.items():
-            # necessary because multi-index can return multiple
-            # columns for a single key
-            if len(col_value.shape) == 1:
-                data[col_name] = column.as_column(
-                    col_value.array, nan_as_null=nan_as_null
-                )
-            else:
-                vals = col_value.values.T
-                if vals.shape[0] == 1:
+            # Set columns
+            data = {}
+            for col_name, col_value in dataframe.items():
+                # necessary because multi-index can return multiple
+                # columns for a single key
+                if len(col_value.shape) == 1:
                     data[col_name] = column.as_column(
-                        vals.flatten(), nan_as_null=nan_as_null
+                        col_value.array, nan_as_null=nan_as_null
                     )
                 else:
-                    if isinstance(col_name, tuple):
-                        col_name = str(col_name)
-                    for idx in range(len(vals.shape)):
+                    vals = col_value.values.T
+                    if vals.shape[0] == 1:
                         data[col_name] = column.as_column(
-                            vals[idx], nan_as_null=nan_as_null
+                            vals.flatten(), nan_as_null=nan_as_null
                         )
+                    else:
+                        if isinstance(col_name, tuple):
+                            col_name = str(col_name)
+                        for idx in range(len(vals.shape)):
+                            data[col_name] = column.as_column(
+                                vals[idx], nan_as_null=nan_as_null
+                            )
 
-        index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
-        df = cls._from_data(data, index)
-        df._data._level_names = tuple(dataframe.columns.names)
+            index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
+            df = cls._from_data(data, index)
+            df._data._level_names = tuple(dataframe.columns.names)
 
-        # Set columns only if it is a MultiIndex
-        if isinstance(dataframe.columns, pd.MultiIndex):
-            df.columns = dataframe.columns
+            # Set columns only if it is a MultiIndex
+            if isinstance(dataframe.columns, pd.MultiIndex):
+                df.columns = dataframe.columns
 
-        return df
+            return df
+        else:
+            try:
+                return from_dataframe(dataframe, allow_copy=True)
+            except Exception:
+                raise TypeError(
+                    f"Could not construct DataFrame from {type(dataframe)}"
+                )
 
     @classmethod
     @_cudf_nvtx_annotate
@@ -5449,13 +5500,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             num_cols = 1
 
         if columns is None:
-            names = [i for i in range(num_cols)]
+            names = range(num_cols)
         else:
             if len(columns) != num_cols:
                 raise ValueError(
                     f"columns length expected {num_cols} but "
                     f"found {len(columns)}"
                 )
+            elif len(columns) != len(set(columns)):
+                raise ValueError("Duplicate column names are not allowed")
             names = columns
 
         df = cls()

@@ -752,8 +752,8 @@ def test_multiindex_copy_sem(data, levels, codes, names):
 
     for glv, plv in zip(gmi_copy.levels, pmi_copy.levels):
         assert all(glv.values_host == plv.values)
-    for (_, gval), pval in zip(gmi.codes._data._data.items(), pmi.codes):
-        assert all(gval.values_host == pval.astype(np.int64))
+    for gval, pval in zip(gmi.codes, pmi.codes):
+        assert_eq(gval, pval)
     assert_eq(gmi_copy.names, pmi_copy.names)
 
     # Test same behavior when used on DataFrame
@@ -1732,14 +1732,21 @@ def test_difference():
                 [[3, 3, 2, 4], [0.2, 0.4, 1.4, 10], [3, 3, 2, 4]]
             ),
         ),
+        (
+            pd.MultiIndex.from_arrays(
+                [[1, 2, 3, 4], [5, 6, 7, 10], [11, 12, 12, 13]],
+                names=["a", "b", "c"],
+            ),
+            [(2, 6, 12)],
+        ),
     ],
 )
 @pytest.mark.parametrize("sort", [None, False])
 def test_union_mulitIndex(idx1, idx2, sort):
     expected = idx1.union(idx2, sort=sort)
 
-    idx1 = cudf.from_pandas(idx1)
-    idx2 = cudf.from_pandas(idx2)
+    idx1 = cudf.from_pandas(idx1) if isinstance(idx1, pd.MultiIndex) else idx1
+    idx2 = cudf.from_pandas(idx2) if isinstance(idx2, pd.MultiIndex) else idx2
 
     actual = idx1.union(idx2, sort=sort)
     assert_eq(expected, actual)
@@ -2016,3 +2023,47 @@ def test_multiindex_values_pandas_compatible():
     with cudf.option_context("mode.pandas_compatible", True):
         with pytest.raises(NotImplementedError):
             midx.values
+
+
+def test_multiindex_dtype_error():
+    midx = cudf.MultiIndex.from_tuples([(10, 12), (8, 9), (3, 4)])
+    with pytest.raises(TypeError):
+        cudf.Index(midx, dtype="int64")
+    with pytest.raises(TypeError):
+        cudf.Index(midx.to_pandas(), dtype="int64")
+    with pytest.raises(TypeError):
+        cudf.Index(midx.to_frame(), dtype="int64")
+
+
+def test_multiindex_codes():
+    midx = cudf.MultiIndex.from_tuples(
+        [("a", "b"), ("a", "c"), ("b", "c")], names=["A", "Z"]
+    )
+
+    for p_array, g_array in zip(midx.to_pandas().codes, midx.codes):
+        assert_eq(p_array, g_array)
+
+
+def test_multiindex_union_error():
+    midx = cudf.MultiIndex.from_tuples([(10, 12), (8, 9), (3, 4)])
+    pidx = midx.to_pandas()
+
+    assert_exceptions_equal(
+        midx.union,
+        pidx.union,
+        lfunc_args_and_kwargs=(["a"],),
+        rfunc_args_and_kwargs=(["b"],),
+    )
+
+
+@pytest.mark.parametrize("idx_get", [(0, 0), (0, 1), (1, 0), (1, 1)])
+@pytest.mark.parametrize("cols_get", [0, 1, [0, 1], [1, 0], [1], [0]])
+def test_multiindex_loc_scalar(idx_get, cols_get):
+    idx = cudf.MultiIndex.from_tuples([(0, 0), (0, 1), (1, 0), (1, 1)])
+    df = cudf.DataFrame({0: range(4), 1: range(10, 50, 10)}, index=idx)
+    pdf = df.to_pandas()
+
+    actual = df.loc[idx_get, cols_get]
+    expected = pdf.loc[idx_get, cols_get]
+
+    assert_eq(actual, expected)

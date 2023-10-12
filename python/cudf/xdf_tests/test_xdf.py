@@ -21,14 +21,15 @@ from io import BytesIO, StringIO
 import numpy as np
 import pyarrow as pa
 import pytest
+from numba import NumbaDeprecationWarning
 
-from xdf.autoload import LOADED
+from cudf.pandas import LOADED
 
 if not LOADED:
     import pandas as pd
 
-    import xdf.pandas as xpd
-    import xdf.pandas._testing as tm
+    import cudf.pandas.pandas as xpd
+    import cudf.pandas.pandas._testing as tm
 else:
     import pandas as xpd
     import pandas._testing as tm
@@ -36,7 +37,7 @@ else:
     # Transparent-provided pandas has the real pandas module as an attribute
     pd = xpd._xdf_slow
 
-from xdf import Profiler
+from cudf.pandas import Profiler
 
 
 @pytest.fixture
@@ -50,6 +51,14 @@ def dataframe():
 def series(dataframe):
     pdf, df = dataframe
     return (pdf["a"], df["a"])
+
+
+@pytest.fixture
+def index():
+    return (
+        pd.Index(["a", "b", "c", "d", "e"]),
+        xpd.Index(["a", "b", "c", "d", "e"]),
+    )
 
 
 @pytest.fixture
@@ -150,6 +159,20 @@ def test_tz_localize():
     )
 
 
+def test_index_tz_localize():
+    pti = pd.Index(pd.date_range("2020-01-01", periods=3, freq="D"))
+    xti = xpd.Index(xpd.date_range("2020-01-01", periods=3, freq="D"))
+    pti = pti.tz_localize("UTC")
+    xti = xti.tz_localize("UTC")
+    tm.assert_equal(pti, xti)
+
+
+def test_index_generator():
+    pi = pd.Index(iter(range(10)))
+    xi = xpd.Index(iter(range(10)))
+    tm.assert_equal(pi, xi)
+
+
 def test_groupby_apply_fallback(dataframe, groupby_udf):
     pdf, df = dataframe
     tm.assert_equal(
@@ -216,7 +239,6 @@ def test_ewm():
     tm.assert_equal(result, expected)
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/12397")
 def test_setitem_frame(dataframe):
     pdf, df = dataframe
     pdf[pdf > 1] = -pdf
@@ -260,8 +282,9 @@ def test_rename_categories():
 def test_rename_categories_inplace():
     psr = pd.Series([1, 2, 3], dtype="category")
     sr = xpd.Series([1, 2, 3], dtype="category")
-    psr.cat.rename_categories({1: 5}, inplace=True)
-    sr.cat.rename_categories({1: 5}, inplace=True)
+    with pytest.warns(FutureWarning):
+        psr.cat.rename_categories({1: 5}, inplace=True)
+        sr.cat.rename_categories({1: 5}, inplace=True)
     tm.assert_series_equal(psr, sr)
 
 
@@ -271,7 +294,8 @@ def test_rename_categories_inplace_after_copying_parent():
     # so this copies `s` from device to host:
     rename_categories = s.cat.rename_categories
     _ = len(s)  # trigger a copy of `s` from host to device:
-    rename_categories([5, 2, 3], inplace=True)
+    with pytest.warns(FutureWarning):
+        rename_categories([5, 2, 3], inplace=True)
     assert s.cat.categories.tolist() == [5, 2, 3]
 
 
@@ -446,12 +470,6 @@ def test_groupby_grouper_fallback(dataframe, groupby_udf):
     )
 
 
-@pytest.mark.xfail(
-    reason="""
-Fails becaue .options is a module in cudf and a
-dict-like in Pandas. Need to figure out how to
-handle that"""
-)
 def test_options_mode():
     assert xpd.options.mode.copy_on_write == pd.options.mode.copy_on_write
 
@@ -505,7 +523,8 @@ def test_binop_array_series(series):
 def test_array_ufunc(series):
     psr, sr = series
     expect = np.ufunc.reduce(np.subtract, psr)
-    got = np.ufunc.reduce(np.subtract, sr)
+    with pytest.warns(DeprecationWarning):
+        got = np.ufunc.reduce(np.subtract, sr)
     tm.assert_equal(expect, got)
 
 
@@ -646,7 +665,8 @@ def test_rolling_win_type():
     pdf = pd.DataFrame(range(5))
     df = xpd.DataFrame(range(5))
     result = df.rolling(2, win_type="boxcar").mean()
-    expected = pdf.rolling(2, win_type="boxcar").mean()
+    with pytest.warns(DeprecationWarning):
+        expected = pdf.rolling(2, win_type="boxcar").mean()
     tm.assert_equal(result, expected)
 
 
@@ -659,9 +679,10 @@ def test_rolling_apply_numba_engine():
     pdf = pd.DataFrame([[1, 2, 0.6], [2, 3, 0.4], [3, 4, 0.2], [4, 5, 0.7]])
     df = xpd.DataFrame([[1, 2, 0.6], [2, 3, 0.4], [3, 4, 0.2], [4, 5, 0.7]])
 
-    expect = pdf.rolling(2, method="table", min_periods=0).apply(
-        weighted_mean, raw=True, engine="numba"
-    )
+    with pytest.warns(NumbaDeprecationWarning):
+        expect = pdf.rolling(2, method="table", min_periods=0).apply(
+            weighted_mean, raw=True, engine="numba"
+        )
     got = df.rolling(2, method="table", min_periods=0).apply(
         weighted_mean, raw=True, engine="numba"
     )
@@ -1051,3 +1072,86 @@ def test_dataframe_query():
     expected = pd_df.query("foo > @bizz")
 
     tm.assert_equal(actual, expected)
+
+
+def test_numpy_var():
+    np.random.seed(42)
+    data = np.random.rand(1000)
+    psr = pd.Series(data)
+    sr = xpd.Series(data)
+
+    tm.assert_almost_equal(np.var(psr), np.var(sr))
+
+
+def test_index_new():
+    expected = pd.Index.__new__(pd.Index, [1, 2, 3])
+    got = xpd.Index.__new__(xpd.Index, [1, 2, 3])
+    tm.assert_equal(expected, got)
+
+    expected = pd.Index.__new__(pd.Index, [1, 2, 3], dtype="int8")
+    got = xpd.Index.__new__(xpd.Index, [1, 2, 3], dtype="int8")
+    tm.assert_equal(expected, got)
+
+    expected = pd.RangeIndex.__new__(pd.RangeIndex, 0, 10, 2)
+    got = xpd.RangeIndex.__new__(xpd.RangeIndex, 0, 10, 2)
+    tm.assert_equal(expected, got)
+
+
+@pytest.mark.xfail(not LOADED, reason="Should not fail in transparent mode")
+def test_groupby_apply_callable_referencing_pandas(dataframe):
+
+    pdf, df = dataframe
+
+    class Callable1:
+        def __call__(self, df):
+            if not isinstance(df, pd.DataFrame):
+                raise TypeError
+            return 1
+
+    class Callable2:
+        def __call__(self, df):
+            if not isinstance(df, xpd.DataFrame):
+                raise TypeError
+            return 1
+
+    expect = pdf.groupby("a").apply(Callable1())
+    got = df.groupby("a").apply(Callable2())
+
+    tm.assert_equal(expect, got)
+
+
+def test_constructor_properties(dataframe, series, index):
+    _, df = dataframe
+    _, sr = series
+    _, idx = index
+
+    assert df._constructor is xpd.DataFrame
+    assert sr._constructor is xpd.Series
+    assert idx._constructor is xpd.Index
+    assert sr._constructor_expanddim is xpd.DataFrame
+    assert df._constructor_sliced is xpd.Series
+
+
+def test_pos():
+    xser = +xpd.Series([-1])
+    ser = +pd.Series([-1])
+    tm.assert_equal(xser, ser)
+
+
+def test_from_dataframe():
+    cudf = pytest.importorskip("cudf")
+    from cudf.testing._utils import assert_eq
+
+    data = {"foo": [1, 2, 3], "bar": [4, 5, 6]}
+
+    xdf_df = xpd.DataFrame(data)
+    cudf_df = cudf.DataFrame(data)
+
+    # test construction of a cuDF DataFrame from an xdf DataFrame
+    assert_eq(cudf_df, cudf.DataFrame.from_pandas(xdf_df))
+    assert_eq(cudf_df, cudf.from_dataframe(xdf_df))
+
+    # ideally the below would work as well, but currently segfaults
+
+    # pd_df = pd.DataFrame(data)
+    # assert_eq(pd_df, pd.api.interchange.from_dataframe(xdf_df))

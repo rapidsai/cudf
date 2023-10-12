@@ -2105,3 +2105,17 @@ def test_series_iloc_float_int(arg):
     expected = ps.loc[arg]
 
     assert_eq(actual, expected)
+
+
+def test_iloc_loc_mixed_dtype():
+    df = cudf.DataFrame({"a": ["a", "b"], "b": [0, 1]})
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(TypeError):
+            df.iloc[0]
+        with pytest.raises(TypeError):
+            df.loc[0]
+    df = df.astype("str")
+    pdf = df.to_pandas()
+
+    assert_eq(df.iloc[0], pdf.iloc[0])
+    assert_eq(df.loc[0], pdf.loc[0])

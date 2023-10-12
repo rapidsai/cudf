@@ -62,6 +62,10 @@ def dtype(arbitrary):
     # `arbitrary` as a Pandas extension type.
     #  Return the corresponding NumPy/cuDF type.
     pd_dtype = pd.api.types.pandas_dtype(arbitrary)
+    if cudf.get_option(
+        "mode.pandas_compatible"
+    ) and cudf.api.types._is_pandas_nullable_extension_dtype(pd_dtype):
+        raise NotImplementedError("not supported")
     try:
         return dtype(pd_dtype.numpy_dtype)
     except AttributeError:

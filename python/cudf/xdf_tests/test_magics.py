@@ -41,6 +41,11 @@ def test_magics_gpu():
     assert sp_completed.stderr.decode() == ""
 
 
+@pytest.mark.skip(
+    "This test was viable when xdf was separate from cudf, but now that it is "
+    "a subpackage we always require a GPU to be present and cannot run this "
+    "test."
+)
 def test_magics_cpu():
     env = os.environ.copy()
     env["CUDA_VISIBLE_DEVICES"] = ""

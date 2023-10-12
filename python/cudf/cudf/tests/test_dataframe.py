@@ -10413,6 +10413,41 @@ def test_dataframe_nlargest_nsmallest_str_error(attr):
     )
 
 
+def test_series_data_no_name_with_columns():
+    gdf = cudf.DataFrame(cudf.Series([1]), columns=[1])
+    pdf = pd.DataFrame(pd.Series([1]), columns=[1])
+    assert_eq(gdf, pdf)
+
+
+def test_series_data_no_name_with_columns_more_than_one_raises():
+    with pytest.raises(ValueError):
+        cudf.DataFrame(cudf.Series([1]), columns=[1, 2])
+    with pytest.raises(ValueError):
+        pd.DataFrame(pd.Series([1]), columns=[1, 2])
+
+
+def test_series_data_with_name_with_columns_matching():
+    gdf = cudf.DataFrame(cudf.Series([1], name=1), columns=[1])
+    pdf = pd.DataFrame(pd.Series([1], name=1), columns=[1])
+    assert_eq(gdf, pdf)
+
+
+@pytest.mark.xfail(
+    version.parse(pd.__version__) < version.parse("2.0"),
+    reason="pandas returns Index[object] instead of RangeIndex",
+)
+def test_series_data_with_name_with_columns_not_matching():
+    gdf = cudf.DataFrame(cudf.Series([1], name=2), columns=[1])
+    pdf = pd.DataFrame(pd.Series([1], name=2), columns=[1])
+    assert_eq(gdf, pdf)
+
+
+def test_series_data_with_name_with_columns_matching_align():
+    gdf = cudf.DataFrame(cudf.Series([1], name=2), columns=[1, 2])
+    pdf = pd.DataFrame(pd.Series([1], name=2), columns=[1, 2])
+    assert_eq(gdf, pdf)
+
+
 @pytest.mark.parametrize("digits", [0, 1, 3, 4, 10])
 def test_dataframe_round_builtin(digits):
     pdf = pd.DataFrame(
@@ -10484,3 +10519,14 @@ def test_dataframe_reduction_error():
 
     with pytest.raises(TypeError):
         gdf.sum()
+
+
+def test_dataframe_from_generator():
+    pdf = pd.DataFrame((i for i in range(5)))
+    gdf = cudf.DataFrame((i for i in range(5)))
+    assert_eq(pdf, gdf)
+
+
+def test_dataframe_from_ndarray_dup_columns():
+    with pytest.raises(ValueError):
+        cudf.DataFrame(np.eye(2), columns=["A", "A"])

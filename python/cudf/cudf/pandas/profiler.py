@@ -21,6 +21,39 @@ from rich.table import Table
 
 from .fast_slow_proxy import _FunctionProxy, _MethodProxy
 
+# This text is used in contexts where the profiler is injected into the
+# original code. The profiler is injected at the top of the cell, so the line
+# numbers in the profiler results are offset by 2.
+_profile_injection_text = """\
+from cudf.pandas import Profiler
+with Profiler() as profiler:
+{original_lines}
+
+# Patch the results to shift the line numbers back to the original before the
+# profiler injection.
+new_results = {{}}
+
+for (lineno, currfile, line), v in profiler._results.items():
+    new_results[(lineno - 2, currfile, line)] = v
+
+profiler._results = new_results
+profiler.print_stats()
+{function_profile_printer}
+"""
+
+
+def lines_with_profiling(lines, print_function_profile=False):
+    """Inject profiling code into the given lines of code."""
+    cleaned_lines = "\n".join(
+        [(" " * 4) + line.replace("\t", " " * 4) for line in lines]
+    )
+    return _profile_injection_text.format(
+        original_lines=cleaned_lines,
+        function_profile_printer="profiler.print_per_func_stats()"
+        if print_function_profile
+        else "",
+    )
+
 
 class Profiler:
     _IGNORE_LIST = ["Profiler()", "settrace(None)"]

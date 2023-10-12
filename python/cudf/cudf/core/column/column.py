@@ -49,6 +49,7 @@ from cudf._lib.types import size_type_dtype
 from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
+    _is_pandas_nullable_extension_dtype,
     infer_dtype,
     is_bool_dtype,
     is_categorical_dtype,
@@ -2023,6 +2024,8 @@ def as_column(
             ):
                 return as_column(arbitrary.array)
             elif PANDAS_GE_150 and isinstance(arbitrary.dtype, pd.ArrowDtype):
+                if cudf.get_option("mode.pandas_compatible"):
+                    raise NotImplementedError("not supported")
                 return as_column(pa.array(arbitrary.array, from_pandas=True))
             elif isinstance(arbitrary.dtype, pd.SparseDtype):
                 raise NotImplementedError(
@@ -2061,6 +2064,10 @@ def as_column(
                 "cuDF does not yet support `PeriodDtype`"
             )
         else:
+            if cudf.get_option(
+                "mode.pandas_compatible"
+            ) and _is_pandas_nullable_extension_dtype(arbitrary.dtype):
+                raise NotImplementedError("not supported")
             pyarrow_array = pa.array(arbitrary, from_pandas=nan_as_null)
             if arbitrary.dtype == cudf.dtype("object") and cudf.dtype(
                 pyarrow_array.type.to_pandas_dtype()
@@ -2210,6 +2217,10 @@ def as_column(
             data = data.astype(cudf.dtype(dtype))
 
     elif isinstance(arbitrary, pd.arrays.PandasArray):
+        if cudf.get_option(
+            "mode.pandas_compatible"
+        ) and _is_pandas_nullable_extension_dtype(arbitrary.dtype):
+            raise NotImplementedError("not supported")
         if is_categorical_dtype(arbitrary.dtype):
             arb_dtype = arbitrary.dtype
         else:
@@ -2270,6 +2281,8 @@ def as_column(
     elif isinstance(arbitrary, cudf.Scalar):
         data = ColumnBase.from_scalar(arbitrary, length if length else 1)
     elif isinstance(arbitrary, pd.core.arrays.masked.BaseMaskedArray):
+        if cudf.get_option("mode.pandas_compatible"):
+            raise NotImplementedError("not supported")
         data = as_column(pa.Array.from_pandas(arbitrary), dtype=dtype)
     elif (
         (
@@ -2433,6 +2446,15 @@ def as_column(
                             _maybe_convert_to_default_type("float")
                         )
 
+                if (
+                    cudf.get_option("mode.pandas_compatible")
+                    and isinstance(
+                        arbitrary, (pd.Index, pd.api.extensions.ExtensionArray)
+                    )
+                    and _is_pandas_nullable_extension_dtype(arbitrary.dtype)
+                ):
+                    raise NotImplementedError("not supported")
+
                 pyarrow_array = pa.array(
                     arbitrary,
                     type=pa_type,
@@ -2541,6 +2563,7 @@ def _construct_array(
                     raise NotImplementedError(
                         "cuDF does not yet support timezone-aware datetimes"
                     )
+                return pd_arbitrary.to_numpy()
             except pd.errors.OutOfBoundsDatetime:
                 # https://github.com/pandas-dev/pandas/issues/55096
                 pass

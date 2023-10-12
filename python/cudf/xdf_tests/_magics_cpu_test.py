@@ -26,7 +26,7 @@ def ipython_magics_cpu_test():
     c.HistoryManager.hist_file = ":memory:"
 
     ip = InteractiveShell(config=c)
-    ip.run_line_magic("load_ext", "xdf")
+    ip.run_line_magic("load_ext", "cudf.pandas")
 
     # confirm pandas is not aliased
     with capture_output() as output:

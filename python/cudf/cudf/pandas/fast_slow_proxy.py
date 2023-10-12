@@ -30,7 +30,7 @@ from typing import (
     Type,
 )
 
-from xdf.annotation import nvtx
+from .annotation import nvtx
 
 _XDF_NVTX_COLORS = {
     "COPY_SLOW_TO_FAST": 0xCA0020,
@@ -99,9 +99,10 @@ class _PickleConstructor:
         self._type = type_
 
     def __call__(self):
-        # If for some reason _FastSlowProxy ever overrides __new__ this may
-        # fail and we would need to call object.__new__ instead.
-        return self._type.__new__(self._type)
+        return object.__new__(self._type)
+
+
+_DELETE = object()
 
 
 def make_final_proxy_type(
@@ -134,12 +135,17 @@ def make_final_proxy_type(
         Function that accepts a single argument of type `slow_type`
         and returns an object of type `fast_type`
     additional_attributes
-        Mapping of additional attributes to add to the class (optional)
+        Mapping of additional attributes to add to the class
+       (optional), these will override any defaulted attributes (e.g.
+       ``__init__`). If you want to remove a defaulted attribute
+       completely, pass the special sentinel ``_DELETE`` as a value.
     postprocess
         Optional function called to allow the proxy to postprocess
         itself when being wrapped up, called with the proxy object,
         the unwrapped result object, and the function that was used to
         construct said unwrapped object. See also `_maybe_wrap_result`.
+    bases
+        Optional tuple of base classes to insert into the mro.
 
     Notes
     -----
@@ -221,16 +227,14 @@ def make_final_proxy_type(
     }
     if additional_attributes is None:
         additional_attributes = {}
-    if overlap := (set(cls_dict) & set(additional_attributes)):
-        raise RuntimeError(
-            f"Some additional attributes ({overlap}) overlap with reserved "
-            "names"
-        )
-
     for method in _SPECIAL_METHODS:
         if getattr(slow_type, method, False):
             cls_dict[method] = _FastSlowAttribute(method)
-    cls_dict.update(additional_attributes)
+    for k, v in additional_attributes.items():
+        if v is _DELETE and k in cls_dict:
+            del cls_dict[k]
+        elif v is not _DELETE:
+            cls_dict[k] = v
 
     cls = types.new_class(
         name,
@@ -581,9 +585,6 @@ class _FastSlowProxy:
             return
         return _FastSlowAttribute("__setattr__").__get__(self)(name, value)
 
-    def __array_function__(self, func, types, args, kwargs):
-        return _fast_slow_function_call(func, *args, **kwargs)[0]
-
     def __add__(self, other):
         return _fast_slow_function_call(operator.add, self, other)[0]
 
@@ -812,6 +813,8 @@ def _fast_slow_function_call(func: Callable, /, *args, **kwargs) -> Any:
     Wrap the result in a fast-slow proxy if it is a type we know how
     to wrap.
     """
+    from .module_finder import disable_transparent_mode_if_enabled
+
     fast = False
     try:
         with nvtx.annotate(
@@ -832,7 +835,8 @@ def _fast_slow_function_call(func: Callable, /, *args, **kwargs) -> Any:
             domain="xdf_python",
         ):
             slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
-            result = func(*slow_args, **slow_kwargs)
+            with disable_transparent_mode_if_enabled():
+                result = func(*slow_args, **slow_kwargs)
     return _maybe_wrap_result(result, func, *args, **kwargs), fast
 
 
@@ -1050,6 +1054,7 @@ _SPECIAL_METHODS: Set[str] = {
     "__ne__",
     "__gt__",
     "__ge__",
+    "__pos__",
     "__neg__",
     "__invert__",
     "__abs__",
@@ -1064,6 +1069,7 @@ _SPECIAL_METHODS: Set[str] = {
     "__next__",
     "__copy__",
     "__deepcopy__",
+    "__dataframe__",
     # Added on a per-proxy basis
     # https://github.com/rapidsai/xdf/pull/306#pullrequestreview-1636155428
     # "__hash__",

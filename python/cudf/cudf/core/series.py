@@ -82,6 +82,7 @@ from cudf.core.indexed_frame import (
 from cudf.core.resample import SeriesResampler
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.core.udf.scalar_function import _get_scalar_kernel
+from cudf.errors import MixedTypeError
 from cudf.utils import docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -211,6 +212,27 @@ class _SeriesIlocIndexer(_FrameIndexer):
         # coerce value into a scalar or column
         if is_scalar(value):
             value = to_cudf_compatible_scalar(value)
+            if (
+                not isinstance(
+                    self._frame._column,
+                    (
+                        cudf.core.column.DatetimeColumn,
+                        cudf.core.column.TimeDeltaColumn,
+                    ),
+                )
+                and cudf.utils.utils._isnat(value)
+                and not (
+                    isinstance(
+                        self._frame._column, cudf.core.column.StringColumn
+                    )
+                    and isinstance(value, str)
+                )
+            ):
+                raise MixedTypeError(
+                    f"Cannot assign {value=} to non-datetime/non-timedelta "
+                    "columns"
+                )
+
         elif not (
             isinstance(value, (list, dict))
             and isinstance(
@@ -283,7 +305,28 @@ class _SeriesLocIndexer(_FrameIndexer):
                 and not isinstance(self._frame.index, cudf.MultiIndex)
                 and is_scalar(value)
             ):
-                _append_new_row_inplace(self._frame.index._values, key)
+                # TODO: Modifying index in place is bad because
+                # our index are immutable, but columns are not (which
+                # means our index are mutable with internal APIs).
+                # Get rid of the deep copy once columns too are
+                # immutable.
+                idx_copy = self._frame._index.copy(deep=True)
+                if (
+                    isinstance(idx_copy, cudf.RangeIndex)
+                    and isinstance(key, int)
+                    and (key == idx_copy[-1] + idx_copy.step)
+                ):
+                    idx_copy = cudf.RangeIndex(
+                        start=idx_copy.start,
+                        stop=idx_copy.stop + idx_copy.step,
+                        step=idx_copy.step,
+                        name=idx_copy.name,
+                    )
+                else:
+                    if isinstance(idx_copy, cudf.RangeIndex):
+                        idx_copy = idx_copy._as_int_index()
+                    _append_new_row_inplace(idx_copy._values, key)
+                self._frame._index = idx_copy
                 _append_new_row_inplace(self._frame._column, value)
                 return
             else:

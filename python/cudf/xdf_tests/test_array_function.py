@@ -12,14 +12,15 @@
 import numpy as np
 import pytest
 
-from xdf.autoload import LOADED
+from cudf.pandas import LOADED
+from cudf.pandas._wrappers.common import array_function_method
 
 if not LOADED:
-    import xdf.pandas._testing as tm
+    import cudf.pandas.pandas._testing as tm
 else:
     import pandas._testing as tm
 
-from xdf.fast_slow_proxy import make_final_proxy_type
+from cudf.pandas.fast_slow_proxy import make_final_proxy_type
 
 
 class Slow:
@@ -47,9 +48,10 @@ def test_array_function():
     Proxy = make_final_proxy_type(
         "Proxy",
         Fast,
-        Slow,
-        fast_to_slow=lambda fast: Slow(),
+        Slow2,
+        fast_to_slow=lambda fast: Slow2(),
         slow_to_fast=lambda slow: Fast(),
+        additional_attributes={"__array_function__": array_function_method},
     )
     tm.assert_equal(np.unique(Proxy()), "fast")
 
@@ -62,6 +64,7 @@ def test_array_function_fallback():
         Slow2,
         fast_to_slow=lambda fast: Slow2(),
         slow_to_fast=lambda slow: Fast2(),
+        additional_attributes={"__array_function__": array_function_method},
     )
     tm.assert_equal(np.unique(Proxy()), "slow")
 
@@ -75,6 +78,7 @@ def test_array_function_fallback_array():
         Slow,
         fast_to_slow=lambda fast: Slow(),
         slow_to_fast=lambda slow: Fast2(),
+        additional_attributes={"__array_function__": array_function_method},
     )
     tm.assert_equal(np.unique(Proxy()), np.unique(np.asarray(Slow())))
 
@@ -88,6 +92,7 @@ def test_array_function_notimplemented():
         Fast2,
         fast_to_slow=lambda fast: Fast2(),
         slow_to_fast=lambda slow: Fast2(),
+        additional_attributes={"__array_function__": array_function_method},
     )
     with pytest.raises(TypeError):
         np.unique(Proxy())

@@ -81,6 +81,7 @@ dependencies:
 - python-snappy>=0.6.0
 - python>=3.9,<3.11
 - pytorch<1.12.0
+- rich
 - rmm==23.10.*
 - s3fs>=2022.3.0
 - scikit-build>=0.13.1
