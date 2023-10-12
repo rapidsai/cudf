@@ -308,3 +308,10 @@ def test_interval_range_floating(start, stop, freq, periods):
     )
     got = interval_range(start=start, end=stop, freq=freq, periods=periods)
     assert_eq(expected, got)
+
+
+def test_intervalindex_empty_typed_non_int():
+    data = np.array([], dtype="datetime64[ns]")
+    result = cudf.IntervalIndex(data)
+    expected = pd.IntervalIndex(data)
+    assert_eq(result, expected)
