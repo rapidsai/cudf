@@ -9,9 +9,8 @@ package_dir=$2
 source rapids-configure-sccache
 source rapids-date-string
 
-# Use gha-tools rapids-pip-wheel-version to generate wheel version then
-# update the necessary files
-version_override="$(rapids-pip-wheel-version ${RAPIDS_DATE_STRING})"
+version=$(rapids-generate-version)
+commit=$(git rev-parse HEAD)
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 
@@ -21,9 +20,11 @@ PACKAGE_CUDA_SUFFIX="-${RAPIDS_PY_CUDA_SUFFIX}"
 
 # Patch project metadata files to include the CUDA version suffix and version override.
 pyproject_file="${package_dir}/pyproject.toml"
+version_file="${package_dir}/${package_name}/_version.py"
 
-sed -i "s/^version = .*/version = \"${version_override}\"/g" ${pyproject_file}
 sed -i "s/name = \"${package_name}\"/name = \"${package_name}${PACKAGE_CUDA_SUFFIX}\"/g" ${pyproject_file}
+sed -i "/^__version__/ s/= .*/= ${version}/g" ${version_file}
+sed -i "/^__git_commit__/ s/= .*/= \"${commit}\"/g" ${version_file}
 
 # For nightlies we want to ensure that we're pulling in alphas as well. The
 # easiest way to do so is to augment the spec with a constraint containing a

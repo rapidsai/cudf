@@ -9,6 +9,16 @@ export CMAKE_GENERATOR=Ninja
 
 rapids-print-env
 
+package_dir="python"
+version=$(rapids-generate-version)
+commit=$(git rev-parse HEAD)
+
+for pkg in cudf dask_cudf cudf_kafka custreamz; do
+    version_file="${package_dir}/${package_name}/_version.py"
+    sed -i "/^__version__/ s/= .*/= ${version}/g" ${version_file}
+    sed -i "/^__git_commit__/ s/= .*/= \"${commit}\"/g" ${version_file}
+done
+
 rapids-logger "Begin py build"
 
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
@@ -16,24 +26,24 @@ CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 # TODO: Remove `--no-test` flag once importing on a CPU
 # node works correctly
 # With boa installed conda build forwards to the boa builder
-rapids-conda-retry mambabuild \
+RAPIDS_PACKAGE_VERSION=${version} rapids-conda-retry mambabuild \
   --no-test \
   --channel "${CPP_CHANNEL}" \
   conda/recipes/cudf
 
-rapids-conda-retry mambabuild \
+RAPIDS_PACKAGE_VERSION=${version} rapids-conda-retry mambabuild \
   --no-test \
   --channel "${CPP_CHANNEL}" \
   --channel "${RAPIDS_CONDA_BLD_OUTPUT_DIR}" \
   conda/recipes/dask-cudf
 
-rapids-conda-retry mambabuild \
+RAPIDS_PACKAGE_VERSION=${version} rapids-conda-retry mambabuild \
   --no-test \
   --channel "${CPP_CHANNEL}" \
   --channel "${RAPIDS_CONDA_BLD_OUTPUT_DIR}" \
   conda/recipes/cudf_kafka
 
-rapids-conda-retry mambabuild \
+RAPIDS_PACKAGE_VERSION=${version} rapids-conda-retry mambabuild \
   --no-test \
   --channel "${CPP_CHANNEL}" \
   --channel "${RAPIDS_CONDA_BLD_OUTPUT_DIR}" \
