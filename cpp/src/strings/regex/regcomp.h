@@ -113,8 +113,9 @@ class reprog {
    * @return Instance of reprog
    */
   static reprog create_from(std::string_view pattern,
-                            regex_flags const flags,
-                            capture_groups const capture = capture_groups::EXTRACT);
+                            regex_flags flags,
+                            capture_groups capture = capture_groups::EXTRACT,
+                            optimizer_flags opt    = optimizer_flags::DEFAULT);
 
   int32_t add_inst(int32_t type);
   int32_t add_inst(reinst const& inst);
@@ -137,7 +138,7 @@ class reprog {
   void set_start_inst(int32_t id);
   [[nodiscard]] int32_t get_start_inst() const;
 
-  void optimize();
+  void optimize(optimizer_flags opt);
   void finalize();
   void check_for_errors();
 #ifndef NDEBUG

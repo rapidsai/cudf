@@ -289,6 +289,33 @@ TEST_F(StringsContainsTests, OctalTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
+TEST_F(StringsContainsTests, Optimizer)
+{
+  cudf::test::strings_column_wrapper input(
+    {"contains matches", "matches contains", "counts counts"});
+  auto view = cudf::strings_column_view(input);
+
+  auto prog     = cudf::strings::regex_program::create("contains");
+  auto expected = cudf::strings::contains_re(view, *prog);
+
+  auto results = cudf::strings::contains_re(
+    view,
+    *cudf::strings::regex_program::create("contains.*",
+                                          cudf::strings::regex_flags::DOTALL,
+                                          cudf::strings::capture_groups::NON_CAPTURE,
+                                          cudf::strings::optimizer_flags::TRIM_RIGHT));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, *expected);
+  results = cudf::strings::contains_re(
+    view,
+    *cudf::strings::regex_program::create(".*contains.*",
+                                          cudf::strings::regex_flags::DOTALL,
+                                          cudf::strings::capture_groups::NON_CAPTURE,
+                                          cudf::strings::optimizer_flags::TRIM_BOTH));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, *expected);
+  results = cudf::strings::contains_re(view, *cudf::strings::regex_program::create(".*contains"));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, *expected);
+}
+
 TEST_F(StringsContainsTests, HexTest)
 {
   std::vector<char> ascii_chars(  // all possible matchable chars

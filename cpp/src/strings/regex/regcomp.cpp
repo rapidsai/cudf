@@ -145,6 +145,8 @@ int32_t const* reprog::starts_data() const { return _startinst_ids.data(); }
 
 int32_t reprog::starts_count() const { return static_cast<int>(_startinst_ids.size()); }
 
+namespace {
+
 static constexpr auto MAX_REGEX_CHAR = std::numeric_limits<char32_t>::max();
 
 /**
@@ -968,8 +970,9 @@ class regex_compiler {
 
  public:
   regex_compiler(char32_t const* pattern,
-                 regex_flags const flags,
-                 capture_groups const capture,
+                 regex_flags flags,
+                 capture_groups capture,
+                 optimizer_flags opt,
                  reprog& prog)
     : _prog(prog), _last_was_and(false), _bracket_count(0), _flags(flags)
   {
@@ -1009,53 +1012,59 @@ class regex_compiler {
     CUDF_EXPECTS(_bracket_count == 0, "unmatched left parenthesis");
 
     _prog.set_start_inst(_and_stack.top().id_first);
-    _prog.optimize();
+    _prog.optimize(opt);
     _prog.check_for_errors();
     _prog.finalize();
     _prog.set_groups_count(cur_subid);
   }
 };
 
+struct find_next_op_fn {
+  std::vector<reinst> const& insts;
+  int32_t operator()(int32_t id) const
+  {
+    while (insts[id].type == NOP) {
+      id = insts[id].u2.next_id;
+    }
+    return id;
+  }
+};
+
+}  // namespace
+
 // Convert pattern into program
 reprog reprog::create_from(std::string_view pattern,
-                           regex_flags const flags,
-                           capture_groups const capture)
+                           regex_flags flags,
+                           capture_groups capture,
+                           optimizer_flags opt)
 {
   reprog rtn;
   auto pattern32 = string_to_char32_vector(pattern);
-  regex_compiler compiler(pattern32.data(), flags, capture, rtn);
+  regex_compiler compiler(pattern32.data(), flags, capture, opt, rtn);
   // for debugging, it can be helpful to call rtn.print(flags) here to dump
   // out the instructions that have been created from the given pattern
   return rtn;
 }
 
-void reprog::optimize() { collapse_nops(); }
-
-void reprog::finalize() { build_start_ids(); }
-
-void reprog::collapse_nops()
+void reprog::optimize(optimizer_flags opt)
 {
-  // functor for finding the next valid op
-  auto find_next_op = [&insts = _insts](int id) {
-    while (insts[id].type == NOP) {
-      id = insts[id].u2.next_id;
-    }
-    return id;
-  };
-
   // remove unneeded ANY instruction if present
   // one pattern would be: ANY <--> OR -> END  ('abc.*' == 'abc')
-  for (auto idx = 0; idx < static_cast<int32_t>(_insts.size()); ++idx) {
-    auto& inst = _insts[idx];
-    if ((inst.type != OR) || (inst.u2.left_id != inst.u2.next_id)) { continue; }
-    auto& right = _insts[inst.u1.right_id];
-    // check right points to ANY and that points back to this OR
-    if (right.u2.next_id == idx && (right.type == ANY || right.type == ANYNL)) {
-      auto const next_id = find_next_op(inst.u2.next_id);
-      // if right is the first instruction or OR's next is the END instruction
-      if (inst.u1.right_id == 0 || _insts[next_id].type == END) {
-        right.type = NOP;  // remove this ANY instruction
-        inst.type  = NOP;  // and this OR instruction
+  if (opt == optimizer_flags::TRIM_BOTH || opt == optimizer_flags::TRIM_RIGHT) {
+    auto find_next_op = find_next_op_fn{_insts};
+    for (auto idx = 0; idx < static_cast<int32_t>(_insts.size()); ++idx) {
+      auto& inst = _insts[idx];
+      if ((inst.type != OR) || (inst.u2.left_id != inst.u2.next_id)) { continue; }
+      auto& right = _insts[inst.u1.right_id];
+      // check right points to ANY and that points back to this OR
+      if (right.u2.next_id == idx && (right.type == ANY || right.type == ANYNL)) {
+        auto const next_id = find_next_op(inst.u2.next_id);
+        // if right is the first instruction or OR's next is the END instruction
+        if ((opt == optimizer_flags::TRIM_BOTH && inst.u1.right_id == 0) ||
+            _insts[next_id].type == END) {
+          right.type = NOP;  // remove this ANY instruction
+          inst.type  = NOP;  // and this OR instruction
+        }
       }
     }
   }
@@ -1066,6 +1075,14 @@ void reprog::collapse_nops()
     return inst;
   });
 
+  collapse_nops();
+}
+
+void reprog::finalize() { build_start_ids(); }
+
+void reprog::collapse_nops()
+{
+  auto find_next_op = find_next_op_fn{_insts};
   // create new routes around NOP chains
   std::transform(_insts.begin(), _insts.end(), _insts.begin(), [find_next_op](auto inst) {
     if (inst.type != NOP) {

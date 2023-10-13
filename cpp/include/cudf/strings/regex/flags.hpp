@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,6 +82,20 @@ constexpr bool is_ascii(regex_flags const f)
 enum class capture_groups : uint32_t {
   EXTRACT,     ///< Capture groups processed normally for extract
   NON_CAPTURE  ///< Convert all capture groups to non-capture groups
+};
+
+/**
+ * @brief Optimizer setting
+ *
+ * For processing a regex pattern used with contains or matches.
+ * These can be used to optimize the generated regex instructions
+ * where the where trailing or preceding '.*' instructions are
+ * not needed.
+ */
+enum class optimizer_flags : uint32_t {
+  DEFAULT,     ///< No extra optimization
+  TRIM_RIGHT,  ///< Removes trailing '.*' instructions
+  TRIM_BOTH    ///< Removes preceding or trailing '.*' instructions
 };
 
 /** @} */  // end of doxygen group

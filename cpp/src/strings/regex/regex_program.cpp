@@ -26,9 +26,10 @@ namespace strings {
 
 std::unique_ptr<regex_program> regex_program::create(std::string_view pattern,
                                                      regex_flags flags,
-                                                     capture_groups capture)
+                                                     capture_groups capture,
+                                                     optimizer_flags optimize)
 {
-  auto p = new regex_program(pattern, flags, capture);
+  auto p = new regex_program(pattern, flags, capture, optimize);
   return std::unique_ptr<regex_program>(p);
 }
 
@@ -36,11 +37,16 @@ regex_program::~regex_program()                                = default;
 regex_program::regex_program(regex_program&& other)            = default;
 regex_program& regex_program::operator=(regex_program&& other) = default;
 
-regex_program::regex_program(std::string_view pattern, regex_flags flags, capture_groups capture)
+regex_program::regex_program(std::string_view pattern,
+                             regex_flags flags,
+                             capture_groups capture,
+                             optimizer_flags optimize)
   : _pattern(pattern),
     _flags(flags),
-    _impl(
-      std::make_unique<regex_program_impl>(detail::reprog::create_from(pattern, flags, capture)))
+    _capture(capture),
+    _optimize(optimize),
+    _impl(std::make_unique<regex_program_impl>(
+      detail::reprog::create_from(pattern, flags, capture, optimize)))
 {
 }
 

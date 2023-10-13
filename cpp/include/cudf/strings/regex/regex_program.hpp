@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,11 +48,13 @@ struct regex_program {
    * @param pattern Regex pattern
    * @param flags Regex flags for interpreting special characters in the pattern
    * @param capture Controls how capture groups in the pattern are used
+   * @param optimize Optimizer flags for the pattern compiler
    * @return Instance of this object
    */
   static std::unique_ptr<regex_program> create(std::string_view pattern,
-                                               regex_flags flags      = regex_flags::DEFAULT,
-                                               capture_groups capture = capture_groups::EXTRACT);
+                                               regex_flags flags        = regex_flags::DEFAULT,
+                                               capture_groups capture   = capture_groups::EXTRACT,
+                                               optimizer_flags optimize = optimizer_flags::DEFAULT);
 
   /**
    * @brief Move constructor
@@ -91,6 +93,13 @@ struct regex_program {
   capture_groups capture() const;
 
   /**
+   * @brief Return the optimizer_flags used to create this instance
+   *
+   * @return optimizer setting
+   */
+  optimizer_flags optimize_flags() const;
+
+  /**
    * @brief Return the number of instructions in this instance
    *
    * @return Number of instructions
@@ -120,6 +129,7 @@ struct regex_program {
   std::string _pattern;
   regex_flags _flags;
   capture_groups _capture;
+  optimizer_flags _optimize;
 
   std::unique_ptr<regex_program_impl> _impl;
 
@@ -128,7 +138,10 @@ struct regex_program {
    *
    * Called by create()
    */
-  regex_program(std::string_view pattern, regex_flags flags, capture_groups capture);
+  regex_program(std::string_view pattern,
+                regex_flags flags,
+                capture_groups capture,
+                optimizer_flags optimize);
 
   friend struct regex_device_builder;
 };
