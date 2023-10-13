@@ -2149,6 +2149,7 @@ class IndexedFrame(Frame):
         self, value=None, method=None, axis=None, inplace=False, limit=None
     ):  # noqa: D102
         if method is not None:
+            # Do not remove until pandas 3.0 support is added.
             warnings.warn(
                 f"{type(self).__name__}.fillna with 'method' is "
                 "deprecated and will raise in a future version. "

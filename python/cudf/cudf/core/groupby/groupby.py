@@ -2183,6 +2183,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         if method is not None:
             if method not in {"ffill", "bfill"}:
                 raise ValueError("Method can only be of 'ffill', 'bfill'.")
+            # Do not remove until pandas 3.0 support is added.
             warnings.warn(
                 f"{type(self).__name__}.fillna with 'method' is "
                 "deprecated and will raise in a future version. "

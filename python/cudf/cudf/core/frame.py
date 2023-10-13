@@ -740,6 +740,7 @@ class Frame(BinaryOperand, Scannable):
             `ffill` propagates the last non-null values forward to the next
             non-null value. `bfill` propagates backward with the next non-null
             value. Cannot be used with ``value``.
+
             .. deprecated:: 23.12
                 `method` is deprecated.
 
