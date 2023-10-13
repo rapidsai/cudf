@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.api.extensions import no_default
 from cudf.datasets import randomdata
 from cudf.testing._utils import (
     _create_cudf_series_float64_default,
@@ -16,6 +17,7 @@ from cudf.testing._utils import (
     assert_exceptions_equal,
     expect_warning_if,
 )
+from cudf.core._compat import PANDAS_GE_210
 
 params_dtypes = [np.int32, np.uint32, np.float32, np.float64]
 methods = ["min", "max", "sum", "mean", "var", "std"]
@@ -342,14 +344,21 @@ def test_series_median(dtype, num_na):
     ],
 )
 @pytest.mark.parametrize("periods", range(-5, 5))
-@pytest.mark.parametrize("fill_method", ["ffill", "bfill", "pad", "backfill"])
+@pytest.mark.parametrize(
+    "fill_method", ["ffill", "bfill", "pad", "backfill", no_default]
+)
 def test_series_pct_change(data, periods, fill_method):
     cs = cudf.Series(data)
     ps = cs.to_pandas()
 
     if np.abs(periods) <= len(cs):
-        got = cs.pct_change(periods=periods, fill_method=fill_method)
-        expected = ps.pct_change(periods=periods, fill_method=fill_method)
+        with expect_warning_if(fill_method is not no_default):
+            got = cs.pct_change(periods=periods, fill_method=fill_method)
+        with expect_warning_if(
+            PANDAS_GE_210
+            and (fill_method is not no_default or ps.isna().any())
+        ):
+            expected = ps.pct_change(periods=periods, fill_method=fill_method)
         np.testing.assert_array_almost_equal(
             got.to_numpy(na_value=np.nan), expected
         )

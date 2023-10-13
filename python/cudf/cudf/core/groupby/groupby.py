@@ -21,6 +21,7 @@ from cudf._lib.reshape import interleave_columns
 from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
 from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
+from cudf.api.extensions import no_default
 from cudf.api.types import is_bool_dtype, is_list_like
 from cudf.core.abc import Serializable
 from cudf.core.column.column import ColumnBase, arange, as_column
@@ -2250,7 +2251,12 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     @_cudf_nvtx_annotate
     def pct_change(
-        self, periods=1, fill_method="ffill", axis=0, limit=None, freq=None
+        self,
+        periods=1,
+        fill_method=no_default,
+        axis=0,
+        limit=no_default,
+        freq=None,
     ):
         """
         Calculates the percent change between sequential elements
@@ -2262,9 +2268,15 @@ class GroupBy(Serializable, Reducible, Scannable):
             Periods to shift for forming percent change.
         fill_method : str, default 'ffill'
             How to handle NAs before computing percent changes.
+
+            .. deprecated:: 23.12
+                `fill_method` is deprecated.
         limit : int, optional
             The number of consecutive NAs to fill before stopping.
             Not yet implemented.
+
+            .. deprecated:: 23.12
+                `limit` is deprecated.
         freq : str, optional
             Increment to use from time series API.
             Not yet implemented.
@@ -2276,24 +2288,30 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         if not axis == 0:
             raise NotImplementedError("Only axis=0 is supported.")
-        if limit is not None:
+        if limit is not no_default:
             raise NotImplementedError("limit parameter not supported yet.")
         if freq is not None:
             raise NotImplementedError("freq parameter not supported yet.")
-        elif fill_method not in {"ffill", "pad", "bfill", "backfill"}:
+        elif fill_method not in {no_default, "ffill", "bfill"}:
             raise ValueError(
-                "fill_method must be one of 'ffill', 'pad', "
-                "'bfill', or 'backfill'."
+                "fill_method must be one of 'ffill', or" "'bfill'."
             )
 
-        if fill_method in ("pad", "backfill"):
-            alternative = "ffill" if fill_method == "pad" else "bfill"
+        if fill_method is not no_default or limit is not no_default:
             # Do not remove until pandas 2.0 support is added.
             warnings.warn(
-                f"{fill_method} is deprecated and will be removed in a future "
-                f"version. Use f{alternative} instead.",
+                "The 'fill_method' and 'limit' keywords in "
+                f"{type(self).__name__}.pct_change are deprecated and will be "
+                "removed in a future version. Call "
+                f"{'bfill' if fill_method in ('backfill', 'bfill') else 'ffill'} "  # noqa: E501
+                "before calling pct_change instead.",
                 FutureWarning,
             )
+
+        if fill_method is no_default:
+            fill_method = "ffill"
+        if limit is no_default:
+            limit = None
 
         filled = self.fillna(method=fill_method, limit=limit)
         fill_grp = filled.groupby(self.grouping)

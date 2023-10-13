@@ -6998,7 +6998,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return super()._explode(column, ignore_index)
 
     def pct_change(
-        self, periods=1, fill_method="ffill", limit=None, freq=None
+        self, periods=1, fill_method=no_default, limit=no_default, freq=None
     ):
         """
         Calculates the percent change between sequential elements
@@ -7010,9 +7010,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             Periods to shift for forming percent change.
         fill_method : str, default 'ffill'
             How to handle NAs before computing percent changes.
+
+            .. deprecated:: 23.12
+                `fill_method` is deprecated.
         limit : int, optional
             The number of consecutive NAs to fill before stopping.
             Not yet implemented.
+
+            .. deprecated:: 23.12
+                `limit` is deprecated.
         freq : str, optional
             Increment to use from time series API.
             Not yet implemented.
@@ -7021,16 +7027,34 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         DataFrame
         """
-        if limit is not None:
+        if limit is not no_default:
             raise NotImplementedError("limit parameter not supported yet.")
         if freq is not None:
             raise NotImplementedError("freq parameter not supported yet.")
-        elif fill_method not in {"ffill", "pad", "bfill", "backfill"}:
+        elif fill_method not in {
+            no_default,
+            "ffill",
+            "pad",
+            "bfill",
+            "backfill",
+        }:
             raise ValueError(
                 "fill_method must be one of 'ffill', 'pad', "
                 "'bfill', or 'backfill'."
             )
-
+        if fill_method is not no_default or limit is not no_default:
+            warnings.warn(
+                "The 'fill_method' and 'limit' keywords in "
+                f"{type(self).__name__}.pct_change are deprecated and will be "
+                "removed in a future version. Call "
+                f"{'bfill' if fill_method in ('backfill', 'bfill') else 'ffill'} "  # noqa: E501
+                "before calling pct_change instead.",
+                FutureWarning,
+            )
+        if fill_method is no_default:
+            fill_method = "ffill"
+        if limit is no_default:
+            limit = None
         data = self.fillna(method=fill_method, limit=limit)
 
         return data.diff(periods=periods) / data.shift(
