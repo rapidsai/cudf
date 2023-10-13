@@ -199,14 +199,14 @@ std::unique_ptr<column> is_hex(
  *
  * @code{.pseudo}
  * Example:
- * input = [123, -1, 0, 27, 342718233] // int32 type input column
+ * input = [1234, -1, 0, 27, 342718233] // int32 type input column
  * s = integers_to_hex(input)
  * s is [ '04D2', 'FFFFFFFF', '00', '1B', '146D7719']
  * @endcode
  *
  * The example above shows an `INT32` type column where each integer is 4 bytes.
  * Leading zeros are suppressed unless filling out a complete byte as in
- * `123 -> '04D2'` instead of `000004D2` or `4D2`.
+ * `1234 -> '04D2'` instead of `000004D2` or `4D2`.
  *
  * @throw cudf::logic_error if the input column is not integral type.
  *
