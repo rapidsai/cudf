@@ -16,6 +16,9 @@
 
 #include "parquet_gpu.hpp"
 #include <io/utilities/block_utils.cuh>
+
+#include <cudf/detail/utilities/cuda.cuh>
+
 #include <thrust/tuple.h>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -342,14 +345,15 @@ struct gpuParsePageHeader {
 __global__ void __launch_bounds__(128)
   gpuDecodePageHeaders(ColumnChunkDesc* chunks, int32_t num_chunks, int32_t* error_code)
 {
+  using cudf::detail::warp_size;
   gpuParsePageHeader parse_page_header;
   __shared__ byte_stream_s bs_g[4];
 
-  int error[4]            = {0};
-  int lane_id             = threadIdx.x % 32;
-  int warp_id             = threadIdx.x / 32;
-  int chunk               = (blockIdx.x * 4) + warp_id;
-  byte_stream_s* const bs = &bs_g[warp_id];
+  int32_t error[4]   = {0};
+  auto const lane_id = threadIdx.x % warp_size;
+  auto const warp_id = threadIdx.x / warp_size;
+  auto const chunk   = (blockIdx.x * 4) + warp_id;
+  auto const bs      = &bs_g[warp_id];
 
   if (chunk < num_chunks and lane_id == 0) { bs->ck = chunks[chunk]; }
   if (lane_id == 0) { error[warp_id] = 0; }
