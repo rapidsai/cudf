@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import pickle
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -73,7 +74,9 @@ class _Resampler(GroupBy):
         )
 
         # fill the gaps:
-        filled = upsampled.fillna(method=method)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            filled = upsampled.fillna(method=method)
 
         # filter the result to only include the values corresponding
         # to the bin labels:

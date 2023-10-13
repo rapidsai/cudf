@@ -2646,10 +2646,12 @@ def test_groupby_various_by_fillna(by, data, args):
     ps = pd.Series(data)
     gs = cudf.from_pandas(ps)
 
-    expect = ps.groupby(by).fillna(**args)
+    with expect_warning_if(PANDAS_GE_210 and "method" in args):
+        expect = ps.groupby(by).fillna(**args)
     if isinstance(by, pd.Grouper):
         by = cudf.Grouper(level=by.level)
-    got = gs.groupby(by).fillna(**args)
+    with expect_warning_if("method" in args):
+        got = gs.groupby(by).fillna(**args)
 
     assert_groupby_results_equal(expect, got, check_dtype=False)
 
@@ -2693,8 +2695,10 @@ def test_groupby_fillna_method(nelem, method):
     pdf = t.to_pandas()
     gdf = cudf.from_pandas(pdf)
 
-    expect = pdf.groupby(key_col).fillna(method=method)
-    got = gdf.groupby(key_col).fillna(method=method)
+    with expect_warning_if(PANDAS_GE_210):
+        expect = pdf.groupby(key_col).fillna(method=method)
+    with pytest.warns(FutureWarning):
+        got = gdf.groupby(key_col).fillna(method=method)
 
     assert_groupby_results_equal(
         expect[value_cols], got[value_cols], sort=False
