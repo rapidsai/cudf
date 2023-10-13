@@ -182,7 +182,7 @@ int main(int argc, char const** argv)
   std::cout << "count_aggregate time: " << count_time.count() << " seconds\n";
 
   auto count_w_copy_st = std::chrono::steady_clock::now();
-  auto count_w_copy    = count_aggregate(tbl->view());
+  auto count_w_copy    = count_aggregate_with_copy(tbl->view());
   std::chrono::duration<double> count_w_copy_time =
     std::chrono::steady_clock::now() - count_w_copy_st;
   std::cout << "count_aggregate_with_copy time: " << count_w_copy_time.count() << " seconds\n";
