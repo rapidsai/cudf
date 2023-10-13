@@ -11,7 +11,7 @@ package:
   name: libcudf-split
 
 source:
-  git_url: ../../..
+  path: ../../..
 
 build:
   script_env:
