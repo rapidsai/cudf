@@ -3518,6 +3518,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 "'bfill', or 'backfill'."
             )
         if fill_method is not no_default or limit is not no_default:
+            # Do not remove until pandas 3.0 support is added.
             warnings.warn(
                 "The 'fill_method' and 'limit' keywords in "
                 f"{type(self).__name__}.pct_change are deprecated and will be "
