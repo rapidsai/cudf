@@ -39,7 +39,7 @@ class kernel_error {
   /**
    * @brief Construct a new `kernel_error` with an initial value of 0.
    *
-   * Note: setting the initial value is done asynchronously.
+   * Note: the initial value is set asynchronously.
    *
    * @throws `rmm::bad_alloc` if allocating the device memory for `initial_value` fails.
    * @throws `rmm::cuda_error` if copying `initial_value` to device memory fails.
