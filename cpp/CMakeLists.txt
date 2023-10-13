@@ -614,10 +614,10 @@ add_library(
   src/text/normalize.cu
   src/text/replace.cu
   src/text/stemmer.cu
-  src/text/subword/bpe_tokenizer.cu
+  src/text/bpe/byte_pair_encoding.cu
+  src/text/bpe/load_merge_pairs.cu
   src/text/subword/data_normalizer.cu
   src/text/subword/load_hash_file.cu
-  src/text/subword/load_merges_file.cu
   src/text/subword/subword_tokenize.cu
   src/text/subword/wordpiece_tokenizer.cu
   src/text/tokenize.cu
