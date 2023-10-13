@@ -7042,6 +7042,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "fill_method must be one of 'ffill', 'pad', "
                 "'bfill', or 'backfill'."
             )
+
         if fill_method is not no_default or limit is not no_default:
             # Do not remove until pandas 3.0 support is added.
             warnings.warn(
@@ -7056,7 +7057,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             fill_method = "ffill"
         if limit is no_default:
             limit = None
-        data = self.fillna(method=fill_method, limit=limit)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            data = self.fillna(method=fill_method, limit=limit)
 
         return data.diff(periods=periods) / data.shift(
             periods=periods, freq=freq

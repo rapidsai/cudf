@@ -735,12 +735,14 @@ class Frame(BinaryOperand, Scannable):
             are filled with values in corresponding indices.
             A dict can be used to provide different values to fill nulls
             in different columns. Cannot be used with ``method``.
-
         method : {'ffill', 'bfill'}, default None
             Method to use for filling null values in the dataframe or series.
             `ffill` propagates the last non-null values forward to the next
             non-null value. `bfill` propagates backward with the next non-null
             value. Cannot be used with ``value``.
+
+            .. deprecated:: 23.12
+                `method` is deprecated.
 
         Returns
         -------

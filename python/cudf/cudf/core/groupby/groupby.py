@@ -2184,6 +2184,14 @@ class GroupBy(Serializable, Reducible, Scannable):
         if method is not None:
             if method not in {"ffill", "bfill"}:
                 raise ValueError("Method can only be of 'ffill', 'bfill'.")
+            # Do not remove until pandas 3.0 support is added.
+            warnings.warn(
+                f"{type(self).__name__}.fillna with 'method' is "
+                "deprecated and will raise in a future version. "
+                "Use obj.ffill() or obj.bfill() instead.",
+                FutureWarning,
+            )
+
             return getattr(self, method, limit)()
 
         values = self.obj.__class__._from_data(
@@ -2313,7 +2321,10 @@ class GroupBy(Serializable, Reducible, Scannable):
         if limit is no_default:
             limit = None
 
-        filled = self.fillna(method=fill_method, limit=limit)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            filled = self.fillna(method=fill_method, limit=limit)
+
         fill_grp = filled.groupby(self.grouping)
         shifted = fill_grp.shift(periods=periods, freq=freq)
         return (filled / shifted) - 1

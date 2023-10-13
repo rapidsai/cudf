@@ -3533,7 +3533,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if limit is no_default:
             limit = None
 
-        data = self.fillna(method=fill_method, limit=limit)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            data = self.fillna(method=fill_method, limit=limit)
         diff = data.diff(periods=periods)
         change = diff / data.shift(periods=periods, freq=freq)
         return change
