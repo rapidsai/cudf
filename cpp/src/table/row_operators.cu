@@ -34,6 +34,8 @@
 
 #include <thrust/iterator/transform_iterator.h>
 
+#include <cudf/detail/nvtx/ranges.hpp>
+
 namespace cudf {
 namespace experimental {
 
@@ -73,6 +75,7 @@ std::vector<column_view> unslice_children(column_view const& c)
  */
 table_view remove_struct_child_offsets(table_view table)
 {
+  CUDF_FUNC_RANGE();
   std::vector<column_view> cols;
   cols.reserve(table.num_columns());
   std::transform(table.begin(), table.end(), std::back_inserter(cols), [&](column_view const& c) {
@@ -185,6 +188,7 @@ auto decompose_structs(table_view table,
                        host_span<order const> column_order         = {},
                        host_span<null_order const> null_precedence = {})
 {
+  CUDF_FUNC_RANGE();
   auto linked_columns = detail::table_to_linked_columns(table);
 
   std::vector<column_view> verticalized_columns;
