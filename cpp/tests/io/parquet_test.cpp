@@ -4161,8 +4161,10 @@ TEST_P(ParquetV2Test, LargeColumnIndex)
       // check trunc(page.min) <= stats.min && trun(page.max) >= stats.max
       auto const ptype = fmd.schema[c + 1].type;
       auto const ctype = fmd.schema[c + 1].converted_type;
-      EXPECT_TRUE(compare_binary(ci.min_values[0], stats.min_value, ptype, ctype) <= 0);
-      EXPECT_TRUE(compare_binary(ci.max_values[0], stats.max_value, ptype, ctype) >= 0);
+      ASSERT_TRUE(stats.min_value.has_value());
+      ASSERT_TRUE(stats.max_value.has_value());
+      EXPECT_TRUE(compare_binary(ci.min_values[0], stats.min_value.value(), ptype, ctype) <= 0);
+      EXPECT_TRUE(compare_binary(ci.max_values[0], stats.max_value.value(), ptype, ctype) >= 0);
     }
   }
 }
@@ -4242,6 +4244,9 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndex)
       auto const ci    = read_column_index(source, chunk);
       auto const stats = get_statistics(chunk);
 
+      ASSERT_TRUE(stats.min_value.has_value());
+      ASSERT_TRUE(stats.max_value.has_value());
+
       // schema indexing starts at 1
       auto const ptype = fmd.schema[c + 1].type;
       auto const ctype = fmd.schema[c + 1].converted_type;
@@ -4250,10 +4255,10 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndex)
         EXPECT_FALSE(ci.null_pages[p]);
         // null_counts should always be 0
         EXPECT_EQ(ci.null_counts[p], 0);
-        EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
+        EXPECT_TRUE(compare_binary(stats.min_value.value(), ci.min_values[p], ptype, ctype) <= 0);
       }
       for (size_t p = 0; p < ci.max_values.size(); p++)
-        EXPECT_TRUE(compare_binary(stats.max_value, ci.max_values[p], ptype, ctype) >= 0);
+        EXPECT_TRUE(compare_binary(stats.max_value.value(), ci.max_values[p], ptype, ctype) >= 0);
     }
   }
 }
@@ -4344,7 +4349,10 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNulls)
       auto const stats = get_statistics(chunk);
 
       // should be half nulls, except no nulls in column 0
-      EXPECT_EQ(stats.null_count, c == 0 ? 0 : num_rows / 2);
+      ASSERT_TRUE(stats.min_value.has_value());
+      ASSERT_TRUE(stats.max_value.has_value());
+      ASSERT_TRUE(stats.null_count.has_value());
+      EXPECT_EQ(stats.null_count.value(), c == 0 ? 0 : num_rows / 2);
 
       // schema indexing starts at 1
       auto const ptype = fmd.schema[c + 1].type;
@@ -4356,10 +4364,10 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNulls)
         } else {
           EXPECT_EQ(ci.null_counts[p], 0);
         }
-        EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
+        EXPECT_TRUE(compare_binary(stats.min_value.value(), ci.min_values[p], ptype, ctype) <= 0);
       }
       for (size_t p = 0; p < ci.max_values.size(); p++) {
-        EXPECT_TRUE(compare_binary(stats.max_value, ci.max_values[p], ptype, ctype) >= 0);
+        EXPECT_TRUE(compare_binary(stats.max_value.value(), ci.max_values[p], ptype, ctype) >= 0);
       }
     }
   }
@@ -4436,7 +4444,12 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNullColumn)
       auto const stats = get_statistics(chunk);
 
       // there should be no nulls except column 1 which is all nulls
-      EXPECT_EQ(stats.null_count, c == 1 ? num_rows : 0);
+      if (c != 1) {
+        ASSERT_TRUE(stats.min_value.has_value());
+        ASSERT_TRUE(stats.max_value.has_value());
+      }
+      ASSERT_TRUE(stats.null_count.has_value());
+      EXPECT_EQ(stats.null_count.value(), c == 1 ? num_rows : 0);
 
       // schema indexing starts at 1
       auto const ptype = fmd.schema[c + 1].type;
@@ -4449,12 +4462,12 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNullColumn)
         }
         if (not ci.null_pages[p]) {
           EXPECT_EQ(ci.null_counts[p], 0);
-          EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
+          EXPECT_TRUE(compare_binary(stats.min_value.value(), ci.min_values[p], ptype, ctype) <= 0);
         }
       }
       for (size_t p = 0; p < ci.max_values.size(); p++) {
         if (not ci.null_pages[p]) {
-          EXPECT_TRUE(compare_binary(stats.max_value, ci.max_values[p], ptype, ctype) >= 0);
+          EXPECT_TRUE(compare_binary(stats.max_value.value(), ci.max_values[p], ptype, ctype) >= 0);
         }
       }
     }
@@ -4533,13 +4546,16 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStruct)
       auto const ci    = read_column_index(source, chunk);
       auto const stats = get_statistics(chunk);
 
+      ASSERT_TRUE(stats.min_value.has_value());
+      ASSERT_TRUE(stats.max_value.has_value());
+
       auto const ptype = fmd.schema[colidx].type;
       auto const ctype = fmd.schema[colidx].converted_type;
       for (size_t p = 0; p < ci.min_values.size(); p++) {
-        EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
+        EXPECT_TRUE(compare_binary(stats.min_value.value(), ci.min_values[p], ptype, ctype) <= 0);
       }
       for (size_t p = 0; p < ci.max_values.size(); p++) {
-        EXPECT_TRUE(compare_binary(stats.max_value, ci.max_values[p], ptype, ctype) >= 0);
+        EXPECT_TRUE(compare_binary(stats.max_value.value(), ci.max_values[p], ptype, ctype) >= 0);
       }
     }
   }
@@ -4829,11 +4845,14 @@ TEST_F(ParquetWriterTest, CheckColumnIndexTruncation)
       auto const ci    = read_column_index(source, chunk);
       auto const stats = get_statistics(chunk);
 
+      ASSERT_TRUE(stats.min_value.has_value());
+      ASSERT_TRUE(stats.max_value.has_value());
+
       // check trunc(page.min) <= stats.min && trun(page.max) >= stats.max
       auto const ptype = fmd.schema[c + 1].type;
       auto const ctype = fmd.schema[c + 1].converted_type;
-      EXPECT_TRUE(compare_binary(ci.min_values[0], stats.min_value, ptype, ctype) <= 0);
-      EXPECT_TRUE(compare_binary(ci.max_values[0], stats.max_value, ptype, ctype) >= 0);
+      EXPECT_TRUE(compare_binary(ci.min_values[0], stats.min_value.value(), ptype, ctype) <= 0);
+      EXPECT_TRUE(compare_binary(ci.max_values[0], stats.max_value.value(), ptype, ctype) >= 0);
 
       // check that truncated values == expected
       EXPECT_EQ(memcmp(ci.min_values[0].data(), truncated_min[c], ci.min_values[0].size()), 0);
@@ -4890,8 +4909,10 @@ TEST_F(ParquetWriterTest, BinaryColumnIndexTruncation)
       // check trunc(page.min) <= stats.min && trun(page.max) >= stats.max
       auto const ptype = fmd.schema[c + 1].type;
       auto const ctype = fmd.schema[c + 1].converted_type;
-      EXPECT_TRUE(compare_binary(ci.min_values[0], stats.min_value, ptype, ctype) <= 0);
-      EXPECT_TRUE(compare_binary(ci.max_values[0], stats.max_value, ptype, ctype) >= 0);
+      ASSERT_TRUE(stats.min_value.has_value());
+      ASSERT_TRUE(stats.max_value.has_value());
+      EXPECT_TRUE(compare_binary(ci.min_values[0], stats.min_value.value(), ptype, ctype) <= 0);
+      EXPECT_TRUE(compare_binary(ci.max_values[0], stats.max_value.value(), ptype, ctype) >= 0);
 
       // check that truncated values == expected
       EXPECT_EQ(ci.min_values[0], truncated_min[c]);
@@ -6735,6 +6756,38 @@ TEST_P(ParquetV2Test, CheckEncodings)
     EXPECT_TRUE(contains(chunk2_enc, Encoding::RLE));
     EXPECT_TRUE(contains(chunk2_enc, Encoding::PLAIN_DICTIONARY));
   }
+}
+
+TEST_F(ParquetWriterTest, EmptyMinStringStatistics)
+{
+  char const* const min_val = "";
+  char const* const max_val = "zzz";
+  std::vector<char const*> strings{min_val, max_val, "pining", "for", "the", "fjords"};
+
+  column_wrapper<cudf::string_view> string_col{strings.begin(), strings.end()};
+  auto const output   = table_view{{string_col}};
+  auto const filepath = temp_env->get_temp_filepath("EmptyMinStringStatistics.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, output);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::detail::FileMetaData fmd;
+  read_footer(source, &fmd);
+
+  ASSERT_TRUE(fmd.row_groups.size() > 0);
+  ASSERT_TRUE(fmd.row_groups[0].columns.size() > 0);
+  auto const& chunk = fmd.row_groups[0].columns[0];
+  auto const stats  = get_statistics(chunk);
+
+  ASSERT_TRUE(stats.min_value.has_value());
+  ASSERT_TRUE(stats.max_value.has_value());
+  auto const min_value = std::string{reinterpret_cast<char const*>(stats.min_value.value().data()),
+                                     stats.min_value.value().size()};
+  auto const max_value = std::string{reinterpret_cast<char const*>(stats.max_value.value().data()),
+                                     stats.max_value.value().size()};
+  EXPECT_EQ(min_value, std::string(min_val));
+  EXPECT_EQ(max_value, std::string(max_val));
 }
 
 TEST_F(ParquetReaderTest, RepeatedNoAnnotations)

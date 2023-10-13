@@ -56,18 +56,32 @@ static void BM_shift(benchmark::State& state)
   cudf::size_type size   = state.range(0);
   cudf::size_type offset = size * (static_cast<double>(shift_factor) / 100.0);
 
-  auto const input_table =
-    create_sequence_table({cudf::type_to_id<int>()},
-                          row_count{size},
-                          use_validity ? std::optional<double>{1.0} : std::nullopt);
+  auto constexpr column_type_id = cudf::type_id::INT32;
+  using column_type             = cudf::id_to_type<column_type_id>;
+
+  auto const input_table = create_sequence_table(
+    {column_type_id}, row_count{size}, use_validity ? std::optional<double>{1.0} : std::nullopt);
   cudf::column_view input{input_table->get_column(0)};
 
-  auto fill = use_validity ? make_scalar<int>() : make_scalar<int>(777);
+  auto fill = use_validity ? make_scalar<column_type>() : make_scalar<column_type>(777);
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);
     auto output = cudf::shift(input, offset, *fill);
   }
+
+  auto const elems_read = (size - offset);
+  auto const bytes_read = elems_read * sizeof(column_type);
+
+  // If 'use_validity' is false, the fill value is a number, and the entire column
+  // (excluding the null bitmask) needs to be written. On the other hand, if 'use_validity'
+  // is true, only the elements that can be shifted are written, along with the full null bitmask.
+  auto const elems_written = use_validity ? (size - offset) : size;
+  auto const bytes_written = elems_written * sizeof(column_type);
+  auto const null_bytes    = use_validity ? 2 * cudf::bitmask_allocation_size_bytes(size) : 0;
+
+  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) *
+                          (bytes_written + bytes_read + null_bytes));
 }
 
 class Shift : public cudf::benchmark {};
