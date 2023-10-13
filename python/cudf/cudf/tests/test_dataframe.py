@@ -8069,7 +8069,7 @@ def test_series_empty(ps):
     [["a"], ["another column name"], None, pd.Index(["a"], name="index name")],
 )
 def test_dataframe_init_with_columns(data, columns, request):
-    if data is None and columns is None and not PANDAS_GE_200:
+    if data == [] and columns is None and not PANDAS_GE_200:
         request.node.add_marker(
             pytest.mark.xfail(reason=".column returns Index[object]")
         )
@@ -8876,7 +8876,7 @@ def test_dataframe_constructor_columns(df, columns, index, request):
         else:
             assert_eq(expected, actual, check_index_type=check_index_type)
 
-    if df.empty and columns == [] and not PANDAS_GE_200:
+    if df.empty and columns is None and not PANDAS_GE_200:
         request.node.add_marker(
             pytest.mark.xfail(
                 reason="pandas returns Index[object] instead of RangeIndex"
