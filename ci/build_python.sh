@@ -13,7 +13,7 @@ package_dir="python"
 version=$(rapids-generate-version)
 commit=$(git rev-parse HEAD)
 
-for pkg in cudf dask_cudf cudf_kafka custreamz; do
+for package_name in cudf dask_cudf cudf_kafka custreamz; do
     version_file="${package_dir}/${package_name}/_version.py"
     sed -i "/^__version__/ s/= .*/= ${version}/g" ${version_file}
     sed -i "/^__git_commit__/ s/= .*/= \"${commit}\"/g" ${version_file}
