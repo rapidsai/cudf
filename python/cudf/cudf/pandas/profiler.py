@@ -133,6 +133,9 @@ class Profiler:
         elif (
             event == "return"
             and frame.f_code.co_name == "_fast_slow_function_call"
+            # if arg is None the event is caused by an exception which
+            # we should not try and handle
+            and arg is not None
         ):
             if self._currkey is not None:
                 if arg[1]:  # fast
