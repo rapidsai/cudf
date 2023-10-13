@@ -7031,7 +7031,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "'bfill', or 'backfill'."
             )
 
-        data = self.fillna(method=fill_method, limit=limit)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            data = self.fillna(method=fill_method, limit=limit)
 
         return data.diff(periods=periods) / data.shift(
             periods=periods, freq=freq
