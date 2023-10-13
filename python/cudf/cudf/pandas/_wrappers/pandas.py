@@ -684,6 +684,20 @@ ExcelWriter = make_final_proxy_type(
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
 
+try:
+    from pandas.io.formats.style import Styler as pd_Styler  # isort: skip
+
+    Styler = make_final_proxy_type(
+        "Styler",
+        _Unusable,
+        pd_Styler,
+        fast_to_slow=_Unusable(),
+        slow_to_fast=_Unusable(),
+    )
+except ImportError:
+    # Styler requires Jinja to be installed
+    pass
+
 _eval_func = _FunctionProxy(_Unusable(), pd.eval)
 
 

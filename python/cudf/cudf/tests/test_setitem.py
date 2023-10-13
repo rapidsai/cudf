@@ -463,3 +463,44 @@ def test_loc_setitem_series_index_alignment_13031(other_index):
     cs.loc[["1", "3"]] = cother
 
     assert_eq(s, cs)
+
+
+@pytest.mark.parametrize(
+    "ps",
+    [
+        pd.Series([1, 2, 3], index=pd.RangeIndex(0, 3)),
+        pd.Series([1, 2, 3], index=pd.RangeIndex(start=2, stop=-1, step=-1)),
+        pd.Series([1, 2, 3], index=pd.RangeIndex(start=1, stop=6, step=2)),
+        pd.Series(
+            [1, 2, 3, 4, 5], index=pd.RangeIndex(start=1, stop=-9, step=-2)
+        ),
+        pd.Series(
+            [1, 2, 3, 4, 5], index=pd.RangeIndex(start=1, stop=-12, step=-3)
+        ),
+        pd.Series([1, 2, 3, 4], index=pd.RangeIndex(start=1, stop=14, step=4)),
+        pd.Series(
+            [1, 2, 3, 4], index=pd.RangeIndex(start=1, stop=-14, step=-4)
+        ),
+    ],
+)
+@pytest.mark.parametrize("arg", list(range(-20, 20)) + [5.6, 3.1])
+def test_series_set_item_range_index(ps, arg):
+    gsr = cudf.from_pandas(ps)
+    psr = ps.copy(deep=True)
+    psr[arg] = 11
+    gsr[arg] = 11
+
+    assert_eq(psr, gsr, check_index_type=True)
+
+
+def test_series_set_item_index_reference():
+    gs1 = cudf.Series([1], index=[7])
+    gs2 = cudf.Series([2], index=gs1.index)
+    gs1.loc[11] = 2
+
+    ps1 = pd.Series([1], index=[7])
+    ps2 = pd.Series([2], index=ps1.index)
+    ps1.loc[11] = 2
+
+    assert_eq(ps1, gs1)
+    assert_eq(ps2, gs2)
