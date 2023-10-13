@@ -111,7 +111,7 @@ inline __device__ bool is_integer(string_view const& d_str)
  * @brief The dispatch functions for checking if strings are valid integers.
  */
 struct dispatch_is_integer_fn {
-  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+  template <typename T, std::enable_if_t<cudf::is_integral_not_bool<T>()>* = nullptr>
   std::unique_ptr<column> operator()(strings_column_view const& strings,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
@@ -145,7 +145,7 @@ struct dispatch_is_integer_fn {
     return results;
   }
 
-  template <typename T, std::enable_if_t<not std::is_integral_v<T>>* = nullptr>
+  template <typename T, std::enable_if_t<not cudf::is_integral_not_bool<T>()>* = nullptr>
   std::unique_ptr<column> operator()(strings_column_view const&,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*) const
@@ -243,7 +243,8 @@ struct string_to_integer_fn {
  * The output_column is expected to be one of the integer types only.
  */
 struct dispatch_to_integers_fn {
-  template <typename IntegerType, std::enable_if_t<std::is_integral_v<IntegerType>>* = nullptr>
+  template <typename IntegerType,
+            std::enable_if_t<cudf::is_integral_not_bool<IntegerType>()>* = nullptr>
   void operator()(column_device_view const& strings_column,
                   mutable_column_view& output_column,
                   rmm::cuda_stream_view stream) const
@@ -254,21 +255,13 @@ struct dispatch_to_integers_fn {
                       output_column.data<IntegerType>(),
                       string_to_integer_fn<IntegerType>{strings_column});
   }
-  // non-integral types throw an exception
-  template <typename T, std::enable_if_t<not std::is_integral_v<T>>* = nullptr>
+  // non-integer types throw an exception
+  template <typename T, std::enable_if_t<not cudf::is_integral_not_bool<T>()>* = nullptr>
   void operator()(column_device_view const&, mutable_column_view&, rmm::cuda_stream_view) const
   {
-    CUDF_FAIL("Output for to_integers must be an integral type.");
+    CUDF_FAIL("Output for to_integers must be an integer type.");
   }
 };
-
-template <>
-void dispatch_to_integers_fn::operator()<bool>(column_device_view const&,
-                                               mutable_column_view&,
-                                               rmm::cuda_stream_view) const
-{
-  CUDF_FAIL("Output for to_integers must not be a boolean type.");
-}
 
 }  // namespace
 
@@ -351,7 +344,8 @@ struct from_integers_fn {
  * The template function declaration ensures only integer types are used.
  */
 struct dispatch_from_integers_fn {
-  template <typename IntegerType, std::enable_if_t<std::is_integral_v<IntegerType>>* = nullptr>
+  template <typename IntegerType,
+            std::enable_if_t<cudf::is_integral_not_bool<IntegerType>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& integers,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
@@ -373,23 +367,15 @@ struct dispatch_from_integers_fn {
                                std::move(null_mask));
   }
 
-  // non-integral types throw an exception
-  template <typename T, std::enable_if_t<not std::is_integral_v<T>>* = nullptr>
+  // non-integer types throw an exception
+  template <typename T, std::enable_if_t<not cudf::is_integral_not_bool<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const&,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*) const
   {
-    CUDF_FAIL("Values for from_integers function must be an integral type.");
+    CUDF_FAIL("Values for from_integers function must be an integer type.");
   }
 };
-
-template <>
-std::unique_ptr<column> dispatch_from_integers_fn::operator()<bool>(
-  column_view const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*) const
-{
-  CUDF_FAIL("Input for from_integers must not be a boolean type.");
-}
-
 }  // namespace
 
 // This will convert all integer column types into a strings column.
