@@ -97,6 +97,29 @@ std::unique_ptr<cudf::table> count_aggregate(cudf::table_view tbl)
   return std::make_unique<cudf::table>(std::move(left_cols));
 }
 
+std::unique_ptr<cudf::table> count_aggregate_with_copy(cudf::table_view tbl)
+{
+  // Get count for each key
+  auto keys = cudf::table_view{{tbl.column(0)}};
+  auto val  = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, keys.num_rows());
+
+  cudf::groupby::groupby grpby_obj(keys);
+  std::vector<cudf::groupby::aggregation_request> requests;
+  requests.emplace_back(cudf::groupby::aggregation_request());
+  auto agg = cudf::make_count_aggregation<cudf::groupby_aggregation>();
+  requests[0].aggregations.push_back(std::move(agg));
+  requests[0].values = *val;
+  auto agg_results   = grpby_obj.aggregate(requests);
+  auto result_key    = std::move(agg_results.first);
+  auto result_val    = std::move(agg_results.second[0].results[0]);
+
+  std::vector<cudf::column_view> columns{result_key->get_column(0), *result_val};
+  auto agg_v = cudf::table_view(columns);
+
+  // Join on keys to get
+  return std::make_unique<cudf::table>(agg_v);
+}
+
 std::unique_ptr<cudf::table> join_count(cudf::table_view left, cudf::table_view right)
 {
   auto [left_indices, right_indices] =
@@ -156,17 +179,23 @@ int main(int argc, char const** argv)
   auto count_st                            = std::chrono::steady_clock::now();
   auto count                               = count_aggregate(tbl->view());
   std::chrono::duration<double> count_time = std::chrono::steady_clock::now() - count_st;
-  std::cout << "Wall time: " << count_time.count() << " seconds\n";
+  std::cout << "count_aggregate time: " << count_time.count() << " seconds\n";
+
+  auto count_w_copy_st = std::chrono::steady_clock::now();
+  auto count_w_copy    = count_aggregate(tbl->view());
+  std::chrono::duration<double> count_w_copy_time =
+    std::chrono::steady_clock::now() - count_w_copy_st;
+  std::cout << "count_aggregate_with_copy time: " << count_w_copy_time.count() << " seconds\n";
 
   auto combined_st                            = std::chrono::steady_clock::now();
   auto combined                               = join_count(tbl->view(), count->view());
   std::chrono::duration<double> combined_time = std::chrono::steady_clock::now() - combined_st;
-  std::cout << "Wall time: " << combined_time.count() << " seconds\n";
+  std::cout << "join_count time: " << combined_time.count() << " seconds\n";
 
   auto sorted_st                            = std::chrono::steady_clock::now();
   auto sorted                               = sort_keys(combined->view());
   std::chrono::duration<double> sorted_time = std::chrono::steady_clock::now() - sorted_st;
-  std::cout << "Wall time: " << sorted_time.count() << " seconds\n";
+  std::cout << "sort_keys time: " << sorted_time.count() << " seconds\n";
 
   metadata.schema_info.emplace_back("count");
 
