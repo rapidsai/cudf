@@ -43,20 +43,22 @@ struct regex_program;
  *
  * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
- * @param strings Strings instance for this operation
+ * @param input Strings instance for this operation
  * @param prog Regex program instance
  * @param replacement The string used to replace the matched sequence in each string.
  *        Default is an empty string.
  * @param max_replace_count The maximum number of times to replace the matched pattern
  *        within each string. Default replaces every substring that is matched.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column
  */
 std::unique_ptr<column> replace_re(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   regex_program const& prog,
   string_scalar const& replacement           = string_scalar(""),
   std::optional<size_type> max_replace_count = std::nullopt,
+  rmm::cuda_stream_view stream               = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr        = rmm::mr::get_current_device_resource());
 
 /**
@@ -67,18 +69,20 @@ std::unique_ptr<column> replace_re(
  *
  * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
- * @param strings Strings instance for this operation.
- * @param patterns The regular expression patterns to search within each string.
- * @param replacements The strings used for replacement.
- * @param flags Regex flags for interpreting special characters in the patterns.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings column.
+ * @param input Strings instance for this operation
+ * @param patterns The regular expression patterns to search within each string
+ * @param replacements The strings used for replacement
+ * @param flags Regex flags for interpreting special characters in the patterns
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings column
  */
 std::unique_ptr<column> replace_re(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   std::vector<std::string> const& patterns,
   strings_column_view const& replacements,
   regex_flags const flags             = regex_flags::DEFAULT,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -92,16 +96,18 @@ std::unique_ptr<column> replace_re(
  * @throw cudf::logic_error if capture index values in `replacement` are not in range 0-99, and also
  * if the index exceeds the group count specified in the pattern
  *
- * @param strings Strings instance for this operation
+ * @param input Strings instance for this operation
  * @param prog Regex program instance
  * @param replacement The replacement template for creating the output string
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column
  */
 std::unique_ptr<column> replace_with_backrefs(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   regex_program const& prog,
   std::string_view replacement,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace strings

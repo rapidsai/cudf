@@ -633,8 +633,14 @@ ConfigureTest(STREAM_REPLACE_TEST streams/replace_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_SEARCH_TEST streams/search_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_DICTIONARY_TEST streams/dictionary_test.cpp STREAM_MODE testing)
 ConfigureTest(
-  STREAM_STRINGS_TEST streams/strings/case_test.cpp streams/strings/find_test.cpp
-  streams/strings/split_test.cpp streams/strings/strings_tests.cpp STREAM_MODE testing
+  STREAM_STRINGS_TEST
+  streams/strings/case_test.cpp
+  streams/strings/find_test.cpp
+  streams/strings/replace_test.cpp
+  streams/strings/split_test.cpp
+  streams/strings/strings_tests.cpp
+  STREAM_MODE
+  testing
 )
 ConfigureTest(STREAM_SORTING_TEST streams/sorting_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_TEXT_TEST streams/text/ngrams_test.cpp STREAM_MODE testing)
