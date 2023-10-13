@@ -1535,7 +1535,7 @@ def build_column(
 
     if _is_non_decimal_numeric_dtype(dtype):
         assert data is not None
-        return cudf.core.column.NumericalColumn(
+        col = cudf.core.column.NumericalColumn(
             data=data,
             dtype=dtype,
             mask=mask,
@@ -1543,6 +1543,14 @@ def build_column(
             offset=offset,
             null_count=null_count,
         )
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and is_integer_dtype(col)
+            and col.null_count
+        ):
+            return col.astype("float64").fillna(np.nan)
+        return col
+
     if is_categorical_dtype(dtype):
         if not len(children) == 1:
             raise ValueError(
@@ -2486,15 +2494,6 @@ def as_column(
                 ):
                     raise MixedTypeError(
                         "Cannot create column with mixed types"
-                    )
-
-                if (
-                    cudf.get_option("mode.pandas_compatible")
-                    and pa.types.is_integer(pyarrow_array.type)
-                    and pyarrow_array.null_count
-                ):
-                    pyarrow_array = pyarrow_array.cast("float64").fill_null(
-                        np.nan
                     )
 
                 data = as_column(
