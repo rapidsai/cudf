@@ -39,25 +39,25 @@ namespace cudf {
 namespace strings {
 namespace detail {
 // Convert strings column to boolean column
-std::unique_ptr<column> to_booleans(strings_column_view const& strings,
+std::unique_ptr<column> to_booleans(strings_column_view const& input,
                                     string_scalar const& true_string,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  size_type strings_count = strings.size();
+  size_type strings_count = input.size();
   if (strings_count == 0) return make_numeric_column(data_type{type_id::BOOL8}, 0);
 
   CUDF_EXPECTS(true_string.is_valid(stream) && true_string.size() > 0,
                "Parameter true_string must not be empty.");
   auto d_true = string_view(true_string.data(), true_string.size());
 
-  auto strings_column = column_device_view::create(strings.parent(), stream);
+  auto strings_column = column_device_view::create(input.parent(), stream);
   auto d_strings      = *strings_column;
   // create output column copying the strings' null-mask
   auto results      = make_numeric_column(data_type{type_id::BOOL8},
                                      strings_count,
-                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                                     strings.null_count(),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     input.null_count(),
                                      stream,
                                      mr);
   auto results_view = results->mutable_view();
@@ -73,7 +73,7 @@ std::unique_ptr<column> to_booleans(strings_column_view const& strings,
                         result = d_strings.element<string_view>(idx).compare(d_true) == 0;
                       return result;
                     });
-  results->set_null_count(strings.null_count());
+  results->set_null_count(input.null_count());
   return results;
 }
 
