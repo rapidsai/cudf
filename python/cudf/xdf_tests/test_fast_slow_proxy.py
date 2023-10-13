@@ -9,6 +9,7 @@
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
 import inspect
+from functools import partial
 from io import StringIO
 
 import numpy as np
@@ -18,6 +19,7 @@ from cudf.pandas.fast_slow_proxy import (
     _fast_arg,
     _FunctionProxy,
     _slow_arg,
+    _transform_arg,
     _Unusable,
     make_final_proxy_type,
     make_intermediate_proxy_type,
@@ -447,3 +449,78 @@ def test_proxy_binop():
     assert Bar() + FooProxy() == "sum"
     assert Foo() + BarProxy() == "sum"
     assert BarProxy() + Foo() == "sum"
+
+
+def tuple_with_attrs(name, fields: list[str], extra_fields: set[str]):
+    # Build a tuple-like class with some extra attributes and a custom
+    # pickling scheme with __getnewargs_ex__
+    args = ", ".join(fields)
+    kwargs = ", ".join(sorted(extra_fields))
+    code = f"""
+def __new__(cls, {args}, *, {kwargs}):
+    return tuple.__new__(cls, ({args}, ))
+
+def __init__(self, {args}, *, {kwargs}):
+    for key, val in zip({sorted(extra_fields)}, [{kwargs}]):
+        self.__dict__[key] = val
+
+def __eq__(self, other):
+    return (
+        type(other) is type(self)
+        and tuple.__eq__(self, other)
+        and all(getattr(self, k) == getattr(other, k) for k in self._fields)
+    )
+
+def __ne__(self, other):
+    return not (self == other)
+
+def __getnewargs_ex__(self):
+    return tuple(self), self.__dict__
+"""
+    namespace = {
+        "__builtins__": {
+            "AttributeError": AttributeError,
+            "tuple": tuple,
+            "zip": zip,
+            "super": super,
+            "frozenset": frozenset,
+            "type": type,
+            "all": all,
+            "getattr": getattr,
+        }
+    }
+    exec(code, namespace)
+    return type(
+        name,
+        (tuple,),
+        {
+            "_fields": frozenset(extra_fields),
+            "__eq__": namespace["__eq__"],
+            "__getnewargs_ex__": namespace["__getnewargs_ex__"],
+            "__init__": namespace["__init__"],
+            "__ne__": namespace["__ne__"],
+            "__new__": namespace["__new__"],
+        },
+    )
+
+
+def test_tuple_with_attrs_transform():
+    Bunch = tuple_with_attrs("Bunch", ["a", "b"], {"c", "d"})
+    Bunch2 = tuple_with_attrs("Bunch", ["a", "b"], {"c", "d"})
+    a = Bunch(1, 2, c=3, d=4)
+    b = (1, 2)
+    c = Bunch(1, 2, c=4, d=3)
+    d = Bunch2(1, 2, c=3, d=4)
+    assert a != c
+    assert a != b
+    assert b != c
+    assert a != d
+    transform = partial(_transform_arg, attribute_name="_xdf_fast", seen=set())
+    aprime = transform(a)
+    bprime = transform(b)
+    cprime = transform(c)
+    dprime = transform(d)
+    assert a == aprime and a is not aprime
+    assert b == bprime and b is not bprime
+    assert c == cprime and c is not cprime
+    assert d == dprime and d is not dprime
