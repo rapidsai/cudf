@@ -2044,7 +2044,13 @@ TEST_F(JsonReaderTest, JSONLinesRecoveringIgnoreExcessChars)
     R"({"a":4} 123)"
     "\n"
     // 5 -> (valid)
-    R"({"a":5})";
+    R"({"a":5}//Comment after record)"
+    "\n"
+    // 6 -> (valid)
+    R"({"a":6} //Comment after whitespace)"
+    "\n"
+    // 7 -> (invalid)
+    R"({"a":5 //Invalid Comment within record})";
 
   auto filepath = temp_env->get_temp_dir() + "RecoveringLinesExcessChars.json";
   {
@@ -2060,25 +2066,25 @@ TEST_F(JsonReaderTest, JSONLinesRecoveringIgnoreExcessChars)
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
   EXPECT_EQ(result.tbl->num_columns(), 3);
-  EXPECT_EQ(result.tbl->num_rows(), 6);
+  EXPECT_EQ(result.tbl->num_rows(), 8);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
   EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::STRUCT);
   EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::FLOAT64);
 
-  std::vector<bool> a_validity{true, false, false, false, true, true};
-  std::vector<bool> b_validity{false, false, true, false, false, false};
-  std::vector<bool> c_validity{false, false, false, true, false, false};
+  std::vector<bool> a_validity{true, false, false, false, true, true, true, false};
+  std::vector<bool> b_validity{false, false, true, false, false, false, false, false};
+  std::vector<bool> c_validity{false, false, false, true, false, false, false, false};
 
   // Child column b->a
-  auto b_a_col = int64_wrapper({0, 0, 3, 0, 0, 0});
+  auto b_a_col = int64_wrapper({0, 0, 3, 0, 0, 0, 0, 0});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
-                                 int64_wrapper{{-2, 0, 0, 0, 4, 5}, a_validity.cbegin()});
+                                 int64_wrapper{{-2, 0, 0, 0, 4, 5, 6, 0}, a_validity.cbegin()});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     result.tbl->get_column(1), cudf::test::structs_column_wrapper({b_a_col}, b_validity.cbegin()));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     result.tbl->get_column(2),
-    float64_wrapper{{0.0, 0.0, 0.0, 1.2, 0.0, 0.0}, c_validity.cbegin()});
+    float64_wrapper{{0.0, 0.0, 0.0, 1.2, 0.0, 0.0, 0.0, 0.0}, c_validity.cbegin()});
 }
 
 CUDF_TEST_PROGRAM_MAIN()

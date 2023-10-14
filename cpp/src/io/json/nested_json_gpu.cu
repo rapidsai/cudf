@@ -173,7 +173,7 @@ constexpr auto TT_INSD = dfa_states::WITHIN;
 constexpr auto TT_POST = dfa_states::EXCESS;
 
 // Transition table
-std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const transition_table{
+std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> constexpr transition_table{
   {/* IN_STATE         ROOT    NEWLINE  OTHER */
    /* TT_BEFR    */ {{TT_BEFR, TT_BEFR, TT_INSD}},
    /* TT_INSD    */ {{TT_POST, TT_BEFR, TT_INSD}},
@@ -831,8 +831,8 @@ auto get_translation_table(bool recover_from_error)
   /**
    * @brief Helper function that returns `recovering_tokens` if `recover_from_error` is true and
    * returns `regular_tokens` otherwise. This is used to ignore excess characters after the first
-   * vaue in the case of JSON lines that recover from invalid lines, as Spark does simply ignore any
-   * excess characters that follow the first record on a JSON line.
+   * value in the case of JSON lines that recover from invalid lines, as Spark ignores any excess
+   * characters that follow the first record on a JSON line.
    */
   auto alt_tokens = [recover_from_error](std::vector<char> regular_tokens,
                                          std::vector<char> recovering_tokens) {
