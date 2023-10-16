@@ -35,7 +35,7 @@
 
 #include <vector>
 
-namespace cudf::io::parquet {
+namespace cudf::io::parquet::detail {
 
 using cudf::io::detail::string_index_pair;
 
@@ -87,8 +87,6 @@ struct input_column_info {
 
   auto nesting_depth() const { return nesting.size(); }
 };
-
-namespace gpu {
 
 /**
  * @brief Enums for the flags in the page header
@@ -318,79 +316,6 @@ struct ColumnChunkDesc {
 
   int32_t src_col_index{};   // my input column index
   int32_t src_col_schema{};  // my schema index in the file
-};
-
-/**
- * @brief The row_group_info class
- */
-struct row_group_info {
-  size_type index;  // row group index within a file. aggregate_reader_metadata::get_row_group() is
-                    // called with index and source_index
-  size_t start_row;
-  size_type source_index;  // file index.
-
-  row_group_info() = default;
-
-  row_group_info(size_type index, size_t start_row, size_type source_index)
-    : index{index}, start_row{start_row}, source_index{source_index}
-  {
-  }
-};
-
-/**
- * @brief Struct to store file-level data that remains constant for
- * all passes/chunks for the file.
- */
-struct file_intermediate_data {
-  // all row groups to read
-  std::vector<row_group_info> row_groups{};
-
-  // all chunks from the selected row groups. We may end up reading these chunks progressively
-  // instead of all at once
-  std::vector<gpu::ColumnChunkDesc> chunks{};
-
-  // skip_rows/num_rows values for the entire file. these need to be adjusted per-pass because we
-  // may not be visiting every row group that contains these bounds
-  size_t global_skip_rows;
-  size_t global_num_rows;
-};
-
-/**
- * @brief Structs to identify the reading row range for each chunk of rows in chunked reading.
- */
-struct chunk_read_info {
-  size_t skip_rows;
-  size_t num_rows;
-};
-
-/**
- * @brief Struct to store pass-level data that remains constant for a single pass.
- */
-struct pass_intermediate_data {
-  std::vector<std::unique_ptr<datasource::buffer>> raw_page_data;
-  rmm::device_buffer decomp_page_data;
-
-  // rowgroup, chunk and page information for the current pass.
-  std::vector<row_group_info> row_groups{};
-  cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc> chunks{};
-  cudf::detail::hostdevice_vector<gpu::PageInfo> pages_info{};
-  cudf::detail::hostdevice_vector<gpu::PageNestingInfo> page_nesting_info{};
-  cudf::detail::hostdevice_vector<gpu::PageNestingDecodeInfo> page_nesting_decode_info{};
-
-  rmm::device_uvector<int32_t> page_keys{0, rmm::cuda_stream_default};
-  rmm::device_uvector<int32_t> page_index{0, rmm::cuda_stream_default};
-  rmm::device_uvector<string_index_pair> str_dict_index{0, rmm::cuda_stream_default};
-
-  std::vector<gpu::chunk_read_info> output_chunk_read_info;
-  std::size_t current_output_chunk{0};
-
-  rmm::device_buffer level_decode_data{};
-  int level_type_size{0};
-
-  // skip_rows and num_rows values for this particular pass. these may be adjusted values from the
-  // global values stored in file_intermediate_data.
-  size_t skip_rows;
-  size_t num_rows;
 };
 
 /**
@@ -739,7 +664,7 @@ void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_st
  * @param frags Column fragments
  * @param stream CUDA stream to use
  */
-void populate_chunk_hash_maps(cudf::detail::device_2dspan<gpu::PageFragment const> frags,
+void populate_chunk_hash_maps(cudf::detail::device_2dspan<PageFragment const> frags,
                               rmm::cuda_stream_view stream);
 
 /**
@@ -762,7 +687,7 @@ void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_vi
  * @param frags Column fragments
  * @param stream CUDA stream to use
  */
-void get_dictionary_indices(cudf::detail::device_2dspan<gpu::PageFragment const> frags,
+void get_dictionary_indices(cudf::detail::device_2dspan<PageFragment const> frags,
                             rmm::cuda_stream_view stream);
 
 /**
@@ -781,7 +706,7 @@ void get_dictionary_indices(cudf::detail::device_2dspan<gpu::PageFragment const>
  * @param[in] stream CUDA stream to use
  */
 void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                      device_span<gpu::EncPage> pages,
+                      device_span<EncPage> pages,
                       device_span<size_type> page_sizes,
                       device_span<size_type> comp_page_sizes,
                       device_span<parquet_column_device_view const> col_desc,
@@ -847,7 +772,7 @@ void EncodePageHeaders(device_span<EncPage> pages,
  * @param[in] stream CUDA stream to use
  */
 void GatherPages(device_span<EncColumnChunk> chunks,
-                 device_span<gpu::EncPage const> pages,
+                 device_span<EncPage const> pages,
                  rmm::cuda_stream_view stream);
 
 /**
@@ -863,5 +788,4 @@ void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,
                          int32_t column_index_truncate_length,
                          rmm::cuda_stream_view stream);
 
-}  // namespace gpu
-}  // namespace cudf::io::parquet
+}  // namespace cudf::io::parquet::detail

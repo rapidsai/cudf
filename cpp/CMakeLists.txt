@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 23.10.00
+  VERSION 23.12.00
   LANGUAGES C CXX CUDA
 )
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
@@ -401,6 +401,7 @@ add_library(
   src/io/parquet/predicate_pushdown.cpp
   src/io/parquet/reader.cpp
   src/io/parquet/reader_impl.cpp
+  src/io/parquet/reader_impl_chunking.cu
   src/io/parquet/reader_impl_helpers.cpp
   src/io/parquet/reader_impl_preprocess.cu
   src/io/parquet/writer_impl.cu

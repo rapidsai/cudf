@@ -18,6 +18,8 @@
 
 #include "parquet_common.hpp"
 
+#include <cudf/types.hpp>
+
 #include <thrust/optional.h>
 
 #include <cstdint>
@@ -25,9 +27,8 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
-namespace parquet {
+namespace cudf::io::parquet::detail {
+
 constexpr uint32_t parquet_magic = (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24));
 
 /**
@@ -153,8 +154,8 @@ struct SchemaElement {
   // The following fields are filled in later during schema initialization
   int max_definition_level = 0;
   int max_repetition_level = 0;
-  int parent_idx           = 0;
-  std::vector<size_t> children_idx;
+  size_type parent_idx     = 0;
+  std::vector<size_type> children_idx;
 
   bool operator==(SchemaElement const& other) const
   {
@@ -206,7 +207,7 @@ struct SchemaElement {
   {
     return type == UNDEFINED_TYPE &&
            // this assumption might be a little weak.
-           ((repetition_type != REPEATED) || (repetition_type == REPEATED && num_children == 2));
+           ((repetition_type != REPEATED) || (repetition_type == REPEATED && num_children > 1));
   }
 };
 
@@ -214,12 +215,18 @@ struct SchemaElement {
  * @brief Thrift-derived struct describing column chunk statistics
  */
 struct Statistics {
-  std::vector<uint8_t> max;        // deprecated max value in signed comparison order
-  std::vector<uint8_t> min;        // deprecated min value in signed comparison order
-  int64_t null_count     = -1;     // count of null values in the column
-  int64_t distinct_count = -1;     // count of distinct values occurring
-  std::vector<uint8_t> max_value;  // max value for column determined by ColumnOrder
-  std::vector<uint8_t> min_value;  // min value for column determined by ColumnOrder
+  // deprecated max value in signed comparison order
+  thrust::optional<std::vector<uint8_t>> max;
+  // deprecated min value in signed comparison order
+  thrust::optional<std::vector<uint8_t>> min;
+  // count of null values in the column
+  thrust::optional<int64_t> null_count;
+  // count of distinct values occurring
+  thrust::optional<int64_t> distinct_count;
+  // max value for column determined by ColumnOrder
+  thrust::optional<std::vector<uint8_t>> max_value;
+  // min value for column determined by ColumnOrder
+  thrust::optional<std::vector<uint8_t>> min_value;
 };
 
 /**
@@ -405,6 +412,4 @@ static inline int CountLeadingZeros32(uint32_t value)
 #endif
 }
 
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

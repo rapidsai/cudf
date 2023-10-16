@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,15 +51,17 @@ namespace strings {
  * r[2] is ["cd","g_h"]
  * @endcode
  *
- * @param strings Strings instance for this operation.
+ * @param input Strings instance for this operation
  * @param delimiter UTF-8 encoded string indicating where to split each string.
  *        Default of empty string indicates split on whitespace.
- * @param mr Device memory resource used to allocate the returned table's device memory.
- * @return New table of strings columns.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ * @return New table of strings columns
  */
 std::unique_ptr<table> partition(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   string_scalar const& delimiter      = string_scalar(""),
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -83,15 +85,17 @@ std::unique_ptr<table> partition(
  * r[2] is ["cd","h"]
  * @endcode
  *
- * @param strings Strings instance for this operation.
+ * @param input Strings instance for this operation
  * @param delimiter UTF-8 encoded string indicating where to split each string.
  *        Default of empty string indicates split on whitespace.
- * @param mr Device memory resource used to allocate the returned table's device memory.
- * @return New strings columns.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ * @return New strings columns
  */
 std::unique_ptr<table> rpartition(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   string_scalar const& delimiter      = string_scalar(""),
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
