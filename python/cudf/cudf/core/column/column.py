@@ -1543,12 +1543,6 @@ def build_column(
             offset=offset,
             null_count=null_count,
         )
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and is_integer_dtype(col)
-            and col.null_count
-        ):
-            return col.astype("float64").fillna(np.nan)
         return col
 
     if is_categorical_dtype(dtype):
