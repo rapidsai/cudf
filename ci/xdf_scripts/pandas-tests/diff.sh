@@ -21,4 +21,10 @@ aws s3 cp $PR_ARTIFACT pr-results.json
 
 # Compute the diff and prepare job summary:
 python -m pip install pandas tabulate
-python ci/xdf_scripts/pandas-tests/job-summary.py main-results.json pr-results.json >> $GITHUB_STEP_SUMMARY
+COMMENT=$(python ci/xdf_scripts/pandas-tests/job-summary.py main-results.json pr-results.json | tee -a "$GITHUB_STEP_SUMMARY" | head -1)
+
+
+echo "$COMMENT"
+
+# Magic name that the custom-job.yaml workflow reads and re-exports
+echo "job_output=$COMMENT" >> "${GITHUB_OUTPUT}"

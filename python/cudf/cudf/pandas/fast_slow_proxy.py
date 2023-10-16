@@ -792,6 +792,8 @@ class _FunctionProxy(_CallableProxyMixin):
     Proxy for a pair of fast and slow functions.
     """
 
+    __name__: str
+
     def __init__(self, fast: Callable | _Unusable, slow: Callable):
         self._xdf_fast = fast
         self._xdf_slow = slow
@@ -855,12 +857,49 @@ def _transform_arg(
         return typ
     elif isinstance(arg, types.ModuleType) and attribute_name in arg.__dict__:
         return arg.__dict__[attribute_name]
-    elif isinstance(arg, (list, tuple)):
-        transformed = (_transform_arg(a, attribute_name, seen) for a in arg)
-        if hasattr(arg, "_make"):
-            # namedtuple
-            return type(arg)._make(transformed)
-        return type(arg)(transformed)
+    elif isinstance(arg, list):
+        return type(arg)(_transform_arg(a, attribute_name, seen) for a in arg)
+    elif isinstance(arg, tuple):
+        # This attempts to handle arbitrary subclasses of tuple by
+        # assuming that if you've subclassed tuple with some special
+        # behaviour you'll also make the object pickleable by
+        # implementing the custom pickle protocol interface (either
+        # __getnewargs_ex__ or __getnewargs__). Perhaps this should
+        # use __reduce_ex__ instead...
+        if type(arg) is tuple:
+            # Must come first to avoid infinite recursion
+            return tuple(_transform_arg(a, attribute_name, seen) for a in arg)
+        elif hasattr(arg, "__getnewargs_ex__"):
+            # Partial implementation of to reconstruct with
+            # transformed pieces
+            # This handles scipy._lib._bunch._make_tuple_bunch
+            args, kwargs = (
+                _transform_arg(a, attribute_name, seen)
+                for a in arg.__getnewargs_ex__()
+            )
+            obj = type(arg).__new__(type(arg), *args, **kwargs)
+            if hasattr(obj, "__setstate__"):
+                raise NotImplementedError(
+                    "Transforming tuple-like with __getnewargs_ex__ and "
+                    "__setstate__ not implemented"
+                )
+            if not hasattr(obj, "__dict__") and kwargs:
+                raise NotImplementedError(
+                    "Transforming tuple-like with kwargs from "
+                    "__getnewargs_ex__ and no __dict__ not implemented"
+                )
+            obj.__dict__.update(kwargs)
+            return obj
+        elif hasattr(arg, "__getnewargs__"):
+            # This handles namedtuple, and would catch tuple if we
+            # didn't handle it above.
+            args = _transform_arg(arg.__getnewargs__(), attribute_name, seen)
+            return type(arg).__new__(type(arg), *args)
+        else:
+            # Hope we can just call the constructor with transformed entries.
+            return type(arg)(
+                _transform_arg(a, attribute_name, seen) for a in args
+            )
     elif isinstance(arg, dict):
         return {
             _transform_arg(k, attribute_name, seen): _transform_arg(

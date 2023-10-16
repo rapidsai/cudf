@@ -34,7 +34,6 @@ from .common import (
     cuda_array_interface,
     custom_iter,
 )
-from .numpy import generate_numpy_wrappers
 
 # TODO(pandas2.1): Can import from pandas.api.typing
 from pandas.core.resample import (  # isort: skip
@@ -42,8 +41,6 @@ from pandas.core.resample import (  # isort: skip
     TimeGrouper as pd_TimeGrouper,
 )
 
-
-generate_numpy_wrappers()
 
 cudf.set_option("mode.pandas_compatible", True)
 
@@ -683,6 +680,20 @@ ExcelWriter = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
+
+try:
+    from pandas.io.formats.style import Styler as pd_Styler  # isort: skip
+
+    Styler = make_final_proxy_type(
+        "Styler",
+        _Unusable,
+        pd_Styler,
+        fast_to_slow=_Unusable(),
+        slow_to_fast=_Unusable(),
+    )
+except ImportError:
+    # Styler requires Jinja to be installed
+    pass
 
 _eval_func = _FunctionProxy(_Unusable(), pd.eval)
 
