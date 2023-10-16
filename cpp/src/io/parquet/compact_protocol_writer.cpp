@@ -16,9 +16,7 @@
 
 #include "compact_protocol_writer.hpp"
 
-namespace cudf {
-namespace io {
-namespace parquet {
+namespace cudf::io::parquet::detail {
 
 /**
  * @brief Parquet CompactProtocolWriter class
@@ -33,18 +31,7 @@ size_t CompactProtocolWriter::write(FileMetaData const& f)
   c.field_struct_list(4, f.row_groups);
   if (not f.key_value_metadata.empty()) { c.field_struct_list(5, f.key_value_metadata); }
   if (not f.created_by.empty()) { c.field_string(6, f.created_by); }
-  if (f.column_order_listsize != 0) {
-    // Dummy list of struct containing an empty field1 struct
-    c.put_field_header(7, c.current_field(), ST_FLD_LIST);
-    c.put_byte((uint8_t)((std::min(f.column_order_listsize, 0xfu) << 4) | ST_FLD_STRUCT));
-    if (f.column_order_listsize >= 0xf) c.put_uint(f.column_order_listsize);
-    for (uint32_t i = 0; i < f.column_order_listsize; i++) {
-      c.put_field_header(1, 0, ST_FLD_STRUCT);
-      c.put_byte(0);  // ColumnOrder.field1 struct end
-      c.put_byte(0);  // ColumnOrder struct end
-    }
-    c.set_current_field(7);
-  }
+  if (f.column_orders.has_value()) { c.field_struct_list(7, f.column_orders.value()); }
   return c.value();
 }
 
@@ -208,12 +195,12 @@ size_t CompactProtocolWriter::write(ColumnChunkMetaData const& s)
 size_t CompactProtocolWriter::write(Statistics const& s)
 {
   CompactProtocolFieldWriter c(*this);
-  if (not s.max.empty()) { c.field_binary(1, s.max); }
-  if (not s.min.empty()) { c.field_binary(2, s.min); }
-  if (s.null_count != -1) { c.field_int(3, s.null_count); }
-  if (s.distinct_count != -1) { c.field_int(4, s.distinct_count); }
-  if (not s.max_value.empty()) { c.field_binary(5, s.max_value); }
-  if (not s.min_value.empty()) { c.field_binary(6, s.min_value); }
+  if (s.max.has_value()) { c.field_binary(1, s.max.value()); }
+  if (s.min.has_value()) { c.field_binary(2, s.min.value()); }
+  if (s.null_count.has_value()) { c.field_int(3, s.null_count.value()); }
+  if (s.distinct_count.has_value()) { c.field_int(4, s.distinct_count.value()); }
+  if (s.max_value.has_value()) { c.field_binary(5, s.max_value.value()); }
+  if (s.min_value.has_value()) { c.field_binary(6, s.min_value.value()); }
   return c.value();
 }
 
@@ -230,6 +217,16 @@ size_t CompactProtocolWriter::write(OffsetIndex const& s)
 {
   CompactProtocolFieldWriter c(*this);
   c.field_struct_list(1, s.page_locations);
+  return c.value();
+}
+
+size_t CompactProtocolWriter::write(ColumnOrder const& co)
+{
+  CompactProtocolFieldWriter c(*this);
+  switch (co) {
+    case ColumnOrder::TYPE_ORDER: c.field_empty_struct(1); break;
+    default: break;
+  }
   return c.value();
 }
 
@@ -315,8 +312,15 @@ inline void CompactProtocolFieldWriter::field_struct(int field, T const& val)
   if constexpr (not std::is_empty_v<T>) {
     writer.write(val);  // write the struct if it's not empty
   } else {
-    put_byte(0);        // otherwise, add a stop field
+    put_byte(0);  // otherwise, add a stop field
   }
+  current_field_value = field;
+}
+
+inline void CompactProtocolFieldWriter::field_empty_struct(int field)
+{
+  put_field_header(field, current_field_value, ST_FLD_STRUCT);
+  put_byte(0);  // add a stop field
   current_field_value = field;
 }
 
@@ -385,6 +389,4 @@ inline void CompactProtocolFieldWriter::set_current_field(int const& field)
   current_field_value = field;
 }
 
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

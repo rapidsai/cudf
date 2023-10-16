@@ -59,31 +59,24 @@ struct CompressedStreamInfo {
   explicit constexpr CompressedStreamInfo(uint8_t const* compressed_data_, size_t compressed_size_)
     : compressed_data(compressed_data_),
       uncompressed_data(nullptr),
-      compressed_data_size(compressed_size_),
-      dec_in_ctl(nullptr),
-      dec_out_ctl(nullptr),
-      copy_in_ctl(nullptr),
-      copy_out_ctl(nullptr),
-      num_compressed_blocks(0),
-      num_uncompressed_blocks(0),
-      max_uncompressed_size(0),
-      max_uncompressed_block_size(0)
+      compressed_data_size(compressed_size_)
   {
   }
-  uint8_t const* compressed_data;  // [in] base ptr to compressed stream data
-  uint8_t* uncompressed_data;  // [in] base ptr to uncompressed stream data or NULL if not known yet
-  size_t compressed_data_size;              // [in] compressed data size for this stream
-  device_span<uint8_t const>* dec_in_ctl;   // [in] input buffer to decompress
-  device_span<uint8_t>* dec_out_ctl;        // [in] output buffer to decompress into
-  device_span<compression_result> dec_res;  // [in] results of decompression
-  device_span<uint8_t const>* copy_in_ctl;  // [out] input buffer to copy
-  device_span<uint8_t>* copy_out_ctl;       // [out] output buffer to copy to
-  uint32_t num_compressed_blocks;  // [in,out] number of entries in decctl(in), number of compressed
-                                   // blocks(out)
-  uint32_t num_uncompressed_blocks;      // [in,out] number of entries in dec_in_ctl(in), number of
-                                         // uncompressed blocks(out)
-  uint64_t max_uncompressed_size;        // [out] maximum uncompressed data size of stream
-  uint32_t max_uncompressed_block_size;  // [out] maximum uncompressed size of any block in stream
+  uint8_t const* compressed_data{};  // [in] base ptr to compressed stream data
+  uint8_t*
+    uncompressed_data{};  // [in] base ptr to uncompressed stream data or NULL if not known yet
+  size_t compressed_data_size{};              // [in] compressed data size for this stream
+  device_span<uint8_t const>* dec_in_ctl{};   // [in] input buffer to decompress
+  device_span<uint8_t>* dec_out_ctl{};        // [in] output buffer to decompress into
+  device_span<compression_result> dec_res{};  // [in] results of decompression
+  device_span<uint8_t const>* copy_in_ctl{};  // [out] input buffer to copy
+  device_span<uint8_t>* copy_out_ctl{};       // [out] output buffer to copy to
+  uint32_t num_compressed_blocks{};           // [in,out] number of entries in decctl(in), number of
+                                              // compressed blocks(out)
+  uint32_t num_uncompressed_blocks{};  // [in,out] number of entries in dec_in_ctl(in), number of
+                                       // uncompressed blocks(out)
+  uint64_t max_uncompressed_size{};    // [out] maximum uncompressed data size of stream
+  uint32_t max_uncompressed_block_size{};  // [out] maximum uncompressed size of any block in stream
 };
 
 enum StreamIndexType {
@@ -157,7 +150,7 @@ struct EncChunk {
   uint8_t dtype_len;                 // data type length
   int32_t scale;                     // scale for decimals or timestamps
 
-  uint32_t* dict_index;              // dictionary index from row index
+  uint32_t* dict_index;  // dictionary index from row index
   uint32_t* decimal_offsets;
   orc_column_device_view const* column;
 };

@@ -34,18 +34,19 @@ TEST_F(TextGenerateNgramsTest, Ngrams)
 {
   cudf::test::strings_column_wrapper strings{"the", "fox", "jumped", "over", "thé", "dog"};
   cudf::strings_column_view strings_view(strings);
+  auto const separator = cudf::string_scalar("_");
 
   {
     cudf::test::strings_column_wrapper expected{
       "the_fox", "fox_jumped", "jumped_over", "over_thé", "thé_dog"};
-    auto const results = nvtext::generate_ngrams(strings_view);
+    auto const results = nvtext::generate_ngrams(strings_view, 2, separator);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 
   {
     cudf::test::strings_column_wrapper expected{
       "the_fox_jumped", "fox_jumped_over", "jumped_over_thé", "over_thé_dog"};
-    auto const results = nvtext::generate_ngrams(strings_view, 3);
+    auto const results = nvtext::generate_ngrams(strings_view, 3, separator);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
@@ -83,10 +84,11 @@ TEST_F(TextGenerateNgramsTest, NgramsWithNulls)
     h_strings.begin(),
     h_strings.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+  auto const separator = cudf::string_scalar("_");
 
   cudf::strings_column_view strings_view(strings);
   {
-    auto const results = nvtext::generate_ngrams(strings_view, 3);
+    auto const results = nvtext::generate_ngrams(strings_view, 3, separator);
     cudf::test::strings_column_wrapper expected{
       "the_fox_jumped", "fox_jumped_over", "jumped_over_the", "over_the_dog"};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
@@ -101,9 +103,12 @@ TEST_F(TextGenerateNgramsTest, NgramsWithNulls)
 
 TEST_F(TextGenerateNgramsTest, Empty)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  auto results = nvtext::generate_ngrams(cudf::strings_column_view(zero_size_strings_column));
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
+
+  auto const separator = cudf::string_scalar("_");
+
+  auto results =
+    nvtext::generate_ngrams(cudf::strings_column_view(zero_size_strings_column), 2, separator);
   cudf::test::expect_column_empty(results->view());
   results = nvtext::generate_character_ngrams(cudf::strings_column_view(zero_size_strings_column));
   cudf::test::expect_column_empty(results->view());
@@ -112,21 +117,20 @@ TEST_F(TextGenerateNgramsTest, Empty)
 TEST_F(TextGenerateNgramsTest, Errors)
 {
   cudf::test::strings_column_wrapper strings{""};
+  auto const separator = cudf::string_scalar("_");
   // invalid parameter value
-  EXPECT_THROW(nvtext::generate_ngrams(cudf::strings_column_view(strings), 1), cudf::logic_error);
+  EXPECT_THROW(nvtext::generate_ngrams(cudf::strings_column_view(strings), 1, separator),
+               cudf::logic_error);
   EXPECT_THROW(nvtext::generate_character_ngrams(cudf::strings_column_view(strings), 1),
                cudf::logic_error);
   // not enough strings to generate ngrams
-  EXPECT_THROW(nvtext::generate_ngrams(cudf::strings_column_view(strings), 3), cudf::logic_error);
+  EXPECT_THROW(nvtext::generate_ngrams(cudf::strings_column_view(strings), 3, separator),
+               cudf::logic_error);
   EXPECT_THROW(nvtext::generate_character_ngrams(cudf::strings_column_view(strings), 3),
                cudf::logic_error);
 
-  std::vector<char const*> h_strings{"", nullptr, "", nullptr};
-  cudf::test::strings_column_wrapper strings_no_tokens(
-    h_strings.begin(),
-    h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  EXPECT_THROW(nvtext::generate_ngrams(cudf::strings_column_view(strings_no_tokens)),
+  cudf::test::strings_column_wrapper strings_no_tokens({"", "", "", ""}, {1, 0, 1, 0});
+  EXPECT_THROW(nvtext::generate_ngrams(cudf::strings_column_view(strings_no_tokens), 2, separator),
                cudf::logic_error);
   EXPECT_THROW(nvtext::generate_character_ngrams(cudf::strings_column_view(strings_no_tokens)),
                cudf::logic_error);

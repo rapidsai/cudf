@@ -419,6 +419,52 @@ std::unique_ptr<column> get_column(arrow::Array const& array,
            : get_empty_type_column(array.length());
 }
 
+struct BuilderGenerator {
+  template <typename T,
+            CUDF_ENABLE_IF(!std::is_same_v<T, arrow::ListType> &&
+                           !std::is_same_v<T, arrow::StructType>)>
+  std::shared_ptr<arrow::ArrayBuilder> operator()(std::shared_ptr<arrow::DataType> const& type)
+  {
+    return std::make_shared<typename arrow::TypeTraits<T>::BuilderType>(
+      type, arrow::default_memory_pool());
+  }
+
+  template <typename T,
+            CUDF_ENABLE_IF(std::is_same_v<T, arrow::ListType> ||
+                           std::is_same_v<T, arrow::StructType>)>
+  std::shared_ptr<arrow::ArrayBuilder> operator()(std::shared_ptr<arrow::DataType> const& type)
+  {
+    CUDF_FAIL("Type not supported by BuilderGenerator");
+  }
+};
+
+std::shared_ptr<arrow::ArrayBuilder> make_builder(std::shared_ptr<arrow::DataType> const& type)
+{
+  switch (type->id()) {
+    case arrow::Type::STRUCT: {
+      std::vector<std::shared_ptr<arrow::ArrayBuilder>> field_builders;
+
+      for (auto field : type->fields()) {
+        auto const vt = field->type();
+        if (vt->id() == arrow::Type::STRUCT || vt->id() == arrow::Type::LIST) {
+          field_builders.push_back(make_builder(vt));
+        } else {
+          field_builders.push_back(arrow_type_dispatcher(*vt, BuilderGenerator{}, vt));
+        }
+      }
+      return std::make_shared<arrow::StructBuilder>(
+        type, arrow::default_memory_pool(), field_builders);
+    }
+    case arrow::Type::LIST: {
+      return std::make_shared<arrow::ListBuilder>(arrow::default_memory_pool(),
+                                                  make_builder(type->field(0)->type()));
+    }
+    default: {
+      return arrow_type_dispatcher(*type, BuilderGenerator{}, type);
+    }
+  }
+}
+
 }  // namespace
 
 std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
@@ -462,14 +508,54 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
   return std::make_unique<table>(std::move(columns));
 }
 
+std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  // Get a builder for the scalar type
+  auto builder = detail::make_builder(input.type);
+
+  auto status = builder->AppendScalar(input);
+  if (status != arrow::Status::OK()) {
+    if (status.IsNotImplemented()) {
+      // The only known failure case here is for nulls
+      CUDF_FAIL("Cannot create untyped null scalars or nested types with untyped null leaf nodes",
+                std::invalid_argument);
+    }
+    CUDF_FAIL("Arrow ArrayBuilder::AppendScalar failed");
+  }
+
+  auto maybe_array = builder->Finish();
+  if (!maybe_array.ok()) { CUDF_FAIL("Arrow ArrayBuilder::Finish failed"); }
+  auto array = *maybe_array;
+
+  auto field = arrow::field("", input.type);
+
+  auto table = arrow::Table::Make(arrow::schema({field}), {array});
+
+  auto cudf_table = detail::from_arrow(*table, stream, mr);
+
+  auto cv = cudf_table->view().column(0);
+  return get_element(cv, 0, stream);
+}
+
 }  // namespace detail
 
 std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
+                                  rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 
-  return detail::from_arrow(input_table, cudf::get_default_stream(), mr);
+  return detail::from_arrow(input_table, stream, mr);
 }
 
+std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+
+  return detail::from_arrow(input, stream, mr);
+}
 }  // namespace cudf

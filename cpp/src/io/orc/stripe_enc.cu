@@ -53,7 +53,7 @@ constexpr bool zero_pll_war = true;
 struct byterle_enc_state_s {
   uint32_t literal_run;
   uint32_t repeat_run;
-  volatile uint32_t rpt_map[(512 / 32) + 1];
+  uint32_t rpt_map[(512 / 32) + 1];
 };
 
 struct intrle_enc_state_s {
@@ -63,7 +63,7 @@ struct intrle_enc_state_s {
   uint32_t literal_w;
   uint32_t hdr_bytes;
   uint32_t pl_bytes;
-  volatile uint32_t delta_map[(512 / 32) + 1];
+  uint32_t delta_map[(512 / 32) + 1];
 };
 
 struct strdata_enc_state_s {
@@ -366,7 +366,7 @@ static __device__ uint32_t IntegerRLE(
   using block_reduce = cub::BlockReduce<T, block_size>;
   uint8_t* dst       = s->stream.data_ptrs[cid] + s->strm_pos[cid];
   uint32_t out_cnt   = 0;
-  __shared__ volatile uint64_t block_vmin;
+  __shared__ uint64_t block_vmin;
 
   while (numvals > 0) {
     T v0               = (t < numvals) ? inbuf[(inpos + t) & inmask] : 0;
@@ -615,7 +615,7 @@ static __device__ void StoreStringData(uint8_t* dst,
  * @param[in] t thread id
  */
 template <class T>
-inline __device__ void lengths_to_positions(volatile T* vals, uint32_t numvals, unsigned int t)
+inline __device__ void lengths_to_positions(T* vals, uint32_t numvals, unsigned int t)
 {
   for (uint32_t n = 1; n < numvals; n <<= 1) {
     __syncthreads();
@@ -1143,7 +1143,7 @@ __global__ void __launch_bounds__(256)
                            uint32_t comp_block_align)
 {
   __shared__ __align__(16) StripeStream ss;
-  __shared__ uint8_t* volatile uncomp_base_g;
+  __shared__ uint8_t* uncomp_base_g;
 
   auto const padded_block_header_size = util::round_up_unsafe(block_header_size, comp_block_align);
   auto const padded_comp_block_size   = util::round_up_unsafe(max_comp_blk_size, comp_block_align);
@@ -1196,8 +1196,8 @@ __global__ void __launch_bounds__(1024)
                              uint32_t max_comp_blk_size)
 {
   __shared__ __align__(16) StripeStream ss;
-  __shared__ uint8_t const* volatile comp_src_g;
-  __shared__ uint32_t volatile comp_len_g;
+  __shared__ uint8_t const* comp_src_g;
+  __shared__ uint32_t comp_len_g;
 
   auto const stripe_id = blockIdx.x;
   auto const stream_id = blockIdx.y;

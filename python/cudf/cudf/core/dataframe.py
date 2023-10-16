@@ -36,7 +36,7 @@ from pandas._config import get_option
 from pandas.core.dtypes.common import is_float, is_integer
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
-from typing_extensions import assert_never
+from typing_extensions import Self, assert_never
 
 import cudf
 import cudf.core.common
@@ -665,7 +665,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                             len(self), dtype="object", masked=True
                         )
                         for k in columns
-                    }
+                    },
+                    level_names=tuple(columns.names)
+                    if isinstance(columns, pd.Index)
+                    else None,
                 )
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
@@ -712,6 +715,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
                     self._data = new_df._data
                     self._index = new_df._index
+                    self._data._level_names = (
+                        tuple(columns.names)
+                        if isinstance(columns, pd.Index)
+                        else self._data._level_names
+                    )
                 elif len(data) > 0 and isinstance(data[0], Series):
                     self._init_from_series_list(
                         data=data, columns=columns, index=index
@@ -834,6 +842,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     self._data[col_name] = column.column_empty(
                         row_count=len(self), dtype=None, masked=True
                     )
+            self._data._level_names = (
+                tuple(columns.names)
+                if isinstance(columns, pd.Index)
+                else self._data._level_names
+            )
             self._data = self._data.select_by_label(columns)
 
     @_cudf_nvtx_annotate
@@ -852,12 +865,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         elif len(data) > 0 and isinstance(data[0], pd._libs.interval.Interval):
             data = DataFrame.from_pandas(pd.DataFrame(data))
             self._data = data._data
+        elif any(
+            not isinstance(col, (abc.Iterable, abc.Sequence)) for col in data
+        ):
+            raise TypeError("Inputs should be an iterable or sequence.")
+        elif len(data) > 0 and not can_convert_to_column(data[0]):
+            raise ValueError("Must pass 2-d input.")
         else:
-            if any(
-                not isinstance(col, (abc.Iterable, abc.Sequence))
-                for col in data
-            ):
-                raise TypeError("Inputs should be an iterable or sequence.")
             if (
                 len(data) > 0
                 and columns is None
@@ -956,6 +970,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     data[col_name],
                     nan_as_null=nan_as_null,
                 )
+        self._data._level_names = (
+            tuple(columns.names)
+            if isinstance(columns, pd.Index)
+            else self._data._level_names
+        )
 
     @classmethod
     def _from_data(
@@ -977,7 +996,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         input_series = [
             Series(val)
             for val in data.values()
-            if isinstance(val, (pd.Series, Series))
+            if isinstance(val, (pd.Series, Series, dict))
         ]
 
         if input_series:
@@ -994,7 +1013,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 index = aligned_input_series[0].index
 
             for name, val in data.items():
-                if isinstance(val, (pd.Series, Series)):
+                if isinstance(val, (pd.Series, Series, dict)):
                     data[name] = aligned_input_series.pop(0)
 
         return data, index
@@ -1389,9 +1408,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self[columns]
 
     @_cudf_nvtx_annotate
-    def assign(self, **kwargs):
+    def assign(self, **kwargs: Union[Callable[[Self], Any], Any]):
         """
         Assign columns to DataFrame from keyword arguments.
+
+        Parameters
+        ----------
+        **kwargs: dict mapping string column names to values
+            The value for each key can either be a literal column (or
+            something that can be converted to a column), or
+            a callable of one argument that will be given the
+            dataframe as an argument and should return the new column
+            (without modifying the input argument).
+            Columns are added in-order, so callables can refer to
+            column names constructed in the assignment.
 
         Examples
         --------
@@ -1404,15 +1434,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         1  1  4
         2  2  5
         """
-        new_df = cudf.DataFrame(index=self.index.copy())
-        for name, col in self._data.items():
-            if name in kwargs:
-                new_df[name] = kwargs.pop(name)
-            else:
-                new_df._data[name] = col.copy()
-
+        new_df = self.copy(deep=False)
         for k, v in kwargs.items():
-            new_df[k] = v
+            new_df[k] = v(new_df) if callable(v) else v
         return new_df
 
     @classmethod
@@ -1830,13 +1854,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self._get_renderable_dataframe().to_pandas()._repr_latex_()
 
     @_cudf_nvtx_annotate
-    def _get_columns_by_label(self, labels, downcast=False):
+    def _get_columns_by_label(
+        self, labels, *, downcast=False
+    ) -> Self | Series:
         """
         Return columns of dataframe by `labels`
 
         If downcast is True, try and downcast from a DataFrame to a Series
         """
-        new_data = super()._get_columns_by_label(labels, downcast)
+        ca = self._data.select_by_label(labels)
         if downcast:
             if is_scalar(labels):
                 nlevels = 1
@@ -1844,11 +1870,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 nlevels = len(labels)
             if self._data.multiindex is False or nlevels == self._data.nlevels:
                 out = self._constructor_sliced._from_data(
-                    new_data, index=self.index, name=labels
+                    ca, index=self.index, name=labels
                 )
                 return out
         out = self.__class__._from_data(
-            new_data, index=self.index, columns=new_data.to_pandas_index()
+            ca, index=self.index, columns=ca.to_pandas_index()
         )
         return out
 
@@ -5123,7 +5149,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
         df = cls._from_data(data, index)
-        df._data._level_names = list(dataframe.columns.names)
+        df._data._level_names = tuple(dataframe.columns.names)
 
         # Set columns only if it is a MultiIndex
         if isinstance(dataframe.columns, pd.MultiIndex):
@@ -5369,6 +5395,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             df = df.set_index(index)
         else:
             df._index = as_index(index)
+        if isinstance(columns, pd.Index):
+            df._data._level_names = tuple(columns.names)
         return df
 
     @classmethod
@@ -5426,7 +5454,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 data, nan_as_null=nan_as_null
             )
         if isinstance(columns, pd.Index):
-            df._data._level_names = list(columns.names)
+            df._data._level_names = tuple(columns.names)
 
         if index is None:
             df._index = RangeIndex(start=0, stop=len(data))
@@ -5487,16 +5515,23 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         numeric_only : bool, default True
             If False, the quantile of datetime and timedelta data will be
             computed as well.
-        interpolation : {`linear`, `lower`, `higher`, `midpoint`, `nearest`}
+        interpolation : {'linear', 'lower', 'higher', 'midpoint', 'nearest'}
             This parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j.
-            Default is ``linear`` for ``method="single"``, and ``nearest``
+            Default is ``'linear'`` for ``method="single"``, and ``'nearest'``
             for ``method="table"``.
+
+                * linear: `i + (j - i) * fraction`, where `fraction` is the
+                  fractional part of the index surrounded by `i` and `j`.
+                * lower: `i`.
+                * higher: `j`.
+                * nearest: `i` or `j` whichever is nearest.
+                * midpoint: (`i` + `j`) / 2.
         columns : list of str
             List of column names to include.
         exact : boolean
             Whether to use approximate or exact quantile algorithm.
-        method : {`single`, `table`}, default `single`
+        method : {'single', 'table'}, default `'single'`
             Whether to compute quantiles per-column ('single') or over all
             columns ('table'). When 'table', the only allowed interpolation
             methods are 'nearest', 'lower', and 'higher'.
@@ -5597,7 +5632,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 result.name = q
                 return result
 
-        result.index = list(map(float, qs))
+        result.index = cudf.Index(list(map(float, qs)), dtype="float64")
         return result
 
     @_cudf_nvtx_annotate
@@ -7875,9 +7910,7 @@ def _get_union_of_indices(indexes):
         return indexes[0]
     else:
         merged_index = cudf.core.index.GenericIndex._concat(indexes)
-        merged_index = merged_index.drop_duplicates()
-        inds = merged_index._values.argsort()
-        return merged_index.take(inds)
+        return merged_index.drop_duplicates()
 
 
 def _get_union_of_series_names(series_list):

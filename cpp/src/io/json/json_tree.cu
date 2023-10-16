@@ -15,8 +15,6 @@
  */
 
 #include "nested_json.hpp"
-#include <hash/hash_allocator.cuh>
-#include <hash/helper_functions.cuh>
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -24,7 +22,9 @@
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
+#include <cudf/hashing/detail/hash_allocator.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
+#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -35,7 +35,7 @@
 
 #include <cub/device/device_radix_sort.cuh>
 
-#include <cuco/static_map.cuh>
+#include <cuco/static_set.cuh>
 
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
@@ -400,8 +400,6 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
 {
   CUDF_FUNC_RANGE();
   using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
-  using hash_map_type =
-    cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
 
   auto const num_nodes  = d_tree.node_categories.size();
   auto const num_fields = thrust::count(rmm::exec_policy(stream),
@@ -409,12 +407,6 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
                                         d_tree.node_categories.end(),
                                         node_t::NC_FN);
 
-  constexpr size_type empty_node_index_sentinel = -1;
-  hash_map_type key_map{compute_hash_table_size(num_fields, 40),  // 40% occupancy in hash map
-                        cuco::empty_key{empty_node_index_sentinel},
-                        cuco::empty_value{empty_node_index_sentinel},
-                        hash_table_allocator_type{default_allocator<char>{}, stream},
-                        stream.value()};
   auto const d_hasher = [d_input          = d_input.data(),
                          node_range_begin = d_tree.node_range_begin.data(),
                          node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id) {
@@ -434,25 +426,33 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
   };
   // key-value pairs: uses node_id itself as node_type. (unique node_id for a field name due to
   // hashing)
-  auto const iter = cudf::detail::make_counting_transform_iterator(
-    0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
+  auto const iter = thrust::make_counting_iterator<size_type>(0);
 
   auto const is_field_name_node = [node_categories =
                                      d_tree.node_categories.data()] __device__(auto node_id) {
     return node_categories[node_id] == node_t::NC_FN;
   };
-  key_map.insert_if(iter,
-                    iter + num_nodes,
-                    thrust::counting_iterator<size_type>(0),  // stencil
-                    is_field_name_node,
-                    d_hasher,
-                    d_equal,
-                    stream.value());
+
+  using hasher_type                             = decltype(d_hasher);
+  constexpr size_type empty_node_index_sentinel = -1;
+  auto key_set =
+    cuco::experimental::static_set{cuco::experimental::extent{compute_hash_table_size(
+                                     num_fields, 40)},  // 40% occupancy in hash map
+                                   cuco::empty_key{empty_node_index_sentinel},
+                                   d_equal,
+                                   cuco::experimental::linear_probing<1, hasher_type>{d_hasher},
+                                   hash_table_allocator_type{default_allocator<char>{}, stream},
+                                   stream.value()};
+  key_set.insert_if_async(iter,
+                          iter + num_nodes,
+                          thrust::counting_iterator<size_type>(0),  // stencil
+                          is_field_name_node,
+                          stream.value());
 
   auto const get_hash_value =
-    [key_map = key_map.get_device_view(), d_hasher, d_equal] __device__(auto node_id) -> size_type {
-    auto const it = key_map.find(node_id, d_hasher, d_equal);
-    return (it == key_map.end()) ? size_type{0} : it->second.load(cuda::std::memory_order_relaxed);
+    [key_set = key_set.ref(cuco::experimental::op::find)] __device__(auto node_id) -> size_type {
+    auto const it = key_set.find(node_id);
+    return (it == key_set.end()) ? size_type{0} : *it;
   };
 
   // convert field nodes to node indices, and other nodes to enum value.
@@ -528,7 +528,6 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
 {
   CUDF_FUNC_RANGE();
   auto const num_nodes = parent_node_ids.size();
-  rmm::device_uvector<size_type> col_id(num_nodes, stream, mr);
 
   // array of arrays
   NodeIndexT const row_array_children_level = is_enabled_lines ? 1 : 2;
@@ -560,17 +559,6 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
                     list_indices.begin());
   }
 
-  using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
-  using hash_map_type =
-    cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
-
-  constexpr size_type empty_node_index_sentinel = -1;
-  hash_map_type key_map{compute_hash_table_size(num_nodes),  // TODO reduce oversubscription
-                        cuco::empty_key{empty_node_index_sentinel},
-                        cuco::empty_value{empty_node_index_sentinel},
-                        cuco::erased_key{-2},
-                        hash_table_allocator_type{default_allocator<char>{}, stream},
-                        stream.value()};
   // path compression is not used since extra writes make all map operations slow.
   auto const d_hasher = [node_level      = node_levels.begin(),
                          node_type       = node_type.begin(),
@@ -632,23 +620,26 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
     return node_id1 == node_id2;
   };
 
-  // insert and convert node ids to unique set ids
-  auto const num_inserted = thrust::count_if(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(num_nodes),
-    [d_hashed_cache,
-     d_equal,
-     view       = key_map.get_device_mutable_view(),
-     uq_node_id = col_id.begin()] __device__(auto node_id) mutable {
-      auto it = view.insert_and_find(cuco::make_pair(node_id, node_id), d_hashed_cache, d_equal);
-      uq_node_id[node_id] = (it.first)->first.load(cuda::std::memory_order_relaxed);
-      return it.second;
-    });
+  constexpr size_type empty_node_index_sentinel = -1;
+  using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
+  using hasher_type               = decltype(d_hashed_cache);
 
-  auto const num_columns = num_inserted;  // key_map.get_size() is not updated.
+  auto key_set = cuco::experimental::static_set{
+    cuco::experimental::extent{compute_hash_table_size(num_nodes)},
+    cuco::empty_key<cudf::size_type>{empty_node_index_sentinel},
+    d_equal,
+    cuco::experimental::linear_probing<1, hasher_type>{d_hashed_cache},
+    hash_table_allocator_type{default_allocator<char>{}, stream},
+    stream.value()};
+
+  // insert and convert node ids to unique set ids
+  auto nodes_itr         = thrust::make_counting_iterator<size_type>(0);
+  auto const num_columns = key_set.insert(nodes_itr, nodes_itr + num_nodes, stream.value());
+
   rmm::device_uvector<size_type> unique_keys(num_columns, stream);
-  key_map.retrieve_all(unique_keys.begin(), thrust::make_discard_iterator(), stream.value());
+  rmm::device_uvector<size_type> col_id(num_nodes, stream, mr);
+  key_set.find_async(nodes_itr, nodes_itr + num_nodes, col_id.begin(), stream.value());
+  std::ignore = key_set.retrieve_all(unique_keys.begin(), stream.value());
 
   return {std::move(col_id), std::move(unique_keys)};
 }

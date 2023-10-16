@@ -41,10 +41,7 @@
 #include <thrust/scatter.h>
 #include <thrust/tuple.h>
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace gpu {
+namespace cudf::io::parquet::detail {
 
 namespace {
 
@@ -229,6 +226,16 @@ Encoding __device__ determine_encoding(PageType page_type,
   }
 }
 
+// operator to use with warp_reduce. stolen from cub::Sum
+struct BitwiseOr {
+  /// Binary OR operator, returns <tt>a | b</tt>
+  template <typename T>
+  __host__ __device__ __forceinline__ T operator()(T const& a, T const& b) const
+  {
+    return a | b;
+  }
+};
+
 }  // anonymous namespace
 
 // blockDim {512,1,1}
@@ -319,7 +326,7 @@ __global__ void __launch_bounds__(128)
 // blockDim {128,1,1}
 __global__ void __launch_bounds__(128)
   gpuInitPages(device_2dspan<EncColumnChunk> chunks,
-               device_span<gpu::EncPage> pages,
+               device_span<EncPage> pages,
                device_span<size_type> page_sizes,
                device_span<size_type> comp_page_sizes,
                device_span<parquet_column_device_view const> col_desc,
@@ -988,7 +995,7 @@ __device__ auto julian_days_with_time(int64_t v)
 // blockDim(128, 1, 1)
 template <int block_size>
 __global__ void __launch_bounds__(128, 8)
-  gpuEncodePages(device_span<gpu::EncPage> pages,
+  gpuEncodePages(device_span<EncPage> pages,
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
                  device_span<compression_result> comp_results,
@@ -1445,6 +1452,7 @@ __global__ void __launch_bounds__(decide_compression_block_size)
 
   uint32_t uncompressed_data_size = 0;
   uint32_t compressed_data_size   = 0;
+  uint32_t encodings              = 0;
   auto const num_pages            = ck_g[warp_id].num_pages;
   for (auto page_id = lane_id; page_id < num_pages; page_id += cudf::detail::warp_size) {
     auto const& curr_page     = ck_g[warp_id].pages[page_id];
@@ -1457,9 +1465,13 @@ __global__ void __launch_bounds__(decide_compression_block_size)
         atomicOr(&compression_error[warp_id], 1);
       }
     }
+    // collect encoding info for the chunk metadata
+    encodings |= encoding_to_mask(curr_page.encoding);
   }
   uncompressed_data_size = warp_reduce(temp_storage[warp_id][0]).Sum(uncompressed_data_size);
   compressed_data_size   = warp_reduce(temp_storage[warp_id][1]).Sum(compressed_data_size);
+  __syncwarp();
+  encodings = warp_reduce(temp_storage[warp_id][0]).Reduce(encodings, BitwiseOr{});
   __syncwarp();
 
   if (lane_id == 0) {
@@ -1469,6 +1481,12 @@ __global__ void __launch_bounds__(decide_compression_block_size)
     chunks[chunk_id].bfr_size      = uncompressed_data_size;
     chunks[chunk_id].compressed_size =
       write_compressed ? compressed_data_size : uncompressed_data_size;
+
+    // if there is repetition or definition level data add RLE encoding
+    auto const rle_bits =
+      ck_g[warp_id].col_desc->num_def_level_bits() + ck_g[warp_id].col_desc->num_rep_level_bits();
+    if (rle_bits > 0) { encodings |= encoding_to_mask(Encoding::RLE); }
+    chunks[chunk_id].encodings = encodings;
   }
 }
 
@@ -1837,8 +1855,8 @@ __device__ std::pair<void const*, uint32_t> get_extremum(statistics_val const* s
     }
     case dtype_int64:
     case dtype_timestamp64:
-    case dtype_float64:
-    case dtype_decimal64: return {stats_val, sizeof(int64_t)};
+    case dtype_float64: return {stats_val, sizeof(int64_t)};
+    case dtype_decimal64:
     case dtype_decimal128:
       byte_reverse128(stats_val->d128_val, scratch);
       return {scratch, sizeof(__int128_t)};
@@ -1967,7 +1985,7 @@ __global__ void __launch_bounds__(128)
 
 // blockDim(1024, 1, 1)
 __global__ void __launch_bounds__(1024)
-  gpuGatherPages(device_span<EncColumnChunk> chunks, device_span<gpu::EncPage const> pages)
+  gpuGatherPages(device_span<EncColumnChunk> chunks, device_span<EncPage const> pages)
 {
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
@@ -2244,7 +2262,7 @@ void InitFragmentStatistics(device_span<statistics_group> groups,
 }
 
 void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
-                      device_span<gpu::EncPage> pages,
+                      device_span<EncPage> pages,
                       device_span<size_type> page_sizes,
                       device_span<size_type> comp_page_sizes,
                       device_span<parquet_column_device_view const> col_desc,
@@ -2273,7 +2291,7 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                                                      write_v2_headers);
 }
 
-void EncodePages(device_span<gpu::EncPage> pages,
+void EncodePages(device_span<EncPage> pages,
                  bool write_v2_headers,
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
@@ -2307,7 +2325,7 @@ void EncodePageHeaders(device_span<EncPage> pages,
 }
 
 void GatherPages(device_span<EncColumnChunk> chunks,
-                 device_span<gpu::EncPage const> pages,
+                 device_span<EncPage const> pages,
                  rmm::cuda_stream_view stream)
 {
   gpuGatherPages<<<chunks.size(), 1024, 0, stream.value()>>>(chunks, pages);
@@ -2322,7 +2340,4 @@ void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,
     chunks, column_stats, column_index_truncate_length);
 }
 
-}  // namespace gpu
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 23.10.00
+  VERSION 23.12.00
   LANGUAGES C CXX CUDA
 )
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
@@ -323,6 +323,7 @@ add_library(
   src/groupby/sort/group_collect.cu
   src/groupby/sort/group_correlation.cu
   src/groupby/sort/group_count.cu
+  src/groupby/sort/group_histogram.cu
   src/groupby/sort/group_m2.cu
   src/groupby/sort/group_max.cu
   src/groupby/sort/group_min.cu
@@ -400,6 +401,7 @@ add_library(
   src/io/parquet/predicate_pushdown.cpp
   src/io/parquet/reader.cpp
   src/io/parquet/reader_impl.cpp
+  src/io/parquet/reader_impl_chunking.cu
   src/io/parquet/reader_impl_helpers.cpp
   src/io/parquet/reader_impl_preprocess.cu
   src/io/parquet/writer_impl.cu
@@ -413,11 +415,13 @@ add_library(
   src/io/utilities/arrow_io_source.cpp
   src/io/utilities/column_buffer.cpp
   src/io/utilities/config_utils.cpp
+  src/io/utilities/data_casting.cu
   src/io/utilities/data_sink.cpp
   src/io/utilities/datasource.cpp
   src/io/utilities/file_io_utilities.cpp
   src/io/utilities/parsing_utils.cu
   src/io/utilities/row_selection.cpp
+  src/io/utilities/type_inference.cu
   src/io/utilities/trie.cu
   src/jit/cache.cpp
   src/jit/parser.cpp
@@ -469,6 +473,7 @@ add_library(
   src/reductions/all.cu
   src/reductions/any.cu
   src/reductions/collect_ops.cu
+  src/reductions/histogram.cu
   src/reductions/max.cu
   src/reductions/mean.cu
   src/reductions/min.cu
@@ -530,7 +535,7 @@ add_library(
   src/stream_compaction/apply_boolean_mask.cu
   src/stream_compaction/distinct.cu
   src/stream_compaction/distinct_count.cu
-  src/stream_compaction/distinct_reduce.cu
+  src/stream_compaction/distinct_helpers.cu
   src/stream_compaction/drop_nans.cu
   src/stream_compaction/drop_nulls.cu
   src/stream_compaction/stable_distinct.cu
@@ -616,6 +621,7 @@ add_library(
   src/text/subword/subword_tokenize.cu
   src/text/subword/wordpiece_tokenizer.cu
   src/text/tokenize.cu
+  src/text/vocabulary_tokenize.cu
   src/transform/bools_to_mask.cu
   src/transform/compute_column.cu
   src/transform/encode.cu
@@ -633,6 +639,7 @@ add_library(
   src/utilities/linked_column.cpp
   src/utilities/logger.cpp
   src/utilities/stacktrace.cpp
+  src/utilities/stream_pool.cpp
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
   src/utilities/type_dispatcher.cpp

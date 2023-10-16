@@ -907,8 +907,8 @@ __launch_bounds__(block_size) __global__
                               thrust::optional<size_type*> out_valid_count,
                               get_json_object_options options)
 {
-  size_type tid    = threadIdx.x + (blockDim.x * blockIdx.x);
-  size_type stride = blockDim.x * gridDim.x;
+  auto tid          = cudf::detail::grid_1d::global_thread_id();
+  auto const stride = cudf::thread_index_type{blockDim.x} * cudf::thread_index_type{gridDim.x};
 
   size_type warp_valid_count{0};
 
@@ -984,7 +984,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
       col.size(),
       rmm::device_buffer{0, stream, mr},  // no data
       cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr),
-      col.size());                        // null count
+      col.size());  // null count
   }
 
   constexpr int block_size = 512;

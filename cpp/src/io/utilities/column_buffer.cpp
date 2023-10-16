@@ -51,19 +51,21 @@ std::unique_ptr<column> gather_column_buffer::make_string_column_impl(rmm::cuda_
   return make_strings_column(*_strings, stream, _mr);
 }
 
-void inline_column_buffer::allocate_strings_data(rmm::cuda_stream_view stream)
+void cudf::io::detail::inline_column_buffer::allocate_strings_data(rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(type.id() == type_id::STRING, "allocate_strings_data called for non-string column");
   // size + 1 for final offset. _string_data will be initialized later.
   _data = create_data(data_type{type_id::INT32}, size + 1, stream, _mr);
 }
 
-void inline_column_buffer::create_string_data(size_t num_bytes, rmm::cuda_stream_view stream)
+void cudf::io::detail::inline_column_buffer::create_string_data(size_t num_bytes,
+                                                                rmm::cuda_stream_view stream)
 {
   _string_data = rmm::device_buffer(num_bytes, stream, _mr);
 }
 
-std::unique_ptr<column> inline_column_buffer::make_string_column_impl(rmm::cuda_stream_view stream)
+std::unique_ptr<column> cudf::io::detail::inline_column_buffer::make_string_column_impl(
+  rmm::cuda_stream_view stream)
 {
   // no need for copies, just transfer ownership of the data_buffers to the columns
   auto const state = mask_state::UNALLOCATED;
@@ -149,7 +151,10 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
                                     std::optional<reader_column_schema> const& schema,
                                     rmm::cuda_stream_view stream)
 {
-  if (schema_info != nullptr) { schema_info->name = buffer.name; }
+  if (schema_info != nullptr) {
+    schema_info->name        = buffer.name;
+    schema_info->is_nullable = buffer.is_nullable;
+  }
 
   switch (buffer.type.id()) {
     case type_id::STRING:
@@ -321,7 +326,7 @@ std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
 }
 
 using pointer_type = gather_column_buffer;
-using string_type  = inline_column_buffer;
+using string_type  = cudf::io::detail::inline_column_buffer;
 
 using pointer_column_buffer = column_buffer_base<pointer_type>;
 using string_column_buffer  = column_buffer_base<string_type>;
