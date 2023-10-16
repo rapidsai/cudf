@@ -19,7 +19,12 @@ from rich.console import Console
 from rich.syntax import Syntax
 from rich.table import Table
 
-from .fast_slow_proxy import _FunctionProxy, _MethodProxy
+from .fast_slow_proxy import (
+    _FinalProxy,
+    _FunctionProxy,
+    _IntermediateProxy,
+    _MethodProxy,
+)
 
 # This text is used in contexts where the profiler is injected into the
 # original code. The profiler is injected at the top of the cell, so the line
@@ -94,14 +99,25 @@ class Profiler:
 
     @staticmethod
     def get_namespaced_function_name(
-        func_obj: Union[_FunctionProxy, _MethodProxy]
+        func_obj: Union[
+            _FunctionProxy,
+            _MethodProxy,
+            type[_FinalProxy],
+            type[_IntermediateProxy],
+        ]
     ):
-        if isinstance(func_obj, _FunctionProxy):
-            return func_obj.__name__  # type: ignore
-
-        # Extract classname from method object
-        type_name = type(func_obj._xdf_wrapped.__self__).__name__
-        return ".".join([type_name, func_obj.__name__])
+        if isinstance(func_obj, _MethodProxy):
+            # Extract classname from method object
+            type_name = type(func_obj._xdf_wrapped.__self__).__name__
+            return ".".join([type_name, func_obj.__name__])
+        elif isinstance(func_obj, _FunctionProxy) or issubclass(
+            func_obj, (_FinalProxy, _IntermediateProxy)
+        ):
+            return func_obj.__name__
+        else:
+            raise NotImplementedError(
+                f"Don't know how to get namespaced name for {func_obj}"
+            )
 
     def _tracefunc(self, frame, event, arg):
         if event == "line" and frame.f_code.co_filename == self._currfile:
@@ -121,9 +137,13 @@ class Profiler:
 
             # Store per-function information for free functions and methods
             frame_locals = inspect.getargvalues(frame).locals
-            if isinstance(
-                func_obj := frame_locals["args"][0],
-                (_MethodProxy, _FunctionProxy),
+            if (
+                isinstance(
+                    func_obj := frame_locals["args"][0],
+                    (_MethodProxy, _FunctionProxy),
+                )
+                or isinstance(func_obj, type)
+                and issubclass(func_obj, (_FinalProxy, _IntermediateProxy))
             ):
                 func_name = self.get_namespaced_function_name(func_obj)
                 func_values = self._per_func_results.setdefault(
@@ -154,9 +174,13 @@ class Profiler:
                     )
 
             frame_locals = inspect.getargvalues(frame).locals
-            if isinstance(
-                func_obj := frame_locals["args"][0],
-                (_MethodProxy, _FunctionProxy),
+            if (
+                isinstance(
+                    func_obj := frame_locals["args"][0],
+                    (_MethodProxy, _FunctionProxy),
+                )
+                or isinstance(func_obj, type)
+                and issubclass(func_obj, (_FinalProxy, _IntermediateProxy))
             ):
                 func_name = self.get_namespaced_function_name(func_obj)
                 self._per_func_results[func_name]["finished"].append(
