@@ -16,10 +16,10 @@
 #   run-pandas-tests.sh <pytest args> <path to pandas tests (optional)>
 #
 # Examples
-# Run a single test in rewrite-imports mode
-#   run-pandas-tests.sh --transparent -n auto -v tests/groupby/test_groupby_dropna.py
-# Run all tests in transparent mode
-#   run-pandas-tests.sh --transparent --tb=line --report-log=log.json
+# Run a single test
+#   run-pandas-tests.sh -n auto -v tests/groupby/test_groupby_dropna.py
+# Run all tests
+#   run-pandas-tests.sh --tb=line --report-log=log.json
 #
 # This script creates a `pandas-testing` directory if it doesn't exist
 
