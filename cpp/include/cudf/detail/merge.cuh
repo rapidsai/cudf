@@ -85,8 +85,8 @@ struct row_lexicographic_tagged_comparator {
  private:
   table_device_view _lhs;
   table_device_view _rhs;
-  device_span<null_order const> _null_precedence{};
-  device_span<order const> _column_order{};
+  device_span<null_order const> _null_precedence;
+  device_span<order const> _column_order;
 };
 
 /**
