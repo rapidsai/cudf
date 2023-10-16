@@ -295,7 +295,8 @@ class Profiler:
         console.print(table)
 
         if cpu_funcs:
-            console.print(_cpu_issue_text.format(cpu_functions=cpu_funcs))
+            func_list = "\n".join(f"- {func}" for func in cpu_funcs)
+            console.print(Markdown(_cpu_issue_text.format(cpu_functions=func_list)))
 
             call_to_action = (
                 "To request GPU support for any of these functions, "
