@@ -519,6 +519,7 @@ rmm::device_buffer copy_bitmask(bitmask_type const* mask,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::copy_bitmask(mask, begin_bit, end_bit, stream, mr);
 }
 
@@ -527,6 +528,7 @@ rmm::device_buffer copy_bitmask(column_view const& view,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::copy_bitmask(view, stream, mr);
 }
 
@@ -534,6 +536,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
                                                      rmm::cuda_stream_view stream,
                                                      rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::bitmask_and(view, stream, mr);
 }
 
@@ -541,6 +544,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(table_view const& view,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::bitmask_or(view, stream, mr);
 }
 
@@ -550,6 +554,7 @@ cudf::size_type null_count(bitmask_type const* bitmask,
                            size_type stop,
                            rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
   return detail::null_count(bitmask, start, stop, stream);
 }
 
