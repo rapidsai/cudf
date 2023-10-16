@@ -3576,7 +3576,6 @@
 - Fixing empty null lists throwing explode_outer for a loop. ([#7649](https://github.com/rapidsai/cudf/pull/7649)) [@hyperbolic2346](https://github.com/hyperbolic2346)
 - Fix internal compiler error during JNI Docker build ([#7645](https://github.com/rapidsai/cudf/pull/7645)) [@jlowe](https://github.com/jlowe)
 - Fix Debug build break with device_uvectors in grouped_rolling.cu ([#7633](https://github.com/rapidsai/cudf/pull/7633)) [@mythrocks](https://github.com/mythrocks)
-- Parquet reader: Fix issue when using skip_rows on non-nested columns containing nulls ([#7627](https://github.com/rapidsai/cudf/pull/7627)) [@nvdbaranec](https://github.com/nvdbaranec)
 - Parquet reader:  Fix issue when using skip_rows on non-nested columns containing nulls ([#7627](https://github.com/rapidsai/cudf/pull/7627)) [@nvdbaranec](https://github.com/nvdbaranec)
 - Fix ORC reader for empty DataFrame/Table ([#7624](https://github.com/rapidsai/cudf/pull/7624)) [@rgsl888prabhu](https://github.com/rgsl888prabhu)
 - Fix specifying GPU architecture in JNI build ([#7612](https://github.com/rapidsai/cudf/pull/7612)) [@jlowe](https://github.com/jlowe)
@@ -3676,7 +3675,6 @@
 - Add groupby scan operations (sort groupby) ([#7387](https://github.com/rapidsai/cudf/pull/7387)) [@karthikeyann](https://github.com/karthikeyann)
 - Add cudf::explode_position ([#7376](https://github.com/rapidsai/cudf/pull/7376)) [@hyperbolic2346](https://github.com/hyperbolic2346)
 - Add string conversion to/from decimal values libcudf APIs ([#7364](https://github.com/rapidsai/cudf/pull/7364)) [@davidwendt](https://github.com/davidwendt)
-- Add groupby SUM_OF_SQUARES support ([#7362](https://github.com/rapidsai/cudf/pull/7362)) [@karthikeyann](https://github.com/karthikeyann)
 - Add  groupby SUM_OF_SQUARES support ([#7362](https://github.com/rapidsai/cudf/pull/7362)) [@karthikeyann](https://github.com/karthikeyann)
 - Add `Series.drop` api ([#7304](https://github.com/rapidsai/cudf/pull/7304)) [@isVoid](https://github.com/isVoid)
 - get_json_object() implementation ([#7286](https://github.com/rapidsai/cudf/pull/7286)) [@nvdbaranec](https://github.com/nvdbaranec)
@@ -3685,7 +3683,6 @@
 - Add support for special tokens in nvtext::subword_tokenizer ([#7254](https://github.com/rapidsai/cudf/pull/7254)) [@davidwendt](https://github.com/davidwendt)
 - Fix inplace update of data and add Series.update ([#7201](https://github.com/rapidsai/cudf/pull/7201)) [@galipremsagar](https://github.com/galipremsagar)
 - Implement `cudf::group_by` (hash) for `decimal32` and `decimal64` ([#7190](https://github.com/rapidsai/cudf/pull/7190)) [@codereport](https://github.com/codereport)
-- Adding support to specify &quot;level&quot; parameter for `Dataframe.rename` ([#7135](https://github.com/rapidsai/cudf/pull/7135)) [@skirui-source](https://github.com/skirui-source)
 - Adding support to specify &quot;level&quot; parameter  for `Dataframe.rename` ([#7135](https://github.com/rapidsai/cudf/pull/7135)) [@skirui-source](https://github.com/skirui-source)
 
 ## 🛠️ Improvements
@@ -3825,7 +3822,6 @@
 - Rework libcudf CMakeLists.txt to export targets for CPM ([#7107](https://github.com/rapidsai/cudf/pull/7107)) [@trxcllnt](https://github.com/trxcllnt)
 - Adding Interval Dtype ([#6984](https://github.com/rapidsai/cudf/pull/6984)) [@marlenezw](https://github.com/marlenezw)
 - Cleaning up `for` loops with `make_(counting_)transform_iterator` ([#6546](https://github.com/rapidsai/cudf/pull/6546)) [@codereport](https://github.com/codereport)
-
 
 # cuDF 0.18.0 (24 Feb 2021)
 
