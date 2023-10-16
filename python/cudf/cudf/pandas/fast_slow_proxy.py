@@ -792,6 +792,8 @@ class _FunctionProxy(_CallableProxyMixin):
     Proxy for a pair of fast and slow functions.
     """
 
+    __name__: str
+
     def __init__(self, fast: Callable | _Unusable, slow: Callable):
         self._xdf_fast = fast
         self._xdf_slow = slow

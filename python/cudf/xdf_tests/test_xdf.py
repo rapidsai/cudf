@@ -1014,48 +1014,40 @@ def test_np_array_of_timestamps():
     tm.assert_equal(expected, got)
 
 
-def pd_obj_equal(s1, s2):
-    return s1.equals(s2)
-
-
 @pytest.mark.parametrize(
-    "obj, comp",
+    "obj",
     [
         # Basic types
-        (xpd.Series(dtype="float64"), pd_obj_equal),
-        (xpd.Series([1, 2, 3]), pd_obj_equal),
-        (xpd.DataFrame(dtype="float64"), pd_obj_equal),
-        (xpd.DataFrame({"a": [1, 2, 3]}), pd_obj_equal),
+        xpd.Series(dtype="float64"),
+        xpd.Series([1, 2, 3]),
+        xpd.DataFrame(dtype="float64"),
+        xpd.DataFrame({"a": [1, 2, 3]}),
+        xpd.Series([1, 2, 3]),
         # Index (doesn't support nullary construction)
-        (xpd.Index([1, 2, 3]), pd_obj_equal),
-        (xpd.Index(["a", "b", "c"]), pd_obj_equal),
+        xpd.Index([1, 2, 3]),
+        xpd.Index(["a", "b", "c"]),
         # Complex index
-        (
-            xpd.to_datetime(
-                [
-                    "1/1/2018",
-                    np.datetime64("2018-01-01"),
-                    datetime.datetime(2018, 1, 1),
-                ]
-            ),
-            pd_obj_equal,
+        xpd.to_datetime(
+            [
+                "1/1/2018",
+                np.datetime64("2018-01-01"),
+                datetime.datetime(2018, 1, 1),
+            ]
         ),
         # Objects where the underlying store is the slow type.
-        (xpd.Series(["a", 2, 3]), pd_obj_equal),
-        # I expect this to fail not just because of pickle not knowing the
-        # underlying type but also because __new__ is overridden. Will verify.
-        (xpd.Index(["a", 2, 3]), pd_obj_equal),
+        xpd.Series(["a", 2, 3]),
+        xpd.Index(["a", 2, 3]),
         # Other types
-        (xpd.tseries.offsets.BDay(5), operator.eq),
+        xpd.tseries.offsets.BDay(5),
     ],
 )
-def test_pickle(obj, comp):
+def test_pickle(obj):
     with tempfile.TemporaryFile() as f:
         pickle.dump(obj, f)
         f.seek(0)
         copy = pickle.load(f)
 
-    assert comp(obj, copy)
+    tm.assert_equal(obj, copy)
 
 
 def test_dataframe_query():
