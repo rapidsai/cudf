@@ -13,6 +13,7 @@ import inspect
 import pickle
 import sys
 import time
+from collections import defaultdict
 from typing import Union
 
 from rich.console import Console
@@ -65,7 +66,11 @@ class Profiler:
 
     def __init__(self):
         self._results = {}
-        self._per_func_results = {}
+        # Map func-name to list of calls (was_fast, time)
+        self._per_func_results = defaultdict(list)
+        # Current fast_slow_function_call stack frame recording name
+        # and start time
+        self._call_stack = []
         self._currkey = None
         self._timer = {}
         self._currfile = None
@@ -153,50 +158,48 @@ class Profiler:
                 and issubclass(func_obj, (_FinalProxy, _IntermediateProxy))
             ):
                 func_name = self.get_namespaced_function_name(func_obj)
-                func_values = self._per_func_results.setdefault(
-                    func_name, {"current": [], "finished": []}
-                )
-                func_values["current"].append(time.perf_counter())
+                self._call_stack.append((func_name, time.perf_counter()))
         elif (
             event == "return"
             and frame.f_code.co_name == "_fast_slow_function_call"
-            # if arg is None the event is caused by an exception which
-            # we should not try and handle
-            and arg is not None
         ):
-            if self._currkey is not None:
-                if arg[1]:  # fast
-                    run_time = time.perf_counter() - self._timer[self._currkey]
-                    self._results[self._currkey][
-                        "gpu_time"
-                    ] = run_time + self._results[self._currkey].get(
-                        "gpu_time", 0
-                    )
-                else:
-                    run_time = time.perf_counter() - self._timer[self._currkey]
-                    self._results[self._currkey][
-                        "cpu_time"
-                    ] = run_time + self._results[self._currkey].get(
-                        "cpu_time", 0
-                    )
+            if arg is None:
+                # Call raised an exception, just pop the stack
+                self._call_stack.pop()
+            else:
+                if self._currkey is not None:
+                    if arg[1]:  # fast
+                        run_time = (
+                            time.perf_counter() - self._timer[self._currkey]
+                        )
+                        self._results[self._currkey][
+                            "gpu_time"
+                        ] = run_time + self._results[self._currkey].get(
+                            "gpu_time", 0
+                        )
+                    else:
+                        run_time = (
+                            time.perf_counter() - self._timer[self._currkey]
+                        )
+                        self._results[self._currkey][
+                            "cpu_time"
+                        ] = run_time + self._results[self._currkey].get(
+                            "cpu_time", 0
+                        )
 
-            frame_locals = inspect.getargvalues(frame).locals
-            if (
-                isinstance(
-                    func_obj := frame_locals["args"][0],
-                    (_MethodProxy, _FunctionProxy),
-                )
-                or isinstance(func_obj, type)
-                and issubclass(func_obj, (_FinalProxy, _IntermediateProxy))
-            ):
-                func_name = self.get_namespaced_function_name(func_obj)
-                self._per_func_results[func_name]["finished"].append(
-                    (
-                        arg[1],
-                        time.perf_counter()
-                        - self._per_func_results[func_name]["current"].pop(),
+                frame_locals = inspect.getargvalues(frame).locals
+                if (
+                    isinstance(
+                        func_obj := frame_locals["args"][0],
+                        (_MethodProxy, _FunctionProxy),
                     )
-                )
+                    or isinstance(func_obj, type)
+                    and issubclass(func_obj, (_FinalProxy, _IntermediateProxy))
+                ):
+                    func_name, start = self._call_stack.pop()
+                    self._per_func_results[func_name].append(
+                        (arg[1], time.perf_counter() - start)
+                    )
 
         return self._tracefunc
 
@@ -243,7 +246,7 @@ class Profiler:
         for func_name, func_data in self._per_func_results.items():
             final_data[func_name] = {"cpu": [], "gpu": []}
 
-            for is_gpu, runtime in func_data["finished"]:
+            for is_gpu, runtime in func_data:
                 key = "gpu" if is_gpu else "cpu"
                 final_data[func_name][key].append(runtime)
 
