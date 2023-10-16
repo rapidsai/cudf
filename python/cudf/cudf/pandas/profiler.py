@@ -297,11 +297,15 @@ class Profiler:
         if cpu_funcs:
             console.print(_cpu_issue_text.format(cpu_functions=cpu_funcs))
 
-            call_to_action = "To request GPU support for any of these \
-functions, \
-[link=https://github.com/rapidsai/cudf/issues/new?assignees=&labels=\
-%3F+-+Needs+Triage%2C+feature+request&projects=&template=\
-profiler_cpu_request.md&title=%5BFEA%5D]please file a Github issue[/link].\n"
+            call_to_action = (
+                "To request GPU support for any of these functions, "
+                "[link=https://github.com/rapidsai/cudf/issues/new?"
+                "assignees=&labels=%3F+-+Needs+Triage%2C+feature"
+                "+request&projects=&template=profiler_cpu_request.md"
+                "&title=%5BFEA%5D]"
+                "please file a Github issue"
+                "[/link].\n"
+            )
             console.print(call_to_action)
 
     def dump_stats(self, file_name):
