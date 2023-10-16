@@ -41,6 +41,13 @@ profiler.print_stats()
 {function_profile_printer}
 """
 
+_cpu_issue_text = """\
+This workflow could not be completed entirely on the GPU. \
+The following functions required CPU fallback:
+
+{cpu_functions}
+"""
+
 
 def lines_with_profiling(lines, print_function_profile=False):
     """Inject profiling code into the given lines of code."""
@@ -198,6 +205,8 @@ class Profiler:
         console.print(table)
 
     def print_per_func_stats(self):
+        cpu_funcs = []
+
         final_data = {}
         for func_name, func_data in self._per_func_results.items():
             final_data[func_name] = {"cpu": [], "gpu": []}
@@ -205,6 +214,8 @@ class Profiler:
             for is_gpu, runtime in func_data["finished"]:
                 key = "gpu" if is_gpu else "cpu"
                 final_data[func_name][key].append(runtime)
+                if key == "cpu" and func_name not in cpu_funcs:
+                    cpu_funcs.append(func_name)
 
         table = Table(title="Stats")
         for col in (
@@ -233,6 +244,16 @@ class Profiler:
 
         console = Console()
         console.print(table)
+
+        if cpu_funcs:
+            console.print(_cpu_issue_text.format(cpu_functions=cpu_funcs))
+
+            call_to_action = "To request GPU support for any of these \
+functions, \
+[link=https://github.com/rapidsai/cudf/issues/new?assignees=&labels=\
+%3F+-+Needs+Triage%2C+feature+request&projects=&template=\
+profiler_cpu_request.md&title=%5BFEA%5D]please file a Github issue[/link].\n"
+            console.print(call_to_action)
 
     def dump_stats(self, file_name):
         pickle_file = open(file_name, "wb")
