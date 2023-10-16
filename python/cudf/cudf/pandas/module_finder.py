@@ -20,6 +20,7 @@ import os
 import sys
 import threading
 import warnings
+from abc import abstractmethod
 from importlib._bootstrap import _ImportLockContext as ImportLock
 from types import ModuleType
 from typing import Any, ContextManager, Dict, List, NamedTuple, Tuple
@@ -204,8 +205,9 @@ class ModuleFinderAndLoaderBase(
         # importlib calls this function with the global import lock held.
         self._populate_module(mod)
 
+    @abstractmethod
     def disabled(self) -> ContextManager:
-        raise NotImplementedError("Abstract base class")
+        pass
 
     def _postprocess_module(
         self,
@@ -244,6 +246,7 @@ class ModuleFinderAndLoaderBase(
             mod.__dict__["_xdf_fast"] = fast_mod
         return mod
 
+    @abstractmethod
     def _populate_module(self, mod: ModuleType) -> ModuleType:
         """Populate given module with appropriate attributes.
 
@@ -275,7 +278,7 @@ class ModuleFinderAndLoaderBase(
         The necessary invariants are checked and applied in
         :meth:`_postprocess_module`.
         """
-        raise NotImplementedError("Abstract base class")
+        pass
 
     def _wrap_attribute(
         self,
@@ -337,6 +340,7 @@ class ModuleFinderAndLoaderBase(
         return wrapped_attr
 
     @classmethod
+    @abstractmethod
     def install(
         cls, destination_module: str, fast_lib: str, slow_lib: str
     ) -> Self | None:
@@ -363,91 +367,7 @@ class ModuleFinderAndLoaderBase(
         returns the existing loader from ``sys.meta_path``.
 
         """
-        raise NotImplementedError("Abstract base class")
-
-
-class XDFModuleFinderAndLoader(ModuleFinderAndLoaderBase):
-    """
-    A finder and loader for importing xdf submodules.
-
-    When someone attempts to import xdf submodules that don't
-    actually exist, this importer is used. It creates new modules on
-    the fly that have the same named attributes as the corresponding
-    submodules in the slow library. The difference is that the module
-    attributes are wrapped in xdf wrappers that dispatch to the fast
-    library when possible.
-    """
-
-    def _populate_module(self, mod: ModuleType):
-        mod_name = mod.__name__
-        slow_mod = importlib.import_module(
-            rename_root_module(mod_name, self.mod_name, self.slow_lib)
-        )
-        try:
-            fast_mod = importlib.import_module(
-                rename_root_module(mod_name, self.mod_name, self.fast_lib)
-            )
-        except Exception:
-            fast_mod = None
-
-        # for any attribute in the corresponding slow module,
-        # replace it with a "fast-slow" version in xdf:
-        for key, _ in sorted_module_items(slow_mod):
-            # Only copy attributes that don't already exist
-            slow_attr = getattr(slow_mod, key)
-            fast_attr = getattr(fast_mod, key, _Unusable())
-            mod.__dict__.setdefault(
-                key, self._wrap_attribute(slow_attr, fast_attr, key)
-            )
-        return self._postprocess_module(mod, slow_mod, fast_mod)
-
-    def disabled(self):
-        """Return a no-op context manager.
-
-        This doesn't actually disable this loader (if you need to
-        access the real objects, don't use the xdf-wrapped types)
-
-        Notes
-        -----
-        This is for API-compatibility with the transparent loader.
-
-        Returns
-        -------
-        No-op context manager
-        """
-        return contextlib.nullcontext()
-
-    @classmethod
-    def install(cls, destination_module, fast_lib, slow_lib) -> Self:
-        mode = deduce_xdf_mode(slow_lib, fast_lib)
-        # Although we can't race against other threads importing
-        # slow_lib, we might race against another thread populating
-        # the module (or modifying sys.meta_path). In particular
-        # holding the lock here avoids racing against ourselves and
-        # the transparent module finder.
-        with ImportLock():
-            if mode.use_fast_lib:
-                importlib.import_module(
-                    f".._wrappers.{mode.slow_lib}", __name__
-                )
-            try:
-                (self,) = (
-                    p
-                    for p in sys.meta_path
-                    if isinstance(p, cls)
-                    and p.mod_name == destination_module
-                    and p.slow_lib == mode.slow_lib
-                    and p.fast_lib == mode.fast_lib
-                )
-            except ValueError:
-                self = cls(
-                    destination_module,
-                    mode.fast_lib,
-                    mode.slow_lib,
-                )
-                sys.meta_path.append(self)
-                self._populate_module(sys.modules[destination_module])
-            return self
+        pass
 
 
 class TransparentModuleFinderAndLoader(ModuleFinderAndLoaderBase):

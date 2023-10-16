@@ -16,9 +16,9 @@ from cudf.pandas import LOADED
 from cudf.pandas._wrappers.common import array_function_method
 
 if not LOADED:
-    import cudf.pandas.pandas._testing as tm
-else:
-    import pandas._testing as tm
+    raise ImportError("These tests must be run with cudf.pandas loaded")
+
+import pandas._testing as tm
 
 from cudf.pandas.fast_slow_proxy import make_final_proxy_type
 
