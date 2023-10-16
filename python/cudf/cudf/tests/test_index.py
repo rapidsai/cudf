@@ -2870,3 +2870,8 @@ def test_period_index_error():
         cudf.Series(pd.Series(pidx))
     with pytest.raises(NotImplementedError):
         cudf.Series(pd.array(pidx))
+
+
+def test_index_from_dataframe_valueerror():
+    with pytest.raises(ValueError):
+        cudf.Index(cudf.DataFrame(range(1)))

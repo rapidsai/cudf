@@ -3404,12 +3404,7 @@ def as_index(
             arbitrary.copy(deep=copy), nan_as_null=nan_as_null
         )
     elif isinstance(arbitrary, cudf.DataFrame):
-        if dtype is not None:
-            raise TypeError(
-                "dtype must be `None` for inputs of type: "
-                f"{type(arbitrary).__name__}, found {dtype=} "
-            )
-        return cudf.MultiIndex.from_frame(arbitrary.copy(deep=copy))
+        raise ValueError("Index data must be 1-dimensional")
     else:
         return as_index(
             column.as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null),
@@ -3490,11 +3485,6 @@ class Index(BaseIndex, metaclass=IndexMeta):
     >>> import cudf
     >>> cudf.Index([1, 2, 3], dtype="uint64", name="a")
     UInt64Index([1, 2, 3], dtype='uint64', name='a')
-
-    >>> cudf.Index(cudf.DataFrame({"a":[1, 2], "b":[2, 3]}))
-    MultiIndex([(1, 2),
-                (2, 3)],
-                names=['a', 'b'])
     """
 
     @_cudf_nvtx_annotate
