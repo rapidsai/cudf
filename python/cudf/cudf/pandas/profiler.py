@@ -268,11 +268,11 @@ class Profiler:
             table.add_row(
                 func_name,
                 f"{len(gpu_times)}",
-                f"{sum(gpu_times)}",
-                f"{sum(gpu_times) / max(len(gpu_times), 1)}",
+                f"{sum(gpu_times):.3f}",
+                f"{sum(gpu_times) / max(len(gpu_times), 1):.3f}",
                 f"{len(cpu_times)}",
-                f"{sum(cpu_times)}",
-                f"{sum(cpu_times) / max(len(cpu_times), 1)}",
+                f"{sum(cpu_times):.3f}",
+                f"{sum(cpu_times) / max(len(cpu_times), 1):.3f}",
             )
             total_gpu_time += sum(gpu_times)
             total_cpu_time += sum(cpu_times)
