@@ -21,8 +21,9 @@ aws s3 cp $PR_ARTIFACT pr-results.json
 
 # Compute the diff and prepare job summary:
 python -m pip install pandas tabulate
-COMMENT=$(python ci/xdf_scripts/pandas-tests/job-summary.py main-results.json pr-results.json | tee -a "$GITHUB_STEP_SUMMARY" | head -1)
+python ci/xdf_scripts/pandas-tests/job-summary.py main-results.json pr-results.json | tee summary.txt >> "$GITHUB_STEP_SUMMARY"
 
+COMMENT=$(head -1 summary.txt)
 
 echo "$COMMENT"
 
