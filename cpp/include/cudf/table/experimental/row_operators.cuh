@@ -296,7 +296,7 @@ class device_row_comparator {
                         std::optional<device_span<int const>> depth                  = std::nullopt,
                         std::optional<device_span<order const>> column_order         = std::nullopt,
                         std::optional<device_span<null_order const>> null_precedence = std::nullopt,
-                        PhysicalElementComparator comparator                         = {})
+                        PhysicalElementComparator comparator                         = {}) noexcept
     : _lhs{lhs},
       _rhs{rhs},
       _l_dremel(l_dremel_device_views),
@@ -334,7 +334,7 @@ class device_row_comparator {
     table_device_view rhs,
     std::optional<device_span<order const>> column_order         = std::nullopt,
     std::optional<device_span<null_order const>> null_precedence = std::nullopt,
-    PhysicalElementComparator comparator                         = {})
+    PhysicalElementComparator comparator                         = {}) noexcept
     : _lhs{lhs},
       _rhs{rhs},
       _l_dremel{},
