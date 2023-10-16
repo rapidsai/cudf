@@ -52,6 +52,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <type_traits>
 #include <utility>
 
 namespace cudf {
@@ -275,10 +276,10 @@ class device_row_comparator {
    * @param check_nulls Indicates if any input column contains nulls.
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
+   * @param l_dremel_device_views lhs table dremel device view for list type
+   * @param r_dremel_device_views rhs table dremel device view for list type
    * @param depth Optional, device array the same length as a row that contains starting depths of
    * columns if they're nested, and 0 otherwise.
-   * @param l_dremel_device_views <>
-   * @param r_dremel_device_views <>
    * @param column_order Optional, device array the same length as a row that indicates the desired
    * ascending/descending order of each column in a row. If `nullopt`, it is assumed all columns are
    * sorted in ascending order.
@@ -287,7 +288,6 @@ class device_row_comparator {
    * `null_order::BEFORE` for all columns.
    * @param comparator Physical element relational comparison functor.
    */
-  __host__ __device__
   device_row_comparator(Nullate check_nulls,
                         table_device_view lhs,
                         table_device_view rhs,
@@ -303,6 +303,44 @@ class device_row_comparator {
       _r_dremel(r_dremel_device_views),
       _check_nulls{check_nulls},
       _depth{depth},
+      _column_order{column_order},
+      _null_precedence{null_precedence},
+      _comparator{comparator}
+  {
+  }
+
+  /**
+   * @brief Construct a function object for performing a lexicographic
+   * comparison between the rows of two tables.
+   * This is a special overload to allow device-side construction of the
+   * comparator for cases where no preprocessing is needed, i.e. tables with
+   * non-nested type columns.
+   *
+   * @param check_nulls Indicates if any input column contains nulls.
+   * @param lhs The first table
+   * @param rhs The second table (may be the same table as `lhs`)
+   * @param column_order Optional, device array the same length as a row that indicates the desired
+   * ascending/descending order of each column in a row. If `nullopt`, it is assumed all columns are
+   * sorted in ascending order.
+   * @param null_precedence Optional, device array the same length as a row and indicates how null
+   * values compare to all other for every column. If `nullopt`, then null precedence would be
+   * `null_order::BEFORE` for all columns.
+   * @param comparator Physical element relational comparison functor.
+   */
+  template <bool nested_disable = not has_nested_columns, CUDF_ENABLE_IF(nested_disable)>
+  __device__ device_row_comparator(
+    Nullate check_nulls,
+    table_device_view lhs,
+    table_device_view rhs,
+    std::optional<device_span<order const>> column_order         = std::nullopt,
+    std::optional<device_span<null_order const>> null_precedence = std::nullopt,
+    PhysicalElementComparator comparator                         = {})
+    : _lhs{lhs},
+      _rhs{rhs},
+      _l_dremel{},
+      _r_dremel{},
+      _check_nulls{check_nulls},
+      _depth{},
       _column_order{column_order},
       _null_precedence{null_precedence},
       _comparator{comparator}
@@ -377,13 +415,11 @@ class device_row_comparator {
     }
 
     /**
-     * @brief
+     * @brief Throws run-time error when columns types cannot be compared
+     *        or if this class is instantiated with `has_nested_columns = false` but
+     *        passed tables with nested columns
      *
-     * @tparam Element
-     * @tparam Element,
-     * CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
-     * (not has_nested_columns or not cudf::is_nested<Element>()))
-     * @return __device__
+     * @return Ordering
      */
     template <typename Element,
               CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
@@ -395,14 +431,12 @@ class device_row_comparator {
     }
 
     /**
-     * @brief
+     * @brief Compares two struct-type columns
      *
-     * @tparam Element
-     * @tparam Element,
-     * CUDF_ENABLE_IF(has_nested_columns and std::is_same_v<Element, cudf::struct_view>)
-     * @param lhs_element_index
-     * @param rhs_element_index
-     * @return __device__
+     * @param lhs_element_index The index of the first element
+     * @param rhs_element_index The index of the second element
+     * @return Indicates the relationship between the elements in the `lhs` and `rhs` columns, along
+     * with the depth at which a null value was encountered.
      */
     template <typename Element,
               CUDF_ENABLE_IF(has_nested_columns and std::is_same_v<Element, cudf::struct_view>)>
@@ -439,14 +473,12 @@ class device_row_comparator {
     }
 
     /**
-     * @brief
+     * @brief Compares two list-type columns
      *
-     * @tparam Element
-     * @tparam Element,
-     * CUDF_ENABLE_IF(has_nested_columns and std::is_same_v<Element, cudf::list_view>)
-     * @param lhs_element_index
-     * @param rhs_element_index
-     * @return __device__
+     * @param lhs_element_index The index of the first element
+     * @param rhs_element_index The index of the second element
+     * @return Indicates the relationship between the elements in the `lhs` and `rhs` columns, along
+     * with the depth at which a null value was encountered.
      */
     template <typename Element,
               CUDF_ENABLE_IF(has_nested_columns and std::is_same_v<Element, cudf::list_view>)>

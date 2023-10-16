@@ -41,7 +41,7 @@ using index_type = thrust::pair<side, cudf::size_type>;
  */
 using index_vector = rmm::device_uvector<index_type>;
 
-template <bool has_nulls = true>
+template <bool has_nulls>
 struct row_lexicographic_tagged_comparator {
   row_lexicographic_tagged_comparator(table_device_view lhs,
                                       table_device_view rhs,
@@ -67,15 +67,15 @@ struct row_lexicographic_tagged_comparator {
                                          ? const_cast<cudf::table_device_view*>(&_lhs)
                                          : const_cast<cudf::table_device_view*>(&_rhs)};
 
-    cudf::experimental::row::lexicographic::device_row_comparator<false, bool> comparator{
-      has_nulls,
-      *ptr_left_dview,
-      *ptr_right_dview,
-      {},
-      {},
-      std::nullopt,
-      _column_order,
-      _null_precedence};
+    auto comparator = [&]() {
+      if (has_nulls) {
+        return cudf::experimental::row::lexicographic::device_row_comparator<false, bool>{
+          has_nulls, *ptr_left_dview, *ptr_right_dview, _column_order, _null_precedence};
+      } else {
+        return cudf::experimental::row::lexicographic::device_row_comparator<false, bool>{
+          has_nulls, *ptr_left_dview, *ptr_right_dview, _column_order};
+      }
+    }();
 
     auto weak_order = comparator(l_indx, r_indx);
 

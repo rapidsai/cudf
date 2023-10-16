@@ -190,9 +190,8 @@ index_vector generate_merged_indices(table_view const& left_table,
 
   index_vector merged_indices(total_size, stream);
 
-  auto const left_has_nulls       = nullate::DYNAMIC{cudf::has_nulls(left_table)};
-  auto const right_has_nulls      = nullate::DYNAMIC{cudf::has_nulls(right_table)};
-  auto const left_right_has_nulls = nullate::DYNAMIC{left_has_nulls or right_has_nulls};
+  auto const has_nulls =
+    nullate::DYNAMIC{cudf::has_nulls(left_table) or cudf::has_nulls(right_table)};
 
   auto lhs_device_view = table_device_view::create(left_table, stream);
   auto rhs_device_view = table_device_view::create(right_table, stream);
@@ -200,9 +199,19 @@ index_vector generate_merged_indices(table_view const& left_table,
   auto d_column_order = cudf::detail::make_device_uvector_async(
     column_order, stream, rmm::mr::get_current_device_resource());
 
-  if (left_right_has_nulls) {
+  if (has_nulls) {
+    auto new_null_precedence = [&]() {
+      if (null_precedence.size() > 0) {
+        CUDF_EXPECTS(static_cast<size_type>(null_precedence.size()) == left_table.num_columns(),
+                     "Null precedence vector size mismatched");
+        return null_precedence;
+      } else {
+        return std::vector<null_order>(left_table.num_columns(), null_order::BEFORE);
+      }
+    }();
+
     auto d_null_precedence = cudf::detail::make_device_uvector_async(
-      null_precedence, stream, rmm::mr::get_current_device_resource());
+      new_null_precedence, stream, rmm::mr::get_current_device_resource());
 
     auto ineq_op = detail::row_lexicographic_tagged_comparator<true>(
       *lhs_device_view, *rhs_device_view, d_column_order, d_null_precedence);
@@ -262,6 +271,9 @@ index_vector generate_merged_indices_nested(table_view const& left_table,
     total_counter + total_size,
     [merged = merged_indices.data(), left = left_indices_begin, left_size, right_size] __device__(
       auto const idx) {
+      // We split threads into two groups, so only one kernel is needed.
+      // Threads in [0, right_size) will insert right indices in sorted order.
+      // Threads in [right_size, total_size) will insert left indices in sorted order.
       if (idx < right_size) {
         // this tells us between which segments of left elements a right element
         // would fall
@@ -472,16 +484,16 @@ table_ptr_type merge(cudf::table_view const& left_table,
 
   // extract merged row order according to indices:
   //
-  index_vector merged_indices(0, stream);
-  if (cudf::detail::has_nested_columns(left_table) or
-      cudf::detail::has_nested_columns(right_table)) {
-    merged_indices = generate_merged_indices_nested(
-      index_left_view, index_right_view, column_order, null_precedence, nullable, stream);
-  } else {
-    merged_indices = generate_merged_indices(
-      index_left_view, index_right_view, column_order, null_precedence, nullable, stream);
-  }
-
+  auto const merged_indices = [&]() {
+    if (cudf::detail::has_nested_columns(left_table) or
+        cudf::detail::has_nested_columns(right_table)) {
+      return generate_merged_indices_nested(
+        index_left_view, index_right_view, column_order, null_precedence, nullable, stream);
+    } else {
+      return generate_merged_indices(
+        index_left_view, index_right_view, column_order, null_precedence, nullable, stream);
+    }
+  }();
   // create merged table:
   //
   auto const n_cols = left_table.num_columns();
