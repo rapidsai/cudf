@@ -404,7 +404,7 @@ __global__ void __launch_bounds__(128)
         bs->page.lvl_bytes[level_type::REPETITION] = 0;
         if (parse_page_header(bs) && bs->page.compressed_page_size >= 0) {
           if (not is_supported_encoding(bs->page.encoding)) {
-            error[warp_id] |= static_cast<int>(decode_error::UNSUPPORTED_ENCODING);
+            error[warp_id] |= static_cast<int32_t>(decode_error::UNSUPPORTED_ENCODING);
           }
           switch (bs->page_type) {
             case PageType::DATA_PAGE:
@@ -435,7 +435,7 @@ __global__ void __launch_bounds__(128)
           bs->page.page_data = const_cast<uint8_t*>(bs->cur);
           bs->cur += bs->page.compressed_page_size;
           if (bs->cur > bs->end) {
-            error[warp_id] |= static_cast<int>(decode_error::DATA_STREAM_OVERRUN);
+            error[warp_id] |= static_cast<int32_t>(decode_error::DATA_STREAM_OVERRUN);
           }
           bs->page.kernel_mask = kernel_mask_for_page(bs->page, bs->ck);
         } else {
