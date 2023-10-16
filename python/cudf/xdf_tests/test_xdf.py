@@ -26,10 +26,7 @@ from numba import NumbaDeprecationWarning
 from cudf.pandas import LOADED
 
 if not LOADED:
-    import pandas as pd
-
-    import cudf.pandas.pandas as xpd
-    import cudf.pandas.pandas._testing as tm
+    raise ImportError("These tests must be run with cudf.pandas loaded")
 else:
     import pandas as xpd
     import pandas._testing as tm
