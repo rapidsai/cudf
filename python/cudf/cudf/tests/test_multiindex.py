@@ -2067,3 +2067,10 @@ def test_multiindex_loc_scalar(idx_get, cols_get):
     expected = pdf.loc[idx_get, cols_get]
 
     assert_eq(actual, expected)
+
+
+def test_multiindex_eq_other_multiindex():
+    idx = cudf.MultiIndex.from_tuples([(0, 0), (0, 1), (1, 0), (1, 1)])
+    result = idx == idx
+    expected = np.array([True, True])
+    assert_eq(result, expected)
