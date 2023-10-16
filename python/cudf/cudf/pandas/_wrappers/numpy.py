@@ -110,31 +110,31 @@ def wrap_ndarray(cls, arr: cupy.ndarray | numpy.ndarray, constructor):
         return super(cls, cls)._xdf_wrap(arr, constructor)
 
 
-def generate_numpy_wrappers():
-    make_final_proxy_type(
-        "ndarray",
-        cupy.ndarray,
-        numpy.ndarray,
-        fast_to_slow=cupy.ndarray.get,
-        slow_to_fast=cupy.asarray,
-        additional_attributes={
-            "__array__": array_method,
-            # So that pa.array(wrapped-numpy-array) works
-            "__arrow_array__": arrow_array_method,
-            "__cuda_array_interface__": cuda_array_interface,
-            # ndarrays are unhashable
-            "__hash__": None,
-            # iter(cupy-array) produces an iterable of zero-dim device
-            # arrays, which is not usable in many settings (whereas
-            # iter(numpy-array) produces an iterable of scalars)
-            "__iter__": custom_iter,
-            # Special wrapping to handle scalar values
-            "_xdf_wrap": classmethod(wrap_ndarray),
-        },
-    )
-    # Mapping flags between slow and fast types
-    make_intermediate_proxy_type(
-        "_ndarray_flags",
-        cupy._core.flags.Flags,
-        numpy.core.multiarray.flagsobj,
-    )
+ndarray = make_final_proxy_type(
+    "ndarray",
+    cupy.ndarray,
+    numpy.ndarray,
+    fast_to_slow=cupy.ndarray.get,
+    slow_to_fast=cupy.asarray,
+    additional_attributes={
+        "__array__": array_method,
+        # So that pa.array(wrapped-numpy-array) works
+        "__arrow_array__": arrow_array_method,
+        "__cuda_array_interface__": cuda_array_interface,
+        # ndarrays are unhashable
+        "__hash__": None,
+        # iter(cupy-array) produces an iterable of zero-dim device
+        # arrays, which is not usable in many settings (whereas
+        # iter(numpy-array) produces an iterable of scalars)
+        "__iter__": custom_iter,
+        # Special wrapping to handle scalar values
+        "_xdf_wrap": classmethod(wrap_ndarray),
+    },
+)
+
+# Mapping flags between slow and fast types
+_ndarray_flags = make_intermediate_proxy_type(
+    "_ndarray_flags",
+    cupy._core.flags.Flags,
+    numpy.core.multiarray.flagsobj,
+)
