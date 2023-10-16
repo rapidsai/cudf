@@ -47,10 +47,10 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         table_view target,
     ) except +
 
-    ctypedef enum mask_allocation_policy:
-        NEVER 'cudf::mask_allocation_policy::NEVER',
-        RETAIN 'cudf::mask_allocation_policy::RETAIN',
-        ALWAYS 'cudf::mask_allocation_policy::ALWAYS'
+    cpdef enum class mask_allocation_policy(int32_t):
+        NEVER
+        RETAIN
+        ALWAYS
 
     cdef unique_ptr[column] empty_like (
         column_view input_column
@@ -148,6 +148,6 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         size_type index
     ) except +
 
-    ctypedef enum sample_with_replacement:
-        FALSE 'cudf::sample_with_replacement::FALSE',
-        TRUE 'cudf::sample_with_replacement::TRUE',
+    cpdef enum class sample_with_replacement(bool):
+        FALSE
+        TRUE
