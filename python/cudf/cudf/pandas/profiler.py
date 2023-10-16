@@ -69,8 +69,11 @@ class Profiler:
         self._currkey = None
         self._timer = {}
         self._currfile = None
+        self.start_time = None
+        self.end_time = None
 
     def __enter__(self, *args, **kwargs):
+        self.start_time = time.perf_counter()
         self._oldtrace = sys.gettrace()
         # Setting the global trace function with sys.settrace does not affect
         # the current call stack, so in addition to this we must also set the
@@ -96,6 +99,7 @@ class Profiler:
     def __exit__(self, *args, **kwargs):
         sys.settrace(self._oldtrace)
         inspect.currentframe().f_back.f_trace = self._f_back_oldtrace
+        self.end_time = time.perf_counter()
 
     @staticmethod
     def get_namespaced_function_name(
@@ -205,7 +209,7 @@ class Profiler:
         return list_data
 
     def print_stats(self):
-        table = Table(title="Stats")
+        table = Table()
         table.add_column("Line no.")
         table.add_column("Line")
         table.add_column("GPU TIME(s)")
@@ -217,11 +221,21 @@ class Profiler:
                 "" if gpu_time == 0 else "{:.9f}".format(gpu_time),
                 "" if cpu_time == 0 else "{:.9f}".format(cpu_time),
             )
+        time_elapsed = self.end_time - self.start_time
+        table.title = f"""\n\
+        Total time elapsed: {time_elapsed:.3f} seconds
 
+        Stats
+        """
         console = Console()
         console.print(table)
 
     def print_per_func_stats(self):
+        n_gpu_func_calls = 0
+        n_cpu_func_calls = 0
+        total_gpu_time = 0
+        total_cpu_time = 0
+
         final_data = {}
         for func_name, func_data in self._per_func_results.items():
             final_data[func_name] = {"cpu": [], "gpu": []}
@@ -230,7 +244,7 @@ class Profiler:
                 key = "gpu" if is_gpu else "cpu"
                 final_data[func_name][key].append(runtime)
 
-        table = Table(title="Stats")
+        table = Table()
         for col in (
             "Function",
             "GPU ncalls",
@@ -254,7 +268,19 @@ class Profiler:
                 f"{sum(cpu_times)}",
                 f"{sum(cpu_times) / max(len(cpu_times), 1)}",
             )
+            total_gpu_time += sum(gpu_times)
+            total_cpu_time += sum(cpu_times)
+            n_gpu_func_calls += len(gpu_times)
+            n_cpu_func_calls += len(cpu_times)
 
+        time_elapsed = self.end_time - self.start_time
+        table.title = f"""\n\
+        Total time elapsed: {time_elapsed:.3f} seconds
+        {n_gpu_func_calls} GPU function calls in {total_gpu_time:.3f} seconds
+        {n_cpu_func_calls} CPU function calls in {total_cpu_time:.3f} seconds
+
+        Stats
+        """
         console = Console()
         console.print(table)
 
