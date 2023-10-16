@@ -264,6 +264,7 @@ template <bool has_nested_columns,
           typename Nullate,
           typename PhysicalElementComparator = sorting_physical_element_comparator>
 class device_row_comparator {
+ public:
   friend class self_comparator;       ///< Allow self_comparator to access private members
   friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
 
@@ -276,6 +277,8 @@ class device_row_comparator {
    * @param rhs The second table (may be the same table as `lhs`)
    * @param depth Optional, device array the same length as a row that contains starting depths of
    * columns if they're nested, and 0 otherwise.
+   * @param l_dremel_device_views <>
+   * @param r_dremel_device_views <>
    * @param column_order Optional, device array the same length as a row that indicates the desired
    * ascending/descending order of each column in a row. If `nullopt`, it is assumed all columns are
    * sorted in ascending order.
@@ -284,6 +287,7 @@ class device_row_comparator {
    * `null_order::BEFORE` for all columns.
    * @param comparator Physical element relational comparison functor.
    */
+  __host__ __device__
   device_row_comparator(Nullate check_nulls,
                         table_device_view lhs,
                         table_device_view rhs,
@@ -292,7 +296,7 @@ class device_row_comparator {
                         std::optional<device_span<int const>> depth                  = std::nullopt,
                         std::optional<device_span<order const>> column_order         = std::nullopt,
                         std::optional<device_span<null_order const>> null_precedence = std::nullopt,
-                        PhysicalElementComparator comparator                         = {}) noexcept
+                        PhysicalElementComparator comparator                         = {})
     : _lhs{lhs},
       _rhs{rhs},
       _l_dremel(l_dremel_device_views),
@@ -323,6 +327,8 @@ class device_row_comparator {
      * @param depth The depth of the column if part of a nested column @see
      * preprocessed_table::depths
      * @param comparator Physical element relational comparison functor.
+     * @param l_dremel_device_view <>
+     * @param r_dremel_device_view <>
      */
     __device__ element_comparator(Nullate check_nulls,
                                   column_device_view lhs,
@@ -370,6 +376,15 @@ class device_row_comparator {
                              std::numeric_limits<int>::max());
     }
 
+    /**
+     * @brief
+     *
+     * @tparam Element
+     * @tparam Element,
+     * CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
+     * (not has_nested_columns or not cudf::is_nested<Element>()))
+     * @return __device__
+     */
     template <typename Element,
               CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
                              (not has_nested_columns or not cudf::is_nested<Element>()))>
@@ -379,6 +394,16 @@ class device_row_comparator {
       CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
     }
 
+    /**
+     * @brief
+     *
+     * @tparam Element
+     * @tparam Element,
+     * CUDF_ENABLE_IF(has_nested_columns and std::is_same_v<Element, cudf::struct_view>)
+     * @param lhs_element_index
+     * @param rhs_element_index
+     * @return __device__
+     */
     template <typename Element,
               CUDF_ENABLE_IF(has_nested_columns and std::is_same_v<Element, cudf::struct_view>)>
     __device__ cuda::std::pair<weak_ordering, int> operator()(
@@ -413,6 +438,16 @@ class device_row_comparator {
         rhs_element_index);
     }
 
+    /**
+     * @brief
+     *
+     * @tparam Element
+     * @tparam Element,
+     * CUDF_ENABLE_IF(has_nested_columns and std::is_same_v<Element, cudf::list_view>)
+     * @param lhs_element_index
+     * @param rhs_element_index
+     * @return __device__
+     */
     template <typename Element,
               CUDF_ENABLE_IF(has_nested_columns and std::is_same_v<Element, cudf::list_view>)>
     __device__ cuda::std::pair<weak_ordering, int> operator()(size_type lhs_element_index,

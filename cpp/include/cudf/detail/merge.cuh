@@ -41,43 +41,52 @@ using index_type = thrust::pair<side, cudf::size_type>;
  */
 using index_vector = rmm::device_uvector<index_type>;
 
-/**
- * @brief The equivalent of `row_lexicographic_comparator` for tagged indices.
- */
-template <typename LeftComparator, typename LeftRightComparator, typename RightComparator>
+template <bool has_nulls = true>
 struct row_lexicographic_tagged_comparator {
-  row_lexicographic_tagged_comparator(LeftComparator left_comp,
-                                      LeftRightComparator left_right_comp,
-                                      RightComparator right_comp)
-    : _left_comp{left_comp}, _left_right_comp{left_right_comp}, _right_comp{right_comp}
+  row_lexicographic_tagged_comparator(table_device_view lhs,
+                                      table_device_view rhs,
+                                      device_span<order const> column_order,
+                                      device_span<null_order const> null_precedence)
+    : _lhs{lhs}, _rhs{rhs}, _column_order{column_order}, _null_precedence{null_precedence}
   {
+    // Add check for types to be the same.
+    CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
   }
 
   __device__ bool operator()(index_type lhs_tagged_index,
                              index_type rhs_tagged_index) const noexcept
   {
-    using cudf::experimental::row::lhs_index_type;
-    using cudf::experimental::row::rhs_index_type;
-
     auto const [l_side, l_indx] = lhs_tagged_index;
     auto const [r_side, r_indx] = rhs_tagged_index;
 
-    if (l_side == side::LEFT && r_side == side::RIGHT) {
-      return _left_right_comp(lhs_index_type{l_indx}, rhs_index_type{r_indx});
-    } else if (l_side == side::RIGHT && r_side == side::LEFT) {
-      return _left_right_comp(rhs_index_type{l_indx}, lhs_index_type{r_indx});
-    } else if (l_side == side::LEFT && r_side == side::LEFT) {
-      return _left_comp(l_indx, r_indx);
-    } else if (l_side == side::RIGHT && r_side == side::RIGHT) {
-      return _right_comp(l_indx, r_indx);
-    }
-    return false;
+    // Not sure why `const_cast` is needed here
+    table_device_view* ptr_left_dview{l_side == side::LEFT
+                                        ? const_cast<cudf::table_device_view*>(&_lhs)
+                                        : const_cast<cudf::table_device_view*>(&_rhs)};
+    table_device_view* ptr_right_dview{r_side == side::LEFT
+                                         ? const_cast<cudf::table_device_view*>(&_lhs)
+                                         : const_cast<cudf::table_device_view*>(&_rhs)};
+
+    cudf::experimental::row::lexicographic::device_row_comparator<false, bool> comparator{
+      has_nulls,
+      *ptr_left_dview,
+      *ptr_right_dview,
+      {},
+      {},
+      std::nullopt,
+      _column_order,
+      _null_precedence};
+
+    auto weak_order = comparator(l_indx, r_indx);
+
+    return weak_order == weak_ordering::LESS;
   }
 
  private:
-  LeftComparator _left_comp;
-  LeftRightComparator _left_right_comp;
-  RightComparator _right_comp;
+  table_device_view _lhs;
+  table_device_view _rhs;
+  device_span<null_order const> _null_precedence{};
+  device_span<order const> _column_order{};
 };
 
 /**

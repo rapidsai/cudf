@@ -190,30 +190,40 @@ index_vector generate_merged_indices(table_view const& left_table,
 
   index_vector merged_indices(total_size, stream);
 
-  auto left_comp = cudf::experimental::row::lexicographic::self_comparator{
-    left_table, column_order, null_precedence, stream};
-  auto left_right_comp = cudf::experimental::row::lexicographic::two_table_comparator{
-    left_table, right_table, column_order, null_precedence, stream};
-  auto right_comp = cudf::experimental::row::lexicographic::self_comparator{
-    right_table, column_order, null_precedence, stream};
-
-  auto const left_has_nulls       = nullate::DYNAMIC{cudf::has_nested_nulls(left_table)};
-  auto const right_has_nulls      = nullate::DYNAMIC{cudf::has_nested_nulls(right_table)};
+  auto const left_has_nulls       = nullate::DYNAMIC{cudf::has_nulls(left_table)};
+  auto const right_has_nulls      = nullate::DYNAMIC{cudf::has_nulls(right_table)};
   auto const left_right_has_nulls = nullate::DYNAMIC{left_has_nulls or right_has_nulls};
 
-  auto d_left_comp       = left_comp.less<false>(left_has_nulls);
-  auto d_left_right_comp = left_right_comp.less<false>(left_right_has_nulls);
-  auto d_right_comp      = right_comp.less<false>(right_has_nulls);
+  auto lhs_device_view = table_device_view::create(left_table, stream);
+  auto rhs_device_view = table_device_view::create(right_table, stream);
 
-  auto ineq_op =
-    detail::row_lexicographic_tagged_comparator(d_left_comp, d_left_right_comp, d_right_comp);
-  thrust::merge(rmm::exec_policy(stream),
-                left_begin,
-                left_begin + left_size,
-                right_begin,
-                right_begin + right_size,
-                merged_indices.begin(),
-                ineq_op);
+  auto d_column_order = cudf::detail::make_device_uvector_async(
+    column_order, stream, rmm::mr::get_current_device_resource());
+
+  if (left_right_has_nulls) {
+    auto d_null_precedence = cudf::detail::make_device_uvector_async(
+      null_precedence, stream, rmm::mr::get_current_device_resource());
+
+    auto ineq_op = detail::row_lexicographic_tagged_comparator<true>(
+      *lhs_device_view, *rhs_device_view, d_column_order, d_null_precedence);
+    thrust::merge(rmm::exec_policy(stream),
+                  left_begin,
+                  left_begin + left_size,
+                  right_begin,
+                  right_begin + right_size,
+                  merged_indices.begin(),
+                  ineq_op);
+  } else {
+    auto ineq_op = detail::row_lexicographic_tagged_comparator<false>(
+      *lhs_device_view, *rhs_device_view, d_column_order, {});
+    thrust::merge(rmm::exec_policy(stream),
+                  left_begin,
+                  left_begin + left_size,
+                  right_begin,
+                  right_begin + right_size,
+                  merged_indices.begin(),
+                  ineq_op);
+  }
 
   CUDF_CHECK_CUDA(stream.value());
 
