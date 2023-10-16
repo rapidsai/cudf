@@ -34,7 +34,6 @@ from .common import (
     cuda_array_interface,
     custom_iter,
 )
-from .numpy import generate_numpy_wrappers
 
 # TODO(pandas2.1): Can import from pandas.api.typing
 from pandas.core.resample import (  # isort: skip
@@ -42,8 +41,6 @@ from pandas.core.resample import (  # isort: skip
     TimeGrouper as pd_TimeGrouper,
 )
 
-
-generate_numpy_wrappers()
 
 cudf.set_option("mode.pandas_compatible", True)
 
