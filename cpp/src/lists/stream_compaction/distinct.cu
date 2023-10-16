@@ -76,10 +76,11 @@ std::unique_ptr<column> distinct(lists_column_view const& input,
 std::unique_ptr<column> distinct(lists_column_view const& input,
                                  null_equality nulls_equal,
                                  nan_equality nans_equal,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct(input, nulls_equal, nans_equal, cudf::get_default_stream(), mr);
+  return detail::distinct(input, nulls_equal, nans_equal, stream, mr);
 }
 
 }  // namespace cudf::lists
