@@ -636,6 +636,7 @@ ConfigureTest(
   STREAM_STRINGS_TEST
   streams/strings/case_test.cpp
   streams/strings/combine_test.cpp
+  streams/strings/convert_test.cpp
   streams/strings/find_test.cpp
   streams/strings/replace_test.cpp
   streams/strings/split_test.cpp
