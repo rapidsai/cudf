@@ -246,6 +246,28 @@ TEST_F(StringsReplaceTest, ReplaceEndOfString)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
+TEST_F(StringsReplaceTest, ReplaceAdjacentMultiByteTarget)
+{
+  auto input = cudf::test::strings_column_wrapper({"ééééééé", "eéeéeée", "eeeeeee"});
+  auto strings_view = cudf::strings_column_view(input);
+  // replace all occurrences of 'é' with 'e'
+  cudf::test::strings_column_wrapper expected({"eeeeeee", "eeeeeee", "eeeeeee"});
+
+  auto stream = cudf::get_default_stream();
+  auto mr     = rmm::mr::get_current_device_resource();
+
+  auto target  = cudf::string_scalar("é", true, stream);
+  auto repl    = cudf::string_scalar("e", true, stream);
+  auto results = cudf::strings::replace(strings_view, target, repl);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  results = cudf::strings::detail::replace<algorithm::CHAR_PARALLEL>(
+    strings_view, target, repl, -1, stream, mr);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  results = cudf::strings::detail::replace<algorithm::ROW_PARALLEL>(
+    strings_view, target, repl, -1, stream, mr);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TEST_F(StringsReplaceTest, ReplaceSlice)
 {
   std::vector<char const*> h_strings{"Héllo", "thesé", nullptr, "ARE THE", "tést strings", ""};
@@ -470,8 +492,8 @@ TEST_F(StringsReplaceTest, ReplaceMultiLong)
 
 TEST_F(StringsReplaceTest, EmptyStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
+
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   auto results      = cudf::strings::replace(
     strings_view, cudf::string_scalar("not"), cudf::string_scalar("pertinent"));

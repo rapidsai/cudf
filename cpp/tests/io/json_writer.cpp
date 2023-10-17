@@ -517,4 +517,40 @@ TEST_F(JsonWriterTest, StructAllNullCombinations)
   EXPECT_EQ(expected, std::string(out_buffer.data(), out_buffer.size()));
 }
 
+TEST_F(JsonWriterTest, Unicode)
+{
+  //                                       UTF-8,                      UTF-16
+  cudf::test::strings_column_wrapper col1{"\"\\/\b\f\n\r\t", "ராபிட்ஸ்", "$€𐐷𤭢", "C𝞵𝓓𝒻"};
+  // Unicode
+  // 0000-FFFF     Basic Multilingual Plane
+  // 10000-10FFFF  Supplementary Plane
+  cudf::test::strings_column_wrapper col2{
+    "CႮ≪ㇳ䍏凹沦王辿龸ꁗ믜스폶ﴠ",  //  0000-FFFF
+    "𐀀𑿪𒐦𓃰𔙆 𖦆𗿿𘳕𚿾[↳] 𜽆𝓚𞤁🄰",                            // 10000-1FFFF
+    "𠘨𡥌𢗉𣇊𤊩𥅽𦉱𧴱𨁲𩁹𪐢𫇭𬬭𭺷𮊦屮",                // 20000-2FFFF
+    "𰾑𱔈𲍉"};                                         // 30000-3FFFF
+  cudf::test::fixed_width_column_wrapper<int16_t> col3{{1, 2, 3, 4},
+                                                       cudf::test::iterators::nulls_at({0, 2})};
+  cudf::table_view tbl_view{{col1, col2, col3}};
+  cudf::io::table_metadata mt{{{"col1"}, {"col2"}, {"int16"}}};
+
+  std::vector<char> out_buffer;
+  auto destination     = cudf::io::sink_info(&out_buffer);
+  auto options_builder = cudf::io::json_writer_options_builder(destination, tbl_view)
+                           .include_nulls(true)
+                           .metadata(mt)
+                           .lines(true)
+                           .na_rep("null");
+
+  cudf::io::write_json(options_builder.build(), rmm::mr::get_current_device_resource());
+
+  std::string const expected =
+    R"({"col1":"\"\\\/\b\f\n\r\t","col2":"C\u10ae\u226a\u31f3\u434f\u51f9\u6ca6\u738b\u8fbf\u9fb8\ua057\ubbdc\uc2a4\ud3f6\ue4fe\ufd20","int16":null}
+{"col1":"\u0bb0\u0bbe\u0baa\u0bbf\u0b9f\u0bcd\u0bb8\u0bcd","col2":"\ud800\udc00\ud807\udfea\ud809\udc26\ud80c\udcf0\ud811\ude46 \ud81a\udd86\ud81f\udfff\ud823\udcd5\ud82b\udffe[\u21b3] \ud833\udf46\ud835\udcda\ud83a\udd01\ud83c\udd30","int16":2}
+{"col1":"$\u20ac\ud801\udc37\ud852\udf62","col2":"\ud841\ude28\ud846\udd4c\ud849\uddc9\ud84c\uddca\ud850\udea9\ud854\udd7d\ud858\ude71\ud85f\udd31\ud860\udc72\ud864\udc79\ud869\udc22\ud86c\udded\ud872\udf2d\ud877\udeb7\ud878\udea6\u5c6e","int16":null}
+{"col1":"C\ud835\udfb5\ud835\udcd3\ud835\udcbb","col2":"\ud883\udf91\ud885\udd08\ud888\udf49","int16":4}
+)";
+  EXPECT_EQ(expected, std::string(out_buffer.data(), out_buffer.size()));
+}
+
 CUDF_TEST_PROGRAM_MAIN()

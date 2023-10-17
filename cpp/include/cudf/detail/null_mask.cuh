@@ -263,7 +263,7 @@ __global__ void subtract_set_bits_range_boundaries_kernel(bitmask_type const* bi
  */
 struct bit_to_word_index {
   bit_to_word_index(bool inclusive) : inclusive(inclusive) {}
-  __device__ inline size_type operator()(const size_type& bit_index) const
+  __device__ inline size_type operator()(size_type const& bit_index) const
   {
     return word_index(bit_index) + ((inclusive || intra_word_index(bit_index) == 0) ? 0 : 1);
   }
@@ -379,13 +379,13 @@ size_type validate_segmented_indices(IndexIterator indices_begin, IndexIterator 
 }
 
 struct index_alternator {
-  __device__ inline size_type operator()(const size_type& i) const
+  __device__ inline size_type operator()(size_type const& i) const
   {
     return *(d_indices + 2 * i + (is_end ? 1 : 0));
   }
 
   bool const is_end = false;
-  const size_type* d_indices;
+  size_type const* d_indices;
 };
 
 /**

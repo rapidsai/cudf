@@ -20,7 +20,6 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/strings/detail/split_utils.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -36,6 +35,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
+
+#include <cuda/atomic>
 
 namespace cudf::strings::detail {
 
@@ -189,7 +190,7 @@ struct split_tokenizer_fn : base_split_tokenizer<split_tokenizer_fn> {
                                  device_span<size_type const> d_delimiters,
                                  device_span<string_index_pair> d_tokens) const
   {
-    auto const base_ptr    = get_base_ptr();                // d_positions values based on this
+    auto const base_ptr    = get_base_ptr();  // d_positions values based on this
     auto str_ptr           = d_str.data();
     auto const str_end     = str_ptr + d_str.size_bytes();  // end of the string
     auto const token_count = static_cast<size_type>(d_tokens.size());
@@ -356,7 +357,9 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
                        delimiter_count,
                        [d_string_indices, d_delimiter_offsets] __device__(size_type idx) {
                          auto const str_idx = d_string_indices[idx] - 1;
-                         atomicAdd(d_delimiter_offsets + str_idx, 1);
+                         cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{
+                           *(d_delimiter_offsets + str_idx)};
+                         ref.fetch_add(1, cuda::std::memory_order_relaxed);
                        });
     // finally, convert the delimiter counts into offsets
     thrust::exclusive_scan(rmm::exec_policy(stream),

@@ -23,7 +23,7 @@
 
 #include <cuco/static_map.cuh>
 
-namespace cudf::io::parquet::gpu {
+namespace cudf::io::parquet::detail {
 
 auto constexpr KEY_SENTINEL   = size_type{-1};
 auto constexpr VALUE_SENTINEL = size_type{-1};
@@ -81,4 +81,4 @@ inline size_type __device__ row_to_value_idx(size_type idx,
   return idx;
 }
 
-}  // namespace cudf::io::parquet::gpu
+}  // namespace cudf::io::parquet::detail

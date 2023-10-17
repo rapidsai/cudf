@@ -80,7 +80,6 @@ class mutable_table_view;
 using size_type         = int32_t;   ///< Row index type for columns and tables
 using bitmask_type      = uint32_t;  ///< Bitmask type stored as 32-bit unsigned integer
 using valid_type        = uint8_t;   ///< Valid type in host memory
-using offset_type       = int32_t;   ///< Offset type for column offsets
 using thread_index_type = int64_t;   ///< Thread index type in kernels
 
 /**
@@ -222,7 +221,7 @@ enum class type_id : int32_t {
 /**
  * @brief Indicator for the logical data type of an element in a column.
  *
- * Simple types can be be entirely described by their `id()`, but some types
+ * Simple types can be entirely described by their `id()`, but some types
  * require additional metadata to fully describe elements of that type.
  */
 class data_type {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -184,17 +184,19 @@ struct dispatch_is_letter_fn {
 struct porter_stemmer_measure_fn {
   cudf::column_device_view const d_strings;  // strings to measure
 
-  __device__ int32_t operator()(cudf::size_type idx) const
+  __device__ cudf::size_type operator()(cudf::size_type idx) const
   {
-    if (d_strings.is_null(idx)) return 0;
+    if (d_strings.is_null(idx)) { return 0; }
     cudf::string_view d_str = d_strings.element<cudf::string_view>(idx);
-    if (d_str.empty()) return 0;
-    int32_t measure = 0;
-    auto itr        = d_str.begin();
-    bool vowel_run  = !is_consonant(itr);
+    if (d_str.empty()) { return 0; }
+
+    cudf::size_type measure = 0;
+
+    auto itr       = d_str.begin();
+    bool vowel_run = !is_consonant(itr);
     while (itr != d_str.end()) {
       if (is_consonant(itr)) {
-        if (vowel_run) measure++;
+        if (vowel_run) { measure++; }
         vowel_run = false;
       } else {
         vowel_run = true;
@@ -211,11 +213,13 @@ std::unique_ptr<cudf::column> porter_stemmer_measure(cudf::strings_column_view c
                                                      rmm::cuda_stream_view stream,
                                                      rmm::mr::device_memory_resource* mr)
 {
-  if (strings.is_empty()) return cudf::make_empty_column(cudf::data_type{cudf::type_id::INT32});
+  if (strings.is_empty()) {
+    return cudf::make_empty_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()});
+  }
 
   // create empty output column
   auto results =
-    cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32},
+    cudf::make_fixed_width_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
                                   strings.size(),
                                   cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                                   strings.null_count(),
@@ -226,7 +230,7 @@ std::unique_ptr<cudf::column> porter_stemmer_measure(cudf::strings_column_view c
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(strings.size()),
-                    results->mutable_view().data<int32_t>(),
+                    results->mutable_view().data<cudf::size_type>(),
                     porter_stemmer_measure_fn{*strings_column});
   results->set_null_count(strings.null_count());
   return results;

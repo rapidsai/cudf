@@ -633,16 +633,19 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
     for col in gdf:
         if "minimum" in file_stats[0][col]:
             stats_min = file_stats[0][col]["minimum"]
-            actual_min = gdf[col].min()
-            assert normalized_equals(actual_min, stats_min)
+            if stats_min is not None:
+                actual_min = gdf[col].min()
+                assert normalized_equals(actual_min, stats_min)
         if "maximum" in file_stats[0][col]:
             stats_max = file_stats[0][col]["maximum"]
-            actual_max = gdf[col].max()
-            assert normalized_equals(actual_max, stats_max)
+            if stats_max is not None:
+                actual_max = gdf[col].max()
+                assert normalized_equals(actual_max, stats_max)
         if "number_of_values" in file_stats[0][col]:
             stats_num_vals = file_stats[0][col]["number_of_values"]
-            actual_num_vals = gdf[col].count()
-            assert stats_num_vals == actual_num_vals
+            if stats_num_vals is not None:
+                actual_num_vals = gdf[col].count()
+                assert stats_num_vals == actual_num_vals
 
     # compare stripe statistics with actual min/max
     for stripe_idx in range(0, orc_file.nstripes):
@@ -651,21 +654,24 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
         stripe_df = cudf.DataFrame(stripe.to_pandas())
         for col in stripe_df:
             if "minimum" in stripes_stats[stripe_idx][col]:
-                actual_min = stripe_df[col].min()
                 stats_min = stripes_stats[stripe_idx][col]["minimum"]
-                assert normalized_equals(actual_min, stats_min)
+                if stats_min is not None:
+                    actual_min = stripe_df[col].min()
+                    assert normalized_equals(actual_min, stats_min)
 
             if "maximum" in stripes_stats[stripe_idx][col]:
-                actual_max = stripe_df[col].max()
                 stats_max = stripes_stats[stripe_idx][col]["maximum"]
-                assert normalized_equals(actual_max, stats_max)
+                if stats_max is not None:
+                    actual_max = stripe_df[col].max()
+                    assert normalized_equals(actual_max, stats_max)
 
             if "number_of_values" in stripes_stats[stripe_idx][col]:
                 stats_num_vals = stripes_stats[stripe_idx][col][
                     "number_of_values"
                 ]
-                actual_num_vals = stripe_df[col].count()
-                assert stats_num_vals == actual_num_vals
+                if stats_num_vals is not None:
+                    actual_num_vals = stripe_df[col].count()
+                    assert stats_num_vals == actual_num_vals
 
 
 @pytest.mark.parametrize("stats_freq", ["STRIPE", "ROWGROUP"])
@@ -733,16 +739,19 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
     for col in expect:
         if "minimum" in file_stats[0][col]:
             stats_min = file_stats[0][col]["minimum"]
-            actual_min = expect[col].min()
-            assert normalized_equals(actual_min, stats_min)
+            if stats_min is not None:
+                actual_min = expect[col].min()
+                assert normalized_equals(actual_min, stats_min)
         if "maximum" in file_stats[0][col]:
             stats_max = file_stats[0][col]["maximum"]
-            actual_max = expect[col].max()
-            assert normalized_equals(actual_max, stats_max)
+            if stats_max is not None:
+                actual_max = expect[col].max()
+                assert normalized_equals(actual_max, stats_max)
         if "number_of_values" in file_stats[0][col]:
             stats_num_vals = file_stats[0][col]["number_of_values"]
-            actual_num_vals = expect[col].count()
-            assert stats_num_vals == actual_num_vals
+            if stats_num_vals is not None:
+                actual_num_vals = expect[col].count()
+                assert stats_num_vals == actual_num_vals
 
     # compare stripe statistics with actual min/max
     for stripe_idx in range(0, orc_file.nstripes):
@@ -751,21 +760,24 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
         stripe_df = cudf.DataFrame(stripe.to_pandas())
         for col in stripe_df:
             if "minimum" in stripes_stats[stripe_idx][col]:
-                actual_min = stripe_df[col].min()
                 stats_min = stripes_stats[stripe_idx][col]["minimum"]
-                assert normalized_equals(actual_min, stats_min)
+                if stats_min is not None:
+                    actual_min = stripe_df[col].min()
+                    assert normalized_equals(actual_min, stats_min)
 
             if "maximum" in stripes_stats[stripe_idx][col]:
-                actual_max = stripe_df[col].max()
                 stats_max = stripes_stats[stripe_idx][col]["maximum"]
-                assert normalized_equals(actual_max, stats_max)
+                if stats_max is not None:
+                    actual_max = stripe_df[col].max()
+                    assert normalized_equals(actual_max, stats_max)
 
             if "number_of_values" in stripes_stats[stripe_idx][col]:
                 stats_num_vals = stripes_stats[stripe_idx][col][
                     "number_of_values"
                 ]
-                actual_num_vals = stripe_df[col].count()
-                assert stats_num_vals == actual_num_vals
+                if stats_num_vals is not None:
+                    actual_num_vals = stripe_df[col].count()
+                    assert stats_num_vals == actual_num_vals
 
 
 @pytest.mark.parametrize("nrows", [1, 100, 6000000])
@@ -921,7 +933,6 @@ def test_orc_writer_decimal(tmpdir, scale, decimal_type):
 
 @pytest.mark.parametrize("num_rows", [1, 100, 3000])
 def test_orc_reader_multiple_files(datadir, num_rows):
-
     path = datadir / "TestOrcFile.testSnappy.orc"
 
     df_1 = pd.read_orc(path)
@@ -939,7 +950,6 @@ def test_orc_reader_multiple_files(datadir, num_rows):
 
 
 def test_orc_reader_multi_file_single_stripe(datadir):
-
     path = datadir / "TestOrcFile.testSnappy.orc"
 
     # should raise an exception
@@ -948,7 +958,6 @@ def test_orc_reader_multi_file_single_stripe(datadir):
 
 
 def test_orc_reader_multi_file_multi_stripe(datadir):
-
     path = datadir / "TestOrcFile.testStripeLevelStats.orc"
     gdf = cudf.read_orc([path, path], stripes=[[0, 1], [2]])
     pdf = pd.read_orc(path)
@@ -1100,7 +1109,6 @@ def list_struct_buff():
 @pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 100_000])
 @pytest.mark.parametrize("use_index", [True, False])
 def test_lists_struct_nests(columns, num_rows, use_index, list_struct_buff):
-
     gdf = cudf.read_orc(
         list_struct_buff,
         columns=columns,
@@ -1905,3 +1913,27 @@ def test_reader_row_index_order(data):
     expected.to_pandas().to_orc(buffer)
     got = cudf.read_orc(buffer)
     assert_eq(expected, got)
+
+
+# Test the corner case where empty blocks are compressed
+# Decompressed data size is zero, even though compressed data size is non-zero
+# For more information see https://github.com/rapidsai/cudf/issues/13608
+def test_orc_reader_empty_decomp_data(datadir):
+    path = datadir / "TestOrcFile.Spark.EmptyDecompData.orc"
+
+    expect = pd.read_orc(path)
+    got = cudf.read_orc(path)
+
+    assert_eq(expect, got)
+
+
+def test_orc_reader_empty_deeply_nested_level(datadir):
+    # Test the case where top level struct has nulls, but the nested struct is
+    # not nullable. In this case there is no data in the second level, but we
+    # still need to pass the parent null mask to the third level.
+    path = datadir / "TestOrcFile.Spark.NestedNotNullableStruct.orc"
+
+    expect = pd.read_orc(path)
+    got = cudf.read_orc(path)
+
+    assert_eq(expect, got)

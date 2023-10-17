@@ -166,7 +166,7 @@ std::unique_ptr<column> fast_segmented_sorted_order(column_view const& input,
   // Unfortunately, CUB's segmented sort functions cannot accept iterators.
   // We have to build a pre-filled sequence of indices as input.
   auto sorted_indices =
-    cudf::detail::sequence(input.size(), numeric_scalar<size_type>{0}, stream, mr);
+    cudf::detail::sequence(input.size(), numeric_scalar<size_type>{0, true, stream}, stream, mr);
   auto indices_view = sorted_indices->mutable_view();
 
   cudf::type_dispatcher<dispatch_storage_type>(input.type(),

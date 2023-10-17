@@ -131,7 +131,7 @@ class Iterator : public cudf::benchmark {};
 template <class TypeParam, bool cub_or_thrust, bool raw_or_iterator>
 void BM_iterator(benchmark::State& state)
 {
-  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  cudf::size_type const column_size{(cudf::size_type)state.range(0)};
   using T      = TypeParam;
   auto num_gen = thrust::counting_iterator<cudf::size_type>(0);
 
@@ -145,7 +145,7 @@ void BM_iterator(benchmark::State& state)
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     if (cub_or_thrust) {
       if (raw_or_iterator) {
-        raw_stream_bench_cub<T>(hasnull_F, dev_result);       // driven by raw pointer
+        raw_stream_bench_cub<T>(hasnull_F, dev_result);  // driven by raw pointer
       } else {
         iterator_bench_cub<T, false>(hasnull_F, dev_result);  // driven by riterator without nulls
       }
@@ -195,7 +195,7 @@ void pair_iterator_bench_thrust(cudf::column_view& col,
 template <class TypeParam, bool cub_or_thrust>
 void BM_pair_iterator(benchmark::State& state)
 {
-  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  cudf::size_type const column_size{(cudf::size_type)state.range(0)};
   using T      = TypeParam;
   auto num_gen = thrust::counting_iterator<cudf::size_type>(0);
   auto null_gen =

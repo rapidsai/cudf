@@ -98,7 +98,7 @@ class ptx_parser {
   static std::string parse_param(std::string const& src);
 
   /**
-   * @brief parse function body of the the PTX code into statements by `;`s.
+   * @brief parse function body of the PTX code into statements by `;`s.
    *
    * @param src The function body of the PTX code
    * @return The parsed statements

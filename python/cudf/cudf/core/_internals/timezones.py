@@ -186,7 +186,7 @@ def localize(
         DatetimeColumn,
         data._scatter_by_column(
             data.isnull() | (ambiguous | nonexistent),
-            cudf.Scalar(cudf.NA, dtype=data.dtype),
+            cudf.Scalar(cudf.NaT, dtype=data.dtype),
         ),
     )
     gmt_data = local_to_utc(localized, zone_name)
@@ -200,6 +200,17 @@ def localize(
             offset=gmt_data.offset,
         ),
     )
+
+
+def delocalize(data: DatetimeColumn) -> DatetimeColumn:
+    """
+    Convert a timezone-aware datetime column to a timezone-naive one.
+    If the column is already timezone-naive, return it as is.
+    """
+    if isinstance(data, DatetimeTZColumn):
+        return data._local_time
+    # already timezone-naive:
+    return data
 
 
 def convert(data: DatetimeTZColumn, zone_name: str) -> DatetimeTZColumn:

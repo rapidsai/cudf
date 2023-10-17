@@ -20,6 +20,7 @@ from typing import (
 import pandas as pd
 from packaging.version import Version
 from pandas.api.types import is_bool
+from typing_extensions import Self
 
 import cudf
 from cudf.core import column
@@ -196,8 +197,6 @@ class ColumnAccessor(abc.MutableMapping):
 
     @property
     def name(self) -> Any:
-        if len(self._data) == 0:
-            return None
         return self.level_names[-1]
 
     @property
@@ -476,6 +475,13 @@ class ColumnAccessor(abc.MutableMapping):
         self._data[key] = value
         self._clear_cache()
 
+    def _select_by_names(self, names: abc.Sequence) -> Self:
+        return self.__class__(
+            {key: self[key] for key in names},
+            multiindex=self.multiindex,
+            level_names=self.level_names,
+        )
+
     def _select_by_label_list_like(self, key: Any) -> ColumnAccessor:
         # Might be a generator
         key = tuple(key)
@@ -503,7 +509,7 @@ class ColumnAccessor(abc.MutableMapping):
     def _select_by_label_grouped(self, key: Any) -> ColumnAccessor:
         result = self._grouped_data[key]
         if isinstance(result, cudf.core.column.ColumnBase):
-            return self.__class__({key: result})
+            return self.__class__({key: result}, multiindex=self.multiindex)
         else:
             if self.multiindex:
                 result = _to_flat_dict(result)

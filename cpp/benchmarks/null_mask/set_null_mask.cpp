@@ -23,7 +23,7 @@ class SetNullmask : public cudf::benchmark {};
 
 void BM_setnullmask(benchmark::State& state)
 {
-  const cudf::size_type size{(cudf::size_type)state.range(0)};
+  cudf::size_type const size{(cudf::size_type)state.range(0)};
   rmm::device_buffer mask = cudf::create_null_mask(size, cudf::mask_state::UNINITIALIZED);
   auto begin = 0, end = size;
 

@@ -116,6 +116,7 @@ ConfigureTest(
   groupby/covariance_tests.cpp
   groupby/groupby_test_util.cpp
   groupby/groups_tests.cpp
+  groupby/histogram_tests.cpp
   groupby/keys_tests.cpp
   groupby/lists_tests.cpp
   groupby/m2_tests.cpp
@@ -163,7 +164,14 @@ ConfigureTest(DATETIME_OPS_TEST datetime/datetime_ops_test.cpp)
 
 # ##################################################################################################
 # * hashing tests ---------------------------------------------------------------------------------
-ConfigureTest(HASHING_TEST hashing/hash_test.cpp)
+ConfigureTest(
+  HASHING_TEST
+  hashing/md5_test.cpp
+  hashing/murmurhash3_x86_32_test.cpp
+  hashing/murmurhash3_x64_128_test.cpp
+  hashing/spark_murmurhash3_x86_32_test.cpp
+  hashing/xxhash_64_test.cpp
+)
 
 # ##################################################################################################
 # * partitioning tests ----------------------------------------------------------------------------
@@ -446,6 +454,8 @@ ConfigureTest(
   rolling/grouped_rolling_test.cpp
   rolling/lead_lag_test.cpp
   rolling/nth_element_test.cpp
+  rolling/offset_row_window_test.cpp
+  rolling/range_comparator_test.cu
   rolling/range_rolling_window_test.cpp
   rolling/range_window_bounds_test.cpp
   rolling/rolling_test.cpp
@@ -536,6 +546,7 @@ ConfigureTest(
   TEXT_TEST
   text/bpe_tests.cpp
   text/edit_distance_tests.cpp
+  text/jaccard_tests.cpp
   text/minhash_tests.cpp
   text/ngrams_tests.cpp
   text/ngrams_tokenize_tests.cpp
@@ -610,6 +621,31 @@ ConfigureTest(LABEL_BINS_TEST labeling/label_bins_tests.cpp)
 ConfigureTest(
   STREAM_IDENTIFICATION_TEST identify_stream_usage/test_default_stream_identification.cu
 )
+
+ConfigureTest(STREAM_BINARYOP_TEST streams/binaryop_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_CONCATENATE_TEST streams/concatenate_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_COPYING_TEST streams/copying_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_FILLING_TEST streams/filling_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_GROUPBY_TEST streams/groupby_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_HASHING_TEST streams/hash_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_INTEROP_TEST streams/interop_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_REPLACE_TEST streams/replace_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_SEARCH_TEST streams/search_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_DICTIONARY_TEST streams/dictionary_test.cpp STREAM_MODE testing)
+ConfigureTest(
+  STREAM_STRINGS_TEST
+  streams/strings/case_test.cpp
+  streams/strings/convert_test.cpp
+  streams/strings/find_test.cpp
+  streams/strings/replace_test.cpp
+  streams/strings/split_test.cpp
+  streams/strings/strings_tests.cpp
+  STREAM_MODE
+  testing
+)
+ConfigureTest(STREAM_SORTING_TEST streams/sorting_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_TEXT_TEST streams/text/ngrams_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_LISTS_TEST streams/lists_test.cpp STREAM_MODE testing)
 
 # ##################################################################################################
 # Install tests ####################################################################################

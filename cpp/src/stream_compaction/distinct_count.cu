@@ -136,29 +136,38 @@ cudf::size_type distinct_count(table_view const& keys,
   auto const preprocessed_input =
     cudf::experimental::row::hash::preprocessed_table::create(keys, stream);
   auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
-  auto const hash_key   = experimental::compaction_hash(row_hasher.device_hasher(has_nulls));
+  auto const hash_key   = row_hasher.device_hasher(has_nulls);
   auto const row_comp   = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
   auto const comparator_helper = [&](auto const row_equal) {
     using hasher_type = decltype(hash_key);
     auto key_set      = cuco::experimental::static_set{
       cuco::experimental::extent{compute_hash_table_size(num_rows)},
-      cuco::empty_key<cudf::size_type>{COMPACTION_EMPTY_KEY_SENTINEL},
+      cuco::empty_key<cudf::size_type>{-1},
       row_equal,
       cuco::experimental::linear_probing<1, hasher_type>{hash_key},
       detail::hash_table_allocator_type{default_allocator<char>{}, stream},
       stream.value()};
 
     auto const iter = thrust::counting_iterator<cudf::size_type>(0);
-    // when nulls are equal, insert non-null rows only to improve efficiency
+    // when nulls are equal, we skip hashing any row that has a null
+    // in every column to improve efficiency.
     if (nulls_equal == null_equality::EQUAL and has_nulls) {
       thrust::counting_iterator<size_type> stencil(0);
+      // We must consider a row if any of its column entries is valid,
+      // hence OR together the validities of the columns.
       auto const [row_bitmask, null_count] =
         cudf::detail::bitmask_or(keys, stream, rmm::mr::get_current_device_resource());
-      row_validity pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
-      return key_set.insert_if(iter, iter + num_rows, stencil, pred, stream.value()) +
-             static_cast<cudf::size_type>(null_count > 0);
+      // Unless all columns have a null mask, row_bitmask will be
+      // null, and null_count will be zero. Equally, unless there is
+      // some row which is null in all columns, null_count will be
+      // zero. So, it is only when null_count is not zero that we need
+      // to do a filtered insertion.
+      if (null_count > 0) {
+        row_validity pred{static_cast<bitmask_type const*>(row_bitmask.data())};
+        return key_set.insert_if(iter, iter + num_rows, stencil, pred, stream.value()) + 1;
+      }
     }
     // otherwise, insert all
     return key_set.insert(iter, iter + num_rows, stream.value());

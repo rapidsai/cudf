@@ -65,7 +65,7 @@ struct dictionary_wrapper {
    *
    * @return The reference to this dictionary wrapper object
    */
-  dictionary_wrapper& operator=(const dictionary_wrapper&) = default;
+  dictionary_wrapper& operator=(dictionary_wrapper const&) = default;
 
   /**
    * @brief Construct dictionary_wrapper from a value
@@ -215,5 +215,5 @@ CUDF_HOST_DEVICE inline bool operator>(dictionary_wrapper<Integer> const& lhs,
 
 using dictionary32 = dictionary_wrapper<int32_t>;  ///< 32-bit integer indexed dictionary wrapper
 
-/** @} */                                          // end of group
+/** @} */  // end of group
 }  // namespace cudf

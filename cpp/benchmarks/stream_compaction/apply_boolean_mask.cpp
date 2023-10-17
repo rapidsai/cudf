@@ -59,13 +59,13 @@ void calculate_bandwidth(benchmark::State& state, cudf::size_type num_columns)
   int64_t const column_bytes_in    = column_bytes_out;  // we only read unmasked inputs
 
   int64_t const bytes_read =
-    (column_bytes_in + validity_bytes_in) * num_columns +   // reading columns
-    mask_size;                                              // reading boolean mask
+    (column_bytes_in + validity_bytes_in) * num_columns +  // reading columns
+    mask_size;                                             // reading boolean mask
   int64_t const bytes_written =
     (column_bytes_out + validity_bytes_out) * num_columns;  // writing columns
 
   state.SetItemsProcessed(state.iterations() * column_size * num_columns);
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * bytes_read + bytes_written);
+  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * (bytes_read + bytes_written));
 }
 
 }  // namespace
@@ -73,8 +73,8 @@ void calculate_bandwidth(benchmark::State& state, cudf::size_type num_columns)
 template <class T>
 void BM_apply_boolean_mask(benchmark::State& state, cudf::size_type num_columns)
 {
-  const cudf::size_type column_size{static_cast<cudf::size_type>(state.range(0))};
-  const cudf::size_type percent_true{static_cast<cudf::size_type>(state.range(1))};
+  cudf::size_type const column_size{static_cast<cudf::size_type>(state.range(0))};
+  cudf::size_type const percent_true{static_cast<cudf::size_type>(state.range(1))};
 
   data_profile profile = data_profile_builder().cardinality(0).null_probability(0.0).distribution(
     cudf::type_to_id<T>(), distribution_id::UNIFORM, 0, 100);

@@ -40,6 +40,7 @@ import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.*;
@@ -74,6 +75,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TableTest extends CudfTestBase {
+  private static final HostMemoryAllocator hostMemoryAllocator = DefaultHostMemoryAllocator.get();
+
   private static final File TEST_PARQUET_FILE = TestUtils.getResourceAsFile("acq.parquet");
   private static final File TEST_PARQUET_FILE_CHUNKED_READ = TestUtils.getResourceAsFile("splittable.parquet");
   private static final File TEST_PARQUET_FILE_BINARY = TestUtils.getResourceAsFile("binary.parquet");
@@ -83,6 +86,7 @@ public class TableTest extends CudfTestBase {
   private static final File TEST_ALL_TYPES_PLAIN_AVRO_FILE = TestUtils.getResourceAsFile("alltypes_plain.avro");
   private static final File TEST_SIMPLE_CSV_FILE = TestUtils.getResourceAsFile("simple.csv");
   private static final File TEST_SIMPLE_JSON_FILE = TestUtils.getResourceAsFile("people.json");
+  private static final File TEST_JSON_ERROR_FILE = TestUtils.getResourceAsFile("people_with_invalid_lines.json");
 
   private static final Schema CSV_DATA_BUFFER_SCHEMA = Schema.builder()
       .column(DType.INT32, "A")
@@ -127,6 +131,16 @@ public class TableTest extends CudfTestBase {
     }
     for (int i = 0 ; i < expectedTable.length ; i++) {
       assertTrue(expectedTable[i].isEmpty());
+    }
+  }
+
+  @Test
+  void testDistinctCount() {
+    try (Table table1 = new Table.TestBuilder()
+            .column(5, 3, null, null, 5)
+            .build()) {
+      assertEquals(3, table1.distinctCount());
+      assertEquals(4, table1.distinctCount(NullEquality.UNEQUAL));
     }
   }
 
@@ -314,6 +328,58 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testReadJSONFromDataSource() throws IOException {
+    Schema schema = Schema.builder()
+            .column(DType.STRING, "name")
+            .column(DType.INT32, "age")
+            .build();
+    JSONOptions opts = JSONOptions.builder()
+            .withLines(true)
+            .build();
+    try (Table expected = new Table.TestBuilder()
+            .column("Michael", "Andy", "Justin")
+            .column(null, 30, 19)
+            .build();
+         MultiBufferDataSource source = sourceFrom(TEST_SIMPLE_JSON_FILE);
+         Table table = Table.readJSON(schema, opts, source)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadJSONFileWithInvalidLines() {
+    Schema schema = Schema.builder()
+            .column(DType.STRING, "name")
+            .column(DType.INT32, "age")
+            .build();
+
+    // test with recoverWithNulls=true
+    {
+      JSONOptions opts = JSONOptions.builder()
+              .withLines(true)
+              .withRecoverWithNull(true)
+              .build();
+      try (Table expected = new Table.TestBuilder()
+              .column("Michael", "Andy", null, "Justin")
+              .column(null, 30, null, 19)
+              .build();
+           Table table = Table.readJSON(schema, opts, TEST_JSON_ERROR_FILE)) {
+        assertTablesAreEqual(expected, table);
+      }
+    }
+
+    // test with recoverWithNulls=false
+    {
+      JSONOptions opts = JSONOptions.builder()
+              .withLines(true)
+              .withRecoverWithNull(false)
+              .build();
+      assertThrows(CudfException.class, () ->
+        Table.readJSON(schema, opts, TEST_JSON_ERROR_FILE));
+    }
+  }
+
+  @Test
   void testReadJSONFileWithDifferentColumnOrder() {
     Schema schema = Schema.builder()
         .column(DType.INT32, "age")
@@ -429,7 +495,7 @@ public class TableTest extends CudfTestBase {
             "{ \"A\": 3, \"B\": 6, \"C\": \"Z\"}\n" +
             "{ \"A\": 4, \"B\": 8, \"C\": \"W\"}\n").getBytes(StandardCharsets.UTF_8);
     final int numBytes = data.length;
-    try (HostMemoryBuffer hostbuf = HostMemoryBuffer.allocate(numBytes)) {
+    try (HostMemoryBuffer hostbuf = hostMemoryAllocator.allocate(numBytes)) {
       hostbuf.setBytes(0, data, 0, numBytes);
       try (Table expected = new Table.TestBuilder()
               .column(1L, 2L, 3L, 4L)
@@ -509,6 +575,126 @@ public class TableTest extends CudfTestBase {
         .build();
          Table table = Table.readCSV(TableTest.CSV_DATA_BUFFER_SCHEMA, opts,
              TableTest.CSV_DATA_BUFFER)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  byte[][] sliceBytes(byte[] data, int slices) {
+    slices = Math.min(data.length, slices);
+    // We are not going to worry about making it super even here.
+    // The last one gets the extras.
+    int bytesPerSlice = data.length / slices;
+    byte[][] ret = new byte[slices][];
+    int startingAt = 0;
+    for (int i = 0; i < (slices - 1); i++) {
+      ret[i] = new byte[bytesPerSlice];
+      System.arraycopy(data, startingAt, ret[i], 0, bytesPerSlice);
+      startingAt += bytesPerSlice;
+    }
+    // Now for the last one
+    ret[slices - 1] = new byte[data.length - startingAt];
+    System.arraycopy(data, startingAt, ret[slices - 1], 0, data.length - startingAt);
+    return ret;
+  }
+
+  @Test
+  void testReadCSVBufferMultiBuffer() {
+    CSVOptions opts = CSVOptions.builder()
+            .includeColumn("A")
+            .includeColumn("B")
+            .hasHeader()
+            .withDelim('|')
+            .withQuote('\'')
+            .withNullValue("NULL")
+            .build();
+    byte[][] data = sliceBytes(CSV_DATA_BUFFER, 10);
+    try (Table expected = new Table.TestBuilder()
+            .column(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+            .column(110.0, 111.0, 112.0, 113.0, 114.0, 115.0, 116.0, null, 118.2, 119.8)
+            .build();
+         MultiBufferDataSource source = sourceFrom(data);
+         Table table = Table.readCSV(TableTest.CSV_DATA_BUFFER_SCHEMA, opts, source)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  public static byte[] arrayFrom(File f) throws IOException {
+    long len = f.length();
+    if (len > Integer.MAX_VALUE) {
+      throw new IllegalArgumentException("Sorry cannot read " + f +
+              " into an array it does not fit");
+    }
+    int remaining = (int)len;
+    byte[] ret = new byte[remaining];
+    try (java.io.FileInputStream fin = new java.io.FileInputStream(f)) {
+      int at = 0;
+      while (remaining > 0) {
+        int amount = fin.read(ret, at, remaining);
+        at += amount;
+        remaining -= amount;
+      }
+    }
+    return ret;
+  }
+
+  public static MultiBufferDataSource sourceFrom(File f) throws IOException {
+    long len = f.length();
+    byte[] tmp = new byte[(int)Math.min(32 * 1024, len)];
+    try (HostMemoryBuffer buffer = HostMemoryBuffer.allocate(len)) {
+      try (java.io.FileInputStream fin = new java.io.FileInputStream(f)) {
+        long at = 0;
+        while (at < len) {
+          int amount = fin.read(tmp);
+          buffer.setBytes(at, tmp, 0, amount);
+          at += amount;
+        }
+      }
+      return new MultiBufferDataSource(buffer);
+    }
+  }
+
+  public static MultiBufferDataSource sourceFrom(byte[] data) {
+    long len = data.length;
+    try (HostMemoryBuffer buffer = HostMemoryBuffer.allocate(len)) {
+      buffer.setBytes(0, data, 0, len);
+      return new MultiBufferDataSource(buffer);
+    }
+  }
+
+  public static MultiBufferDataSource sourceFrom(byte[][] data) {
+    HostMemoryBuffer[] buffers = new HostMemoryBuffer[data.length];
+    try {
+      for (int i = 0; i < data.length; i++) {
+        byte[] subData = data[i];
+        buffers[i] = HostMemoryBuffer.allocate(subData.length);
+        buffers[i].setBytes(0, subData, 0, subData.length);
+      }
+      return new MultiBufferDataSource(buffers);
+    } finally {
+      for (HostMemoryBuffer buffer: buffers) {
+        if (buffer != null) {
+          buffer.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testReadCSVDataSource() {
+    CSVOptions opts = CSVOptions.builder()
+            .includeColumn("A")
+            .includeColumn("B")
+            .hasHeader()
+            .withDelim('|')
+            .withQuote('\'')
+            .withNullValue("NULL")
+            .build();
+    try (Table expected = new Table.TestBuilder()
+            .column(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+            .column(110.0, 111.0, 112.0, 113.0, 114.0, 115.0, 116.0, null, 118.2, 119.8)
+            .build();
+         MultiBufferDataSource source = sourceFrom(TableTest.CSV_DATA_BUFFER);
+         Table table = Table.readCSV(TableTest.CSV_DATA_BUFFER_SCHEMA, opts, source)) {
       assertTablesAreEqual(expected, table);
     }
   }
@@ -818,6 +1004,37 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testReadParquetFromDataSource() throws IOException {
+    ParquetOptions opts = ParquetOptions.builder()
+            .includeColumn("loan_id")
+            .includeColumn("zip")
+            .includeColumn("num_units")
+            .build();
+    try (MultiBufferDataSource source = sourceFrom(TEST_PARQUET_FILE);
+         Table table = Table.readParquet(opts, source)) {
+      long rows = table.getRowCount();
+      assertEquals(1000, rows);
+      assertTableTypes(new DType[]{DType.INT64, DType.INT32, DType.INT32}, table);
+    }
+  }
+
+  @Test
+  void testReadParquetMultiBuffer() throws IOException {
+    ParquetOptions opts = ParquetOptions.builder()
+            .includeColumn("loan_id")
+            .includeColumn("zip")
+            .includeColumn("num_units")
+            .build();
+    byte [][] data = sliceBytes(arrayFrom(TEST_PARQUET_FILE), 10);
+    try (MultiBufferDataSource source = sourceFrom(data);
+         Table table = Table.readParquet(opts, source)) {
+      long rows = table.getRowCount();
+      assertEquals(1000, rows);
+      assertTableTypes(new DType[]{DType.INT64, DType.INT32, DType.INT32}, table);
+    }
+  }
+
+  @Test
   void testReadParquetBinary() {
     ParquetOptions opts = ParquetOptions.builder()
         .includeColumn("value1", true)
@@ -972,6 +1189,23 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testChunkedReadParquetFromDataSource() throws IOException {
+    try (MultiBufferDataSource source = sourceFrom(TEST_PARQUET_FILE_CHUNKED_READ);
+         ParquetChunkedReader reader = new ParquetChunkedReader(240000, ParquetOptions.DEFAULT, source)) {
+      int numChunks = 0;
+      long totalRows = 0;
+      while(reader.hasNext()) {
+        ++numChunks;
+        try(Table chunk = reader.readChunk()) {
+          totalRows += chunk.getRowCount();
+        }
+      }
+      assertEquals(2, numChunks);
+      assertEquals(40000, totalRows);
+    }
+  }
+
+  @Test
   void testReadAvro() {
     AvroOptions opts = AvroOptions.builder()
         .includeColumn("bool_col")
@@ -986,6 +1220,26 @@ public class TableTest extends CudfTestBase {
             1233446400000000L, 1233446460000000L, 1230768000000000L, 1230768060000000L)
         .build();
         Table table = Table.readAvro(opts, TEST_ALL_TYPES_PLAIN_AVRO_FILE)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadAvroFromDataSource() throws IOException {
+    AvroOptions opts = AvroOptions.builder()
+            .includeColumn("bool_col")
+            .includeColumn("int_col")
+            .includeColumn("timestamp_col")
+            .build();
+
+    try (Table expected = new Table.TestBuilder()
+            .column(true, false, true, false, true, false, true, false)
+            .column(0, 1, 0, 1, 0, 1, 0, 1)
+            .column(1235865600000000L, 1235865660000000L, 1238544000000000L, 1238544060000000L,
+                    1233446400000000L, 1233446460000000L, 1230768000000000L, 1230768060000000L)
+            .build();
+         MultiBufferDataSource source = sourceFrom(TEST_ALL_TYPES_PLAIN_AVRO_FILE);
+         Table table = Table.readAvro(opts, source)) {
       assertTablesAreEqual(expected, table);
     }
   }
@@ -1043,6 +1297,24 @@ public class TableTest extends CudfTestBase {
         .column(65536,65536)
         .build();
          Table table = Table.readORC(opts, TEST_ORC_FILE)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadORCFromDataSource() throws IOException {
+    ORCOptions opts = ORCOptions.builder()
+            .includeColumn("string1")
+            .includeColumn("float1")
+            .includeColumn("int1")
+            .build();
+    try (Table expected = new Table.TestBuilder()
+            .column("hi","bye")
+            .column(1.0f,2.0f)
+            .column(65536,65536)
+            .build();
+         MultiBufferDataSource source = sourceFrom(TEST_ORC_FILE);
+         Table table = Table.readORC(opts, source)) {
       assertTablesAreEqual(expected, table);
     }
   }
@@ -3454,7 +3726,7 @@ public class TableTest extends CudfTestBase {
         do {
           head = new JCudfSerialization.SerializedTableHeader(din);
           if (head.wasInitialized()) {
-            HostMemoryBuffer buff = HostMemoryBuffer.allocate(head.getDataLen());
+            HostMemoryBuffer buff = hostMemoryAllocator.allocate(head.getDataLen());
             buffers.add(buff);
             JCudfSerialization.readTableIntoBuffer(din, head, buff);
             assert head.wasDataRead();
@@ -3613,7 +3885,7 @@ public class TableTest extends CudfTestBase {
           do {
             head = new JCudfSerialization.SerializedTableHeader(din);
             if (head.wasInitialized()) {
-              HostMemoryBuffer buff = HostMemoryBuffer.allocate(100 * 1024);
+              HostMemoryBuffer buff = hostMemoryAllocator.allocate(100 * 1024);
               buffers.add(buff);
               JCudfSerialization.readTableIntoBuffer(din, head, buff);
               assert head.wasDataRead();
@@ -3654,7 +3926,7 @@ public class TableTest extends CudfTestBase {
     JCudfSerialization.SerializedTableHeader header =
             new JCudfSerialization.SerializedTableHeader(din);
     assertTrue(header.wasInitialized());
-    try (HostMemoryBuffer buffer = HostMemoryBuffer.allocate(header.getDataLen())) {
+    try (HostMemoryBuffer buffer = hostMemoryAllocator.allocate(header.getDataLen())) {
       JCudfSerialization.readTableIntoBuffer(din, header, buffer);
       assertTrue(header.wasDataRead());
       HostColumnVector[] hostColumns =
@@ -3716,7 +3988,7 @@ public class TableTest extends CudfTestBase {
       DataInputStream in = new DataInputStream(new ByteArrayInputStream(out.toByteArray()));
       JCudfSerialization.SerializedTableHeader header = new JCudfSerialization.SerializedTableHeader(in);
       assert header.wasInitialized();
-      try (HostMemoryBuffer buff = HostMemoryBuffer.allocate(header.getDataLen())) {
+      try (HostMemoryBuffer buff = hostMemoryAllocator.allocate(header.getDataLen())) {
         JCudfSerialization.readTableIntoBuffer(in, header, buff);
         assert header.wasDataRead();
         try (Table result = JCudfSerialization.readAndConcat(
@@ -3747,7 +4019,7 @@ public class TableTest extends CudfTestBase {
           do {
             head = new JCudfSerialization.SerializedTableHeader(din);
             if (head.wasInitialized()) {
-              HostMemoryBuffer buff = HostMemoryBuffer.allocate(100 * 1024);
+              HostMemoryBuffer buff = hostMemoryAllocator.allocate(100 * 1024);
               buffers.add(buff);
               JCudfSerialization.readTableIntoBuffer(din, head, buff);
               assert head.wasDataRead();
@@ -4082,6 +4354,115 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  @Test
+  void testGroupbyHistogram() {
+    StructType histogramStruct = new StructType(false,
+        new BasicType(false, DType.INT32), // values
+        new BasicType(false, DType.INT64)); // frequencies
+    ListType histogramList = new ListType(false, histogramStruct);
+
+    // key = 0: values = [2, 2, -3, -2, 2]
+    // key = 1: values = [2, 0, 5, 2, 1]
+    // key = 2: values = [-3, 1, 1, 2, 2]
+    try (Table input = new Table.TestBuilder()
+        .column(2, 0, 2, 1, 1, 1, 0, 0, 0, 1, 2, 2, 1, 0, 2)
+        .column(-3, 2, 1, 2, 0, 5, 2, -3, -2, 2, 1, 2, 1, 2, 2)
+        .build();
+         Table result = input.groupBy(0)
+             .aggregate(GroupByAggregation.histogram().onColumn(1));
+         Table sortedResult = result.orderBy(OrderByArg.asc(0));
+         ColumnVector sortedOutHistograms = sortedResult.getColumn(1).listSortRows(false, false);
+
+         ColumnVector expectedKeys = ColumnVector.fromInts(0, 1, 2);
+         ColumnVector expectedHistograms = ColumnVector.fromLists(histogramList,
+             Arrays.asList(new StructData(-3, 1L), new StructData(-2, 1L), new StructData(2, 3L)),
+             Arrays.asList(new StructData(0, 1L), new StructData(1, 1L), new StructData(2, 2L),
+                 new StructData(5, 1L)),
+             Arrays.asList(new StructData(-3, 1L), new StructData(1, 2L), new StructData(2, 2L)))
+    ) {
+      assertColumnsAreEqual(expectedKeys, sortedResult.getColumn(0));
+      assertColumnsAreEqual(expectedHistograms, sortedOutHistograms);
+    }
+  }
+
+  @Test
+  void testGroupbyMergeHistogram() {
+    StructType histogramStruct = new StructType(false,
+        new BasicType(false, DType.INT32), // values
+        new BasicType(false, DType.INT64)); // frequencies
+    ListType histogramList = new ListType(false, histogramStruct);
+
+    // key = 0: histograms = [[<-3, 1>, <-2, 1>, <2, 3>], [<0, 1>, <1, 1>], [<-3, 3>, <0, 1>, <1, 2>]]
+    // key = 1: histograms = [[<-2, 1>, <1, 3>, <2, 2>], [<0, 2>, <1, 1>, <2, 2>]]
+    try (Table input = new Table.TestBuilder()
+        .column(0, 1, 0, 1, 0)
+        .column(histogramStruct,
+            new StructData[]{new StructData(-3, 1L), new StructData(-2, 1L), new StructData(2, 3L)},
+            new StructData[]{new StructData(-2, 1L), new StructData(1, 3L), new StructData(2, 2L)},
+            new StructData[]{new StructData(0, 1L), new StructData(1, 1L)},
+            new StructData[]{new StructData(0, 2L), new StructData(1, 1L), new StructData(2, 2L)},
+            new StructData[]{new StructData(-3, 3L), new StructData(0, 1L), new StructData(1, 2L)})
+        .build();
+         Table result = input.groupBy(0)
+             .aggregate(GroupByAggregation.mergeHistogram().onColumn(1));
+         Table sortedResult = result.orderBy(OrderByArg.asc(0));
+         ColumnVector sortedOutHistograms = sortedResult.getColumn(1).listSortRows(false, false);
+
+         ColumnVector expectedKeys = ColumnVector.fromInts(0, 1);
+         ColumnVector expectedHistograms = ColumnVector.fromLists(histogramList,
+             Arrays.asList(new StructData(-3, 4L), new StructData(-2, 1L), new StructData(0, 2L),
+                           new StructData(1, 3L), new StructData(2, 3L)),
+             Arrays.asList(new StructData(-2, 1L), new StructData(0, 2L), new StructData(1, 4L),
+                           new StructData(2, 4L)))
+    ) {
+      assertColumnsAreEqual(expectedKeys, sortedResult.getColumn(0));
+      assertColumnsAreEqual(expectedHistograms, sortedOutHistograms);
+    }
+  }
+
+  @Test
+  void testReductionHistogram() {
+    StructType histogramStruct = new StructType(false,
+        new BasicType(false, DType.INT32), // values
+        new BasicType(false, DType.INT64)); // frequencies
+
+    try (ColumnVector input = ColumnVector.fromInts(-3, 2, 1, 2, 0, 5, 2, -3, -2, 2, 1);
+         Scalar result = input.reduce(ReductionAggregation.histogram(), DType.LIST);
+         ColumnVector resultCV = result.getListAsColumnView().copyToColumnVector();
+         Table resultTable = new Table(resultCV);
+         Table sortedResult = resultTable.orderBy(OrderByArg.asc(0));
+
+         ColumnVector expectedHistograms = ColumnVector.fromStructs(histogramStruct,
+             new StructData(-3, 2L), new StructData(-2, 1L), new StructData(0, 1L),
+             new StructData(1, 2L), new StructData(2, 4L), new StructData(5, 1L))
+    ) {
+      assertColumnsAreEqual(expectedHistograms, sortedResult.getColumn(0));
+    }
+  }
+
+  @Test
+  void testReductionMergeHistogram() {
+    StructType histogramStruct = new StructType(false,
+        new BasicType(false, DType.INT32), // values
+        new BasicType(false, DType.INT64)); // frequencies
+
+    try (ColumnVector input = ColumnVector.fromStructs(histogramStruct,
+             new StructData(-3, 2L), new StructData(2, 1L), new StructData(1, 1L),
+             new StructData(2, 2L), new StructData(0, 4L), new StructData(5, 1L),
+             new StructData(2, 2L), new StructData(-3, 3L), new StructData(-2, 5L),
+             new StructData(2, 3L), new StructData(1, 4L));
+         Scalar result = input.reduce(ReductionAggregation.mergeHistogram(), DType.LIST);
+         ColumnVector resultCV = result.getListAsColumnView().copyToColumnVector();
+         Table resultTable = new Table(resultCV);
+         Table sortedResult = resultTable.orderBy(OrderByArg.asc(0));
+
+         ColumnVector expectedHistograms = ColumnVector.fromStructs(histogramStruct,
+             new StructData(-3, 5L), new StructData(-2, 5L), new StructData(0, 4L),
+             new StructData(1, 5L), new StructData(2, 8L), new StructData(5, 1L))
+    ) {
+      assertColumnsAreEqual(expectedHistograms, sortedResult.getColumn(0));
+    }
+  }
   @Test
   void testGroupByMinMaxDecimal() {
     try (Table t1 = new Table.TestBuilder()
@@ -5297,6 +5678,35 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  @Test
+  void testWindowWithUnboundedPrecedingUnboundedFollowing() {
+    try (Table unsorted = new Table.TestBuilder()
+            .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+            .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
+            .column(1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
+            .column(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column
+            .build()) {
+      try (Table sorted = unsorted.orderBy(OrderByArg.asc(0), OrderByArg.asc(1), OrderByArg.asc(2));
+           ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+        ColumnVector sortedAggColumn = sorted.getColumn(3);
+        assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+        try (WindowOptions window = WindowOptions.builder()
+                .minPeriods(1)
+                .unboundedPreceding()
+                .unboundedFollowing()
+                .build()) {
+
+          try (Table windowAggResults = sorted.groupBy(0, 1)
+                  .aggregateWindows(RollingAggregation.sum().onColumn(3).overWindow(window));
+               ColumnVector expectAggResult = ColumnVector.fromBoxedLongs(22L, 22L, 22L, 22L, 26L, 26L, 26L, 26L, 20L, 20L, 20L, 20L)) {
+            assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
+          }
+        }
+      }
+    }
+  }
+
   private Scalar getScalar(DType type, long value) {
     if (type.equals(DType.INT32)) {
       return Scalar.fromInt((int) value);
@@ -6148,7 +6558,7 @@ public class TableTest extends CudfTestBase {
 
   /**
    * Helper to get scalar for preceding == Decimal(value),
-   * with data width depending upon the the order-by
+   * with data width depending upon the order-by
    * column index:
    *   orderby_col_idx = 2 -> Decimal32
    *   orderby_col_idx = 3 -> Decimal64
@@ -6246,6 +6656,106 @@ public class TableTest extends CudfTestBase {
                                                                                               .onColumn(5)
                                                                                               .overWindow(window));
                 ColumnVector expect = ColumnVector.fromBoxedInts(4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4)) {
+              assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Helper to get scalar for preceding == Decimal(value),
+   * with data width depending upon the order-by column index:
+   *   orderby_col_idx = 2 -> FLOAT32
+   *   orderby_col_idx = 3 -> FLOAT64
+   */
+  private static Scalar getFloatingPointScalarRangeBounds(float value, int orderby_col_idx)
+  {
+    switch(orderby_col_idx)
+    {
+      case 2: return Scalar.fromFloat(value);
+      case 3: return Scalar.fromDouble(Double.valueOf(value));
+      default:
+        throw new IllegalStateException("Unexpected order by column index: "
+                + orderby_col_idx);
+    }
+  }
+
+  @Test
+  void testRangeWindowsWithFloatOrderBy() {
+    try (Table unsorted = new Table.TestBuilder()
+            .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+            .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
+            .column(400f, 300f, 200f, 100f,
+                    400f, 300f, 200f, 100f,
+                    400f, 300f, 200f, 100f) // Float OBY Key
+            .column(400.0, 300.0, 200.0, 100.0,
+                    400.0, 300.0, 200.0, 100.0,
+                    400.0, 300.0, 200.0, 100.0) // Double OBY Key
+            .column(9, 1, 5, 7, 2, 8, 9, 7, 6, 6, 0, 8) // Agg Column
+            .build()) {
+
+      // Columns 2-3 are order-by columns of type FLOAT32 and FLOAT64 respectively, with similarly ordered values.
+      // In the following loop, each float type is tested as the order-by column,
+      // producing the same results with similar range bounds.
+      for (int float_oby_col_idx = 2; float_oby_col_idx <= 3; ++float_oby_col_idx) {
+        try (Table sorted = unsorted.orderBy(OrderByArg.asc(0),
+                OrderByArg.asc(1),
+                OrderByArg.asc(float_oby_col_idx));
+             ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+          ColumnVector sortedAggColumn = sorted.getColumn(4);
+          assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+          // Test Window functionality with range window (200 PRECEDING and 100 FOLLOWING)
+          try (Scalar preceding200 = getFloatingPointScalarRangeBounds(200, float_oby_col_idx);
+               Scalar following100 = getFloatingPointScalarRangeBounds(100, float_oby_col_idx);
+               WindowOptions window = WindowOptions.builder()
+                       .minPeriods(1)
+                       .window(preceding200, following100)
+                       .orderByColumnIndex(float_oby_col_idx)
+                       .build()) {
+
+            try (Table windowAggResults = sorted.groupBy(0, 1)
+                    .aggregateWindowsOverRanges(RollingAggregation.count()
+                            .onColumn(4)
+                            .overWindow(window));
+                 ColumnVector expect = ColumnVector.fromBoxedInts(2, 3, 4, 3, 2, 3, 4, 3, 2, 3, 4, 3)) {
+              assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
+            }
+          }
+
+          // Test Window functionality with range window (UNBOUNDED PRECEDING and CURRENT ROW)
+          try (Scalar current_row = getFloatingPointScalarRangeBounds(0, float_oby_col_idx);
+               WindowOptions window = WindowOptions.builder()
+                       .minPeriods(1)
+                       .unboundedPreceding()
+                       .following(current_row)
+                       .orderByColumnIndex(float_oby_col_idx)
+                       .build()) {
+
+            try (Table windowAggResults = sorted.groupBy(0, 1)
+                    .aggregateWindowsOverRanges(RollingAggregation.count()
+                            .onColumn(4)
+                            .overWindow(window));
+                 ColumnVector expect = ColumnVector.fromBoxedInts(1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4)) {
+              assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
+            }
+          }
+
+          // Test Window functionality with range window (UNBOUNDED PRECEDING and UNBOUNDED FOLLOWING)
+          try (WindowOptions window = WindowOptions.builder()
+                  .minPeriods(1)
+                  .unboundedPreceding()
+                  .unboundedFollowing()
+                  .orderByColumnIndex(float_oby_col_idx)
+                  .build()) {
+
+            try (Table windowAggResults = sorted.groupBy(0, 1)
+                    .aggregateWindowsOverRanges(RollingAggregation.count()
+                            .onColumn(4)
+                            .overWindow(window));
+                 ColumnVector expect = ColumnVector.fromBoxedInts(4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4)) {
               assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
             }
           }
@@ -7845,7 +8355,7 @@ public class TableTest extends CudfTestBase {
     long offset = 0;
 
     public MyBufferConsumer() {
-      buffer = HostMemoryBuffer.allocate(10 * 1024 * 1024);
+      buffer = hostMemoryAllocator.allocate(10 * 1024 * 1024);
     }
 
     @Override
@@ -7894,6 +8404,17 @@ public class TableTest extends CudfTestBase {
           .withDecimalColumn("_c8", 5)
           .build();
 
+      TableDebug.get().debug("default stderr table0", table0);
+      TableDebug.builder()
+        .withOutput(TableDebug.Output.STDOUT)
+        .build().debug("stdout table0", table0);
+      TableDebug.builder()
+          .withOutput(TableDebug.Output.LOG)
+          .build().debug("slf4j default debug table0", table0);
+      TableDebug.builder()
+          .withOutput(TableDebug.Output.LOG_ERROR)
+          .build().debug("slf4j error table0", table0);
+
       try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
         writer.write(table0);
         writer.write(table0);
@@ -7911,7 +8432,8 @@ public class TableTest extends CudfTestBase {
     ParquetWriterOptions options = ParquetWriterOptions.builder()
         .withMapColumn(mapColumn("my_map",
             new ColumnWriterOptions("key0", false),
-            new ColumnWriterOptions("value0"))).build();
+            new ColumnWriterOptions("value0"),
+            true)).build();
     File f = File.createTempFile("test-map", ".parquet");
     List<HostColumnVector.StructData> list1 =
         Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
@@ -8409,7 +8931,8 @@ public class TableTest extends CudfTestBase {
     ORCWriterOptions options = ORCWriterOptions.builder()
             .withMapColumn(mapColumn("my_map",
                     new ColumnWriterOptions("key0", false),
-                    new ColumnWriterOptions("value0"))).build();
+                    new ColumnWriterOptions("value0"),
+                    true)).build();
     File f = File.createTempFile("test-map", ".parquet");
     List<HostColumnVector.StructData> list1 =
             Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
@@ -8452,6 +8975,9 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  // https://github.com/NVIDIA/spark-rapids-jni/issues/1338
+  // Need to remove this tag if #1338 is fixed.
+  @Tag("noSanitizer")
   @Test
   void testORCReadAndWriteForDecimal128() throws IOException {
     File tempFile = File.createTempFile("test", ".orc");

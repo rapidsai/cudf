@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,7 +62,7 @@ CUDF_HOST_DEVICE inline auto max(LHS const& lhs, RHS const& rhs)
  */
 struct DeviceSum {
   template <typename T, std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
-  CUDF_HOST_DEVICE inline auto operator()(const T& lhs, const T& rhs) -> decltype(lhs + rhs)
+  CUDF_HOST_DEVICE inline auto operator()(T const& lhs, T const& rhs) -> decltype(lhs + rhs)
   {
     return lhs + rhs;
   }
@@ -93,13 +93,13 @@ struct DeviceSum {
  */
 struct DeviceCount {
   template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
-  CUDF_HOST_DEVICE inline T operator()(const T& lhs, const T& rhs)
+  CUDF_HOST_DEVICE inline T operator()(T const& lhs, T const& rhs)
   {
     return T{DeviceCount{}(lhs.time_since_epoch(), rhs.time_since_epoch())};
   }
 
   template <typename T, std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
-  CUDF_HOST_DEVICE inline T operator()(const T&, const T& rhs)
+  CUDF_HOST_DEVICE inline T operator()(T const&, T const& rhs)
   {
     return rhs + T{1};
   }
@@ -116,7 +116,7 @@ struct DeviceCount {
  */
 struct DeviceMin {
   template <typename T>
-  CUDF_HOST_DEVICE inline auto operator()(const T& lhs, const T& rhs)
+  CUDF_HOST_DEVICE inline auto operator()(T const& lhs, T const& rhs)
     -> decltype(cudf::detail::min(lhs, rhs))
   {
     return numeric::detail::min(lhs, rhs);
@@ -164,7 +164,7 @@ struct DeviceMin {
  */
 struct DeviceMax {
   template <typename T>
-  CUDF_HOST_DEVICE inline auto operator()(const T& lhs, const T& rhs)
+  CUDF_HOST_DEVICE inline auto operator()(T const& lhs, T const& rhs)
     -> decltype(cudf::detail::max(lhs, rhs))
   {
     return numeric::detail::max(lhs, rhs);
@@ -211,7 +211,7 @@ struct DeviceMax {
  */
 struct DeviceProduct {
   template <typename T, std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
-  CUDF_HOST_DEVICE inline auto operator()(const T& lhs, const T& rhs) -> decltype(lhs * rhs)
+  CUDF_HOST_DEVICE inline auto operator()(T const& lhs, T const& rhs) -> decltype(lhs * rhs)
   {
     return lhs * rhs;
   }
@@ -231,43 +231,10 @@ struct DeviceProduct {
 };
 
 /**
- * @brief binary `and` operator
- */
-struct DeviceAnd {
-  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-  CUDF_HOST_DEVICE inline auto operator()(const T& lhs, const T& rhs) -> decltype(lhs & rhs)
-  {
-    return (lhs & rhs);
-  }
-};
-
-/**
- * @brief binary `or` operator
- */
-struct DeviceOr {
-  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-  CUDF_HOST_DEVICE inline auto operator()(const T& lhs, const T& rhs) -> decltype(lhs | rhs)
-  {
-    return (lhs | rhs);
-  }
-};
-
-/**
- * @brief binary `xor` operator
- */
-struct DeviceXor {
-  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-  CUDF_HOST_DEVICE inline auto operator()(const T& lhs, const T& rhs) -> decltype(lhs ^ rhs)
-  {
-    return (lhs ^ rhs);
-  }
-};
-
-/**
  * @brief Operator for calculating Lead/Lag window function.
  */
 struct DeviceLeadLag {
-  const size_type row_offset;
+  size_type const row_offset;
 
   explicit CUDF_HOST_DEVICE inline DeviceLeadLag(size_type offset_) : row_offset(offset_) {}
 };

@@ -20,10 +20,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace gpu {
+namespace cudf::io::parquet::detail {
+
 // Minimal thrift implementation for parsing page headers
 // https://github.com/apache/thrift/blob/master/doc/specs/thrift-compact-protocol.md
 
@@ -45,13 +43,13 @@ static const __device__ __constant__ uint8_t g_list2struct[16] = {0,
                                                                   ST_FLD_LIST};
 
 struct byte_stream_s {
-  uint8_t const* cur;
-  uint8_t const* end;
-  uint8_t const* base;
+  uint8_t const* cur{};
+  uint8_t const* end{};
+  uint8_t const* base{};
   // Parsed symbols
-  PageType page_type;
-  PageInfo page;
-  ColumnChunkDesc ck;
+  PageType page_type{};
+  PageInfo page{};
+  ColumnChunkDesc ck{};
 };
 
 /**
@@ -152,6 +150,27 @@ __device__ void skip_struct_field(byte_stream_s* bs, int field_type)
       case ST_FLD_STRUCT: struct_depth++; break;
     }
   } while (rep_cnt || struct_depth);
+}
+
+/**
+ * @brief Determine which decode kernel to run for the given page.
+ *
+ * @param page The page to decode
+ * @param chunk Column chunk the page belongs to
+ * @return `kernel_mask_bits` value for the given page
+ */
+__device__ uint32_t kernel_mask_for_page(PageInfo const& page, ColumnChunkDesc const& chunk)
+{
+  if (page.flags & PAGEINFO_FLAGS_DICTIONARY) { return 0; }
+
+  if (page.encoding == Encoding::DELTA_BINARY_PACKED) {
+    return KERNEL_MASK_DELTA_BINARY;
+  } else if (is_string_col(chunk)) {
+    return KERNEL_MASK_STRING;
+  }
+
+  // non-string, non-delta
+  return KERNEL_MASK_GENERAL;
 }
 
 /**
@@ -310,8 +329,8 @@ struct gpuParseDataPageHeaderV2 {
                                  ParquetFieldInt32(2, bs->page.num_nulls),
                                  ParquetFieldInt32(3, bs->page.num_rows),
                                  ParquetFieldEnum<Encoding>(4, bs->page.encoding),
-                                 ParquetFieldInt32(5, bs->page.def_lvl_bytes),
-                                 ParquetFieldInt32(6, bs->page.rep_lvl_bytes));
+                                 ParquetFieldInt32(5, bs->page.lvl_bytes[level_type::DEFINITION]),
+                                 ParquetFieldInt32(6, bs->page.lvl_bytes[level_type::REPETITION]));
     return parse_header(op, bs);
   }
 };
@@ -370,6 +389,7 @@ __global__ void __launch_bounds__(128)
       bs->page.skipped_values      = -1;
       bs->page.skipped_leaf_values = 0;
       bs->page.str_bytes           = 0;
+      bs->page.kernel_mask         = 0;
     }
     num_values     = bs->ck.num_values;
     page_info      = bs->ck.page_info;
@@ -386,16 +406,16 @@ __global__ void __launch_bounds__(128)
         // definition levels
         bs->page.chunk_row += bs->page.num_rows;
         bs->page.num_rows = 0;
+        bs->page.flags    = 0;
         // zero out V2 info
-        bs->page.num_nulls     = 0;
-        bs->page.def_lvl_bytes = 0;
-        bs->page.rep_lvl_bytes = 0;
+        bs->page.num_nulls                         = 0;
+        bs->page.lvl_bytes[level_type::DEFINITION] = 0;
+        bs->page.lvl_bytes[level_type::REPETITION] = 0;
         if (parse_page_header(bs) && bs->page.compressed_page_size >= 0) {
           switch (bs->page_type) {
             case PageType::DATA_PAGE:
               index_out = num_dict_pages + data_page_count;
               data_page_count++;
-              bs->page.flags = 0;
               // this computation is only valid for flat schemas. for nested schemas,
               // they will be recomputed in the preprocess step by examining repetition and
               // definition levels
@@ -405,7 +425,7 @@ __global__ void __launch_bounds__(128)
             case PageType::DATA_PAGE_V2:
               index_out = num_dict_pages + data_page_count;
               data_page_count++;
-              bs->page.flags = 0;
+              bs->page.flags |= PAGEINFO_FLAGS_V2;
               values_found += bs->page.num_input_values;
               // V2 only uses RLE, so it was removed from the header
               bs->page.definition_level_encoding = Encoding::RLE;
@@ -414,12 +434,13 @@ __global__ void __launch_bounds__(128)
             case PageType::DICTIONARY_PAGE:
               index_out = dictionary_page_count;
               dictionary_page_count++;
-              bs->page.flags = PAGEINFO_FLAGS_DICTIONARY;
+              bs->page.flags |= PAGEINFO_FLAGS_DICTIONARY;
               break;
             default: index_out = -1; break;
           }
           bs->page.page_data = const_cast<uint8_t*>(bs->cur);
           bs->cur += bs->page.compressed_page_size;
+          bs->page.kernel_mask = kernel_mask_for_page(bs->page, bs->ck);
         } else {
           bs->cur = bs->end;
         }
@@ -504,7 +525,4 @@ void __host__ BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
   gpuBuildStringDictionaryIndex<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_chunks);
 }
 
-}  // namespace gpu
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

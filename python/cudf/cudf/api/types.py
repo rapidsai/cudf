@@ -86,7 +86,7 @@ def is_integer(obj):
     bool
     """
     if isinstance(obj, cudf.Scalar):
-        return pd.api.types.is_integer(obj.dtype)
+        return pd.api.types.is_integer_dtype(obj.dtype)
     return pd.api.types.is_integer(obj)
 
 
@@ -154,10 +154,8 @@ def _is_scalar_or_zero_d_array(val):
         Return True if given object is scalar.
     """
     return (
-        (isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0)
-        or (isinstance(val, pd.Categorical) and len(val) == 1)
-        or is_scalar(val)
-    )
+        isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0
+    ) or is_scalar(val)
 
 
 # TODO: We should be able to reuse the pandas function for this, need to figure
@@ -222,9 +220,7 @@ def _union_categoricals(
         [obj._column for obj in to_union]
     )
     if sort_categories:
-        sorted_categories = result_col.categories.sort_by_values(
-            ascending=True
-        )[0]
+        sorted_categories = result_col.categories.sort_values(ascending=True)
         result_col = result_col.reorder_categories(
             new_categories=sorted_categories
         )
@@ -458,17 +454,23 @@ is_complex_dtype = pd_types.is_complex_dtype
 # TODO: Evaluate which of the datetime types need special handling for cudf.
 is_datetime_dtype = _wrap_pandas_is_dtype_api(pd_types.is_datetime64_dtype)
 is_datetime64_any_dtype = pd_types.is_datetime64_any_dtype
-is_datetime64_dtype = pd_types.is_datetime64_dtype
-is_datetime64_ns_dtype = pd_types.is_datetime64_ns_dtype
-is_datetime64tz_dtype = pd_types.is_datetime64tz_dtype
+is_datetime64_dtype = _wrap_pandas_is_dtype_api(pd_types.is_datetime64_dtype)
+is_datetime64_ns_dtype = _wrap_pandas_is_dtype_api(
+    pd_types.is_datetime64_ns_dtype
+)
+is_datetime64tz_dtype = _wrap_pandas_is_dtype_api(
+    pd_types.is_datetime64tz_dtype
+)
 is_extension_type = pd_types.is_extension_type
 is_extension_array_dtype = pd_types.is_extension_array_dtype
 is_int64_dtype = pd_types.is_int64_dtype
 is_period_dtype = pd_types.is_period_dtype
 is_signed_integer_dtype = pd_types.is_signed_integer_dtype
 is_timedelta_dtype = _wrap_pandas_is_dtype_api(pd_types.is_timedelta64_dtype)
-is_timedelta64_dtype = pd_types.is_timedelta64_dtype
-is_timedelta64_ns_dtype = pd_types.is_timedelta64_ns_dtype
+is_timedelta64_dtype = _wrap_pandas_is_dtype_api(pd_types.is_timedelta64_dtype)
+is_timedelta64_ns_dtype = _wrap_pandas_is_dtype_api(
+    pd_types.is_timedelta64_ns_dtype
+)
 is_unsigned_integer_dtype = pd_types.is_unsigned_integer_dtype
 is_sparse = pd_types.is_sparse
 # is_list_like = pd_types.is_list_like

@@ -18,9 +18,10 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
@@ -37,6 +38,7 @@
 #include <cudf_test/default_stream.hpp>
 
 #include <rmm/device_buffer.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/functional.h>
@@ -449,7 +451,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
 
   /**
    * @brief Construct a nullable column from a list of fixed-width elements and
-   * the the range `[v, v + element_list.size())` interpreted as booleans to
+   * the range `[v, v + element_list.size())` interpreted as booleans to
    * indicate the validity of each element.
    *
    * Example:
@@ -662,7 +664,7 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
   }
 
   /**
-   * @brief Construct a nullable column from an initializer list of decimal elements and the the
+   * @brief Construct a nullable column from an initializer list of decimal elements and the
    * range `[v, v + element_list.size())` interpreted as booleans to indicate the validity of each
    * element.
    *
@@ -943,8 +945,10 @@ class dictionary_column_wrapper : public detail::column_wrapper {
   template <typename InputIterator>
   dictionary_column_wrapper(InputIterator begin, InputIterator end) : column_wrapper{}
   {
-    wrapped = cudf::dictionary::encode(
-      fixed_width_column_wrapper<KeyElementTo, SourceElementT>(begin, end));
+    wrapped =
+      cudf::dictionary::encode(fixed_width_column_wrapper<KeyElementTo, SourceElementT>(begin, end),
+                               cudf::data_type{type_id::UINT32},
+                               cudf::test::get_default_stream());
   }
 
   /**
@@ -977,7 +981,9 @@ class dictionary_column_wrapper : public detail::column_wrapper {
     : column_wrapper{}
   {
     wrapped = cudf::dictionary::encode(
-      fixed_width_column_wrapper<KeyElementTo, SourceElementT>(begin, end, v));
+      fixed_width_column_wrapper<KeyElementTo, SourceElementT>(begin, end, v),
+      cudf::data_type{type_id::UINT32},
+      cudf::test::get_default_stream());
   }
 
   /**
@@ -1026,7 +1032,7 @@ class dictionary_column_wrapper : public detail::column_wrapper {
 
   /**
    * @brief Construct a nullable dictionary column from a list of fixed-width elements and
-   * the the range `[v, v + element_list.size())` interpreted as booleans to
+   * the range `[v, v + element_list.size())` interpreted as booleans to
    * indicate the validity of each element.
    *
    * Example:
@@ -1133,7 +1139,9 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
   template <typename StringsIterator>
   dictionary_column_wrapper(StringsIterator begin, StringsIterator end) : column_wrapper{}
   {
-    wrapped = cudf::dictionary::encode(strings_column_wrapper(begin, end));
+    wrapped = cudf::dictionary::encode(strings_column_wrapper(begin, end),
+                                       cudf::data_type{type_id::UINT32},
+                                       cudf::test::get_default_stream());
   }
 
   /**
@@ -1168,7 +1176,9 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
   dictionary_column_wrapper(StringsIterator begin, StringsIterator end, ValidityIterator v)
     : column_wrapper{}
   {
-    wrapped = cudf::dictionary::encode(strings_column_wrapper(begin, end, v));
+    wrapped = cudf::dictionary::encode(strings_column_wrapper(begin, end, v),
+                                       cudf::data_type{type_id::UINT32},
+                                       cudf::test::get_default_stream());
   }
 
   /**
@@ -1272,6 +1282,11 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
 template <typename T, typename SourceElementT = T>
 class lists_column_wrapper : public detail::column_wrapper {
  public:
+  /**
+   * @brief Cast to lists_column_view
+   */
+  operator lists_column_view() const { return cudf::lists_column_view{wrapped->view()}; }
+
   /**
    * @brief Construct a lists column containing a single list of fixed-width
    * type from an initializer list of values.
@@ -1506,7 +1521,7 @@ class lists_column_wrapper : public detail::column_wrapper {
    */
   static lists_column_wrapper<T> make_one_empty_row_column(bool valid = true)
   {
-    cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets{0, 0};
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets{0, 0};
     cudf::test::fixed_width_column_wrapper<int> values{};
     return lists_column_wrapper<T>(
       1,
@@ -1533,8 +1548,12 @@ class lists_column_wrapper : public detail::column_wrapper {
                        rmm::device_buffer&& null_mask)
   {
     // construct the list column
-    wrapped = make_lists_column(
-      num_rows, std::move(offsets), std::move(values), null_count, std::move(null_mask));
+    wrapped = make_lists_column(num_rows,
+                                std::move(offsets),
+                                std::move(values),
+                                null_count,
+                                std::move(null_mask),
+                                cudf::test::get_default_stream());
   }
 
   /**
@@ -1595,7 +1614,10 @@ class lists_column_wrapper : public detail::column_wrapper {
     thrust::copy_if(
       std::cbegin(cols), std::cend(cols), valids, std::back_inserter(children), thrust::identity{});
 
-    auto data = children.empty() ? cudf::empty_like(expected_hierarchy) : concatenate(children);
+    auto data = children.empty() ? cudf::empty_like(expected_hierarchy)
+                                 : cudf::concatenate(children,
+                                                     cudf::test::get_default_stream(),
+                                                     rmm::mr::get_current_device_resource());
 
     // increment depth
     depth = expected_depth + 1;
@@ -1606,8 +1628,12 @@ class lists_column_wrapper : public detail::column_wrapper {
     }();
 
     // construct the list column
-    wrapped = make_lists_column(
-      cols.size(), std::move(offsets), std::move(data), null_count, std::move(null_mask));
+    wrapped = make_lists_column(cols.size(),
+                                std::move(offsets),
+                                std::move(data),
+                                null_count,
+                                std::move(null_mask),
+                                cudf::test::get_default_stream());
   }
 
   /**
@@ -1635,8 +1661,12 @@ class lists_column_wrapper : public detail::column_wrapper {
     depth = 0;
 
     size_type num_elements = offsets->size() == 0 ? 0 : offsets->size() - 1;
-    wrapped =
-      make_lists_column(num_elements, std::move(offsets), std::move(c), 0, rmm::device_buffer{});
+    wrapped                = make_lists_column(num_elements,
+                                std::move(offsets),
+                                std::move(c),
+                                0,
+                                rmm::device_buffer{},
+                                cudf::test::get_default_stream());
   }
 
   /**
@@ -1685,12 +1715,15 @@ class lists_column_wrapper : public detail::column_wrapper {
     }
 
     lists_column_view lcv(col);
-    return make_lists_column(col.size(),
-                             std::make_unique<column>(lcv.offsets()),
-                             normalize_column(lists_column_view(col).child(),
-                                              lists_column_view(expected_hierarchy).child()),
-                             col.null_count(),
-                             copy_bitmask(col));
+    return make_lists_column(
+      col.size(),
+      std::make_unique<column>(lcv.offsets()),
+      normalize_column(lists_column_view(col).child(),
+                       lists_column_view(expected_hierarchy).child()),
+      col.null_count(),
+      cudf::detail::copy_bitmask(
+        col, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource()),
+      cudf::test::get_default_stream());
   }
 
   std::pair<std::vector<column_view>, std::vector<std::unique_ptr<column>>> preprocess_columns(
@@ -1722,7 +1755,7 @@ class lists_column_wrapper : public detail::column_wrapper {
                          // "a List<List<List<int>>> that's empty at the top level"
                          //
                          // { {{{1, 2, 3}}}, {4, 5, 6} }
-                         // In this case, row 1 is a a concrete List<int> with actual values.
+                         // In this case, row 1 is a concrete List<int> with actual values.
                          // There is no way to rectify the differences so we will treat it as a
                          // true column mismatch.
                          CUDF_EXPECTS(l.wrapped->size() == 0, "Mismatch in column types!");

@@ -24,9 +24,19 @@
 
 #include <string>
 
-namespace cudf {
-namespace io {
-namespace orc {
+namespace cudf::io::orc {
+
+namespace {
+[[nodiscard]] constexpr uint32_t varint_size(uint64_t val)
+{
+  auto len = 1u;
+  while (val > 0x7f) {
+    val >>= 7;
+    ++len;
+  }
+  return len;
+}
+}  // namespace
 
 uint32_t ProtobufReader::read_field_size(uint8_t const* end)
 {
@@ -168,7 +178,9 @@ void ProtobufReader::read(timestamp_statistics& s, size_t maxlen)
   auto op = std::tuple(field_reader(1, s.minimum),
                        field_reader(2, s.maximum),
                        field_reader(3, s.minimum_utc),
-                       field_reader(4, s.maximum_utc));
+                       field_reader(4, s.maximum_utc),
+                       field_reader(5, s.minimum_nanos),
+                       field_reader(6, s.maximum_nanos));
   function_builder(s, maxlen, op);
 }
 
@@ -515,6 +527,4 @@ void metadata::init_parent_descriptors()
   }
 }
 
-}  // namespace orc
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc

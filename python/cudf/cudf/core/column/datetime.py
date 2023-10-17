@@ -31,7 +31,7 @@ from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.dtypes import _get_base_dtype
-from cudf.utils.utils import _fillna_natwise
+from cudf.utils.utils import _all_bools_with_nulls, _fillna_natwise
 
 _guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
 
@@ -146,7 +146,7 @@ class DatetimeColumn(column.ColumnBase):
             null_count=null_count,
         )
 
-        if not (self.dtype.type is np.datetime64):
+        if self.dtype.type is not np.datetime64:
             raise TypeError(f"{self.dtype} is not a supported datetime type")
 
         self._time_unit, _ = np.datetime_data(self.dtype)
@@ -242,14 +242,22 @@ class DatetimeColumn(column.ColumnBase):
         if isinstance(other, (cudf.Scalar, ColumnBase, cudf.DateOffset)):
             return other
 
-        if isinstance(other, datetime.datetime):
-            other = np.datetime64(other)
-        elif isinstance(other, datetime.timedelta):
-            other = np.timedelta64(other)
-        elif isinstance(other, pd.Timestamp):
+        tz_error_msg = (
+            "Cannot perform binary operation on timezone-naive columns"
+            " and timezone-aware timestamps."
+        )
+        if isinstance(other, pd.Timestamp):
+            if other.tz is not None:
+                raise NotImplementedError(tz_error_msg)
             other = other.to_datetime64()
         elif isinstance(other, pd.Timedelta):
             other = other.to_timedelta64()
+        elif isinstance(other, datetime.datetime):
+            if other.tzinfo is not None:
+                raise NotImplementedError(tz_error_msg)
+            other = np.datetime64(other)
+        elif isinstance(other, datetime.timedelta):
+            other = np.timedelta64(other)
 
         if isinstance(other, np.datetime64):
             if np.isnat(other):
@@ -416,12 +424,8 @@ class DatetimeColumn(column.ColumnBase):
         )
         lhs, rhs = (other, self) if reflect else (self, other)
         out_dtype = None
-        if op in {
-            "__eq__",
-            "NULL_EQUALS",
-        }:
-            out_dtype = cudf.dtype(np.bool_)
-        elif (
+
+        if (
             op
             in {
                 "__ne__",
@@ -447,11 +451,31 @@ class DatetimeColumn(column.ColumnBase):
             # well-defined if this operation was not invoked via reflection.
             elif other_is_timedelta and not reflect:
                 out_dtype = _resolve_mixed_dtypes(lhs, rhs, "datetime64")
+        elif op in {
+            "__eq__",
+            "NULL_EQUALS",
+            "__ne__",
+        }:
+            out_dtype = cudf.dtype(np.bool_)
+            if isinstance(other, ColumnBase) and not isinstance(
+                other, DatetimeColumn
+            ):
+                result = _all_bools_with_nulls(
+                    self, other, bool_fill_value=op == "__ne__"
+                )
+                if cudf.get_option("mode.pandas_compatible"):
+                    result = result.fillna(op == "__ne__")
+                return result
 
         if out_dtype is None:
             return NotImplemented
 
-        return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
+        result = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
+        if cudf.get_option(
+            "mode.pandas_compatible"
+        ) and out_dtype == cudf.dtype(np.bool_):
+            result = result.fillna(op == "__ne__")
+        return result
 
     def fillna(
         self,
@@ -470,27 +494,13 @@ class DatetimeColumn(column.ColumnBase):
 
         return super().fillna(fill_value, method)
 
-    def find_first_value(
-        self, value: ScalarLike, closest: bool = False
-    ) -> int:
-        """
-        Returns offset of first value that matches
-        """
-        value = pd.to_datetime(value)
+    def indices_of(
+        self, value: ScalarLike
+    ) -> cudf.core.column.NumericalColumn:
         value = column.as_column(
-            value, dtype=self.dtype
-        ).as_numerical.element_indexing(0)
-        return self.as_numerical.find_first_value(value, closest=closest)
-
-    def find_last_value(self, value: ScalarLike, closest: bool = False) -> int:
-        """
-        Returns offset of last value that matches
-        """
-        value = pd.to_datetime(value)
-        value = column.as_column(
-            value, dtype=self.dtype
-        ).as_numerical.element_indexing(0)
-        return self.as_numerical.find_last_value(value, closest=closest)
+            pd.to_datetime(value), dtype=self.dtype
+        ).as_numerical
+        return self.as_numerical.indices_of(value)
 
     @property
     def is_unique(self) -> bool:
@@ -621,6 +631,10 @@ def infer_format(element: str, **kwargs) -> str:
     fmt = _guess_datetime_format(element, **kwargs)
 
     if fmt is not None:
+        if "%z" in fmt or "%Z" in fmt:
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
         return fmt
 
     element_parts = element.split(".")
@@ -641,11 +655,12 @@ def infer_format(element: str, **kwargs) -> str:
         raise ValueError("Unable to infer the timestamp format from the data")
 
     if len(second_parts) > 1:
-        # "Z" indicates Zulu time(widely used in aviation) - Which is
-        # UTC timezone that currently cudf only supports. Having any other
-        # unsupported timezone will let the code fail below
-        # with a ValueError.
-        second_parts.remove("Z")
+        # We may have a non-digit, timezone-like component
+        # like Z, UTC-3, +01:00
+        if any(re.search(r"\D", part) for part in second_parts):
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
         second_part = "".join(second_parts[1:])
 
         if len(second_part) > 1:

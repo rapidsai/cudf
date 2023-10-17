@@ -4850,6 +4850,49 @@ class StringMethods(ColumnMethods):
             return result.explode()
         return result
 
+    def hash_character_ngrams(
+        self, n: int = 5, as_list: bool = False
+    ) -> SeriesOrIndex:
+        """
+        Generate hashes of n-grams from characters in a column of strings.
+        The MurmurHash32 algorithm is used to produce the hash results.
+
+        Parameters
+        ----------
+        n : int
+            The degree of the n-gram (number of consecutive characters).
+            Default is 5.
+        as_list : bool
+            Set to True to return the hashes in a list column where each
+            list element is the hashes for each string.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> str_series = cudf.Series(['abcdefg','stuvwxyz'])
+        >>> str_series.str.hash_character_ngrams(5, True)
+        0               [3902511862, 570445242, 4202475763]
+        1    [556054766, 3166857694, 3760633458, 192452857]
+        dtype: list
+        >>> str_series.str.hash_character_ngrams(5)
+        0    3902511862
+        0     570445242
+        0    4202475763
+        1     556054766
+        1    3166857694
+        1    3760633458
+        1     192452857
+        dtype: uint32
+        """
+
+        result = self._return_or_inplace(
+            libstrings.hash_character_ngrams(self._column, n),
+            retain_index=True,
+        )
+        if isinstance(result, cudf.Series) and not as_list:
+            return result.explode()
+        return result
+
     def ngrams_tokenize(
         self, n: int = 2, delimiter: str = " ", separator: str = "_"
     ) -> SeriesOrIndex:
@@ -5209,18 +5252,16 @@ class StringMethods(ColumnMethods):
         should not contain nulls.
 
         Edit distance is measured based on the `Levenshtein edit distance
-        algorithm
-        <https://www.cuelogic.com/blog/the-levenshtein-algorithm>`_.
-
+        algorithm <https://www.cuelogic.com/blog/the-levenshtein-algorithm>`_.
 
         Returns
         -------
         Series of ListDtype(int64)
-            Assume `N` is the length of this series. The return series contains
-            `N` lists of size `N`, where the `j`th number in the `i`th row of
-            the series tells the edit distance between the `i`th string and the
-            `j`th string of this series.
-            The matrix is symmetric. Diagonal elements are 0.
+            Assume ``N`` is the length of this series. The return series
+            contains ``N`` lists of size ``N``, where the ``j`` th number in
+            the ``i`` th row of the series tells the edit distance between the
+            ``i`` th string and the ``j`` th string of this series.  The matrix
+            is symmetric. Diagonal elements are 0.
 
         Examples
         --------
@@ -5246,26 +5287,20 @@ class StringMethods(ColumnMethods):
         )
 
     def minhash(
-        self,
-        seeds: Optional[cudf.Series] = None,
-        n: int = 4,
-        method: str = "murmur3",
+        self, seeds: Optional[ColumnLike] = None, width: int = 4
     ) -> SeriesOrIndex:
         """
         Compute the minhash of a strings column.
+        This uses the MurmurHash3_x86_32 algorithm for the hash function.
 
         Parameters
         ----------
-        seeds : Series
+        seeds : ColumnLike
             The seeds used for the hash algorithm.
             Must be of type uint32.
-        n : int
+        width : int
             The width of the substring to hash.
             Default is 4 characters.
-        method : str
-            Hash function to use.
-            Only 'murmur3' (MurmurHash3_32) is supported.
-            Default is 'murmur3'.
 
         Examples
         --------
@@ -5273,9 +5308,9 @@ class StringMethods(ColumnMethods):
         >>> str_series = cudf.Series(['this is my', 'favorite book'])
         >>> seeds = cudf.Series([0], dtype=np.uint32)
         >>> str_series.str.minhash(seeds)
-        0     21141582
-        1    962346254
-        dtype: uint32
+        0     [21141582]
+        1    [962346254]
+        dtype: list
         >>> seeds = cudf.Series([0, 1, 2], dtype=np.uint32)
         >>> str_series.str.minhash(seeds)
         0    [21141582, 403093213, 1258052021]
@@ -5284,14 +5319,82 @@ class StringMethods(ColumnMethods):
         """
         if seeds is None:
             seeds_column = column.as_column(0, dtype=np.uint32, length=1)
-        elif isinstance(seeds, cudf.Series) and seeds.dtype == np.uint32:
-            seeds_column = seeds._column
         else:
-            raise ValueError(
-                f"Expecting a Series with dtype uint32, got {type(seeds)}"
-            )
+            seeds_column = column.as_column(seeds)
+            if seeds_column.dtype != np.uint32:
+                raise ValueError(
+                    f"Expecting a Series with dtype uint32, got {type(seeds)}"
+                )
         return self._return_or_inplace(
-            libstrings.minhash(self._column, seeds_column, n, method)
+            libstrings.minhash(self._column, seeds_column, width)
+        )
+
+    def minhash64(
+        self, seeds: Optional[ColumnLike] = None, width: int = 4
+    ) -> SeriesOrIndex:
+        """
+        Compute the minhash of a strings column.
+        This uses the MurmurHash3_x64_128 algorithm for the hash function.
+        This function generates 2 uint64 values but only the first
+        uint64 value is used.
+
+        Parameters
+        ----------
+        seeds : ColumnLike
+            The seeds used for the hash algorithm.
+            Must be of type uint64.
+        width : int
+            The width of the substring to hash.
+            Default is 4 characters.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> str_series = cudf.Series(['this is my', 'favorite book'])
+        >>> seeds = cudf.Series([0, 1, 2], dtype=np.uint64)
+        >>> str_series.str.minhash64(seeds)
+        0    [3232308021562742685, 4445611509348165860, 586435843695903598]
+        1    [23008204270530356, 1281229757012344693, 153762819128779913]
+        dtype: list
+        """
+        if seeds is None:
+            seeds_column = column.as_column(0, dtype=np.uint64, length=1)
+        else:
+            seeds_column = column.as_column(seeds)
+            if seeds_column.dtype != np.uint64:
+                raise ValueError(
+                    f"Expecting a Series with dtype uint64, got {type(seeds)}"
+                )
+        return self._return_or_inplace(
+            libstrings.minhash64(self._column, seeds_column, width)
+        )
+
+    def jaccard_index(self, input: cudf.Series, width: int) -> SeriesOrIndex:
+        """
+        Compute the Jaccard index between this column and the given
+        input strings column.
+
+        Parameters
+        ----------
+        input : Series
+            The input strings column to compute the Jaccard index against.
+            Must have the same number of strings as this column.
+        width : int
+            The number of characters for the sliding window calculation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> str1 = cudf.Series(["the brown dog", "jumped about"])
+        >>> str2 = cudf.Series(["the black cat", "jumped around"])
+        >>> str1.str.jaccard_index(str2, 5)
+        0    0.058824
+        1    0.307692
+        dtype: float32
+        """
+
+        return self._return_or_inplace(
+            libstrings.jaccard_index(self._column, input._column, width),
         )
 
 
@@ -5716,23 +5819,6 @@ class StringColumn(column.ColumnBase):
             return super().fillna(value=fill_value, dtype="object")
         else:
             return super().fillna(method=method)
-
-    def _find_first_and_last(self, value: ScalarLike) -> Tuple[int, int]:
-        found_indices = libcudf.search.contains(
-            column.as_column([value], dtype=self.dtype), self
-        )
-        found_indices = libcudf.unary.cast(found_indices, dtype=np.int32)
-        first = column.as_column(found_indices).find_first_value(np.int32(1))
-        last = column.as_column(found_indices).find_last_value(np.int32(1))
-        return first, last
-
-    def find_first_value(
-        self, value: ScalarLike, closest: bool = False
-    ) -> int:
-        return self._find_first_and_last(value)[0]
-
-    def find_last_value(self, value: ScalarLike, closest: bool = False) -> int:
-        return self._find_first_and_last(value)[1]
 
     def normalize_binop_value(
         self, other
