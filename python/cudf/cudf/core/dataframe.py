@@ -378,7 +378,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             elif self._frame.empty and isinstance(key[0], slice):
                 idx = None
             else:
-                idx = cudf.Index(key[0])
+                idx = cudf.Index([key[0]])
             if is_scalar(value):
                 length = len(idx) if idx is not None else 1
                 value = as_column(value, length=length)
