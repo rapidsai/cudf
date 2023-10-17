@@ -65,14 +65,7 @@ import static ai.rapids.cudf.ParquetWriterOptions.listBuilder;
 import static ai.rapids.cudf.ParquetWriterOptions.structBuilder;
 import static ai.rapids.cudf.Table.TestBuilder;
 import static ai.rapids.cudf.Table.removeNullMasksIfNeeded;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class TableTest extends CudfTestBase {
   private static final HostMemoryAllocator hostMemoryAllocator = DefaultHostMemoryAllocator.get();
@@ -87,6 +80,7 @@ public class TableTest extends CudfTestBase {
   private static final File TEST_SIMPLE_CSV_FILE = TestUtils.getResourceAsFile("simple.csv");
   private static final File TEST_SIMPLE_JSON_FILE = TestUtils.getResourceAsFile("people.json");
   private static final File TEST_JSON_ERROR_FILE = TestUtils.getResourceAsFile("people_with_invalid_lines.json");
+  private static final File TEST_TEACHERS_JSON = TestUtils.getResourceAsFile("teachers.json");
 
   private static final Schema CSV_DATA_BUFFER_SCHEMA = Schema.builder()
       .column(DType.INT32, "A")
@@ -306,6 +300,67 @@ public class TableTest extends CudfTestBase {
          ColumnVector v2 = ColumnVector.build(DType.INT32, 5, Range.appendInts(5));
          Table t = new Table(new ColumnVector[]{v1, v2})) {
       assertEquals(2, t.getNumberOfColumns());
+    }
+  }
+
+  @Test
+  void testReadTeachersJSON() throws IOException {
+    // regression test for https://github.com/rapidsai/cudf/issues/14282
+
+    // read JSON into memory and build a list of teacher names so
+    // that we can check that they match the results of cuDF parsing the JSON
+    StringBuilder b = new StringBuilder();
+    List<String> list = new ArrayList<>();
+    try (BufferedReader reader = new BufferedReader(new FileReader(TEST_TEACHERS_JSON))) {
+      String line = reader.readLine();
+      while (line != null) {
+        b.append(line.trim());
+        b.append('\n');
+        if (line.equals("{\"teacher\":null}")) {
+          list.add("NULL");
+        } else {
+          int pos = line.indexOf("\"", 13);
+          list.add(line.substring(13, pos));
+        }
+        line = reader.readLine();
+      }
+    }
+
+    try (ColumnVector cv = ColumnVector.fromStrings(b.toString().trim());
+         HostColumnVector hostCv = cv.copyToHost()) {
+
+      HostMemoryBuffer data = hostCv.getData();
+      long start = hostCv.getStartListOffset(0);
+      long end = hostCv.getEndListOffset(0);
+      long length = end - start;
+      JSONOptions opts = JSONOptions.builder()
+              .withRecoverWithNull(true)
+              .build();
+
+      try (TableWithMeta tableWithMeta = Table.readJSON(opts, data, start, length)) {
+        String[] columnNames = tableWithMeta.getColumnNames();
+        assert (columnNames.length == 2);
+        assert (columnNames[0].equals("teacher"));
+        assert (columnNames[1].equals("student"));
+        try (Table table = tableWithMeta.releaseTable()) {
+          ColumnVector c = table.getColumn(0);
+          assertEquals(512, c.rows);
+
+          // verify all data is correct
+          try (HostColumnVector hcv = c.copyToHost()) {
+            for (int i = 0; i < c.getRowCount(); i++) {
+              String s = "NULL";
+              if (!hcv.isNull(i)) {
+                s = hcv.getJavaString(i);
+              }
+              String orig = list.get(i);
+              assert orig.equals(s) : "Expected '" + orig + "' at index " + i + " but found '" + s + "'";
+            }
+          }
+
+          assertEquals(186, c.getNullCount());
+        }
+      }
     }
   }
 
