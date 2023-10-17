@@ -9,8 +9,9 @@ files:
       - build_all
       - build_cpp
       - build_wheels
-      - build_python
       - build_python_common
+      - build_python_cudf
+      - build_python_cudf_kafka
       - cudatoolkit
       - develop
       - docs
@@ -70,8 +71,8 @@ files:
       table: build-system
     includes:
       - build_all
-      - build_python
       - build_python_common
+      - build_python_cudf
       - build_wheels
   py_run_cudf:
     output: pyproject
@@ -122,7 +123,7 @@ files:
       table: build-system
     includes:
       - build_python_common
-      - build_python
+      - build_python_cudf_kafka
       - build_wheels
   py_run_cudf_kafka:
     output: pyproject
@@ -247,7 +248,7 @@ dependencies:
           - pyarrow==12.0.1.*
           # TODO: Pin to numpy<1.25 until cudf requires pandas 2
           - &numpy numpy>=1.21,<1.25
-  build_python:
+  build_python_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
@@ -259,6 +260,11 @@ dependencies:
       - output_types: pyproject
         packages:
           - protoc-wheel
+  build_python_cudf_kafka:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - scikit-build>=0.13.1
   libarrow_run:
     common:
       - output_types: [conda, requirements]

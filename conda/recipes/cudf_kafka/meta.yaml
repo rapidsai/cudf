@@ -47,6 +47,7 @@ requirements:
     - cuda-version ={{ cuda_version }}
     - cudf ={{ version }}
     - libcudf_kafka ={{ version }}
+    - scikit-build >=0.13.1
     - setuptools
   run:
     - python
