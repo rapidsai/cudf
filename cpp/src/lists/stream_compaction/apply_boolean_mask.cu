@@ -101,10 +101,11 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
 
 std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                            lists_column_view const& boolean_mask,
+                                           rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::apply_boolean_mask(input, boolean_mask, cudf::get_default_stream(), mr);
+  return detail::apply_boolean_mask(input, boolean_mask, stream, mr);
 }
 
 }  // namespace cudf::lists
