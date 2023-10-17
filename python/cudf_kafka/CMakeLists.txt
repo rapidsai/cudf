@@ -27,10 +27,12 @@ project(
             # language to be enabled here. The test project that is built in scikit-build to verify
             # various linking options for the python library is hardcoded to build with C, so until
             # that is fixed we need to keep C.
-            C CXX CUDA)
+            C CXX CUDA
+)
 
-option(FIND_CUDF_KAFKA_CPP "Search for existing cudf_kafka C++ installations before defaulting to local files"
-       OFF)
+option(FIND_CUDF_KAFKA_CPP
+       "Search for existing cudf_kafka C++ installations before defaulting to local files" OFF
+)
 
 option(CUDF_KAFKA_BUILD_WHEELS "Whether this build is generating a Python wheel." OFF)
 
@@ -71,12 +73,14 @@ if(NOT cudf_kafka_FOUND)
     include(cmake/Modules/WheelHelpers.cmake)
     get_target_property(_nvcomp_link_libs nvcomp::nvcomp INTERFACE_LINK_LIBRARIES)
     # Ensure all the shared objects we need at runtime are in the wheel
-    add_target_libs_to_wheel(LIB_DIR ${cython_lib_dir} TARGETS arrow_shared nvcomp::nvcomp ${_nvcomp_link_libs})
+    add_target_libs_to_wheel(
+      LIB_DIR ${cython_lib_dir} TARGETS arrow_shared nvcomp::nvcomp ${_nvcomp_link_libs}
+    )
   endif()
 
-  # Since there are multiple subpackages of cudf_kafka._lib that require access to libcudf_kafka, we place the
-  # library in the cudf_kafka directory as a single source of truth and modify the other rpaths
-  # appropriately.
+  # Since there are multiple subpackages of cudf_kafka._lib that require access to libcudf_kafka, we
+  # place the library in the cudf_kafka directory as a single source of truth and modify the other
+  # rpaths appropriately.
   install(TARGETS cudf_kafka DESTINATION ${cython_lib_dir})
 endif()
 

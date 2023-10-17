@@ -12,14 +12,11 @@
 # the License.
 # =============================================================================
 
-set(cython_sources
-    kafka.pyx
-    )
+set(cython_sources kafka.pyx)
 set(linked_libraries cudf_kafka::cudf_kafka)
 
 rapids_cython_create_modules(
-  CXX
-  ASSOCIATED_TARGETS cudf_kafka
+  CXX ASSOCIATED_TARGETS cudf_kafka
   SOURCE_FILES "${cython_sources}"
   LINKED_LIBRARIES "${linked_libraries}"
 )
