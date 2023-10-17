@@ -1584,7 +1584,7 @@ def test_multiindex_to_arrow():
     )
     pdf["a"] = pdf["a"].astype("category")
     df = cudf.from_pandas(pdf)
-    gdi = cudf.Index(df)
+    gdi = cudf.MultiIndex.from_frame(df)
 
     expected = pa.Table.from_pandas(pdf)
     got = gdi.to_arrow()
@@ -2870,3 +2870,8 @@ def test_period_index_error():
         cudf.Series(pd.Series(pidx))
     with pytest.raises(NotImplementedError):
         cudf.Series(pd.array(pidx))
+
+
+def test_index_from_dataframe_valueerror():
+    with pytest.raises(ValueError):
+        cudf.Index(cudf.DataFrame(range(1)))
