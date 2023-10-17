@@ -35,11 +35,6 @@ jobs:
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
       script: ci/build_wheel_cudf.sh
-      # TODO: This filter is temporary since we're only testing one arch and
-      # Python for now on this repo, but we should relax this before finalizing
-      # branch-23.10-xdf. This filter is fine during the sprint up to the
-      # release though.
-      matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and .CUDA_VER == "12.0.1"))
   wheel-publish-cudf:
     needs: wheel-build-cudf
     secrets: inherit
