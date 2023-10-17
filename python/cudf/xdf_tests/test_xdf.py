@@ -653,7 +653,7 @@ def test_maintain_container_subclasses(multiindex):
     got = mi.names.difference(["b"])
     expect = pmi.names.difference(["b"])
     assert got == expect
-    assert isinstance(got, type(expect))
+    assert isinstance(got, xpd.core.indexes.frozen.FrozenList)
 
 
 def test_rolling_win_type():

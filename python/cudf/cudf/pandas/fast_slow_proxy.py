@@ -385,7 +385,7 @@ def get_final_type_map():
     Return the mapping of all known fast and slow final types to their
     corresponding proxy types.
     """
-    return _DictOfTypes()
+    return dict()
 
 
 @functools.lru_cache(maxsize=None)
@@ -394,7 +394,7 @@ def get_intermediate_type_map():
     Return a mapping of all known fast and slow intermediate types to their
     corresponding proxy types.
     """
-    return _DictOfTypes()
+    return dict()
 
 
 @functools.lru_cache(maxsize=None)
@@ -497,6 +497,13 @@ class _FastSlowProxyMeta(type):
             return True
         if hasattr(__subclass, "_xdf_slow"):
             return issubclass(__subclass._xdf_slow, self._xdf_slow)
+        return False
+
+    def __instancecheck__(self, __instance: Any) -> bool:
+        if super().__instancecheck__(__instance):
+            return True
+        elif hasattr(type(__instance), "_xdf_slow"):
+            return issubclass(type(__instance)._xdf_slow, self._xdf_slow)
         return False
 
 
@@ -992,17 +999,17 @@ def _maybe_wrap_result(result: Any, func: Callable, /, *args, **kwargs) -> Any:
 
 
 def _is_final_type(result: Any) -> bool:
-    return isinstance(result, tuple(get_final_type_map().keys()))
+    return type(result) in get_final_type_map().keys()
 
 
 def _is_final_class(result: Any) -> bool:
     if not isinstance(result, type):
         return False
-    return any(issubclass(result, k) for k in get_final_type_map().keys())
+    return result in get_final_type_map().keys()
 
 
 def _is_intermediate_type(result: Any) -> bool:
-    return isinstance(result, tuple(get_intermediate_type_map().keys()))
+    return type(result) in get_intermediate_type_map().keys()
 
 
 def _is_function_or_method(obj: Any) -> bool:
@@ -1018,19 +1025,6 @@ def _is_function_or_method(obj: Any) -> bool:
             types.BuiltinMethodType,
         ),
     )
-
-
-class _DictOfTypes(dict):
-    # a `dict` meant to be used with types as keys, accepting subtypes
-    # for lookup
-    def __missing__(self, key: type):
-        # if `key` was not found, see if a superclass of `key` is
-        # found:
-        for k in self.keys():
-            if issubclass(key, k):
-                return self[k]
-        else:
-            raise KeyError(key)
 
 
 def _replace_closurevars(

@@ -23,6 +23,7 @@ from ..fast_slow_proxy import (
     _FastSlowAttribute,
     _FunctionProxy,
     _Unusable,
+    get_final_type_map,
     make_final_proxy_type,
     make_intermediate_proxy_type,
     register_proxy_func,
@@ -177,8 +178,27 @@ Index = make_final_proxy_type(
         "__init__": _DELETE,
         "__new__": Index__new__,
         "_constructor": _FastSlowAttribute("_constructor"),
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )
+
+# TODO: an incomplete list; just doing as much as necessary to get all
+# pytests to collect:
+get_final_type_map()[cudf.StringIndex] = Index
+get_final_type_map()[cudf.Int8Index] = Index
+get_final_type_map()[cudf.Int8Index] = Index
+get_final_type_map()[cudf.Int16Index] = Index
+get_final_type_map()[cudf.Int32Index] = Index
+get_final_type_map()[cudf.Int64Index] = Index
+get_final_type_map()[cudf.UInt64Index] = Index
+get_final_type_map()[cudf.UInt8Index] = Index
+get_final_type_map()[cudf.UInt16Index] = Index
+get_final_type_map()[cudf.UInt32Index] = Index
+get_final_type_map()[cudf.UInt64Index] = Index
+get_final_type_map()[cudf.Float32Index] = Index
+get_final_type_map()[cudf.Float64Index] = Index
+get_final_type_map()[cudf.GenericIndex] = Index
+
 
 RangeIndex = make_final_proxy_type(
     "RangeIndex",
@@ -391,6 +411,9 @@ BooleanArray = make_final_proxy_type(
     pd.arrays.BooleanArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__")
+    },
 )
 
 BooleanDtype = make_final_proxy_type(
@@ -408,6 +431,9 @@ IntegerArray = make_final_proxy_type(
     pd.arrays.IntegerArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__")
+    },
 )
 
 Int8Dtype = make_final_proxy_type(
@@ -418,6 +444,7 @@ Int8Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
+
 
 Int16Dtype = make_final_proxy_type(
     "Int16Dtype",
@@ -445,6 +472,7 @@ Int64Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
+
 
 UInt8Dtype = make_final_proxy_type(
     "UInt8Dtype",
@@ -524,6 +552,9 @@ FloatingArray = make_final_proxy_type(
     pd.arrays.FloatingArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__")
+    },
 )
 
 Float32Dtype = make_final_proxy_type(
@@ -542,16 +573,6 @@ Float64Dtype = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
-)
-
-Float64Index = make_final_proxy_type(
-    "Float64Index",
-    cudf.Float64Index,
-    pd.Float64Index,
-    fast_to_slow=lambda fast: fast.to_pandas(),
-    slow_to_fast=cudf.from_pandas,
-    bases=(Index,),
-    additional_attributes={"__init__": _DELETE},
 )
 
 SeriesGroupBy = make_intermediate_proxy_type(
@@ -1198,5 +1219,6 @@ for typ in all_pandas_obj_types:
             "__array__": array_method,
             "__array_function__": array_function_method,
             "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+            "__hash__": _FastSlowAttribute("__hash__"),
         },
     )
