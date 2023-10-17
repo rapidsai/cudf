@@ -544,6 +544,16 @@ Float64Dtype = make_final_proxy_type(
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
 
+Float64Index = make_final_proxy_type(
+    "Float64Index",
+    cudf.Float64Index,
+    pd.Float64Index,
+    fast_to_slow=lambda fast: fast.to_pandas(),
+    slow_to_fast=cudf.from_pandas,
+    bases=(Index,),
+    additional_attributes={"__init__": _DELETE},
+)
+
 SeriesGroupBy = make_intermediate_proxy_type(
     "SeriesGroupBy",
     cudf.core.groupby.groupby.SeriesGroupBy,
@@ -1164,3 +1174,29 @@ NamedAgg = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
+
+
+# make proxies for every PandasObject:
+def get_all_subclasses(klass):
+    for kls in klass.__subclasses__():
+        yield from get_all_subclasses(kls)
+        yield kls
+
+
+all_pandas_obj_types = get_all_subclasses(pd.core.base.PandasObject)
+
+for typ in all_pandas_obj_types:
+    if typ.__name__ in globals():
+        continue
+    globals()[typ.__name__] = make_final_proxy_type(
+        typ.__name__,
+        _Unusable,
+        typ,
+        fast_to_slow=_Unusable(),
+        slow_to_fast=_Unusable(),
+        additional_attributes={
+            "__array__": array_method,
+            "__array_function__": array_function_method,
+            "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        },
+    )

@@ -492,6 +492,13 @@ class _FastSlowProxyMeta(type):
         attr = _FastSlowAttribute(name)
         return attr.__get__(None, owner=self)
 
+    def __subclasscheck__(self, __subclass: type) -> bool:
+        if super().__subclasscheck__(__subclass):
+            return True
+        if hasattr(__subclass, "_xdf_slow"):
+            return issubclass(__subclass._xdf_slow, self._xdf_slow)
+        return False
+
 
 class _FastSlowProxy:
     """
