@@ -1584,7 +1584,7 @@ def test_multiindex_to_arrow():
     )
     pdf["a"] = pdf["a"].astype("category")
     df = cudf.from_pandas(pdf)
-    gdi = cudf.Index(df)
+    gdi = cudf.MultiIndex.from_frame(df)
 
     expected = pa.Table.from_pandas(pdf)
     got = gdi.to_arrow()
