@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/lists/list_view.hpp>
@@ -29,8 +28,6 @@ NVBENCH_DECLARE_TYPE_STRINGS(cudf::timestamp_ms, "cudf::timestamp_ms", "cudf::ti
 template <typename Type>
 void nvbench_distinct(nvbench::state& state, nvbench::type_list<Type>)
 {
-  cudf::rmm_pool_raii pool_raii;
-
   cudf::size_type const num_rows = state.get_int64("NumRows");
 
   data_profile profile = data_profile_builder().cardinality(0).null_probability(0.01).distribution(
@@ -61,8 +58,6 @@ NVBENCH_BENCH_TYPES(nvbench_distinct, NVBENCH_TYPE_AXES(data_type))
 template <typename Type>
 void nvbench_distinct_list(nvbench::state& state, nvbench::type_list<Type>)
 {
-  cudf::rmm_pool_raii pool_raii;
-
   auto const size               = state.get_int64("ColumnSize");
   auto const dtype              = cudf::type_to_id<Type>();
   double const null_probability = state.get_float64("null_probability");

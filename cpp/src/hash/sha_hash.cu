@@ -15,13 +15,16 @@
  */
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/hashing.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/hashing/detail/hash_functions.cuh>
+#include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/string_view.hpp>
 #include <cudf/table/table_device_view.cuh>
-#include <cudf/types.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -39,6 +42,7 @@
 #include <utility>
 
 namespace cudf {
+namespace hashing {
 namespace detail {
 
 namespace {
@@ -291,13 +295,13 @@ struct sha384_hash_state {
   uint64_t message_length = 0;
   uint32_t buffer_length  = 0;
   uint64_t hash_value[8]  = {0xcbbb9d5dc1059ed8,
-                            0x629a292a367cd507,
-                            0x9159015a3070dd17,
-                            0x152fecd8f70e5939,
-                            0x67332667ffc00b31,
-                            0x8eb44a8768581511,
-                            0xdb0c2e0d64f98fa7,
-                            0x47b5481dbefa4fa4};
+                             0x629a292a367cd507,
+                             0x9159015a3070dd17,
+                             0x152fecd8f70e5939,
+                             0x67332667ffc00b31,
+                             0x8eb44a8768581511,
+                             0xdb0c2e0d64f98fa7,
+                             0x47b5481dbefa4fa4};
   uint8_t buffer[128];
 };
 
@@ -305,13 +309,13 @@ struct sha512_hash_state {
   uint64_t message_length = 0;
   uint32_t buffer_length  = 0;
   uint64_t hash_value[8]  = {0x6a09e667f3bcc908,
-                            0xbb67ae8584caa73b,
-                            0x3c6ef372fe94f82b,
-                            0xa54ff53a5f1d36f1,
-                            0x510e527fade682d1,
-                            0x9b05688c2b3e6c1f,
-                            0x1f83d9abfb41bd6b,
-                            0x5be0cd19137e2179};
+                             0xbb67ae8584caa73b,
+                             0x3c6ef372fe94f82b,
+                             0xa54ff53a5f1d36f1,
+                             0x510e527fade682d1,
+                             0x9b05688c2b3e6c1f,
+                             0x1f83d9abfb41bd6b,
+                             0x5be0cd19137e2179};
   uint8_t buffer[128];
 };
 
@@ -648,16 +652,12 @@ std::unique_ptr<column> sha_hash(table_view const& input,
 
   // Result column allocation and creation
   auto begin = thrust::make_constant_iterator(Hasher::digest_size);
-  auto offsets_column =
-    cudf::strings::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, mr);
+  auto [offsets_column, bytes] =
+    cudf::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, mr);
 
-  auto chars_column =
-    strings::detail::create_chars_child_column(input.num_rows() * Hasher::digest_size, stream, mr);
-  auto chars_view = chars_column->mutable_view();
-  auto d_chars    = chars_view.template data<char>();
-
-  // Build an output null mask from the logical AND of all input columns' null masks.
-  auto [null_mask, null_count] = cudf::detail::bitmask_and(input, stream);
+  auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
+  auto chars_view   = chars_column->mutable_view();
+  auto d_chars      = chars_view.data<char>();
 
   auto const device_input = table_device_view::create(input, stream);
 
@@ -676,43 +676,40 @@ std::unique_ptr<column> sha_hash(table_view const& input,
                      hasher.finalize();
                    });
 
-  return make_strings_column(input.num_rows(),
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             null_count,
-                             std::move(null_mask));
+  return make_strings_column(
+    input.num_rows(), std::move(offsets_column), std::move(chars_column), 0, {});
 }
 
 }  // namespace
 
-std::unique_ptr<column> sha1_hash(table_view const& input,
-                                  rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> sha1(table_view const& input,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
 {
   string_scalar const empty_result("da39a3ee5e6b4b0d3255bfef95601890afd80709");
   return sha_hash<SHA1Hash>(input, empty_result, stream, mr);
 }
 
-std::unique_ptr<column> sha224_hash(table_view const& input,
-                                    rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> sha224(table_view const& input,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
 {
   string_scalar const empty_result("d14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f");
   return sha_hash<SHA224Hash>(input, empty_result, stream, mr);
 }
 
-std::unique_ptr<column> sha256_hash(table_view const& input,
-                                    rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> sha256(table_view const& input,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
 {
   string_scalar const empty_result(
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
   return sha_hash<SHA256Hash>(input, empty_result, stream, mr);
 }
 
-std::unique_ptr<column> sha384_hash(table_view const& input,
-                                    rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> sha384(table_view const& input,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
 {
   string_scalar const empty_result(
     "38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b9"
@@ -720,9 +717,9 @@ std::unique_ptr<column> sha384_hash(table_view const& input,
   return sha_hash<SHA384Hash>(input, empty_result, stream, mr);
 }
 
-std::unique_ptr<column> sha512_hash(table_view const& input,
-                                    rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> sha512(table_view const& input,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
 {
   string_scalar const empty_result(
     "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec"
@@ -731,4 +728,46 @@ std::unique_ptr<column> sha512_hash(table_view const& input,
 }
 
 }  // namespace detail
+
+std::unique_ptr<column> sha1(table_view const& input,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::sha1(input, stream, mr);
+}
+
+std::unique_ptr<column> sha224(table_view const& input,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::sha224(input, stream, mr);
+}
+
+std::unique_ptr<column> sha256(table_view const& input,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::sha256(input, stream, mr);
+}
+
+std::unique_ptr<column> sha384(table_view const& input,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::sha384(input, stream, mr);
+}
+
+std::unique_ptr<column> sha512(table_view const& input,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::sha512(input, stream, mr);
+}
+
+}  // namespace hashing
 }  // namespace cudf

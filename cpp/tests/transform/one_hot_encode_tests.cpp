@@ -33,11 +33,9 @@ using cudf::test::iterators::null_at;
 using cudf::test::iterators::nulls_at;
 
 template <typename T>
-struct OneHotEncodingTestTyped : public cudf::test::BaseFixture {
-};
+struct OneHotEncodingTestTyped : public cudf::test::BaseFixture {};
 
-struct OneHotEncodingTest : public cudf::test::BaseFixture {
-};
+struct OneHotEncodingTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(OneHotEncodingTestTyped, cudf::test::NumericTypes);
 

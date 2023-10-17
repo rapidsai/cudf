@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import Any, Sequence, cast
+from typing import Any, Optional, Sequence, cast
 
 import numpy as np
 import pandas as pd
@@ -16,7 +16,7 @@ from cudf.api.types import is_scalar, is_timedelta64_dtype
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column import ColumnBase, column, string
 from cudf.utils.dtypes import np_to_pa_dtype
-from cudf.utils.utils import _fillna_natwise
+from cudf.utils.utils import _all_bools_with_nulls, _fillna_natwise
 
 _dtype_to_format_conversion = {
     "timedelta64[ns]": "%D days %H:%M:%S",
@@ -80,10 +80,10 @@ class TimeDeltaColumn(ColumnBase):
         self,
         data: Buffer,
         dtype: Dtype,
-        size: int = None,  # TODO: make non-optional
-        mask: Buffer = None,
+        size: Optional[int] = None,  # TODO: make non-optional
+        mask: Optional[Buffer] = None,
         offset: int = 0,
-        null_count: int = None,
+        null_count: Optional[int] = None,
     ):
         dtype = cudf.dtype(dtype)
 
@@ -101,7 +101,7 @@ class TimeDeltaColumn(ColumnBase):
             null_count=null_count,
         )
 
-        if not (self.dtype.type is np.timedelta64):
+        if self.dtype.type is not np.timedelta64:
             raise TypeError(f"{self.dtype} is not a supported duration type")
 
         self._time_unit, _ = np.datetime_data(self.dtype)
@@ -181,7 +181,7 @@ class TimeDeltaColumn(ColumnBase):
                 "__ge__",
                 "NULL_EQUALS",
             }:
-                out_dtype = np.bool_
+                out_dtype = cudf.dtype(np.bool_)
             elif op == "__mod__":
                 out_dtype = determine_out_dtype(self.dtype, other.dtype)
             elif op in {"__truediv__", "__floordiv__"}:
@@ -202,23 +202,48 @@ class TimeDeltaColumn(ColumnBase):
         elif other.dtype.kind in {"f", "i", "u"}:
             if op in {"__mul__", "__mod__", "__truediv__", "__floordiv__"}:
                 out_dtype = self.dtype
+            elif op in {"__eq__", "NULL_EQUALS", "__ne__"}:
+                if isinstance(other, ColumnBase) and not isinstance(
+                    other, TimeDeltaColumn
+                ):
+                    result = _all_bools_with_nulls(
+                        self, other, bool_fill_value=op == "__ne__"
+                    )
+                    if cudf.get_option("mode.pandas_compatible"):
+                        result = result.fillna(op == "__ne__")
+                    return result
 
         if out_dtype is None:
             return NotImplemented
 
         lhs, rhs = (other, this) if reflect else (this, other)
 
-        return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
+        result = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
+        if cudf.get_option(
+            "mode.pandas_compatible"
+        ) and out_dtype == cudf.dtype(np.bool_):
+            result = result.fillna(op == "__ne__")
+        return result
 
     def normalize_binop_value(self, other) -> ColumnBinaryOperand:
         if isinstance(other, (ColumnBase, cudf.Scalar)):
             return other
-        if isinstance(other, datetime.timedelta):
-            other = np.timedelta64(other)
-        elif isinstance(other, pd.Timestamp):
+
+        tz_error_msg = (
+            "Cannot perform binary operation on timezone-naive columns"
+            " and timezone-aware timestamps."
+        )
+        if isinstance(other, pd.Timestamp):
+            if other.tz is not None:
+                raise NotImplementedError(tz_error_msg)
             other = other.to_datetime64()
         elif isinstance(other, pd.Timedelta):
             other = other.to_timedelta64()
+        elif isinstance(other, datetime.timedelta):
+            other = np.timedelta64(other)
+        elif isinstance(other, datetime.datetime) and other.tzinfo is not None:
+            raise NotImplementedError(tz_error_msg)
+
         if isinstance(other, np.timedelta64):
             other_time_unit = cudf.utils.dtypes.get_time_unit(other)
             if np.isnat(other):
@@ -251,7 +276,10 @@ class TimeDeltaColumn(ColumnBase):
         return self._time_unit
 
     def fillna(
-        self, fill_value: Any = None, method: str = None, dtype: Dtype = None
+        self,
+        fill_value: Any = None,
+        method: Optional[str] = None,
+        dtype: Optional[Dtype] = None,
     ) -> TimeDeltaColumn:
         if fill_value is not None:
             if cudf.utils.utils._isnat(fill_value):
@@ -313,7 +341,7 @@ class TimeDeltaColumn(ColumnBase):
             unit=self.time_unit,
         )
 
-    def median(self, skipna: bool = None) -> pd.Timedelta:
+    def median(self, skipna: Optional[bool] = None) -> pd.Timedelta:
         return pd.Timedelta(
             self.as_numerical.median(skipna=skipna), unit=self.time_unit
         )
@@ -340,9 +368,9 @@ class TimeDeltaColumn(ColumnBase):
 
     def sum(
         self,
-        skipna: bool = None,
+        skipna: Optional[bool] = None,
         min_count: int = 0,
-        dtype: Dtype = None,
+        dtype: Optional[Dtype] = None,
     ) -> pd.Timedelta:
         return pd.Timedelta(
             # Since sum isn't overridden in Numerical[Base]Column, mypy only
@@ -356,7 +384,7 @@ class TimeDeltaColumn(ColumnBase):
 
     def std(
         self,
-        skipna: bool = None,
+        skipna: Optional[bool] = None,
         min_count: int = 0,
         dtype: Dtype = np.float64,
         ddof: int = 1,

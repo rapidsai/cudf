@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "distinct_reduce.cuh"
+#include "distinct_helpers.hpp"
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/gather.hpp>
@@ -24,6 +24,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/distance.h>
@@ -48,17 +50,18 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   }
 
   auto map = hash_map_type{compute_hash_table_size(input.num_rows()),
-                           cuco::empty_key{COMPACTION_EMPTY_KEY_SENTINEL},
-                           cuco::empty_value{COMPACTION_EMPTY_VALUE_SENTINEL},
+                           cuco::empty_key{-1},
+                           cuco::empty_value{std::numeric_limits<size_type>::min()},
                            detail::hash_table_allocator_type{default_allocator<char>{}, stream},
                            stream.value()};
 
   auto const preprocessed_input =
     cudf::experimental::row::hash::preprocessed_table::create(input, stream);
-  auto const has_nulls = nullate::DYNAMIC{cudf::has_nested_nulls(input)};
+  auto const has_nulls          = nullate::DYNAMIC{cudf::has_nested_nulls(input)};
+  auto const has_nested_columns = cudf::detail::has_nested_columns(input);
 
   auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
-  auto const key_hasher = experimental::compaction_hash(row_hasher.device_hasher(has_nulls));
+  auto const key_hasher = row_hasher.device_hasher(has_nulls);
 
   auto const row_comp = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
@@ -66,8 +69,13 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
     size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
 
   auto const insert_keys = [&](auto const value_comp) {
-    auto const key_equal = row_comp.equal_to(has_nulls, nulls_equal, value_comp);
-    map.insert(pair_iter, pair_iter + input.num_rows(), key_hasher, key_equal, stream.value());
+    if (has_nested_columns) {
+      auto const key_equal = row_comp.equal_to<true>(has_nulls, nulls_equal, value_comp);
+      map.insert(pair_iter, pair_iter + input.num_rows(), key_hasher, key_equal, stream.value());
+    } else {
+      auto const key_equal = row_comp.equal_to<false>(has_nulls, nulls_equal, value_comp);
+      map.insert(pair_iter, pair_iter + input.num_rows(), key_hasher, key_equal, stream.value());
+    }
   };
 
   if (nans_equal == nan_equality::ALL_EQUAL) {
@@ -88,14 +96,16 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   }
 
   // For other keep options, reduce by row on rows that compare equal.
-  auto const reduction_results = hash_reduce_by_row(map,
-                                                    std::move(preprocessed_input),
-                                                    input.num_rows(),
-                                                    has_nulls,
-                                                    keep,
-                                                    nulls_equal,
-                                                    nans_equal,
-                                                    stream);
+  auto const reduction_results = reduce_by_row(map,
+                                               std::move(preprocessed_input),
+                                               input.num_rows(),
+                                               has_nulls,
+                                               has_nested_columns,
+                                               keep,
+                                               nulls_equal,
+                                               nans_equal,
+                                               stream,
+                                               rmm::mr::get_current_device_resource());
 
   // Extract the desired output indices from reduction results.
   auto const map_end = [&] {
@@ -138,8 +148,12 @@ std::unique_ptr<table> distinct(table_view const& input,
     return empty_like(input);
   }
 
-  auto const gather_map =
-    get_distinct_indices(input.select(keys), keep, nulls_equal, nans_equal, stream);
+  auto const gather_map = get_distinct_indices(input.select(keys),
+                                               keep,
+                                               nulls_equal,
+                                               nans_equal,
+                                               stream,
+                                               rmm::mr::get_current_device_resource());
   return detail::gather(input,
                         gather_map,
                         out_of_bounds_policy::DONT_CHECK,

@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
-#include "io/comp/nvcomp_adapter.hpp"
 #include "io/text/device_data_chunks.hpp"
-#include "io/utilities/config_utils.hpp"
+
+#include <io/comp/nvcomp_adapter.hpp>
+#include <io/utilities/config_utils.hpp>
 
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/pinned_allocator.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/pinned_host_vector.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/detail/bgzip_utils.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -48,14 +50,14 @@ struct bgzip_nvcomp_transform_functor {
   uint8_t const* compressed_ptr;
   uint8_t* decompressed_ptr;
 
-  __device__ thrust::tuple<device_span<const uint8_t>, device_span<uint8_t>> operator()(
+  __device__ thrust::tuple<device_span<uint8_t const>, device_span<uint8_t>> operator()(
     thrust::tuple<std::size_t, std::size_t, std::size_t, std::size_t> t)
   {
     auto const compressed_begin   = thrust::get<0>(t);
     auto const compressed_end     = thrust::get<1>(t);
     auto const decompressed_begin = thrust::get<2>(t);
     auto const decompressed_end   = thrust::get<3>(t);
-    return thrust::make_tuple(device_span<const uint8_t>{compressed_ptr + compressed_begin,
+    return thrust::make_tuple(device_span<uint8_t const>{compressed_ptr + compressed_begin,
                                                          compressed_end - compressed_begin},
                               device_span<uint8_t>{decompressed_ptr + decompressed_begin,
                                                    decompressed_end - decompressed_begin});
@@ -65,14 +67,13 @@ struct bgzip_nvcomp_transform_functor {
 class bgzip_data_chunk_reader : public data_chunk_reader {
  private:
   template <typename T>
-  using pinned_host_vector = thrust::host_vector<T, cudf::detail::pinned_allocator<T>>;
-
-  template <typename T>
-  static void copy_to_device(const pinned_host_vector<T>& host,
+  static void copy_to_device(cudf::detail::pinned_host_vector<T> const& host,
                              rmm::device_uvector<T>& device,
                              rmm::cuda_stream_view stream)
   {
-    device.resize(host.size(), stream);
+    // Buffer needs to be padded.
+    // Required by `inflate_kernel`.
+    device.resize(cudf::util::round_up_safe(host.size(), BUFFER_PADDING_MULTIPLE), stream);
     CUDF_CUDA_TRY(cudaMemcpyAsync(
       device.data(), host.data(), host.size() * sizeof(T), cudaMemcpyDefault, stream.value()));
   }
@@ -84,14 +85,14 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       1 << 16;  // 64k offset allocation, resized on demand
 
     cudaEvent_t event;
-    pinned_host_vector<char> h_compressed_blocks;
-    pinned_host_vector<std::size_t> h_compressed_offsets;
-    pinned_host_vector<std::size_t> h_decompressed_offsets;
+    cudf::detail::pinned_host_vector<char> h_compressed_blocks;
+    cudf::detail::pinned_host_vector<std::size_t> h_compressed_offsets;
+    cudf::detail::pinned_host_vector<std::size_t> h_decompressed_offsets;
     rmm::device_uvector<char> d_compressed_blocks;
     rmm::device_uvector<char> d_decompressed_blocks;
     rmm::device_uvector<std::size_t> d_compressed_offsets;
     rmm::device_uvector<std::size_t> d_decompressed_offsets;
-    rmm::device_uvector<device_span<const uint8_t>> d_compressed_spans;
+    rmm::device_uvector<device_span<uint8_t const>> d_compressed_spans;
     rmm::device_uvector<device_span<uint8_t>> d_decompressed_spans;
     rmm::device_uvector<compression_result> d_decompression_results;
     std::size_t compressed_size_with_headers{};
@@ -142,7 +143,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
         offset_it + num_blocks(),
         span_it,
         bgzip_nvcomp_transform_functor{reinterpret_cast<uint8_t const*>(d_compressed_blocks.data()),
-                                       reinterpret_cast<uint8_t*>(d_decompressed_blocks.begin())});
+                                       reinterpret_cast<uint8_t*>(d_decompressed_blocks.data())});
       if (decompressed_size() > 0) {
         if (nvcomp::is_decompression_disabled(nvcomp::compression_type::DEFLATE)) {
           gpuinflate(d_compressed_spans,

@@ -1,0 +1,220 @@
+/*
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include <cudf/detail/iterator.cuh>
+#include <cudf/hashing.hpp>
+
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
+
+constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
+
+class SHA512HashTest : public cudf::test::BaseFixture {};
+
+TEST_F(SHA512HashTest, EmptyTable)
+{
+  auto const empty_table        = cudf::table_view{};
+  auto const empty_column       = cudf::make_empty_column(cudf::data_type(cudf::type_id::STRING));
+  auto const output_empty_table = cudf::hash(empty_table, cudf::hash_id::HASH_SHA512);
+  EXPECT_EQ(empty_column->size(), output_empty_table->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(empty_column->view(), output_empty_table->view());
+
+  auto const table_one_empty_column  = cudf::table_view{{empty_column->view()}};
+  auto const output_one_empty_column = cudf::hash(empty_table, cudf::hash_id::HASH_SHA512);
+  EXPECT_EQ(empty_column->size(), output_one_empty_column->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(empty_column->view(), output_one_empty_column->view());
+}
+
+TEST_F(SHA512HashTest, MultiValue)
+{
+  cudf::test::strings_column_wrapper const strings_col(
+    {"",
+     "0",
+     "A 56 character string to test message padding algorithm.",
+     "A 63 character string to test message padding algorithm, again.",
+     "A 64 character string to test message padding algorithm, again!!",
+     "A very long (greater than 128 bytes/char string) to execute a multi hash-step data point in "
+     "the hash function being tested. This string needed to be longer.",
+     "All work and no play makes Jack a dull boy",
+     "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"});
+
+  cudf::test::strings_column_wrapper const sha512_string_results1(
+    {"cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877ee"
+     "c2f63b931bd47417a81a538327af927da3e",
+     "31bca02094eb78126a517b206a88c73cfa9ec6f704c7030d18212cace820f025f00bf0ea68dbf3f3a5436ca63b53b"
+     "f7bf80ad8d5de7d8359d0b7fed9dbc3ab99",
+     "1d8b355dbe0c4ad81c9815a1490f0b6a6fa710e42ca60767ffd6d845acd116defe307c9496a80c4a67653873af6ed"
+     "83e2e04c2102f55f9cd402677b246832e4c",
+     "8ac8ae9de5597aa630f071f81fcb94dc93b6a8f92d8f2cdd5a469764a5daf6ef387b6465ae097dcd6e0c64286260d"
+     "cc3d2c789d2cf5960df648c78a765e6c27c",
+     "9c436e24be60e17425a1a829642d97e7180b57485cf95db007cf5b32bbae1f2325b6874b3377e37806b15b739bffa"
+     "412ea6d095b726487d70e7b50e92d56c750",
+     "6a25ca1f20f6e79faea2a0770075e4262beb66b40f59c22d3e8abdb6188ef8d8914faf5dbf6df76165bb61b81dfda"
+     "46643f0d6366a39f7bd3d270312f9d3cf87",
+     "bae9eb4b5c05a4c5f85750b70b2f0ce78e387f992f0927a017eb40bd180a13004f6252a6bbf9816f195fb7d86668c"
+     "393dc0985aaf7168f48e8b905f3b9b02df2",
+     "05a4ca1c523dcab32edb7d8793934a4cdf41a9062b229d711f5326e297bda83fa965118b9d7636172b43688e8e149"
+     "008b3f967f1a969962b7e959af894a8a315"});
+
+  cudf::test::strings_column_wrapper const sha512_string_results2(
+    {"cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877ee"
+     "c2f63b931bd47417a81a538327af927da3e",
+     "8ab3361c051a97ddc3c665d29f2762f8ac4240d08995f8724b6d07d8cbedd32c28f589ccdae514f20a6c8eea6f755"
+     "408dd3dd6837d66932ca2352eaeab594427",
+     "338b22eb841420affff9904f903ed14c91bf8f4d1b10f25c145a31018367607a2cf562121ba7eaa2d08db3382cc82"
+     "149805198c1fa3e7dc714fc2782e0f6ebd8",
+     "d3045ecde16ea036d2f2ff3fa685beb46d5fcb73de71f0aee653265f18b22e4c131255e6eb5ad3be2f32914408ec6"
+     "67911b49d951714decbdbfca1957be8ba10",
+     "da7706221f8861ef522ab9555f57306382fb18c337536545d839e431dede4ff9f9affafb82ab5588734a8fc6631e6"
+     "a0cd864634b62e24a42755c863c5d5c5848",
+     "04dadc8fdf205fe535c8eb38f20882fc2a0e308081052d7588e74f6620aa207749039468c126db7407050def80415"
+     "1d037cb188d5d4d459015032972a9e9f001",
+     "aae2e742074847889a029a8d3170f9e17177d48ec0b9dabe572aa68dd3001af0c512f164ba84aa75b13950948170a"
+     "0912912d16c98d2f05cb633c0d5b6a9105e",
+     "77f46e99a7a51ac04b4380ebca70c0782381629f711169a3b9dad3fc9aa6221a9c0cdaa9b9ea4329773e773e2987c"
+     "d1eebe0661386909684927d67819a2cf736"});
+
+  using limits = std::numeric_limits<int32_t>;
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col(
+    {0, 100, -100, limits::min(), limits::max(), 1, 2, 3});
+
+  // Different truth values should be equal
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0, 1, 2, 255});
+
+  auto const string_input1         = cudf::table_view({strings_col});
+  auto const string_input2         = cudf::table_view({strings_col, strings_col});
+  auto const sha512_string_output1 = cudf::hash(string_input1, cudf::hash_id::HASH_SHA512);
+  auto const sha512_string_output2 = cudf::hash(string_input2, cudf::hash_id::HASH_SHA512);
+  EXPECT_EQ(string_input1.num_rows(), sha512_string_output1->size());
+  EXPECT_EQ(string_input2.num_rows(), sha512_string_output2->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(sha512_string_output1->view(), sha512_string_results1, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(sha512_string_output2->view(), sha512_string_results2, verbosity);
+
+  auto const input1         = cudf::table_view({strings_col, ints_col, bools_col1});
+  auto const input2         = cudf::table_view({strings_col, ints_col, bools_col2});
+  auto const sha512_output1 = cudf::hash(input1, cudf::hash_id::HASH_SHA512);
+  auto const sha512_output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA512);
+  EXPECT_EQ(input1.num_rows(), sha512_output1->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(sha512_output1->view(), sha512_output2->view(), verbosity);
+}
+
+TEST_F(SHA512HashTest, MultiValueNulls)
+{
+  // Nulls with different values should be equal
+  cudf::test::strings_column_wrapper const strings_col1(
+    {"",
+     "Different but null!",
+     "A very long (greater than 128 bytes/char string) to execute a multi hash-step data point in "
+     "the hash function being tested. This string needed to be longer.",
+     "All work and no play makes Jack a dull boy",
+     "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"},
+    {1, 0, 0, 1, 0});
+  cudf::test::strings_column_wrapper const strings_col2(
+    {"",
+     "Another string that is null.",
+     "Very different... but null",
+     "All work and no play makes Jack a dull boy",
+     ""},
+    {1, 0, 0, 1, 0});
+
+  // Nulls with different values should be equal
+  using limits = std::numeric_limits<int32_t>;
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col1(
+    {0, 100, -100, limits::min(), limits::max()}, {1, 0, 0, 1, 0});
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col2(
+    {0, -200, 200, limits::min(), limits::max()}, {1, 0, 0, 0, 1});
+
+  // Nulls with different values should be equal
+  // Different truthy values should be equal
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 1, 0});
+
+  auto const input1 = cudf::table_view({strings_col1, ints_col1, bools_col1});
+  auto const input2 = cudf::table_view({strings_col2, ints_col2, bools_col2});
+
+  auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_SHA512);
+  auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA512);
+
+  EXPECT_EQ(input1.num_rows(), output1->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
+}
+
+template <typename T>
+class SHA512HashTestTyped : public cudf::test::BaseFixture {};
+
+TYPED_TEST_CASE(SHA512HashTestTyped, cudf::test::NumericTypes);
+
+TYPED_TEST(SHA512HashTestTyped, Equality)
+{
+  cudf::test::fixed_width_column_wrapper<TypeParam> const col({0, 127, 1, 2, 8});
+  auto const input = cudf::table_view({col});
+
+  // Hash of same input should be equal
+  auto const output1 = cudf::hash(input, cudf::hash_id::HASH_SHA512);
+  auto const output2 = cudf::hash(input, cudf::hash_id::HASH_SHA512);
+
+  EXPECT_EQ(input.num_rows(), output1->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
+}
+
+TYPED_TEST(SHA512HashTestTyped, EqualityNulls)
+{
+  using T = TypeParam;
+
+  // Nulls with different values should be equal
+  cudf::test::fixed_width_column_wrapper<T> const col1({0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<T> const col2({1, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+
+  auto const input1 = cudf::table_view({col1});
+  auto const input2 = cudf::table_view({col2});
+
+  auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_SHA512);
+  auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA512);
+
+  EXPECT_EQ(input1.num_rows(), output1->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
+}
+
+template <typename T>
+class SHA512HashTestFloatTyped : public cudf::test::BaseFixture {};
+
+TYPED_TEST_CASE(SHA512HashTestFloatTyped, cudf::test::FloatingPointTypes);
+
+TYPED_TEST(SHA512HashTestFloatTyped, TestExtremes)
+{
+  using T = TypeParam;
+  T min   = std::numeric_limits<T>::min();
+  T max   = std::numeric_limits<T>::max();
+  T nan   = std::numeric_limits<T>::quiet_NaN();
+  T inf   = std::numeric_limits<T>::infinity();
+
+  cudf::test::fixed_width_column_wrapper<T> const col1(
+    {T(0.0), T(100.0), T(-100.0), min, max, nan, inf, -inf});
+  cudf::test::fixed_width_column_wrapper<T> const col2(
+    {T(-0.0), T(100.0), T(-100.0), min, max, -nan, inf, -inf});
+
+  auto const input1 = cudf::table_view({col1});
+  auto const input2 = cudf::table_view({col2});
+
+  auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_SHA512);
+  auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA512);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
+}

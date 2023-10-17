@@ -69,14 +69,14 @@ def simple_pdf(request):
         "float32",
         "float64",
     ]
-    typer = {"col_" + val: val for val in types}
-    ncols = len(types)
     nrows = request.param
 
     # Create a pandas dataframe with random data of mixed types
     test_pdf = pd.DataFrame(
-        [list(range(ncols * i, ncols * (i + 1))) for i in range(nrows)],
-        columns=pd.Index([f"col_{typ}" for typ in types], name="foo"),
+        {
+            f"col_{typ}": np.random.randint(0, nrows, nrows).astype(typ)
+            for typ in types
+        },
         # Need to ensure that this index is not a RangeIndex to get the
         # expected round-tripping behavior from Parquet reader/writer.
         index=pd.Index(list(range(nrows))),
@@ -84,10 +84,6 @@ def simple_pdf(request):
     # Delete the name of the column index, and rename the row index
     test_pdf.columns.name = None
     test_pdf.index.name = "test_index"
-
-    # Cast all the column dtypes to objects, rename them, and then cast to
-    # appropriate types
-    test_pdf = test_pdf.astype("object").astype(typer)
 
     return test_pdf
 
@@ -115,14 +111,14 @@ def build_pdf(num_columns, day_resolution_timestamps):
         "datetime64[us]",
         "str",
     ]
-    typer = {"col_" + val: val for val in types}
-    ncols = len(types)
     nrows = num_columns.param
 
     # Create a pandas dataframe with random data of mixed types
     test_pdf = pd.DataFrame(
-        [list(range(ncols * i, ncols * (i + 1))) for i in range(nrows)],
-        columns=pd.Index([f"col_{typ}" for typ in types], name="foo"),
+        {
+            f"col_{typ}": np.random.randint(0, nrows, nrows).astype(typ)
+            for typ in types
+        },
         # Need to ensure that this index is not a RangeIndex to get the
         # expected round-tripping behavior from Parquet reader/writer.
         index=pd.Index(list(range(nrows))),
@@ -130,10 +126,6 @@ def build_pdf(num_columns, day_resolution_timestamps):
     # Delete the name of the column index, and rename the row index
     test_pdf.columns.name = None
     test_pdf.index.name = "test_index"
-
-    # Cast all the column dtypes to objects, rename them, and then cast to
-    # appropriate types
-    test_pdf = test_pdf.astype(typer)
 
     # make datetime64's a little more interesting by increasing the range of
     # dates note that pandas will convert these to ns timestamps, so care is
@@ -305,8 +297,7 @@ def test_parquet_reader_empty_pandas_dataframe(tmpdir, engine):
 
 
 @pytest.mark.parametrize("has_null", [False, True])
-@pytest.mark.parametrize("strings_to_categorical", [False, True, None])
-def test_parquet_reader_strings(tmpdir, strings_to_categorical, has_null):
+def test_parquet_reader_strings(tmpdir, has_null):
     df = pd.DataFrame(
         [(1, "aaa", 9.0), (2, "bbb", 8.0), (3, "ccc", 7.0)],
         columns=pd.Index(list("abc")),
@@ -317,25 +308,10 @@ def test_parquet_reader_strings(tmpdir, strings_to_categorical, has_null):
     df.to_parquet(fname)
     assert os.path.exists(fname)
 
-    if strings_to_categorical is not None:
-        gdf = cudf.read_parquet(
-            fname, engine="cudf", strings_to_categorical=strings_to_categorical
-        )
-    else:
-        gdf = cudf.read_parquet(fname, engine="cudf")
+    gdf = cudf.read_parquet(fname, engine="cudf")
 
-    if strings_to_categorical:
-        if has_null:
-            hash_ref = [989983842, None, 1169108191]
-        else:
-            hash_ref = [989983842, 429364346, 1169108191]
-        assert gdf["b"].dtype == np.dtype("int32")
-        assert_eq(
-            gdf["b"], cudf.Series(hash_ref, dtype=np.dtype("int32"), name="b")
-        )
-    else:
-        assert gdf["b"].dtype == np.dtype("object")
-        assert_eq(gdf["b"], df["b"])
+    assert gdf["b"].dtype == np.dtype("object")
+    assert_eq(gdf["b"], df["b"])
 
 
 @pytest.mark.parametrize("columns", [None, ["b"]])
@@ -528,9 +504,7 @@ def test_parquet_read_filtered_multiple_files(tmpdir):
     )
     assert_eq(
         filtered_df,
-        cudf.DataFrame(
-            {"x": [2, 3, 2, 3], "y": list("bbcc")}, index=[2, 3, 2, 3]
-        ),
+        cudf.DataFrame({"x": [2, 2], "y": list("bc")}, index=[2, 2]),
     )
 
 
@@ -541,13 +515,16 @@ def test_parquet_read_filtered_multiple_files(tmpdir):
 @pytest.mark.parametrize(
     "predicate,expected_len",
     [
-        ([[("x", "==", 0)], [("z", "==", 0)]], 4),
+        ([[("x", "==", 0)], [("z", "==", 0)]], 2),
         ([("x", "==", 0), ("z", "==", 0)], 0),
-        ([("x", "==", 0), ("z", "!=", 0)], 2),
-        ([("x", "==", 0), ("z", "==", 0)], 0),
+        ([("x", "==", 0), ("z", "!=", 0)], 1),
         ([("y", "==", "c"), ("x", ">", 8)], 0),
-        ([("y", "==", "c"), ("x", ">=", 5)], 2),
-        ([[("y", "==", "c")], [("x", "<", 3)]], 6),
+        ([("y", "==", "c"), ("x", ">=", 5)], 1),
+        ([[("y", "==", "c")], [("x", "<", 3)]], 5),
+        ([[("x", "not in", (0, 9)), ("z", "not in", (4, 5))]], 6),
+        ([[("y", "==", "c")], [("x", "in", (0, 9)), ("z", "in", (0, 9))]], 4),
+        ([[("x", "==", 0)], [("x", "==", 1)], [("x", "==", 2)]], 3),
+        ([[("x", "==", 0), ("z", "==", 9), ("y", "==", "a")]], 1),
     ],
 )
 def test_parquet_read_filtered_complex_predicate(
@@ -556,7 +533,11 @@ def test_parquet_read_filtered_complex_predicate(
     # Generate data
     fname = tmpdir.join("filtered_complex_predicate.parquet")
     df = pd.DataFrame(
-        {"x": range(10), "y": list("aabbccddee"), "z": reversed(range(10))}
+        {
+            "x": range(10),
+            "y": list("aabbccddee"),
+            "z": reversed(range(10)),
+        }
     )
     df.to_parquet(fname, row_group_size=2)
 
@@ -1305,6 +1286,56 @@ def test_parquet_reader_v2(tmpdir, simple_pdf):
     assert_eq(cudf.read_parquet(pdf_fname), simple_pdf)
 
 
+@pytest.mark.parametrize("nrows", [1, 100000])
+@pytest.mark.parametrize("add_nulls", [True, False])
+def test_delta_binary(nrows, add_nulls, tmpdir):
+    null_frequency = 0.25 if add_nulls else 0
+
+    # Create a pandas dataframe with random data of mixed types
+    arrow_table = dg.rand_dataframe(
+        dtypes_meta=[
+            {
+                "dtype": "int8",
+                "null_frequency": null_frequency,
+                "cardinality": nrows,
+            },
+            {
+                "dtype": "int16",
+                "null_frequency": null_frequency,
+                "cardinality": nrows,
+            },
+            {
+                "dtype": "int32",
+                "null_frequency": null_frequency,
+                "cardinality": nrows,
+            },
+            {
+                "dtype": "int64",
+                "null_frequency": null_frequency,
+                "cardinality": nrows,
+            },
+        ],
+        rows=nrows,
+        seed=0,
+        use_threads=False,
+    )
+    # Roundabout conversion to pandas to preserve nulls/data types
+    cudf_table = cudf.DataFrame.from_arrow(arrow_table)
+    test_pdf = cudf_table.to_pandas(nullable=True)
+    pdf_fname = tmpdir.join("pdfv2.parquet")
+    test_pdf.to_parquet(
+        pdf_fname,
+        version="2.6",
+        column_encoding="DELTA_BINARY_PACKED",
+        data_page_version="2.0",
+        engine="pyarrow",
+        use_dictionary=False,
+    )
+    cdf = cudf.read_parquet(pdf_fname)
+    pcdf = cudf.from_pandas(test_pdf)
+    assert_eq(cdf, pcdf)
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -1954,26 +1985,16 @@ def test_read_parquet_partitioned_filtered(
         assert got.dtypes["c"] == "int"
     assert_eq(expect, got)
 
-    # Filter on non-partitioned column.
-    # Cannot compare to pandas, since the pyarrow
-    # backend will filter by row (and cudf can
-    # only filter by column, for now)
+    # Filter on non-partitioned column
     filters = [("a", "==", 10)]
-    got = cudf.read_parquet(
-        read_path,
-        filters=filters,
-        row_groups=row_groups,
-    )
-    assert len(got) < len(df) and 10 in got["a"]
+    got = cudf.read_parquet(read_path, filters=filters)
+    expect = pd.read_parquet(read_path, filters=filters)
 
     # Filter on both kinds of columns
     filters = [[("a", "==", 10)], [("c", "==", 1)]]
-    got = cudf.read_parquet(
-        read_path,
-        filters=filters,
-        row_groups=row_groups,
-    )
-    assert len(got) < len(df) and (1 in got["c"] and 10 in got["a"])
+    got = cudf.read_parquet(read_path, filters=filters)
+    expect = pd.read_parquet(read_path, filters=filters)
+    assert_eq(expect, got)
 
 
 def test_parquet_writer_chunked_metadata(tmpdir, simple_pdf, simple_gdf):
@@ -2293,7 +2314,7 @@ def test_parquet_writer_statistics(tmpdir, pdf, add_nulls):
         pdf = pdf.drop(columns=["col_category", "col_bool"])
 
     if not add_nulls:
-        # Timedelta types convert NA to None when reading from parquet into
+        # Timedelta types convert NaT to None when reading from parquet into
         # pandas which interferes with series.max()/min()
         for t in TIMEDELTA_TYPES:
             pdf["col_" + t] = pd.Series(np.arange(len(pdf.index))).astype(t)
@@ -2353,11 +2374,11 @@ def test_parquet_writer_list_statistics(tmpdir):
         for i, col in enumerate(pd_slice):
             stats = pq_file.metadata.row_group(rg).column(i).statistics
 
-            actual_min = cudf.Series(pd_slice[col].explode().explode()).min()
+            actual_min = pd_slice[col].explode().explode().dropna().min()
             stats_min = stats.min
             assert normalized_equals(actual_min, stats_min)
 
-            actual_max = cudf.Series(pd_slice[col].explode().explode()).max()
+            actual_max = pd_slice[col].explode().explode().dropna().max()
             stats_max = stats.max
             assert normalized_equals(actual_max, stats_max)
 
@@ -2547,6 +2568,24 @@ def test_parquet_reader_binary_decimal(datadir):
     assert_eq(expect, got)
 
 
+def test_parquet_reader_fixed_bin(datadir):
+    fname = datadir / "fixed_len_byte_array.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname)
+
+    assert_eq(expect, got)
+
+
+def test_parquet_reader_rle_boolean(datadir):
+    fname = datadir / "rle_boolean_encoding.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname)
+
+    assert_eq(expect, got)
+
+
 # testing a specific bug-fix/edge case.
 # specifically:  int a parquet file containing a particular way of representing
 #                a list column in a schema, the cudf reader was confusing
@@ -2571,6 +2610,20 @@ def test_parquet_reader_one_level_list2(datadir):
     got = cudf.read_parquet(fname)
 
     assert_eq(expect, got, check_dtype=False)
+
+
+# testing a specific bug-fix/edge case.
+# specifically:  in a parquet file containing a particular way of representing
+#                a list column in a schema, the cudf reader was confusing
+#                nesting information and building a list of list of int instead
+#                of a list of int
+def test_parquet_reader_one_level_list3(datadir):
+    fname = datadir / "one_level_list3.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname)
+
+    assert_eq(expect, got, check_dtype=True)
 
 
 @pytest.mark.parametrize("size_bytes", [4_000_000, 1_000_000, 600_000])
@@ -2643,6 +2696,20 @@ def test_parquet_columns_and_index_param(index, columns):
     buffer = BytesIO()
     df = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
     df.to_parquet(buffer, index=index)
+
+    expected = pd.read_parquet(buffer, columns=columns)
+    got = cudf.read_parquet(buffer, columns=columns)
+
+    assert_eq(expected, got, check_index_type=True)
+
+
+@pytest.mark.parametrize("columns", [None, ["b", "a"]])
+def test_parquet_columns_and_range_index(columns):
+    buffer = BytesIO()
+    df = cudf.DataFrame(
+        {"a": [1, 2, 3], "b": ["a", "b", "c"]}, index=pd.RangeIndex(2, 5)
+    )
+    df.to_parquet(buffer)
 
     expected = pd.read_parquet(buffer, columns=columns)
     got = cudf.read_parquet(buffer, columns=columns)
@@ -2753,3 +2820,51 @@ def test_parquet_reader_malformed_file(datadir):
     # expect a failure when reading the whole file
     with pytest.raises(RuntimeError):
         cudf.read_parquet(fname)
+
+
+def test_parquet_reader_unsupported_page_encoding(datadir):
+    fname = datadir / "delta_encoding.parquet"
+
+    # expect a failure when reading the whole file
+    with pytest.raises(RuntimeError):
+        cudf.read_parquet(fname)
+
+
+@pytest.mark.parametrize("data", [{"a": [1, 2, 3, 4]}, {"b": [1, None, 2, 3]}])
+@pytest.mark.parametrize("force_nullable_schema", [True, False])
+def test_parquet_writer_schema_nullability(data, force_nullable_schema):
+    df = cudf.DataFrame(data)
+    file_obj = BytesIO()
+
+    df.to_parquet(file_obj, force_nullable_schema=force_nullable_schema)
+
+    assert pa.parquet.read_schema(file_obj).field(0).nullable == (
+        force_nullable_schema or df.isnull().any().any()
+    )
+
+
+def test_parquet_read_filter_and_project():
+    # Filter on columns that are not included
+    # in the current column projection
+
+    with BytesIO() as buffer:
+        # Write parquet data
+        df = cudf.DataFrame(
+            {
+                "a": [1, 2, 3, 4, 5] * 10,
+                "b": [0, 1, 2, 3, 4] * 10,
+                "c": range(50),
+                "d": [6, 7] * 25,
+                "e": [8, 9] * 25,
+            }
+        )
+        df.to_parquet(buffer)
+
+        # Read back with filter and projection
+        columns = ["b"]
+        filters = [[("a", "==", 5), ("c", ">", 20)]]
+        got = cudf.read_parquet(buffer, columns=columns, filters=filters)
+
+    # Check result
+    expected = df[(df.a == 5) & (df.c > 20)][columns].reset_index(drop=True)
+    assert_eq(got, expected)

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import glob
 import math
@@ -7,7 +7,6 @@ import os
 import numpy as np
 import pandas as pd
 import pytest
-from packaging.version import parse as parse_version
 
 import dask
 from dask import dataframe as dd
@@ -36,16 +35,6 @@ df = pd.DataFrame(
 ddf = dd.from_pandas(df, npartitions=npartitions)
 
 
-# Helper function to make it easier to handle the
-# upcoming deprecation of `gather_statistics`.
-# See: https://github.com/dask/dask/issues/8937
-# TODO: This function should be used to switch to
-# the "new" `calculate_divisions` kwarg (for newer
-# Dask versions) once it is introduced
-def _divisions(setting):
-    return {"gather_statistics": setting}
-
-
 def test_roundtrip_backend_dispatch(tmpdir):
     # Test ddf.read_parquet cudf-backend dispatch
     tmpdir = str(tmpdir)
@@ -69,31 +58,35 @@ def test_roundtrip_from_dask(tmpdir, divisions, write_metadata_file):
     )
 
     # Read list of parquet files
-    ddf2 = dask_cudf.read_parquet(files, **_divisions(divisions))
+    ddf2 = dask_cudf.read_parquet(files, calculate_divisions=divisions)
     dd.assert_eq(ddf, ddf2, check_divisions=divisions)
 
     # Specify columns=['x']
     ddf2 = dask_cudf.read_parquet(
-        files, columns=["x"], **_divisions(divisions)
+        files, columns=["x"], calculate_divisions=divisions
     )
     dd.assert_eq(ddf[["x"]], ddf2, check_divisions=divisions)
 
     # Specify columns='y'
-    ddf2 = dask_cudf.read_parquet(files, columns="y", **_divisions(divisions))
+    ddf2 = dask_cudf.read_parquet(
+        files, columns="y", calculate_divisions=divisions
+    )
     dd.assert_eq(ddf[["y"]], ddf2, check_divisions=divisions)
 
     # Now include metadata
-    ddf2 = dask_cudf.read_parquet(tmpdir, **_divisions(divisions))
+    ddf2 = dask_cudf.read_parquet(tmpdir, calculate_divisions=divisions)
     dd.assert_eq(ddf, ddf2, check_divisions=divisions)
 
     # Specify columns=['x'] (with metadata)
     ddf2 = dask_cudf.read_parquet(
-        tmpdir, columns=["x"], **_divisions(divisions)
+        tmpdir, columns=["x"], calculate_divisions=divisions
     )
     dd.assert_eq(ddf[["x"]], ddf2, check_divisions=divisions)
 
     # Specify columns='y' (with metadata)
-    ddf2 = dask_cudf.read_parquet(tmpdir, columns="y", **_divisions(divisions))
+    ddf2 = dask_cudf.read_parquet(
+        tmpdir, columns="y", calculate_divisions=divisions
+    )
     dd.assert_eq(ddf[["y"]], ddf2, check_divisions=divisions)
 
 
@@ -122,7 +115,7 @@ def test_roundtrip_from_dask_cudf(tmpdir, write_meta):
     gddf = dask_cudf.from_dask_dataframe(ddf)
     gddf.to_parquet(tmpdir, write_metadata_file=write_meta)
 
-    gddf2 = dask_cudf.read_parquet(tmpdir, **_divisions(True))
+    gddf2 = dask_cudf.read_parquet(tmpdir, calculate_divisions=True)
     dd.assert_eq(gddf, gddf2)
 
 
@@ -166,12 +159,6 @@ def test_strings(tmpdir):
     read_df = dask_cudf.read_parquet(fn, index=["a"])
     dd.assert_eq(ddf2, read_df.compute().to_pandas())
 
-    read_df_cats = dask_cudf.read_parquet(
-        fn, index=["a"], strings_to_categorical=True
-    )
-    dd.assert_eq(read_df_cats.dtypes, read_df_cats.compute().dtypes)
-    dd.assert_eq(read_df_cats.dtypes[0], "int32")
-
 
 def test_dask_timeseries_from_pandas(tmpdir):
 
@@ -190,7 +177,9 @@ def test_dask_timeseries_from_dask(tmpdir, index, divisions):
     fn = str(tmpdir)
     ddf2 = dask.datasets.timeseries(freq="D")
     ddf2.to_parquet(fn, engine="pyarrow", write_index=index)
-    read_df = dask_cudf.read_parquet(fn, index=index, **_divisions(divisions))
+    read_df = dask_cudf.read_parquet(
+        fn, index=index, calculate_divisions=divisions
+    )
     dd.assert_eq(
         ddf2, read_df, check_divisions=(divisions and index), check_index=index
     )
@@ -206,7 +195,9 @@ def test_dask_timeseries_from_daskcudf(tmpdir, index, divisions):
     )
     ddf2.name = ddf2.name.astype("object")
     ddf2.to_parquet(fn, write_index=index)
-    read_df = dask_cudf.read_parquet(fn, index=index, **_divisions(divisions))
+    read_df = dask_cudf.read_parquet(
+        fn, index=index, calculate_divisions=divisions
+    )
     dd.assert_eq(
         ddf2, read_df, check_divisions=(divisions and index), check_index=index
     )
@@ -257,6 +248,41 @@ def test_filters(tmpdir):
     assert not len(c)
 
 
+@pytest.mark.parametrize("numeric", [True, False])
+@pytest.mark.parametrize("null", [np.nan, None])
+def test_isna_filters(tmpdir, null, numeric):
+
+    tmp_path = str(tmpdir)
+    df = pd.DataFrame(
+        {
+            "x": range(10),
+            "y": list("aabbccddee"),
+            "i": [0] * 4 + [np.nan] * 2 + [0] * 4,
+            "j": [""] * 4 + [None] * 2 + [""] * 4,
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=5)
+    assert ddf.npartitions == 5
+    ddf.to_parquet(tmp_path, engine="pyarrow")
+
+    # Test "is"
+    col = "i" if numeric else "j"
+    filters = [(col, "is", null)]
+    out = dask_cudf.read_parquet(
+        tmp_path, filters=filters, split_row_groups=True
+    )
+    assert len(out) == 2
+    assert list(out.x.compute().values) == [4, 5]
+
+    # Test "is not"
+    filters = [(col, "is not", null)]
+    out = dask_cudf.read_parquet(
+        tmp_path, filters=filters, split_row_groups=True
+    )
+    assert len(out) == 8
+    assert list(out.x.compute().values) == [0, 1, 2, 3, 6, 7, 8, 9]
+
+
 def test_filters_at_row_group_level(tmpdir):
 
     tmp_path = str(tmpdir)
@@ -270,7 +296,7 @@ def test_filters_at_row_group_level(tmpdir):
         tmp_path, filters=[("x", "==", 1)], split_row_groups=True
     )
     assert a.npartitions == 1
-    assert (a.shape[0] == 2).compute()
+    assert (a.shape[0] == 1).compute()
 
     ddf.to_parquet(tmp_path, engine="pyarrow", row_group_size=1)
 
@@ -328,89 +354,14 @@ def test_roundtrip_from_dask_partitioned(tmpdir, parts, daskcudf, metadata):
             if not fn.startswith("_"):
                 assert "part" in fn
 
-    if parse_version(dask.__version__) > parse_version("2021.07.0"):
-        # This version of Dask supports `aggregate_files=True`.
-        # Check that we can aggregate by a partition name.
-        df_read = dd.read_parquet(
-            tmpdir, engine="pyarrow", aggregate_files="year"
-        )
-        gdf_read = dask_cudf.read_parquet(tmpdir, aggregate_files="year")
-        dd.assert_eq(df_read, gdf_read)
-
-
-@pytest.mark.parametrize("metadata", [True, False])
-@pytest.mark.parametrize("chunksize", [None, 1024, 4096, "1MiB"])
-def test_chunksize(tmpdir, chunksize, metadata):
-    nparts = 2
-    df_size = 100
-    row_group_size = 5
-
-    df = pd.DataFrame(
-        {
-            "a": np.random.choice(["apple", "banana", "carrot"], size=df_size),
-            "b": np.random.random(size=df_size),
-            "c": np.random.randint(1, 5, size=df_size),
-            "index": np.arange(0, df_size),
-        }
-    ).set_index("index")
-
-    ddf1 = dd.from_pandas(df, npartitions=nparts)
-    ddf1.to_parquet(
-        str(tmpdir),
-        engine="pyarrow",
-        row_group_size=row_group_size,
-        write_metadata_file=metadata,
+    # Check that we can aggregate files by a partition name
+    df_read = dd.read_parquet(
+        tmpdir, engine="pyarrow", aggregate_files="year", split_row_groups=2
     )
-
-    if metadata:
-        path = str(tmpdir)
-    else:
-        dirname = str(tmpdir)
-        files = os.listdir(dirname)
-        assert "_metadata" not in files
-        path = os.path.join(dirname, "*.parquet")
-
-    ddf2 = dask_cudf.read_parquet(
-        path,
-        chunksize=chunksize,
-        split_row_groups=True,
-        **_divisions(True),
+    gdf_read = dask_cudf.read_parquet(
+        tmpdir, aggregate_files="year", split_row_groups=2
     )
-    ddf2.compute(scheduler="synchronous")
-
-    dd.assert_eq(ddf1, ddf2, check_divisions=False)
-
-    num_row_groups = df_size // row_group_size
-    if not chunksize:
-        assert ddf2.npartitions == num_row_groups
-    else:
-        assert ddf2.npartitions < num_row_groups
-
-    if parse_version(dask.__version__) > parse_version("2021.07.0"):
-        # This version of Dask supports `aggregate_files=True`.
-        # Test that it works as expected.
-        ddf3 = dask_cudf.read_parquet(
-            path,
-            chunksize=chunksize,
-            split_row_groups=True,
-            aggregate_files=True,
-            **_divisions(True),
-        )
-
-        dd.assert_eq(ddf1, ddf3, check_divisions=False)
-
-        if not chunksize:
-            # Files should not be aggregated
-            assert ddf3.npartitions == num_row_groups
-        elif chunksize == "1MiB":
-            # All files should be aggregated into
-            # one output partition
-            assert ddf3.npartitions == 1
-        else:
-            # Files can be aggregated together, but
-            # chunksize is not large enough to produce
-            # a single output partition
-            assert ddf3.npartitions < num_row_groups
+    dd.assert_eq(df_read, gdf_read)
 
 
 @pytest.mark.parametrize("row_groups", [1, 3, 10, 12])
@@ -483,7 +434,7 @@ def test_create_metadata_file(tmpdir, partition_on):
         tmpdir,
         split_row_groups=False,
         index="myindex",
-        **_divisions(True),
+        calculate_divisions=True,
     )
     if partition_on:
         ddf1 = df1.sort_values("b")
@@ -514,7 +465,7 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
     # New pyarrow-dataset base can handle an inconsistent
     # schema (even without a _metadata file), but computing
     # and dtype validation may fail
-    ddf1 = dask_cudf.read_parquet(str(tmpdir), **_divisions(True))
+    ddf1 = dask_cudf.read_parquet(str(tmpdir), calculate_divisions=True)
 
     # Add global metadata file.
     # Dask-CuDF can do this without requiring schema
@@ -523,7 +474,7 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
 
     # Check that we can still read the ddf
     # with the _metadata file present
-    ddf2 = dask_cudf.read_parquet(str(tmpdir), **_divisions(True))
+    ddf2 = dask_cudf.read_parquet(str(tmpdir), calculate_divisions=True)
 
     # Check that the result is the same with and
     # without the _metadata file.  Note that we must
@@ -580,3 +531,67 @@ def test_check_file_size(tmpdir):
     cudf.DataFrame({"a": np.arange(1000)}).to_parquet(fn)
     with pytest.warns(match="large parquet file"):
         dask_cudf.read_parquet(fn, check_file_size=1).compute()
+
+
+def test_null_partition(tmpdir):
+    import pyarrow as pa
+    from pyarrow.dataset import HivePartitioning
+
+    ids = pd.Series([0, 1, None], dtype="Int64")
+    df = pd.DataFrame({"id": ids, "x": [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=1).to_backend("cudf")
+    ddf.to_parquet(str(tmpdir), partition_on="id")
+    fns = glob.glob(os.path.join(tmpdir, "id" + "=*/*.parquet"))
+    assert len(fns) == 3
+
+    partitioning = HivePartitioning(pa.schema([("id", pa.int64())]))
+    ddf_read = dask_cudf.read_parquet(
+        str(tmpdir),
+        dataset={"partitioning": partitioning},
+    )
+    dd.assert_eq(
+        ddf[["x", "id"]],
+        ddf_read[["x", "id"]],
+        check_divisions=False,
+    )
+
+
+def test_nullable_schema_mismatch(tmpdir):
+    # See: https://github.com/rapidsai/cudf/issues/12702
+    path0 = str(tmpdir.join("test.0.parquet"))
+    path1 = str(tmpdir.join("test.1.parquet"))
+    cudf.DataFrame.from_dict({"a": [1, 2, 3]}).to_parquet(path0)
+    cudf.DataFrame.from_dict({"a": [4, 5, None]}).to_parquet(path1)
+    with dask.config.set({"dataframe.backend": "cudf"}):
+        ddf = dd.read_parquet(
+            [path0, path1], split_row_groups=2, aggregate_files=True
+        )
+        expect = pd.read_parquet([path0, path1])
+    dd.assert_eq(ddf, expect, check_index=False)
+
+
+def test_parquet_read_filter_and_project(tmpdir):
+    # Filter on columns that are not included
+    # in the current column projection
+
+    # Write parquet data
+    path = str(tmpdir.join("test.parquet"))
+    df = cudf.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5] * 10,
+            "b": [0, 1, 2, 3, 4] * 10,
+            "c": range(50),
+            "d": [6, 7] * 25,
+            "e": [8, 9] * 25,
+        }
+    )
+    df.to_parquet(path)
+
+    # Read back with filter and projection
+    columns = ["b"]
+    filters = [[("a", "==", 5), ("c", ">", 20)]]
+    got = dask_cudf.read_parquet(path, columns=columns, filters=filters)
+
+    # Check result
+    expected = df[(df.a == 5) & (df.c > 20)][columns].reset_index(drop=True)
+    dd.assert_eq(got, expected)

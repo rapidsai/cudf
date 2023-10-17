@@ -7,7 +7,6 @@ Constructor
 -----------
 .. autosummary::
    :toctree: api/
-   :template: autosummary/class_with_autosummary.rst
 
    Series
 
@@ -44,8 +43,16 @@ Conversion
    :toctree: api/
 
    Series.astype
+   Series.convert_dtypes
    Series.copy
+   Series.deserialize
+   Series.device_deserialize
+   Series.device_serialize
+   Series.host_deserialize
+   Series.host_serialize
+   Series.serialize
    Series.to_list
+   Series.tolist
    Series.__array__
    Series.scale
 
@@ -102,7 +109,6 @@ Function application, GroupBy & window
    :toctree: api/
 
    Series.apply
-   Series.applymap
    Series.map
    Series.groupby
    Series.rolling
@@ -193,6 +199,7 @@ Missing data handling
    Series.dropna
    Series.ffill
    Series.fillna
+   Series.interpolate
    Series.isna
    Series.isnull
    Series.nans_to_nulls
@@ -256,6 +263,12 @@ Datetimelike properties
 datetimelike and return several properties.
 These can be accessed like ``Series.dt.<property>``.
 
+.. currentmodule:: cudf
+.. autosummary::
+   :toctree: api/
+
+   Series.dt
+
 Datetime properties
 ^^^^^^^^^^^^^^^^^^^
 .. currentmodule:: cudf.core.series.DatetimeProperties
@@ -296,6 +309,7 @@ Datetime methods
    round
    floor
    ceil
+   tz_localize
 
 
 Timedelta properties
@@ -322,6 +336,12 @@ Categorical accessor
 
 Categorical-dtype specific methods and attributes are available under
 the ``Series.cat`` accessor.
+
+.. currentmodule:: cudf
+.. autosummary::
+   :toctree: api/
+
+   Series.cat
 
 .. currentmodule:: cudf.core.column.categorical.CategoricalAccessor
 .. autosummary::

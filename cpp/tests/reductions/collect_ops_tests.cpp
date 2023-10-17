@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,8 +42,7 @@ auto collect_set(cudf::column_view const& input,
 }  // namespace
 
 template <typename T>
-struct CollectTestFixedWidth : public cudf::test::BaseFixture {
-};
+struct CollectTestFixedWidth : public cudf::test::BaseFixture {};
 
 using CollectFixedWidthTypes = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                                   cudf::test::FloatingPointTypes,
@@ -191,8 +190,7 @@ TYPED_TEST(CollectTestFixedWidth, MergeSets)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected3, dynamic_cast<cudf::list_scalar*>(ret3.get())->view());
 }
 
-struct CollectTest : public cudf::test::BaseFixture {
-};
+struct CollectTest : public cudf::test::BaseFixture {};
 
 TEST_F(CollectTest, CollectSetWithNaN)
 {

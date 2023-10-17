@@ -197,10 +197,7 @@ public:
     update_thresholds(env, alloc_thresholds, jalloc_thresholds);
     update_thresholds(env, dealloc_thresholds, jdealloc_thresholds);
 
-    handler_obj = env->NewGlobalRef(jhandler);
-    if (handler_obj == nullptr) {
-      throw cudf::jni::jni_exception("global ref");
-    }
+    handler_obj = cudf::jni::add_global_ref(env, jhandler);
   }
 
   virtual ~java_event_handler_memory_resource() {
@@ -209,7 +206,7 @@ public:
     // already be destroyed and this thread should not try to attach to get an environment.
     JNIEnv *env = nullptr;
     if (jvm->GetEnv(reinterpret_cast<void **>(&env), cudf::jni::MINIMUM_JNI_VERSION) == JNI_OK) {
-      env->DeleteGlobalRef(handler_obj);
+      handler_obj = cudf::jni::del_global_ref(env, handler_obj);
     }
     handler_obj = nullptr;
   }
@@ -549,10 +546,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseArenaMemoryResource(JNIEnv
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newCudaAsyncMemoryResource(JNIEnv *env,
-                                                                           jclass clazz,
-                                                                           jlong child, jlong init,
+                                                                           jclass clazz, jlong init,
                                                                            jlong release) {
-  JNI_NULL_CHECK(env, child, "child is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     auto ret = new rmm::mr::cuda_async_memory_resource(init, release);

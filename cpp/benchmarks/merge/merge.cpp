@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,7 @@
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
 // Fixture that enables RMM pool mode
-class Merge : public cudf::benchmark {
-};
+class Merge : public cudf::benchmark {};
 
 using IntColWrap = cudf::test::fixed_width_column_wrapper<int32_t>;
 

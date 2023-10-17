@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,10 +50,9 @@ struct contains_fn {
     if (d_strings.is_null(idx)) return false;
     auto const d_str = d_strings.element<string_view>(idx);
 
-    size_type begin = 0;
-    size_type end   = beginning_only ? 1    // match only the beginning of the string;
-                                     : -1;  // match anywhere in the string
-    return static_cast<bool>(prog.find(thread_idx, d_str, begin, end));
+    size_type end = beginning_only ? 1    // match only the beginning of the string;
+                                   : -1;  // match anywhere in the string
+    return prog.find(thread_idx, d_str, d_str.begin(), end).has_value();
   }
 };
 
@@ -125,16 +124,6 @@ std::unique_ptr<column> count_re(strings_column_view const& input,
 // external APIs
 
 std::unique_ptr<column> contains_re(strings_column_view const& strings,
-                                    std::string_view pattern,
-                                    regex_flags const flags,
-                                    rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  auto const h_prog = regex_program::create(pattern, flags, capture_groups::NON_CAPTURE);
-  return detail::contains_re(strings, *h_prog, cudf::get_default_stream(), mr);
-}
-
-std::unique_ptr<column> contains_re(strings_column_view const& strings,
                                     regex_program const& prog,
                                     rmm::mr::device_memory_resource* mr)
 {
@@ -143,31 +132,11 @@ std::unique_ptr<column> contains_re(strings_column_view const& strings,
 }
 
 std::unique_ptr<column> matches_re(strings_column_view const& strings,
-                                   std::string_view pattern,
-                                   regex_flags const flags,
-                                   rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  auto const h_prog = regex_program::create(pattern, flags, capture_groups::NON_CAPTURE);
-  return detail::matches_re(strings, *h_prog, cudf::get_default_stream(), mr);
-}
-
-std::unique_ptr<column> matches_re(strings_column_view const& strings,
                                    regex_program const& prog,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::matches_re(strings, prog, cudf::get_default_stream(), mr);
-}
-
-std::unique_ptr<column> count_re(strings_column_view const& strings,
-                                 std::string_view pattern,
-                                 regex_flags const flags,
-                                 rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  auto const h_prog = regex_program::create(pattern, flags, capture_groups::NON_CAPTURE);
-  return detail::count_re(strings, *h_prog, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> count_re(strings_column_view const& strings,

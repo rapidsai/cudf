@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,14 +90,12 @@ template <class... T, int D>
 struct GetTypeImpl<Types<T...>, D> {
   static_assert(D < sizeof...(T), "Out of bounds");
 
-  using type = typename GetTypeImpl<typename Types<T...>::Tail, D - 1>::type;
+  using raw_type = decltype(std::get<D>(std::declval<std::tuple<T...>>()));
+  using type     = std::decay_t<raw_type>;
 };
-
-template <class... ARGS>
-struct GetTypeImpl<Types<ARGS...>, 0> {
-  static_assert(sizeof...(ARGS) > 0, "Out of bounds");
-
-  using type = typename Types<ARGS...>::Head;
+template <class T, class... ARGS>
+struct GetTypeImpl<Types<T, ARGS...>, 0> {
+  using type = T;
 };
 // @endcond
 
@@ -244,8 +242,7 @@ struct Prepend<T, Types<TUPLES...>> {
 
 // skip empty tuples
 template <class T, class... TUPLES>
-struct Prepend<T, Types<Types<>, TUPLES...>> : Prepend<T, Types<TUPLES...>> {
-};
+struct Prepend<T, Types<Types<>, TUPLES...>> : Prepend<T, Types<TUPLES...>> {};
 }  // namespace detail
 
 template <class... ARGS>
@@ -269,8 +266,7 @@ struct CrossProductImpl<Types<AARGS...>, TAIL...> {
 
 // to make it easy for the user when there's only one element to be joined
 template <class T, class... TAIL>
-struct CrossProductImpl<T, TAIL...> : CrossProductImpl<Types<T>, TAIL...> {
-};
+struct CrossProductImpl<T, TAIL...> : CrossProductImpl<Types<T>, TAIL...> {};
 // @endcond
 
 /**
@@ -295,25 +291,20 @@ using CrossProduct = typename CrossProductImpl<ARGS...>::type;
 // @cond
 namespace detail {
 template <class... ITEMS>
-struct AllSame : std::false_type {
-};
+struct AllSame : std::false_type {};
 
 // degenerate case
 template <class A>
-struct AllSame<A> : std::true_type {
-};
+struct AllSame<A> : std::true_type {};
 
 template <class A>
-struct AllSame<A, A> : std::true_type {
-};
+struct AllSame<A, A> : std::true_type {};
 
 template <class HEAD, class... TAIL>
-struct AllSame<HEAD, HEAD, TAIL...> : AllSame<HEAD, TAIL...> {
-};
+struct AllSame<HEAD, HEAD, TAIL...> : AllSame<HEAD, TAIL...> {};
 
 template <class... ITEMS>
-struct AllSame<Types<ITEMS...>> : AllSame<ITEMS...> {
-};
+struct AllSame<Types<ITEMS...>> : AllSame<ITEMS...> {};
 
 }  // namespace detail
 // @endcond
@@ -352,18 +343,15 @@ struct ExistsImpl;
 
 // end case, no more types to check
 template <class NEEDLE>
-struct ExistsImpl<NEEDLE, Types<>> : std::false_type {
-};
+struct ExistsImpl<NEEDLE, Types<>> : std::false_type {};
 
 // next one matches
 template <class NEEDLE, class... TAIL>
-struct ExistsImpl<NEEDLE, Types<NEEDLE, TAIL...>> : std::true_type {
-};
+struct ExistsImpl<NEEDLE, Types<NEEDLE, TAIL...>> : std::true_type {};
 
 // next one doesn't match
 template <class NEEDLE, class HEAD, class... TAIL>
-struct ExistsImpl<NEEDLE, Types<HEAD, TAIL...>> : ExistsImpl<NEEDLE, Types<TAIL...>> {
-};
+struct ExistsImpl<NEEDLE, Types<HEAD, TAIL...>> : ExistsImpl<NEEDLE, Types<TAIL...>> {};
 // @endcond
 
 /**

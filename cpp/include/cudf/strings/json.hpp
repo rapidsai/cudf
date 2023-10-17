@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -160,6 +160,8 @@ class get_json_object_options {
  * @param options Options for controlling the behavior of the function
  * @param mr Resource for allocating device memory.
  * @return New strings column containing the retrieved json object strings
+ *
+ * @throw std::invalid_argument if provided an invalid operator or an empty name
  */
 std::unique_ptr<cudf::column> get_json_object(
   cudf::strings_column_view const& col,

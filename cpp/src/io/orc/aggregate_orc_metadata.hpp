@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,12 +43,12 @@ struct column_hierarchy {
  * to aggregate that metadata from all the files.
  */
 class aggregate_orc_metadata {
-  using OrcStripeInfo = std::pair<const StripeInformation*, const StripeFooter*>;
+  using OrcStripeInfo = std::pair<StripeInformation const*, StripeFooter const*>;
 
   /**
    * @brief Sums up the number of rows of each source
    */
-  [[nodiscard]] size_type calc_num_rows() const;
+  [[nodiscard]] int64_t calc_num_rows() const;
 
   /**
    * @brief Number of columns in a ORC file.
@@ -62,7 +62,7 @@ class aggregate_orc_metadata {
 
  public:
   std::vector<metadata> per_file_metadata;
-  size_type const num_rows;
+  int64_t const num_rows;
   size_type const num_stripes;
   bool row_grp_idx_present{true};
 
@@ -91,7 +91,7 @@ class aggregate_orc_metadata {
   /**
    * @brief Returns the name of the given column from the given source.
    */
-  [[nodiscard]] std::string const& column_name(const int source_idx, const int column_id) const
+  [[nodiscard]] std::string const& column_name(int const source_idx, int const column_id) const
   {
     CUDF_EXPECTS(source_idx <= static_cast<int>(per_file_metadata.size()),
                  "Out of range source_idx provided");
@@ -103,7 +103,7 @@ class aggregate_orc_metadata {
    *
    * Full name includes ancestor columns' names.
    */
-  [[nodiscard]] std::string const& column_path(const int source_idx, const int column_id) const
+  [[nodiscard]] std::string const& column_path(int const source_idx, int const column_id) const
   {
     CUDF_EXPECTS(source_idx <= static_cast<int>(per_file_metadata.size()),
                  "Out of range source_idx provided");
@@ -115,10 +115,10 @@ class aggregate_orc_metadata {
    *
    * Stripes are potentially selected from multiple files.
    */
-  std::vector<metadata::stripe_source_mapping> select_stripes(
+  std::tuple<int64_t, size_type, std::vector<metadata::stripe_source_mapping>> select_stripes(
     std::vector<std::vector<size_type>> const& user_specified_stripes,
-    size_type& row_start,
-    size_type& row_count,
+    uint64_t skip_rows,
+    std::optional<size_type> const& num_rows,
     rmm::cuda_stream_view stream);
 
   /**
@@ -131,7 +131,8 @@ class aggregate_orc_metadata {
    * `nullopt` if user did not select columns to read
    * @return Columns hierarchy - lists of children columns and sorted columns in each nesting level
    */
-  column_hierarchy select_columns(std::optional<std::vector<std::string>> const& column_paths);
+  column_hierarchy select_columns(
+    std::optional<std::vector<std::string>> const& column_paths) const;
 };
 
 }  // namespace cudf::io::orc::detail

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,8 +25,7 @@
 
 #include <vector>
 
-struct StringsReverseTest : public cudf::test::BaseFixture {
-};
+struct StringsReverseTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsReverseTest, Reverse)
 {
@@ -46,8 +45,8 @@ TEST_F(StringsReverseTest, Reverse)
 
 TEST_F(StringsReverseTest, EmptyStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
+
   auto results = cudf::strings::reverse(cudf::strings_column_view(zero_size_strings_column));
   auto view    = results->view();
   cudf::test::expect_column_empty(results->view());

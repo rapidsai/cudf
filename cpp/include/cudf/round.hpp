@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,7 +67,7 @@ enum class rounding_method : int32_t { HALF_UP, HALF_EVEN };
  * @param method         Rounding method
  * @param mr             Device memory resource used to allocate the returned column's device memory
  *
- * @return std::unique_ptr<column> Column with each of the values rounded
+ * @return Column with each of the values rounded
  */
 std::unique_ptr<column> round(
   column_view const& input,

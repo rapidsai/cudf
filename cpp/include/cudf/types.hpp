@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,7 +80,6 @@ class mutable_table_view;
 using size_type         = int32_t;   ///< Row index type for columns and tables
 using bitmask_type      = uint32_t;  ///< Bitmask type stored as 32-bit unsigned integer
 using valid_type        = uint8_t;   ///< Valid type in host memory
-using offset_type       = int32_t;   ///< Offset type for column offsets
 using thread_index_type = int64_t;   ///< Thread index type in kernels
 
 /**
@@ -89,21 +88,13 @@ using thread_index_type = int64_t;   ///< Thread index type in kernels
  * @tparam T Iterator type
  * @param f "first" iterator
  * @param l "last" iterator
- * @return size_type The distance between first and last
+ * @return The distance between first and last
  */
 template <typename T>
 size_type distance(T f, T l)
 {
   return static_cast<size_type>(std::distance(f, l));
 }
-
-/**
- * @brief Indicates an unknown null count.
- *
- * Use this value when constructing any column-like object to indicate that
- * the null count should be computed on the first invocation of `null_count()`.
- */
-static constexpr size_type UNKNOWN_NULL_COUNT{-1};
 
 /**
  * @brief Indicates the order in which elements should be sorted.
@@ -230,7 +221,7 @@ enum class type_id : int32_t {
 /**
  * @brief Indicator for the logical data type of an element in a column.
  *
- * Simple types can be be entirely described by their `id()`, but some types
+ * Simple types can be entirely described by their `id()`, but some types
  * require additional metadata to fully describe elements of that type.
  */
 class data_type {

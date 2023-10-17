@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,13 +22,12 @@
 #include <cudf/reduction.hpp>
 #include <cudf/types.hpp>
 
-class Reduction : public cudf::benchmark {
-};
+class Reduction : public cudf::benchmark {};
 
 template <typename type>
 void BM_reduction(benchmark::State& state)
 {
-  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  cudf::size_type const column_size{(cudf::size_type)state.range(0)};
   auto const dtype = cudf::type_to_id<type>();
   auto const input_column =
     create_random_column(dtype, row_count{column_size}, data_profile_builder().no_validity());

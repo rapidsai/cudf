@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,8 @@ std::unique_ptr<table> quantiles(table_view const& input,
     return detail::select_quantile<size_type>(selector, size, q, interp);
   };
 
-  auto const q_device = cudf::detail::make_device_uvector_async(q, stream);
+  auto const q_device =
+    cudf::detail::make_device_uvector_async(q, stream, rmm::mr::get_current_device_resource());
 
   auto quantile_idx_iter = thrust::make_transform_iterator(q_device.begin(), quantile_idx_lookup);
 

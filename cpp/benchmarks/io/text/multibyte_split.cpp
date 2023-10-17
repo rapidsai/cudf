@@ -16,14 +16,13 @@
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf_test/file_utilities.hpp>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/utilities/pinned_allocator.hpp>
+#include <cudf/detail/utilities/pinned_host_vector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/detail/bgzip_utils.hpp>
@@ -33,7 +32,6 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-#include <thrust/host_vector.h>
 #include <thrust/transform.h>
 
 #include <nvbench/nvbench.cuh>
@@ -116,8 +114,6 @@ template <data_chunk_source_type source_type>
 static void bench_multibyte_split(nvbench::state& state,
                                   nvbench::type_list<nvbench::enum_type<source_type>>)
 {
-  cudf::rmm_pool_raii pool_raii;
-
   auto const delim_size         = state.get_int64("delim_size");
   auto const delim_percent      = state.get_int64("delim_percent");
   auto const file_size_approx   = state.get_int64("size_approx");
@@ -138,7 +134,7 @@ static void bench_multibyte_split(nvbench::state& state,
   std::unique_ptr<cudf::io::datasource> datasource;
   auto device_input      = create_random_input(file_size_approx, delim_factor, 0.05, delim);
   auto host_input        = std::vector<char>{};
-  auto host_pinned_input = thrust::host_vector<char, cudf::detail::pinned_allocator<char>>{};
+  auto host_pinned_input = cudf::detail::pinned_host_vector<char>{};
 
   if (source_type != data_chunk_source_type::device &&
       source_type != data_chunk_source_type::host_pinned) {
@@ -209,10 +205,21 @@ using source_type_list = nvbench::enum_type_list<data_chunk_source_type::device,
                                                  data_chunk_source_type::host_pinned,
                                                  data_chunk_source_type::file_bgzip>;
 
-NVBENCH_BENCH_TYPES(bench_multibyte_split, NVBENCH_TYPE_AXES(source_type_list))
-  .set_name("multibyte_split")
+NVBENCH_BENCH_TYPES(bench_multibyte_split,
+                    NVBENCH_TYPE_AXES(nvbench::enum_type_list<data_chunk_source_type::file>))
+  .set_name("multibyte_split_delimiters")
+  .set_min_samples(4)
   .add_int64_axis("strip_delimiters", {0, 1})
   .add_int64_axis("delim_size", {1, 4, 7})
   .add_int64_axis("delim_percent", {1, 25})
+  .add_int64_power_of_two_axis("size_approx", {15})
+  .add_int64_axis("byte_range_percent", {50});
+
+NVBENCH_BENCH_TYPES(bench_multibyte_split, NVBENCH_TYPE_AXES(source_type_list))
+  .set_name("multibyte_split_source")
+  .set_min_samples(4)
+  .add_int64_axis("strip_delimiters", {1})
+  .add_int64_axis("delim_size", {1})
+  .add_int64_axis("delim_percent", {1})
   .add_int64_power_of_two_axis("size_approx", {15, 30})
-  .add_int64_axis("byte_range_percent", {1, 5, 25, 50, 100});
+  .add_int64_axis("byte_range_percent", {10, 100});

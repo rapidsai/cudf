@@ -12,6 +12,7 @@ from cudf import _lib as libcudf
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import column
 from cudf.utils import utils
+from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.docutils import docfmt_partial
 
 _doc_applyparams = """
@@ -105,6 +106,7 @@ def apply_chunks(
     return applychunks.run(df, chunks=chunks, tpb=tpb)
 
 
+@acquire_spill_lock()
 def make_aggregate_nullmask(df, columns=None, op="__and__"):
 
     out_mask = None
@@ -112,17 +114,16 @@ def make_aggregate_nullmask(df, columns=None, op="__and__"):
         col = cudf.core.dataframe.extract_col(df, k)
         if not col.nullable:
             continue
-        nullmask = df[k].nullmask
+        nullmask = column.as_column(df[k]._column.nullmask)
 
         if out_mask is None:
             out_mask = column.as_column(
                 nullmask.copy(), dtype=utils.mask_dtype
             )
-            continue
-
-        out_mask = libcudf.binaryop.binaryop(
-            column.as_column(nullmask), out_mask, op, out_mask.dtype
-        )
+        else:
+            out_mask = libcudf.binaryop.binaryop(
+                nullmask, out_mask, op, out_mask.dtype
+            )
 
     return out_mask
 
@@ -195,7 +196,8 @@ class ApplyRowsCompiler(ApplyKernelCompilerBase):
         return kernel
 
     def launch_kernel(self, df, args):
-        self.kernel.forall(len(df))(*args)
+        with _CUDFNumbaConfig():
+            self.kernel.forall(len(df))(*args)
 
 
 class ApplyChunksCompiler(ApplyKernelCompilerBase):
@@ -209,12 +211,14 @@ class ApplyChunksCompiler(ApplyKernelCompilerBase):
     def launch_kernel(self, df, args, chunks, blkct=None, tpb=None):
         chunks = self.normalize_chunks(len(df), chunks)
         if blkct is None and tpb is None:
-            self.kernel.forall(len(df))(len(df), chunks, *args)
+            with _CUDFNumbaConfig():
+                self.kernel.forall(len(df))(len(df), chunks, *args)
         else:
             assert tpb is not None
             if blkct is None:
                 blkct = chunks.size
-            self.kernel[blkct, tpb](len(df), chunks, *args)
+            with _CUDFNumbaConfig():
+                self.kernel[blkct, tpb](len(df), chunks, *args)
 
     def normalize_chunks(self, size, chunks):
         if isinstance(chunks, int):
@@ -336,7 +340,7 @@ def chunk_wise_kernel(nrows, chunks, {args}):
     return kernel
 
 
-_cache = dict()  # type: Dict[Any, Any]
+_cache: Dict[Any, Any] = dict()
 
 
 @functools.wraps(_make_row_wise_kernel)

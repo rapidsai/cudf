@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <algorithm>
 #include <future>
 #include <memory>
 #include <string>
@@ -29,6 +30,13 @@
 namespace cudf {
 //! IO interfaces
 namespace io {
+
+/**
+ * @addtogroup io_datasinks
+ * @{
+ * @file
+ */
+
 /**
  * @brief Interface class for storing the output data from the writers
  */
@@ -40,7 +48,7 @@ class data_sink {
    * @param[in] filepath Path to the file to use
    * @return Constructed data_sink object
    */
-  static std::unique_ptr<data_sink> create(const std::string& filepath);
+  static std::unique_ptr<data_sink> create(std::string const& filepath);
 
   /**
    * @brief Create a sink from a std::vector
@@ -123,7 +131,7 @@ class data_sink {
    * instead of write() when possible.  However, it is still possible to receive
    * write() calls as well.
    *
-   * @return bool If this writer supports device_write() calls
+   * @return If this writer supports device_write() calls
    */
   [[nodiscard]] virtual bool supports_device_write() const { return false; }
 
@@ -194,10 +202,11 @@ class data_sink {
   /**
    * @pure @brief Returns the total number of bytes written into this sink
    *
-   * @return size_t Total number of bytes written into this sink
+   * @return Total number of bytes written into this sink
    */
   virtual size_t bytes_written() = 0;
 };
 
+/** @} */  // end of group
 }  // namespace io
 }  // namespace cudf

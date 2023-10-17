@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/reduction_functions.hpp>
+#include <cudf/reduction/detail/reduction_functions.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -28,11 +28,13 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 
-std::unique_ptr<cudf::scalar> cudf::reduction::nth_element(column_view const& col,
-                                                           size_type n,
-                                                           null_policy null_handling,
-                                                           rmm::cuda_stream_view stream,
-                                                           rmm::mr::device_memory_resource* mr)
+namespace cudf::reduction::detail {
+
+std::unique_ptr<cudf::scalar> nth_element(column_view const& col,
+                                          size_type n,
+                                          null_policy null_handling,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(n >= -col.size() and n < col.size(), "Index out of bounds");
   auto wrap_n = [n](size_type size) { return (n < 0 ? size + n : n); };
@@ -60,3 +62,5 @@ std::unique_ptr<cudf::scalar> cudf::reduction::nth_element(column_view const& co
     return cudf::detail::get_element(col, n, stream, mr);
   }
 }
+
+}  // namespace cudf::reduction::detail

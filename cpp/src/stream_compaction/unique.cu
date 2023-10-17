@@ -65,20 +65,45 @@ std::unique_ptr<table> unique(table_view const& input,
   auto mutable_view = mutable_column_device_view::create(*unique_indices, stream);
   auto keys_view    = input.select(keys);
 
-  auto comp      = cudf::experimental::row::equality::self_comparator(keys_view, stream);
-  auto row_equal = comp.equal_to(nullate::DYNAMIC{has_nested_nulls(keys_view)}, nulls_equal);
+  auto comp = cudf::experimental::row::equality::self_comparator(keys_view, stream);
 
-  // get indices of unique rows
-  auto result_end = unique_copy(thrust::counting_iterator<size_type>(0),
-                                thrust::counting_iterator<size_type>(num_rows),
-                                mutable_view->begin<size_type>(),
-                                row_equal,
-                                keep,
-                                stream);
-  auto indices_view =
-    cudf::detail::slice(column_view(*unique_indices),
-                        0,
-                        thrust::distance(mutable_view->begin<size_type>(), result_end));
+  size_type const unique_size = [&] {
+    if (cudf::detail::has_nested_columns(keys_view)) {
+      // Using a temporary buffer for intermediate transform results from the functor containing
+      // the comparator speeds up compile-time significantly without much degradation in
+      // runtime performance over using the comparator directly in thrust::unique_copy.
+      auto row_equal =
+        comp.equal_to<true>(nullate::DYNAMIC{has_nested_nulls(keys_view)}, nulls_equal);
+      auto d_results = rmm::device_uvector<bool>(num_rows, stream);
+      auto itr       = thrust::make_counting_iterator<size_type>(0);
+      thrust::transform(
+        rmm::exec_policy(stream),
+        itr,
+        itr + num_rows,
+        d_results.begin(),
+        unique_copy_fn<decltype(itr), decltype(row_equal)>{itr, keep, row_equal, num_rows - 1});
+      auto result_end = thrust::copy_if(rmm::exec_policy(stream),
+                                        itr,
+                                        itr + num_rows,
+                                        d_results.begin(),
+                                        mutable_view->begin<size_type>(),
+                                        thrust::identity<bool>{});
+      return static_cast<size_type>(thrust::distance(mutable_view->begin<size_type>(), result_end));
+    } else {
+      // Using thrust::unique_copy with the comparator directly will compile more slowly but
+      // improves runtime by up to 2x over the transform/copy_if approach above.
+      auto row_equal =
+        comp.equal_to<false>(nullate::DYNAMIC{has_nested_nulls(keys_view)}, nulls_equal);
+      auto result_end = unique_copy(thrust::counting_iterator<size_type>(0),
+                                    thrust::counting_iterator<size_type>(num_rows),
+                                    mutable_view->begin<size_type>(),
+                                    row_equal,
+                                    keep,
+                                    stream);
+      return static_cast<size_type>(thrust::distance(mutable_view->begin<size_type>(), result_end));
+    }
+  }();
+  auto indices_view = cudf::detail::slice(column_view(*unique_indices), 0, unique_size, stream);
 
   // gather unique rows and return
   return detail::gather(input,

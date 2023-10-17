@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,12 +31,10 @@
 
 using namespace numeric;
 
-struct FixedPointTest : public cudf::test::BaseFixture {
-};
+struct FixedPointTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct FixedPointTestAllReps : public cudf::test::BaseFixture {
-};
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {};
 
 using RepresentationTypes = ::testing::Types<int32_t, int64_t>;
 
@@ -491,11 +489,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointColumnWrapper)
 
 TYPED_TEST(FixedPointTestAllReps, NoScaleOrWrongTypeID)
 {
-  auto null_mask = cudf::create_null_mask(0, cudf::mask_state::ALL_NULL);
-
-  EXPECT_THROW(
-    cudf::make_fixed_point_column(cudf::data_type{cudf::type_id::INT32}, 0, std::move(null_mask)),
-    cudf::logic_error);
+  EXPECT_THROW(cudf::make_fixed_point_column(cudf::data_type{cudf::type_id::INT32}, 0),
+               cudf::logic_error);
 }
 
 TYPED_TEST(FixedPointTestAllReps, SimpleFixedPointColumnWrapper)

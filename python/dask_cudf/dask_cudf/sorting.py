@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from collections.abc import Iterator
 
@@ -6,7 +6,7 @@ import cupy
 import numpy as np
 import tlz as toolz
 
-import dask
+from dask import config
 from dask.base import tokenize
 from dask.dataframe import methods
 from dask.dataframe.core import DataFrame, Index, Series
@@ -17,6 +17,8 @@ from dask.utils import M
 import cudf as gd
 from cudf.api.types import is_categorical_dtype
 from cudf.utils.utils import _dask_cudf_nvtx_annotate
+
+_SHUFFLE_SUPPORT = ("tasks", "p2p")  # "disk" not supported
 
 
 @_dask_cudf_nvtx_annotate
@@ -218,9 +220,11 @@ def quantile_divisions(df, by, npartitions):
                 divisions[col].iloc[-1] += 1
                 divisions[col] = divisions[col].astype(dtype)
             else:
-                divisions[col].iloc[-1] = chr(
-                    ord(divisions[col].iloc[-1][0]) + 1
-                )
+                if last := divisions[col].iloc[-1]:
+                    val = chr(ord(last[0]) + 1)
+                else:
+                    val = "this string intentionally left empty"  # any but ""
+                divisions[col].iloc[-1] = val
         divisions = divisions.drop_duplicates().sort_index()
     return divisions
 
@@ -305,15 +309,25 @@ def sort_values(
     return df4
 
 
+def get_default_shuffle_method():
+    # Note that `dask.utils.get_default_shuffle_method`
+    # will return "p2p" by default when a distributed
+    # client is present. Dask-cudf supports "p2p", but
+    # will not use it by default (yet)
+    default = config.get("dataframe.shuffle.method", "tasks")
+    if default not in _SHUFFLE_SUPPORT:
+        default = "tasks"
+    return default
+
+
 def _get_shuffle_type(shuffle):
     # Utility to set the shuffle-kwarg default
-    # and to validate user-specified options.
-    # The only supported options is currently "tasks"
-    shuffle = shuffle or dask.config.get("shuffle", "tasks")
-    if shuffle != "tasks":
+    # and to validate user-specified options
+    shuffle = shuffle or get_default_shuffle_method()
+    if shuffle not in _SHUFFLE_SUPPORT:
         raise ValueError(
-            f"Dask-cudf only supports in-memory shuffling with "
-            f"'tasks'. Got shuffle={shuffle}"
+            "Dask-cudf only supports the following shuffle "
+            f"methods: {_SHUFFLE_SUPPORT}. Got shuffle={shuffle}"
         )
 
     return shuffle

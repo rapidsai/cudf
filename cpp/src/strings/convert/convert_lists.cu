@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -134,7 +134,7 @@ struct format_lists_fn {
       auto const view = get_nested_child(stack_idx);
 
       auto offsets   = view.child(cudf::lists_column_view::offsets_column_index);
-      auto d_offsets = offsets.data<offset_type>() + view.offset();
+      auto d_offsets = offsets.data<size_type>() + view.offset();
 
       // add pending separator
       if (item.separator == item_separator::LIST) {
@@ -233,10 +233,11 @@ std::unique_ptr<column> format_list_column(lists_column_view const& input,
 std::unique_ptr<column> format_list_column(lists_column_view const& input,
                                            string_scalar const& na_rep,
                                            strings_column_view const& separators,
+                                           rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::format_list_column(input, na_rep, separators, cudf::get_default_stream(), mr);
+  return detail::format_list_column(input, na_rep, separators, stream, mr);
 }
 
 }  // namespace strings

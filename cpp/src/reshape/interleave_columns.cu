@@ -93,9 +93,9 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::struc
     std::vector<std::unique_ptr<cudf::column>> output_struct_members;
     for (size_type child_idx = 0; child_idx < num_children; ++child_idx) {
       // Collect children columns from the input structs columns at index `child_idx`.
-      auto const child_iter =
-        thrust::make_transform_iterator(structs_columns.begin(), [child_idx](auto const& col) {
-          return structs_column_view(col).get_sliced_child(child_idx);
+      auto const child_iter = thrust::make_transform_iterator(
+        structs_columns.begin(), [&stream = stream, child_idx](auto const& col) {
+          return structs_column_view(col).get_sliced_child(child_idx, stream);
         });
       auto children = std::vector<column_view>(child_iter, child_iter + num_columns);
 
@@ -228,7 +228,7 @@ struct interleave_columns_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
     auto arch_column = input.column(0);
     auto output_size = input.num_columns() * input.num_rows();
     auto output =
-      allocate_like(arch_column, output_size, mask_allocation_policy::NEVER, stream, mr);
+      detail::allocate_like(arch_column, output_size, mask_allocation_policy::NEVER, stream, mr);
     auto device_input  = table_device_view::create(input, stream);
     auto device_output = mutable_column_device_view::create(*output, stream);
     auto index_begin   = thrust::make_counting_iterator<size_type>(0);

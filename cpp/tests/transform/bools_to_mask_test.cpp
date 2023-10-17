@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,9 +38,9 @@ struct MaskToNullTest : public cudf::test::BaseFixture {
     cudf::test::fixed_width_column_wrapper<int32_t> expected(
       sample, sample + input.size(), input.begin());
 
-    auto got_mask = cudf::bools_to_mask(input_column);
+    auto [null_mask, null_count] = cudf::bools_to_mask(input_column);
     cudf::column got_column(expected);
-    got_column.set_null_mask(std::move(*(got_mask.first)));
+    got_column.set_null_mask(std::move(*null_mask), null_count);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got_column.view());
   }
@@ -53,9 +53,9 @@ struct MaskToNullTest : public cudf::test::BaseFixture {
     cudf::test::fixed_width_column_wrapper<int32_t> expected(
       sample, sample + input.size(), input.begin());
 
-    auto got_mask = cudf::bools_to_mask(input_column);
+    auto [null_mask, null_count] = cudf::bools_to_mask(input_column);
     cudf::column got_column(expected);
-    got_column.set_null_mask(std::move(*(got_mask.first)));
+    got_column.set_null_mask(std::move(*null_mask), null_count);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got_column.view());
   }

@@ -1,8 +1,8 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 import warnings
 from decimal import Decimal
-from typing import Any, Sequence, Union, cast
+from typing import Any, Optional, Sequence, Union, cast
 
 import cupy as cp
 import numpy as np
@@ -62,6 +62,27 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 "cudf.core.column.StringColumn", as_column([], dtype="object")
             )
 
+    def __pow__(self, other):
+        if isinstance(other, int):
+            if other == 0:
+                res = cudf.core.column.full(
+                    size=len(self), fill_value=1, dtype=self.dtype
+                )
+                if self.nullable:
+                    res = res.set_mask(self.mask)
+                return res
+            elif other < 0:
+                raise TypeError("Power of negative integers not supported.")
+            res = self
+            for _ in range(other - 1):
+                res = self * res
+            return res
+        else:
+            raise NotImplementedError(
+                f"__pow__ of types {self.dtype} and {type(other)} is "
+                "not yet implemented."
+            )
+
     # Decimals in libcudf don't support truediv, see
     # https://github.com/rapidsai/cudf/pull/7435 for explanation.
     def __truediv__(self, other):
@@ -79,37 +100,34 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
         # Binary Arithmetics between decimal columns. `Scale` and `precision`
         # are computed outside of libcudf
-        unsupported_msg = (
-            f"{op} not supported for the following dtypes: "
-            f"{self.dtype}, {other.dtype}"
-        )
-        try:
-            if op in {"__add__", "__sub__", "__mul__", "__div__"}:
-                output_type = _get_decimal_type(lhs.dtype, rhs.dtype, op)
-                result = libcudf.binaryop.binaryop(lhs, rhs, op, output_type)
-                # TODO:  Why is this necessary? Why isn't the result's
-                # precision already set correctly based on output_type?
-                result.dtype.precision = output_type.precision
-            elif op in {
-                "__eq__",
-                "__ne__",
-                "__lt__",
-                "__gt__",
-                "__le__",
-                "__ge__",
-            }:
-                result = libcudf.binaryop.binaryop(lhs, rhs, op, bool)
-            else:
-                raise TypeError(unsupported_msg)
-        except RuntimeError as e:
-            if "Unsupported operator for these types" in str(e):
-                raise TypeError(unsupported_msg) from e
-            raise
+        if op in {"__add__", "__sub__", "__mul__", "__div__"}:
+            output_type = _get_decimal_type(lhs.dtype, rhs.dtype, op)
+            result = libcudf.binaryop.binaryop(lhs, rhs, op, output_type)
+            # TODO:  Why is this necessary? Why isn't the result's
+            # precision already set correctly based on output_type?
+            result.dtype.precision = output_type.precision
+        elif op in {
+            "__eq__",
+            "__ne__",
+            "__lt__",
+            "__gt__",
+            "__le__",
+            "__ge__",
+        }:
+            result = libcudf.binaryop.binaryop(lhs, rhs, op, bool)
+        else:
+            raise TypeError(
+                f"{op} not supported for the following dtypes: "
+                f"{self.dtype}, {other.dtype}"
+            )
 
         return result
 
     def fillna(
-        self, value: Any = None, method: str = None, dtype: Dtype = None
+        self,
+        value: Any = None,
+        method: Optional[str] = None,
+        dtype: Optional[Dtype] = None,
     ):
         """Fill null values with ``value``.
 
@@ -129,10 +147,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 "integer values"
             )
 
-        result = libcudf.replace.replace_nulls(
-            input_col=self, replacement=value, method=method, dtype=dtype
-        )
-        return result._with_type_metadata(self.dtype)
+        return super().fillna(value=value, method=method)
 
     def normalize_binop_value(self, other):
         if isinstance(other, ColumnBase):
@@ -150,12 +165,8 @@ class DecimalBaseColumn(NumericalBaseColumn):
             elif not isinstance(self.dtype, other.dtype.__class__):
                 # This branch occurs if we have a DecimalBaseColumn of a
                 # different size (e.g. 64 instead of 32).
-                if (
-                    self.dtype.precision == other.dtype.precision
-                    and self.dtype.scale == other.dtype.scale
-                ):
+                if _same_precision_and_scale(self.dtype, other.dtype):
                     other = other.astype(self.dtype)
-
             return other
         if isinstance(other, cudf.Scalar) and isinstance(
             # TODO: Should it be possible to cast scalars of other numerical
@@ -163,9 +174,17 @@ class DecimalBaseColumn(NumericalBaseColumn):
             other.dtype,
             cudf.core.dtypes.DecimalDtype,
         ):
+            if _same_precision_and_scale(self.dtype, other.dtype):
+                other = other.astype(self.dtype)
             return other
         elif is_scalar(other) and isinstance(other, (int, Decimal)):
-            return cudf.Scalar(Decimal(other))
+            other = Decimal(other)
+            metadata = other.as_tuple()
+            precision = max(len(metadata.digits), metadata.exponent)
+            scale = -metadata.exponent
+            return cudf.Scalar(
+                other, dtype=self.dtype.__class__(precision, scale)
+            )
         return NotImplemented
 
     def _decimal_quantile(
@@ -356,12 +375,23 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
     if op in {"__add__", "__sub__"}:
         scale = max(s1, s2)
         precision = scale + max(p1 - s1, p2 - s2) + 1
-    elif op == "__mul__":
-        scale = s1 + s2
-        precision = p1 + p2 + 1
-    elif op == "__div__":
-        scale = max(6, s1 + p2 + 1)
-        precision = p1 - s1 + s2 + scale
+        if precision > Decimal128Dtype.MAX_PRECISION:
+            precision = Decimal128Dtype.MAX_PRECISION
+            scale = Decimal128Dtype.MAX_PRECISION - max(p1 - s1, p2 - s2)
+    elif op in {"__mul__", "__div__"}:
+        if op == "__mul__":
+            scale = s1 + s2
+            precision = p1 + p2 + 1
+        else:
+            scale = max(6, s1 + p2 + 1)
+            precision = p1 - s1 + s2 + scale
+        if precision > Decimal128Dtype.MAX_PRECISION:
+            integral = precision - scale
+            if integral < 32:
+                scale = min(scale, Decimal128Dtype.MAX_PRECISION - integral)
+            elif scale > 6 and integral > 32:
+                scale = 6
+            precision = Decimal128Dtype.MAX_PRECISION
     else:
         raise NotImplementedError()
 
@@ -389,9 +419,9 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
     # can fit `precision` & `scale`.
     max_precision = max(lhs_dtype.MAX_PRECISION, rhs_dtype.MAX_PRECISION)
     for decimal_type in (
-        cudf.Decimal32Dtype,
-        cudf.Decimal64Dtype,
-        cudf.Decimal128Dtype,
+        Decimal32Dtype,
+        Decimal64Dtype,
+        Decimal128Dtype,
     ):
         if decimal_type.MAX_PRECISION >= max_precision:
             try:
@@ -401,12 +431,13 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
                 # to try the next dtype
                 continue
 
-    # Instead of raising an overflow error, we create a `Decimal128Dtype`
-    # with max possible scale & precision, see example of this demonstration
-    # here: https://learn.microsoft.com/en-us/sql/t-sql/data-types/
-    # precision-scale-and-length-transact-sql?view=sql-server-ver16#examples
-    scale = min(
-        scale, cudf.Decimal128Dtype.MAX_PRECISION - (precision - scale)
+    # if we've reached this point, we cannot create a decimal type without
+    # overflow; raise an informative error
+    raise ValueError(
+        f"Performing {op} between columns of type {repr(lhs_dtype)} and "
+        f"{repr(rhs_dtype)} would result in overflow"
     )
-    precision = min(cudf.Decimal128Dtype.MAX_PRECISION, max_precision)
-    return cudf.Decimal128Dtype(precision=precision, scale=scale)
+
+
+def _same_precision_and_scale(lhs: DecimalDtype, rhs: DecimalDtype) -> bool:
+    return lhs.precision == rhs.precision and lhs.scale == rhs.scale

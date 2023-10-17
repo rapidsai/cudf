@@ -11,11 +11,18 @@ import cupy
 import numpy as np
 import pandas as pd
 import pytest
+from numba.core.typing import signature as nb_signature
+from numba.core.typing.templates import AbstractTemplate
+from numba.cuda.cudadecl import registry as cuda_decl_registry
+from numba.cuda.cudaimpl import lower as cuda_lower
 from pandas import testing as tm
 
 import cudf
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
+from cudf.api.types import is_scalar
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
+from cudf.core.udf.strings_lowering import cast_string_view_to_udf_string
+from cudf.core.udf.strings_typing import StringView, string_view, udf_string
 from cudf.utils import dtypes as dtypeutils
 
 supported_numpy_dtypes = [
@@ -40,6 +47,33 @@ DATETIME_TYPES = sorted(list(dtypeutils.DATETIME_TYPES))
 TIMEDELTA_TYPES = sorted(list(dtypeutils.TIMEDELTA_TYPES))
 OTHER_TYPES = sorted(list(dtypeutils.OTHER_TYPES))
 ALL_TYPES = sorted(list(dtypeutils.ALL_TYPES))
+
+SERIES_OR_INDEX_NAMES = [
+    None,
+    pd.NA,
+    cudf.NA,
+    np.nan,
+    float("NaN"),
+    "abc",
+    1,
+    pd.NaT,
+    np.datetime64("nat"),
+    np.timedelta64("NaT"),
+    np.timedelta64(10, "D"),
+    np.timedelta64(5, "D"),
+    np.datetime64("1970-01-01 00:00:00.000000001"),
+    np.datetime64("1970-01-01 00:00:00.000000002"),
+    pd.Timestamp(1),
+    pd.Timestamp(2),
+    pd.Timedelta(1),
+    pd.Timedelta(2),
+    Decimal("NaN"),
+    Decimal("1.2"),
+    np.int64(1),
+    np.int32(1),
+    np.float32(1),
+    pd.Timestamp(1),
+]
 
 
 def set_random_null_mask_inplace(series, null_probability=0.5, seed=None):
@@ -346,6 +380,11 @@ def assert_column_memory_eq(
     assert len(lhs.base_children) == len(rhs.base_children)
     for lhs_child, rhs_child in zip(lhs.base_children, rhs.base_children):
         assert_column_memory_eq(lhs_child, rhs_child)
+    if isinstance(lhs, cudf.core.column.CategoricalColumn) and isinstance(
+        rhs, cudf.core.column.CategoricalColumn
+    ):
+        assert_column_memory_eq(lhs.categories, rhs.categories)
+        assert_column_memory_eq(lhs.codes, rhs.codes)
 
 
 def assert_column_memory_ne(
@@ -358,11 +397,30 @@ def assert_column_memory_ne(
     raise AssertionError("lhs and rhs holds the same memory.")
 
 
-def _create_pandas_series(data=None, index=None, dtype=None, *args, **kwargs):
-    # Wrapper around pd.Series using a float64 default dtype for empty data.
-    if dtype is None and (data is None or len(data) == 0):
+def _create_pandas_series_float64_default(
+    data=None, index=None, dtype=None, *args, **kwargs
+):
+    # Wrapper around pd.Series using a float64
+    # default dtype for empty data to silence warnings.
+    # TODO: Remove this in pandas-2.0 upgrade
+    if dtype is None and (
+        data is None or (not is_scalar(data) and len(data) == 0)
+    ):
         dtype = "float64"
     return pd.Series(data=data, index=index, dtype=dtype, *args, **kwargs)
+
+
+def _create_cudf_series_float64_default(
+    data=None, index=None, dtype=None, *args, **kwargs
+):
+    # Wrapper around cudf.Series using a float64
+    # default dtype for empty data to silence warnings.
+    # TODO: Remove this in pandas-2.0 upgrade
+    if dtype is None and (
+        data is None or (not is_scalar(data) and len(data) == 0)
+    ):
+        dtype = "float64"
+    return cudf.Series(data=data, index=index, dtype=dtype, *args, **kwargs)
 
 
 parametrize_numeric_dtypes_pairwise = pytest.mark.parametrize(
@@ -382,3 +440,36 @@ def expect_warning_if(condition, warning=FutureWarning, *args, **kwargs):
             yield
     else:
         yield
+
+
+def sv_to_udf_str(sv):
+    """
+    Cast a string_view object to a udf_string object
+
+    This placeholder function never runs in python
+    It exists only for numba to have something to replace
+    with the typing and lowering code below
+
+    This is similar conceptually to needing a translation
+    engine to emit an expression in target language "B" when
+    there is no equivalent in the source language "A" to
+    translate from. This function effectively defines the
+    expression in language "A" and the associated typing
+    and lowering describe the translation process, despite
+    the expression having no meaning in language "A"
+    """
+    pass
+
+
+@cuda_decl_registry.register_global(sv_to_udf_str)
+class StringViewToUDFStringDecl(AbstractTemplate):
+    def generic(self, args, kws):
+        if isinstance(args[0], StringView) and len(args) == 1:
+            return nb_signature(udf_string, string_view)
+
+
+@cuda_lower(sv_to_udf_str, string_view)
+def sv_to_udf_str_testing_lowering(context, builder, sig, args):
+    return cast_string_view_to_udf_string(
+        context, builder, sig.args[0], sig.return_type, args[0]
+    )

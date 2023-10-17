@@ -130,8 +130,7 @@ using Add_types =
                     cudf::test::Types<cudf::timestamp_ns, cudf::timestamp_ms, cudf::duration_ns>>;
 
 template <typename T>
-struct BinaryOperationCompiledTest_Add : public BinaryOperationCompiledTest<T> {
-};
+struct BinaryOperationCompiledTest_Add : public BinaryOperationCompiledTest<T> {};
 TYPED_TEST_SUITE(BinaryOperationCompiledTest_Add, Add_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Add, Vector_Vector)
@@ -159,8 +158,7 @@ using Sub_types = cudf::test::Types<
   cudf::test::Types<int, decimal128, decimal128>>;
 
 template <typename T>
-struct BinaryOperationCompiledTest_Sub : public BinaryOperationCompiledTest<T> {
-};
+struct BinaryOperationCompiledTest_Sub : public BinaryOperationCompiledTest<T> {};
 TYPED_TEST_SUITE(BinaryOperationCompiledTest_Sub, Sub_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Sub, Vector_Vector)
@@ -189,8 +187,7 @@ using Mul_types =
                     cudf::test::Types<decimal128, int, int>>;
 
 template <typename T>
-struct BinaryOperationCompiledTest_Mul : public BinaryOperationCompiledTest<T> {
-};
+struct BinaryOperationCompiledTest_Mul : public BinaryOperationCompiledTest<T> {};
 TYPED_TEST_SUITE(BinaryOperationCompiledTest_Mul, Mul_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Mul, Vector_Vector)
@@ -219,8 +216,7 @@ using Div_types =
                     cudf::test::Types<int, decimal128, decimal128>>;
 
 template <typename T>
-struct BinaryOperationCompiledTest_Div : public BinaryOperationCompiledTest<T> {
-};
+struct BinaryOperationCompiledTest_Div : public BinaryOperationCompiledTest<T> {};
 TYPED_TEST_SUITE(BinaryOperationCompiledTest_Div, Div_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Div, Vector_Vector)
@@ -239,8 +235,7 @@ using TrueDiv_types = cudf::test::Types<cudf::test::Types<int16_t, u_int64_t, u_
                                         cudf::test::Types<u_int64_t, float, int16_t>>;
 
 template <typename T>
-struct BinaryOperationCompiledTest_TrueDiv : public BinaryOperationCompiledTest<T> {
-};
+struct BinaryOperationCompiledTest_TrueDiv : public BinaryOperationCompiledTest<T> {};
 TYPED_TEST_SUITE(BinaryOperationCompiledTest_TrueDiv, TrueDiv_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_TrueDiv, Vector_Vector)
@@ -270,8 +265,7 @@ using Mod_types =
                     cudf::test::Types<cudf::duration_ns, cudf::duration_D, int16_t>,
                     cudf::test::Types<cudf::duration_ns, cudf::duration_us, cudf::duration_ns>>;
 template <typename T>
-struct BinaryOperationCompiledTest_Mod : public BinaryOperationCompiledTest<T> {
-};
+struct BinaryOperationCompiledTest_Mod : public BinaryOperationCompiledTest<T> {};
 TYPED_TEST_SUITE(BinaryOperationCompiledTest_Mod, Mod_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Mod, Vector_Vector)
@@ -290,8 +284,7 @@ using PyMod_types =
                     cudf::test::Types<double, double, double>,
                     cudf::test::Types<cudf::duration_ns, cudf::duration_us, cudf::duration_ns>>;
 template <typename T>
-struct BinaryOperationCompiledTest_PyMod : public BinaryOperationCompiledTest<T> {
-};
+struct BinaryOperationCompiledTest_PyMod : public BinaryOperationCompiledTest<T> {};
 TYPED_TEST_SUITE(BinaryOperationCompiledTest_PyMod, PyMod_types);
 TYPED_TEST(BinaryOperationCompiledTest_PyMod, Vector_Vector)
 {
@@ -314,8 +307,7 @@ using Pow_types = cudf::test::Types<cudf::test::Types<double, int64_t, int64_t>,
                                     cudf::test::Types<double, int32_t, int64_t>>;
 
 template <typename T>
-struct BinaryOperationCompiledTest_FloatOps : public BinaryOperationCompiledTest<T> {
-};
+struct BinaryOperationCompiledTest_FloatOps : public BinaryOperationCompiledTest<T> {};
 TYPED_TEST_SUITE(BinaryOperationCompiledTest_FloatOps, Pow_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_FloatOps, Pow_Vector_Vector)
@@ -402,8 +394,7 @@ TYPED_TEST(BinaryOperationCompiledTest_FloatOps, PMod_Vector_Vector)
 using IntPow_types = cudf::test::Types<cudf::test::Types<int32_t, int32_t, int32_t>,
                                        cudf::test::Types<int64_t, int64_t, int64_t>>;
 template <typename T>
-struct BinaryOperationCompiledTest_IntPow : public BinaryOperationCompiledTest<T> {
-};
+struct BinaryOperationCompiledTest_IntPow : public BinaryOperationCompiledTest<T> {};
 TYPED_TEST_SUITE(BinaryOperationCompiledTest_IntPow, IntPow_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_IntPow, IntPow_SpecialCases)
@@ -489,8 +480,7 @@ using Bit_types = cudf::test::Types<cudf::test::Types<int16_t, int8_t, int16_t>,
                                     cudf::test::Types<uint64_t, uint64_t, int64_t>,
                                     cudf::test::Types<uint16_t, uint8_t, uint32_t>>;
 template <typename T>
-struct BinaryOperationCompiledTest_Bit : public BinaryOperationCompiledTest<T> {
-};
+struct BinaryOperationCompiledTest_Bit : public BinaryOperationCompiledTest<T> {};
 TYPED_TEST_SUITE(BinaryOperationCompiledTest_Bit, Bit_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Bit, BitwiseAnd_Vector_Vector)
@@ -538,8 +528,7 @@ using Logical_types = cudf::test::Types<cudf::test::Types<bool, int8_t, int16_t>
                                         cudf::test::Types<bool, uint8_t, uint32_t>,
                                         cudf::test::Types<bool, uint64_t, int64_t>>;
 template <typename T>
-struct BinaryOperationCompiledTest_Logical : public BinaryOperationCompiledTest<T> {
-};
+struct BinaryOperationCompiledTest_Logical : public BinaryOperationCompiledTest<T> {};
 TYPED_TEST_SUITE(BinaryOperationCompiledTest_Logical, Logical_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Logical, LogicalAnd_Vector_Vector)
@@ -628,8 +617,7 @@ using Comparison_types =
                     cudf::test::Types<bool, decimal128, decimal128>>;
 
 template <typename T>
-struct BinaryOperationCompiledTest_Comparison : public BinaryOperationCompiledTest<T> {
-};
+struct BinaryOperationCompiledTest_Comparison : public BinaryOperationCompiledTest<T> {};
 TYPED_TEST_SUITE(BinaryOperationCompiledTest_Comparison, Comparison_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Comparison, Equal_Vector_Vector)
@@ -688,8 +676,7 @@ using Null_types =
                     cudf::test::Types<int64_t, decimal128, decimal128>>;
 
 template <typename T>
-struct BinaryOperationCompiledTest_NullOps : public BinaryOperationCompiledTest<T> {
-};
+struct BinaryOperationCompiledTest_NullOps : public BinaryOperationCompiledTest<T> {};
 TYPED_TEST_SUITE(BinaryOperationCompiledTest_NullOps, Null_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_NullOps, NullEquals_Vector_Vector)

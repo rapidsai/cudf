@@ -16,31 +16,30 @@
 #pragma once
 
 #include <cudf/detail/join.hpp>
-#include <cudf/detail/utilities/device_atomics.cuh>
-#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/hashing/detail/default_hash.cuh>
+#include <cudf/hashing/detail/hash_allocator.cuh>
+#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/join.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
-
-#include <hash/hash_allocator.cuh>
-#include <hash/helper_functions.cuh>
 
 #include <rmm/mr/device/polymorphic_allocator.hpp>
 
 #include <cuco/static_map.cuh>
 #include <cuco/static_multimap.cuh>
 
+#include <cuda/atomic>
+
 #include <limits>
 
 namespace cudf {
 namespace detail {
-constexpr size_type MAX_JOIN_SIZE{std::numeric_limits<size_type>::max()};
 
 constexpr int DEFAULT_JOIN_BLOCK_SIZE = 128;
 constexpr int DEFAULT_JOIN_CACHE_SIZE = 128;
 constexpr size_type JoinNoneValue     = std::numeric_limits<size_type>::min();
 
-using pair_type = cuco::pair_type<hash_value_type, size_type>;
+using pair_type = cuco::pair<hash_value_type, size_type>;
 
 using hash_type = cuco::murmurhash3_32<hash_value_type>;
 
@@ -60,9 +59,10 @@ using mixed_multimap_type = cuco::static_multimap<hash_value_type,
 using semi_map_type = cuco::
   static_map<hash_value_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
 
-using row_hash = cudf::row_hasher<default_hash, cudf::nullate::DYNAMIC>;
+using row_hash_legacy =
+  cudf::row_hasher<cudf::hashing::detail::default_hash, cudf::nullate::DYNAMIC>;
 
-using row_equality = cudf::row_equality_comparator<cudf::nullate::DYNAMIC>;
+using row_equality_legacy = cudf::row_equality_comparator<cudf::nullate::DYNAMIC>;
 
 bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type);
 }  // namespace detail

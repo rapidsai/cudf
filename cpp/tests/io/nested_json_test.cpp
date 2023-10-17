@@ -32,6 +32,11 @@
 #include <cudf_test/io_metadata_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/copy.h>
+#include <thrust/iterator/zip_iterator.h>
+
 #include <string>
 
 namespace cuio_json = cudf::io::json;
@@ -129,8 +134,7 @@ void print_column(std::string const& input, cuio_json::json_column const& column
 }  // namespace
 
 // Base test fixture for tests
-struct JsonTest : public cudf::test::BaseFixture {
-};
+struct JsonTest : public cudf::test::BaseFixture {};
 
 TEST_F(JsonTest, StackContext)
 {
@@ -161,13 +165,14 @@ TEST_F(JsonTest, StackContext)
   cudf::string_scalar const d_scalar(input, true, stream);
   auto const d_input =
     cudf::device_span<SymbolT const>{d_scalar.data(), static_cast<size_t>(d_scalar.size())};
-  hostdevice_vector<StackSymbolT> stack_context(input.size(), stream);
+  cudf::detail::hostdevice_vector<StackSymbolT> stack_context(input.size(), stream);
 
   // Run algorithm
-  cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stream);
+  constexpr auto stack_behavior = cuio_json::stack_behavior_t::PushPopWithoutReset;
+  cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stack_behavior, stream);
 
   // Copy back the results
-  stack_context.device_to_host(stream);
+  stack_context.device_to_host_async(stream);
 
   // Make sure we copied back the stack context
   stream.synchronize();
@@ -209,13 +214,14 @@ TEST_F(JsonTest, StackContextUtf8)
   cudf::string_scalar const d_scalar(input, true, stream);
   auto const d_input =
     cudf::device_span<SymbolT const>{d_scalar.data(), static_cast<size_t>(d_scalar.size())};
-  hostdevice_vector<StackSymbolT> stack_context(input.size(), stream);
+  cudf::detail::hostdevice_vector<StackSymbolT> stack_context(input.size(), stream);
 
   // Run algorithm
-  cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stream);
+  constexpr auto stack_behavior = cuio_json::stack_behavior_t::PushPopWithoutReset;
+  cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stack_behavior, stream);
 
   // Copy back the results
-  stack_context.device_to_host(stream);
+  stack_context.device_to_host_async(stream);
 
   // Make sure we copied back the stack context
   stream.synchronize();
@@ -226,6 +232,55 @@ TEST_F(JsonTest, StackContextUtf8)
     '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{',
     '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '['};
 
+  ASSERT_EQ(golden_stack_context.size(), stack_context.size());
+  CUDF_TEST_EXPECT_VECTOR_EQUAL(golden_stack_context, stack_context, stack_context.size());
+}
+
+TEST_F(JsonTest, StackContextRecovering)
+{
+  // Type used to represent the atomic symbol type used within the finite-state machine
+  using SymbolT      = char;
+  using StackSymbolT = char;
+
+  // Prepare cuda stream for data transfers & kernels
+  auto const stream = cudf::get_default_stream();
+
+  // JSON lines input that recovers on invalid lines
+  std::string const input = R"({"a":-2},
+  {"a":
+  {"a":{"a":[321
+  {"a":[1]}
+
+  {"b":123}
+  )";
+
+  // Expected stack context (including stack context of the newline characters)
+  std::string const golden_stack_context =
+    "_{{{{{{{__"
+    "___{{{{{"
+    "___{{{{{{{{{{[[[["
+    "___{{{{{[[{_"
+    "_"
+    "___{{{{{{{{_"
+    "__";
+
+  // Prepare input & output buffers
+  cudf::string_scalar const d_scalar(input, true, stream);
+  auto const d_input =
+    cudf::device_span<SymbolT const>{d_scalar.data(), static_cast<size_t>(d_scalar.size())};
+  cudf::detail::hostdevice_vector<StackSymbolT> stack_context(input.size(), stream);
+
+  // Run algorithm
+  constexpr auto stack_behavior = cuio_json::stack_behavior_t::ResetOnDelimiter;
+  cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stack_behavior, stream);
+
+  // Copy back the results
+  stack_context.device_to_host_async(stream);
+
+  // Make sure we copied back the stack context
+  stream.synchronize();
+
+  // Verify results
   ASSERT_EQ(golden_stack_context.size(), stack_context.size());
   CUDF_TEST_EXPECT_VECTOR_EQUAL(golden_stack_context, stack_context, stack_context.size());
 }
@@ -262,13 +317,11 @@ TEST_F(JsonTest, TokenStream)
     cudf::device_span<SymbolT const>{d_scalar.data(), static_cast<size_t>(d_scalar.size())};
 
   // Parse the JSON and get the token stream
-  auto [d_tokens_gpu, d_token_indices_gpu] =
-    cuio_json::detail::get_token_stream(d_input, default_options, stream);
+  auto [d_tokens_gpu, d_token_indices_gpu] = cuio_json::detail::get_token_stream(
+    d_input, default_options, stream, rmm::mr::get_current_device_resource());
   // Copy back the number of tokens that were written
-  thrust::host_vector<PdaTokenT> const tokens_gpu =
-    cudf::detail::make_host_vector_async(d_tokens_gpu, stream);
-  thrust::host_vector<SymbolOffsetT> const token_indices_gpu =
-    cudf::detail::make_host_vector_async(d_token_indices_gpu, stream);
+  auto const tokens_gpu        = cudf::detail::make_std_vector_async(d_tokens_gpu, stream);
+  auto const token_indices_gpu = cudf::detail::make_std_vector_async(d_token_indices_gpu, stream);
 
   // Golden token stream sample
   using token_t = cuio_json::token_t;
@@ -398,13 +451,11 @@ TEST_F(JsonTest, TokenStream2)
     cudf::device_span<SymbolT const>{d_scalar.data(), static_cast<size_t>(d_scalar.size())};
 
   // Parse the JSON and get the token stream
-  auto [d_tokens_gpu, d_token_indices_gpu] =
-    cuio_json::detail::get_token_stream(d_input, default_options, stream);
+  auto [d_tokens_gpu, d_token_indices_gpu] = cuio_json::detail::get_token_stream(
+    d_input, default_options, stream, rmm::mr::get_current_device_resource());
   // Copy back the number of tokens that were written
-  thrust::host_vector<PdaTokenT> const tokens_gpu =
-    cudf::detail::make_host_vector_async(d_tokens_gpu, stream);
-  thrust::host_vector<SymbolOffsetT> const token_indices_gpu =
-    cudf::detail::make_host_vector_async(d_token_indices_gpu, stream);
+  auto const tokens_gpu        = cudf::detail::make_std_vector_async(d_tokens_gpu, stream);
+  auto const token_indices_gpu = cudf::detail::make_std_vector_async(d_token_indices_gpu, stream);
 
   // Golden token stream sample
   using token_t = cuio_json::token_t;
@@ -450,8 +501,7 @@ TEST_F(JsonTest, TokenStream2)
   }
 }
 
-struct JsonParserTest : public cudf::test::BaseFixture, public testing::WithParamInterface<bool> {
-};
+struct JsonParserTest : public cudf::test::BaseFixture, public testing::WithParamInterface<bool> {};
 INSTANTIATE_TEST_SUITE_P(Experimental, JsonParserTest, testing::Bool());
 
 TEST_P(JsonParserTest, ExtractColumn)
@@ -470,7 +520,9 @@ TEST_P(JsonParserTest, ExtractColumn)
 
   std::string const input = R"( [{"a":0.0, "b":1.0}, {"a":0.1, "b":1.1}, {"a":0.2, "b":1.2}] )";
   auto const d_input      = cudf::detail::make_device_uvector_async(
-    cudf::host_span<char const>{input.c_str(), input.size()}, stream);
+    cudf::host_span<char const>{input.c_str(), input.size()},
+    stream,
+    rmm::mr::get_current_device_resource());
   // Get the JSON's tree representation
   auto const cudf_table = json_parser(d_input, default_options, stream, mr);
 
@@ -485,6 +537,217 @@ TEST_P(JsonParserTest, ExtractColumn)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col1, parsed_col1);
   cudf::column_view parsed_col2 = cudf_table.tbl->get_column(1);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col2, parsed_col2);
+}
+
+TEST_F(JsonTest, RecoveringTokenStream)
+{
+  // Test input. Inline comments used to indicate character indexes
+  //                           012345678 <= line 0
+  std::string const input = R"({"a":-2},)"
+                            // 9
+                            "\n"
+                            // 01234 <= line 1
+                            R"({"a":)"
+                            // 5
+                            "\n"
+                            // 67890123456789 <= line 2
+                            R"({"a":{"a":[321)"
+                            // 0
+                            "\n"
+                            // 123456789 <= line 3
+                            R"({"a":[1]})"
+                            // 0
+                            "\n"
+                            // 1  <= line 4
+                            "\n"
+                            // 23456789 <= line 5
+                            R"({"b":123})";
+
+  // Golden token stream sample
+  using token_t = cuio_json::token_t;
+  std::vector<std::pair<std::size_t, cuio_json::PdaTokenT>> const golden_token_stream = {
+    // Line 0 (invalid)
+    {0, token_t::StructBegin},
+    {0, token_t::StructEnd},
+    // Line 1 (invalid)
+    {0, token_t::StructBegin},
+    {0, token_t::StructEnd},
+    // Line 2 (invalid)
+    {0, token_t::StructBegin},
+    {0, token_t::StructEnd},
+    // Line 3 (valid)
+    {31, token_t::StructBegin},
+    {32, token_t::StructMemberBegin},
+    {32, token_t::FieldNameBegin},
+    {34, token_t::FieldNameEnd},
+    {36, token_t::ListBegin},
+    {37, token_t::ValueBegin},
+    {38, token_t::ValueEnd},
+    {38, token_t::ListEnd},
+    {39, token_t::StructMemberEnd},
+    {39, token_t::StructEnd},
+    // Line 4 (empty)
+    // Line 5 (valid)
+    {42, token_t::StructBegin},
+    {43, token_t::StructMemberBegin},
+    {43, token_t::FieldNameBegin},
+    {45, token_t::FieldNameEnd},
+    {47, token_t::ValueBegin},
+    {50, token_t::ValueEnd},
+    {50, token_t::StructMemberEnd},
+    {50, token_t::StructEnd}};
+
+  auto const stream = cudf::get_default_stream();
+
+  // Default parsing options
+  cudf::io::json_reader_options default_options{};
+  default_options.set_recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+  default_options.enable_lines(true);
+
+  // Prepare input & output buffers
+  cudf::string_scalar const d_scalar(input, true, stream);
+  auto const d_input = cudf::device_span<cuio_json::SymbolT const>{
+    d_scalar.data(), static_cast<size_t>(d_scalar.size())};
+
+  // Parse the JSON and get the token stream
+  auto [d_tokens_gpu, d_token_indices_gpu] = cuio_json::detail::get_token_stream(
+    d_input, default_options, stream, rmm::mr::get_current_device_resource());
+  // Copy back the number of tokens that were written
+  auto const tokens_gpu        = cudf::detail::make_std_vector_async(d_tokens_gpu, stream);
+  auto const token_indices_gpu = cudf::detail::make_std_vector_async(d_token_indices_gpu, stream);
+
+  // Verify the number of tokens matches
+  ASSERT_EQ(golden_token_stream.size(), tokens_gpu.size());
+  ASSERT_EQ(golden_token_stream.size(), token_indices_gpu.size());
+
+  for (std::size_t i = 0; i < tokens_gpu.size(); i++) {
+    // Ensure the index the tokens are pointing to do match
+    EXPECT_EQ(golden_token_stream[i].first, token_indices_gpu[i]) << "Mismatch at #" << i;
+    // Ensure the token category is correct
+    EXPECT_EQ(golden_token_stream[i].second, tokens_gpu[i]) << "Mismatch at #" << i;
+  }
+}
+
+TEST_F(JsonTest, PostProcessTokenStream)
+{
+  // Golden token stream sample
+  using token_t       = cuio_json::token_t;
+  using token_index_t = cuio_json::SymbolOffsetT;
+  using tuple_t       = thrust::tuple<token_index_t, cuio_json::PdaTokenT>;
+
+  std::vector<tuple_t> const input = {// Line 0 (invalid)
+                                      {0, token_t::LineEnd},
+                                      {0, token_t::StructBegin},
+                                      {1, token_t::StructMemberBegin},
+                                      {1, token_t::FieldNameBegin},
+                                      {3, token_t::FieldNameEnd},
+                                      {5, token_t::ValueBegin},
+                                      {7, token_t::ValueEnd},
+                                      {7, token_t::StructMemberEnd},
+                                      {7, token_t::StructEnd},
+                                      {8, token_t::ErrorBegin},
+                                      {9, token_t::LineEnd},
+                                      // Line 1
+                                      {10, token_t::StructBegin},
+                                      {11, token_t::StructMemberBegin},
+                                      {11, token_t::FieldNameBegin},
+                                      {13, token_t::FieldNameEnd},
+                                      {15, token_t::LineEnd},
+                                      // Line 2 (invalid)
+                                      {16, token_t::StructBegin},
+                                      {17, token_t::StructMemberBegin},
+                                      {17, token_t::FieldNameBegin},
+                                      {19, token_t::FieldNameEnd},
+                                      {21, token_t::StructBegin},
+                                      {22, token_t::StructMemberBegin},
+                                      {22, token_t::FieldNameBegin},
+                                      {24, token_t::FieldNameEnd},
+                                      {26, token_t::ListBegin},
+                                      {27, token_t::ValueBegin},
+                                      {29, token_t::ErrorBegin},
+                                      {30, token_t::LineEnd},
+                                      // Line 3 (invalid)
+                                      {31, token_t::StructBegin},
+                                      {32, token_t::StructMemberBegin},
+                                      {32, token_t::FieldNameBegin},
+                                      {34, token_t::FieldNameEnd},
+                                      {36, token_t::ListBegin},
+                                      {37, token_t::ValueBegin},
+                                      {38, token_t::ValueEnd},
+                                      {38, token_t::ListEnd},
+                                      {39, token_t::StructMemberEnd},
+                                      {39, token_t::StructEnd},
+                                      {40, token_t::ErrorBegin},
+                                      {40, token_t::LineEnd},
+                                      // Line 4
+                                      {41, token_t::LineEnd},
+                                      // Line 5
+                                      {42, token_t::StructBegin},
+                                      {43, token_t::StructMemberBegin},
+                                      {43, token_t::FieldNameBegin},
+                                      {45, token_t::FieldNameEnd},
+                                      {47, token_t::ValueBegin},
+                                      {50, token_t::ValueEnd},
+                                      {50, token_t::StructMemberEnd},
+                                      {50, token_t::StructEnd}};
+
+  std::vector<tuple_t> const expected_output = {// Line 0 (invalid)
+                                                {0, token_t::StructBegin},
+                                                {0, token_t::StructEnd},
+                                                // Line 1
+                                                {10, token_t::StructBegin},
+                                                {11, token_t::StructMemberBegin},
+                                                {11, token_t::FieldNameBegin},
+                                                {13, token_t::FieldNameEnd},
+                                                // Line 2 (invalid)
+                                                {0, token_t::StructBegin},
+                                                {0, token_t::StructEnd},
+                                                // Line 3 (invalid)
+                                                {0, token_t::StructBegin},
+                                                {0, token_t::StructEnd},
+                                                // Line 4 (empty)
+                                                // Line 5
+                                                {42, token_t::StructBegin},
+                                                {43, token_t::StructMemberBegin},
+                                                {43, token_t::FieldNameBegin},
+                                                {45, token_t::FieldNameEnd},
+                                                {47, token_t::ValueBegin},
+                                                {50, token_t::ValueEnd},
+                                                {50, token_t::StructMemberEnd},
+                                                {50, token_t::StructEnd}};
+
+  // Decompose tuples
+  auto const stream = cudf::get_default_stream();
+  std::vector<token_index_t> offsets(input.size());
+  std::vector<cuio_json::PdaTokenT> tokens(input.size());
+  auto token_tuples = thrust::make_zip_iterator(offsets.begin(), tokens.begin());
+  thrust::copy(input.cbegin(), input.cend(), token_tuples);
+
+  // Initialize device-side test data
+  auto const d_offsets = cudf::detail::make_device_uvector_async(
+    cudf::host_span<token_index_t const>{offsets.data(), offsets.size()},
+    stream,
+    rmm::mr::get_current_device_resource());
+  auto const d_tokens =
+    cudf::detail::make_device_uvector_async(tokens, stream, rmm::mr::get_current_device_resource());
+
+  // Run system-under-test
+  auto [d_filtered_tokens, d_filtered_indices] =
+    cuio_json::detail::process_token_stream(d_tokens, d_offsets, stream);
+
+  auto const filtered_tokens  = cudf::detail::make_std_vector_async(d_filtered_tokens, stream);
+  auto const filtered_indices = cudf::detail::make_std_vector_async(d_filtered_indices, stream);
+
+  // Verify the number of tokens matches
+  ASSERT_EQ(filtered_tokens.size(), expected_output.size());
+  ASSERT_EQ(filtered_indices.size(), expected_output.size());
+
+  for (std::size_t i = 0; i < filtered_tokens.size(); i++) {
+    // Ensure the index the tokens are pointing to do match
+    EXPECT_EQ(thrust::get<0>(expected_output[i]), filtered_indices[i]) << "Mismatch at #" << i;
+    // Ensure the token category is correct
+    EXPECT_EQ(thrust::get<1>(expected_output[i]), filtered_tokens[i]) << "Mismatch at #" << i;
+  }
 }
 
 TEST_P(JsonParserTest, UTF_JSON)
@@ -508,7 +771,9 @@ TEST_P(JsonParserTest, UTF_JSON)
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}}])";
   auto const d_ascii_pass      = cudf::detail::make_device_uvector_sync(
-    cudf::host_span<char const>{ascii_pass.c_str(), ascii_pass.size()}, stream);
+    cudf::host_span<char const>{ascii_pass.c_str(), ascii_pass.size()},
+    stream,
+    rmm::mr::get_current_device_resource());
 
   CUDF_EXPECT_NO_THROW(json_parser(d_ascii_pass, default_options, stream, mr));
 
@@ -521,7 +786,9 @@ TEST_P(JsonParserTest, UTF_JSON)
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "filip ʒakotɛ"}}])";
   auto const d_utf_failed      = cudf::detail::make_device_uvector_sync(
-    cudf::host_span<char const>{utf_failed.c_str(), utf_failed.size()}, stream);
+    cudf::host_span<char const>{utf_failed.c_str(), utf_failed.size()},
+    stream,
+    rmm::mr::get_current_device_resource());
   CUDF_EXPECT_NO_THROW(json_parser(d_utf_failed, default_options, stream, mr));
 
   // utf-8 string that passes parsing.
@@ -534,7 +801,9 @@ TEST_P(JsonParserTest, UTF_JSON)
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}},
   {"a":1,"b":NaN,"c":[null, null], "d": {"year": 2, "author": "filip ʒakotɛ"}}])";
   auto const d_utf_pass      = cudf::detail::make_device_uvector_sync(
-    cudf::host_span<char const>{utf_pass.c_str(), utf_pass.size()}, stream);
+    cudf::host_span<char const>{utf_pass.c_str(), utf_pass.size()},
+    stream,
+    rmm::mr::get_current_device_resource());
   CUDF_EXPECT_NO_THROW(json_parser(d_utf_pass, default_options, stream, mr));
 }
 
@@ -555,7 +824,9 @@ TEST_P(JsonParserTest, ExtractColumnWithQuotes)
 
   std::string const input = R"( [{"a":"0.0", "b":1.0}, {"b":1.1}, {"b":2.1, "a":"2.0"}] )";
   auto const d_input      = cudf::detail::make_device_uvector_async(
-    cudf::host_span<char const>{input.c_str(), input.size()}, stream);
+    cudf::host_span<char const>{input.c_str(), input.size()},
+    stream,
+    rmm::mr::get_current_device_resource());
   // Get the JSON's tree representation
   auto const cudf_table = json_parser(d_input, options, stream, mr);
 
@@ -599,14 +870,18 @@ TEST_P(JsonParserTest, ExpectFailMixStructAndList)
   // libcudf does not currently support a mix of lists and structs.
   for (auto const& input : inputs_fail) {
     auto const d_input = cudf::detail::make_device_uvector_async(
-      cudf::host_span<char const>{input.c_str(), input.size()}, stream);
+      cudf::host_span<char const>{input.c_str(), input.size()},
+      stream,
+      rmm::mr::get_current_device_resource());
     EXPECT_THROW(auto const cudf_table = json_parser(d_input, options, stream, mr),
                  cudf::logic_error);
   }
 
   for (auto const& input : inputs_succeed) {
     auto const d_input = cudf::detail::make_device_uvector_async(
-      cudf::host_span<char const>{input.c_str(), input.size()}, stream);
+      cudf::host_span<char const>{input.c_str(), input.size()},
+      stream,
+      rmm::mr::get_current_device_resource());
     CUDF_EXPECT_NO_THROW(auto const cudf_table = json_parser(d_input, options, stream, mr));
   }
 }
@@ -626,8 +901,10 @@ TEST_P(JsonParserTest, EmptyString)
   cudf::io::json_reader_options default_options{};
 
   std::string const input = R"([])";
-  auto const d_input      = cudf::detail::make_device_uvector_sync(
-    cudf::host_span<char const>{input.c_str(), input.size()}, stream);
+  auto const d_input =
+    cudf::detail::make_device_uvector_sync(cudf::host_span<char const>{input.c_str(), input.size()},
+                                           stream,
+                                           rmm::mr::get_current_device_resource());
   // Get the JSON's tree representation
   auto const cudf_table = json_parser(d_input, default_options, stream, mr);
 

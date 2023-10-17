@@ -29,12 +29,11 @@
 
 #include <vector>
 
-struct StringsDatetimeTest : public cudf::test::BaseFixture {
-};
+struct StringsDatetimeTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsDatetimeTest, ToTimestamp)
 {
-  std::vector<const char*> h_strings{"1974-02-28T01:23:45Z",
+  std::vector<char const*> h_strings{"1974-02-28T01:23:45Z",
                                      "2019-07-17T21:34:37Z",
                                      nullptr,
                                      "",
@@ -331,7 +330,7 @@ TEST_F(StringsDatetimeTest, FromTimestamp)
 {
   std::vector<cudf::timestamp_s::rep> h_timestamps{
     131246625, 1563399277, 0, 1553085296, 1582934400, -1545730073, -86399};
-  std::vector<const char*> h_expected{"1974-02-28T01:23:45Z",
+  std::vector<char const*> h_expected{"1974-02-28T01:23:45Z",
                                       "2019-07-17T21:34:37Z",
                                       nullptr,
                                       "2019-03-20T12:34:56Z",
@@ -606,13 +605,11 @@ TEST_F(StringsDatetimeTest, FromTimestampAllSpecifiers)
 
 TEST_F(StringsDatetimeTest, ZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_column(
-    cudf::data_type{cudf::type_id::TIMESTAMP_SECONDS}, 0, nullptr, nullptr, 0);
-  auto results = cudf::strings::from_timestamps(zero_size_column);
+  auto const zero_size_column = cudf::make_empty_column(cudf::type_id::TIMESTAMP_SECONDS)->view();
+  auto results                = cudf::strings::from_timestamps(zero_size_column);
   cudf::test::expect_column_empty(results->view());
 
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
   results = cudf::strings::to_timestamps(cudf::strings_column_view(zero_size_strings_column),
                                          cudf::data_type{cudf::type_id::TIMESTAMP_SECONDS},
                                          "%Y");

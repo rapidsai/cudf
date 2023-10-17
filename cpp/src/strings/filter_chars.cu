@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -132,7 +132,8 @@ std::unique_ptr<column> filter_characters(
     characters_to_filter.begin(), characters_to_filter.end(), htable.begin(), [](auto entry) {
       return char_range{entry.first, entry.second};
     });
-  rmm::device_uvector<char_range> table = cudf::detail::make_device_uvector_async(htable, stream);
+  rmm::device_uvector<char_range> table =
+    cudf::detail::make_device_uvector_async(htable, stream, rmm::mr::get_current_device_resource());
 
   auto d_strings = column_device_view::create(strings.parent(), stream);
 

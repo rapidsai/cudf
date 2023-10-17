@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,6 +81,8 @@ std::unique_ptr<column> contains(column_view const& haystack,
  * output   = { false, true, true }
  * @endcode
  *
+ * @throws cudf::logic_error If column types of haystack and needles don't match
+ *
  * @param haystack The table containing the search space
  * @param needles A table of rows whose existence to check in the search space
  * @param compare_nulls Control whether nulls should be compared as equal or not
@@ -89,12 +91,11 @@ std::unique_ptr<column> contains(column_view const& haystack,
  * @param mr Device memory resource used to allocate the returned vector
  * @return A vector of bools indicating if each row in `needles` has matching rows in `haystack`
  */
-rmm::device_uvector<bool> contains(
-  table_view const& haystack,
-  table_view const& needles,
-  null_equality compare_nulls,
-  nan_equality compare_nans,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+rmm::device_uvector<bool> contains(table_view const& haystack,
+                                   table_view const& needles,
+                                   null_equality compare_nulls,
+                                   nan_equality compare_nans,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr);
 
 }  // namespace cudf::detail

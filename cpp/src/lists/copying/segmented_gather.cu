@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
 {
   CUDF_EXPECTS(is_index_type(gather_map.child().type()),
                "Gather map should be list column of index type");
-  CUDF_EXPECTS(!gather_map.has_nulls(), "Gather map contains nulls");
+  CUDF_EXPECTS(!gather_map.has_nulls(), "Gather map contains nulls", std::invalid_argument);
   CUDF_EXPECTS(value_column.size() == gather_map.size(),
                "Gather map and list column should be same size");
 
@@ -116,11 +116,11 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
 std::unique_ptr<column> segmented_gather(lists_column_view const& source_column,
                                          lists_column_view const& gather_map_list,
                                          out_of_bounds_policy bounds_policy,
+                                         rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::segmented_gather(
-    source_column, gather_map_list, bounds_policy, cudf::get_default_stream(), mr);
+  return detail::segmented_gather(source_column, gather_map_list, bounds_policy, stream, mr);
 }
 
 }  // namespace lists

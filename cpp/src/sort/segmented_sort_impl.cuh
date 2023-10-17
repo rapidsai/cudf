@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <cub/device/device_segmented_sort.cuh>
 
@@ -72,8 +73,11 @@ struct column_fast_sort_fn {
   {
     // CUB's segmented sort functions cannot accept iterators.
     // We create a temporary column here for it to use.
-    auto temp_col =
-      cudf::detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, stream);
+    auto temp_col                   = cudf::detail::allocate_like(input,
+                                                input.size(),
+                                                mask_allocation_policy::NEVER,
+                                                stream,
+                                                rmm::mr::get_current_device_resource());
     mutable_column_view output_view = temp_col->mutable_view();
 
     // DeviceSegmentedSort is faster than DeviceSegmentedRadixSort at this time
@@ -162,7 +166,7 @@ std::unique_ptr<column> fast_segmented_sorted_order(column_view const& input,
   // Unfortunately, CUB's segmented sort functions cannot accept iterators.
   // We have to build a pre-filled sequence of indices as input.
   auto sorted_indices =
-    cudf::detail::sequence(input.size(), numeric_scalar<size_type>{0}, stream, mr);
+    cudf::detail::sequence(input.size(), numeric_scalar<size_type>{0, true, stream}, stream, mr);
   auto indices_view = sorted_indices->mutable_view();
 
   cudf::type_dispatcher<dispatch_storage_type>(input.type(),
@@ -269,8 +273,8 @@ std::unique_ptr<column> segmented_sorted_order_common(
   // insert segment id before all columns.
   std::vector<column_view> keys_with_segid;
   keys_with_segid.reserve(keys.num_columns() + 1);
-  keys_with_segid.push_back(
-    column_view(data_type(type_to_id<size_type>()), segment_ids.size(), segment_ids.data()));
+  keys_with_segid.push_back(column_view(
+    data_type(type_to_id<size_type>()), segment_ids.size(), segment_ids.data(), nullptr, 0));
   keys_with_segid.insert(keys_with_segid.end(), keys.begin(), keys.end());
   auto segid_keys = table_view(keys_with_segid);
 

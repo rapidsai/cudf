@@ -16,9 +16,10 @@ import cudf
 
 def read_csv(path, blocksize="default", **kwargs):
     """
-    Read CSV files into a dask_cudf.DataFrame
+    Read CSV files into a :class:`.DataFrame`.
 
-    This API parallelizes the ``cudf.read_csv`` function in the following ways:
+    This API parallelizes the :func:`cudf:cudf.read_csv` function in
+    the following ways:
 
     It supports loading many files at once using globstrings:
 
@@ -34,23 +35,31 @@ def read_csv(path, blocksize="default", **kwargs):
     >>> df = dask_cudf.read_csv("s3://bucket/myfiles.*.csv")
     >>> df = dask_cudf.read_csv("https://www.mycloud.com/sample.csv")
 
-    Internally ``dask_cudf.read_csv`` uses ``cudf.read_csv`` and supports
-    many of the same keyword arguments with the same performance guarantees.
-    See the docstring for ``cudf.read_csv()`` for more information on available
+    Internally ``read_csv`` uses :func:`cudf:cudf.read_csv` and
+    supports many of the same keyword arguments with the same
+    performance guarantees. See the docstring for
+    :func:`cudf:cudf.read_csv` for more information on available
     keyword arguments.
 
     Parameters
     ----------
     path : str, path object, or file-like object
-        Either a path to a file (a str, pathlib.Path, or
-        py._path.local.LocalPath), URL (including http, ftp, and S3 locations),
-        or any object with a read() method (such as builtin open() file
-        handler function or StringIO).
+        Either a path to a file (a str, :py:class:`pathlib.Path`, or
+        py._path.local.LocalPath), URL (including http, ftp, and S3
+        locations), or any object with a read() method (such as
+        builtin :py:func:`open` file handler function or
+        :py:class:`~io.StringIO`).
     blocksize : int or str, default "256 MiB"
-        The target task partition size. If `None`, a single block
+        The target task partition size. If ``None``, a single block
         is used for each file.
     **kwargs : dict
-        Passthrough key-word arguments that are sent to ``cudf.read_csv``.
+        Passthrough key-word arguments that are sent to
+        :func:`cudf:cudf.read_csv`.
+
+    Notes
+    -----
+    If any of `skipfooter`/`skiprows`/`nrows` are passed,
+    `blocksize` will default to None.
 
     Examples
     --------
@@ -61,6 +70,7 @@ def read_csv(path, blocksize="default", **kwargs):
     0  1     hi
     1  2  hello
     2  3     ai
+
     """
 
     # Handle `chunksize` deprecation
@@ -76,7 +86,16 @@ def read_csv(path, blocksize="default", **kwargs):
 
     # Set default `blocksize`
     if blocksize == "default":
-        blocksize = "256 MiB"
+        if (
+            kwargs.get("skipfooter", 0) != 0
+            or kwargs.get("skiprows", 0) != 0
+            or kwargs.get("nrows", None) is not None
+        ):
+            # Cannot read in blocks if skipfooter,
+            # skiprows or nrows is passed.
+            blocksize = None
+        else:
+            blocksize = "256 MiB"
 
     if "://" in str(path):
         func = make_reader(cudf.read_csv, "read_csv", "CSV")
@@ -184,9 +203,14 @@ def read_csv_without_blocksize(path, **kwargs):
 
     name = "read-csv-" + tokenize(path, **kwargs)
 
+    meta_kwargs = kwargs.copy()
+    if "skipfooter" in meta_kwargs:
+        meta_kwargs.pop("skipfooter")
+    if "nrows" in meta_kwargs:
+        meta_kwargs.pop("nrows")
     # Read "head" of first file (first 5 rows).
     # Convert to empty df for metadata.
-    meta = cudf.read_csv(filenames[0], nrows=5, **kwargs).iloc[:0]
+    meta = cudf.read_csv(filenames[0], nrows=5, **meta_kwargs).iloc[:0]
 
     graph = {
         (name, i): (apply, cudf.read_csv, [fn], kwargs)

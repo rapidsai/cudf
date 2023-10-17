@@ -9,7 +9,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_120
 from cudf.testing import _utils as utils
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
@@ -56,6 +55,15 @@ _TIMEDELTA_DATA_NON_OVERFLOW = [
     [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
     [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
     [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+]
+
+_cmpops = [
+    operator.lt,
+    operator.gt,
+    operator.le,
+    operator.ge,
+    operator.eq,
+    operator.ne,
 ]
 
 
@@ -414,13 +422,7 @@ def test_timedelta_dataframe_ops(df, op):
         np.timedelta64(4, "s"),
         np.timedelta64(456, "D"),
         np.timedelta64(46, "h"),
-        pytest.param(
-            np.timedelta64("nat"),
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_120,
-                reason="https://github.com/pandas-dev/pandas/issues/35529",
-            ),
-        ),
+        np.timedelta64("nat"),
         np.timedelta64(1, "s"),
         np.timedelta64(1, "ms"),
         np.timedelta64(1, "us"),
@@ -435,13 +437,7 @@ def test_timedelta_dataframe_ops(df, op):
         "sub",
         "truediv",
         "mod",
-        pytest.param(
-            "floordiv",
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_120,
-                reason="https://github.com/pandas-dev/pandas/issues/35529",
-            ),
-        ),
+        "floordiv",
     ],
 )
 def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op):
@@ -541,13 +537,7 @@ def test_timedelta_series_mod_with_scalar_zero(reverse):
         datetime.timedelta(seconds=768),
         datetime.timedelta(microseconds=7),
         np.timedelta64(4, "s"),
-        pytest.param(
-            np.timedelta64("nat", "s"),
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_120,
-                reason="https://github.com/pandas-dev/pandas/issues/35529",
-            ),
-        ),
+        np.timedelta64("nat", "s"),
         np.timedelta64(1, "s"),
         np.timedelta64(1, "ms"),
         np.timedelta64(1, "us"),
@@ -563,13 +553,7 @@ def test_timedelta_series_mod_with_scalar_zero(reverse):
         "sub",
         "truediv",
         "mod",
-        pytest.param(
-            "floordiv",
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_120,
-                reason="https://github.com/pandas-dev/pandas/issues/35529",
-            ),
-        ),
+        "floordiv",
     ],
 )
 def test_timedelta_series_ops_with_cudf_scalars(data, cpu_scalar, dtype, op):
@@ -858,13 +842,7 @@ def test_timedelta_datetime_index_ops_misc(
         "add",
         "sub",
         "truediv",
-        pytest.param(
-            "floordiv",
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_120,
-                reason="https://github.com/pandas-dev/pandas/issues/35529",
-            ),
-        ),
+        "floordiv",
     ],
 )
 @pytest.mark.filterwarnings("ignore:divide by zero:RuntimeWarning:pandas")
@@ -938,13 +916,7 @@ def test_timedelta_index_ops_with_scalars(
         "add",
         "sub",
         "truediv",
-        pytest.param(
-            "floordiv",
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_120,
-                reason="https://github.com/pandas-dev/pandas/issues/35529",
-            ),
-        ),
+        "floordiv",
     ],
 )
 def test_timedelta_index_ops_with_cudf_scalars(
@@ -1463,3 +1435,36 @@ def test_timedelta_constructor(data, dtype):
     actual = cudf.TimedeltaIndex(data=cudf.Series(data), dtype=dtype)
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("op", [operator.add, operator.sub])
+def test_timdelta_binop_tz_timestamp(op):
+    s = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
+    pd_tz_timestamp = pd.Timestamp("1970-01-01 00:00:00.000000001", tz="utc")
+    with pytest.raises(NotImplementedError):
+        op(s, pd_tz_timestamp)
+    date_tz_scalar = datetime.datetime.now(datetime.timezone.utc)
+    with pytest.raises(NotImplementedError):
+        op(s, date_tz_scalar)
+
+
+def test_timedelta_getitem_na():
+    s = cudf.Series([1, 2, None, 3], dtype="timedelta64[ns]")
+    assert s[2] is cudf.NaT
+
+
+@pytest.mark.parametrize("data1", [[123, 456, None, 321, None]])
+@pytest.mark.parametrize("data2", [[123, 456, 789, None, None]])
+@pytest.mark.parametrize("op", _cmpops)
+def test_timedelta_series_cmpops_pandas_compatibility(data1, data2, op):
+    gsr1 = cudf.Series(data=data1, dtype="timedelta64[ns]")
+    psr1 = gsr1.to_pandas()
+
+    gsr2 = cudf.Series(data=data2, dtype="timedelta64[ns]")
+    psr2 = gsr2.to_pandas()
+
+    expect = op(psr1, psr2)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = op(gsr1, gsr2)
+
+    assert_eq(expect, got)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,8 +25,7 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/stream_compaction.hpp>
 
-class ScatterUntypedTests : public cudf::test::BaseFixture {
-};
+class ScatterUntypedTests : public cudf::test::BaseFixture {};
 
 // Throw logic error if scatter map is longer than source
 TEST_F(ScatterUntypedTests, ScatterMapTooLong)
@@ -126,8 +125,7 @@ TEST_F(ScatterUntypedTests, ScatterScalarDataTypeMismatch)
 }
 
 template <typename T>
-class ScatterIndexTypeTests : public cudf::test::BaseFixture {
-};
+class ScatterIndexTypeTests : public cudf::test::BaseFixture {};
 
 using IndexTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t>;
 TYPED_TEST_SUITE(ScatterIndexTypeTests, IndexTypes);
@@ -169,8 +167,7 @@ TYPED_TEST(ScatterIndexTypeTests, ScatterScalarIndexType)
 }
 
 template <typename T>
-class ScatterInvalidIndexTypeTests : public cudf::test::BaseFixture {
-};
+class ScatterInvalidIndexTypeTests : public cudf::test::BaseFixture {};
 
 // NOTE string types hit static assert in fixed_width_column_wrapper
 using InvalidIndexTypes = cudf::test::Concat<cudf::test::Types<float, double, bool>,
@@ -207,8 +204,7 @@ TYPED_TEST(ScatterInvalidIndexTypeTests, ScatterScalarInvalidIndexType)
 }
 
 template <typename T>
-class ScatterDataTypeTests : public cudf::test::BaseFixture {
-};
+class ScatterDataTypeTests : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ScatterDataTypeTests, cudf::test::FixedWidthTypes);
 
@@ -437,21 +433,20 @@ TYPED_TEST(ScatterDataTypeTests, ScatterSourceNullsLarge)
   CUDF_TEST_EXPECT_TABLES_EQUAL(result->view(), expected_table);
 }
 
-class ScatterStringsTests : public cudf::test::BaseFixture {
-};
+class ScatterStringsTests : public cudf::test::BaseFixture {};
 
 TEST_F(ScatterStringsTests, ScatterNoNulls)
 {
-  std::vector<const char*> h_source{"dog", "the", "jumps", "brown", "the"};
+  std::vector<char const*> h_source{"dog", "the", "jumps", "brown", "the"};
   cudf::test::strings_column_wrapper source(h_source.begin(), h_source.end());
 
-  std::vector<const char*> h_target{
+  std::vector<char const*> h_target{
     "a", "quick", "fire", "fox", "browses", "over", "a", "lazy", "web"};
   cudf::test::strings_column_wrapper target(h_target.begin(), h_target.end());
 
   cudf::test::fixed_width_column_wrapper<int32_t> scatter_map({-1, -3, -5, 2, 0});
 
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "the", "quick", "brown", "fox", "jumps", "over", "the", "lazy", "dog"};
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end());
 
@@ -470,13 +465,13 @@ TEST_F(ScatterStringsTests, ScatterScalarNoNulls)
   std::reference_wrapper<const cudf::scalar> slr_ref{source};
   std::vector<std::reference_wrapper<const cudf::scalar>> source_vector{slr_ref};
 
-  std::vector<const char*> h_target{
+  std::vector<char const*> h_target{
     "Buffalo", "bison", "Buffalo", "bison", "bully", "bully", "Buffalo", "bison"};
   cudf::test::strings_column_wrapper target(h_target.begin(), h_target.end());
 
   cudf::test::fixed_width_column_wrapper<int32_t> scatter_map({1, 3, -4, -3, -1});
 
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "Buffalo", "buffalo", "Buffalo", "buffalo", "buffalo", "buffalo", "Buffalo", "buffalo"};
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end());
 
@@ -500,8 +495,7 @@ TEST_F(ScatterStringsTests, EmptyStrings)
 }
 
 template <typename T>
-class BooleanMaskScatter : public cudf::test::BaseFixture {
-};
+class BooleanMaskScatter : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(BooleanMaskScatter, cudf::test::FixedWidthTypes);
 
@@ -550,8 +544,7 @@ TYPED_TEST(BooleanMaskScatter, WithNull)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table, got->view());
 }
 
-class BooleanMaskScatterString : public cudf::test::BaseFixture {
-};
+class BooleanMaskScatterString : public cudf::test::BaseFixture {};
 
 TEST_F(BooleanMaskScatterString, NoNUll)
 {
@@ -585,8 +578,7 @@ TEST_F(BooleanMaskScatterString, WithNUll)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table, got->view());
 }
 
-class BooleanMaskScatterFails : public cudf::test::BaseFixture {
-};
+class BooleanMaskScatterFails : public cudf::test::BaseFixture {};
 
 TEST_F(BooleanMaskScatterFails, SourceAndTargetTypeMismatch)
 {
@@ -724,8 +716,7 @@ TYPED_TEST(BooleanMaskScalarScatter, WithNull)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table, got->view());
 }
 
-class BooleanMaskScatterScalarString : public cudf::test::BaseFixture {
-};
+class BooleanMaskScatterScalarString : public cudf::test::BaseFixture {};
 
 TEST_F(BooleanMaskScatterScalarString, NoNUll)
 {
@@ -764,8 +755,7 @@ TEST_F(BooleanMaskScatterScalarString, WithNUll)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table, got->view());
 }
 
-class BooleanMaskScatterScalarFails : public cudf::test::BaseFixture {
-};
+class BooleanMaskScatterScalarFails : public cudf::test::BaseFixture {};
 
 TEST_F(BooleanMaskScatterScalarFails, SourceAndTargetTypeMismatch)
 {
@@ -825,8 +815,7 @@ TEST_F(BooleanMaskScatterScalarFails, NumberOfColumnAndScalarMismatch)
 }
 
 template <typename T>
-struct FixedPointTestAllReps : public cudf::test::BaseFixture {
-};
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {};
 
 template <typename T>
 using wrapper = cudf::test::fixed_width_column_wrapper<T>;

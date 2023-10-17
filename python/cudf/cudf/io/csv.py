@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from collections import abc
 from io import BytesIO, StringIO
@@ -123,11 +123,12 @@ def read_csv(
     if dtype is None or isinstance(dtype, abc.Mapping):
         # There exists some dtypes in the result columns that is inferred.
         # Find them and map them to the default dtypes.
-        dtype = {} if dtype is None else dtype
+        specified_dtypes = {} if dtype is None else dtype
+        df_dtypes = df._dtypes
         unspecified_dtypes = {
-            name: df._dtypes[name]
+            name: df_dtypes[name]
             for name in df._column_names
-            if name not in dtype
+            if name not in specified_dtypes
         }
         default_dtypes = {}
 
@@ -155,7 +156,7 @@ def to_csv(
     index=True,
     encoding=None,
     compression=None,
-    line_terminator="\n",
+    lineterminator="\n",
     chunksize=None,
     storage_options=None,
 ):
@@ -233,7 +234,7 @@ def to_csv(
                 sep=sep,
                 na_rep=na_rep,
                 header=header,
-                line_terminator=line_terminator,
+                lineterminator=lineterminator,
                 rows_per_chunk=rows_per_chunk,
                 index=index,
             )
@@ -244,7 +245,7 @@ def to_csv(
             sep=sep,
             na_rep=na_rep,
             header=header,
-            line_terminator=line_terminator,
+            lineterminator=lineterminator,
             rows_per_chunk=rows_per_chunk,
             index=index,
         )

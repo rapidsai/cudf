@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,12 +24,11 @@
 #include <cudf/groupby.hpp>
 #include <cudf/sorting.hpp>
 
-class Groupby : public cudf::benchmark {
-};
+class Groupby : public cudf::benchmark {};
 
 void BM_basic_no_requests(benchmark::State& state)
 {
-  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  cudf::size_type const column_size{(cudf::size_type)state.range(0)};
 
   data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
     cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, 100);
@@ -60,7 +59,7 @@ BENCHMARK_REGISTER_F(Groupby, BasicNoRequest)
 
 void BM_pre_sorted_no_requests(benchmark::State& state)
 {
-  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  cudf::size_type const column_size{(cudf::size_type)state.range(0)};
 
   data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
     cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, 100);

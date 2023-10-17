@@ -54,8 +54,7 @@ using TestTypes = cudf::test::Concat<cudf::test::NumericTypes,  // include integ
                                      cudf::test::ChronoTypes>;  // include timestamps and durations
 
 template <typename T>
-struct Sort : public cudf::test::BaseFixture {
-};
+struct Sort : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(Sort, TestTypes);
 
@@ -311,8 +310,9 @@ TYPED_TEST(Sort, WithNullableStructColumn)
   auto make_struct = [&](std::vector<std::unique_ptr<cudf::column>> child_cols,
                          std::vector<bool> nulls) {
     cudf::test::structs_column_wrapper struct_col(std::move(child_cols));
-    auto struct_ = struct_col.release();
-    struct_->set_null_mask(cudf::test::detail::make_null_mask(nulls.begin(), nulls.end()));
+    auto struct_                 = struct_col.release();
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(nulls.begin(), nulls.end());
+    struct_->set_null_mask(std::move(null_mask), null_count);
     return struct_;
   };
 
@@ -988,8 +988,7 @@ TYPED_TEST(Sort, WithEmptyListColumn)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, *result);
 }
 
-struct SortByKey : public cudf::test::BaseFixture {
-};
+struct SortByKey : public cudf::test::BaseFixture {};
 
 TEST_F(SortByKey, ValueKeysSizeMismatch)
 {
@@ -1007,8 +1006,7 @@ TEST_F(SortByKey, ValueKeysSizeMismatch)
 }
 
 template <typename T>
-struct SortFixedPointTest : public cudf::test::BaseFixture {
-};
+struct SortFixedPointTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(SortFixedPointTest, cudf::test::FixedPointTypes);
 
@@ -1044,8 +1042,7 @@ TYPED_TEST(SortFixedPointTest, SortedOrderGather)
   CUDF_TEST_EXPECT_TABLES_EQUAL(sorted_table, sorted->view());
 }
 
-struct SortCornerTest : public cudf::test::BaseFixture {
-};
+struct SortCornerTest : public cudf::test::BaseFixture {};
 
 TEST_F(SortCornerTest, WithEmptyStructColumn)
 {
@@ -1053,9 +1050,9 @@ TEST_F(SortCornerTest, WithEmptyStructColumn)
 
   // struct{}, int, int
   int_col col_for_mask{{0, 0, 0, 0, 0, 0}, {1, 0, 1, 1, 1, 1}};
-  auto null_mask = cudf::copy_bitmask(col_for_mask.release()->view());
-  auto struct_col =
-    cudf::make_structs_column(6, {}, cudf::UNKNOWN_NULL_COUNT, std::move(null_mask));
+  auto null_mask  = cudf::copy_bitmask(col_for_mask);
+  auto struct_col = cudf::make_structs_column(
+    6, {}, cudf::column_view(col_for_mask).null_count(), std::move(null_mask));
 
   int_col col1{{1, 2, 3, 1, 2, 3}};
   int_col col2{{1, 1, 1, 2, 2, 2}};
@@ -1082,10 +1079,10 @@ TEST_F(SortCornerTest, WithEmptyStructColumn)
 
   // struct{struct{}, struct{int}}
   int_col col_for_mask2{{0, 0, 0, 0, 0, 0}, {1, 0, 1, 1, 0, 1}};
-  auto null_mask2 = cudf::copy_bitmask(col_for_mask2.release()->view());
+  auto null_mask2 = cudf::copy_bitmask(col_for_mask2);
   std::vector<std::unique_ptr<cudf::column>> child_columns2;
-  auto child_col_1 =
-    cudf::make_structs_column(6, {}, cudf::UNKNOWN_NULL_COUNT, std::move(null_mask2));
+  auto child_col_1 = cudf::make_structs_column(
+    6, {}, cudf::column_view(col_for_mask2).null_count(), std::move(null_mask2));
   child_columns2.push_back(std::move(child_col_1));
   int_col col4{{5, 4, 3, 2, 1, 0}};
   std::vector<std::unique_ptr<cudf::column>> grand_child;

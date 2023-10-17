@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t, int64_t, uint8_t
 from libcpp cimport bool
@@ -14,25 +14,20 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
+from cudf._lib.exception_handler cimport cudf_exception_handler
 
 ctypedef const scalar constscalar
 
-cdef extern from "cudf/copying.hpp" namespace "cudf::packed_columns" nogil:
-    cdef struct metadata:
-        metadata(vector[uint8_t]&& v)
-        const uint8_t* data () except +
-        size_type size () except +
-
 cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
-    ctypedef enum out_of_bounds_policy:
-        NULLIFY 'cudf::out_of_bounds_policy::NULLIFY'
-        DONT_CHECK 'cudf::out_of_bounds_policy::DONT_CHECK'
+    cpdef enum class out_of_bounds_policy(bool):
+        NULLIFY
+        DONT_CHECK
 
     cdef unique_ptr[table] gather (
         const table_view& source_table,
         const column_view& gather_map,
         out_of_bounds_policy policy
-    ) except +
+    ) except +cudf_exception_handler
 
     cdef unique_ptr[column] shift(
         const column_view& input,
@@ -111,23 +106,6 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         table_view input_table,
         vector[size_type] splits
     ) except +
-
-    cdef cppclass packed_columns:
-        unique_ptr[metadata] metadata_
-        unique_ptr[device_buffer] gpu_data
-
-    cdef struct contiguous_split_result:
-        table_view table
-        vector[device_buffer] all_data
-
-    cdef vector[contiguous_split_result] contiguous_split (
-        table_view input_table,
-        vector[size_type] splits
-    ) except +
-
-    cdef packed_columns pack (const table_view& input) except +
-
-    cdef table_view unpack (const packed_columns& input) except +
 
     cdef unique_ptr[column] copy_if_else (
         column_view lhs,

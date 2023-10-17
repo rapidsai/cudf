@@ -162,13 +162,14 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
 
   rapids_cpm_find(
     Arrow ${VERSION}
-    GLOBAL_TARGETS arrow_shared parquet_shared arrow_dataset_shared arrow_static parquet_static
-                   arrow_dataset_static
+    GLOBAL_TARGETS arrow_shared parquet_shared arrow_acero_shared arrow_dataset_shared arrow_static
+                   parquet_static arrow_acero_static arrow_dataset_static
     CPM_ARGS
     GIT_REPOSITORY https://github.com/apache/arrow.git
     GIT_TAG apache-arrow-${VERSION}
     GIT_SHALLOW TRUE SOURCE_SUBDIR cpp
     OPTIONS "CMAKE_VERBOSE_MAKEFILE ON"
+            "ARROW_ACERO ON"
             "ARROW_IPC ON"
             "ARROW_DATASET ON"
             "ARROW_WITH_BACKTRACE ON"
@@ -221,7 +222,8 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
         # Set this to enable `find_package(Parquet)`
         set(Parquet_DIR "${Arrow_DIR}")
       endif()
-      # Set this to enable `find_package(ArrowDataset)`
+      # Set this to enable `find_package(ArrowDataset)`. This will call find_package(ArrowAcero) for
+      # us
       set(ArrowDataset_DIR "${Arrow_DIR}")
       find_package(ArrowDataset REQUIRED QUIET)
     endif()
@@ -295,9 +297,9 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
         APPEND
         arrow_code_string
         "
-          if(NOT TARGET xsimd)
-            add_library(xsimd INTERFACE IMPORTED)
-            target_include_directories(xsimd INTERFACE \"${Arrow_BINARY_DIR}/xsimd_ep/src/xsimd_ep-install/include\")
+          if(NOT TARGET arrow::xsimd)
+            add_library(arrow::xsimd INTERFACE IMPORTED)
+            target_include_directories(arrow::xsimd INTERFACE \"${Arrow_BINARY_DIR}/xsimd_ep/src/xsimd_ep-install/include\")
           endif()
         "
       )
@@ -313,6 +315,26 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     )
 
     if(ENABLE_PARQUET)
+
+      set(arrow_acero_code_string
+          [=[
+              if (TARGET cudf::arrow_acero_shared AND (NOT TARGET arrow_acero_shared))
+                  add_library(arrow_acero_shared ALIAS cudf::arrow_acero_shared)
+              endif()
+              if (TARGET cudf::arrow_acero_static AND (NOT TARGET arrow_acero_static))
+                  add_library(arrow_acero_static ALIAS cudf::arrow_acero_static)
+              endif()
+            ]=]
+      )
+
+      rapids_export(
+        BUILD ArrowAcero
+        VERSION ${VERSION}
+        EXPORT_SET arrow_acero_targets
+        GLOBAL_TARGETS arrow_acero_shared arrow_acero_static
+        NAMESPACE cudf::
+        FINAL_CODE_BLOCK arrow_acero_code_string
+      )
 
       set(arrow_dataset_code_string
           [=[
@@ -365,11 +387,19 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
   endif()
 
   include("${rapids-cmake-dir}/export/find_package_root.cmake")
-  rapids_export_find_package_root(BUILD Arrow [=[${CMAKE_CURRENT_LIST_DIR}]=] cudf-exports)
-  if(ENABLE_PARQUET)
-    rapids_export_find_package_root(BUILD Parquet [=[${CMAKE_CURRENT_LIST_DIR}]=] cudf-exports)
-    rapids_export_find_package_root(BUILD ArrowDataset [=[${CMAKE_CURRENT_LIST_DIR}]=] cudf-exports)
-  endif()
+  rapids_export_find_package_root(
+    BUILD Arrow [=[${CMAKE_CURRENT_LIST_DIR}]=] EXPORT_SET cudf-exports
+  )
+  rapids_export_find_package_root(
+    BUILD Parquet [=[${CMAKE_CURRENT_LIST_DIR}]=]
+    EXPORT_SET cudf-exports
+    CONDITION ENABLE_PARQUET
+  )
+  rapids_export_find_package_root(
+    BUILD ArrowDataset [=[${CMAKE_CURRENT_LIST_DIR}]=]
+    EXPORT_SET cudf-exports
+    CONDITION ENABLE_PARQUET
+  )
 
   set(ARROW_LIBRARIES
       "${ARROW_LIBRARIES}"
@@ -379,7 +409,9 @@ endfunction()
 
 if(NOT DEFINED CUDF_VERSION_Arrow)
   set(CUDF_VERSION_Arrow
-      10.0.1
+      # This version must be kept in sync with the libarrow version pinned for builds in
+      # dependencies.yaml.
+      12.0.1
       CACHE STRING "The version of Arrow to find (or build)"
   )
 endif()

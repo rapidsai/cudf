@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@ namespace cudf {
  * a struct with fields of arbitrary types (including primitives, lists,
  * and other structs)
  */
-class struct_view {
-};
+class struct_view {};
 
 }  // namespace cudf

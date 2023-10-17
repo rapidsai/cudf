@@ -147,11 +147,12 @@ storage_options : dict, optional, default None
     For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
-filters : list of tuple, list of lists of tuples default None
+filters : list of tuple, list of lists of tuples, default None
     If not None, specifies a filter predicate used to filter out row groups
     using statistics stored for each row group as Parquet metadata. Row groups
-    that do not match the given filter predicate are not read. The
-    predicate is expressed in disjunctive normal form (DNF) like
+    that do not match the given filter predicate are not read. The filters
+    will also be applied to the rows of the in-memory DataFrame after IO.
+    The predicate is expressed in disjunctive normal form (DNF) like
     `[[('x', '=', 0), ...], ...]`. DNF allows arbitrary boolean logical
     combinations of single column predicates. The innermost tuples each
     describe a single column predicate. The list of inner predicates is
@@ -165,9 +166,6 @@ row_groups : int, or list, or a list of lists default None
     If not None, specifies, for each input file, which row groups to read.
     If reading multiple inputs, a list of lists should be passed, one list
     for each input.
-strings_to_categorical : boolean, default False
-    If True, return string columns as GDF_CATEGORY dtype; if False, return a
-    as GDF_STRING dtype.
 categorical_partitions : boolean, default True
     Whether directory-partitioned columns should be interpreted as categorical
     or raw dtypes.
@@ -290,6 +288,10 @@ return_metadata : bool, default False
     include the file path metadata (relative to `root_path`).
     To request metadata binary blob when using with ``partition_cols``, Pass
     ``return_metadata=True`` instead of specifying ``metadata_file_path``
+force_nullable_schema : bool, default False.
+    If True, writes all columns as `null` in schema.
+    If False, columns are written as `null` if they contain null values,
+    otherwise as `not null`.
 **kwargs
     Additional parameters will be passed to execution engines other
     than ``cudf``.
@@ -1224,9 +1226,11 @@ encoding : str, default 'utf-8'
     A string representing the encoding to use in the output file
     Only 'utf-8' is currently supported
 compression : str, None
-    A string representing the compression scheme to use in the the output file
+    A string representing the compression scheme to use in the output file
     Compression while writing csv is not supported currently
-line_terminator : char, default '\\n'
+lineterminator : str, optional
+    The newline character or character sequence to use in the output file.
+    Defaults to :data:`os.linesep`.
 chunksize : int or None, default None
     Rows to write at a time
 storage_options : dict, optional, default None
@@ -1236,6 +1240,7 @@ storage_options : dict, optional, default None
     For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
+
 Returns
 -------
 None or str
@@ -1245,7 +1250,10 @@ None or str
 Notes
 -----
 - Follows the standard of Pandas csv.QUOTE_NONNUMERIC for all output.
-- If `to_csv` leads to memory errors consider setting the `chunksize` argument.
+- The default behaviour is to write all rows of the dataframe at once.
+  This can lead to memory or overflow errors for large tables. If this
+  happens, consider setting the ``chunksize`` argument to some
+  reasonable fraction of the total rows in the dataframe.
 
 Examples
 --------
@@ -1648,7 +1656,6 @@ def get_reader_filepath_or_buffer(
     path_or_data = stringify_pathlike(path_or_data)
 
     if isinstance(path_or_data, str):
-
         # Get a filesystem object if one isn't already available
         paths = [path_or_data]
         if fs is None:

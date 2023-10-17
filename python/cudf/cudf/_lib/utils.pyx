@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import numpy as np
 import pyarrow as pa
@@ -67,17 +67,17 @@ cdef vector[column_view] make_column_views(object columns):
     return views
 
 
-cdef vector[string] get_column_names(object table, object index):
+cdef vector[string] get_column_names(object tbl, object index):
     cdef vector[string] column_names
     if index is not False:
-        if isinstance(table._index, cudf.core.multiindex.MultiIndex):
-            for idx_name in table._index.names:
+        if isinstance(tbl._index, cudf.core.multiindex.MultiIndex):
+            for idx_name in tbl._index.names:
                 column_names.push_back(str.encode(idx_name))
         else:
-            if table._index.name is not None:
-                column_names.push_back(str.encode(table._index.name))
+            if tbl._index.name is not None:
+                column_names.push_back(str.encode(tbl._index.name))
 
-    for col_name in table._column_names:
+    for col_name in tbl._column_names:
         column_names.push_back(str.encode(col_name))
 
     return column_names
@@ -246,6 +246,22 @@ cdef columns_from_unique_ptr(
     return columns
 
 
+cdef columns_from_pylibcudf_table(tbl):
+    """Convert a pylibcudf table into list of columns.
+
+    Parameters
+    ----------
+    tbl : pylibcudf.Table
+        The pylibcudf table whose columns will be extracted
+
+    Returns
+    -------
+    list[Column]
+        A list of columns.
+    """
+    return [Column.from_pylibcudf(plc) for plc in tbl.columns()]
+
+
 cdef data_from_unique_ptr(
     unique_ptr[table] c_tbl, column_names, index_names=None
 ):
@@ -315,7 +331,7 @@ cdef columns_from_table_view(
     object owners,
 ):
     """
-    Given a ``cudf::table_view``, construsts a list of columns from it,
+    Given a ``cudf::table_view``, constructs a list of columns from it,
     along with referencing an owner Python object that owns the memory
     lifetime. owner must be either None or a list of column. If owner
     is a list of columns, the owner of the `i`th ``cudf::column_view``

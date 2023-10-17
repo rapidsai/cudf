@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,20 +33,19 @@ std::unique_ptr<cudf::column> get_strings_column(cudf::size_type rows)
 
 }  // anonymous namespace
 
-class StringsToFixedPoint : public cudf::benchmark {
-};
+class StringsToFixedPoint : public cudf::benchmark {};
 
 template <typename fixed_point_type>
 void convert_to_fixed_point(benchmark::State& state)
 {
-  const auto rows         = static_cast<cudf::size_type>(state.range(0));
-  const auto strings_col  = get_strings_column(rows);
-  const auto strings_view = cudf::strings_column_view(strings_col->view());
-  const auto dtype = cudf::data_type{cudf::type_to_id<fixed_point_type>(), numeric::scale_type{-2}};
+  auto const rows         = static_cast<cudf::size_type>(state.range(0));
+  auto const strings_col  = get_strings_column(rows);
+  auto const strings_view = cudf::strings_column_view(strings_col->view());
+  auto const dtype = cudf::data_type{cudf::type_to_id<fixed_point_type>(), numeric::scale_type{-2}};
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);
-    volatile auto results = cudf::strings::to_fixed_point(strings_view, dtype);
+    auto volatile results = cudf::strings::to_fixed_point(strings_view, dtype);
   }
 
   // bytes_processed = bytes_input + bytes_output
@@ -54,16 +53,15 @@ void convert_to_fixed_point(benchmark::State& state)
                           (strings_view.chars_size() + rows * cudf::size_of(dtype)));
 }
 
-class StringsFromFixedPoint : public cudf::benchmark {
-};
+class StringsFromFixedPoint : public cudf::benchmark {};
 
 template <typename fixed_point_type>
 void convert_from_fixed_point(benchmark::State& state)
 {
-  const auto rows        = static_cast<cudf::size_type>(state.range(0));
-  const auto strings_col = get_strings_column(rows);
-  const auto dtype = cudf::data_type{cudf::type_to_id<fixed_point_type>(), numeric::scale_type{-2}};
-  const auto fp_col =
+  auto const rows        = static_cast<cudf::size_type>(state.range(0));
+  auto const strings_col = get_strings_column(rows);
+  auto const dtype = cudf::data_type{cudf::type_to_id<fixed_point_type>(), numeric::scale_type{-2}};
+  auto const fp_col =
     cudf::strings::to_fixed_point(cudf::strings_column_view(strings_col->view()), dtype);
 
   std::unique_ptr<cudf::column> results = nullptr;

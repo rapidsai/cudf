@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,10 +55,7 @@ bool cache_contiguous_table_jni(JNIEnv *env) {
 }
 
 void release_contiguous_table_jni(JNIEnv *env) {
-  if (Contiguous_table_jclass != nullptr) {
-    env->DeleteGlobalRef(Contiguous_table_jclass);
-    Contiguous_table_jclass = nullptr;
-  }
+  Contiguous_table_jclass = cudf::jni::del_global_ref(env, Contiguous_table_jclass);
 }
 
 bool cache_contig_split_group_by_result_jni(JNIEnv *env) {
@@ -87,10 +84,7 @@ bool cache_contig_split_group_by_result_jni(JNIEnv *env) {
 }
 
 void release_contig_split_group_by_result_jni(JNIEnv *env) {
-  if (Contig_split_group_by_result_jclass != nullptr) {
-    env->DeleteGlobalRef(Contig_split_group_by_result_jclass);
-    Contig_split_group_by_result_jclass = nullptr;
-  }
+  Contig_split_group_by_result_jclass = del_global_ref(env, Contig_split_group_by_result_jclass);
 }
 
 jobject contig_split_group_by_result_from(JNIEnv *env, jobjectArray &groups) {
@@ -108,7 +102,7 @@ jobject contig_split_group_by_result_from(JNIEnv *env, jobjectArray &groups,
 }
 
 jobject contiguous_table_from(JNIEnv *env, cudf::packed_columns &split, long row_count) {
-  jlong metadata_address = reinterpret_cast<jlong>(split.metadata_.get());
+  jlong metadata_address = reinterpret_cast<jlong>(split.metadata.get());
   jlong data_address = reinterpret_cast<jlong>(split.gpu_data->data());
   jlong data_size = static_cast<jlong>(split.gpu_data->size());
   jlong rmm_buffer_address = reinterpret_cast<jlong>(split.gpu_data.get());
@@ -118,7 +112,7 @@ jobject contiguous_table_from(JNIEnv *env, cudf::packed_columns &split, long row
       rmm_buffer_address, row_count);
 
   if (contig_table_obj != nullptr) {
-    split.metadata_.release();
+    split.metadata.release();
     split.gpu_data.release();
   }
 
@@ -143,31 +137,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ContiguousTable_createPackedMetadata
     auto table = reinterpret_cast<cudf::table_view const *>(j_table);
     auto data_addr = reinterpret_cast<uint8_t const *>(j_buffer_addr);
     auto data_size = static_cast<size_t>(j_buffer_length);
-    auto metadata_ptr =
-        new cudf::packed_columns::metadata(cudf::pack_metadata(*table, data_addr, data_size));
+    auto metadata_ptr = new std::vector<uint8_t>(cudf::pack_metadata(*table, data_addr, data_size));
     return reinterpret_cast<jlong>(metadata_ptr);
   }
   CATCH_STD(env, 0);
-}
-
-JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_ContiguousTable_createMetadataDirectBuffer(
-    JNIEnv *env, jclass, jlong j_metadata_ptr) {
-  JNI_NULL_CHECK(env, j_metadata_ptr, "metadata is null", nullptr);
-  try {
-    auto metadata = reinterpret_cast<cudf::packed_columns::metadata *>(j_metadata_ptr);
-    return env->NewDirectByteBuffer(const_cast<uint8_t *>(metadata->data()), metadata->size());
-  }
-  CATCH_STD(env, nullptr);
-}
-
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_ContiguousTable_closeMetadata(JNIEnv *env, jclass,
-                                                                         jlong j_metadata_ptr) {
-  JNI_NULL_CHECK(env, j_metadata_ptr, "metadata is null", );
-  try {
-    auto metadata = reinterpret_cast<cudf::packed_columns::metadata *>(j_metadata_ptr);
-    delete metadata;
-  }
-  CATCH_STD(env, );
 }
 
 } // extern "C"

@@ -8,18 +8,26 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_scalar
+from pandas.core.tools.datetimes import is_datetime64tz_dtype
 
 import dask.dataframe as dd
 from dask import config
+from dask.dataframe.backends import (
+    DataFrameBackendEntrypoint,
+    PandasBackendEntrypoint,
+)
 from dask.dataframe.core import get_parallel_type, meta_nonempty
 from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
     concat_dispatch,
+    from_pyarrow_table_dispatch,
     group_split_dispatch,
     grouper_dispatch,
     hash_object_dispatch,
     is_categorical_dtype_dispatch,
     make_meta_dispatch,
+    pyarrow_schema_dispatch,
+    to_pyarrow_table_dispatch,
     tolist_dispatch,
     union_categoricals_dispatch,
 )
@@ -30,7 +38,7 @@ from dask.dataframe.utils import (
     make_meta_obj,
 )
 from dask.sizeof import sizeof as sizeof_dispatch
-from dask.utils import is_arraylike
+from dask.utils import Dispatch, is_arraylike
 
 import cudf
 from cudf.api.types import is_string_dtype
@@ -118,6 +126,11 @@ def _get_non_empty_data(s):
         data = cudf.core.column.as_column(data, dtype=s.dtype)
     elif is_string_dtype(s.dtype):
         data = pa.array(["cat", "dog"])
+    elif is_datetime64tz_dtype(s.dtype):
+        from cudf.utils.dtypes import get_time_unit
+
+        data = cudf.date_range("2001-01-01", periods=2, freq=get_time_unit(s))
+        data = data.tz_localize(str(s.dtype.tz))._column
     else:
         if pd.api.types.is_numeric_dtype(s.dtype):
             data = cudf.core.column.as_column(
@@ -308,16 +321,6 @@ def get_grouper_cudf(obj):
 
 
 try:
-    from dask.dataframe.dispatch import pyarrow_schema_dispatch
-
-    @pyarrow_schema_dispatch.register((cudf.DataFrame,))
-    def get_pyarrow_schema_cudf(obj):
-        return obj.to_arrow().schema
-
-except ImportError:
-    pass
-
-try:
     try:
         from dask.array.dispatch import percentile_lookup
     except ImportError:
@@ -367,6 +370,61 @@ try:
 
 except ImportError:
     pass
+
+
+@pyarrow_schema_dispatch.register((cudf.DataFrame,))
+def _get_pyarrow_schema_cudf(obj, preserve_index=None, **kwargs):
+    if kwargs:
+        warnings.warn(
+            "Ignoring the following arguments to "
+            f"`pyarrow_schema_dispatch`: {list(kwargs)}"
+        )
+
+    return _cudf_to_table(
+        meta_nonempty(obj), preserve_index=preserve_index
+    ).schema
+
+
+@to_pyarrow_table_dispatch.register(cudf.DataFrame)
+def _cudf_to_table(obj, preserve_index=None, **kwargs):
+    if kwargs:
+        warnings.warn(
+            "Ignoring the following arguments to "
+            f"`to_pyarrow_table_dispatch`: {list(kwargs)}"
+        )
+
+    # TODO: Remove this logic when cudf#14159 is resolved
+    # (see: https://github.com/rapidsai/cudf/issues/14159)
+    if preserve_index and isinstance(obj.index, cudf.RangeIndex):
+        obj = obj.copy()
+        obj.index.name = (
+            obj.index.name
+            if obj.index.name is not None
+            else "__index_level_0__"
+        )
+        obj.index = obj.index._as_int_index()
+
+    return obj.to_arrow(preserve_index=preserve_index)
+
+
+@from_pyarrow_table_dispatch.register(cudf.DataFrame)
+def _table_to_cudf(obj, table, self_destruct=None, **kwargs):
+    # cudf ignores self_destruct.
+    kwargs.pop("self_destruct", None)
+    if kwargs:
+        warnings.warn(
+            f"Ignoring the following arguments to "
+            f"`from_pyarrow_table_dispatch`: {list(kwargs)}"
+        )
+    result = obj.from_arrow(table)
+
+    # TODO: Remove this logic when cudf#14159 is resolved
+    # (see: https://github.com/rapidsai/cudf/issues/14159)
+    if "__index_level_0__" in result.index.names:
+        assert len(result.index.names) == 1
+        result.index.name = None
+
+    return result
 
 
 @union_categoricals_dispatch.register((cudf.Series, cudf.BaseIndex))
@@ -446,91 +504,127 @@ def _default_backend(func, *args, **kwargs):
         return func(*args, **kwargs)
 
 
-try:
+def _unsupported_kwargs(old, new, kwargs):
+    # Utility to raise a meaningful error when
+    # unsupported kwargs are encountered within
+    # ``to_backend_dispatch``
+    if kwargs:
+        raise ValueError(
+            f"Unsupported key-word arguments used in `to_backend` "
+            f"for {old}-to-{new} conversion: {kwargs}"
+        )
 
-    # Define "cudf" backend engine to be registered with Dask
-    from dask.dataframe.backends import DataFrameBackendEntrypoint
 
-    class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
-        """Backend-entrypoint class for Dask-DataFrame
+# Register cudf->pandas
+to_pandas_dispatch = PandasBackendEntrypoint.to_backend_dispatch()
 
-        This class is registered under the name "cudf" for the
-        ``dask.dataframe.backends`` entrypoint in ``setup.cfg``.
-        Dask-DataFrame will use the methods defined in this class
-        in place of ``dask.dataframe.<creation-method>`` when the
-        "dataframe.backend" configuration is set to "cudf":
 
-        Examples
-        --------
-        >>> import dask
-        >>> import dask.dataframe as dd
-        >>> with dask.config.set({"dataframe.backend": "cudf"}):
-        ...     ddf = dd.from_dict({"a": range(10)})
-        >>> type(ddf)
-        <class 'dask_cudf.core.DataFrame'>
-        """
+@to_pandas_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
+def to_pandas_dispatch_from_cudf(data, nullable=False, **kwargs):
+    _unsupported_kwargs("cudf", "pandas", kwargs)
+    return data.to_pandas(nullable=nullable)
 
-        @staticmethod
-        def from_dict(
+
+# Register pandas->cudf
+to_cudf_dispatch = Dispatch("to_cudf_dispatch")
+
+
+@to_cudf_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
+def to_cudf_dispatch_from_pandas(data, nan_as_null=None, **kwargs):
+    _unsupported_kwargs("pandas", "cudf", kwargs)
+    return cudf.from_pandas(data, nan_as_null=nan_as_null)
+
+
+# Define "cudf" backend engine to be registered with Dask
+class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
+    """Backend-entrypoint class for Dask-DataFrame
+
+    This class is registered under the name "cudf" for the
+    ``dask.dataframe.backends`` entrypoint in ``setup.cfg``.
+    Dask-DataFrame will use the methods defined in this class
+    in place of ``dask.dataframe.<creation-method>`` when the
+    "dataframe.backend" configuration is set to "cudf":
+
+    Examples
+    --------
+    >>> import dask
+    >>> import dask.dataframe as dd
+    >>> with dask.config.set({"dataframe.backend": "cudf"}):
+    ...     ddf = dd.from_dict({"a": range(10)})
+    >>> type(ddf)
+    <class 'dask_cudf.core.DataFrame'>
+    """
+
+    @classmethod
+    def to_backend_dispatch(cls):
+        return to_cudf_dispatch
+
+    @classmethod
+    def to_backend(cls, data: dd.core._Frame, **kwargs):
+        if isinstance(data._meta, (cudf.DataFrame, cudf.Series, cudf.Index)):
+            # Already a cudf-backed collection
+            _unsupported_kwargs("cudf", "cudf", kwargs)
+            return data
+        return data.map_partitions(cls.to_backend_dispatch(), **kwargs)
+
+    @staticmethod
+    def from_dict(
+        data,
+        npartitions,
+        orient="columns",
+        dtype=None,
+        columns=None,
+        constructor=cudf.DataFrame,
+    ):
+
+        return _default_backend(
+            dd.from_dict,
             data,
-            npartitions,
-            orient="columns",
-            dtype=None,
-            columns=None,
-            constructor=cudf.DataFrame,
-        ):
+            npartitions=npartitions,
+            orient=orient,
+            dtype=dtype,
+            columns=columns,
+            constructor=constructor,
+        )
 
-            return _default_backend(
-                dd.from_dict,
-                data,
-                npartitions=npartitions,
-                orient=orient,
-                dtype=dtype,
-                columns=columns,
-                constructor=constructor,
-            )
+    @staticmethod
+    def read_parquet(*args, engine=None, **kwargs):
+        from dask_cudf.io.parquet import CudfEngine
 
-        @staticmethod
-        def read_parquet(*args, engine=None, **kwargs):
-            from dask_cudf.io.parquet import CudfEngine
+        return _default_backend(
+            dd.read_parquet,
+            *args,
+            engine=CudfEngine,
+            **kwargs,
+        )
 
-            return _default_backend(
-                dd.read_parquet,
-                *args,
-                engine=CudfEngine,
-                **kwargs,
-            )
+    @staticmethod
+    def read_json(*args, **kwargs):
+        from dask_cudf.io.json import read_json
 
-        @staticmethod
-        def read_json(*args, **kwargs):
-            from dask_cudf.io.json import read_json
+        return read_json(*args, **kwargs)
 
-            return read_json(*args, **kwargs)
+    @staticmethod
+    def read_orc(*args, **kwargs):
+        from dask_cudf.io import read_orc
 
-        @staticmethod
-        def read_orc(*args, **kwargs):
-            from dask_cudf.io import read_orc
+        return read_orc(*args, **kwargs)
 
-            return read_orc(*args, **kwargs)
+    @staticmethod
+    def read_csv(*args, **kwargs):
+        from dask_cudf.io import read_csv
 
-        @staticmethod
-        def read_csv(*args, **kwargs):
-            from dask_cudf.io import read_csv
+        return read_csv(*args, **kwargs)
 
-            return read_csv(*args, **kwargs)
+    @staticmethod
+    def read_hdf(*args, **kwargs):
+        from dask_cudf import from_dask_dataframe
 
-        @staticmethod
-        def read_hdf(*args, **kwargs):
-            from dask_cudf import from_dask_dataframe
-
-            # HDF5 reader not yet implemented in cudf
-            warnings.warn(
-                "read_hdf is not yet implemented in cudf/dask_cudf. "
-                "Moving to cudf from pandas. Expect poor performance!"
-            )
-            return from_dask_dataframe(
-                _default_backend(dd.read_hdf, *args, **kwargs)
-            )
-
-except ImportError:
-    pass
+        # HDF5 reader not yet implemented in cudf
+        warnings.warn(
+            "read_hdf is not yet implemented in cudf/dask_cudf. "
+            "Moving to cudf from pandas. Expect poor performance!"
+        )
+        return from_dask_dataframe(
+            _default_backend(dd.read_hdf, *args, **kwargs)
+        )

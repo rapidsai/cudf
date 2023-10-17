@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,8 @@
 
 #include <cstdint>
 
-namespace cudf {
-namespace io {
-namespace parquet {
+namespace cudf::io::parquet::detail {
+
 // Max decimal precisions according to the parquet spec:
 // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#decimal
 auto constexpr MAX_DECIMAL32_PRECISION  = 9;
@@ -86,11 +85,13 @@ enum class Encoding : uint8_t {
   GROUP_VAR_INT           = 1,  // Deprecated, never used
   PLAIN_DICTIONARY        = 2,
   RLE                     = 3,
-  BIT_PACKED              = 4,
+  BIT_PACKED              = 4,  // Deprecated by parquet-format in 2013, superseded by RLE
   DELTA_BINARY_PACKED     = 5,
   DELTA_LENGTH_BYTE_ARRAY = 6,
   DELTA_BYTE_ARRAY        = 7,
   RLE_DICTIONARY          = 8,
+  BYTE_STREAM_SPLIT       = 9,
+  NUM_ENCODINGS           = 10,
 };
 
 /**
@@ -139,7 +140,7 @@ enum BoundaryOrder {
 /**
  * @brief Thrift compact protocol struct field types
  */
-enum {
+enum FieldType {
   ST_FLD_TRUE   = 1,
   ST_FLD_FALSE  = 2,
   ST_FLD_BYTE   = 3,
@@ -154,6 +155,4 @@ enum {
   ST_FLD_STRUCT = 12,
 };
 
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

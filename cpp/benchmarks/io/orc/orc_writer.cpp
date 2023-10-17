@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
 
@@ -38,7 +37,7 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   },
   [](auto) { return std::string{}; })
 
-// Size of the data in the the benchmark dataframe; chosen to be low enough to allow benchmarks to
+// Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
 // run on most GPUs, but large enough to allow highest throughput
 constexpr int64_t data_size        = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
@@ -46,8 +45,6 @@ constexpr cudf::size_type num_cols = 64;
 template <data_type DataType>
 void BM_orc_write_encode(nvbench::state& state, nvbench::type_list<nvbench::enum_type<DataType>>)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   auto const d_type                 = get_type_or_group(static_cast<int32_t>(DataType));
   cudf::size_type const cardinality = state.get_int64("cardinality");
   cudf::size_type const run_length  = state.get_int64("run_length");
@@ -90,8 +87,6 @@ void BM_orc_write_io_compression(
   nvbench::state& state,
   nvbench::type_list<nvbench::enum_type<IO>, nvbench::enum_type<Compression>>)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL_SIGNED),
                                          static_cast<int32_t>(data_type::FLOAT),
                                          static_cast<int32_t>(data_type::DECIMAL),
@@ -141,8 +136,6 @@ void BM_orc_write_statistics(
   nvbench::state& state,
   nvbench::type_list<nvbench::enum_type<Statistics>, nvbench::enum_type<Compression>>)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL_SIGNED),
                                          static_cast<int32_t>(data_type::FLOAT),
                                          static_cast<int32_t>(data_type::DECIMAL),

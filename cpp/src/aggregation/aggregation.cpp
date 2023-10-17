@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,6 +60,12 @@ std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
 
 std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
   data_type col_type, count_aggregation const& agg)
+{
+  return visit(col_type, static_cast<aggregation const&>(agg));
+}
+
+std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
+  data_type col_type, histogram_aggregation const& agg)
 {
   return visit(col_type, static_cast<aggregation const&>(agg));
 }
@@ -197,6 +203,12 @@ std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
 }
 
 std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
+  data_type col_type, merge_histogram_aggregation const& agg)
+{
+  return visit(col_type, static_cast<aggregation const&>(agg));
+}
+
+std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
   data_type col_type, covariance_aggregation const& agg)
 {
   return visit(col_type, static_cast<aggregation const&>(agg));
@@ -243,6 +255,10 @@ void aggregation_finalizer::visit(max_aggregation const& agg)
 }
 
 void aggregation_finalizer::visit(count_aggregation const& agg)
+{
+  visit(static_cast<aggregation const&>(agg));
+}
+void aggregation_finalizer::visit(histogram_aggregation const& agg)
 {
   visit(static_cast<aggregation const&>(agg));
 }
@@ -357,6 +373,11 @@ void aggregation_finalizer::visit(merge_m2_aggregation const& agg)
   visit(static_cast<aggregation const&>(agg));
 }
 
+void aggregation_finalizer::visit(merge_histogram_aggregation const& agg)
+{
+  visit(static_cast<aggregation const&>(agg));
+}
+
 void aggregation_finalizer::visit(covariance_aggregation const& agg)
 {
   visit(static_cast<aggregation const&>(agg));
@@ -460,6 +481,16 @@ template std::unique_ptr<groupby_aggregation> make_count_aggregation<groupby_agg
 template std::unique_ptr<groupby_scan_aggregation> make_count_aggregation<groupby_scan_aggregation>(
   null_policy null_handling);
 
+/// Factory to create a HISTOGRAM aggregation
+template <typename Base>
+std::unique_ptr<Base> make_histogram_aggregation()
+{
+  return std::make_unique<detail::histogram_aggregation>();
+}
+template std::unique_ptr<aggregation> make_histogram_aggregation<aggregation>();
+template std::unique_ptr<groupby_aggregation> make_histogram_aggregation<groupby_aggregation>();
+template std::unique_ptr<reduce_aggregation> make_histogram_aggregation<reduce_aggregation>();
+
 /// Factory to create a ANY aggregation
 template <typename Base>
 std::unique_ptr<Base> make_any_aggregation()
@@ -492,6 +523,8 @@ template std::unique_ptr<aggregation> make_sum_of_squares_aggregation<aggregatio
 template std::unique_ptr<groupby_aggregation>
 make_sum_of_squares_aggregation<groupby_aggregation>();
 template std::unique_ptr<reduce_aggregation> make_sum_of_squares_aggregation<reduce_aggregation>();
+template std::unique_ptr<segmented_reduce_aggregation>
+make_sum_of_squares_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a MEAN aggregation
 template <typename Base>
@@ -503,6 +536,8 @@ template std::unique_ptr<aggregation> make_mean_aggregation<aggregation>();
 template std::unique_ptr<rolling_aggregation> make_mean_aggregation<rolling_aggregation>();
 template std::unique_ptr<groupby_aggregation> make_mean_aggregation<groupby_aggregation>();
 template std::unique_ptr<reduce_aggregation> make_mean_aggregation<reduce_aggregation>();
+template std::unique_ptr<segmented_reduce_aggregation>
+make_mean_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a M2 aggregation
 template <typename Base>
@@ -526,6 +561,8 @@ template std::unique_ptr<groupby_aggregation> make_variance_aggregation<groupby_
   size_type ddof);
 template std::unique_ptr<reduce_aggregation> make_variance_aggregation<reduce_aggregation>(
   size_type ddof);
+template std::unique_ptr<segmented_reduce_aggregation>
+make_variance_aggregation<segmented_reduce_aggregation>(size_type ddof);
 
 /// Factory to create a STD aggregation
 template <typename Base>
@@ -540,6 +577,8 @@ template std::unique_ptr<groupby_aggregation> make_std_aggregation<groupby_aggre
   size_type ddof);
 template std::unique_ptr<reduce_aggregation> make_std_aggregation<reduce_aggregation>(
   size_type ddof);
+template std::unique_ptr<segmented_reduce_aggregation>
+make_std_aggregation<segmented_reduce_aggregation>(size_type ddof);
 
 /// Factory to create a MEDIAN aggregation
 template <typename Base>
@@ -597,6 +636,8 @@ template std::unique_ptr<groupby_aggregation> make_nunique_aggregation<groupby_a
   null_policy null_handling);
 template std::unique_ptr<reduce_aggregation> make_nunique_aggregation<reduce_aggregation>(
   null_policy null_handling);
+template std::unique_ptr<segmented_reduce_aggregation>
+make_nunique_aggregation<segmented_reduce_aggregation>(null_policy null_handling);
 
 /// Factory to create an NTH_ELEMENT aggregation
 template <typename Base>
@@ -753,6 +794,17 @@ std::unique_ptr<Base> make_merge_m2_aggregation()
 }
 template std::unique_ptr<aggregation> make_merge_m2_aggregation<aggregation>();
 template std::unique_ptr<groupby_aggregation> make_merge_m2_aggregation<groupby_aggregation>();
+
+/// Factory to create a MERGE_HISTOGRAM aggregation
+template <typename Base>
+std::unique_ptr<Base> make_merge_histogram_aggregation()
+{
+  return std::make_unique<detail::merge_histogram_aggregation>();
+}
+template std::unique_ptr<aggregation> make_merge_histogram_aggregation<aggregation>();
+template std::unique_ptr<groupby_aggregation>
+make_merge_histogram_aggregation<groupby_aggregation>();
+template std::unique_ptr<reduce_aggregation> make_merge_histogram_aggregation<reduce_aggregation>();
 
 /// Factory to create a COVARIANCE aggregation
 template <typename Base>

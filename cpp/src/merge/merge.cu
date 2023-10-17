@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,11 +78,14 @@ __global__ void materialize_merged_bitmask_kernel(
   size_type const num_destination_rows,
   index_type const* const __restrict__ merged_indices)
 {
-  size_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
+  auto const stride = detail::grid_1d::grid_stride();
 
-  auto active_threads = __ballot_sync(0xffff'ffffu, destination_row < num_destination_rows);
+  auto tid = detail::grid_1d::global_thread_id();
 
-  while (destination_row < num_destination_rows) {
+  auto active_threads = __ballot_sync(0xffff'ffffu, tid < num_destination_rows);
+
+  while (tid < num_destination_rows) {
+    auto const destination_row     = static_cast<size_type>(tid);
     auto const [src_side, src_row] = merged_indices[destination_row];
     bool const from_left{src_side == side::LEFT};
     bool source_bit_is_valid{true};
@@ -99,8 +102,8 @@ __global__ void materialize_merged_bitmask_kernel(
     // Only one thread writes output
     if (0 == threadIdx.x % warpSize) { out_validity[word_index(destination_row)] = result_mask; }
 
-    destination_row += blockDim.x * gridDim.x;
-    active_threads = __ballot_sync(active_threads, destination_row < num_destination_rows);
+    tid += stride;
+    active_threads = __ballot_sync(active_threads, tid < num_destination_rows);
   }
 }
 
@@ -170,12 +173,12 @@ index_vector generate_merged_indices(table_view const& left_table,
                                      table_view const& right_table,
                                      std::vector<order> const& column_order,
                                      std::vector<null_order> const& null_precedence,
-                                     bool nullable                = true,
-                                     rmm::cuda_stream_view stream = cudf::get_default_stream())
+                                     bool nullable,
+                                     rmm::cuda_stream_view stream)
 {
-  const size_type left_size  = left_table.num_rows();
-  const size_type right_size = right_table.num_rows();
-  const size_type total_size = left_size + right_size;
+  size_type const left_size  = left_table.num_rows();
+  size_type const right_size = right_table.num_rows();
+  size_type const total_size = left_size + right_size;
 
   auto left_gen    = side_index_generator{side::LEFT};
   auto right_gen   = side_index_generator{side::RIGHT};
@@ -187,10 +190,12 @@ index_vector generate_merged_indices(table_view const& left_table,
   auto lhs_device_view = table_device_view::create(left_table, stream);
   auto rhs_device_view = table_device_view::create(right_table, stream);
 
-  auto d_column_order = cudf::detail::make_device_uvector_async(column_order, stream);
+  auto d_column_order = cudf::detail::make_device_uvector_async(
+    column_order, stream, rmm::mr::get_current_device_resource());
 
   if (nullable) {
-    auto d_null_precedence = cudf::detail::make_device_uvector_async(null_precedence, stream);
+    auto d_null_precedence = cudf::detail::make_device_uvector_async(
+      null_precedence, stream, rmm::mr::get_current_device_resource());
 
     auto ineq_op = detail::row_lexicographic_tagged_comparator<true>(
       *lhs_device_view, *rhs_device_view, d_column_order.data(), d_null_precedence.data());
@@ -241,7 +246,7 @@ struct column_merger {
     column_view const& lcol,
     column_view const& rcol,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const
+    rmm::mr::device_memory_resource* mr) const
   {
     auto lsz         = lcol.size();
     auto merged_size = lsz + rcol.size();
@@ -362,8 +367,12 @@ std::unique_ptr<column> column_merger::operator()<cudf::struct_view>(
 
   auto it = cudf::detail::make_counting_transform_iterator(
     0, [&, merger = column_merger{row_order_}](size_type i) {
-      return cudf::type_dispatcher<dispatch_storage_type>(
-        lhs.child(i).type(), merger, lhs.get_sliced_child(i), rhs.get_sliced_child(i), stream, mr);
+      return cudf::type_dispatcher<dispatch_storage_type>(lhs.child(i).type(),
+                                                          merger,
+                                                          lhs.get_sliced_child(i, stream),
+                                                          rhs.get_sliced_child(i, stream),
+                                                          stream,
+                                                          mr);
     });
 
   auto merged_children   = std::vector<std::unique_ptr<column>>(it, it + lhs.num_children());
@@ -410,7 +419,7 @@ table_ptr_type merge(cudf::table_view const& left_table,
   // extract merged row order according to indices:
   //
   auto const merged_indices = generate_merged_indices(
-    index_left_view, index_right_view, column_order, null_precedence, nullable);
+    index_left_view, index_right_view, column_order, null_precedence, nullable, stream);
 
   // create merged table:
   //

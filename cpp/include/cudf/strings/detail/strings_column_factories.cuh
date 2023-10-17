@@ -45,7 +45,7 @@ namespace detail {
  * @brief Basic type expected for iterators passed to `make_strings_column` that represent string
  * data in device memory.
  */
-using string_index_pair = thrust::pair<const char*, size_type>;
+using string_index_pair = thrust::pair<char const*, size_type>;
 
 /**
  * @brief Average string byte-length threshold for deciding character-level
@@ -170,12 +170,11 @@ std::unique_ptr<column> make_strings_column(CharIterator chars_begin,
   size_type bytes         = std::distance(chars_begin, chars_end) * sizeof(char);
   if (strings_count == 0) return make_empty_column(type_id::STRING);
 
-  CUDF_EXPECTS(null_count < strings_count, "null strings column not yet supported");
   CUDF_EXPECTS(bytes >= 0, "invalid offsets data");
 
   // build offsets column -- this is the number of strings + 1
   auto offsets_column = make_numeric_column(
-    data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
   auto offsets_view = offsets_column->mutable_view();
   thrust::transform(rmm::exec_policy(stream),
                     offsets_begin,

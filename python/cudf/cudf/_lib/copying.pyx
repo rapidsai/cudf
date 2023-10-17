@@ -4,13 +4,14 @@ import pickle
 
 from libc.stdint cimport int32_t, uint8_t, uintptr_t
 from libcpp cimport bool
-from libcpp.memory cimport make_shared, make_unique, shared_ptr, unique_ptr
+from libcpp.memory cimport make_shared, shared_ptr, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from rmm._lib.device_buffer cimport DeviceBuffer
 
 import cudf
+from cudf._lib import pylibcudf
 from cudf.core.buffer import Buffer, acquire_spill_lock, as_buffer
 
 from cudf._lib.column cimport Column
@@ -23,10 +24,12 @@ from cudf._lib.utils cimport table_view_from_columns, table_view_from_table
 from cudf._lib.reduce import minmax
 from cudf.core.abc import Serializable
 
+cimport cudf._lib.cpp.contiguous_split as cpp_contiguous_split
 cimport cudf._lib.cpp.copying as cpp_copying
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
 from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
+from cudf._lib.cpp.libcpp.memory cimport make_unique
 from cudf._lib.cpp.lists.gather cimport (
     segmented_gather as cpp_segmented_gather,
 )
@@ -36,6 +39,7 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.utils cimport (
+    columns_from_pylibcudf_table,
     columns_from_table_view,
     columns_from_unique_ptr,
     data_from_table_view,
@@ -76,9 +80,8 @@ def copy_column(Column input_column):
     -------
     Deep copied column
     """
-
-    cdef column_view input_column_view = input_column.view()
     cdef unique_ptr[column] c_result
+    cdef column_view input_column_view = input_column.view()
     with nogil:
         c_result = move(make_unique[column](input_column_view))
 
@@ -151,10 +154,8 @@ def copy_range(Column source_column,
     example via ``slice.indices``.
     """
 
-    assert (
-        source_end - source_begin == target_end - target_begin,
-        "Source and target ranges must be same length"
-    )
+    msg = "Source and target ranges must be same length"
+    assert source_end - source_begin == target_end - target_begin, msg
     if target_end >= target_begin and inplace:
         # FIXME: Are we allowed to do this when inplace=False?
         return target_column
@@ -173,24 +174,13 @@ def gather(
     Column gather_map,
     bool nullify=False
 ):
-    cdef unique_ptr[table] c_result
-    cdef table_view source_table_view = table_view_from_columns(columns)
-    cdef column_view gather_map_view = gather_map.view()
-    cdef cpp_copying.out_of_bounds_policy policy = (
-        cpp_copying.out_of_bounds_policy.NULLIFY if nullify
-        else cpp_copying.out_of_bounds_policy.DONT_CHECK
+    tbl = pylibcudf.copying.gather(
+        pylibcudf.Table([col.to_pylibcudf(mode="read") for col in columns]),
+        gather_map.to_pylibcudf(mode="read"),
+        pylibcudf.copying.OutOfBoundsPolicy.NULLIFY if nullify
+        else pylibcudf.copying.OutOfBoundsPolicy.DONT_CHECK
     )
-
-    with nogil:
-        c_result = move(
-            cpp_copying.gather(
-                source_table_view,
-                gather_map_view,
-                policy
-            )
-        )
-
-    return columns_from_unique_ptr(move(c_result))
+    return columns_from_pylibcudf_table(tbl)
 
 
 cdef scatter_scalar(list source_device_slrs,
@@ -712,7 +702,7 @@ cdef class _CPackedColumns:
             if isinstance(col.dtype, cudf.core.dtypes._BaseDtype):
                 p.column_dtypes[name] = col.dtype
 
-        p.c_obj = move(cpp_copying.pack(input_table_view))
+        p.c_obj = move(cpp_contiguous_split.pack(input_table_view))
 
         return p
 
@@ -740,10 +730,10 @@ cdef class _CPackedColumns:
 
         header["column-names"] = self.column_names
         header["index-names"] = self.index_names
-        if self.c_obj.metadata_.get()[0].data() != NULL:
+        if self.c_obj.metadata.get()[0].data() != NULL:
             header["metadata"] = list(
-                <uint8_t[:self.c_obj.metadata_.get()[0].size()]>
-                self.c_obj.metadata_.get()[0].data()
+                <uint8_t[:self.c_obj.metadata.get()[0].size()]>
+                self.c_obj.metadata.get()[0].data()
             )
 
         column_dtypes = {}
@@ -769,9 +759,9 @@ cdef class _CPackedColumns:
             size=gpu_data.nbytes
         )
 
-        cdef cpp_copying.packed_columns data
-        data.metadata_ = move(
-            make_unique[cpp_copying.metadata](
+        cdef cpp_contiguous_split.packed_columns data
+        data.metadata = move(
+            make_unique[vector[uint8_t]](
                 move(<vector[uint8_t]>header.get("metadata", []))
             )
         )
@@ -793,7 +783,7 @@ cdef class _CPackedColumns:
 
     def unpack(self):
         output_table = cudf.DataFrame._from_data(*data_from_table_view(
-            cpp_copying.unpack(self.c_obj),
+            cpp_contiguous_split.unpack(self.c_obj),
             self,
             self.column_names,
             self.index_names

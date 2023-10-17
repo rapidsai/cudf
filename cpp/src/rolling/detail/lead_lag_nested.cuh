@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
@@ -191,7 +192,8 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
                          scatter_map,
                          out_of_bounds_policy::DONT_CHECK,
                          cudf::detail::negative_index_policy::NOT_ALLOWED,
-                         stream);
+                         stream,
+                         rmm::mr::get_current_device_resource());
 
   // Scatter defaults into locations where LEAD/LAG computed nulls.
   auto scattered_results = cudf::detail::scatter(

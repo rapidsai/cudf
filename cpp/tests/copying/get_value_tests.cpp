@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,8 +36,7 @@
 using namespace cudf::test::iterators;
 
 template <typename T>
-struct FixedWidthGetValueTest : public cudf::test::BaseFixture {
-};
+struct FixedWidthGetValueTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedWidthGetValueTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
@@ -82,8 +81,7 @@ TYPED_TEST(FixedWidthGetValueTest, IndexOutOfBounds)
   EXPECT_THROW(cudf::get_element(col, 4), cudf::logic_error);
 }
 
-struct StringGetValueTest : public cudf::test::BaseFixture {
-};
+struct StringGetValueTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringGetValueTest, BasicGet)
 {
@@ -127,8 +125,7 @@ TEST_F(StringGetValueTest, GetNull)
 }
 
 template <typename T>
-struct DictionaryGetValueTest : public cudf::test::BaseFixture {
-};
+struct DictionaryGetValueTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(DictionaryGetValueTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
@@ -314,7 +311,7 @@ TYPED_TEST(ListGetFixedWidthValueTest, NestedGetNull)
 {
   using LCW      = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
   using FCW      = cudf::test::fixed_width_column_wrapper<TypeParam>;
-  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 
   std::vector<cudf::valid_type> valid{1, 0, 1, 0};
   // clang-format off
@@ -469,7 +466,7 @@ TEST_F(ListGetStringValueTest, NestedGetNonNullEmpty)
 TEST_F(ListGetStringValueTest, NestedGetNull)
 {
   using LCW      = cudf::test::lists_column_wrapper<cudf::string_view>;
-  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
   using StringCW = cudf::test::strings_column_wrapper;
 
   std::vector<cudf::valid_type> valid{0, 0, 1, 1};
@@ -511,7 +508,7 @@ struct ListGetStructValueTest : public cudf::test::BaseFixture {
    */
   std::unique_ptr<cudf::column> make_test_lists_column(
     cudf::size_type num_lists,
-    cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets,
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets,
     std::unique_ptr<cudf::column> child,
     std::initializer_list<cudf::valid_type> null_mask)
   {
@@ -779,7 +776,7 @@ TYPED_TEST(ListGetStructValueTest, NestedGetNull)
   // NULL                      <- cudf::get_element(2)
 
   using valid_t  = std::vector<cudf::valid_type>;
-  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 
   auto list_column = this->make_test_lists_column(2, {0, 2, 3}, this->leaf_data(), {1, 1});
   auto list_column_nested =
@@ -797,11 +794,9 @@ TYPED_TEST(ListGetStructValueTest, NestedGetNull)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected_data, typed_s->view());
 }
 
-struct StructGetValueTest : public cudf::test::BaseFixture {
-};
+struct StructGetValueTest : public cudf::test::BaseFixture {};
 template <typename T>
-struct StructGetValueTestTyped : public cudf::test::BaseFixture {
-};
+struct StructGetValueTestTyped : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(StructGetValueTestTyped, cudf::test::FixedWidthTypes);
 
@@ -812,7 +807,7 @@ TYPED_TEST(StructGetValueTestTyped, mixed_types_valid)
   // col fields
   cudf::test::fixed_width_column_wrapper<TypeParam> f1{1, 2, 3};
   cudf::test::strings_column_wrapper f2{"aa", "bbb", "c"};
-  cudf::test::dictionary_column_wrapper<TypeParam, uint32_t> f3{42, 42, 24};
+  cudf::test::dictionary_column_wrapper<TypeParam, int32_t> f3{42, 42, 24};
   LCW f4{LCW{8, 8, 8}, LCW{9, 9}, LCW{10}};
 
   cudf::test::structs_column_wrapper col{f1, f2, f3, f4};
@@ -824,7 +819,7 @@ TYPED_TEST(StructGetValueTestTyped, mixed_types_valid)
   // expect fields
   cudf::test::fixed_width_column_wrapper<TypeParam> ef1{3};
   cudf::test::strings_column_wrapper ef2{"c"};
-  cudf::test::dictionary_column_wrapper<int32_t, TypeParam> ef3{24};
+  cudf::test::dictionary_column_wrapper<TypeParam, int32_t> ef3{24};
   LCW ef4{LCW{10}};
 
   cudf::table_view expect_data{{ef1, ef2, ef3, ef4}};
@@ -905,12 +900,12 @@ TEST_F(StructGetValueTest, multi_level_nested)
   // col fields
   LCW l3({LCW{1, 1, 1}, LCW{2, 2}, LCW{3}}, validity_mask_t{false, true, true}.begin());
   cudf::test::structs_column_wrapper l2{l3};
-  auto l1 = cudf::make_lists_column(
-    1,
-    cudf::test::fixed_width_column_wrapper<cudf::offset_type>{0, 3}.release(),
-    l2.release(),
-    0,
-    cudf::create_null_mask(1, cudf::mask_state::UNALLOCATED));
+  auto l1 =
+    cudf::make_lists_column(1,
+                            cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 3}.release(),
+                            l2.release(),
+                            0,
+                            cudf::create_null_mask(1, cudf::mask_state::UNALLOCATED));
   std::vector<std::unique_ptr<cudf::column>> l0_fields;
   l0_fields.emplace_back(std::move(l1));
   cudf::test::structs_column_wrapper l0(std::move(l0_fields));

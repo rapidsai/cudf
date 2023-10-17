@@ -1,15 +1,16 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import math
 import re
 import warnings
-from typing import Sequence, Type, TypeVar, Union
+from typing import Sequence, Union
 
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pandas.tseries.offsets as pd_offset
 from pandas.core.tools.datetimes import _unit_map
+from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
@@ -143,8 +144,16 @@ def to_datetime(
     if yearfirst:
         raise NotImplementedError("yearfirst support is not yet implemented")
 
-    if format is not None and "%f" in format:
-        format = format.replace("%f", "%9f")
+    if utc:
+        raise NotImplementedError("utc is not yet implemented")
+
+    if format is not None:
+        if "%Z" in format or "%z" in format:
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
+        elif "%f" in format:
+            format = format.replace("%f", "%9f")
 
     try:
         if isinstance(arg, cudf.DataFrame):
@@ -285,12 +294,8 @@ def to_datetime(
 def _process_col(col, unit, dayfirst, infer_datetime_format, format):
     if col.dtype.kind == "M":
         return col
-    elif col.dtype.kind == "m":
-        raise TypeError(
-            f"dtype {col.dtype} cannot be converted to {_unit_dtype_map[unit]}"
-        )
 
-    if col.dtype.kind in ("f"):
+    elif col.dtype.kind in ("f"):
         if unit not in (None, "ns"):
             factor = cudf.Scalar(
                 column.datetime._unit_to_nanoseconds_conversion[unit]
@@ -316,8 +321,9 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
             )
         else:
             col = col.as_datetime_column(dtype="datetime64[ns]")
+        return col
 
-    if col.dtype.kind in ("i"):
+    elif col.dtype.kind in ("i"):
         if unit in ("D", "h", "m"):
             factor = cudf.Scalar(
                 column.datetime._unit_to_nanoseconds_conversion[unit]
@@ -331,6 +337,7 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
             )
         else:
             col = col.as_datetime_column(dtype=_unit_dtype_map[unit])
+        return col
 
     elif col.dtype.kind in ("O"):
         if unit not in (None, "ns") or col.null_count == len(col):
@@ -346,20 +353,23 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
                 format=format,
             )
         else:
-            if infer_datetime_format and format is None:
+            if format is None:
+                if not infer_datetime_format and dayfirst:
+                    raise NotImplementedError(
+                        f"{dayfirst=} not implemented "
+                        f"when {format=} and {infer_datetime_format=}."
+                    )
                 format = column.datetime.infer_format(
                     element=col.element_indexing(0),
                     dayfirst=dayfirst,
                 )
-            elif format is None:
-                format = column.datetime.infer_format(
-                    element=col.element_indexing(0)
-                )
-            col = col.as_datetime_column(
+            return col.as_datetime_column(
                 dtype=_unit_dtype_map[unit],
                 format=format,
             )
-    return col
+    raise TypeError(
+        f"dtype {col.dtype} cannot be converted to {_unit_dtype_map[unit]}"
+    )
 
 
 def get_units(value):
@@ -371,9 +381,6 @@ def get_units(value):
         return _unit_map[value.lower()]
 
     return value
-
-
-_T = TypeVar("_T", bound="DateOffset")
 
 
 class DateOffset:
@@ -647,7 +654,7 @@ class DateOffset:
         return repr_str
 
     @classmethod
-    def _from_freqstr(cls: Type[_T], freqstr: str) -> _T:
+    def _from_freqstr(cls, freqstr: str) -> Self:
         """
         Parse a string and return a DateOffset object
         expects strings of the form 3D, 25W, 10ms, 42ns, etc.
@@ -669,9 +676,9 @@ class DateOffset:
 
     @classmethod
     def _from_pandas_ticks_or_weeks(
-        cls: Type[_T],
+        cls,
         tick: Union[pd.tseries.offsets.Tick, pd.tseries.offsets.Week],
-    ) -> _T:
+    ) -> Self:
         return cls(**{cls._TICK_OR_WEEK_TO_UNITS[type(tick)]: tick.n})
 
     def _maybe_as_fast_pandas_offset(self):
@@ -832,6 +839,10 @@ def date_range(
         arr = cp.linspace(start=start, stop=end, num=periods)
         result = cudf.core.column.as_column(arr).astype("datetime64[ns]")
         return cudf.DatetimeIndex._from_data({name: result})
+    elif cudf.get_option("mode.pandas_compatible"):
+        raise NotImplementedError(
+            "`DatetimeIndex` with `freq` cannot be constructed."
+        )
 
     # The code logic below assumes `freq` is defined. It is first normalized
     # into `DateOffset` for further computation with timestamps.

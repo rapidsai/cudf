@@ -18,6 +18,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 
+#include <cudf/detail/iterator.cuh>
 #include <cudf/io/json.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
@@ -26,8 +27,7 @@
 #include <string>
 #include <vector>
 
-struct JsonWriterTest : public cudf::test::BaseFixture {
-};
+struct JsonWriterTest : public cudf::test::BaseFixture {};
 
 TEST_F(JsonWriterTest, EmptyInput)
 {
@@ -360,6 +360,197 @@ TEST_F(JsonWriterTest, SpecialChars)
 )";
   auto const output_string   = std::string(out_buffer.data(), out_buffer.size());
   EXPECT_EQ(expected, output_string);
+}
+
+TEST_F(JsonWriterTest, NullList)
+{
+  std::string const data = R"(
+{"a": [null], "b": [[1, 2, 3], [null], [null, null, null], [4, null, 5]]}
+{"a": [2, null, null, 3] , "b": null}
+{"a": [null, null, 4], "b": [[2, null], null]}
+{"a": [5, null, null], "b": [null, [3, 4, 5]]} )";
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+      .lines(true);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+  cudf::table_view tbl_view            = result.tbl->view();
+  cudf::io::table_metadata mt{result.metadata};
+
+  std::vector<char> out_buffer;
+  auto destination     = cudf::io::sink_info(&out_buffer);
+  auto options_builder = cudf::io::json_writer_options_builder(destination, tbl_view)
+                           .include_nulls(true)
+                           .metadata(mt)
+                           .lines(true)
+                           .na_rep("null");
+
+  cudf::io::write_json(options_builder.build(), rmm::mr::get_current_device_resource());
+  std::string const expected = R"({"a":[null],"b":[[1,2,3],[null],[null,null,null],[4,null,5]]}
+{"a":[2,null,null,3],"b":null}
+{"a":[null,null,4],"b":[[2,null],null]}
+{"a":[5,null,null],"b":[null,[3,4,5]]}
+)";
+  EXPECT_EQ(expected, std::string(out_buffer.data(), out_buffer.size()));
+}
+
+TEST_F(JsonWriterTest, ChunkedNested)
+{
+  std::string const data = R"(
+{"a": 1, "b": -2, "c": {      }, "e": [{"f": 1}]}
+{"a": 2, "b": -2, "c": {      }, "e": null}
+{"a": 3, "b": -2, "c": {"d": 9}, "e": [{"f": 2}, null]}
+{"a": 4, "b": -2, "c": {"d": 16}, "e": [{"f": 3}, {"f": 4}, {"f": 5}]}
+{"a": 5, "b": -2, "c": {      }, "e": []}
+{"a": 6, "b": -2, "c": {"d": 36}, "e": [{"f": 6}]}
+{"a": 7, "b": -2, "c": {"d": 49}, "e": [{"f": 7}]}
+{"a": 8, "b": -2, "c": {"d": 64}, "e": [{"f": 8}]}
+{"a": 9, "b": -2, "c": {"d": 81}, "e": [{"f": 9}]}
+)";
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+      .lines(true);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+  cudf::table_view tbl_view            = result.tbl->view();
+  cudf::io::table_metadata mt{result.metadata};
+
+  std::vector<char> out_buffer;
+  auto destination     = cudf::io::sink_info(&out_buffer);
+  auto options_builder = cudf::io::json_writer_options_builder(destination, tbl_view)
+                           .include_nulls(false)
+                           .metadata(mt)
+                           .lines(true)
+                           .na_rep("null")
+                           .rows_per_chunk(8);
+
+  cudf::io::write_json(options_builder.build(), rmm::mr::get_current_device_resource());
+  std::string const expected =
+    R"({"a":1,"b":-2,"c":{},"e":[{"f":1}]}
+{"a":2,"b":-2,"c":{}}
+{"a":3,"b":-2,"c":{"d":9},"e":[{"f":2},null]}
+{"a":4,"b":-2,"c":{"d":16},"e":[{"f":3},{"f":4},{"f":5}]}
+{"a":5,"b":-2,"c":{},"e":[]}
+{"a":6,"b":-2,"c":{"d":36},"e":[{"f":6}]}
+{"a":7,"b":-2,"c":{"d":49},"e":[{"f":7}]}
+{"a":8,"b":-2,"c":{"d":64},"e":[{"f":8}]}
+{"a":9,"b":-2,"c":{"d":81},"e":[{"f":9}]}
+)";
+  EXPECT_EQ(expected, std::string(out_buffer.data(), out_buffer.size()));
+}
+
+TEST_F(JsonWriterTest, StructAllNullCombinations)
+{
+  auto const_1_iter = thrust::make_constant_iterator(1);
+
+  auto col_a = cudf::test::fixed_width_column_wrapper<int>(
+    const_1_iter, const_1_iter + 32, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+      return i / 16;
+    }));
+
+  auto col_b = cudf::test::fixed_width_column_wrapper<int>(
+    const_1_iter, const_1_iter + 32, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+      return (i / 8) % 2;
+    }));
+
+  auto col_c = cudf::test::fixed_width_column_wrapper<int>(
+    const_1_iter, const_1_iter + 32, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+      return (i / 4) % 2;
+    }));
+
+  auto col_d = cudf::test::fixed_width_column_wrapper<int>(
+    const_1_iter, const_1_iter + 32, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+      return (i / 2) % 2;
+    }));
+
+  auto col_e = cudf::test::fixed_width_column_wrapper<int>(
+    const_1_iter, const_1_iter + 32, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+      return i % 2;
+    }));
+
+  // The table has 32 rows with validity from 00000 to 11111
+  cudf::table_view tbl_view = cudf::table_view({col_a, col_b, col_c, col_d, col_e});
+  cudf::io::table_metadata mt{{{"a"}, {"b"}, {"c"}, {"d"}, {"e"}}};
+
+  std::vector<char> out_buffer;
+  auto destination     = cudf::io::sink_info(&out_buffer);
+  auto options_builder = cudf::io::json_writer_options_builder(destination, tbl_view)
+                           .include_nulls(false)
+                           .metadata(mt)
+                           .lines(true)
+                           .na_rep("null");
+
+  cudf::io::write_json(options_builder.build(), rmm::mr::get_current_device_resource());
+  std::string const expected = R"({}
+{"e":1}
+{"d":1}
+{"d":1,"e":1}
+{"c":1}
+{"c":1,"e":1}
+{"c":1,"d":1}
+{"c":1,"d":1,"e":1}
+{"b":1}
+{"b":1,"e":1}
+{"b":1,"d":1}
+{"b":1,"d":1,"e":1}
+{"b":1,"c":1}
+{"b":1,"c":1,"e":1}
+{"b":1,"c":1,"d":1}
+{"b":1,"c":1,"d":1,"e":1}
+{"a":1}
+{"a":1,"e":1}
+{"a":1,"d":1}
+{"a":1,"d":1,"e":1}
+{"a":1,"c":1}
+{"a":1,"c":1,"e":1}
+{"a":1,"c":1,"d":1}
+{"a":1,"c":1,"d":1,"e":1}
+{"a":1,"b":1}
+{"a":1,"b":1,"e":1}
+{"a":1,"b":1,"d":1}
+{"a":1,"b":1,"d":1,"e":1}
+{"a":1,"b":1,"c":1}
+{"a":1,"b":1,"c":1,"e":1}
+{"a":1,"b":1,"c":1,"d":1}
+{"a":1,"b":1,"c":1,"d":1,"e":1}
+)";
+  EXPECT_EQ(expected, std::string(out_buffer.data(), out_buffer.size()));
+}
+
+TEST_F(JsonWriterTest, Unicode)
+{
+  //                                       UTF-8,                      UTF-16
+  cudf::test::strings_column_wrapper col1{"\"\\/\b\f\n\r\t", "ராபிட்ஸ்", "$€𐐷𤭢", "C𝞵𝓓𝒻"};
+  // Unicode
+  // 0000-FFFF     Basic Multilingual Plane
+  // 10000-10FFFF  Supplementary Plane
+  cudf::test::strings_column_wrapper col2{
+    "CႮ≪ㇳ䍏凹沦王辿龸ꁗ믜스폶ﴠ",  //  0000-FFFF
+    "𐀀𑿪𒐦𓃰𔙆 𖦆𗿿𘳕𚿾[↳] 𜽆𝓚𞤁🄰",                            // 10000-1FFFF
+    "𠘨𡥌𢗉𣇊𤊩𥅽𦉱𧴱𨁲𩁹𪐢𫇭𬬭𭺷𮊦屮",                // 20000-2FFFF
+    "𰾑𱔈𲍉"};                                         // 30000-3FFFF
+  cudf::test::fixed_width_column_wrapper<int16_t> col3{{1, 2, 3, 4},
+                                                       cudf::test::iterators::nulls_at({0, 2})};
+  cudf::table_view tbl_view{{col1, col2, col3}};
+  cudf::io::table_metadata mt{{{"col1"}, {"col2"}, {"int16"}}};
+
+  std::vector<char> out_buffer;
+  auto destination     = cudf::io::sink_info(&out_buffer);
+  auto options_builder = cudf::io::json_writer_options_builder(destination, tbl_view)
+                           .include_nulls(true)
+                           .metadata(mt)
+                           .lines(true)
+                           .na_rep("null");
+
+  cudf::io::write_json(options_builder.build(), rmm::mr::get_current_device_resource());
+
+  std::string const expected =
+    R"({"col1":"\"\\\/\b\f\n\r\t","col2":"C\u10ae\u226a\u31f3\u434f\u51f9\u6ca6\u738b\u8fbf\u9fb8\ua057\ubbdc\uc2a4\ud3f6\ue4fe\ufd20","int16":null}
+{"col1":"\u0bb0\u0bbe\u0baa\u0bbf\u0b9f\u0bcd\u0bb8\u0bcd","col2":"\ud800\udc00\ud807\udfea\ud809\udc26\ud80c\udcf0\ud811\ude46 \ud81a\udd86\ud81f\udfff\ud823\udcd5\ud82b\udffe[\u21b3] \ud833\udf46\ud835\udcda\ud83a\udd01\ud83c\udd30","int16":2}
+{"col1":"$\u20ac\ud801\udc37\ud852\udf62","col2":"\ud841\ude28\ud846\udd4c\ud849\uddc9\ud84c\uddca\ud850\udea9\ud854\udd7d\ud858\ude71\ud85f\udd31\ud860\udc72\ud864\udc79\ud869\udc22\ud86c\udded\ud872\udf2d\ud877\udeb7\ud878\udea6\u5c6e","int16":null}
+{"col1":"C\ud835\udfb5\ud835\udcd3\ud835\udcbb","col2":"\ud883\udf91\ud885\udd08\ud888\udf49","int16":4}
+)";
+  EXPECT_EQ(expected, std::string(out_buffer.data(), out_buffer.size()));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

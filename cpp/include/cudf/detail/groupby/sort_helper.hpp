@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
@@ -67,11 +66,11 @@ struct sort_groupby_helper {
                       sorted keys_pre_sorted,
                       std::vector<null_order> const& null_precedence);
 
-  ~sort_groupby_helper()                          = default;
-  sort_groupby_helper(sort_groupby_helper const&) = delete;
+  ~sort_groupby_helper()                                     = default;
+  sort_groupby_helper(sort_groupby_helper const&)            = delete;
   sort_groupby_helper& operator=(sort_groupby_helper const&) = delete;
   sort_groupby_helper(sort_groupby_helper&&)                 = default;
-  sort_groupby_helper& operator=(sort_groupby_helper&&) = default;
+  sort_groupby_helper& operator=(sort_groupby_helper&&)      = default;
 
   /**
    * @brief Groups a column of values according to `keys` and sorts within each
@@ -86,10 +85,9 @@ struct sort_groupby_helper {
    * @param values The value column to group and sort
    * @return the sorted and grouped column
    */
-  std::unique_ptr<column> sorted_values(
-    column_view const& values,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  std::unique_ptr<column> sorted_values(column_view const& values,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Groups a column of values according to `keys`
@@ -101,28 +99,25 @@ struct sort_groupby_helper {
    * @param values The value column to group
    * @return the grouped column
    */
-  std::unique_ptr<column> grouped_values(
-    column_view const& values,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  std::unique_ptr<column> grouped_values(column_view const& values,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Get a table of sorted unique keys
    *
    * @return a new table in which each row is a unique row in the sorted key table.
    */
-  std::unique_ptr<table> unique_keys(
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  std::unique_ptr<table> unique_keys(rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Get a table of sorted keys
    *
    * @return a new table containing the sorted keys.
    */
-  std::unique_ptr<table> sorted_keys(
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  std::unique_ptr<table> sorted_keys(rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Get the number of groups in `keys`

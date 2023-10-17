@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,39 +16,26 @@
 
 #include "compact_protocol_writer.hpp"
 
-namespace cudf {
-namespace io {
-namespace parquet {
+namespace cudf::io::parquet::detail {
 
 /**
  * @brief Parquet CompactProtocolWriter class
  */
 
-size_t CompactProtocolWriter::write(const FileMetaData& f)
+size_t CompactProtocolWriter::write(FileMetaData const& f)
 {
   CompactProtocolFieldWriter c(*this);
   c.field_int(1, f.version);
   c.field_struct_list(2, f.schema);
   c.field_int(3, f.num_rows);
   c.field_struct_list(4, f.row_groups);
-  if (f.key_value_metadata.size() != 0) { c.field_struct_list(5, f.key_value_metadata); }
-  if (f.created_by.size() != 0) { c.field_string(6, f.created_by); }
-  if (f.column_order_listsize != 0) {
-    // Dummy list of struct containing an empty field1 struct
-    c.put_field_header(7, c.current_field(), ST_FLD_LIST);
-    c.put_byte((uint8_t)((std::min(f.column_order_listsize, 0xfu) << 4) | ST_FLD_STRUCT));
-    if (f.column_order_listsize >= 0xf) c.put_uint(f.column_order_listsize);
-    for (uint32_t i = 0; i < f.column_order_listsize; i++) {
-      c.put_field_header(1, 0, ST_FLD_STRUCT);
-      c.put_byte(0);  // ColumnOrder.field1 struct end
-      c.put_byte(0);  // ColumnOrder struct end
-    }
-    c.set_current_field(7);
-  }
+  if (not f.key_value_metadata.empty()) { c.field_struct_list(5, f.key_value_metadata); }
+  if (not f.created_by.empty()) { c.field_string(6, f.created_by); }
+  if (f.column_orders.has_value()) { c.field_struct_list(7, f.column_orders.value()); }
   return c.value();
 }
 
-size_t CompactProtocolWriter::write(const DecimalType& decimal)
+size_t CompactProtocolWriter::write(DecimalType const& decimal)
 {
   CompactProtocolFieldWriter c(*this);
   c.field_int(1, decimal.scale);
@@ -56,7 +43,7 @@ size_t CompactProtocolWriter::write(const DecimalType& decimal)
   return c.value();
 }
 
-size_t CompactProtocolWriter::write(const TimeUnit& time_unit)
+size_t CompactProtocolWriter::write(TimeUnit const& time_unit)
 {
   CompactProtocolFieldWriter c(*this);
   auto const isset = time_unit.isset;
@@ -70,7 +57,7 @@ size_t CompactProtocolWriter::write(const TimeUnit& time_unit)
   return c.value();
 }
 
-size_t CompactProtocolWriter::write(const TimeType& time)
+size_t CompactProtocolWriter::write(TimeType const& time)
 {
   CompactProtocolFieldWriter c(*this);
   c.field_bool(1, time.isAdjustedToUTC);
@@ -78,7 +65,7 @@ size_t CompactProtocolWriter::write(const TimeType& time)
   return c.value();
 }
 
-size_t CompactProtocolWriter::write(const TimestampType& timestamp)
+size_t CompactProtocolWriter::write(TimestampType const& timestamp)
 {
   CompactProtocolFieldWriter c(*this);
   c.field_bool(1, timestamp.isAdjustedToUTC);
@@ -86,7 +73,7 @@ size_t CompactProtocolWriter::write(const TimestampType& timestamp)
   return c.value();
 }
 
-size_t CompactProtocolWriter::write(const IntType& integer)
+size_t CompactProtocolWriter::write(IntType const& integer)
 {
   CompactProtocolFieldWriter c(*this);
   c.field_int8(1, integer.bitWidth);
@@ -94,7 +81,7 @@ size_t CompactProtocolWriter::write(const IntType& integer)
   return c.value();
 }
 
-size_t CompactProtocolWriter::write(const LogicalType& logical_type)
+size_t CompactProtocolWriter::write(LogicalType const& logical_type)
 {
   CompactProtocolFieldWriter c(*this);
   auto const isset = logical_type.isset;
@@ -126,7 +113,7 @@ size_t CompactProtocolWriter::write(const LogicalType& logical_type)
   return c.value();
 }
 
-size_t CompactProtocolWriter::write(const SchemaElement& s)
+size_t CompactProtocolWriter::write(SchemaElement const& s)
 {
   CompactProtocolFieldWriter c(*this);
   if (s.type != UNDEFINED_TYPE) {
@@ -154,7 +141,7 @@ size_t CompactProtocolWriter::write(const SchemaElement& s)
   return c.value();
 }
 
-size_t CompactProtocolWriter::write(const RowGroup& r)
+size_t CompactProtocolWriter::write(RowGroup const& r)
 {
   CompactProtocolFieldWriter c(*this);
   c.field_struct_list(1, r.columns);
@@ -163,18 +150,18 @@ size_t CompactProtocolWriter::write(const RowGroup& r)
   return c.value();
 }
 
-size_t CompactProtocolWriter::write(const KeyValue& k)
+size_t CompactProtocolWriter::write(KeyValue const& k)
 {
   CompactProtocolFieldWriter c(*this);
   c.field_string(1, k.key);
-  if (k.value.size() != 0) { c.field_string(2, k.value); }
+  if (not k.value.empty()) { c.field_string(2, k.value); }
   return c.value();
 }
 
-size_t CompactProtocolWriter::write(const ColumnChunk& s)
+size_t CompactProtocolWriter::write(ColumnChunk const& s)
 {
   CompactProtocolFieldWriter c(*this);
-  if (s.file_path.size() != 0) { c.field_string(1, s.file_path); }
+  if (not s.file_path.empty()) { c.field_string(1, s.file_path); }
   c.field_int(2, s.file_offset);
   c.field_struct(3, s.meta_data);
   if (s.offset_index_length != 0) {
@@ -188,7 +175,7 @@ size_t CompactProtocolWriter::write(const ColumnChunk& s)
   return c.value();
 }
 
-size_t CompactProtocolWriter::write(const ColumnChunkMetaData& s)
+size_t CompactProtocolWriter::write(ColumnChunkMetaData const& s)
 {
   CompactProtocolFieldWriter c(*this);
   c.field_int(1, s.type);
@@ -201,11 +188,23 @@ size_t CompactProtocolWriter::write(const ColumnChunkMetaData& s)
   c.field_int(9, s.data_page_offset);
   if (s.index_page_offset != 0) { c.field_int(10, s.index_page_offset); }
   if (s.dictionary_page_offset != 0) { c.field_int(11, s.dictionary_page_offset); }
-  if (s.statistics_blob.size() != 0) { c.field_struct_blob(12, s.statistics_blob); }
+  c.field_struct(12, s.statistics);
   return c.value();
 }
 
-size_t CompactProtocolWriter::write(const PageLocation& s)
+size_t CompactProtocolWriter::write(Statistics const& s)
+{
+  CompactProtocolFieldWriter c(*this);
+  if (s.max.has_value()) { c.field_binary(1, s.max.value()); }
+  if (s.min.has_value()) { c.field_binary(2, s.min.value()); }
+  if (s.null_count.has_value()) { c.field_int(3, s.null_count.value()); }
+  if (s.distinct_count.has_value()) { c.field_int(4, s.distinct_count.value()); }
+  if (s.max_value.has_value()) { c.field_binary(5, s.max_value.value()); }
+  if (s.min_value.has_value()) { c.field_binary(6, s.min_value.value()); }
+  return c.value();
+}
+
+size_t CompactProtocolWriter::write(PageLocation const& s)
 {
   CompactProtocolFieldWriter c(*this);
   c.field_int(1, s.offset);
@@ -214,16 +213,26 @@ size_t CompactProtocolWriter::write(const PageLocation& s)
   return c.value();
 }
 
-size_t CompactProtocolWriter::write(const OffsetIndex& s)
+size_t CompactProtocolWriter::write(OffsetIndex const& s)
 {
   CompactProtocolFieldWriter c(*this);
   c.field_struct_list(1, s.page_locations);
   return c.value();
 }
 
+size_t CompactProtocolWriter::write(ColumnOrder const& co)
+{
+  CompactProtocolFieldWriter c(*this);
+  switch (co) {
+    case ColumnOrder::TYPE_ORDER: c.field_empty_struct(1); break;
+    default: break;
+  }
+  return c.value();
+}
+
 void CompactProtocolFieldWriter::put_byte(uint8_t v) { writer.m_buf.push_back(v); }
 
-void CompactProtocolFieldWriter::put_byte(const uint8_t* raw, uint32_t len)
+void CompactProtocolFieldWriter::put_byte(uint8_t const* raw, uint32_t len)
 {
   for (uint32_t i = 0; i < len; i++)
     writer.m_buf.push_back(raw[i]);
@@ -285,7 +294,7 @@ inline void CompactProtocolFieldWriter::field_int(int field, int64_t val)
 }
 
 template <typename Enum>
-inline void CompactProtocolFieldWriter::field_int_list(int field, const std::vector<Enum>& val)
+inline void CompactProtocolFieldWriter::field_int_list(int field, std::vector<Enum> const& val)
 {
   put_field_header(field, current_field_value, ST_FLD_LIST);
   put_byte((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_I32));
@@ -297,7 +306,7 @@ inline void CompactProtocolFieldWriter::field_int_list(int field, const std::vec
 }
 
 template <typename T>
-inline void CompactProtocolFieldWriter::field_struct(int field, const T& val)
+inline void CompactProtocolFieldWriter::field_struct(int field, T const& val)
 {
   put_field_header(field, current_field_value, ST_FLD_STRUCT);
   if constexpr (not std::is_empty_v<T>) {
@@ -308,8 +317,15 @@ inline void CompactProtocolFieldWriter::field_struct(int field, const T& val)
   current_field_value = field;
 }
 
+inline void CompactProtocolFieldWriter::field_empty_struct(int field)
+{
+  put_field_header(field, current_field_value, ST_FLD_STRUCT);
+  put_byte(0);  // add a stop field
+  current_field_value = field;
+}
+
 template <typename T>
-inline void CompactProtocolFieldWriter::field_struct_list(int field, const std::vector<T>& val)
+inline void CompactProtocolFieldWriter::field_struct_list(int field, std::vector<T> const& val)
 {
   put_field_header(field, current_field_value, ST_FLD_LIST);
   put_byte((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_STRUCT));
@@ -327,25 +343,33 @@ inline size_t CompactProtocolFieldWriter::value()
 }
 
 inline void CompactProtocolFieldWriter::field_struct_blob(int field,
-                                                          const std::vector<uint8_t>& val)
+                                                          std::vector<uint8_t> const& val)
 {
   put_field_header(field, current_field_value, ST_FLD_STRUCT);
-  put_byte(val.data(), (uint32_t)val.size());
+  put_byte(val.data(), static_cast<uint32_t>(val.size()));
   put_byte(0);
   current_field_value = field;
 }
 
-inline void CompactProtocolFieldWriter::field_string(int field, const std::string& val)
+inline void CompactProtocolFieldWriter::field_binary(int field, std::vector<uint8_t> const& val)
+{
+  put_field_header(field, current_field_value, ST_FLD_BINARY);
+  put_uint(val.size());
+  put_byte(val.data(), static_cast<uint32_t>(val.size()));
+  current_field_value = field;
+}
+
+inline void CompactProtocolFieldWriter::field_string(int field, std::string const& val)
 {
   put_field_header(field, current_field_value, ST_FLD_BINARY);
   put_uint(val.size());
   // FIXME : replace reinterpret_cast
-  put_byte(reinterpret_cast<const uint8_t*>(val.data()), (uint32_t)val.size());
+  put_byte(reinterpret_cast<uint8_t const*>(val.data()), static_cast<uint32_t>(val.size()));
   current_field_value = field;
 }
 
 inline void CompactProtocolFieldWriter::field_string_list(int field,
-                                                          const std::vector<std::string>& val)
+                                                          std::vector<std::string> const& val)
 {
   put_field_header(field, current_field_value, ST_FLD_LIST);
   put_byte((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_BINARY));
@@ -353,18 +377,16 @@ inline void CompactProtocolFieldWriter::field_string_list(int field,
   for (auto& v : val) {
     put_uint(v.size());
     // FIXME : replace reinterpret_cast
-    put_byte(reinterpret_cast<const uint8_t*>(v.data()), (uint32_t)v.size());
+    put_byte(reinterpret_cast<uint8_t const*>(v.data()), static_cast<uint32_t>(v.size()));
   }
   current_field_value = field;
 }
 
 inline int CompactProtocolFieldWriter::current_field() { return current_field_value; }
 
-inline void CompactProtocolFieldWriter::set_current_field(const int& field)
+inline void CompactProtocolFieldWriter::set_current_field(int const& field)
 {
   current_field_value = field;
 }
 
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

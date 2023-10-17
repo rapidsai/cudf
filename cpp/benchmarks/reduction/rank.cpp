@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
 
 #include <cudf/detail/scan.hpp>
 #include <cudf/filling.hpp>
@@ -26,8 +25,6 @@
 template <typename type>
 static void nvbench_reduction_scan(nvbench::state& state, nvbench::type_list<type>)
 {
-  cudf::rmm_pool_raii pool_raii;
-
   auto const dtype = cudf::type_to_id<type>();
 
   double const null_probability = state.get_float64("null_probability");

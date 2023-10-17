@@ -30,8 +30,7 @@
 #include <string>
 
 template <typename T>
-struct EmptyLikeTest : public cudf::test::BaseFixture {
-};
+struct EmptyLikeTest : public cudf::test::BaseFixture {};
 
 using numeric_types = cudf::test::NumericTypes;
 
@@ -47,8 +46,7 @@ TYPED_TEST(EmptyLikeTest, ColumnNumericTests)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *got);
 }
 
-struct EmptyLikeStringTest : public EmptyLikeTest<std::string> {
-};
+struct EmptyLikeStringTest : public EmptyLikeTest<std::string> {};
 
 void check_empty_string_columns(cudf::column_view lhs, cudf::column_view rhs)
 {
@@ -62,7 +60,7 @@ void check_empty_string_columns(cudf::column_view lhs, cudf::column_view rhs)
 
 TEST_F(EmptyLikeStringTest, ColumnStringTest)
 {
-  std::vector<const char*> h_strings{"the quick brown fox jumps over the lazy dog",
+  std::vector<char const*> h_strings{"the quick brown fox jumps over the lazy dog",
                                      "thé result does not include the value in the sum in",
                                      "",
                                      nullptr,
@@ -77,8 +75,7 @@ TEST_F(EmptyLikeStringTest, ColumnStringTest)
 }
 
 template <typename T>
-struct EmptyLikeScalarTest : public cudf::test::BaseFixture {
-};
+struct EmptyLikeScalarTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(EmptyLikeScalarTest, cudf::test::FixedWidthTypes);
 
@@ -86,7 +83,7 @@ TYPED_TEST(EmptyLikeScalarTest, FixedWidth)
 {
   // make a column
   auto input = make_fixed_width_column(
-    cudf::data_type{cudf::type_to_id<TypeParam>()}, 1, rmm::device_buffer{});
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, 1, rmm::device_buffer{}, 0);
   // get a scalar out of it
   std::unique_ptr<cudf::scalar> sc = cudf::get_element(*input, 0);
 
@@ -97,8 +94,7 @@ TYPED_TEST(EmptyLikeScalarTest, FixedWidth)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *result);
 }
 
-struct EmptyLikeScalarStringTest : public EmptyLikeScalarTest<std::string> {
-};
+struct EmptyLikeScalarStringTest : public EmptyLikeScalarTest<std::string> {};
 
 TEST_F(EmptyLikeScalarStringTest, String)
 {
@@ -115,8 +111,7 @@ TEST_F(EmptyLikeScalarStringTest, String)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *result);
 }
 
-struct EmptyLikeScalarListTest : public EmptyLikeScalarTest<cudf::list_view> {
-};
+struct EmptyLikeScalarListTest : public EmptyLikeScalarTest<cudf::list_view> {};
 
 TEST_F(EmptyLikeScalarListTest, List)
 {
@@ -133,8 +128,7 @@ TEST_F(EmptyLikeScalarListTest, List)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *result);
 }
 
-struct EmptyLikeScalarStructTest : public EmptyLikeScalarTest<cudf::struct_view> {
-};
+struct EmptyLikeScalarStructTest : public EmptyLikeScalarTest<cudf::struct_view> {};
 
 TEST_F(EmptyLikeScalarStructTest, Struct)
 {
@@ -169,8 +163,7 @@ std::unique_ptr<cudf::table> create_table(cudf::size_type size, cudf::mask_state
   return std::make_unique<cudf::table>(std::move(columns));
 }
 
-struct EmptyLikeTableTest : public cudf::test::BaseFixture {
-};
+struct EmptyLikeTableTest : public cudf::test::BaseFixture {};
 
 TEST_F(EmptyLikeTableTest, TableTest)
 {
@@ -184,8 +177,7 @@ TEST_F(EmptyLikeTableTest, TableTest)
 }
 
 template <typename T>
-struct AllocateLikeTest : public cudf::test::BaseFixture {
-};
+struct AllocateLikeTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(AllocateLikeTest, numeric_types);
 
@@ -202,15 +194,7 @@ TYPED_TEST(AllocateLikeTest, ColumnNumericTestSameSize)
   input = make_numeric_column(
     cudf::data_type{cudf::type_to_id<TypeParam>()}, size, cudf::mask_state::ALL_VALID);
   got = cudf::allocate_like(input->view());
-  EXPECT_EQ(input->type(), got->type());
-  EXPECT_EQ(input->size(), got->size());
-  EXPECT_EQ(input->nullable(), got->nullable());
-  EXPECT_EQ(input->num_children(), got->num_children());
-  // CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL includes checking the null-count property.
-  // This value will be incorrect since the null mask will contain uninitialized bits
-  // and the null-count set to UNKNOWN_NULL_COUNT on return from allocate_like().
-  // This means any subsequent call to null_count() will try to compute the null-count
-  // using the uninitialized null-mask.
+  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(*input, *got);
 }
 
 TYPED_TEST(AllocateLikeTest, ColumnNumericTestSpecifiedSize)
@@ -229,15 +213,13 @@ TYPED_TEST(AllocateLikeTest, ColumnNumericTestSpecifiedSize)
   input = make_numeric_column(
     cudf::data_type{cudf::type_to_id<TypeParam>()}, size, cudf::mask_state::ALL_VALID);
   got = cudf::allocate_like(input->view(), specified_size);
+  // Can't use CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL because the sizes of
+  // the two columns are different.
   EXPECT_EQ(input->type(), got->type());
   EXPECT_EQ(specified_size, got->size());
+  EXPECT_EQ(0, got->null_count());
   EXPECT_EQ(input->nullable(), got->nullable());
   EXPECT_EQ(input->num_children(), got->num_children());
-  // CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL includes checking the null-count property.
-  // This value will be incorrect since the null mask will contain uninitialized bits
-  // and the null-count set to UNKNOWN_NULL_COUNT on return from allocate_like().
-  // This means any subsequent call to null_count() will try to compute the null-count
-  // using the uninitialized null-mask.
 }
 
 CUDF_TEST_PROGRAM_MAIN()

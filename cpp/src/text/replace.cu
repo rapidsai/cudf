@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ using replace_result = thrust::pair<bool, cudf::string_view>;
 struct base_token_replacer_fn {
   cudf::column_device_view const d_strings;  ///< strings to tokenize
   cudf::string_view const d_delimiter;       ///< delimiter characters for tokenizing
-  int32_t* d_offsets{};                      ///< for locating output string in d_chars
+  cudf::size_type* d_offsets{};              ///< for locating output string in d_chars
   char* d_chars{};                           ///< output buffer
 
   /**

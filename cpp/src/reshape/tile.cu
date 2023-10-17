@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ struct tile_functor {
 }  // anonymous namespace
 
 namespace detail {
-std::unique_ptr<table> tile(const table_view& in,
+std::unique_ptr<table> tile(table_view const& in,
                             size_type count,
                             rmm::cuda_stream_view stream,
                             rmm::mr::device_memory_resource* mr)
@@ -60,7 +60,7 @@ std::unique_ptr<table> tile(const table_view& in,
 }
 }  // namespace detail
 
-std::unique_ptr<table> tile(const table_view& in,
+std::unique_ptr<table> tile(table_view const& in,
                             size_type count,
                             rmm::mr::device_memory_resource* mr)
 {

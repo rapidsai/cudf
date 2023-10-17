@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,8 +33,7 @@ enum class TreeType {
 };
 
 template <typename key_type, TreeType tree_type, bool reuse_columns>
-class BINARYOP : public cudf::benchmark {
-};
+class BINARYOP : public cudf::benchmark {};
 
 template <typename key_type, TreeType tree_type, bool reuse_columns>
 static void BM_binaryop_transform(benchmark::State& state)

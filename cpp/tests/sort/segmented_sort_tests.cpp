@@ -30,8 +30,7 @@ template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T, int>;
 
 template <typename T>
-struct SegmentedSort : public cudf::test::BaseFixture {
-};
+struct SegmentedSort : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(SegmentedSort, cudf::test::NumericTypes);
 using SegmentedSortInt = SegmentedSort<int>;

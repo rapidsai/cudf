@@ -17,8 +17,9 @@
 #pragma once
 
 #include "config_utils.hpp"
+#include "hostdevice_span.hpp"
 
-#include <cudf/detail/utilities/pinned_allocator.hpp>
+#include <cudf/detail/utilities/pinned_host_vector.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -29,6 +30,15 @@
 #include <thrust/host_vector.h>
 
 #include <variant>
+
+namespace cudf::detail {
+
+inline bool hostdevice_vector_uses_pageable_buffer()
+{
+  static bool const use_pageable =
+    cudf::io::detail::getenv_or("LIBCUDF_IO_PREFER_PAGEABLE_TMP_MEMORY", 0);
+  return use_pageable;
+}
 
 /**
  * @brief A helper class that wraps fixed-length device memory for the GPU, and
@@ -56,12 +66,10 @@ class hostdevice_vector {
   {
     CUDF_EXPECTS(initial_size <= max_size, "initial_size cannot be larger than max_size");
 
-    auto const use_pageable_buffer =
-      cudf::io::detail::getenv_or("LIBCUDF_IO_PREFER_PAGEABLE_TMP_MEMORY", 0);
-    if (use_pageable_buffer) {
+    if (hostdevice_vector_uses_pageable_buffer()) {
       h_data_owner = thrust::host_vector<T>();
     } else {
-      h_data_owner = thrust::host_vector<T, cudf::detail::pinned_allocator<T>>();
+      h_data_owner = cudf::detail::pinned_host_vector<T>();
     }
 
     std::visit(
@@ -76,7 +84,7 @@ class hostdevice_vector {
     d_data.resize(max_size, stream);
   }
 
-  void push_back(const T& data)
+  void push_back(T const& data)
   {
     CUDF_EXPECTS(size() < capacity(),
                  "Cannot insert data into hostdevice_vector because capacity has been exceeded.");
@@ -85,7 +93,8 @@ class hostdevice_vector {
 
   [[nodiscard]] size_t capacity() const noexcept { return d_data.size(); }
   [[nodiscard]] size_t size() const noexcept { return current_size; }
-  [[nodiscard]] size_t memory_size() const noexcept { return sizeof(T) * size(); }
+  [[nodiscard]] size_t size_bytes() const noexcept { return sizeof(T) * size(); }
+  [[nodiscard]] bool empty() const noexcept { return size() == 0; }
 
   [[nodiscard]] T& operator[](size_t i) { return host_data[i]; }
   [[nodiscard]] T const& operator[](size_t i) const { return host_data[i]; }
@@ -131,30 +140,61 @@ class hostdevice_vector {
   operator cudf::device_span<T>() { return {device_ptr(), size()}; }
   operator cudf::device_span<T const>() const { return {device_ptr(), size()}; }
 
-  void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
+  void host_to_device_async(rmm::cuda_stream_view stream)
   {
     CUDF_CUDA_TRY(
-      cudaMemcpyAsync(device_ptr(), host_ptr(), memory_size(), cudaMemcpyDefault, stream.value()));
-    if (synchronize) { stream.synchronize(); }
+      cudaMemcpyAsync(device_ptr(), host_ptr(), size_bytes(), cudaMemcpyDefault, stream.value()));
   }
 
-  void device_to_host(rmm::cuda_stream_view stream, bool synchronize = false)
+  void host_to_device_sync(rmm::cuda_stream_view stream)
+  {
+    host_to_device_async(stream);
+    stream.synchronize();
+  }
+
+  void device_to_host_async(rmm::cuda_stream_view stream)
   {
     CUDF_CUDA_TRY(
-      cudaMemcpyAsync(host_ptr(), device_ptr(), memory_size(), cudaMemcpyDefault, stream.value()));
-    if (synchronize) { stream.synchronize(); }
+      cudaMemcpyAsync(host_ptr(), device_ptr(), size_bytes(), cudaMemcpyDefault, stream.value()));
+  }
+
+  void device_to_host_sync(rmm::cuda_stream_view stream)
+  {
+    device_to_host_async(stream);
+    stream.synchronize();
+  }
+
+  /**
+   * @brief Converts a hostdevice_vector into a hostdevice_span.
+   *
+   * @return A typed hostdevice_span of the hostdevice_vector's data
+   */
+  [[nodiscard]] operator hostdevice_span<T>()
+  {
+    return hostdevice_span<T>{host_data, d_data.data(), size()};
+  }
+
+  /**
+   * @brief Converts a part of a hostdevice_vector into a hostdevice_span.
+   *
+   * @param offset The offset of the first element in the subspan
+   * @param count The number of elements in the subspan
+   * @return A typed hostdevice_span of the hostdevice_vector's data
+   */
+  [[nodiscard]] hostdevice_span<T> subspan(size_t offset, size_t count)
+  {
+    CUDF_EXPECTS(offset < d_data.size(), "Offset is out of bounds.");
+    CUDF_EXPECTS(count <= d_data.size() - offset,
+                 "The span with given offset and count is out of bounds.");
+    return hostdevice_span<T>{host_data + offset, d_data.data() + offset, count};
   }
 
  private:
-  std::variant<thrust::host_vector<T>, thrust::host_vector<T, cudf::detail::pinned_allocator<T>>>
-    h_data_owner;
+  std::variant<thrust::host_vector<T>, cudf::detail::pinned_host_vector<T>> h_data_owner;
   T* host_data        = nullptr;
   size_t current_size = 0;
   rmm::device_uvector<T> d_data;
 };
-
-namespace cudf {
-namespace detail {
 
 /**
  * @brief Wrapper around hostdevice_vector to enable two-dimensional indexing.
@@ -202,22 +242,17 @@ class hostdevice_2dvector {
 
   T const* base_device_ptr(size_t offset = 0) const { return _data.device_ptr(offset); }
 
-  size_t memory_size() const noexcept { return _data.memory_size(); }
+  size_t size_bytes() const noexcept { return _data.size_bytes(); }
 
-  void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
-  {
-    _data.host_to_device(stream, synchronize);
-  }
+  void host_to_device_async(rmm::cuda_stream_view stream) { _data.host_to_device_async(stream); }
+  void host_to_device_sync(rmm::cuda_stream_view stream) { _data.host_to_device_sync(stream); }
 
-  void device_to_host(rmm::cuda_stream_view stream, bool synchronize = false)
-  {
-    _data.device_to_host(stream, synchronize);
-  }
+  void device_to_host_async(rmm::cuda_stream_view stream) { _data.device_to_host_async(stream); }
+  void device_to_host_sync(rmm::cuda_stream_view stream) { _data.device_to_host_sync(stream); }
 
  private:
   hostdevice_vector<T> _data;
   typename host_2dspan<T>::size_type _size;
 };
 
-}  // namespace detail
-}  // namespace cudf
+}  // namespace cudf::detail

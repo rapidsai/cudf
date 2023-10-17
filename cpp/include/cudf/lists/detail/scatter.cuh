@@ -89,15 +89,14 @@ rmm::device_uvector<unbound_list_view> list_vector_from_column(
  * @return New lists column.
  */
 template <typename MapIterator>
-std::unique_ptr<column> scatter_impl(
-  rmm::device_uvector<unbound_list_view> const& source_vector,
-  rmm::device_uvector<unbound_list_view>& target_vector,
-  MapIterator scatter_map_begin,
-  MapIterator scatter_map_end,
-  column_view const& source,
-  column_view const& target,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> scatter_impl(rmm::device_uvector<unbound_list_view> const& source_vector,
+                                     rmm::device_uvector<unbound_list_view>& target_vector,
+                                     MapIterator scatter_map_begin,
+                                     MapIterator scatter_map_end,
+                                     column_view const& source,
+                                     column_view const& target,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(column_types_equal(source, target), "Mismatched column types.");
 
@@ -142,7 +141,7 @@ std::unique_ptr<column> scatter_impl(
                                   target.size(),
                                   rmm::device_buffer{},
                                   std::move(null_mask),
-                                  cudf::UNKNOWN_NULL_COUNT,
+                                  target.null_count(),
                                   std::move(children));
 }
 
@@ -170,13 +169,12 @@ std::unique_ptr<column> scatter_impl(
  * @return New lists column.
  */
 template <typename MapIterator>
-std::unique_ptr<column> scatter(
-  column_view const& source,
-  MapIterator scatter_map_begin,
-  MapIterator scatter_map_end,
-  column_view const& target,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> scatter(column_view const& source,
+                                MapIterator scatter_map_begin,
+                                MapIterator scatter_map_end,
+                                column_view const& target,
+                                rmm::cuda_stream_view stream,
+                                rmm::mr::device_memory_resource* mr)
 {
   auto const num_rows = target.size();
   if (num_rows == 0) { return cudf::empty_like(target); }
@@ -227,13 +225,12 @@ std::unique_ptr<column> scatter(
  * @return New lists column.
  */
 template <typename MapIterator>
-std::unique_ptr<column> scatter(
-  scalar const& slr,
-  MapIterator scatter_map_begin,
-  MapIterator scatter_map_end,
-  column_view const& target,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> scatter(scalar const& slr,
+                                MapIterator scatter_map_begin,
+                                MapIterator scatter_map_end,
+                                column_view const& target,
+                                rmm::cuda_stream_view stream,
+                                rmm::mr::device_memory_resource* mr)
 {
   auto const num_rows = target.size();
   if (num_rows == 0) { return cudf::empty_like(target); }
@@ -243,11 +240,11 @@ std::unique_ptr<column> scatter(
   rmm::device_buffer null_mask =
     slr_valid ? cudf::detail::create_null_mask(1, mask_state::UNALLOCATED, stream, mr)
               : cudf::detail::create_null_mask(1, mask_state::ALL_NULL, stream, mr);
-  auto offset_column = make_numeric_column(
-    data_type{type_to_id<offset_type>()}, 2, mask_state::UNALLOCATED, stream, mr);
+  auto offset_column =
+    make_numeric_column(data_type{type_to_id<size_type>()}, 2, mask_state::UNALLOCATED, stream, mr);
   thrust::sequence(rmm::exec_policy_nosync(stream),
-                   offset_column->mutable_view().begin<offset_type>(),
-                   offset_column->mutable_view().end<offset_type>(),
+                   offset_column->mutable_view().begin<size_type>(),
+                   offset_column->mutable_view().end<size_type>(),
                    0,
                    lv->view().size());
   auto wrapped = column_view(data_type{type_id::LIST},

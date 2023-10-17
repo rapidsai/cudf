@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,9 +118,9 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& input,
 
   // parse the repl string for back-ref indicators
   auto group_count = std::min(99, d_prog->group_counts());  // group count should NOT exceed 99
-  auto const parse_result = parse_backrefs(replacement, group_count);
-  rmm::device_uvector<backref_type> backrefs =
-    cudf::detail::make_device_uvector_async(parse_result.second, stream);
+  auto const parse_result                    = parse_backrefs(replacement, group_count);
+  rmm::device_uvector<backref_type> backrefs = cudf::detail::make_device_uvector_async(
+    parse_result.second, stream, rmm::mr::get_current_device_resource());
   string_scalar repl_scalar(parse_result.first, true, stream);
   string_view const d_repl_template = repl_scalar.value();
 
@@ -146,24 +146,13 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& input,
 // external API
 
 std::unique_ptr<column> replace_with_backrefs(strings_column_view const& strings,
-                                              std::string_view pattern,
-                                              std::string_view replacement,
-                                              regex_flags const flags,
-                                              rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  auto const h_prog = regex_program::create(pattern, flags, capture_groups::EXTRACT);
-  return detail::replace_with_backrefs(
-    strings, *h_prog, replacement, cudf::get_default_stream(), mr);
-}
-
-std::unique_ptr<column> replace_with_backrefs(strings_column_view const& strings,
                                               regex_program const& prog,
                                               std::string_view replacement,
+                                              rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_with_backrefs(strings, prog, replacement, cudf::get_default_stream(), mr);
+  return detail::replace_with_backrefs(strings, prog, replacement, stream, mr);
 }
 
 }  // namespace strings

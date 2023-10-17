@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 
 #include <thrust/gather.h>
 
@@ -104,16 +105,22 @@ struct dispatch_to_cudf_column {
     if (array.null_bitmap_data() == nullptr) {
       return std::make_unique<rmm::device_buffer>(0, stream, mr);
     }
-    auto mask = std::make_unique<rmm::device_buffer>(
-      bitmask_allocation_size_bytes(static_cast<size_type>(array.null_bitmap()->size() * CHAR_BIT)),
-      stream,
-      mr);
+    auto const null_bitmap_size = array.null_bitmap()->size();
+    auto const allocation_size =
+      bitmask_allocation_size_bytes(static_cast<size_type>(null_bitmap_size * CHAR_BIT));
+    auto mask        = std::make_unique<rmm::device_buffer>(allocation_size, stream, mr);
     auto mask_buffer = array.null_bitmap();
     CUDF_CUDA_TRY(cudaMemcpyAsync(mask->data(),
-                                  reinterpret_cast<const uint8_t*>(mask_buffer->address()),
-                                  array.null_bitmap()->size(),
+                                  reinterpret_cast<uint8_t const*>(mask_buffer->address()),
+                                  null_bitmap_size,
                                   cudaMemcpyDefault,
                                   stream.value()));
+    // Zero-initialize trailing padding bytes
+    auto const num_trailing_bytes = allocation_size - null_bitmap_size;
+    if (num_trailing_bytes > 0) {
+      auto trailing_bytes = static_cast<uint8_t*>(mask->data()) + null_bitmap_size;
+      CUDF_CUDA_TRY(cudaMemsetAsync(trailing_bytes, 0, num_trailing_bytes, stream.value()));
+    }
     return mask;
   }
 
@@ -138,7 +145,7 @@ struct dispatch_to_cudf_column {
     auto mutable_column_view = col->mutable_view();
     CUDF_CUDA_TRY(cudaMemcpyAsync(
       mutable_column_view.data<T>(),
-      reinterpret_cast<const uint8_t*>(data_buffer->address()) + array.offset() * sizeof(T),
+      reinterpret_cast<uint8_t const*>(data_buffer->address()) + array.offset() * sizeof(T),
       sizeof(T) * num_rows,
       cudaMemcpyDefault,
       stream.value()));
@@ -154,7 +161,7 @@ struct dispatch_to_cudf_column {
                                                      stream,
                                                      mr);
 
-      col->set_null_mask(std::move(out_mask));
+      col->set_null_mask(std::move(out_mask), array.null_count());
     }
 
     return col;
@@ -163,7 +170,11 @@ struct dispatch_to_cudf_column {
 
 std::unique_ptr<column> get_empty_type_column(size_type size)
 {
-  return std::make_unique<column>(data_type(type_id::EMPTY), size, rmm::device_buffer{});
+  // this abomination is required by cuDF Python, which needs to handle
+  // [PyArrow null arrays](https://arrow.apache.org/docs/python/generated/pyarrow.NullArray.html)
+  // of finite length
+  return std::make_unique<column>(
+    data_type(type_id::EMPTY), size, rmm::device_buffer{}, rmm::device_buffer{}, size);
 }
 
 /**
@@ -194,7 +205,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal128>
 
   CUDF_CUDA_TRY(cudaMemcpyAsync(
     mutable_column_view.data<DeviceType>(),
-    reinterpret_cast<const uint8_t*>(data_buffer->address()) + array.offset() * sizeof(DeviceType),
+    reinterpret_cast<uint8_t const*>(data_buffer->address()) + array.offset() * sizeof(DeviceType),
     sizeof(DeviceType) * num_rows,
     cudaMemcpyDefault,
     stream.value()));
@@ -214,7 +225,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal128>
     return rmm::device_buffer{};
   }();
 
-  col->set_null_mask(std::move(null_mask));
+  col->set_null_mask(std::move(null_mask), array.null_count());
   return col;
 }
 
@@ -227,9 +238,11 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<bool>(
   rmm::mr::device_memory_resource* mr)
 {
   auto data_buffer = array.data()->buffers[1];
-  auto data        = rmm::device_buffer(data_buffer->size(), stream, mr);
+  // mask-to-bools expects the mask to be bitmask_type aligned/padded
+  auto data = rmm::device_buffer(
+    cudf::bitmask_allocation_size_bytes(data_buffer->size() * CHAR_BIT), stream, mr);
   CUDF_CUDA_TRY(cudaMemcpyAsync(data.data(),
-                                reinterpret_cast<const uint8_t*>(data_buffer->address()),
+                                reinterpret_cast<uint8_t const*>(data_buffer->address()),
                                 data_buffer->size(),
                                 cudaMemcpyDefault,
                                 stream.value()));
@@ -248,7 +261,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<bool>(
                            stream,
                            mr);
 
-    out_col->set_null_mask(std::move(out_mask));
+    out_col->set_null_mask(std::move(out_mask), array.null_count());
   }
 
   return out_col;
@@ -278,7 +291,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::string_view>(
   auto out_col        = make_strings_column(num_rows,
                                      std::move(offsets_column),
                                      std::move(chars_column),
-                                     UNKNOWN_NULL_COUNT,
+                                     array.null_count(),
                                      std::move(*get_mask_buffer(array, stream, mr)));
 
   return num_rows == array.length()
@@ -286,7 +299,8 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::string_view>(
            : std::make_unique<column>(
                cudf::detail::slice(out_col->view(),
                                    static_cast<size_type>(array.offset()),
-                                   static_cast<size_type>(array.offset() + array.length())),
+                                   static_cast<size_type>(array.offset() + array.length()),
+                                   stream),
                stream,
                mr);
 }
@@ -312,13 +326,16 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::dictionary32>(
 
   // Child columns shouldn't have masks and we need the mask in main column
   auto column_contents = indices_column->release();
-  indices_column       = std::make_unique<column>(
-    dict_indices_type, static_cast<size_type>(array.length()), std::move(*(column_contents.data)));
+  indices_column       = std::make_unique<column>(dict_indices_type,
+                                            static_cast<size_type>(array.length()),
+                                            std::move(*(column_contents.data)),
+                                            rmm::device_buffer{},
+                                            0);
 
   return make_dictionary_column(std::move(keys_column),
                                 std::move(indices_column),
                                 std::move(*(column_contents.null_mask)),
-                                UNKNOWN_NULL_COUNT);
+                                array.null_count());
 }
 
 template <>
@@ -351,7 +368,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::struct_view>(
   }
 
   return make_structs_column(
-    array.length(), move(child_columns), UNKNOWN_NULL_COUNT, std::move(out_mask), stream, mr);
+    array.length(), move(child_columns), array.null_count(), std::move(out_mask), stream, mr);
 }
 
 template <>
@@ -375,7 +392,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::list_view>(
   auto out_col        = make_lists_column(num_rows,
                                    std::move(offsets_column),
                                    std::move(child_column),
-                                   UNKNOWN_NULL_COUNT,
+                                   array.null_count(),
                                    std::move(*get_mask_buffer(array, stream, mr)),
                                    stream,
                                    mr);
@@ -385,7 +402,8 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::list_view>(
            : std::make_unique<column>(
                cudf::detail::slice(out_col->view(),
                                    static_cast<size_type>(array.offset()),
-                                   static_cast<size_type>(array.offset() + array.length())),
+                                   static_cast<size_type>(array.offset() + array.length()),
+                                   stream),
                stream,
                mr);
 }
@@ -399,6 +417,52 @@ std::unique_ptr<column> get_column(arrow::Array const& array,
   return type.id() != type_id::EMPTY
            ? type_dispatcher(type, dispatch_to_cudf_column{}, array, type, skip_mask, stream, mr)
            : get_empty_type_column(array.length());
+}
+
+struct BuilderGenerator {
+  template <typename T,
+            CUDF_ENABLE_IF(!std::is_same_v<T, arrow::ListType> &&
+                           !std::is_same_v<T, arrow::StructType>)>
+  std::shared_ptr<arrow::ArrayBuilder> operator()(std::shared_ptr<arrow::DataType> const& type)
+  {
+    return std::make_shared<typename arrow::TypeTraits<T>::BuilderType>(
+      type, arrow::default_memory_pool());
+  }
+
+  template <typename T,
+            CUDF_ENABLE_IF(std::is_same_v<T, arrow::ListType> ||
+                           std::is_same_v<T, arrow::StructType>)>
+  std::shared_ptr<arrow::ArrayBuilder> operator()(std::shared_ptr<arrow::DataType> const& type)
+  {
+    CUDF_FAIL("Type not supported by BuilderGenerator");
+  }
+};
+
+std::shared_ptr<arrow::ArrayBuilder> make_builder(std::shared_ptr<arrow::DataType> const& type)
+{
+  switch (type->id()) {
+    case arrow::Type::STRUCT: {
+      std::vector<std::shared_ptr<arrow::ArrayBuilder>> field_builders;
+
+      for (auto field : type->fields()) {
+        auto const vt = field->type();
+        if (vt->id() == arrow::Type::STRUCT || vt->id() == arrow::Type::LIST) {
+          field_builders.push_back(make_builder(vt));
+        } else {
+          field_builders.push_back(arrow_type_dispatcher(*vt, BuilderGenerator{}, vt));
+        }
+      }
+      return std::make_shared<arrow::StructBuilder>(
+        type, arrow::default_memory_pool(), field_builders);
+    }
+    case arrow::Type::LIST: {
+      return std::make_shared<arrow::ListBuilder>(arrow::default_memory_pool(),
+                                                  make_builder(type->field(0)->type()));
+    }
+    default: {
+      return arrow_type_dispatcher(*type, BuilderGenerator{}, type);
+    }
+  }
 }
 
 }  // namespace
@@ -427,7 +491,8 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
                                     return get_column(*array_chunk, cudf_type, false, stream, mr);
                                   });
                    if (concat_columns.empty()) {
-                     return std::make_unique<column>(cudf_type, 0, rmm::device_buffer{});
+                     return std::make_unique<column>(
+                       cudf_type, 0, rmm::device_buffer{}, rmm::device_buffer{}, 0);
                    } else if (concat_columns.size() == 1) {
                      return std::move(concat_columns[0]);
                    }
@@ -443,14 +508,54 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
   return std::make_unique<table>(std::move(columns));
 }
 
+std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  // Get a builder for the scalar type
+  auto builder = detail::make_builder(input.type);
+
+  auto status = builder->AppendScalar(input);
+  if (status != arrow::Status::OK()) {
+    if (status.IsNotImplemented()) {
+      // The only known failure case here is for nulls
+      CUDF_FAIL("Cannot create untyped null scalars or nested types with untyped null leaf nodes",
+                std::invalid_argument);
+    }
+    CUDF_FAIL("Arrow ArrayBuilder::AppendScalar failed");
+  }
+
+  auto maybe_array = builder->Finish();
+  if (!maybe_array.ok()) { CUDF_FAIL("Arrow ArrayBuilder::Finish failed"); }
+  auto array = *maybe_array;
+
+  auto field = arrow::field("", input.type);
+
+  auto table = arrow::Table::Make(arrow::schema({field}), {array});
+
+  auto cudf_table = detail::from_arrow(*table, stream, mr);
+
+  auto cv = cudf_table->view().column(0);
+  return get_element(cv, 0, stream);
+}
+
 }  // namespace detail
 
 std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
+                                  rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 
-  return detail::from_arrow(input_table, cudf::get_default_stream(), mr);
+  return detail::from_arrow(input_table, stream, mr);
 }
 
+std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+
+  return detail::from_arrow(input, stream, mr);
+}
 }  // namespace cudf

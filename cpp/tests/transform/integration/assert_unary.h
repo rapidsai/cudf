@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ void ASSERT_UNARY(cudf::column_view const& out, cudf::column_view const& in, Typ
 
   ASSERT_TRUE(out_data.size() == in_data.size());
 
-  auto data_comparator = [ope](const TypeIn& in, const TypeOut& out) {
+  auto data_comparator = [ope](TypeIn const& in, TypeOut const& out) {
     EXPECT_EQ(out, static_cast<TypeOut>(ope(in)));
     return true;
   };
@@ -41,7 +41,7 @@ void ASSERT_UNARY(cudf::column_view const& out, cudf::column_view const& in, Typ
   auto out_valid = out_h.second;
 
   ASSERT_TRUE(out_valid.size() == in_valid.size());
-  auto valid_comparator = [](const bool& in, const bool& out) {
+  auto valid_comparator = [](bool const& in, bool const& out) {
     EXPECT_EQ(out, in);
     return true;
   };

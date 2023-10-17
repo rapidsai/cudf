@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,14 +18,17 @@
 
 #include "parquet_common.hpp"
 
+#include <cudf/types.hpp>
+
+#include <thrust/optional.h>
+
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
-namespace parquet {
+namespace cudf::io::parquet::detail {
+
 constexpr uint32_t parquet_magic = (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24));
 
 /**
@@ -44,27 +47,19 @@ struct file_ender_s {
 };
 
 // thrift generated code simplified.
-struct StringType {
-};
-struct MapType {
-};
-struct ListType {
-};
-struct EnumType {
-};
+struct StringType {};
+struct MapType {};
+struct ListType {};
+struct EnumType {};
 struct DecimalType {
   int32_t scale     = 0;
   int32_t precision = 0;
 };
-struct DateType {
-};
+struct DateType {};
 
-struct MilliSeconds {
-};
-struct MicroSeconds {
-};
-struct NanoSeconds {
-};
+struct MilliSeconds {};
+struct MicroSeconds {};
+struct NanoSeconds {};
 using TimeUnit_isset = struct TimeUnit_isset {
   bool MILLIS{false};
   bool MICROS{false};
@@ -90,12 +85,9 @@ struct IntType {
   int8_t bitWidth = 0;
   bool isSigned   = false;
 };
-struct NullType {
-};
-struct JsonType {
-};
-struct BsonType {
-};
+struct NullType {};
+struct JsonType {};
+struct BsonType {};
 
 // thrift generated code simplified.
 using LogicalType_isset = struct LogicalType_isset {
@@ -130,6 +122,16 @@ struct LogicalType {
 };
 
 /**
+ * Union to specify the order used for the min_value and max_value fields for a column.
+ */
+struct ColumnOrder {
+  enum Type { UNDEFINED, TYPE_ORDER };
+  Type type;
+
+  operator Type() const { return type; }
+};
+
+/**
  * @brief Struct for describing an element/field in the Parquet format schema
  *
  * Parquet is a strongly-typed format so the file layout can be interpreted as
@@ -146,14 +148,14 @@ struct SchemaElement {
   int32_t num_children                = 0;
   int32_t decimal_scale               = 0;
   int32_t decimal_precision           = 0;
-  std::optional<int32_t> field_id     = std::nullopt;
+  thrust::optional<int32_t> field_id  = thrust::nullopt;
   bool output_as_byte_array           = false;
 
   // The following fields are filled in later during schema initialization
   int max_definition_level = 0;
   int max_repetition_level = 0;
-  int parent_idx           = 0;
-  std::vector<size_t> children_idx;
+  size_type parent_idx     = 0;
+  std::vector<size_type> children_idx;
 
   bool operator==(SchemaElement const& other) const
   {
@@ -191,10 +193,13 @@ struct SchemaElement {
   // https://github.com/apache/parquet-cpp/blob/642da05/src/parquet/schema.h#L49-L50
   // One-level LIST encoding: Only allows required lists with required cells:
   //   repeated value_type name
-  [[nodiscard]] bool is_one_level_list() const
+  [[nodiscard]] bool is_one_level_list(SchemaElement const& parent) const
   {
-    return repetition_type == REPEATED and num_children == 0;
+    return repetition_type == REPEATED and num_children == 0 and not parent.is_list();
   }
+
+  // returns true if the element is a list
+  [[nodiscard]] bool is_list() const { return converted_type == LIST; }
 
   // in parquet terms, a group is a level of nesting in the schema. a group
   // can be a struct or a list
@@ -202,7 +207,7 @@ struct SchemaElement {
   {
     return type == UNDEFINED_TYPE &&
            // this assumption might be a little weak.
-           ((repetition_type != REPEATED) || (repetition_type == REPEATED && num_children == 2));
+           ((repetition_type != REPEATED) || (repetition_type == REPEATED && num_children > 1));
   }
 };
 
@@ -210,12 +215,18 @@ struct SchemaElement {
  * @brief Thrift-derived struct describing column chunk statistics
  */
 struct Statistics {
-  std::vector<uint8_t> max;        // deprecated max value in signed comparison order
-  std::vector<uint8_t> min;        // deprecated min value in signed comparison order
-  int64_t null_count     = -1;     // count of null values in the column
-  int64_t distinct_count = -1;     // count of distinct values occurring
-  std::vector<uint8_t> max_value;  // max value for column determined by ColumnOrder
-  std::vector<uint8_t> min_value;  // min value for column determined by ColumnOrder
+  // deprecated max value in signed comparison order
+  thrust::optional<std::vector<uint8_t>> max;
+  // deprecated min value in signed comparison order
+  thrust::optional<std::vector<uint8_t>> min;
+  // count of null values in the column
+  thrust::optional<int64_t> null_count;
+  // count of distinct values occurring
+  thrust::optional<int64_t> distinct_count;
+  // max value for column determined by ColumnOrder
+  thrust::optional<std::vector<uint8_t>> max_value;
+  // min value for column determined by ColumnOrder
+  thrust::optional<std::vector<uint8_t>> min_value;
 };
 
 /**
@@ -234,8 +245,8 @@ struct ColumnChunkMetaData {
   int64_t data_page_offset  = 0;  // Byte offset from beginning of file to first data page
   int64_t index_page_offset = 0;  // Byte offset from beginning of file to root index page
   int64_t dictionary_page_offset =
-    0;  // Byte offset from the beginning of file to first (only) dictionary page
-  std::vector<uint8_t> statistics_blob;  // Encoded chunk-level statistics as binary blob
+    0;                    // Byte offset from the beginning of file to first (only) dictionary page
+  Statistics statistics;  // Encoded chunk-level statistics
 };
 
 /**
@@ -292,8 +303,8 @@ struct FileMetaData {
   int64_t num_rows = 0;
   std::vector<RowGroup> row_groups;
   std::vector<KeyValue> key_value_metadata;
-  std::string created_by         = "";
-  uint32_t column_order_listsize = 0;
+  std::string created_by = "";
+  thrust::optional<std::vector<ColumnOrder>> column_orders;
 };
 
 /**
@@ -304,6 +315,20 @@ struct DataPageHeader {
   Encoding encoding                  = Encoding::PLAIN;  // Encoding used for this data page
   Encoding definition_level_encoding = Encoding::PLAIN;  // Encoding used for definition levels
   Encoding repetition_level_encoding = Encoding::PLAIN;  // Encoding used for repetition levels
+};
+
+/**
+ * @brief Thrift-derived struct describing the header for a V2 data page
+ */
+struct DataPageHeaderV2 {
+  int32_t num_values = 0;  // Number of values, including NULLs, in this data page.
+  int32_t num_nulls  = 0;  // Number of NULL values, in this data page.
+  int32_t num_rows   = 0;  // Number of rows in this data page. which means
+                           // pages change on record boundaries (r = 0)
+  Encoding encoding                     = Encoding::PLAIN;  // Encoding used for this data page
+  int32_t definition_levels_byte_length = 0;                // length of the definition levels
+  int32_t repetition_levels_byte_length = 0;                // length of the repetition levels
+  bool is_compressed                    = true;             // whether the values are compressed.
 };
 
 /**
@@ -330,6 +355,7 @@ struct PageHeader {
   int32_t compressed_page_size   = 0;  // Compressed page size in bytes (not including the header)
   DataPageHeader data_page_header;
   DictionaryPageHeader dictionary_page_header;
+  DataPageHeaderV2 data_page_header_v2;
 };
 
 /**
@@ -386,6 +412,4 @@ static inline int CountLeadingZeros32(uint32_t value)
 #endif
 }
 
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

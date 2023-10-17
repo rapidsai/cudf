@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 set -euo pipefail
 
@@ -11,6 +11,8 @@ rapids-print-env
 
 rapids-logger "Begin cpp build"
 
-rapids-mamba-retry mambabuild conda/recipes/libcudf
+# With boa installed conda build forward to boa
+rapids-conda-retry mambabuild \
+    conda/recipes/libcudf
 
 rapids-upload-conda-to-s3 cpp

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -271,7 +271,10 @@ std::unique_ptr<column> round_with(column_view const& input,
                                out_view.template end<Type>(),
                                static_cast<Type>(0));
   } else {
-    Type const n = std::pow(10, scale_movement);
+    Type n = 10;
+    for (int i = 1; i < scale_movement; ++i) {
+      n *= 10;
+    }
     thrust::transform(rmm::exec_policy(stream),
                       input.begin<Type>(),
                       input.end<Type>(),
@@ -331,7 +334,7 @@ std::unique_ptr<column> round(column_view const& input,
   if (input.is_empty()) {
     if (is_fixed_point(input.type())) {
       auto const type = data_type{input.type().id(), numeric::scale_type{-decimal_places}};
-      return std::make_unique<cudf::column>(type, 0, rmm::device_buffer{});
+      return make_empty_column(type);
     }
     return empty_like(input);
   }

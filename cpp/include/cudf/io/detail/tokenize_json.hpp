@@ -110,6 +110,8 @@ enum token_t : PdaTokenT {
   ValueEnd,
   /// Beginning-of-error token (on first encounter of a parsing error)
   ErrorBegin,
+  /// Delimiting a JSON line for error recovery
+  LineEnd,
   /// Total number of tokens
   NUM_TOKENS
 };
@@ -131,7 +133,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   device_span<SymbolT const> json_in,
   cudf::io::json_reader_options const& options,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 

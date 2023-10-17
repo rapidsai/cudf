@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,9 +44,9 @@ __launch_bounds__(block_size) __global__
                            mutable_column_device_view out,
                            size_type* __restrict__ const valid_count)
 {
-  const size_type tid            = threadIdx.x + blockIdx.x * block_size;
-  const int warp_id              = tid / warp_size;
-  const size_type warps_per_grid = gridDim.x * block_size / warp_size;
+  size_type const tid            = threadIdx.x + blockIdx.x * block_size;
+  int const warp_id              = tid / warp_size;
+  size_type const warps_per_grid = gridDim.x * block_size / warp_size;
 
   // begin/end indices for the column data
   size_type begin = 0;
@@ -59,7 +59,7 @@ __launch_bounds__(block_size) __global__
 
   // lane id within the current warp
   constexpr size_type leader_lane{0};
-  const int lane_id = threadIdx.x % warp_size;
+  int const lane_id = threadIdx.x % warp_size;
 
   size_type warp_valid_count{0};
 
@@ -145,15 +145,14 @@ __launch_bounds__(block_size) __global__
  *                    by `filter[i]`
  */
 template <typename FilterFn, typename LeftIter, typename RightIter>
-std::unique_ptr<column> copy_if_else(
-  bool nullable,
-  LeftIter lhs_begin,
-  LeftIter lhs_end,
-  RightIter rhs,
-  FilterFn filter,
-  cudf::data_type output_type,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> copy_if_else(bool nullable,
+                                     LeftIter lhs_begin,
+                                     LeftIter lhs_end,
+                                     RightIter rhs,
+                                     FilterFn filter,
+                                     cudf::data_type output_type,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
 {
   // This is the type of the thrust::optional element in the passed iterators
   using Element = typename thrust::iterator_traits<LeftIter>::value_type::value_type;

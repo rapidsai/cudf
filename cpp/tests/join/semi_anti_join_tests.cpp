@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,8 +37,7 @@ using strcol_wrapper = cudf::test::strings_column_wrapper;
 using column_vector  = std::vector<std::unique_ptr<cudf::column>>;
 using Table          = cudf::table;
 
-struct JoinTest : public cudf::test::BaseFixture {
-};
+struct JoinTest : public cudf::test::BaseFixture {};
 
 namespace {
 // This function is a wrapper around cudf's join APIs that takes the gather map
@@ -101,8 +100,11 @@ TEST_F(JoinTest, TestSimple)
   auto right = cudf::table_view{{right_col0}};
 
   auto result    = left_semi_join(left, right);
-  auto result_cv = cudf::column_view(
-    cudf::data_type{cudf::type_to_id<cudf::size_type>()}, result->size(), result->data());
+  auto result_cv = cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
+                                     result->size(),
+                                     result->data(),
+                                     nullptr,
+                                     0);
   column_wrapper<cudf::size_type> expected{0, 1};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result_cv);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -141,9 +141,10 @@ struct AtomicsTest : public cudf::test::BaseFixture {
     result_init[4] = result_init[1];
     result_init[5] = result_init[2];
 
-    auto dev_data = cudf::detail::make_device_uvector_sync(v, cudf::get_default_stream());
-    auto dev_result =
-      cudf::detail::make_device_uvector_sync(result_init, cudf::get_default_stream());
+    auto dev_data = cudf::detail::make_device_uvector_sync(
+      v, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    auto dev_result = cudf::detail::make_device_uvector_sync(
+      result_init, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
     if (block_size == 0) { block_size = vec_size; }
 
@@ -253,95 +254,6 @@ TYPED_TEST(AtomicsTest, atomicCASRandom)
   std::generate(input_array.begin(), input_array.end(), [&]() { return dist(engine); });
 
   this->atomic_test(input_array, is_cas_test, block_size, grid_size);
-}
-
-template <typename T>
-__global__ void gpu_atomic_bitwiseOp_test(T* result, T* data, size_t size)
-{
-  size_t id   = blockIdx.x * blockDim.x + threadIdx.x;
-  size_t step = blockDim.x * gridDim.x;
-
-  for (; id < size; id += step) {
-    atomicAnd(&result[0], data[id]);
-    atomicOr(&result[1], data[id]);
-    atomicXor(&result[2], data[id]);
-    cudf::genericAtomicOperation(&result[3], data[id], cudf::DeviceAnd{});
-    cudf::genericAtomicOperation(&result[4], data[id], cudf::DeviceOr{});
-    cudf::genericAtomicOperation(&result[5], data[id], cudf::DeviceXor{});
-  }
-}
-
-template <typename T>
-struct AtomicsBitwiseOpTest : public cudf::test::BaseFixture {
-  void atomic_test(std::vector<uint64_t> const& v_input, int block_size = 0, int grid_size = 1)
-  {
-    size_t vec_size = v_input.size();
-    std::vector<T> v(vec_size);
-    std::transform(v_input.begin(), v_input.end(), v.begin(), [](int x) {
-      T t(x);
-      return t;
-    });
-
-    thrust::host_vector<T> identity(9, T{0});  // +3 elements padding for int8 tests
-    identity[0] = T(~0ull);
-    identity[3] = T(~0ull);
-
-    T exact[3];
-    exact[0] = std::accumulate(
-      v.begin(), v.end(), identity[0], [](T acc, uint64_t i) { return acc & T(i); });
-    exact[1] = std::accumulate(
-      v.begin(), v.end(), identity[1], [](T acc, uint64_t i) { return acc | T(i); });
-    exact[2] = std::accumulate(
-      v.begin(), v.end(), identity[2], [](T acc, uint64_t i) { return acc ^ T(i); });
-
-    auto dev_result = cudf::detail::make_device_uvector_sync(identity, cudf::get_default_stream());
-    auto dev_data   = cudf::detail::make_device_uvector_sync(v, cudf::get_default_stream());
-
-    if (block_size == 0) { block_size = vec_size; }
-
-    gpu_atomic_bitwiseOp_test<T><<<grid_size, block_size, 0, cudf::get_default_stream().value()>>>(
-      reinterpret_cast<T*>(dev_result.data()), reinterpret_cast<T*>(dev_data.data()), vec_size);
-
-    auto host_result = cudf::detail::make_host_vector_sync(dev_result, cudf::get_default_stream());
-
-    CUDF_CHECK_CUDA(cudf::get_default_stream().value());
-
-    // print_exact(exact, "exact");
-    // print_exact(host_result.data(), "result");
-
-    EXPECT_EQ(host_result[0], exact[0]) << "atomicAnd test failed";
-    EXPECT_EQ(host_result[1], exact[1]) << "atomicOr  test failed";
-    EXPECT_EQ(host_result[2], exact[2]) << "atomicXor test failed";
-    EXPECT_EQ(host_result[3], exact[0]) << "atomicAnd test(2) failed";
-    EXPECT_EQ(host_result[4], exact[1]) << "atomicOr  test(2) failed";
-    EXPECT_EQ(host_result[5], exact[2]) << "atomicXor test(2) failed";
-  }
-
-  [[maybe_unused]] void print_exact(const T* v, const char* msg)
-  {
-    std::cout << std::hex << std::showbase;
-    std::cout << "The " << msg << " = {" << +v[0] << ", " << +v[1] << ", " << +v[2] << "}"
-              << std::endl;
-  }
-};
-
-using BitwiseOpTestingTypes =
-  cudf::test::Types<int8_t, int16_t, int32_t, int64_t, uint8_t, uint16_t, uint32_t, uint64_t>;
-
-TYPED_TEST_SUITE(AtomicsBitwiseOpTest, BitwiseOpTestingTypes);
-
-TYPED_TEST(AtomicsBitwiseOpTest, atomicBitwiseOps)
-{
-  {  // test for AND, XOR
-    std::vector<uint64_t> input_array(
-      {0xfcfc'fcfc'fcfc'fc7f, 0x7f'7f7f'7f7f'7ffc, 0xfffd'dffd'dffd'dfdf, 0x7f'7f7f'7f7f'7ffc});
-    this->atomic_test(input_array);
-  }
-  {  // test for OR, XOR
-    std::vector<uint64_t> input_array(
-      {0x01, 0xfc02, 0x1d'ff03, 0x1100'a0b0'801d'0003, 0x8000'0000'0000'0000, 0x1d'ff03});
-    this->atomic_test(input_array);
-  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()

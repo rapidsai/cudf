@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 import math
 import operator
 
@@ -8,18 +8,19 @@ from numba import cuda
 
 import cudf
 from cudf.core.missing import NA
-from cudf.core.udf import _STRING_UDFS_ENABLED
 from cudf.core.udf._ops import (
     arith_ops,
     bitwise_ops,
     comparison_ops,
     unary_ops,
 )
+from cudf.core.udf.api import Masked
 from cudf.core.udf.utils import precompiled
 from cudf.testing._utils import (
     _decimal_series,
     assert_eq,
     parametrize_numeric_dtypes_pairwise,
+    sv_to_udf_str,
 )
 
 
@@ -69,6 +70,37 @@ def run_masked_udf_test(func, data, args=(), **kwargs):
 
     expect = pdf.apply(func, args=args, axis=1)
     obtain = gdf.apply(func, args=args, axis=1)
+    assert_eq(expect, obtain, **kwargs)
+
+
+def run_masked_string_udf_test(func, data, args=(), **kwargs):
+
+    gdf = data
+    pdf = data.to_pandas(nullable=True)
+
+    def row_wrapper(row):
+        st = row["str_col"]
+        return func(st)
+
+    expect = pdf.apply(row_wrapper, args=args, axis=1)
+
+    func = cuda.jit(device=True)(func)
+    obtain = gdf.apply(row_wrapper, args=args, axis=1)
+    assert_eq(expect, obtain, **kwargs)
+
+    # strings that come directly from input columns are backed by
+    # MaskedType(string_view) types. But new strings that are returned
+    # from functions or operators are backed by MaskedType(udf_string)
+    # types. We need to make sure all of our methods work on both kind
+    # of MaskedType. This function promotes the former to the latter
+    # prior to running the input function
+    def udf_string_wrapper(row):
+        masked_udf_str = Masked(
+            sv_to_udf_str(row["str_col"].value), row["str_col"].valid
+        )
+        return func(masked_udf_str)
+
+    obtain = gdf.apply(udf_string_wrapper, args=args, axis=1)
     assert_eq(expect, obtain, **kwargs)
 
 
@@ -743,6 +775,19 @@ def test_masked_udf_caching():
 
     assert precompiled.currsize == 1
 
+    # validate that changing the type of a scalar arg
+    # results in a miss
+    precompiled.clear()
+
+    def f(x, c):
+        return x + c
+
+    data.apply(f, args=(1,))
+    assert precompiled.currsize == 1
+
+    data.apply(f, args=(1.5,))
+    assert precompiled.currsize == 2
+
 
 @pytest.mark.parametrize(
     "data", [[1.0, 0.0, 1.5], [1, 0, 2], [True, False, True]]
@@ -757,8 +802,42 @@ def test_masked_udf_casting(operator, data):
     run_masked_udf_series(func, data, check_dtype=False)
 
 
-# only run string udf tests if library exists and is enabled
-@pytest.mark.skipif(not _STRING_UDFS_ENABLED, reason="String UDFs not enabled")
+@pytest.mark.parametrize(
+    "data",
+    [
+        np.array(
+            [0, 1, -1, 0, np.iinfo("int64").min, np.iinfo("int64").max],
+            dtype="int64",
+        ),
+        np.array([0, 0, 1, np.iinfo("uint64").max], dtype="uint64"),
+        np.array(
+            [
+                0,
+                0.0,
+                -1.0,
+                1.5,
+                -1.5,
+                np.finfo("float64").min,
+                np.finfo("float64").max,
+                np.nan,
+                np.inf,
+                -np.inf,
+            ],
+            dtype="float64",
+        ),
+        [False, True, False, cudf.NA],
+    ],
+)
+def test_masked_udf_abs(data):
+    data = cudf.Series(data)
+    data[0] = cudf.NA
+
+    def func(x):
+        return abs(x)
+
+    run_masked_udf_series(func, data, check_dtype=False)
+
+
 class TestStringUDFs:
     def test_string_udf_len(self, str_udf_data):
         def func(row):

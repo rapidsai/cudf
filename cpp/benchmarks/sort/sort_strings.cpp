@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-class Sort : public cudf::benchmark {
-};
+class Sort : public cudf::benchmark {};
 
 static void BM_sort(benchmark::State& state)
 {

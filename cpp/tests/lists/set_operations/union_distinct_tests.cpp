@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,12 +63,10 @@ auto set_union_sorted(cudf::column_view const& lhs,
 }
 }  // namespace
 
-struct SetUnionTest : public cudf::test::BaseFixture {
-};
+struct SetUnionTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct SetUnionTypedTest : public cudf::test::BaseFixture {
-};
+struct SetUnionTypedTest : public cudf::test::BaseFixture {};
 
 using TestTypes =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
@@ -156,9 +154,9 @@ TEST_F(SetUnionTest, FloatingPointTestsWithNaNs)
   // NaNs are unequal.
   {
     auto const expected       = floats_lists{{-1, 0, 1, 2, 3, 4, NaN, neg_NaN},
-                                       {0, 2, neg_NaN},
-                                       {-2, 0, 1, 2, neg_NaN},
-                                       {NaN, NaN, NaN, NaN, NaN, neg_NaN, neg_NaN}};
+                                             {0, 2, neg_NaN},
+                                             {-2, 0, 1, 2, neg_NaN},
+                                             {NaN, NaN, NaN, NaN, NaN, neg_NaN, neg_NaN}};
     auto const results_sorted = set_union_sorted(lhs, rhs, NULL_EQUAL, NAN_UNEQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }

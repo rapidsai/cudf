@@ -1,5 +1,6 @@
 # Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
+from datetime import datetime
 from itertools import combinations
 
 import cupy
@@ -8,7 +9,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_120
 from cudf.testing import _utils as utils
 from cudf.testing._utils import (
     INTEGER_TYPES,
@@ -451,10 +451,6 @@ def test_series_loc_string():
 
 
 def test_series_loc_datetime():
-    if PANDAS_GE_110:
-        kwargs = {"check_freq": False}
-    else:
-        kwargs = {}
     ps = pd.Series(
         [1, 2, 3, 4, 5], index=pd.date_range("20010101", "20010105")
     )
@@ -475,11 +471,11 @@ def test_series_loc_datetime():
     assert_eq(
         ps.loc["2001-01-02":"2001-01-05"],
         gs.loc["2001-01-02":"2001-01-05"],
-        **kwargs,
+        check_freq=False,
     )
-    assert_eq(ps.loc["2001-01-02":], gs.loc["2001-01-02":], **kwargs)
-    assert_eq(ps.loc[:"2001-01-04"], gs.loc[:"2001-01-04"], **kwargs)
-    assert_eq(ps.loc[::2], gs.loc[::2], **kwargs)
+    assert_eq(ps.loc["2001-01-02":], gs.loc["2001-01-02":], check_freq=False)
+    assert_eq(ps.loc[:"2001-01-04"], gs.loc[:"2001-01-04"], check_freq=False)
+    assert_eq(ps.loc[::2], gs.loc[::2], check_freq=False)
 
     assert_eq(
         ps.loc[["2001-01-01", "2001-01-04", "2001-01-05"]],
@@ -505,13 +501,15 @@ def test_series_loc_datetime():
     assert_eq(
         ps.loc[[True, False, True, False, True]],
         gs.loc[[True, False, True, False, True]],
-        **kwargs,
+        check_freq=False,
     )
 
     just_less_than_max = ps.index.max() - pd.Timedelta("5m")
 
     assert_eq(
-        ps.loc[:just_less_than_max], gs.loc[:just_less_than_max], **kwargs
+        ps.loc[:just_less_than_max],
+        gs.loc[:just_less_than_max],
+        check_freq=False,
     )
 
 
@@ -582,7 +580,6 @@ def test_dataframe_series_loc_multiindex(obj):
 
 @pytest.mark.parametrize("nelem", [2, 5, 20, 100])
 def test_series_iloc(nelem):
-
     # create random cudf.Series
     np.random.seed(12)
     ps = pd.Series(np.random.sample(nelem))
@@ -688,9 +685,6 @@ def test_dataframe_iloc_tuple():
     assert_eq(gdf.iloc[:, -1], pdf.iloc[:, -1])
 
 
-@pytest.mark.xfail(
-    raises=IndexError, reason="positional indexers are out-of-bounds"
-)
 def test_dataframe_iloc_index_error():
     gdf = cudf.DataFrame()
     nelem = 123
@@ -703,11 +697,10 @@ def test_dataframe_iloc_index_error():
     pdf["a"] = ha
     pdf["b"] = hb
 
-    def assert_col(g, p):
-        np.testing.assert_equal(g["a"].to_numpy(), p["a"])
-        np.testing.assert_equal(g["b"].to_numpy(), p["b"])
-
-    assert_col(gdf.iloc[nelem * 2], pdf.iloc[nelem * 2])
+    with pytest.raises(IndexError):
+        pdf.iloc[nelem * 2]
+    with pytest.raises(IndexError):
+        gdf.iloc[nelem * 2]
 
 
 @pytest.mark.parametrize("ntake", [0, 1, 10, 123, 122, 200])
@@ -1012,10 +1005,6 @@ def test_series_setitem_datetime():
     assert_eq(psr, gsr)
 
 
-@pytest.mark.xfail(
-    condition=not PANDAS_GE_120,
-    reason="Pandas will coerce to object datatype here",
-)
 def test_series_setitem_datetime_coerced():
     psr = pd.Series(["2001", "2002", "2003"], dtype="datetime64[ns]")
     gsr = cudf.from_pandas(psr)
@@ -1272,7 +1261,6 @@ def test_iloc_categorical_index(index):
 )
 @pytest.mark.parametrize("is_dataframe", [True, False])
 def test_loc_datetime_index(sli, is_dataframe):
-
     if is_dataframe is True:
         pd_data = pd.DataFrame(
             {"a": [1, 2, 3]},
@@ -1453,6 +1441,8 @@ def test_loc_zero_dim_array():
                 reason="https://github.com/pandas-dev/pandas/issues/46704"
             ),
         ),
+        1,
+        2,
     ],
 )
 def test_loc_series_multiindex(arg):
@@ -1690,3 +1680,428 @@ def test_loc_single_row_from_slice():
     pdf = pd.DataFrame({"a": [10, 20, 30], "b": [1, 2, 3]}).set_index("a")
     df = cudf.from_pandas(pdf)
     assert_eq(pdf.loc[5:10], df.loc[5:10])
+
+
+@pytest.mark.parametrize("indexer", ["loc", "iloc"])
+@pytest.mark.parametrize(
+    "mask",
+    [[False, True], [False, False, True, True, True]],
+    ids=["too-short", "too-long"],
+)
+def test_boolean_mask_wrong_length(indexer, mask):
+    s = pd.Series([1, 2, 3, 4])
+
+    indexee = getattr(s, indexer)
+    with pytest.raises(IndexError):
+        indexee[mask]
+
+    c = cudf.from_pandas(s)
+    indexee = getattr(c, indexer)
+    with pytest.raises(IndexError):
+        indexee[mask]
+
+
+@pytest.mark.parametrize("indexer", ["loc", "iloc"])
+def test_boolean_mask_columns(indexer):
+    df = pd.DataFrame(np.zeros((3, 3)))
+    cdf = cudf.from_pandas(df)
+    mask = [True, False, True]
+    expect = getattr(df, indexer)[:, mask]
+    got = getattr(cdf, indexer)[:, mask]
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("indexer", ["loc", "iloc"])
+@pytest.mark.parametrize(
+    "mask",
+    [[False, True], [False, False, True, True, True]],
+    ids=["too-short", "too-long"],
+)
+def test_boolean_mask_columns_wrong_length(indexer, mask):
+    df = pd.DataFrame(np.zeros((3, 3)))
+    cdf = cudf.from_pandas(df)
+
+    with pytest.raises(IndexError):
+        getattr(df, indexer)[:, mask]
+    with pytest.raises(IndexError):
+        getattr(cdf, indexer)[:, mask]
+
+
+def test_boolean_mask_columns_iloc_series():
+    df = pd.DataFrame(np.zeros((3, 3)))
+    cdf = cudf.from_pandas(df)
+
+    mask = pd.Series([True, False, True], dtype=bool)
+    with pytest.raises(NotImplementedError):
+        df.iloc[:, mask]
+
+    with pytest.raises(NotImplementedError):
+        cdf.iloc[:, mask]
+
+
+@pytest.mark.parametrize("index_type", ["single", "slice"])
+def test_loc_timestamp_issue_8585(index_type):
+    # https://github.com/rapidsai/cudf/issues/8585
+    start = pd.Timestamp(
+        datetime.strptime("2021-03-12 00:00", "%Y-%m-%d %H:%M")
+    )
+    end = pd.Timestamp(datetime.strptime("2021-03-12 11:00", "%Y-%m-%d %H:%M"))
+    timestamps = pd.date_range(start, end, periods=12)
+    value = np.random.normal(size=12)
+    df = pd.DataFrame(value, index=timestamps, columns=["value"])
+    cdf = cudf.from_pandas(df)
+    if index_type == "single":
+        index = pd.Timestamp(
+            datetime.strptime("2021-03-12 03:00", "%Y-%m-%d %H:%M")
+        )
+    elif index_type == "slice":
+        index = slice(start, end, None)
+    else:
+        raise ValueError("Invalid index type")
+    expect = df.loc[index]
+    actual = cdf.loc[index]
+    assert_eq(expect, actual)
+
+
+@pytest.mark.parametrize(
+    "index_type",
+    [
+        "single",
+        pytest.param(
+            "slice",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/8585"
+            ),
+        ),
+        pytest.param(
+            "date_range",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/8585"
+            ),
+        ),
+    ],
+)
+def test_loc_multiindex_timestamp_issue_8585(index_type):
+    # https://github.com/rapidsai/cudf/issues/8585
+    start = pd.Timestamp(
+        datetime.strptime("2021-03-12 00:00", "%Y-%m-%d %H:%M")
+    )
+    end = pd.Timestamp(datetime.strptime("2021-03-12 03:00", "%Y-%m-%d %H:%M"))
+    timestamps = pd.date_range(start, end, periods=4)
+    labels = ["A", "B", "C"]
+    index = pd.MultiIndex.from_product(
+        [timestamps, labels], names=["timestamp", "label"]
+    )
+    value = np.random.normal(size=12)
+    df = pd.DataFrame(value, index=index, columns=["value"])
+    cdf = cudf.from_pandas(df)
+    start = pd.Timestamp(
+        datetime.strptime("2021-03-12 01:00", "%Y-%m-%d %H:%M")
+    )
+    end = pd.Timestamp(datetime.strptime("2021-03-12 02:00", "%Y-%m-%d %H:%M"))
+    if index_type == "single":
+        index = pd.Timestamp(
+            datetime.strptime("2021-03-12 03:00", "%Y-%m-%d %H:%M")
+        )
+    elif index_type == "slice":
+        index = slice(start, end, None)
+    elif index_type == "date_range":
+        index = pd.date_range(start, end, periods=2)
+    else:
+        raise ValueError("Invalid index type")
+    expect = df.loc[index]
+    actual = cdf.loc[index]
+    assert_eq(expect, actual)
+
+
+def test_loc_repeated_index_label_issue_8693():
+    # https://github.com/rapidsai/cudf/issues/8693
+    s = pd.Series([1, 2, 3, 4], index=[0, 1, 1, 2])
+    cs = cudf.from_pandas(s)
+    expect = s.loc[1]
+    actual = cs.loc[1]
+    assert_eq(expect, actual)
+
+
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/13268")
+@pytest.mark.parametrize(
+    "indexer", [(..., 0), (0, ...)], ids=["row_ellipsis", "column_ellipsis"]
+)
+def test_loc_ellipsis_as_slice_issue_13268(indexer):
+    # https://github.com/rapidsai/cudf/issues/13268
+    df = pd.DataFrame(np.arange(4).reshape(2, 2))
+    cdf = cudf.from_pandas(df)
+
+    expect = df.loc[indexer]
+    actual = cdf.loc[indexer]
+    assert_eq(expect, actual)
+
+
+@pytest.mark.xfail(
+    reason="https://github.com/rapidsai/cudf/issues/13269 "
+    "and https://github.com/rapidsai/cudf/issues/13273"
+)
+def test_loc_repeated_column_label_issue_13269():
+    # https://github.com/rapidsai/cudf/issues/13269
+    # https://github.com/rapidsai/cudf/issues/13273
+    df = pd.DataFrame(np.arange(4).reshape(2, 2))
+    cdf = cudf.from_pandas(df)
+
+    expect = df.loc[:, [0, 1, 0]]
+    actual = cdf.loc[:, [0, 1, 0]]
+    assert_eq(expect, actual)
+
+
+def test_loc_column_boolean_mask_issue_13270():
+    # https://github.com/rapidsai/cudf/issues/13270
+    df = pd.DataFrame(np.arange(4).reshape(2, 2))
+    cdf = cudf.from_pandas(df)
+    expect = df.loc[:, [True, True]]
+    actual = cdf.loc[:, [True, True]]
+    assert_eq(expect, actual)
+
+
+@pytest.mark.parametrize("indexer", [[1], [0, 2]])
+def test_iloc_integer_categorical_issue_13013(indexer):
+    # https://github.com/rapidsai/cudf/issues/13013
+    s = pd.Series([0, 1, 2])
+    index = pd.Categorical(indexer)
+    expect = s.iloc[index]
+    c = cudf.from_pandas(s)
+    actual = c.iloc[index]
+    assert_eq(expect, actual)
+
+
+def test_iloc_incorrect_boolean_mask_length_issue_13015():
+    # https://github.com/rapidsai/cudf/issues/13015
+    s = pd.Series([0, 1, 2])
+    with pytest.raises(IndexError):
+        s.iloc[[True, False]]
+    c = cudf.from_pandas(s)
+    with pytest.raises(IndexError):
+        c.iloc[[True, False]]
+
+
+def test_iloc_column_boolean_mask_issue_13265():
+    # https://github.com/rapidsai/cudf/issues/13265
+    df = pd.DataFrame(np.arange(4).reshape(2, 2))
+    cdf = cudf.from_pandas(df)
+    expect = df.iloc[:, [True, True]]
+    actual = cdf.iloc[:, [True, True]]
+    assert_eq(expect, actual)
+
+
+def test_iloc_repeated_column_label_issue_13266():
+    # https://github.com/rapidsai/cudf/issues/13266
+    # https://github.com/rapidsai/cudf/issues/13273
+    df = pd.DataFrame(np.arange(4).reshape(2, 2))
+    cdf = cudf.from_pandas(df)
+
+    with pytest.raises(NotImplementedError):
+        cdf.iloc[:, [0, 1, 0]]
+
+
+@pytest.mark.parametrize(
+    "indexer",
+    [
+        (..., 0),
+        (0, ...),
+    ],
+    ids=["row_ellipsis", "column_ellipsis"],
+)
+def test_iloc_ellipsis_as_slice_issue_13267(indexer):
+    # https://github.com/rapidsai/cudf/issues/13267
+    df = pd.DataFrame(np.arange(4).reshape(2, 2))
+    cdf = cudf.from_pandas(df)
+
+    expect = df.iloc[indexer]
+    actual = cdf.iloc[indexer]
+    assert_eq(expect, actual)
+
+
+@pytest.mark.parametrize(
+    "indexer",
+    [
+        0,
+        (slice(None), 0),
+        ([0, 2], 1),
+        (slice(None), slice(None)),
+        (slice(None), [1, 0]),
+        (0, 0),
+        (1, [1, 0]),
+        ([1, 0], 0),
+        ([1, 2], [0, 1]),
+    ],
+)
+def test_iloc_multiindex_lookup_as_label_issue_13515(indexer):
+    # https://github.com/rapidsai/cudf/issues/13515
+    df = pd.DataFrame(
+        {"a": [1, 1, 3], "b": [2, 3, 4], "c": [1, 6, 7], "d": [1, 8, 9]}
+    ).set_index(["a", "b"])
+    cdf = cudf.from_pandas(df)
+
+    expect = df.iloc[indexer]
+    actual = cdf.iloc[indexer]
+    assert_eq(expect, actual)
+
+
+def test_loc_unsorted_index_slice_lookup_keyerror_issue_12833():
+    # https://github.com/rapidsai/cudf/issues/12833
+    df = pd.DataFrame({"a": [1, 2, 3]}, index=[7, 0, 4])
+    cdf = cudf.from_pandas(df)
+
+    # Check that pandas don't change their mind
+    with pytest.raises(KeyError):
+        df.loc[1:5]
+
+    with pytest.raises(KeyError):
+        cdf.loc[1:5]
+
+
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/13379")
+@pytest.mark.parametrize("index", [range(5), list(range(5))])
+def test_loc_missing_label_keyerror_issue_13379(index):
+    # https://github.com/rapidsai/cudf/issues/13379
+    df = pd.DataFrame({"a": index}, index=index)
+    cdf = cudf.from_pandas(df)
+    # Check that pandas don't change their mind
+    with pytest.raises(KeyError):
+        df.loc[[0, 5]]
+
+    with pytest.raises(KeyError):
+        cdf.loc[[0, 5]]
+
+
+@pytest.mark.parametrize("series", [True, False], ids=["Series", "DataFrame"])
+def test_loc_repeated_label_ordering_issue_13658(series):
+    # https://github.com/rapidsai/cudf/issues/13658
+    values = range(2048)
+    index = [1 for _ in values]
+    if series:
+        frame = cudf.Series(values, index=index)
+    else:
+        frame = cudf.DataFrame({"a": values}, index=index)
+    expect = frame.to_pandas().loc[[1]]
+    actual = frame.loc[[1]]
+    assert_eq(actual, expect)
+
+
+class TestLocIndexWithOrder:
+    # https://github.com/rapidsai/cudf/issues/12833
+    @pytest.fixture(params=["increasing", "decreasing", "neither"])
+    def order(self, request):
+        return request.param
+
+    @pytest.fixture(params=[-1, 1], ids=["reverse", "forward"])
+    def take_order(self, request):
+        return request.param
+
+    @pytest.fixture(params=["float", "int", "string", "range"])
+    def dtype(self, request):
+        return request.param
+
+    @pytest.fixture
+    def index(self, order, dtype):
+        if dtype == "string":
+            index = ["a", "h", "f", "z"]
+        elif dtype == "int":
+            index = [-1, 10, 7, 14]
+        elif dtype == "float":
+            index = [-1.5, 7.10, 2.4, 11.2]
+        elif dtype == "range":
+            if order == "increasing":
+                return cudf.RangeIndex(2, 10, 3)
+            elif order == "decreasing":
+                return cudf.RangeIndex(10, 1, -3)
+            else:
+                return cudf.RangeIndex(10, 20, 3)
+        else:
+            raise ValueError(f"Unhandled index dtype {dtype}")
+        if order == "decreasing":
+            return sorted(index, reverse=True)
+        elif order == "increasing":
+            return sorted(index)
+        elif order == "neither":
+            return index
+        else:
+            raise ValueError(f"Unhandled index order {order}")
+
+    @pytest.fixture
+    def df(self, index):
+        return cudf.DataFrame({"a": range(len(index))}, index=index)
+
+    def test_loc_index_inindex_slice(self, df, take_order):
+        pdf = df.to_pandas()
+        lo = pdf.index[1]
+        hi = pdf.index[-2]
+        expect = pdf.loc[lo:hi:take_order]
+        actual = df.loc[lo:hi:take_order]
+        assert_eq(expect, actual)
+
+    def test_loc_index_inindex_subset(self, df, take_order):
+        pdf = df.to_pandas()
+        vals = [pdf.index[0], pdf.index[2]][::take_order]
+        expect = pdf.loc[vals]
+        actual = df.loc[vals]
+        assert_eq(expect, actual)
+
+    def test_loc_index_notinindex_slice(
+        self, request, df, order, dtype, take_order
+    ):
+        pdf = df.to_pandas()
+        lo = pdf.index[1]
+        hi = pdf.index[-2]
+        if isinstance(lo, str):
+            lo = chr(ord(lo) - 1)
+            hi = chr(ord(hi) + 1)
+        else:
+            lo -= 1
+            hi += 1
+        if order == "neither" and dtype != "range":
+            with pytest.raises(KeyError):
+                pdf.loc[lo:hi:take_order]
+            with pytest.raises(KeyError):
+                df.loc[lo:hi:take_order]
+        else:
+            expect = pdf.loc[lo:hi:take_order]
+            actual = df.loc[lo:hi:take_order]
+            assert_eq(expect, actual)
+
+
+@pytest.mark.parametrize(
+    "arg",
+    [
+        (2, ("one", "second")),
+        (slice(None, None, None), ("two", "first")),
+        (1, ("one", "first")),
+        (slice(None, None, None), ("two", "second")),
+        (slice(None, None, None), ("two", "first", "three")),
+        (3, ("two", "first", "three")),
+        (slice(None, None, None), ("two",)),
+        (0, ("two",)),
+    ],
+)
+def test_loc_dataframe_column_multiindex(arg):
+    gdf = cudf.DataFrame(
+        [list("abcd"), list("efgh"), list("ijkl"), list("mnop")],
+        columns=cudf.MultiIndex.from_product(
+            [["one", "two"], ["first", "second"], ["three"]]
+        ),
+    )
+    pdf = gdf.to_pandas()
+
+    assert_eq(gdf.loc[arg], pdf.loc[arg])
+
+
+@pytest.mark.parametrize(
+    "arg", [slice(2, 4), slice(2, 5), slice(2.3, 5), slice(4.6, 6)]
+)
+def test_series_iloc_float_int(arg):
+    gs = cudf.Series(range(4), index=[2.0, 3.0, 4.5, 5.5])
+    ps = gs.to_pandas()
+
+    actual = gs.loc[arg]
+    expected = ps.loc[arg]
+
+    assert_eq(actual, expected)

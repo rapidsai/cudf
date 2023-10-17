@@ -28,7 +28,7 @@ concurrency:
 jobs:
   cpp-build:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-build.yaml@cuda-118
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-build.yaml@branch-23.12
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -37,7 +37,7 @@ jobs:
   python-build:
     needs: [cpp-build]
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-build.yaml@cuda-118
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-build.yaml@branch-23.12
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -46,27 +46,40 @@ jobs:
   upload-conda:
     needs: [cpp-build, python-build]
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-upload-packages.yaml@cuda-118
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-upload-packages.yaml@branch-23.12
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      skip_upload_pkgs: libcudf-example
+  docs-build:
+    if: github.ref_type == 'branch'
+    needs: python-build
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@branch-23.12
+    with:
+      arch: "amd64"
+      branch: ${{ inputs.branch }}
+      build_type: ${{ inputs.build_type || 'branch' }}
+      container_image: "rapidsai/ci-conda:latest"
+      date: ${{ inputs.date }}
+      node_type: "gpu-v100-latest-1"
+      run_script: "ci/build_docs.sh"
       sha: ${{ inputs.sha }}
   wheel-build-cudf:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-build.yml@cuda-118
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-build.yaml@branch-23.12
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
-      package-name: cudf
-      package-dir: python/cudf
-      skbuild-configure-options: "-DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF"
+      script: ci/build_wheel_cudf.sh
   wheel-publish-cudf:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-publish.yml@cuda-118
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-publish.yaml@branch-23.12
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -76,18 +89,18 @@ jobs:
   wheel-build-dask-cudf:
     needs: wheel-publish-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-build.yml@cuda-118
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-build.yaml@branch-23.12
     with:
+      matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
-      package-name: dask_cudf
-      package-dir: python/dask_cudf
+      script: ci/build_wheel_dask_cudf.sh
   wheel-publish-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-publish.yml@cuda-118
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-publish.yaml@branch-23.12
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}

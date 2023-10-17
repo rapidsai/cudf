@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,5 +35,16 @@ namespace cudf {
  * @return true if column types match
  */
 bool column_types_equal(column_view const& lhs, column_view const& rhs);
+
+/**
+ * @brief Compare the type IDs of two `column_view`s
+ * This function returns true if the type of `lhs` equals that of `rhs`.
+ * - For fixed point types, the scale is ignored.
+ *
+ * @param lhs The first `column_view` to compare
+ * @param rhs The second `column_view` to compare
+ * @return true if column types match
+ */
+bool column_types_equivalent(column_view const& lhs, column_view const& rhs);
 
 }  // namespace cudf

@@ -1869,3 +1869,16 @@ def test_concat_invalid_axis(axis):
     s = gd.Series([1, 2, 3])
     with pytest.raises(ValueError):
         gd.concat([s], axis=axis)
+
+
+@pytest.mark.parametrize(
+    "s1,s2",
+    [
+        ([1, 2], [[1, 2], [3, 4]]),
+    ],
+)
+def test_concat_mixed_list_types_error(s1, s2):
+    s1, s2 = gd.Series(s1), gd.Series(s2)
+
+    with pytest.raises(NotImplementedError):
+        gd.concat([s1, s2], ignore_index=True)

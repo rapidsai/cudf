@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
@@ -163,10 +163,10 @@ def split_re(Column source_strings,
     cdef column_view source_view = source_strings.view()
     cdef string pattern_string = <string>str(pattern).encode()
     cdef regex_flags c_flags = regex_flags.DEFAULT
-    cdef unique_ptr[regex_program] c_prog = \
-        regex_program.create(pattern_string, c_flags)
+    cdef unique_ptr[regex_program] c_prog
 
     with nogil:
+        c_prog = move(regex_program.create(pattern_string, c_flags))
         c_result = move(cpp_split_re(
             source_view,
             dereference(c_prog),
@@ -192,10 +192,10 @@ def rsplit_re(Column source_strings,
     cdef column_view source_view = source_strings.view()
     cdef string pattern_string = <string>str(pattern).encode()
     cdef regex_flags c_flags = regex_flags.DEFAULT
-    cdef unique_ptr[regex_program] c_prog = \
-        regex_program.create(pattern_string, c_flags)
+    cdef unique_ptr[regex_program] c_prog
 
     with nogil:
+        c_prog = move(regex_program.create(pattern_string, c_flags))
         c_result = move(cpp_rsplit_re(
             source_view,
             dereference(c_prog),
@@ -220,10 +220,10 @@ def split_record_re(Column source_strings,
     cdef column_view source_view = source_strings.view()
     cdef string pattern_string = <string>str(pattern).encode()
     cdef regex_flags c_flags = regex_flags.DEFAULT
-    cdef unique_ptr[regex_program] c_prog = \
-        regex_program.create(pattern_string, c_flags)
+    cdef unique_ptr[regex_program] c_prog
 
     with nogil:
+        c_prog = move(regex_program.create(pattern_string, c_flags))
         c_result = move(cpp_split_record_re(
             source_view,
             dereference(c_prog),
@@ -248,10 +248,10 @@ def rsplit_record_re(Column source_strings,
     cdef column_view source_view = source_strings.view()
     cdef string pattern_string = <string>str(pattern).encode()
     cdef regex_flags c_flags = regex_flags.DEFAULT
-    cdef unique_ptr[regex_program] c_prog = \
-        regex_program.create(pattern_string, c_flags)
+    cdef unique_ptr[regex_program] c_prog
 
     with nogil:
+        c_prog = move(regex_program.create(pattern_string, c_flags))
         c_result = move(cpp_rsplit_record_re(
             source_view,
             dereference(c_prog),

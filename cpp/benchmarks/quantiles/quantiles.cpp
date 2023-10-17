@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,16 +24,15 @@
 #include <thrust/execution_policy.h>
 #include <thrust/tabulate.h>
 
-class Quantiles : public cudf::benchmark {
-};
+class Quantiles : public cudf::benchmark {};
 
 static void BM_quantiles(benchmark::State& state, bool nulls)
 {
   using Type = int;
 
-  const cudf::size_type n_rows{(cudf::size_type)state.range(0)};
-  const cudf::size_type n_cols{(cudf::size_type)state.range(1)};
-  const cudf::size_type n_quantiles{(cudf::size_type)state.range(2)};
+  cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
+  cudf::size_type const n_cols{(cudf::size_type)state.range(1)};
+  cudf::size_type const n_quantiles{(cudf::size_type)state.range(2)};
 
   // Create columns with values in the range [0,100)
   data_profile profile = data_profile_builder().cardinality(0).distribution(

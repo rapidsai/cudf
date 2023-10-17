@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import datetime
 from collections import namedtuple
@@ -11,11 +11,8 @@ import pyarrow as pa
 from pandas.core.dtypes.common import infer_dtype_from_object
 
 import cudf
+from cudf._typing import DtypeObj
 from cudf.api.types import is_bool, is_float, is_integer
-from cudf.core._compat import PANDAS_GE_120
-from cudf.core.missing import NA
-
-_NA_REP = "<NA>"
 
 """Map numpy dtype to pyarrow types.
 Note that np.bool_ bitwidth (8) is different from pa.bool_ (1). Special
@@ -90,13 +87,13 @@ pandas_dtypes_alias_to_cudf_alias = {
     "boolean": "bool",
 }
 
-if PANDAS_GE_120:
-    np_dtypes_to_pandas_dtypes[np.dtype("float32")] = pd.Float32Dtype()
-    np_dtypes_to_pandas_dtypes[np.dtype("float64")] = pd.Float64Dtype()
-    pandas_dtypes_to_np_dtypes[pd.Float32Dtype()] = np.dtype("float32")
-    pandas_dtypes_to_np_dtypes[pd.Float64Dtype()] = np.dtype("float64")
-    pandas_dtypes_alias_to_cudf_alias["Float32"] = "float32"
-    pandas_dtypes_alias_to_cudf_alias["Float64"] = "float64"
+
+np_dtypes_to_pandas_dtypes[np.dtype("float32")] = pd.Float32Dtype()
+np_dtypes_to_pandas_dtypes[np.dtype("float64")] = pd.Float64Dtype()
+pandas_dtypes_to_np_dtypes[pd.Float32Dtype()] = np.dtype("float32")
+pandas_dtypes_to_np_dtypes[pd.Float64Dtype()] = np.dtype("float64")
+pandas_dtypes_alias_to_cudf_alias["Float32"] = "float32"
+pandas_dtypes_alias_to_cudf_alias["Float64"] = "float64"
 
 SIGNED_INTEGER_TYPES = {"int8", "int16", "int32", "int64"}
 UNSIGNED_TYPES = {"uint8", "uint16", "uint32", "uint64"}
@@ -261,14 +258,30 @@ def to_cudf_compatible_scalar(val, dtype=None):
     ) or cudf.api.types.is_string_dtype(dtype):
         dtype = "str"
 
-    if isinstance(val, datetime.datetime):
-        val = np.datetime64(val)
-    elif isinstance(val, datetime.timedelta):
-        val = np.timedelta64(val)
-    elif isinstance(val, pd.Timestamp):
+        if isinstance(val, str) and val.endswith("\x00"):
+            # Numpy string dtypes are fixed width and use NULL to
+            # indicate the end of the string, so they cannot
+            # distinguish between "abc\x00" and "abc".
+            # https://github.com/numpy/numpy/issues/20118
+            # In this case, don't try going through numpy and just use
+            # the string value directly (cudf.DeviceScalar will DTRT)
+            return val
+
+    tz_error_msg = (
+        "Cannot covert a timezone-aware timestamp to timezone-naive scalar."
+    )
+    if isinstance(val, pd.Timestamp):
+        if val.tz is not None:
+            raise NotImplementedError(tz_error_msg)
         val = val.to_datetime64()
     elif isinstance(val, pd.Timedelta):
         val = val.to_timedelta64()
+    elif isinstance(val, datetime.datetime):
+        if val.tzinfo is not None:
+            raise NotImplementedError(tz_error_msg)
+        val = np.datetime64(val)
+    elif isinstance(val, datetime.timedelta):
+        val = np.timedelta64(val)
 
     val = _maybe_convert_to_default_type(
         cudf.api.types.pandas_dtype(type(val))
@@ -413,6 +426,11 @@ def get_min_float_dtype(col):
 
 
 def is_mixed_with_object_dtype(lhs, rhs):
+    if cudf.api.types.is_categorical_dtype(lhs.dtype):
+        return is_mixed_with_object_dtype(lhs.dtype.categories, rhs)
+    elif cudf.api.types.is_categorical_dtype(rhs.dtype):
+        return is_mixed_with_object_dtype(lhs, rhs.dtype.categories)
+
     return (lhs.dtype == "object" and rhs.dtype != "object") or (
         rhs.dtype == "object" and lhs.dtype != "object"
     )
@@ -443,24 +461,6 @@ def _get_nan_for_dtype(dtype):
         return dtype.type("nan")
     else:
         return np.float64("nan")
-
-
-def _decimal_to_int64(decimal: Decimal) -> int:
-    """
-    Scale a Decimal such that the result is the integer
-    that would result from removing the decimal point.
-
-    Examples
-    --------
-    >>> _decimal_to_int64(Decimal('1.42'))
-    142
-    >>> _decimal_to_int64(Decimal('0.0042'))
-    42
-    >>> _decimal_to_int64(Decimal('-1.004201'))
-    -1004201
-
-    """
-    return int(f"{decimal:0f}".replace(".", ""))
 
 
 def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
@@ -572,6 +572,27 @@ def find_common_type(dtypes):
             )
         else:
             return cudf.dtype("O")
+    if any(cudf.api.types.is_list_dtype(dtype) for dtype in dtypes):
+        if len(dtypes) == 1:
+            return dtypes.get(0)
+        else:
+            # TODO: As list dtypes allow casting
+            # to identical types, improve this logic of returning a
+            # common dtype, for example:
+            # ListDtype(int64) & ListDtype(int32) common
+            # dtype could be ListDtype(int64).
+            raise NotImplementedError(
+                "Finding a common type for `ListDtype` is currently "
+                "not supported"
+            )
+    if any(cudf.api.types.is_struct_dtype(dtype) for dtype in dtypes):
+        if len(dtypes) == 1:
+            return dtypes.get(0)
+        else:
+            raise NotImplementedError(
+                "Finding a common type for `StructDtype` is currently "
+                "not supported"
+            )
 
     # Corner case 1:
     # Resort to np.result_type to handle "M" and "m" types separately
@@ -595,6 +616,16 @@ def find_common_type(dtypes):
     return cudf.dtype(common_dtype)
 
 
+def _dtype_pandas_compatible(dtype):
+    """
+    A utility function, that returns `str` instead of `object`
+    dtype when pandas comptibility mode is enabled.
+    """
+    if cudf.get_option("mode.pandas_compatible") and dtype == cudf.dtype("O"):
+        return "str"
+    return dtype
+
+
 def _can_cast(from_dtype, to_dtype):
     """
     Utility function to determine if we can cast
@@ -602,7 +633,7 @@ def _can_cast(from_dtype, to_dtype):
     `np.can_cast` but with some special handling around
     cudf specific dtypes.
     """
-    if from_dtype in {None, NA}:
+    if cudf.utils.utils.is_na_like(from_dtype):
         return True
     if isinstance(from_dtype, type):
         from_dtype = cudf.dtype(from_dtype)
@@ -707,6 +738,16 @@ def _dtype_can_hold_element(dtype: np.dtype, element) -> bool:
         return False
 
     raise NotImplementedError(f"Unsupported dtype: {dtype}")
+
+
+def _get_base_dtype(dtype: DtypeObj) -> DtypeObj:
+    # TODO: replace the use of this function with just `dtype.base`
+    # when Pandas 2.1.0 is the minimum version we support:
+    # https://github.com/pandas-dev/pandas/pull/52706
+    if isinstance(dtype, pd.DatetimeTZDtype):
+        return np.dtype(f"<M8[{dtype.unit}]")
+    else:
+        return dtype.base
 
 
 # Type dispatch loops similar to what are found in `np.add.types`

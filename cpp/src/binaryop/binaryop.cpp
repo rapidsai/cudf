@@ -136,13 +136,11 @@ namespace jit {
 void binary_operation(mutable_column_view& out,
                       column_view const& lhs,
                       column_view const& rhs,
-                      const std::string& ptx,
+                      std::string const& ptx,
                       rmm::cuda_stream_view stream)
 {
   std::string const output_type_name = cudf::type_to_name(out.type());
 
-  std::string ptx_hash =
-    "prog_binop." + std::to_string(std::hash<std::string>{}(ptx + output_type_name));
   std::string cuda_source =
     cudf::jit::parse_single_function_ptx(ptx, "GENERIC_BINARY_OP", output_type_name);
 
@@ -203,7 +201,7 @@ std::unique_ptr<column> binary_operation(LhsType const& lhs,
     return cudf::binops::compiled::string_null_min_max(lhs, rhs, op, output_type, stream, mr);
 
   if (not cudf::binops::compiled::is_supported_operation(output_type, lhs.type(), rhs.type(), op))
-    CUDF_FAIL("Unsupported operator for these types");
+    CUDF_FAIL("Unsupported operator for these types", cudf::data_type_error);
 
   if (cudf::is_fixed_point(lhs.type()) or cudf::is_fixed_point(rhs.type())) {
     cudf::binops::compiled::fixed_point_binary_operation_validation(
@@ -219,6 +217,8 @@ std::unique_ptr<column> binary_operation(LhsType const& lhs,
 
   auto out_view = out->mutable_view();
   cudf::binops::compiled::binary_operation(out_view, lhs, rhs, op, stream);
+  // TODO: consider having the binary_operation count nulls instead
+  out->set_null_count(cudf::detail::null_count(out_view.null_mask(), 0, out->size(), stream));
   return out;
 }
 }  // namespace compiled
@@ -375,6 +375,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
   auto out_view = out->mutable_view();
   binops::jit::binary_operation(out_view, lhs, rhs, ptx, stream);
+  out->set_null_count(cudf::detail::null_count(out_view.null_mask(), 0, out->size(), stream));
   return out;
 }
 }  // namespace detail
@@ -404,38 +405,42 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          column_view const& rhs,
                                          binary_operator op,
                                          data_type output_type,
+                                         rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::binary_operation(lhs, rhs, op, output_type, cudf::get_default_stream(), mr);
+  return detail::binary_operation(lhs, rhs, op, output_type, stream, mr);
 }
 std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          scalar const& rhs,
                                          binary_operator op,
                                          data_type output_type,
+                                         rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::binary_operation(lhs, rhs, op, output_type, cudf::get_default_stream(), mr);
+  return detail::binary_operation(lhs, rhs, op, output_type, stream, mr);
 }
 std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          column_view const& rhs,
                                          binary_operator op,
                                          data_type output_type,
+                                         rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::binary_operation(lhs, rhs, op, output_type, cudf::get_default_stream(), mr);
+  return detail::binary_operation(lhs, rhs, op, output_type, stream, mr);
 }
 
 std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          column_view const& rhs,
                                          std::string const& ptx,
                                          data_type output_type,
+                                         rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::binary_operation(lhs, rhs, ptx, output_type, cudf::get_default_stream(), mr);
+  return detail::binary_operation(lhs, rhs, ptx, output_type, stream, mr);
 }
 
 }  // namespace cudf

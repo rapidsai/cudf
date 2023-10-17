@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
+import decimal
 import hashlib
 import operator
 import re
@@ -13,11 +14,13 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_120, PANDAS_LT_140
+from cudf.core._compat import PANDAS_LT_140
 from cudf.testing._utils import (
     NUMERIC_TYPES,
+    SERIES_OR_INDEX_NAMES,
     TIMEDELTA_TYPES,
-    _create_pandas_series,
+    _create_cudf_series_float64_default,
+    _create_pandas_series_float64_default,
     assert_eq,
     assert_exceptions_equal,
     expect_warning_if,
@@ -398,8 +401,8 @@ def test_series_tolist(data):
     [[], [None, None], ["a"], ["a", "b", "c"] * 500, [1.0, 2.0, 0.3] * 57],
 )
 def test_series_size(data):
-    psr = _create_pandas_series(data)
-    gsr = cudf.Series(data)
+    psr = _create_pandas_series_float64_default(data)
+    gsr = _create_cudf_series_float64_default(data)
 
     assert_eq(psr.size, gsr.size)
 
@@ -408,7 +411,8 @@ def test_series_size(data):
 def test_series_describe_numeric(dtype):
     ps = pd.Series([0, 1, 2, 3, 1, 2, 3], dtype=dtype)
     gs = cudf.from_pandas(ps)
-    actual = gs.describe()
+    with pytest.warns(FutureWarning):
+        actual = gs.describe()
     expected = ps.describe()
 
     assert_eq(expected, actual, check_dtype=True)
@@ -426,7 +430,8 @@ def test_series_describe_datetime(dtype):
     # Treating datetimes as categoricals is deprecated in pandas and will
     # be removed in future. Future behavior is treating datetime as numeric.
     expected = ps.describe(datetime_is_numeric=True)
-    actual = gs.describe()
+    with pytest.warns(FutureWarning):
+        actual = gs.describe()
 
     assert_eq(expected.astype("str"), actual)
 
@@ -437,7 +442,8 @@ def test_series_describe_timedelta(dtype):
     gs = cudf.from_pandas(ps)
 
     expected = ps.describe()
-    actual = gs.describe()
+    with pytest.warns(FutureWarning):
+        actual = gs.describe()
 
     assert_eq(actual, expected.astype("str"))
 
@@ -462,7 +468,8 @@ def test_series_describe_other_types(ps):
     gs = cudf.from_pandas(ps)
 
     expected = ps.describe()
-    actual = gs.describe()
+    with pytest.warns(FutureWarning):
+        actual = gs.describe()
 
     if len(ps) == 0:
         assert_eq(expected.fillna("a").astype("str"), actual.fillna("a"))
@@ -481,15 +488,60 @@ def test_series_describe_other_types(ps):
 )
 @pytest.mark.parametrize("na_sentinel", [99999, 11, -1, 0])
 def test_series_factorize(data, na_sentinel):
-    gsr = cudf.Series(data)
+    gsr = _create_cudf_series_float64_default(data)
     psr = gsr.to_pandas()
 
     with pytest.warns(FutureWarning):
         expected_labels, expected_cats = psr.factorize(na_sentinel=na_sentinel)
-    actual_labels, actual_cats = gsr.factorize(na_sentinel=na_sentinel)
+    with pytest.warns(FutureWarning):
+        actual_labels, actual_cats = gsr.factorize(na_sentinel=na_sentinel)
 
     assert_eq(expected_labels, actual_labels.get())
     assert_eq(expected_cats.values, actual_cats.to_pandas().values)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 2, 1],
+        [1, 2, None, 3, 1, 1],
+        [],
+        ["a", "b", "c", None, "z", "a"],
+    ],
+)
+@pytest.mark.parametrize("use_na_sentinel", [True, False])
+def test_series_factorize_use_na_sentinel(data, use_na_sentinel):
+    gsr = _create_cudf_series_float64_default(data)
+    psr = gsr.to_pandas(nullable=True)
+
+    expected_labels, expected_cats = psr.factorize(
+        use_na_sentinel=use_na_sentinel, sort=True
+    )
+    actual_labels, actual_cats = gsr.factorize(
+        use_na_sentinel=use_na_sentinel, sort=True
+    )
+    assert_eq(expected_labels, actual_labels.get())
+    assert_eq(expected_cats, actual_cats.to_pandas(nullable=True))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 2, 1],
+        [1, 2, None, 3, 1, 1],
+        [],
+        ["a", "b", "c", None, "z", "a"],
+    ],
+)
+@pytest.mark.parametrize("sort", [True, False])
+def test_series_factorize_sort(data, sort):
+    gsr = _create_cudf_series_float64_default(data)
+    psr = gsr.to_pandas(nullable=True)
+
+    expected_labels, expected_cats = psr.factorize(sort=sort)
+    actual_labels, actual_cats = gsr.factorize(sort=sort)
+    assert_eq(expected_labels, actual_labels.get())
+    assert_eq(expected_cats, actual_cats.to_pandas(nullable=True))
 
 
 @pytest.mark.parametrize(
@@ -683,7 +735,7 @@ def test_series_value_counts_optional_arguments(ascending, dropna, normalize):
             ],
             dtype="datetime64[ns]",
         ),
-        cudf.Series(name="empty series"),
+        cudf.Series(name="empty series", dtype="float64"),
         cudf.Series(["a", "b", "c", " ", "a", "b", "z"], dtype="category"),
     ],
 )
@@ -1366,7 +1418,7 @@ def test_series_hash_values_invalid_method():
 
 
 def test_set_index_unequal_length():
-    s = cudf.Series()
+    s = cudf.Series(dtype="float64")
     with pytest.raises(ValueError):
         s.index = [1, 2, 3]
 
@@ -1633,7 +1685,7 @@ def test_series_nunique_index(data):
     ],
 )
 def test_axes(data):
-    csr = cudf.Series(data)
+    csr = _create_cudf_series_float64_default(data)
     psr = csr.to_pandas()
 
     expected = psr.axes
@@ -1711,7 +1763,7 @@ def test_series_truncate_datetimeindex():
 )
 def test_isin_numeric(data, values):
     index = np.random.randint(0, 100, len(data))
-    psr = _create_pandas_series(data, index=index)
+    psr = _create_pandas_series_float64_default(data, index=index)
     gsr = cudf.Series.from_pandas(psr, nan_as_null=False)
 
     expected = psr.isin(values)
@@ -1771,7 +1823,7 @@ def test_fill_new_category():
     ],
 )
 def test_isin_datetime(data, values):
-    psr = _create_pandas_series(data)
+    psr = _create_pandas_series_float64_default(data)
     gsr = cudf.Series.from_pandas(psr)
 
     got = gsr.isin(values)
@@ -1795,19 +1847,12 @@ def test_isin_datetime(data, values):
         ["this", "is"],
         [None, None, None],
         ["12", "14", "19"],
-        pytest.param(
-            [12, 14, 19],
-            marks=pytest.mark.xfail(
-                not PANDAS_GE_120,
-                reason="pandas's failure here seems like a bug(in < 1.2) "
-                "given the reverse succeeds",
-            ),
-        ),
+        [12, 14, 19],
         ["is", "this", "is", "this", "is"],
     ],
 )
 def test_isin_string(data, values):
-    psr = _create_pandas_series(data)
+    psr = _create_pandas_series_float64_default(data)
     gsr = cudf.Series.from_pandas(psr)
 
     got = gsr.isin(values)
@@ -1836,7 +1881,7 @@ def test_isin_string(data, values):
     ],
 )
 def test_isin_categorical(data, values):
-    psr = _create_pandas_series(data)
+    psr = _create_pandas_series_float64_default(data)
     gsr = cudf.Series.from_pandas(psr)
 
     got = gsr.isin(values)
@@ -2005,7 +2050,7 @@ def test_series_ordered_dedup():
     sr = cudf.Series(np.random.randint(0, 100, 1000))
     # pandas unique() preserves order
     expect = pd.Series(sr.to_pandas().unique())
-    got = cudf.Series(sr._column.unique(preserve_order=True))
+    got = cudf.Series(sr._column.unique())
     assert_eq(expect.values, got.values)
 
 
@@ -2057,7 +2102,7 @@ def test_series_to_dict(into):
     ],
 )
 def test_series_hasnans(data):
-    gs = cudf.Series(data, nan_as_null=False)
+    gs = _create_cudf_series_float64_default(data, nan_as_null=False)
     ps = gs.to_pandas(nullable=True)
 
     assert_eq(gs.hasnans, ps.hasnans)
@@ -2082,3 +2127,204 @@ def test_series_duplicated(data, index, keep):
     ps = gs.to_pandas()
 
     assert_eq(gs.duplicated(keep=keep), ps.duplicated(keep=keep))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 4],
+        [10, 20, None, None],
+    ],
+)
+@pytest.mark.parametrize("copy", [True, False])
+def test_series_copy(data, copy):
+    psr = pd.Series(data)
+    gsr = cudf.from_pandas(psr)
+
+    new_psr = pd.Series(psr, copy=copy)
+    new_gsr = cudf.Series(gsr, copy=copy)
+
+    new_psr.iloc[0] = 999
+    new_gsr.iloc[0] = 999
+
+    assert_eq(psr, gsr)
+    assert_eq(new_psr, new_gsr)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": 1, "b": 2, "c": 24, "d": 1010},
+        {"a": 1},
+    ],
+)
+@pytest.mark.parametrize(
+    "index", [None, ["b", "c"], ["d", "a", "c", "b"], ["a"]]
+)
+def test_series_init_dict_with_index(data, index):
+    pandas_series = pd.Series(data, index=index)
+    cudf_series = cudf.Series(data, index=index)
+
+    assert_eq(pandas_series, cudf_series)
+
+
+@pytest.mark.parametrize("data", ["abc", None, 1, 3.7])
+@pytest.mark.parametrize(
+    "index", [None, ["b", "c"], ["d", "a", "c", "b"], ["a"]]
+)
+def test_series_init_scalar_with_index(data, index):
+    pandas_series = _create_pandas_series_float64_default(data, index=index)
+    cudf_series = _create_cudf_series_float64_default(data, index=index)
+
+    assert_eq(
+        pandas_series,
+        cudf_series,
+        check_index_type=False if data is None and index is None else True,
+    )
+
+
+def test_series_init_error():
+    assert_exceptions_equal(
+        lfunc=pd.Series,
+        rfunc=cudf.Series,
+        lfunc_args_and_kwargs=([], {"data": [11], "index": [10, 11]}),
+        rfunc_args_and_kwargs=([], {"data": [11], "index": [10, 11]}),
+    )
+
+
+@pytest.mark.parametrize(
+    "dtype", ["datetime64[ns]", "timedelta64[ns]", "object", "str"]
+)
+def test_series_mixed_dtype_error(dtype):
+    ps = pd.concat([pd.Series([1, 2, 3], dtype=dtype), pd.Series([10, 11])])
+    with pytest.raises(TypeError):
+        cudf.Series(ps)
+    with pytest.raises(TypeError):
+        cudf.Series(ps.array)
+
+
+@pytest.mark.parametrize("data", [[True, False, None], [10, 200, 300]])
+@pytest.mark.parametrize("index", [None, [10, 20, 30]])
+def test_series_contains(data, index):
+    ps = pd.Series(data, index=index)
+    gs = cudf.from_pandas(ps)
+
+    assert_eq(1 in ps, 1 in gs)
+    assert_eq(10 in ps, 10 in gs)
+    assert_eq(True in ps, True in gs)
+    assert_eq(False in ps, False in gs)
+
+
+def test_series_from_pandas_sparse():
+    pser = pd.Series(range(2), dtype=pd.SparseDtype(np.int64, 0))
+    with pytest.raises(NotImplementedError):
+        cudf.Series(pser)
+
+
+def test_series_constructor_unbounded_sequence():
+    class A:
+        def __getitem__(self, key):
+            return 1
+
+    with pytest.raises(TypeError):
+        cudf.Series(A())
+
+
+def test_series_constructor_error_mixed_type():
+    with pytest.raises(pa.ArrowTypeError):
+        cudf.Series(["abc", np.nan, "123"], nan_as_null=False)
+
+
+def test_series_typecast_to_object_error():
+    actual = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(ValueError):
+            actual.astype(object)
+        with pytest.raises(ValueError):
+            actual.astype(np.dtype("object"))
+        new_series = actual.astype("str")
+        assert new_series[0] == "1970-01-01 00:00:00.000000001"
+
+
+def test_series_typecast_to_object():
+    actual = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
+    with cudf.option_context("mode.pandas_compatible", False):
+        new_series = actual.astype(object)
+        assert new_series[0] == "1970-01-01 00:00:00.000000001"
+        new_series = actual.astype(np.dtype("object"))
+        assert new_series[0] == "1970-01-01 00:00:00.000000001"
+
+
+@pytest.mark.parametrize("attr", ["nlargest", "nsmallest"])
+def test_series_nlargest_nsmallest_str_error(attr):
+    gs = cudf.Series(["a", "b", "c", "d", "e"])
+    ps = gs.to_pandas()
+
+    assert_exceptions_equal(
+        getattr(gs, attr), getattr(ps, attr), ([], {"n": 1}), ([], {"n": 1})
+    )
+
+
+def test_series_unique_pandas_compatibility():
+    gs = cudf.Series([10, 11, 12, 11, 10])
+    ps = gs.to_pandas()
+    with cudf.option_context("mode.pandas_compatible", True):
+        actual = gs.unique()
+    expected = ps.unique()
+    assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize("initial_name", SERIES_OR_INDEX_NAMES)
+@pytest.mark.parametrize("name", SERIES_OR_INDEX_NAMES)
+def test_series_rename(initial_name, name):
+    gsr = cudf.Series([1, 2, 3], name=initial_name)
+    psr = pd.Series([1, 2, 3], name=initial_name)
+
+    assert_eq(gsr, psr)
+
+    actual = gsr.rename(name)
+    expected = psr.rename(name)
+
+    assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1.2234242333234, 323432.3243423, np.nan],
+        pd.Series([34224, 324324, 324342], dtype="datetime64[ns]"),
+        pd.Series([224.242, None, 2424.234324], dtype="category"),
+        [
+            decimal.Decimal("342.3243234234242"),
+            decimal.Decimal("89.32432497687622"),
+            None,
+        ],
+    ],
+)
+@pytest.mark.parametrize("digits", [0, 1, 3, 4, 10])
+def test_series_round_builtin(data, digits):
+    ps = pd.Series(data)
+    gs = cudf.from_pandas(ps, nan_as_null=False)
+
+    # TODO: Remove `to_frame` workaround
+    # after following issue is fixed:
+    # https://github.com/pandas-dev/pandas/issues/55114
+    expected = round(ps.to_frame(), digits)[0]
+    expected.name = None
+    actual = round(gs, digits)
+
+    assert_eq(expected, actual)
+
+
+def test_series_empty_warning():
+    with pytest.warns(FutureWarning):
+        expected = pd.Series([])
+    with pytest.warns(FutureWarning):
+        actual = cudf.Series([])
+    assert_eq(expected, actual)
+
+
+def test_series_count_invalid_param():
+    s = cudf.Series([], dtype="float64")
+    with pytest.raises(TypeError):
+        s.count(skipna=True)

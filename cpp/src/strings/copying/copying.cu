@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,10 +73,13 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
   auto null_mask = cudf::detail::copy_bitmask(
     strings.null_mask(), offsets_offset, offsets_offset + strings_count, stream, mr);
 
+  auto null_count = cudf::detail::null_count(
+    static_cast<bitmask_type const*>(null_mask.data()), 0, strings_count, stream);
+
   return make_strings_column(strings_count,
                              std::move(offsets_column),
                              std::move(chars_column),
-                             UNKNOWN_NULL_COUNT,
+                             null_count,
                              std::move(null_mask));
 }
 

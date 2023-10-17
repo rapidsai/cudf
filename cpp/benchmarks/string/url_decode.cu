@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,8 +79,7 @@ auto generate_column(cudf::size_type num_rows, cudf::size_type chars_per_row, do
   return result_col;
 }
 
-class UrlDecode : public cudf::benchmark {
-};
+class UrlDecode : public cudf::benchmark {};
 
 void BM_url_decode(benchmark::State& state, int esc_seq_pct)
 {

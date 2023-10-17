@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,8 +23,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/convert/convert_lists.hpp>
 
-struct StringsFormatListsTest : public cudf::test::BaseFixture {
-};
+struct StringsFormatListsTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsFormatListsTest, EmptyList)
 {
@@ -61,8 +60,9 @@ TEST_F(StringsFormatListsTest, WithNulls)
                                cudf::test::iterators::null_at(1)};
   auto const view  = cudf::lists_column_view(input);
 
-  auto results  = cudf::strings::format_list_column(view);
-  auto expected = cudf::test::strings_column_wrapper(
+  auto null_scalar = cudf::string_scalar("NULL");
+  auto results     = cudf::strings::format_list_column(view, null_scalar);
+  auto expected    = cudf::test::strings_column_wrapper(
     {"[a,NULL,ccc]", "NULL", "[NULL,bb,ddd]", "[zzz,xxxxx]", "[v,,NULL,w]"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
@@ -133,11 +133,13 @@ TEST_F(StringsFormatListsTest, SlicedLists)
                                                     "[ééé,12345abcdef]",
                                                     "[www,12345]"});
 
+  auto null_scalar = cudf::string_scalar("NULL");
+
   // set of slice intervals: covers slicing the front, back, and middle
   std::vector<std::pair<int32_t, int32_t>> index_pairs({{0, 11}, {0, 4}, {3, 8}, {5, 11}});
   for (auto indexes : index_pairs) {
     auto sliced   = cudf::lists_column_view(cudf::slice(input, {indexes.first, indexes.second})[0]);
-    auto results  = cudf::strings::format_list_column(sliced);
+    auto results  = cudf::strings::format_list_column(sliced, null_scalar);
     auto expected = cudf::test::strings_column_wrapper(h_expected.begin() + indexes.first,
                                                        h_expected.begin() + indexes.second);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);

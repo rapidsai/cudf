@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -195,11 +195,17 @@ std::unique_ptr<column> rescale(column_view input,
       auto output_column = make_column_from_scalar(*scalar, input.size(), stream, mr);
       if (input.nullable()) {
         auto const null_mask = copy_bitmask(input, stream, mr);
-        output_column->set_null_mask(std::move(null_mask));
+        output_column->set_null_mask(std::move(null_mask), input.null_count());
       }
       return output_column;
     }
-    auto const scalar = make_fixed_point_scalar<T>(std::pow(10, -diff), scale_type{diff}, stream);
+
+    RepType scalar_value = 10;
+    for (int i = 1; i < -diff; ++i) {
+      scalar_value *= 10;
+    }
+
+    auto const scalar = make_fixed_point_scalar<T>(scalar_value, scale_type{diff}, stream);
     return detail::binary_operation(input, *scalar, binary_operator::DIV, type, stream, mr);
   }
 };
@@ -328,7 +334,7 @@ struct dispatch_unary_cast_to {
       auto output     = std::make_unique<column>(cudf::data_type{type.id(), input.type().scale()},
                                              size,
                                              rmm::device_buffer{size * cudf::size_of(type), stream},
-                                             copy_bitmask(input, stream),
+                                             copy_bitmask(input, stream, mr),
                                              input.null_count());
 
       mutable_column_view output_mutable = *output;

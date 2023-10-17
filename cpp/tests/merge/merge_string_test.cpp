@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,8 +41,7 @@ using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
 
 template <typename T>
-class MergeStringTest : public cudf::test::BaseFixture {
-};
+class MergeStringTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(MergeStringTest, cudf::test::FixedWidthTypes);
 

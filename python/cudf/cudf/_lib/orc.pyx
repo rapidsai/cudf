@@ -5,7 +5,7 @@ from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool, int
 from libcpp.map cimport map
-from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
@@ -21,6 +21,7 @@ except ImportError:
 
 cimport cudf._lib.cpp.io.types as cudf_io_types
 from cudf._lib.column cimport Column
+from cudf._lib.cpp.io.data_sink cimport data_sink
 from cudf._lib.cpp.io.orc cimport (
     chunked_orc_writer_options,
     orc_chunked_writer,
@@ -36,7 +37,6 @@ from cudf._lib.cpp.io.orc_metadata cimport (
 from cudf._lib.cpp.io.types cimport (
     column_in_metadata,
     compression_type,
-    data_sink,
     sink_info,
     source_info,
     table_input_metadata,
@@ -254,7 +254,7 @@ def write_orc(
     cdef compression_type compression_ = _get_comp_type(compression)
     cdef unique_ptr[data_sink] data_sink_c
     cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
-    cdef unique_ptr[table_input_metadata] tbl_meta
+    cdef table_input_metadata tbl_meta
     cdef map[string, string] user_data
     user_data[str.encode("pandas")] = str.encode(generate_pandas_metadata(
         table, index)
@@ -264,9 +264,9 @@ def write_orc(
         index is None and not isinstance(table._index, cudf.RangeIndex)
     ):
         tv = table_view_from_table(table)
-        tbl_meta = make_unique[table_input_metadata](tv)
+        tbl_meta = table_input_metadata(tv)
         for level, idx_name in enumerate(table._index.names):
-            tbl_meta.get().column_metadata[level].set_name(
+            tbl_meta.column_metadata[level].set_name(
                 str.encode(
                     _index_level_name(idx_name, level, table._column_names)
                 )
@@ -274,17 +274,17 @@ def write_orc(
         num_index_cols_meta = len(table._index.names)
     else:
         tv = table_view_from_table(table, ignore_index=True)
-        tbl_meta = make_unique[table_input_metadata](tv)
+        tbl_meta = table_input_metadata(tv)
         num_index_cols_meta = 0
 
     if cols_as_map_type is not None:
         cols_as_map_type = set(cols_as_map_type)
 
     for i, name in enumerate(table._column_names, num_index_cols_meta):
-        tbl_meta.get().column_metadata[i].set_name(name.encode())
+        tbl_meta.column_metadata[i].set_name(name.encode())
         _set_col_children_metadata(
             table[name]._column,
-            tbl_meta.get().column_metadata[i],
+            tbl_meta.column_metadata[i],
             (cols_as_map_type is not None)
             and (name in cols_as_map_type),
         )
@@ -292,7 +292,7 @@ def write_orc(
     cdef orc_writer_options c_orc_writer_options = move(
         orc_writer_options.builder(
             sink_info_c, tv
-        ).metadata(tbl_meta.get())
+        ).metadata(tbl_meta)
         .key_value_metadata(move(user_data))
         .compression(compression_)
         .enable_statistics(_get_orc_stat_freq(statistics))
@@ -341,11 +341,12 @@ cdef orc_reader_options make_orc_reader_options(
         orc_reader_options.builder(src)
         .stripes(strps)
         .skip_rows(skip_rows)
-        .num_rows(num_rows)
         .timestamp_type(data_type(timestamp_type))
         .use_index(use_index)
         .build()
     )
+    if num_rows >= 0:
+        opts.set_num_rows(num_rows)
 
     cdef vector[string] c_column_names
     if column_names is not None:
@@ -373,7 +374,7 @@ cdef class ORCWriter:
     cdef cudf_io_types.statistics_freq stat_freq
     cdef compression_type comp_type
     cdef object index
-    cdef unique_ptr[table_input_metadata] tbl_meta
+    cdef table_input_metadata tbl_meta
     cdef object cols_as_map_type
 
     def __cinit__(self,
@@ -422,32 +423,32 @@ cdef class ORCWriter:
         cdef table_view tv
 
         num_index_cols_meta = 0
-        self.tbl_meta = make_unique[table_input_metadata](
+        self.tbl_meta = table_input_metadata(
             table_view_from_table(table, ignore_index=True),
         )
         if self.index is not False:
             if isinstance(table._index, cudf.core.multiindex.MultiIndex):
                 tv = table_view_from_table(table)
-                self.tbl_meta = make_unique[table_input_metadata](tv)
+                self.tbl_meta = table_input_metadata(tv)
                 for level, idx_name in enumerate(table._index.names):
-                    self.tbl_meta.get().column_metadata[level].set_name(
+                    self.tbl_meta.column_metadata[level].set_name(
                         (str.encode(idx_name))
                     )
                 num_index_cols_meta = len(table._index.names)
             else:
                 if table._index.name is not None:
                     tv = table_view_from_table(table)
-                    self.tbl_meta = make_unique[table_input_metadata](tv)
-                    self.tbl_meta.get().column_metadata[0].set_name(
+                    self.tbl_meta = table_input_metadata(tv)
+                    self.tbl_meta.column_metadata[0].set_name(
                         str.encode(table._index.name)
                     )
                     num_index_cols_meta = 1
 
         for i, name in enumerate(table._column_names, num_index_cols_meta):
-            self.tbl_meta.get().column_metadata[i].set_name(name.encode())
+            self.tbl_meta.column_metadata[i].set_name(name.encode())
             _set_col_children_metadata(
                 table[name]._column,
-                self.tbl_meta.get().column_metadata[i],
+                self.tbl_meta.column_metadata[i],
                 (self.cols_as_map_type is not None)
                 and (name in self.cols_as_map_type),
             )
@@ -460,7 +461,7 @@ cdef class ORCWriter:
         with nogil:
             args = move(
                 chunked_orc_writer_options.builder(self.sink)
-                .metadata(self.tbl_meta.get())
+                .metadata(self.tbl_meta)
                 .key_value_metadata(move(user_data))
                 .compression(self.comp_type)
                 .enable_statistics(self.stat_freq)

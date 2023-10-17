@@ -44,6 +44,21 @@ struct tree_meta_t {
  */
 enum class json_col_t : char { ListColumn, StructColumn, StringColumn, Unknown };
 
+/**
+ * @brief Enum class to specify whether we just push onto and pop from the stack or whether we also
+ * reset to an empty stack on a newline character.
+ */
+enum class stack_behavior_t : char {
+  /// Opening brackets and braces, [, {, push onto the stack, closing brackets and braces, ], }, pop
+  /// from the stack
+  PushPopWithoutReset,
+
+  /// Opening brackets and braces, [, {, push onto the stack, closing brackets and braces, ], }, pop
+  /// from the stack. Newline characters are considered delimiters and therefore reset to an empty
+  /// stack.
+  ResetOnDelimiter
+};
+
 // Default name for a list's child column
 constexpr auto list_child_name{"element"};
 
@@ -76,11 +91,11 @@ struct json_column {
   // Counting the current number of items in this column
   row_offset_t current_offset = 0;
 
-  json_column()                    = default;
-  json_column(json_column&& other) = default;
-  json_column& operator=(json_column&&) = default;
-  json_column(const json_column&)       = delete;
-  json_column& operator=(const json_column&) = delete;
+  json_column()                              = default;
+  json_column(json_column&& other)           = default;
+  json_column& operator=(json_column&&)      = default;
+  json_column(json_column const&)            = delete;
+  json_column& operator=(json_column const&) = delete;
 
   /**
    * @brief Fills the rows up to the given \p up_to_row_offset with nulls.
@@ -133,7 +148,7 @@ struct device_json_column {
   rmm::device_uvector<row_offset_t> child_offsets;
 
   // Validity bitmap
-  rmm::device_uvector<bitmask_type> validity;
+  rmm::device_buffer validity;
 
   // Map of child columns, if applicable.
   // Following "element" as the default child column's name of a list column
@@ -175,11 +190,27 @@ namespace detail {
  * character of \p d_json_in, where a '{' represents that the corresponding input character is
  * within the context of a struct, a '[' represents that it is within the context of an array, and a
  * '_' symbol that it is at the root of the JSON.
+ * @param[in] stack_behavior Specifies the stack's behavior
  * @param[in] stream The cuda stream to dispatch GPU kernels to
  */
 void get_stack_context(device_span<SymbolT const> json_in,
                        SymbolT* d_top_of_stack,
+                       stack_behavior_t stack_behavior,
                        rmm::cuda_stream_view stream);
+
+/**
+ * @brief Post-processes a token stream that may contain tokens from invalid lines. Expects that the
+ * token stream begins with a LineEnd token.
+ *
+ * @param tokens The tokens to be post-processed
+ * @param token_indices The tokens' corresponding indices that are post-processed
+ * @param stream The cuda stream to dispatch GPU kernels to
+ * @return Returns the post-processed token stream
+ */
+std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> process_token_stream(
+  device_span<PdaTokenT const> tokens,
+  device_span<SymbolOffsetT const> token_indices,
+  rmm::cuda_stream_view stream);
 
 /**
  * @brief Parses the given JSON string and generates a tree representation of the given input.
@@ -191,11 +222,10 @@ void get_stack_context(device_span<SymbolT const> json_in,
  * @return A tree representation of the input JSON string as vectors of node type, parent index,
  * level, begin index, and end index in the input JSON string
  */
-tree_meta_t get_tree_representation(
-  device_span<PdaTokenT const> tokens,
-  device_span<SymbolOffsetT const> token_indices,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
+                                    device_span<SymbolOffsetT const> token_indices,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Traverse the tree representation of the JSON input in records orient format and populate
@@ -211,13 +241,12 @@ tree_meta_t get_tree_representation(
  * @return A tuple of the output column indices and the row offsets within each column for each node
  */
 std::tuple<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
-records_orient_tree_traversal(
-  device_span<SymbolT const> d_input,
-  tree_meta_t const& d_tree,
-  bool is_array_of_arrays,
-  bool is_enabled_lines,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+records_orient_tree_traversal(device_span<SymbolT const> d_input,
+                              tree_meta_t const& d_tree,
+                              bool is_array_of_arrays,
+                              bool is_enabled_lines,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Searches for and selects nodes at level `row_array_children_level`. For each selected
@@ -258,11 +287,10 @@ reduce_to_column_tree(tree_meta_t& tree,
  * All processing is done in device memory.
  *
  */
-table_with_metadata device_parse_nested_json(
-  device_span<SymbolT const> input,
-  cudf::io::json_reader_options const& options,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+table_with_metadata device_parse_nested_json(device_span<SymbolT const> input,
+                                             cudf::io::json_reader_options const& options,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Parses the given JSON string and generates table from the given input.
@@ -273,11 +301,10 @@ table_with_metadata device_parse_nested_json(
  * @param mr Optional, resource with which to allocate
  * @return The data parsed from the given JSON input
  */
-table_with_metadata host_parse_nested_json(
-  device_span<SymbolT const> input,
-  cudf::io::json_reader_options const& options,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+table_with_metadata host_parse_nested_json(device_span<SymbolT const> input,
+                                           cudf::io::json_reader_options const& options,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 

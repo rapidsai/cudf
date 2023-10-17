@@ -557,5 +557,6 @@ class RollingGroupby(Rolling):
             )
         )
 
-        result = super()._apply_agg(agg_name).set_index(index)
+        result = super()._apply_agg(agg_name)
+        result.index = index
         return result

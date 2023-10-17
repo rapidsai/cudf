@@ -1,12 +1,15 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 from enum import Enum
 
 from cython.operator cimport dereference
 from libc.stdint cimport int64_t
-from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.memory cimport unique_ptr
+from libcpp.string cimport string
+from libcpp.utility cimport move
 
 from cudf._lib.cpp cimport expressions as libcudf_exp
+from cudf._lib.cpp.libcpp.memory cimport make_unique
 from cudf._lib.cpp.types cimport size_type
 
 # Necessary for proper casting, see below.
@@ -43,6 +46,7 @@ class ASTOperator(Enum):
     NULL_LOGICAL_OR = libcudf_exp.ast_operator.NULL_LOGICAL_OR
     # Unary operators
     IDENTITY = libcudf_exp.ast_operator.IDENTITY
+    IS_NULL = libcudf_exp.ast_operator.IS_NULL
     SIN = libcudf_exp.ast_operator.SIN
     COS = libcudf_exp.ast_operator.COS
     TAN = libcudf_exp.ast_operator.TAN
@@ -77,53 +81,46 @@ class TableReference(Enum):
 # restrictive at the moment.
 cdef class Literal(Expression):
     def __cinit__(self, value):
-        # TODO: Would love to find a better solution than unions for literals.
-        cdef int intval
-        cdef double doubleval
-
         if isinstance(value, int):
-            self.c_scalar_type = scalar_type_t.INT
-            intval = value
-            self.c_scalar.int_ptr = make_unique[numeric_scalar[int64_t]](
-                intval, True
-            )
-            self.c_obj = <expression_ptr> make_unique[libcudf_exp.literal](
-                <numeric_scalar[int64_t] &>dereference(self.c_scalar.int_ptr)
-            )
+            self.c_scalar.reset(new numeric_scalar[int64_t](value, True))
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <numeric_scalar[int64_t] &>dereference(self.c_scalar)
+            ))
         elif isinstance(value, float):
-            self.c_scalar_type = scalar_type_t.DOUBLE
-            doubleval = value
-            self.c_scalar.double_ptr = make_unique[numeric_scalar[double]](
-                doubleval, True
-            )
-            self.c_obj = <expression_ptr> make_unique[libcudf_exp.literal](
-                <numeric_scalar[double] &>dereference(self.c_scalar.double_ptr)
-            )
+            self.c_scalar.reset(new numeric_scalar[double](value, True))
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <numeric_scalar[double] &>dereference(self.c_scalar)
+            ))
+        elif isinstance(value, str):
+            self.c_scalar.reset(new string_scalar(value.encode(), True))
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <string_scalar &>dereference(self.c_scalar)
+            ))
 
 
 cdef class ColumnReference(Expression):
     def __cinit__(self, size_type index):
-        self.c_obj = <expression_ptr>make_unique[libcudf_exp.column_reference](
+        self.c_obj = <expression_ptr>move(make_unique[libcudf_exp.column_reference](
             index
-        )
+        ))
 
 
 cdef class Operation(Expression):
     def __cinit__(self, op, Expression left, Expression right=None):
-        # This awkward double casting is the only way to get Cython to generate
-        # valid C++. Cython doesn't support scoped enumerations, so it assumes
-        # that enums correspond to their underlying value types and will thus
-        # attempt operations that are invalid without first explicitly casting
-        # to the underlying before casting to the desired type.
         cdef libcudf_exp.ast_operator op_value = <libcudf_exp.ast_operator>(
             <underlying_type_ast_operator> op.value
         )
 
         if right is None:
-            self.c_obj = <expression_ptr> make_unique[libcudf_exp.operation](
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.operation](
                 op_value, dereference(left.c_obj)
-            )
+            ))
         else:
-            self.c_obj = <expression_ptr> make_unique[libcudf_exp.operation](
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.operation](
                 op_value, dereference(left.c_obj), dereference(right.c_obj)
-            )
+            ))
+
+cdef class ColumnNameReference(Expression):
+    def __cinit__(self, string name):
+        self.c_obj = <expression_ptr> \
+            move(make_unique[libcudf_exp.column_name_reference](name))

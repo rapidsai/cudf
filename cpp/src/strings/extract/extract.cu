@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ namespace detail {
 
 namespace {
 
-using string_index_pair = thrust::pair<const char*, size_type>;
+using string_index_pair = thrust::pair<char const*, size_type>;
 
 /**
  * @brief This functor handles extracting strings by applying the compiled regex pattern
@@ -61,18 +61,19 @@ struct extract_fn {
 
     if (d_strings.is_valid(idx)) {
       auto const d_str = d_strings.element<string_view>(idx);
-
-      size_type begin = 0;
-      size_type end   = -1;  // handles empty strings automatically
-      if (d_prog.find(prog_idx, d_str, begin, end) > 0) {
+      auto const match = d_prog.find(prog_idx, d_str, d_str.begin());
+      if (match) {
+        auto const itr = d_str.begin() + match->first;
+        auto last_pos  = itr;
         for (auto col_idx = 0; col_idx < groups; ++col_idx) {
-          auto const extracted = d_prog.extract(prog_idx, d_str, begin, end, col_idx);
-          d_output[col_idx]    = [&] {
-            if (!extracted) return string_index_pair{nullptr, 0};
-            auto const offset = d_str.byte_offset((*extracted).first);
-            return string_index_pair{d_str.data() + offset,
-                                     d_str.byte_offset((*extracted).second) - offset};
-          }();
+          auto const extracted = d_prog.extract(prog_idx, d_str, itr, match->second, col_idx);
+          if (extracted) {
+            auto const d_extracted = string_from_match(*extracted, d_str, last_pos);
+            d_output[col_idx] = string_index_pair{d_extracted.data(), d_extracted.size_bytes()};
+            last_pos += (extracted->second - last_pos.position());
+          } else {
+            d_output[col_idx] = string_index_pair{nullptr, 0};
+          }
         }
         return;
       }
@@ -129,16 +130,6 @@ std::unique_ptr<table> extract(strings_column_view const& input,
 }  // namespace detail
 
 // external API
-
-std::unique_ptr<table> extract(strings_column_view const& strings,
-                               std::string_view pattern,
-                               regex_flags const flags,
-                               rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  auto const h_prog = regex_program::create(pattern, flags, capture_groups::EXTRACT);
-  return detail::extract(strings, *h_prog, cudf::get_default_stream(), mr);
-}
 
 std::unique_ptr<table> extract(strings_column_view const& strings,
                                regex_program const& prog,

@@ -32,12 +32,13 @@ from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
 from libcpp.map cimport map
-from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.unordered_map cimport unordered_map
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
+cimport cudf._lib.cpp.io.data_sink as cudf_io_data_sink
 cimport cudf._lib.cpp.io.types as cudf_io_types
 cimport cudf._lib.cpp.types as cudf_types
 from cudf._lib.column cimport Column
@@ -51,7 +52,7 @@ from cudf._lib.cpp.io.parquet cimport (
     write_parquet as parquet_writer,
 )
 from cudf._lib.cpp.io.types cimport column_in_metadata, table_input_metadata
-from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.libcpp.memory cimport make_unique
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type, size_type
 from cudf._lib.io.datasource cimport NativeFileDatasource
@@ -121,7 +122,6 @@ def _parse_metadata(meta):
 
 
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
-                   strings_to_categorical=False,
                    use_pandas_metadata=True):
     """
     Cython function to call into libcudf API, see `read_parquet`.
@@ -145,7 +145,6 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     cdef cudf_io_types.source_info source = make_source_info(
         filepaths_or_buffers)
 
-    cdef bool cpp_strings_to_categorical = strings_to_categorical
     cdef bool cpp_use_pandas_metadata = use_pandas_metadata
 
     cdef vector[vector[size_type]] cpp_row_groups
@@ -161,7 +160,6 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     args = move(
         parquet_reader_options.builder(source)
         .row_groups(cpp_row_groups)
-        .convert_strings_to_categories(cpp_strings_to_categorical)
         .use_pandas_metadata(cpp_use_pandas_metadata)
         .timestamp_type(cpp_timestamp_type)
         .build()
@@ -170,7 +168,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     allow_range_index = True
     if columns is not None:
         cpp_columns.reserve(len(columns))
-        allow_range_index = False
+        allow_range_index = len(columns) > 0
         for col in columns:
             cpp_columns.push_back(str(col).encode())
         args.set_columns(cpp_columns)
@@ -321,7 +319,8 @@ def write_parquet(
     object row_group_size_rows=None,
     object max_page_size_bytes=None,
     object max_page_size_rows=None,
-    object partitions_info=None
+    object partitions_info=None,
+    object force_nullable_schema=False,
 ):
     """
     Cython function to call into libcudf API, see `write_parquet`.
@@ -332,11 +331,11 @@ def write_parquet(
     """
 
     # Create the write options
-    cdef unique_ptr[table_input_metadata] tbl_meta
+    cdef table_input_metadata tbl_meta
 
     cdef vector[map[string, string]] user_data
     cdef table_view tv
-    cdef vector[unique_ptr[cudf_io_types.data_sink]] _data_sinks
+    cdef vector[unique_ptr[cudf_io_data_sink.data_sink]] _data_sinks
     cdef cudf_io_types.sink_info sink = make_sinks_info(
         filepaths_or_buffers, _data_sinks
     )
@@ -345,9 +344,9 @@ def write_parquet(
         index is None and not isinstance(table._index, cudf.RangeIndex)
     ):
         tv = table_view_from_table(table)
-        tbl_meta = make_unique[table_input_metadata](tv)
+        tbl_meta = table_input_metadata(tv)
         for level, idx_name in enumerate(table._index.names):
-            tbl_meta.get().column_metadata[level].set_name(
+            tbl_meta.column_metadata[level].set_name(
                 str.encode(
                     _index_level_name(idx_name, level, table._column_names)
                 )
@@ -355,16 +354,18 @@ def write_parquet(
         num_index_cols_meta = len(table._index.names)
     else:
         tv = table_view_from_table(table, ignore_index=True)
-        tbl_meta = make_unique[table_input_metadata](tv)
+        tbl_meta = table_input_metadata(tv)
         num_index_cols_meta = 0
 
     for i, name in enumerate(table._column_names, num_index_cols_meta):
         if not isinstance(name, str):
             raise ValueError("parquet must have string column names")
 
-        tbl_meta.get().column_metadata[i].set_name(name.encode())
+        tbl_meta.column_metadata[i].set_name(name.encode())
         _set_col_metadata(
-            table[name]._column, tbl_meta.get().column_metadata[i]
+            table[name]._column,
+            tbl_meta.column_metadata[i],
+            force_nullable_schema
         )
 
     cdef map[string, string] tmp_user_data
@@ -393,7 +394,7 @@ def write_parquet(
     # Perform write
     cdef parquet_writer_options args = move(
         parquet_writer_options.builder(sink, tv)
-        .metadata(tbl_meta.get())
+        .metadata(tbl_meta)
         .key_value_metadata(move(user_data))
         .compression(comp_type)
         .stats_level(stat_freq)
@@ -474,9 +475,9 @@ cdef class ParquetWriter:
     """
     cdef bool initialized
     cdef unique_ptr[cpp_parquet_chunked_writer] writer
-    cdef unique_ptr[table_input_metadata] tbl_meta
+    cdef table_input_metadata tbl_meta
     cdef cudf_io_types.sink_info sink
-    cdef vector[unique_ptr[cudf_io_types.data_sink]] _data_sink
+    cdef vector[unique_ptr[cudf_io_data_sink.data_sink]] _data_sink
     cdef cudf_io_types.statistics_freq stat_freq
     cdef cudf_io_types.compression_type comp_type
     cdef object index
@@ -574,30 +575,31 @@ cdef class ParquetWriter:
 
         # Set the table_metadata
         num_index_cols_meta = 0
-        self.tbl_meta = make_unique[table_input_metadata](
+        self.tbl_meta = table_input_metadata(
             table_view_from_table(table, ignore_index=True))
         if self.index is not False:
             if isinstance(table._index, cudf.core.multiindex.MultiIndex):
                 tv = table_view_from_table(table)
-                self.tbl_meta = make_unique[table_input_metadata](tv)
+                self.tbl_meta = table_input_metadata(tv)
                 for level, idx_name in enumerate(table._index.names):
-                    self.tbl_meta.get().column_metadata[level].set_name(
+                    self.tbl_meta.column_metadata[level].set_name(
                         (str.encode(idx_name))
                     )
                 num_index_cols_meta = len(table._index.names)
             else:
                 if table._index.name is not None:
                     tv = table_view_from_table(table)
-                    self.tbl_meta = make_unique[table_input_metadata](tv)
-                    self.tbl_meta.get().column_metadata[0].set_name(
+                    self.tbl_meta = table_input_metadata(tv)
+                    self.tbl_meta.column_metadata[0].set_name(
                         str.encode(table._index.name)
                     )
                     num_index_cols_meta = 1
 
         for i, name in enumerate(table._column_names, num_index_cols_meta):
-            self.tbl_meta.get().column_metadata[i].set_name(name.encode())
+            self.tbl_meta.column_metadata[i].set_name(name.encode())
             _set_col_metadata(
-                table[name]._column, self.tbl_meta.get().column_metadata[i]
+                table[name]._column,
+                self.tbl_meta.column_metadata[i],
             )
 
         index = (
@@ -613,7 +615,7 @@ cdef class ParquetWriter:
         with nogil:
             args = move(
                 chunked_parquet_writer_options.builder(self.sink)
-                .metadata(self.tbl_meta.get())
+                .metadata(self.tbl_meta)
                 .key_value_metadata(move(user_data))
                 .compression(self.comp_type)
                 .stats_level(self.stat_freq)
@@ -641,7 +643,7 @@ cpdef merge_filemetadata(object filemetadata_list):
 
     for blob_py in filemetadata_list:
         blob_c = blob_py
-        list_c.push_back(make_unique[vector[uint8_t]](blob_c))
+        list_c.push_back(move(make_unique[vector[uint8_t]](blob_c)))
 
     with nogil:
         output_c = move(parquet_merge_metadata(list_c))
@@ -675,15 +677,32 @@ cdef cudf_io_types.compression_type _get_comp_type(object compression):
         raise ValueError("Unsupported `compression` type")
 
 
-cdef _set_col_metadata(Column col, column_in_metadata& col_meta):
+cdef _set_col_metadata(
+    Column col,
+    column_in_metadata& col_meta,
+    bool force_nullable_schema=False,
+):
+    if force_nullable_schema:
+        # Only set nullability if `force_nullable_schema`
+        # is true.
+        col_meta.set_nullability(True)
+
     if is_struct_dtype(col):
         for i, (child_col, name) in enumerate(
             zip(col.children, list(col.dtype.fields))
         ):
             col_meta.child(i).set_name(name.encode())
-            _set_col_metadata(child_col, col_meta.child(i))
+            _set_col_metadata(
+                child_col,
+                col_meta.child(i),
+                force_nullable_schema
+            )
     elif is_list_dtype(col):
-        _set_col_metadata(col.children[1], col_meta.child(1))
+        _set_col_metadata(
+            col.children[1],
+            col_meta.child(1),
+            force_nullable_schema
+        )
     else:
         if is_decimal_dtype(col):
             col_meta.set_decimal_precision(col.dtype.precision)

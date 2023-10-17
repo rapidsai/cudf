@@ -21,8 +21,15 @@ CURRENT_SHORT_TAG=${CURRENT_MAJOR}.${CURRENT_MINOR}
 #Get <major>.<minor> for next version
 NEXT_MAJOR=$(echo $NEXT_FULL_TAG | awk '{split($0, a, "."); print a[1]}')
 NEXT_MINOR=$(echo $NEXT_FULL_TAG | awk '{split($0, a, "."); print a[2]}')
+NEXT_PATCH=$(echo $NEXT_FULL_TAG | awk '{split($0, a, "."); print a[3]}')
 NEXT_SHORT_TAG=${NEXT_MAJOR}.${NEXT_MINOR}
 NEXT_UCX_PY_VERSION="$(curl -sL https://version.gpuci.io/rapids/${NEXT_SHORT_TAG}).*"
+
+# Need to distutils-normalize the versions for some use cases
+CURRENT_SHORT_TAG_PEP440=$(python -c "from setuptools.extern import packaging; print(packaging.version.Version('${CURRENT_SHORT_TAG}'))")
+NEXT_SHORT_TAG_PEP440=$(python -c "from setuptools.extern import packaging; print(packaging.version.Version('${NEXT_SHORT_TAG}'))")
+PATCH_PEP440=$(python -c "from setuptools.extern import packaging; print(packaging.version.Version('${NEXT_PATCH}'))")
+echo "current is ${CURRENT_SHORT_TAG_PEP440}, next is ${NEXT_SHORT_TAG_PEP440}"
 
 echo "Preparing release $CURRENT_TAG => $NEXT_FULL_TAG"
 
@@ -34,17 +41,8 @@ function sed_runner() {
 # cpp update
 sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g' cpp/CMakeLists.txt
 
-# cpp stream testing update
-sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g' cpp/tests/utilities/identify_stream_usage/CMakeLists.txt
-
-# Python update
+# Python CMakeLists updates
 sed_runner 's/'"cudf_version .*)"'/'"cudf_version ${NEXT_FULL_TAG})"'/g' python/cudf/CMakeLists.txt
-
-# Strings UDF update
-sed_runner 's/'"strings_udf_version .*)"'/'"strings_udf_version ${NEXT_FULL_TAG})"'/g' python/strings_udf/CMakeLists.txt
-
-# Groupby UDF update
-sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g' python/cudf/udf_cpp/CMakeLists.txt
 
 # cpp libcudf_kafka update
 sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g' cpp/libcudf_kafka/CMakeLists.txt
@@ -52,11 +50,25 @@ sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g'
 # cpp cudf_jni update
 sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g' java/src/main/native/CMakeLists.txt
 
+# Python __init__.py updates
+sed_runner "s/__version__ = .*/__version__ = \"${NEXT_FULL_TAG}\"/g" python/cudf/cudf/__init__.py
+sed_runner "s/__version__ = .*/__version__ = \"${NEXT_FULL_TAG}\"/g" python/dask_cudf/dask_cudf/__init__.py
+sed_runner "s/__version__ = .*/__version__ = \"${NEXT_FULL_TAG}\"/g" python/cudf_kafka/cudf_kafka/__init__.py
+sed_runner "s/__version__ = .*/__version__ = \"${NEXT_FULL_TAG}\"/g" python/custreamz/custreamz/__init__.py
+
+# Python pyproject.toml updates
+sed_runner "s/^version = .*/version = \"${NEXT_FULL_TAG}\"/g" python/cudf/pyproject.toml
+sed_runner "s/^version = .*/version = \"${NEXT_FULL_TAG}\"/g" python/dask_cudf/pyproject.toml
+sed_runner "s/^version = .*/version = \"${NEXT_FULL_TAG}\"/g" python/cudf_kafka/pyproject.toml
+sed_runner "s/^version = .*/version = \"${NEXT_FULL_TAG}\"/g" python/custreamz/pyproject.toml
+
+# Wheel testing script
+sed_runner "s/branch-.*/branch-${NEXT_SHORT_TAG}/g" ci/test_wheel_dask_cudf.sh
+
 # rapids-cmake version
 sed_runner 's/'"branch-.*\/RAPIDS.cmake"'/'"branch-${NEXT_SHORT_TAG}\/RAPIDS.cmake"'/g' fetch_rapids.cmake
 
 # cmake-format rapids-cmake definitions
-sed_runner 's/'"branch-.*\/cmake-format-rapids-cmake.json"'/'"branch-${NEXT_SHORT_TAG}\/cmake-format-rapids-cmake.json"'/g' ci/checks/style.sh
 sed_runner 's/'"branch-.*\/cmake-format-rapids-cmake.json"'/'"branch-${NEXT_SHORT_TAG}\/cmake-format-rapids-cmake.json"'/g' ci/check_style.sh
 
 # doxyfile update
@@ -65,12 +77,27 @@ sed_runner 's/PROJECT_NUMBER         = .*/PROJECT_NUMBER         = '${NEXT_FULL_
 # sphinx docs update
 sed_runner 's/version = .*/version = '"'${NEXT_SHORT_TAG}'"'/g' docs/cudf/source/conf.py
 sed_runner 's/release = .*/release = '"'${NEXT_FULL_TAG}'"'/g' docs/cudf/source/conf.py
+sed_runner 's/version = .*/version = '"'${NEXT_SHORT_TAG}'"'/g' docs/dask_cudf/source/conf.py
+sed_runner 's/release = .*/release = '"'${NEXT_FULL_TAG}'"'/g' docs/dask_cudf/source/conf.py
 
-# bump rmm & dask-cuda
-for FILE in conda/environments/*.yaml dependencies.yaml; do
-  sed_runner "s/dask-cuda=${CURRENT_SHORT_TAG}/dask-cuda=${NEXT_SHORT_TAG}/g" ${FILE};
-  sed_runner "s/rmm=${CURRENT_SHORT_TAG}/rmm=${NEXT_SHORT_TAG}/g" ${FILE};
-  sed_runner "s/rmm-cu11=${CURRENT_SHORT_TAG}/rmm-cu11=${NEXT_SHORT_TAG}/g" ${FILE};
+DEPENDENCIES=(
+  cudf
+  cudf_kafka
+  custreamz
+  dask-cuda
+  dask-cudf
+  kvikio
+  libkvikio
+  librmm
+  rmm
+)
+for DEP in "${DEPENDENCIES[@]}"; do
+  for FILE in dependencies.yaml conda/environments/*.yaml; do
+    sed_runner "/-.* ${DEP}==/ s/==.*/==${NEXT_SHORT_TAG_PEP440}.*/g" ${FILE}
+  done
+  for FILE in python/*/pyproject.toml; do
+    sed_runner "/\"${DEP}==/ s/==.*\"/==${NEXT_SHORT_TAG_PEP440}.*\"/g" ${FILE}
+  done
 done
 
 # Doxyfile update
@@ -84,13 +111,15 @@ sed_runner "s/cudf=${CURRENT_SHORT_TAG}/cudf=${NEXT_SHORT_TAG}/g" README.md
 sed_runner "s/CUDF_TAG branch-${CURRENT_SHORT_TAG}/CUDF_TAG branch-${NEXT_SHORT_TAG}/" cpp/examples/basic/CMakeLists.txt
 sed_runner "s/CUDF_TAG branch-${CURRENT_SHORT_TAG}/CUDF_TAG branch-${NEXT_SHORT_TAG}/" cpp/examples/strings/CMakeLists.txt
 
-# ucx-py version update
-sed_runner "s/export UCX_PY_VERSION=.*/export UCX_PY_VERSION='${NEXT_UCX_PY_VERSION}'/g" ci/gpu/build.sh
-sed_runner "s/export UCX_PY_VERSION=.*/export UCX_PY_VERSION='${NEXT_UCX_PY_VERSION}'/g" ci/gpu/java.sh
+# CI files
+for FILE in .github/workflows/*.yaml; do
+  sed_runner "/shared-action-workflows/ s/@.*/@branch-${NEXT_SHORT_TAG}/g" "${FILE}"
+  sed_runner "s/dask-cuda.git@branch-[^\"\s]\+/dask-cuda.git@branch-${NEXT_SHORT_TAG}/g" ${FILE};
+done
+sed_runner "s/RAPIDS_VERSION_NUMBER=\".*/RAPIDS_VERSION_NUMBER=\"${NEXT_SHORT_TAG}\"/g" ci/build_docs.sh
 
-# Need to distutils-normalize the original version
-NEXT_SHORT_TAG_PEP440=$(python -c "from setuptools.extern import packaging; print(packaging.version.Version('${NEXT_SHORT_TAG}'))")
-
-# Wheel builds install intra-RAPIDS dependencies from same release
-sed_runner "s/rmm{cuda_suffix}.*\",/rmm{cuda_suffix}==${NEXT_SHORT_TAG_PEP440}.*\",/g" python/cudf/setup.py
-sed_runner "s/cudf{cuda_suffix}==.*\",/cudf{cuda_suffix}==${NEXT_SHORT_TAG_PEP440}.*\",/g" python/dask_cudf/setup.py
+# Java files
+NEXT_FULL_JAVA_TAG="${NEXT_SHORT_TAG}.${PATCH_PEP440}-SNAPSHOT"
+sed_runner "s|<version>.*-SNAPSHOT</version>|<version>${NEXT_FULL_JAVA_TAG}</version>|g" java/pom.xml
+sed_runner "s/branch-.*/branch-${NEXT_SHORT_TAG}/g" java/ci/README.md
+sed_runner "s/cudf-.*-SNAPSHOT/cudf-${NEXT_FULL_JAVA_TAG}/g" java/ci/README.md

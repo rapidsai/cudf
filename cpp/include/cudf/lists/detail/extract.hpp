@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,22 +27,20 @@ namespace detail {
  * rmm::mr::device_memory_resource*)
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> extract_list_element(
-  lists_column_view lists_column,
-  size_type const index,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
+                                             size_type const index,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::lists::extract_list_element(lists_column_view, column_view const&,
  * rmm::mr::device_memory_resource*)
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> extract_list_element(
-  lists_column_view lists_column,
-  column_view const& indices,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
+                                             column_view const& indices,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace lists

@@ -1,7 +1,5 @@
 # <div align="left"><img src="img/rapids_logo.png" width="90px"/>&nbsp;cuDF - GPU DataFrames</div>
 
-[![Build Status](https://gpuci.gpuopenanalytics.com/job/rapidsai/job/gpuci/job/cudf/job/branches/job/cudf-branch-pipeline/badge/icon)](https://gpuci.gpuopenanalytics.com/job/rapidsai/job/gpuci/job/cudf/job/branches/job/cudf-branch-pipeline/)
-
 **NOTE:** For the latest stable [README.md](https://github.com/rapidsai/cudf/blob/main/README.md) ensure you are on the `main` branch.
 
 ## Resources
@@ -63,17 +61,17 @@ Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapids
 
 ### Conda
 
-cuDF can be installed with conda ([miniconda](https://conda.io/miniconda.html), or the full [Anaconda distribution](https://www.anaconda.com/download)) from the `rapidsai` channel:
+cuDF can be installed with conda (via [miniconda](https://conda.io/miniconda.html) or the full [Anaconda distribution](https://www.anaconda.com/download)) from the `rapidsai` channel:
 
 ```bash
 conda install -c rapidsai -c conda-forge -c nvidia \
-    cudf=23.04 python=3.10 cudatoolkit=11.8
+    cudf=23.12 python=3.10 cuda-version=11.8
 ```
 
 We also provide [nightly Conda packages](https://anaconda.org/rapidsai-nightly) built from the HEAD
 of our latest development branch.
 
-Note: cuDF is supported only on Linux, and with Python versions 3.8 and later.
+Note: cuDF is supported only on Linux, and with Python versions 3.9 and later.
 
 See the [Get RAPIDS version picker](https://rapids.ai/start.html) for more OS and version info.
 

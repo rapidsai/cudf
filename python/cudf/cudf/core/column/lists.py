@@ -5,6 +5,7 @@ from typing import List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pyarrow as pa
+from typing_extensions import Self
 
 import cudf
 from cudf._lib.copying import segmented_gather
@@ -198,6 +199,11 @@ class ListColumn(ColumnBase):
 
         return self
 
+    def copy(self, deep: bool = True):
+        # Since list columns are immutable, both deep and shallow copies share
+        # the underlying device data and mask.
+        return super().copy(deep=False)
+
     def leaves(self):
         if isinstance(self.elements, ListColumn):
             return self.elements.leaves()
@@ -256,7 +262,7 @@ class ListColumn(ColumnBase):
         # Call libcudf to format the list column
         return format_list_column(lc, separators)
 
-    def _transform_leaves(self, func, *args, **kwargs):
+    def _transform_leaves(self, func, *args, **kwargs) -> Self:
         # return a new list column with the same nested structure
         # as ``self``, but with the leaf column transformed
         # by applying ``func`` to it
@@ -401,19 +407,9 @@ class ListMethods(ColumnMethods):
         Series([False, True, True])
         dtype: bool
         """
-        search_key = cudf.Scalar(search_key)
-        try:
-            res = self._return_or_inplace(
-                contains_scalar(self._column, search_key)
-            )
-        except RuntimeError as e:
-            if (
-                "Type/Scale of search key does not "
-                "match list column element type." in str(e)
-            ):
-                raise TypeError(str(e)) from e
-            raise
-        return res
+        return self._return_or_inplace(
+            contains_scalar(self._column, cudf.Scalar(search_key))
+        )
 
     def index(self, search_key: Union[ScalarLike, ColumnLike]) -> ParentType:
         """
@@ -460,23 +456,14 @@ class ListMethods(ColumnMethods):
         dtype: int32
         """
 
-        try:
-            if is_scalar(search_key):
-                return self._return_or_inplace(
-                    index_of_scalar(self._column, cudf.Scalar(search_key))
-                )
-            else:
-                return self._return_or_inplace(
-                    index_of_column(self._column, as_column(search_key))
-                )
-
-        except RuntimeError as e:
-            if (
-                "Type/Scale of search key does not "
-                "match list column element type." in str(e)
-            ):
-                raise TypeError(str(e)) from e
-            raise
+        if is_scalar(search_key):
+            return self._return_or_inplace(
+                index_of_scalar(self._column, cudf.Scalar(search_key))
+            )
+        else:
+            return self._return_or_inplace(
+                index_of_column(self._column, as_column(search_key))
+            )
 
     @property
     def leaves(self) -> ParentType:
@@ -572,16 +559,9 @@ class ListMethods(ColumnMethods):
                 "lists_indices should be column of values of index types."
             )
 
-        try:
-            res = self._return_or_inplace(
-                segmented_gather(self._column, lists_indices_col)
-            )
-        except RuntimeError as e:
-            if "contains nulls" in str(e):
-                raise ValueError("lists_indices contains null.") from e
-            raise
-        else:
-            return res
+        return self._return_or_inplace(
+            segmented_gather(self._column, lists_indices_col)
+        )
 
     def unique(self) -> ParentType:
         """
@@ -715,16 +695,9 @@ class ListMethods(ColumnMethods):
         1    [6.0, nan, 7.0, 8.0, 9.0]
         dtype: list
         """
-        try:
-            result = concatenate_list_elements(self._column, dropna=dropna)
-        except RuntimeError as e:
-            if "Rows of the input column must be lists." in str(e):
-                raise ValueError(
-                    "list.concat() can only be called on "
-                    "list columns with at least one level "
-                    "of nesting"
-                )
-        return self._return_or_inplace(result)
+        return self._return_or_inplace(
+            concatenate_list_elements(self._column, dropna=dropna)
+        )
 
     def astype(self, dtype):
         """

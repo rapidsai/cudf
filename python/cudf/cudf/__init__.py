@@ -1,16 +1,22 @@
 # Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
+# _setup_numba _must be called before numba.cuda is imported, because
+# it sets the numba config variable responsible for enabling
+# Minor Version Compatibility. Setting it after importing numba.cuda has no effect.
+from cudf.utils._numba import _setup_numba
 from cudf.utils.gpu_utils import validate_setup
 
+_setup_numba()
 validate_setup()
 
 import cupy
 from numba import config as numba_config, cuda
 
 import rmm
+from rmm.allocators.cupy import rmm_cupy_allocator
+from rmm.allocators.numba import RMMNumbaManager
 
 from cudf import api, core, datasets, testing
-from cudf._version import get_versions
 from cudf.api.extensions import (
     register_dataframe_accessor,
     register_index_accessor,
@@ -52,7 +58,7 @@ from cudf.core.index import (
     UInt64Index,
     interval_range,
 )
-from cudf.core.missing import NA
+from cudf.core.missing import NA, NaT
 from cudf.core.multiindex import MultiIndex
 from cudf.core.reshape import (
     concat,
@@ -78,43 +84,22 @@ from cudf.io import (
     read_parquet,
     read_text,
 )
-from cudf.options import describe_option, get_option, set_option
-from cudf.utils.dtypes import _NA_REP
-from cudf.utils.utils import clear_cache, set_allocator
+from cudf.options import (
+    describe_option,
+    get_option,
+    option_context,
+    set_option,
+)
+from cudf.utils.utils import clear_cache
 
-try:
-    from cubinlinker.patch import patch_numba_linker_if_needed
-except ImportError:
-    pass
-else:
-    # Patch Numba to support CUDA enhanced compatibility.
-    # cuDF requires a stronger set of conditions than what is
-    # checked by patch_numba_linker_if_needed due to the PTX
-    # files needed for JIT Groupby Apply and string UDFs
-    from cudf.core.udf.groupby_utils import dev_func_ptx
-    from cudf.core.udf.utils import _setup_numba_linker
-
-    _setup_numba_linker(dev_func_ptx)
-
-    del patch_numba_linker_if_needed
-
-cuda.set_memory_manager(rmm.RMMNumbaManager)
-cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
-
-try:
-    # Numba 0.54: Disable low occupancy warnings
-    numba_config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
-except AttributeError:
-    # Numba < 0.54: No occupancy warnings
-    pass
-del numba_config
+cuda.set_memory_manager(RMMNumbaManager)
+cupy.cuda.set_allocator(rmm_cupy_allocator)
 
 
 rmm.register_reinitialize_hook(clear_cache)
 
 
-__version__ = get_versions()["version"]
-del get_versions
+__version__ = "23.12.00"
 
 __all__ = [
     "BaseIndex",
@@ -139,6 +124,7 @@ __all__ = [
     "ListDtype",
     "MultiIndex",
     "NA",
+    "NaT",
     "RangeIndex",
     "Scalar",
     "Series",
@@ -175,7 +161,6 @@ __all__ = [
     "read_orc",
     "read_parquet",
     "read_text",
-    "set_allocator",
     "set_option",
     "testing",
     "to_datetime",

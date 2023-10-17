@@ -35,9 +35,9 @@ from cudf._lib.cpp.io.csv cimport (
     read_csv as cpp_read_csv,
     write_csv as cpp_write_csv,
 )
+from cudf._lib.cpp.io.data_sink cimport data_sink
 from cudf._lib.cpp.io.types cimport (
     compression_type,
-    data_sink,
     quote_style,
     sink_info,
     source_info,
@@ -262,7 +262,7 @@ cdef csv_reader_options make_csv_reader_options(
         elif (
             cudf.api.types.is_scalar(dtype) or
             isinstance(dtype, (
-                np.dtype, pd.core.dtypes.dtypes.ExtensionDtype, type
+                np.dtype, pd.api.extensions.ExtensionDtype, type
             ))
         ):
             c_dtypes_list.reserve(1)
@@ -439,7 +439,7 @@ def read_csv(
         elif (
             cudf.api.types.is_scalar(dtype) or
             isinstance(dtype, (
-                np.dtype, pd.core.dtypes.dtypes.ExtensionDtype, type
+                np.dtype, pd.api.extensions.ExtensionDtype, type
             ))
         ):
             if cudf.api.types.is_categorical_dtype(dtype):
@@ -472,7 +472,7 @@ def write_csv(
     object sep=",",
     object na_rep="",
     bool header=True,
-    object line_terminator="\n",
+    object lineterminator="\n",
     int rows_per_chunk=8,
     bool index=True,
 ):
@@ -488,7 +488,7 @@ def write_csv(
     )
     cdef bool include_header_c = header
     cdef char delim_c = ord(sep)
-    cdef string line_term_c = line_terminator.encode()
+    cdef string line_term_c = lineterminator.encode()
     cdef string na_c = na_rep.encode()
     cdef int rows_per_chunk_c = rows_per_chunk
     cdef vector[string] col_names
@@ -533,11 +533,17 @@ def write_csv(
         .build()
     )
 
-    with nogil:
-        cpp_write_csv(options)
+    try:
+        with nogil:
+            cpp_write_csv(options)
+    except OverflowError:
+        raise OverflowError(
+            f"Writing CSV file with chunksize={rows_per_chunk} failed. "
+            "Consider providing a smaller chunksize argument."
+        )
 
 
-cdef data_type _get_cudf_data_type_from_dtype(object dtype) except +:
+cdef data_type _get_cudf_data_type_from_dtype(object dtype) except *:
     # TODO: Remove this work-around Dictionary types
     # in libcudf are fully mapped to categorical columns:
     # https://github.com/rapidsai/cudf/issues/3960

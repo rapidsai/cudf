@@ -16,7 +16,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_130
+from cudf.api.extensions import no_default
+from cudf.core._compat import PANDAS_GE_200
 from cudf.core.column import as_column
 from cudf.core.index import as_index
 from cudf.testing._utils import (
@@ -155,7 +156,7 @@ def test_multiindex_swaplevel():
 
 
 def test_string_index():
-    from cudf.core.index import StringIndex
+    from cudf.core.index import Index
 
     pdf = pd.DataFrame(np.random.rand(5, 5))
     gdf = cudf.from_pandas(pdf)
@@ -167,7 +168,7 @@ def test_string_index():
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = StringIndex(["a", "b", "c", "d", "e"], name="name")
+    stringIndex = Index(["a", "b", "c", "d", "e"], name="name")
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
@@ -319,6 +320,9 @@ def test_multiindex_getitem(pdf, gdf, pdfIndex):
         (("a", "store"), slice(None)),
         # return 2 rows, n-1 remaining keys = dataframe with n-k index columns
         ("a",),
+        "a",
+        "b",
+        "c",
         (("a",), slice(None)),
         # return 1 row, 0 remaining keys = dataframe with entire index
         ("a", "store", "storm", "smoke"),
@@ -335,9 +339,31 @@ def test_multiindex_loc(pdf, gdf, pdfIndex, key_tuple):
     gdf.index = gdfIndex
     # The index is unsorted, which makes things slow but is fine for testing.
     with expect_pandas_performance_warning(key_tuple):
-        expected = pdf.loc[key_tuple].sort_index()
+        expected = pdf.loc[key_tuple]
     got = gdf.loc[key_tuple].sort_index()
+    assert_eq(expected.sort_index(), got)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gdf.loc[key_tuple]
     assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "indexer",
+    [
+        (([1, 1], [0, 1]), slice(None)),
+        (([1, 1], [1, 0]), slice(None)),
+    ],
+)
+def test_multiindex_compatible_ordering(indexer):
+    df = pd.DataFrame(
+        {"a": [1, 1, 2, 3], "b": [1, 0, 1, 1], "c": [1, 2, 3, 4]}
+    ).set_index(["a", "b"])
+    cdf = cudf.from_pandas(df)
+    expect = df.loc[indexer]
+    with cudf.option_context("mode.pandas_compatible", True):
+        actual = cdf.loc[indexer]
+    assert_eq(actual, expect)
 
 
 @pytest.mark.parametrize(
@@ -781,13 +807,15 @@ def test_multiindex_copy_sem(data, levels, codes, names):
         ),
     ],
 )
+@pytest.mark.parametrize("copy_on_write", [True, False])
 @pytest.mark.parametrize("deep", [True, False])
-def test_multiindex_copy_deep(data, deep):
+def test_multiindex_copy_deep(data, copy_on_write, deep):
     """Test memory identity for deep copy
     Case1: Constructed from GroupBy, StringColumns
     Case2: Constructed from MultiIndex, NumericColumns
     """
-    same_ref = not deep
+    original_cow_setting = cudf.get_option("copy_on_write")
+    cudf.set_option("copy_on_write", copy_on_write)
 
     if isinstance(data, dict):
         import operator
@@ -807,9 +835,12 @@ def test_multiindex_copy_deep(data, deep):
         lptrs = [child.base_data.get_ptr(mode="read") for child in lchildren]
         rptrs = [child.base_data.get_ptr(mode="read") for child in rchildren]
 
-        assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
+        assert all((x == y) for x, y in zip(lptrs, rptrs))
 
     elif isinstance(data, cudf.MultiIndex):
+        same_ref = (not deep) or (
+            cudf.get_option("copy_on_write") and not deep
+        )
         mi1 = data
         mi2 = mi1.copy(deep=deep)
 
@@ -846,6 +877,7 @@ def test_multiindex_copy_deep(data, deep):
         ]
 
         assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
+    cudf.set_option("copy_on_write", original_cow_setting)
 
 
 @pytest.mark.parametrize(
@@ -1096,7 +1128,6 @@ def test_multicolumn_loc(pdf, pdfIndex):
 
 
 @pytest.mark.xfail(
-    condition=PANDAS_GE_130,
     reason="https://github.com/pandas-dev/pandas/issues/43351",
 )
 def test_multicolumn_set_item(pdf, pdfIndex):
@@ -1150,6 +1181,17 @@ def test_multiindex_values_host():
     pmidx = midx.to_pandas()
 
     assert_eq(midx.values_host, pmidx.values)
+
+
+def test_multiindex_to_numpy():
+    midx = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    pmidx = midx.to_pandas()
+
+    assert_eq(midx.to_numpy(), pmidx.to_numpy())
 
 
 @pytest.mark.parametrize(
@@ -1656,6 +1698,7 @@ def test_difference():
 
     expected = midx2.to_pandas().difference(midx.to_pandas())
     actual = midx2.difference(midx)
+    assert isinstance(actual, cudf.MultiIndex)
     assert_eq(expected, actual)
 
 
@@ -1813,8 +1856,14 @@ def test_pickle_roundtrip_multiindex(names):
 def test_multiindex_type_methods(pidx, func):
     gidx = cudf.from_pandas(pidx)
 
-    expected = getattr(pidx, func)()
-    actual = getattr(gidx, func)()
+    if PANDAS_GE_200:
+        with pytest.warns(FutureWarning):
+            expected = getattr(pidx, func)()
+    else:
+        expected = getattr(pidx, func)()
+
+    with pytest.warns(FutureWarning):
+        actual = getattr(gidx, func)()
 
     if func == "is_object":
         assert_eq(False, actual)
@@ -1832,3 +1881,131 @@ def test_multiindex_index_single_row():
     gdf.index = idx
     pdf = gdf.to_pandas()
     assert_eq(pdf.loc[("b", 3)], gdf.loc[("b", 3)])
+
+
+def test_multiindex_levels():
+    gidx = cudf.MultiIndex.from_product(
+        [range(3), ["one", "two"]], names=["first", "second"]
+    )
+    pidx = gidx.to_pandas()
+
+    assert_eq(gidx.levels[0], pidx.levels[0])
+    assert_eq(gidx.levels[1], pidx.levels[1])
+
+
+def test_multiindex_empty_slice_pandas_compatibility():
+    expected = pd.MultiIndex.from_tuples([("a", "b")])[:0]
+    with cudf.option_context("mode.pandas_compatible", True):
+        actual = cudf.from_pandas(expected)
+    assert_eq(expected, actual, exact=False)
+
+
+@pytest.mark.parametrize(
+    "levels",
+    itertools.chain.from_iterable(
+        itertools.permutations(range(3), n) for n in range(1, 4)
+    ),
+    ids=str,
+)
+def test_multiindex_sort_index_partial(levels):
+    df = pd.DataFrame(
+        {
+            "a": [3, 3, 3, 1, 1, 1, 2, 2],
+            "b": [4, 2, 7, -1, 11, -2, 7, 7],
+            "c": [4, 4, 2, 3, 3, 3, 1, 1],
+            "val": [1, 2, 3, 4, 5, 6, 7, 8],
+        }
+    ).set_index(["a", "b", "c"])
+    cdf = cudf.from_pandas(df)
+
+    expect = df.sort_index(level=levels, sort_remaining=True)
+    got = cdf.sort_index(level=levels, sort_remaining=True)
+    assert_eq(expect, got)
+
+
+def test_multiindex_to_series_error():
+    midx = cudf.MultiIndex.from_tuples([("a", "b")])
+    with pytest.raises(NotImplementedError):
+        midx.to_series()
+
+
+@pytest.mark.parametrize(
+    "pidx",
+    [
+        pd.MultiIndex.from_arrays(
+            [[1, 2, 3, 4], [5, 6, 7, 10], [11, 12, 12, 13]],
+            names=["a", "b", "c"],
+        ),
+        pd.MultiIndex.from_arrays(
+            [[1, 2, 3, 4], [5, 6, 7, 10], [11, 12, 12, 13]],
+            names=["a", "a", "a"],
+        ),
+        pd.MultiIndex.from_arrays(
+            [[1, 2, 3, 4], [5, 6, 7, 10], [11, 12, 12, 13]],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "name", [None, no_default, ["x", "y", "z"], ["rapids", "rapids", "rapids"]]
+)
+@pytest.mark.parametrize("allow_duplicates", [True, False])
+@pytest.mark.parametrize("index", [True, False])
+def test_multiindex_to_frame_allow_duplicates(
+    pidx, name, allow_duplicates, index
+):
+    gidx = cudf.from_pandas(pidx)
+
+    if (
+        (
+            len(pidx.names) != len(set(pidx.names))
+            and not all(x is None for x in pidx.names)
+        )
+        and not allow_duplicates
+        and (name is None or name is no_default)
+    ):
+        assert_exceptions_equal(
+            pidx.to_frame,
+            gidx.to_frame,
+            lfunc_args_and_kwargs=(
+                [],
+                {
+                    "index": index,
+                    "name": name,
+                    "allow_duplicates": allow_duplicates,
+                },
+            ),
+            rfunc_args_and_kwargs=(
+                [],
+                {
+                    "index": index,
+                    "name": name,
+                    "allow_duplicates": allow_duplicates,
+                },
+            ),
+        )
+    else:
+        if (
+            len(pidx.names) != len(set(pidx.names))
+            and not all(x is None for x in pidx.names)
+            and not isinstance(name, list)
+        ) or (isinstance(name, list) and len(name) != len(set(name))):
+            # cudf doesn't have the ability to construct dataframes
+            # with duplicate column names
+            with expect_warning_if(name is None):
+                with pytest.raises(ValueError):
+                    gidx.to_frame(
+                        index=index,
+                        name=name,
+                        allow_duplicates=allow_duplicates,
+                    )
+        else:
+            with expect_warning_if(name is None):
+                expected = pidx.to_frame(
+                    index=index, name=name, allow_duplicates=allow_duplicates
+                )
+            with expect_warning_if(name is None):
+                actual = gidx.to_frame(
+                    index=index, name=name, allow_duplicates=allow_duplicates
+                )
+
+            assert_eq(expected, actual)

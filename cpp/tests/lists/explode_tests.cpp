@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,19 +25,15 @@
 using FCW = cudf::test::fixed_width_column_wrapper<int32_t>;
 using LCW = cudf::test::lists_column_wrapper<int32_t>;
 
-class ExplodeTest : public cudf::test::BaseFixture {
-};
+class ExplodeTest : public cudf::test::BaseFixture {};
 
-class ExplodeOuterTest : public cudf::test::BaseFixture {
-};
+class ExplodeOuterTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-class ExplodeTypedTest : public cudf::test::BaseFixture {
-};
+class ExplodeTypedTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-class ExplodeOuterTypedTest : public cudf::test::BaseFixture {
-};
+class ExplodeOuterTypedTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ExplodeTypedTest, cudf::test::FixedPointTypes);
 
@@ -401,11 +397,9 @@ TEST_F(ExplodeTest, ListOfStructsWithEmpties)
   std::vector<std::unique_ptr<cudf::column>> s2_cols;
   s2_cols.push_back(i2.release());
   std::vector<bool> r2_valids{false};
-  auto s2 = cudf::make_structs_column(
-    1,
-    std::move(s2_cols),
-    1,
-    cudf::test::detail::make_null_mask(r2_valids.begin(), r2_valids.end()));
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(r2_valids.begin(), r2_valids.end());
+  auto s2 = cudf::make_structs_column(1, std::move(s2_cols), null_count, std::move(null_mask));
   cudf::test::fixed_width_column_wrapper<int32_t> off2{0, 1};
   auto row2 = cudf::make_lists_column(1, off2.release(), std::move(s2), 0, rmm::device_buffer{});
 
@@ -424,12 +418,10 @@ TEST_F(ExplodeTest, ListOfStructsWithEmpties)
   auto s4 = cudf::make_structs_column(0, std::move(s4_cols), 0, rmm::device_buffer{});
   cudf::test::fixed_width_column_wrapper<int32_t> off4{0, 0};
   std::vector<bool> r4_valids{false};
+  std::tie(null_mask, null_count) =
+    cudf::test::detail::make_null_mask(r4_valids.begin(), r4_valids.end());
   auto row4 =
-    cudf::make_lists_column(1,
-                            off4.release(),
-                            std::move(s4),
-                            1,
-                            cudf::test::detail::make_null_mask(r4_valids.begin(), r4_valids.end()));
+    cudf::make_lists_column(1, off4.release(), std::move(s4), null_count, std::move(null_mask));
 
   // concatenated
   auto final_col =
@@ -469,8 +461,8 @@ TYPED_TEST(ExplodeTypedTest, ListOfStructs)
   cudf::test::strings_column_wrapper string_col{
     "70", "75", "50", "55", "35", "45", "25", "30", "15", "20"};
   auto struct_col = cudf::test::structs_column_wrapper{{numeric_col, string_col}}.release();
-  auto a          = cudf::make_lists_column(
-    5, FCW{0, 2, 4, 6, 8, 10}.release(), std::move(struct_col), cudf::UNKNOWN_NULL_COUNT, {});
+  auto a =
+    cudf::make_lists_column(5, FCW{0, 2, 4, 6, 8, 10}.release(), std::move(struct_col), 0, {});
 
   FCW b{100, 200, 300, 400, 500};
 
@@ -1048,11 +1040,9 @@ TEST_F(ExplodeOuterTest, ListOfStructsWithEmpties)
   std::vector<std::unique_ptr<cudf::column>> s2_cols;
   s2_cols.push_back(i2.release());
   std::vector<bool> r2_valids{false};
-  auto s2 = cudf::make_structs_column(
-    1,
-    std::move(s2_cols),
-    1,
-    cudf::test::detail::make_null_mask(r2_valids.begin(), r2_valids.end()));
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(r2_valids.begin(), r2_valids.end());
+  auto s2 = cudf::make_structs_column(1, std::move(s2_cols), null_count, std::move(null_mask));
   cudf::test::fixed_width_column_wrapper<int32_t> off2{0, 1};
   auto row2 = cudf::make_lists_column(1, off2.release(), std::move(s2), 0, rmm::device_buffer{});
 
@@ -1071,12 +1061,10 @@ TEST_F(ExplodeOuterTest, ListOfStructsWithEmpties)
   auto s4 = cudf::make_structs_column(0, std::move(s4_cols), 0, rmm::device_buffer{});
   cudf::test::fixed_width_column_wrapper<int32_t> off4{0, 0};
   std::vector<bool> r4_valids{false};
+  std::tie(null_mask, null_count) =
+    cudf::test::detail::make_null_mask(r4_valids.begin(), r4_valids.end());
   auto row4 =
-    cudf::make_lists_column(1,
-                            off4.release(),
-                            std::move(s4),
-                            1,
-                            cudf::test::detail::make_null_mask(r4_valids.begin(), r4_valids.end()));
+    cudf::make_lists_column(1, off4.release(), std::move(s4), null_count, std::move(null_mask));
 
   // concatenated
   auto final_col =
@@ -1118,8 +1106,8 @@ TYPED_TEST(ExplodeOuterTypedTest, ListOfStructs)
   cudf::test::strings_column_wrapper string_col{
     "70", "75", "50", "55", "35", "45", "25", "30", "15", "20"};
   auto struct_col = cudf::test::structs_column_wrapper{{numeric_col, string_col}}.release();
-  auto a          = cudf::make_lists_column(
-    5, FCW{0, 2, 4, 6, 8, 10}.release(), std::move(struct_col), cudf::UNKNOWN_NULL_COUNT, {});
+  auto a =
+    cudf::make_lists_column(5, FCW{0, 2, 4, 6, 8, 10}.release(), std::move(struct_col), 0, {});
 
   FCW b{100, 200, 300, 400, 500};
 

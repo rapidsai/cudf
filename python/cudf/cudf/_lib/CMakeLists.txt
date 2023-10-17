@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -46,7 +46,9 @@ set(cython_sources
     sort.pyx
     stream_compaction.pyx
     string_casting.pyx
+    strings_udf.pyx
     text.pyx
+    timezone.pyx
     transform.pyx
     transpose.pyx
     types.pyx
@@ -60,6 +62,8 @@ rapids_cython_create_modules(
   SOURCE_FILES "${cython_sources}"
   LINKED_LIBRARIES "${linked_libraries}" ASSOCIATED_TARGETS cudf
 )
+
+target_link_libraries(strings_udf cudf_strings_udf)
 
 # TODO: Finding NumPy currently requires finding Development due to a bug in CMake. This bug was
 # fixed in https://gitlab.kitware.com/cmake/cmake/-/merge_requests/7410 and will be available in
@@ -89,19 +93,31 @@ foreach(target IN LISTS targets_using_dlpack)
   target_include_directories(${target} PRIVATE "${DLPACK_INCLUDE_DIR}")
 endforeach()
 
-find_package(Python 3.8 REQUIRED COMPONENTS Interpreter)
+find_package(Python 3.9 REQUIRED COMPONENTS Interpreter)
 
 execute_process(
   COMMAND "${Python_EXECUTABLE}" -c "import pyarrow; print(pyarrow.get_include())"
   OUTPUT_VARIABLE PYARROW_INCLUDE_DIR
+  ERROR_VARIABLE PYARROW_ERROR
+  RESULT_VARIABLE PYARROW_RESULT
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
-set(targets_using_arrow_headers interop avro csv orc json parquet)
-foreach(target IN LISTS targets_using_arrow_headers)
+if(${PYARROW_RESULT})
+  message(FATAL_ERROR "Error while trying to obtain pyarrow include directory:\n${PYARROW_ERROR}")
+endif()
+
+# TODO: Due to cudf's scalar.pyx needing to cimport pylibcudf's scalar.pyx (because there are parts
+# of cudf Cython that need to directly access the c_obj underlying the pylibcudf Scalar) the
+# requirement for arrow headers infects all of cudf. That in turn requires including numpy headers.
+# These requirements will go away once all scalar-related Cython code is removed from cudf.
+foreach(target IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)
+  target_include_directories(${target} PRIVATE "${NumPy_INCLUDE_DIRS}")
   target_include_directories(${target} PRIVATE "${PYARROW_INCLUDE_DIR}")
 endforeach()
 
+add_subdirectory(cpp)
 add_subdirectory(io)
 add_subdirectory(nvtext)
+add_subdirectory(pylibcudf)
 add_subdirectory(strings)

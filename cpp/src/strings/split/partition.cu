@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-using string_index_pair = thrust::pair<const char*, size_type>;
+using string_index_pair = thrust::pair<char const*, size_type>;
 
 namespace {
 //
@@ -239,20 +239,22 @@ std::unique_ptr<table> rpartition(strings_column_view const& strings,
 
 // external APIs
 
-std::unique_ptr<table> partition(strings_column_view const& strings,
+std::unique_ptr<table> partition(strings_column_view const& input,
                                  string_scalar const& delimiter,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::partition(strings, delimiter, cudf::get_default_stream(), mr);
+  return detail::partition(input, delimiter, stream, mr);
 }
 
-std::unique_ptr<table> rpartition(strings_column_view const& strings,
+std::unique_ptr<table> rpartition(strings_column_view const& input,
                                   string_scalar const& delimiter,
+                                  rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rpartition(strings, delimiter, cudf::get_default_stream(), mr);
+  return detail::rpartition(input, delimiter, stream, mr);
 }
 
 }  // namespace strings

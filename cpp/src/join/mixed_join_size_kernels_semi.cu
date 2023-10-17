@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ __launch_bounds__(block_size) __global__ void compute_mixed_join_output_size_sem
   table_device_view right_table,
   table_device_view probe,
   table_device_view build,
+  row_hash const hash_probe,
   row_equality const equality_probe,
   join_kind const join_type,
   cudf::detail::semi_map_type::device_view hash_table_view,
@@ -64,7 +65,7 @@ __launch_bounds__(block_size) __global__ void compute_mixed_join_output_size_sem
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
-  row_hash hash_probe{nullate::DYNAMIC{has_nulls}, probe};
+
   // TODO: Address asymmetry in operator.
   auto equality = single_expression_equality<has_nulls>{
     evaluator, thread_intermediate_storage, swap_tables, equality_probe};
@@ -82,7 +83,10 @@ __launch_bounds__(block_size) __global__ void compute_mixed_join_output_size_sem
   std::size_t block_counter = BlockReduce(temp_storage).Sum(thread_counter);
 
   // Add block counter to global counter
-  if (threadIdx.x == 0) atomicAdd(output_size, block_counter);
+  if (threadIdx.x == 0) {
+    cuda::atomic_ref<std::size_t, cuda::thread_scope_device> ref{*output_size};
+    ref.fetch_add(block_counter, cuda::std::memory_order_relaxed);
+  }
 }
 
 template __global__ void compute_mixed_join_output_size_semi<DEFAULT_JOIN_BLOCK_SIZE, true>(
@@ -90,6 +94,7 @@ template __global__ void compute_mixed_join_output_size_semi<DEFAULT_JOIN_BLOCK_
   table_device_view right_table,
   table_device_view probe,
   table_device_view build,
+  row_hash const hash_probe,
   row_equality const equality_probe,
   join_kind const join_type,
   cudf::detail::semi_map_type::device_view hash_table_view,
@@ -103,6 +108,7 @@ template __global__ void compute_mixed_join_output_size_semi<DEFAULT_JOIN_BLOCK_
   table_device_view right_table,
   table_device_view probe,
   table_device_view build,
+  row_hash const hash_probe,
   row_equality const equality_probe,
   join_kind const join_type,
   cudf::detail::semi_map_type::device_view hash_table_view,

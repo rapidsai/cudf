@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -14,7 +14,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.cpp.strings.translate cimport (
     filter_characters as cpp_filter_characters,
-    filter_type as filter_type,
+    filter_type,
     translate as cpp_translate,
 )
 from cudf._lib.cpp.types cimport char_utf8

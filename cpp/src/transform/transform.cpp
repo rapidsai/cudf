@@ -37,7 +37,7 @@ namespace jit {
 
 void unary_operation(mutable_column_view output,
                      column_view input,
-                     const std::string& udf,
+                     std::string const& udf,
                      data_type output_type,
                      bool is_ptx,
                      rmm::cuda_stream_view stream)
@@ -78,7 +78,7 @@ std::unique_ptr<column> transform(column_view const& input,
   CUDF_EXPECTS(is_fixed_width(input.type()), "Unexpected non-fixed-width type.");
 
   std::unique_ptr<column> output = make_fixed_width_column(
-    output_type, input.size(), copy_bitmask(input), cudf::UNKNOWN_NULL_COUNT, stream, mr);
+    output_type, input.size(), copy_bitmask(input), input.null_count(), stream, mr);
 
   if (input.is_empty()) { return output; }
 
