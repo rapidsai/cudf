@@ -1074,6 +1074,18 @@ def test_index_append(data, other):
         assert_eq(expected, actual)
 
 
+def test_index_empty_append_name_conflict():
+    empty = cudf.Index([], name="foo")
+    non_empty = cudf.Index([1], name="bar")
+    expected = cudf.Index([1])
+
+    result = non_empty.append(empty)
+    assert_eq(result, expected)
+
+    result = empty.append(non_empty)
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize(
     "data",
     [
