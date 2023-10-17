@@ -184,12 +184,13 @@ std::unique_ptr<column> to_fixed_point(strings_column_view const& input,
 }  // namespace detail
 
 // external API
-std::unique_ptr<column> to_fixed_point(strings_column_view const& strings,
+std::unique_ptr<column> to_fixed_point(strings_column_view const& input,
                                        data_type output_type,
+                                       rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_fixed_point(strings, output_type, cudf::get_default_stream(), mr);
+  return detail::to_fixed_point(input, output_type, stream, mr);
 }
 
 namespace detail {
@@ -277,10 +278,11 @@ std::unique_ptr<column> from_fixed_point(column_view const& input,
 // external API
 
 std::unique_ptr<column> from_fixed_point(column_view const& input,
+                                         rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_fixed_point(input, cudf::get_default_stream(), mr);
+  return detail::from_fixed_point(input, stream, mr);
 }
 
 namespace detail {
@@ -341,10 +343,11 @@ std::unique_ptr<column> is_fixed_point(strings_column_view const& input,
 
 std::unique_ptr<column> is_fixed_point(strings_column_view const& input,
                                        data_type decimal_type,
+                                       rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_fixed_point(input, decimal_type, cudf::get_default_stream(), mr);
+  return detail::is_fixed_point(input, decimal_type, stream, mr);
 }
 
 }  // namespace strings
