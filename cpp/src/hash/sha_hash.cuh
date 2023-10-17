@@ -45,8 +45,6 @@ namespace cudf {
 namespace hashing {
 namespace detail {
 
-namespace {
-
 const __constant__ uint32_t sha256_hash_constants[64] = {
   0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
   0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
@@ -268,57 +266,6 @@ struct HasherDispatcher {
   }
 };
 
-struct sha1_hash_state {
-  uint64_t message_length = 0;
-  uint32_t buffer_length  = 0;
-  uint32_t hash_value[5]  = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0};
-  uint8_t buffer[64];
-};
-
-struct sha224_hash_state {
-  uint64_t message_length = 0;
-  uint32_t buffer_length  = 0;
-  uint32_t hash_value[8]  = {
-    0xc1059ed8, 0x367cd507, 0x3070dd17, 0xf70e5939, 0xffc00b31, 0x68581511, 0x64f98fa7, 0xbefa4fa4};
-  uint8_t buffer[64];
-};
-
-struct sha256_hash_state {
-  uint64_t message_length = 0;
-  uint32_t buffer_length  = 0;
-  uint32_t hash_value[8]  = {
-    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
-  uint8_t buffer[64];
-};
-
-struct sha384_hash_state {
-  uint64_t message_length = 0;
-  uint32_t buffer_length  = 0;
-  uint64_t hash_value[8]  = {0xcbbb9d5dc1059ed8,
-                             0x629a292a367cd507,
-                             0x9159015a3070dd17,
-                             0x152fecd8f70e5939,
-                             0x67332667ffc00b31,
-                             0x8eb44a8768581511,
-                             0xdb0c2e0d64f98fa7,
-                             0x47b5481dbefa4fa4};
-  uint8_t buffer[128];
-};
-
-struct sha512_hash_state {
-  uint64_t message_length = 0;
-  uint32_t buffer_length  = 0;
-  uint64_t hash_value[8]  = {0x6a09e667f3bcc908,
-                             0xbb67ae8584caa73b,
-                             0x3c6ef372fe94f82b,
-                             0xa54ff53a5f1d36f1,
-                             0x510e527fade682d1,
-                             0x9b05688c2b3e6c1f,
-                             0x1f83d9abfb41bd6b,
-                             0x5be0cd19137e2179};
-  uint8_t buffer[128];
-};
-
 /**
  * @brief Core SHA-1 algorithm implementation. Processes a single 512-bit chunk,
  * updating the hash value so far. Does not zero out the buffer contents.
@@ -518,103 +465,8 @@ void __device__ inline sha512_hash_step(hash_state& state)
   state.buffer_length = 0;
 }
 
-struct SHA1Hash : HashBase<SHA1Hash> {
-  __device__ inline SHA1Hash(char* result_location) : HashBase<SHA1Hash>(result_location) {}
-
-  // Intermediate data type storing the hash state
-  using hash_state = sha1_hash_state;
-  // The word type used by this hash function
-  using sha_word_type = uint32_t;
-  // Number of bytes processed in each hash step
-  static constexpr uint32_t message_chunk_size = 64;
-  // Digest size in bytes
-  static constexpr uint32_t digest_size = 40;
-  // Number of bytes used for the message length
-  static constexpr uint32_t message_length_size = 8;
-
-  void __device__ inline hash_step(hash_state& state) { sha1_hash_step(state); }
-
-  hash_state state;
-};
-
-struct SHA224Hash : HashBase<SHA224Hash> {
-  __device__ inline SHA224Hash(char* result_location) : HashBase<SHA224Hash>(result_location) {}
-
-  // Intermediate data type storing the hash state
-  using hash_state = sha224_hash_state;
-  // The word type used by this hash function
-  using sha_word_type = uint32_t;
-  // Number of bytes processed in each hash step
-  static constexpr uint32_t message_chunk_size = 64;
-  // Digest size in bytes. This is truncated from SHA-256.
-  static constexpr uint32_t digest_size = 56;
-  // Number of bytes used for the message length
-  static constexpr uint32_t message_length_size = 8;
-
-  void __device__ inline hash_step(hash_state& state) { sha256_hash_step(state); }
-
-  hash_state state;
-};
-
-struct SHA256Hash : HashBase<SHA256Hash> {
-  __device__ inline SHA256Hash(char* result_location) : HashBase<SHA256Hash>(result_location) {}
-
-  // Intermediate data type storing the hash state
-  using hash_state = sha256_hash_state;
-  // The word type used by this hash function
-  using sha_word_type = uint32_t;
-  // Number of bytes processed in each hash step
-  static constexpr uint32_t message_chunk_size = 64;
-  // Digest size in bytes
-  static constexpr uint32_t digest_size = 64;
-  // Number of bytes used for the message length
-  static constexpr uint32_t message_length_size = 8;
-
-  void __device__ inline hash_step(hash_state& state) { sha256_hash_step(state); }
-
-  hash_state state;
-};
-
-struct SHA384Hash : HashBase<SHA384Hash> {
-  __device__ inline SHA384Hash(char* result_location) : HashBase<SHA384Hash>(result_location) {}
-
-  // Intermediate data type storing the hash state
-  using hash_state = sha384_hash_state;
-  // The word type used by this hash function
-  using sha_word_type = uint64_t;
-  // Number of bytes processed in each hash step
-  static constexpr uint32_t message_chunk_size = 128;
-  // Digest size in bytes. This is truncated from SHA-512.
-  static constexpr uint32_t digest_size = 96;
-  // Number of bytes used for the message length
-  static constexpr uint32_t message_length_size = 16;
-
-  void __device__ inline hash_step(hash_state& state) { sha512_hash_step(state); }
-
-  hash_state state;
-};
-
-struct SHA512Hash : HashBase<SHA512Hash> {
-  __device__ inline SHA512Hash(char* result_location) : HashBase<SHA512Hash>(result_location) {}
-
-  // Intermediate data type storing the hash state
-  using hash_state = sha512_hash_state;
-  // The word type used by this hash function
-  using sha_word_type = uint64_t;
-  // Number of bytes processed in each hash step
-  static constexpr uint32_t message_chunk_size = 128;
-  // Digest size in bytes
-  static constexpr uint32_t digest_size = 128;
-  // Number of bytes used for the message length
-  static constexpr uint32_t message_length_size = 16;
-
-  void __device__ inline hash_step(hash_state& state) { sha512_hash_step(state); }
-
-  hash_state state;
-};
-
 // SHA supported leaf data type check
-bool sha_leaf_type_check(data_type dt)
+bool inline sha_leaf_type_check(data_type dt)
 {
   return (is_fixed_width(dt) && !is_chrono(dt)) || (dt.id() == type_id::STRING);
 }
@@ -680,94 +532,6 @@ std::unique_ptr<column> sha_hash(table_view const& input,
     input.num_rows(), std::move(offsets_column), std::move(chars_column), 0, {});
 }
 
-}  // namespace
-
-std::unique_ptr<column> sha1(table_view const& input,
-                             rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
-{
-  string_scalar const empty_result("da39a3ee5e6b4b0d3255bfef95601890afd80709");
-  return sha_hash<SHA1Hash>(input, empty_result, stream, mr);
-}
-
-std::unique_ptr<column> sha224(table_view const& input,
-                               rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
-{
-  string_scalar const empty_result("d14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f");
-  return sha_hash<SHA224Hash>(input, empty_result, stream, mr);
-}
-
-std::unique_ptr<column> sha256(table_view const& input,
-                               rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
-{
-  string_scalar const empty_result(
-    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
-  return sha_hash<SHA256Hash>(input, empty_result, stream, mr);
-}
-
-std::unique_ptr<column> sha384(table_view const& input,
-                               rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
-{
-  string_scalar const empty_result(
-    "38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b9"
-    "5b");
-  return sha_hash<SHA384Hash>(input, empty_result, stream, mr);
-}
-
-std::unique_ptr<column> sha512(table_view const& input,
-                               rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
-{
-  string_scalar const empty_result(
-    "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec"
-    "2f63b931bd47417a81a538327af927da3e");
-  return sha_hash<SHA512Hash>(input, empty_result, stream, mr);
-}
-
 }  // namespace detail
-
-std::unique_ptr<column> sha1(table_view const& input,
-                             rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::sha1(input, stream, mr);
-}
-
-std::unique_ptr<column> sha224(table_view const& input,
-                               rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::sha224(input, stream, mr);
-}
-
-std::unique_ptr<column> sha256(table_view const& input,
-                               rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::sha256(input, stream, mr);
-}
-
-std::unique_ptr<column> sha384(table_view const& input,
-                               rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::sha384(input, stream, mr);
-}
-
-std::unique_ptr<column> sha512(table_view const& input,
-                               rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::sha512(input, stream, mr);
-}
-
 }  // namespace hashing
 }  // namespace cudf
