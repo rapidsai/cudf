@@ -23,21 +23,16 @@ import pyarrow as pa
 import pytest
 from numba import NumbaDeprecationWarning
 
-from cudf.pandas import LOADED
+from cudf.pandas import LOADED, Profiler
 
 if not LOADED:
-    import pandas as pd
+    raise ImportError("These tests must be run with cudf.pandas loaded")
 
-    import cudf.pandas.pandas as xpd
-    import cudf.pandas.pandas._testing as tm
-else:
-    import pandas as xpd
-    import pandas._testing as tm
+import pandas as xpd
+import pandas._testing as tm
 
-    # Transparent-provided pandas has the real pandas module as an attribute
-    pd = xpd._xdf_slow
-
-from cudf.pandas import Profiler
+# Transparent-provided pandas has the real pandas module as an attribute
+pd = xpd._xdf_slow
 
 
 @pytest.fixture

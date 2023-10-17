@@ -11,10 +11,8 @@
 # its affiliates is strictly prohibited.
 
 PANDAS_TESTS_BRANCH=${1}
-XDF_MODE=${2:-"--transparent"}
 
 rapids-logger "Running Pandas tests using $PANDAS_TESTS_BRANCH branch"
-rapids-logger "Using ${XDF_MODE} for import overrrides"
 rapids-logger "PR number: $RAPIDS_REF_NAME"
 
 
@@ -31,7 +29,7 @@ python -m pip install $(ls ./local-cudf-dep/cudf*.whl)[test,pandas_tests]
 
 git checkout $COMMIT
 
-bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh ${XDF_MODE} \
+bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
   -n 10 \
   --tb=line \
   --skip-slow \
