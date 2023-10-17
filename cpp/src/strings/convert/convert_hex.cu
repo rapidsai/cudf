@@ -275,24 +275,27 @@ std::unique_ptr<column> integers_to_hex(column_view const& input,
 // external API
 std::unique_ptr<column> hex_to_integers(strings_column_view const& strings,
                                         data_type output_type,
+                                        rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hex_to_integers(strings, output_type, cudf::get_default_stream(), mr);
+  return detail::hex_to_integers(strings, output_type, stream, mr);
 }
 
 std::unique_ptr<column> is_hex(strings_column_view const& strings,
+                               rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_hex(strings, cudf::get_default_stream(), mr);
+  return detail::is_hex(strings, stream, mr);
 }
 
 std::unique_ptr<column> integers_to_hex(column_view const& input,
+                                        rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::integers_to_hex(input, cudf::get_default_stream(), mr);
+  return detail::integers_to_hex(input, stream, mr);
 }
 
 }  // namespace strings

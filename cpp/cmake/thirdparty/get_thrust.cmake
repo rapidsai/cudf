@@ -33,14 +33,13 @@ function(find_and_configure_thrust)
     INSTALL_EXPORT_SET cudf-exports
   )
 
-  if(Thrust_SOURCE_DIR)
-    # Store where CMake can find our custom Thrust install
-    include("${rapids-cmake-dir}/export/find_package_root.cmake")
-    rapids_export_find_package_root(
-      INSTALL Thrust
-      [=[${CMAKE_CURRENT_LIST_DIR}/../../../include/libcudf/lib/rapids/cmake/thrust]=] cudf-exports
-    )
-  endif()
+  # Store where CMake can find our custom Thrust install
+  include("${rapids-cmake-dir}/export/find_package_root.cmake")
+  rapids_export_find_package_root(
+    INSTALL Thrust [=[${CMAKE_CURRENT_LIST_DIR}/../../../include/libcudf/lib/rapids/cmake/thrust]=]
+    EXPORT_SET cudf-exports
+    CONDITION Thrust_SOURCE_DIR
+  )
 endfunction()
 
 find_and_configure_thrust()
