@@ -43,7 +43,7 @@ for (lineno, currfile, line), v in profiler._results.items():
     new_results[(lineno - 2, currfile, line)] = v
 
 profiler._results = new_results
-profiler.print_stats()
+profiler.print_per_line_stats()
 {function_profile_printer}
 """
 
@@ -55,7 +55,7 @@ def lines_with_profiling(lines, print_function_profile=False):
     )
     return _profile_injection_text.format(
         original_lines=cleaned_lines,
-        function_profile_printer="profiler.print_per_func_stats()"
+        function_profile_printer="profiler.print_per_function_stats()"
         if print_function_profile
         else "",
     )
@@ -204,7 +204,7 @@ class Profiler:
         return self._tracefunc
 
     @property
-    def get_stats(self):
+    def per_line_stats(self):
         list_data = []
         for key, val in self._results.items():
             cpu_time = val.get("cpu_time", 0)
@@ -214,13 +214,24 @@ class Profiler:
 
         return list_data
 
-    def print_stats(self):
+    @property
+    def per_function_stats(self):
+        data = {}
+        for func_name, func_data in self._per_func_results.items():
+            data[func_name] = {"cpu": [], "gpu": []}
+
+            for is_gpu, runtime in func_data:
+                key = "gpu" if is_gpu else "cpu"
+                data[func_name][key].append(runtime)
+        return data
+
+    def print_per_line_stats(self):
         table = Table()
         table.add_column("Line no.")
         table.add_column("Line")
         table.add_column("GPU TIME(s)")
         table.add_column("CPU TIME(s)")
-        for line_no, line, gpu_time, cpu_time in self.get_stats:
+        for line_no, line, gpu_time, cpu_time in self.per_line_stats:
             table.add_row(
                 str(line_no),
                 Syntax(str(line), "python"),
@@ -236,19 +247,11 @@ class Profiler:
         console = Console()
         console.print(table)
 
-    def print_per_func_stats(self):
+    def print_per_function_stats(self):
         n_gpu_func_calls = 0
         n_cpu_func_calls = 0
         total_gpu_time = 0
         total_cpu_time = 0
-
-        final_data = {}
-        for func_name, func_data in self._per_func_results.items():
-            final_data[func_name] = {"cpu": [], "gpu": []}
-
-            for is_gpu, runtime in func_data:
-                key = "gpu" if is_gpu else "cpu"
-                final_data[func_name][key].append(runtime)
 
         table = Table()
         for col in (
@@ -262,7 +265,7 @@ class Profiler:
         ):
             table.add_column(col)
 
-        for func_name, func_data in final_data.items():
+        for func_name, func_data in self.per_function_stats.items():
             gpu_times = func_data["gpu"]
             cpu_times = func_data["cpu"]
             table.add_row(
@@ -291,9 +294,8 @@ class Profiler:
         console.print(table)
 
     def dump_stats(self, file_name):
-        pickle_file = open(file_name, "wb")
-        pickle.dump(self, pickle_file)
-        pickle_file.close()
+        with open(file_name, "wb") as f:
+            pickle.dump(self, f)
 
 
 def load_stats(file_name):
