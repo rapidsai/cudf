@@ -29,28 +29,28 @@ project(
             # that is fixed we need to keep C.
             C CXX CUDA)
 
-option(FIND_CUSPATIAL_CPP "Search for existing cuspatial C++ installations before defaulting to local files"
+option(FIND_CUDF_KAFKA_CPP "Search for existing cudf_kafka C++ installations before defaulting to local files"
        OFF)
 
-option(CUSPATIAL_BUILD_WHEELS "Whether this build is generating a Python wheel." OFF)
+option(CUDF_KAFKA_BUILD_WHEELS "Whether this build is generating a Python wheel." OFF)
 
-# If the user requested it we attempt to find cuspatial.
-if(FIND_CUSPATIAL_CPP)
-  find_package(cuspatial ${cuspatial_version})
+# If the user requested it we attempt to find cudf_kafka.
+if(FIND_CUDF_KAFKA_CPP)
+  find_package(cudf_kafka ${cudf_kafka_version})
 else()
-  set(cuspatial_FOUND OFF)
+  set(cudf_kafka_FOUND OFF)
 endif()
 
-if(NOT cuspatial_FOUND)
+if(NOT cudf_kafka_FOUND)
   set(BUILD_TESTS OFF)
   set(BUILD_BENCHMARKS OFF)
   set(_exclude_from_all "")
-  if(CUSPATIAL_BUILD_WHEELS)
+  if(CUDF_KAFKA_BUILD_WHEELS)
 
     # Statically link cudart if building wheels
     set(CUDA_STATIC_RUNTIME ON)
-    set(CUSPATIAL_USE_CUDF_STATIC ON)
-    set(CUSPATIAL_EXCLUDE_CUDF_FROM_ALL ON)
+    set(CUDF_KAFKA_USE_CUDF_STATIC ON)
+    set(CUDF_KAFKA_EXCLUDE_CUDF_FROM_ALL ON)
 
     # Always build wheels against the pyarrow libarrow.
     set(USE_LIBARROW_FROM_PYARROW ON)
@@ -59,32 +59,32 @@ if(NOT cuspatial_FOUND)
     # https://cmake.org/cmake/help/latest/variable/CMAKE_FIND_PACKAGE_TARGETS_GLOBAL.html#variable:CMAKE_FIND_PACKAGE_TARGETS_GLOBAL
     set(CMAKE_FIND_PACKAGE_TARGETS_GLOBAL ON)
 
-    # Don't install the cuSpatial C++ targets into wheels
+    # Don't install the cudf_kafka C++ targets into wheels
     set(_exclude_from_all EXCLUDE_FROM_ALL)
   endif()
 
-  add_subdirectory(../../cpp cuspatial-cpp ${_exclude_from_all})
+  add_subdirectory(../../cpp cudf_kafka-cpp ${_exclude_from_all})
 
-  set(cython_lib_dir cuspatial)
+  set(cython_lib_dir cudf_kafka)
 
-  if(CUSPATIAL_BUILD_WHEELS)
+  if(CUDF_KAFKA_BUILD_WHEELS)
     include(cmake/Modules/WheelHelpers.cmake)
     get_target_property(_nvcomp_link_libs nvcomp::nvcomp INTERFACE_LINK_LIBRARIES)
     # Ensure all the shared objects we need at runtime are in the wheel
     add_target_libs_to_wheel(LIB_DIR ${cython_lib_dir} TARGETS arrow_shared nvcomp::nvcomp ${_nvcomp_link_libs})
   endif()
 
-  # Since there are multiple subpackages of cuspatial._lib that require access to libcuspatial, we place the
-  # library in the cuspatial directory as a single source of truth and modify the other rpaths
+  # Since there are multiple subpackages of cudf_kafka._lib that require access to libcudf_kafka, we place the
+  # library in the cudf_kafka directory as a single source of truth and modify the other rpaths
   # appropriately.
-  install(TARGETS cuspatial DESTINATION ${cython_lib_dir})
+  install(TARGETS cudf_kafka DESTINATION ${cython_lib_dir})
 endif()
 
 include(rapids-cython)
 rapids_cython_init()
 
-add_subdirectory(cuspatial/_lib)
+add_subdirectory(cudf_kafka/_lib)
 
 if(DEFINED cython_lib_dir)
-  rapids_cython_add_rpath_entries(TARGET cuspatial PATHS "${cython_lib_dir}")
+  rapids_cython_add_rpath_entries(TARGET cudf_kafka PATHS "${cython_lib_dir}")
 endif()
