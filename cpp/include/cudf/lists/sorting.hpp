@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,6 +46,7 @@ namespace lists {
  * @param source_column View of the list column of numeric types to sort
  * @param column_order The desired sort order
  * @param null_precedence The desired order of null compared to other elements in the list
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource to allocate any returned objects
  * @return list column with elements in each list sorted.
  *
@@ -54,6 +55,7 @@ std::unique_ptr<column> sort_lists(
   lists_column_view const& source_column,
   order column_order,
   null_order null_precedence,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -66,6 +68,7 @@ std::unique_ptr<column> stable_sort_lists(
   lists_column_view const& source_column,
   order column_order,
   null_order null_precedence,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
