@@ -50,7 +50,7 @@ sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g'
 # cpp cudf_jni update
 sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g' java/src/main/native/CMakeLists.txt
 
-# Python __init__.py updates
+# Python _version.py updates
 sed_runner "/__version__ / s/= .*/= \"${NEXT_FULL_TAG}\"/g" python/cudf/cudf/_version.py
 sed_runner "/__version__ / s/= .*/= \"${NEXT_FULL_TAG}\"/g" python/dask_cudf/dask_cudf/_version.py
 sed_runner "/__version__ / s/= .*/= \"${NEXT_FULL_TAG}\"/g" python/cudf_kafka/cudf_kafka/_version.py
