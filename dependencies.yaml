@@ -121,8 +121,9 @@ files:
     extras:
       table: build-system
     includes:
-      - build_wheels
       - build_python_common
+      - build_python
+      - build_wheels
   py_run_cudf_kafka:
     output: pyproject
     pyproject_dir: python/cudf_kafka
