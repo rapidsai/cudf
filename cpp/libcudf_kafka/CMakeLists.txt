@@ -85,6 +85,8 @@ set_target_properties(
              CXX_STANDARD_REQUIRED ON
 )
 
+add_library(cudf_kafka::cudf_kafka ALIAS cudf_kafka)
+
 # ##################################################################################################
 # * cudf_kafka Install ----------------------------------------------------------------------------
 rapids_cmake_install_lib_dir(lib_dir)
