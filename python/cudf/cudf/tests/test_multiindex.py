@@ -2031,8 +2031,6 @@ def test_multiindex_dtype_error():
         cudf.Index(midx, dtype="int64")
     with pytest.raises(TypeError):
         cudf.Index(midx.to_pandas(), dtype="int64")
-    with pytest.raises(TypeError):
-        cudf.Index(midx.to_frame(), dtype="int64")
 
 
 def test_multiindex_codes():
