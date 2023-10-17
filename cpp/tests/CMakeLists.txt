@@ -636,8 +636,10 @@ ConfigureTest(
   STREAM_STRINGS_TEST
   streams/strings/case_test.cpp
   streams/strings/convert_test.cpp
+  streams/strings/filter_test.cpp
   streams/strings/find_test.cpp
   streams/strings/replace_test.cpp
+  streams/strings/reverse_test.cpp
   streams/strings/split_test.cpp
   streams/strings/strings_tests.cpp
   STREAM_MODE
