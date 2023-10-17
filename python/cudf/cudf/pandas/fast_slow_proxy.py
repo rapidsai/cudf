@@ -908,10 +908,16 @@ def _transform_arg(
             for k, a in arg.items()
         }
     elif isinstance(arg, np.ndarray) and arg.dtype == "O":
-        return np.asarray(
-            [_transform_arg(a, attribute_name, seen) for a in arg.flat],
-            dtype="O",
-        ).reshape(arg.shape)
+        transformed = [
+            _transform_arg(a, attribute_name, seen) for a in arg.flat
+        ]
+        if arg.ndim == 1 and len(arg) and isinstance(arg[0], tuple):
+            # Don't unpack tuple elements
+            result = np.empty(len(arg), dtype=object)
+            result[...] = transformed
+            return result
+        else:
+            return np.asarray(transformed, dtype=object).reshape(arg.shape)
     elif isinstance(arg, Iterator) and attribute_name == "_xdf_fast":
         # this may include consumable objects like generators or
         # IOBase objects, which we don't want unavailable to the slow
