@@ -63,7 +63,7 @@ if(NOT cudf_kafka_FOUND)
     set(_exclude_from_all EXCLUDE_FROM_ALL)
   endif()
 
-  add_subdirectory(../../cpp cudf_kafka-cpp ${_exclude_from_all})
+  add_subdirectory(../../cpp/libcudf_kafka cudf_kafka-cpp ${_exclude_from_all})
 
   set(cython_lib_dir cudf_kafka)
 
