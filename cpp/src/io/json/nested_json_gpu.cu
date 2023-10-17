@@ -91,7 +91,7 @@ void check_input_size(std::size_t input_size)
 
 namespace cudf::io::json {
 
-// FST to help fixing the stack context of characters that follow the first record on ech JSON line
+// FST to help fixing the stack context of characters that follow the first record on each JSON line
 namespace fix_stack_of_excess_chars {
 
 // Type used to represent the target state in the transition table
@@ -168,16 +168,16 @@ struct TransduceInputOp {
 };
 
 // Aliases for readability of the transition table
-constexpr auto TT_BEFR = dfa_states::BEFORE;
-constexpr auto TT_INSD = dfa_states::WITHIN;
-constexpr auto TT_POST = dfa_states::EXCESS;
+constexpr auto TT_BEFORE = dfa_states::BEFORE;
+constexpr auto TT_INSIDE = dfa_states::WITHIN;
+constexpr auto TT_EXCESS = dfa_states::EXCESS;
 
 // Transition table
 std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> constexpr transition_table{
-  {/* IN_STATE         ROOT    NEWLINE  OTHER */
-   /* TT_BEFR    */ {{TT_BEFR, TT_BEFR, TT_INSD}},
-   /* TT_INSD    */ {{TT_POST, TT_BEFR, TT_INSD}},
-   /* TT_POST    */ {{TT_POST, TT_BEFR, TT_POST}}}};
+  {/* IN_STATE            ROOT      NEWLINE     OTHER */
+   /* TT_BEFORE    */ {{TT_BEFORE, TT_BEFORE, TT_INSIDE}},
+   /* TT_INSIDE    */ {{TT_EXCESS, TT_BEFORE, TT_INSIDE}},
+   /* TT_EXCESS    */ {{TT_EXCESS, TT_BEFORE, TT_EXCESS}}}};
 
 // The DFA's starting state
 constexpr auto start_state = static_cast<StateT>(dfa_states::BEFORE);
