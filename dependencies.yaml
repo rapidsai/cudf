@@ -225,7 +225,9 @@ dependencies:
           - &gmock gmock>=1.13.0
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - libarrow==12.0.1.*
+          # Temporarily building a specific build string in order to choose one
+          # that is compatible with the aws-sdk-cpp version required above
+          - libarrow==12.0.1.*=hb6645e0_10_cpu
           - librdkafka>=1.9.0,<1.10.0a0
           # Align nvcomp version with rapids-cmake
           - nvcomp==2.6.1
@@ -263,7 +265,7 @@ dependencies:
       - output_types: [conda, requirements]
         packages:
           # Allow runtime version to float up to minor version
-          - libarrow==12.*
+          - libarrow==12.0.1.*=hb6645e0_10_cpu
   pyarrow_run:
     common:
       - output_types: [conda, requirements, pyproject]

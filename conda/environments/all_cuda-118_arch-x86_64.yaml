@@ -40,7 +40,7 @@ dependencies:
 - hypothesis
 - identify>=2.5.20
 - ipython
-- libarrow==12.0.1.*
+- libarrow==12.0.1.*=hb6645e0_10_cpu
 - libcufile-dev=1.4.0.31
 - libcufile=1.4.0.31
 - libcurand-dev=10.3.0.86

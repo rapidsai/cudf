@@ -26,7 +26,7 @@ aws_sdk_cpp_version:
   - "<1.11"
 
 libarrow_version:
-  - "=12"
+  - "==12.0.1.*=hb6645e0_10_cpu"
 
 dlpack_version:
   - ">=0.5,<0.6.0a0"
