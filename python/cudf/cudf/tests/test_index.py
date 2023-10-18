@@ -2892,3 +2892,8 @@ def test_period_index_error():
 def test_index_from_dataframe_valueerror():
     with pytest.raises(ValueError):
         cudf.Index(cudf.DataFrame(range(1)))
+
+
+def test_index_from_scalar_valueerror():
+    with pytest.raises(ValueError):
+        cudf.Index(11)
