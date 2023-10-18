@@ -911,7 +911,7 @@ def _transform_arg(
         transformed = [
             _transform_arg(a, attribute_name, seen) for a in arg.flat
         ]
-        result = np.empty(np.prod(arg.shape), dtype=object)
+        result = np.empty(int(np.prod(arg.shape)), dtype=object)
         result[...] = transformed
         return result.reshape(arg.shape)
     elif isinstance(arg, Iterator) and attribute_name == "_xdf_fast":
