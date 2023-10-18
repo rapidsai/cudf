@@ -65,7 +65,8 @@ requirements:
     {% endif %}
     - cuda-version ={{ cuda_version }}
     - nvcomp {{ nvcomp_version }}
-    - libarrow {{ libarrow_version }}
+    - libarrow {{ libarrow_x86_version }} # [linux64]
+    - libarrow {{ libarrow_aarch64_version }} # [aarch64]
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
     - fmt {{ fmt_version }}

@@ -227,11 +227,21 @@ dependencies:
           # in sync with the version pinned in get_arrow.cmake.
           # Temporarily building a specific build string in order to choose one
           # that is compatible with the aws-sdk-cpp version required above
-          - libarrow==12.0.1.*=hb6645e0_10_cpu
           - librdkafka>=1.9.0,<1.10.0a0
           # Align nvcomp version with rapids-cmake
           - nvcomp==2.6.1
           - spdlog>=1.11.0,<1.12
+    specific:
+      - output_types: conda
+        matrices:
+          - matrix:
+              arch: x86_64
+            packages:
+              - libarrow==12.0.1.*=hb6645e0_10_cpu
+          - matrix:
+              arch: aarch64
+            packages:
+              - libarrow==12.0.1.*=hf79fbb4_10_cpu
   build_wheels:
     common:
       - output_types: pyproject
@@ -261,11 +271,17 @@ dependencies:
         packages:
           - protoc-wheel
   libarrow_run:
-    common:
-      - output_types: [conda, requirements]
-        packages:
-          # Allow runtime version to float up to minor version
-          - libarrow==12.0.1.*=hb6645e0_10_cpu
+    specific:
+      - output_types: conda
+        matrices:
+          - matrix:
+              arch: x86_64
+            packages:
+              - libarrow==12.0.1.*=hb6645e0_10_cpu
+          - matrix:
+              arch: aarch64
+            packages:
+              - libarrow==12.0.1.*=hf79fbb4_10_cpu
   pyarrow_run:
     common:
       - output_types: [conda, requirements, pyproject]
