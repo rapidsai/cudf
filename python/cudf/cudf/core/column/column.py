@@ -2430,7 +2430,7 @@ def as_column(
                         unit = np.datetime_data(np_dtype)[0]
                         if unit not in {"ns", "us", "ms", "s", "D"}:
                             raise NotImplementedError(
-                                f"{np_dtype=} is not supported."
+                                f"{dtype=} is not supported."
                             )
                     np_type = np_dtype.type
                     pa_type = np_to_pa_dtype(np_dtype)
