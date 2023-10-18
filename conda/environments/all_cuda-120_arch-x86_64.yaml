@@ -17,6 +17,7 @@ dependencies:
 - cachetools
 - cmake>=3.26.4
 - cuda-cudart-dev
+- cuda-gdb
 - cuda-nvcc
 - cuda-nvrtc-dev
 - cuda-nvtx-dev

@@ -41,6 +41,9 @@ requirements:
     - {{ compiler('cxx') }}
     - ninja
     - sysroot_{{ target_platform }} {{ sysroot_version }}
+    {% if cuda_major == "12" %}
+    - cuda-gdb
+    {% endif %}
   host:
     - python
     - cython >=3.0.0

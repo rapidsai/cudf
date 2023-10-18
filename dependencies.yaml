@@ -301,6 +301,7 @@ dependencies:
               - cuda-nvrtc-dev
               - cuda-nvtx-dev
               - libcurand-dev
+              - cuda-gdb
           - matrix:
               cuda: "11.8"
             packages:
