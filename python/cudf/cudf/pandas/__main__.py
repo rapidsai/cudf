@@ -49,9 +49,10 @@ def main():
     parser = argparse.ArgumentParser(
         prog="python -m cudf.pandas",
         description=(
-            "Run a Python script in transparent mode. "
-            "In transparent mode, all imports of pandas will automatically "
-            "use GPU accelerated cuDF equivalents where possible."
+            "Run a Python script with Pandas Accelerator Mode enabled. "
+            "In Pandas Accelerator Mode, all imports of pandas will "
+            "automaticallyu se GPU accelerated cuDF equivalents where "
+            "possible."
         ),
     )
 
