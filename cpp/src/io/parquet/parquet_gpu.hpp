@@ -116,7 +116,6 @@ constexpr uint32_t BitAnd(T1 a, T2 b)
   return static_cast<uint32_t>(a) & static_cast<uint32_t>(b);
 }
 
-// helpers to do bit operations on scoped enums
 template <class T1,
           class T2,
           typename std::enable_if_t<(is_scoped_enum<T1>::value and std::is_same_v<T1, T2>) or
