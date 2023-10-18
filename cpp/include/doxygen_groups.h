@@ -146,6 +146,7 @@
  *   @defgroup io_datasources Data Sources
  *   @defgroup io_datasinks Data Sinks
  * @}
+ * @defgroup json_object JSON
  * @defgroup lists_apis Lists
  * @{
  *   @defgroup lists_combine Combining
