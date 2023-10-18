@@ -25,10 +25,10 @@ jobs:
       - pandas-tests-xdf-diff
       - pandas-tests-xdf-diff-comment
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/pr-builder.yaml@branch-23.10
+    uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@branch-23.10
   checks:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/checks.yaml@branch-23.10
+    uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-23.10
     with:
       enable_check_generated_files: false
   changed_files:
@@ -55,7 +55,7 @@ jobs:
   wheel-build-cudf:
     needs: checks
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-build.yaml@branch-23.10
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-23.10
     with:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
@@ -63,7 +63,7 @@ jobs:
   wheel-build-cudf-main:
     needs: checks
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-build.yaml@branch-23.10
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-23.10
     with:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
@@ -72,7 +72,7 @@ jobs:
     if: needs.changed_files.outputs.cudf_files_changed == 'true'
     needs: [wheel-build-cudf, changed_files]
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-test.yaml@branch-23.10
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-23.10
     with:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
@@ -80,7 +80,7 @@ jobs:
   wheel-build-dask-cudf:
     needs: wheel-tests-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-build.yaml@branch-23.10
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-23.10
     with:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
@@ -88,7 +88,7 @@ jobs:
   wheel-tests-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-test.yaml@branch-23.10
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-23.10
     with:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
@@ -96,7 +96,7 @@ jobs:
   unit-tests-xdf:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-test.yaml@branch-23.10
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-23.10
     with:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
@@ -105,7 +105,7 @@ jobs:
     # run the Pandas unit tests using xdf (main branch)
     needs: wheel-build-cudf-main
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-test.yaml@branch-23.10
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-23.10
     with:
       matrix_filter: map(select(.ARCH == "amd64")) | max_by(.CUDA_VER) | [.]
       build_type: pull-request
@@ -114,7 +114,7 @@ jobs:
     # run the Pandas unit tests using xdf (PR branch)
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-test.yaml@branch-23.10
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-23.10
     with:
       matrix_filter: map(select(.ARCH == "amd64")) | max_by(.CUDA_VER) | [.]
       build_type: pull-request
@@ -124,7 +124,7 @@ jobs:
     needs: [pandas-tests-xdf-main, pandas-tests-xdf-pr]
     secrets: inherit
     # This branch exports a `job_output` output that the downstream job reads.
-    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@wence/fea/custom-job-output
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@wence/fea/custom-job-output
     with:
       node_type: cpu4
       build_type: pull-request

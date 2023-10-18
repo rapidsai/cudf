@@ -28,7 +28,7 @@ concurrency:
 jobs:
   wheel-build-cudf:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-build.yaml@branch-23.10
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-23.10
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -38,7 +38,7 @@ jobs:
   wheel-publish-cudf:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-publish.yaml@branch-23.10
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@branch-23.10
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
