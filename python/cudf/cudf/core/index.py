@@ -188,6 +188,8 @@ class RangeIndex(BaseIndex, BinaryOperand):
     ):
         if step == 0:
             raise ValueError("Step must not be zero.")
+        if not cudf.api.types.is_hashable(name):
+            raise ValueError("Name must be a hashable value.")
 
         if isinstance(start, range):
             therange = start
