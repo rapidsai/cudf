@@ -31,12 +31,12 @@ TEST_F(SHA384HashTest, EmptyTable)
 {
   auto const empty_table        = cudf::table_view{};
   auto const empty_column       = cudf::make_empty_column(cudf::data_type(cudf::type_id::STRING));
-  auto const output_empty_table = cudf::hash(empty_table, cudf::hash_id::HASH_SHA384);
+  auto const output_empty_table = cudf::hashing::sha384(empty_table);
   EXPECT_EQ(empty_column->size(), output_empty_table->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(empty_column->view(), output_empty_table->view());
 
   auto const table_one_empty_column  = cudf::table_view{{empty_column->view()}};
-  auto const output_one_empty_column = cudf::hash(empty_table, cudf::hash_id::HASH_SHA384);
+  auto const output_one_empty_column = cudf::hashing::sha384(empty_table);
   EXPECT_EQ(empty_column->size(), output_one_empty_column->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(empty_column->view(), output_one_empty_column->view());
 }
@@ -100,8 +100,8 @@ TEST_F(SHA384HashTest, MultiValue)
 
   auto const string_input1         = cudf::table_view({strings_col});
   auto const string_input2         = cudf::table_view({strings_col, strings_col});
-  auto const sha384_string_output1 = cudf::hash(string_input1, cudf::hash_id::HASH_SHA384);
-  auto const sha384_string_output2 = cudf::hash(string_input2, cudf::hash_id::HASH_SHA384);
+  auto const sha384_string_output1 = cudf::hashing::sha384(string_input1);
+  auto const sha384_string_output2 = cudf::hashing::sha384(string_input2);
   EXPECT_EQ(string_input1.num_rows(), sha384_string_output1->size());
   EXPECT_EQ(string_input2.num_rows(), sha384_string_output2->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(sha384_string_output1->view(), sha384_string_results1, verbosity);
@@ -109,8 +109,8 @@ TEST_F(SHA384HashTest, MultiValue)
 
   auto const input1         = cudf::table_view({strings_col, ints_col, bools_col1});
   auto const input2         = cudf::table_view({strings_col, ints_col, bools_col2});
-  auto const sha384_output1 = cudf::hash(input1, cudf::hash_id::HASH_SHA384);
-  auto const sha384_output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA384);
+  auto const sha384_output1 = cudf::hashing::sha384(input1);
+  auto const sha384_output2 = cudf::hashing::sha384(input2);
   EXPECT_EQ(input1.num_rows(), sha384_output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(sha384_output1->view(), sha384_output2->view(), verbosity);
 }
@@ -132,25 +132,25 @@ TEST_F(SHA384HashTest, MultiValueNulls)
      "Very different... but null",
      "All work and no play makes Jack a dull boy",
      ""},
-    {1, 0, 0, 1, 0});
+    {1, 0, 0, 1, 1});  // empty string is equivalent to null
 
   // Nulls with different values should be equal
   using limits = std::numeric_limits<int32_t>;
   cudf::test::fixed_width_column_wrapper<int32_t> const ints_col1(
-    {0, 100, -100, limits::min(), limits::max()}, {1, 0, 0, 1, 0});
+    {0, 100, -100, limits::min(), limits::max()}, {1, 0, 0, 1, 1});
   cudf::test::fixed_width_column_wrapper<int32_t> const ints_col2(
-    {0, -200, 200, limits::min(), limits::max()}, {1, 0, 0, 0, 1});
+    {0, -200, 200, limits::min(), limits::max()}, {1, 0, 0, 1, 1});
 
   // Nulls with different values should be equal
-  // Different truthy values should be equal
+  // Different truth values should be equal
   cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
-  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 1, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 0, 1});
 
   auto const input1 = cudf::table_view({strings_col1, ints_col1, bools_col1});
   auto const input2 = cudf::table_view({strings_col2, ints_col2, bools_col2});
 
-  auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_SHA384);
-  auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA384);
+  auto const output1 = cudf::hashing::sha384(input1);
+  auto const output2 = cudf::hashing::sha384(input2);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
@@ -167,8 +167,8 @@ TYPED_TEST(SHA384HashTestTyped, Equality)
   auto const input = cudf::table_view({col});
 
   // Hash of same input should be equal
-  auto const output1 = cudf::hash(input, cudf::hash_id::HASH_SHA384);
-  auto const output2 = cudf::hash(input, cudf::hash_id::HASH_SHA384);
+  auto const output1 = cudf::hashing::sha384(input);
+  auto const output2 = cudf::hashing::sha384(input);
 
   EXPECT_EQ(input.num_rows(), output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
@@ -185,8 +185,8 @@ TYPED_TEST(SHA384HashTestTyped, EqualityNulls)
   auto const input1 = cudf::table_view({col1});
   auto const input2 = cudf::table_view({col2});
 
-  auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_SHA384);
-  auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA384);
+  auto const output1 = cudf::hashing::sha384(input1);
+  auto const output2 = cudf::hashing::sha384(input2);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
@@ -213,8 +213,8 @@ TYPED_TEST(SHA384HashTestFloatTyped, TestExtremes)
   auto const input1 = cudf::table_view({col1});
   auto const input2 = cudf::table_view({col2});
 
-  auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_SHA384);
-  auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA384);
+  auto const output1 = cudf::hashing::sha384(input1);
+  auto const output2 = cudf::hashing::sha384(input2);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
