@@ -198,17 +198,17 @@ def make_final_proxy_type(
 
     def __reduce__(self):
         # Need a local import to avoid circular import issues
-        from .module_finder import disable_transparent_mode_if_enabled
+        from .module_accelerator import disable_module_accelerator
 
-        with disable_transparent_mode_if_enabled():
+        with disable_module_accelerator():
             pickled_wrapped_obj = pickle.dumps(self._xdf_wrapped)
         return (_PickleConstructor(type(self)), (), pickled_wrapped_obj)
 
     def __setstate__(self, state):
         # Need a local import to avoid circular import issues
-        from .module_finder import disable_transparent_mode_if_enabled
+        from .module_accelerator import disable_module_accelerator
 
-        with disable_transparent_mode_if_enabled():
+        with disable_module_accelerator():
             unpickled_wrapped_obj = pickle.loads(state)
         self._xdf_wrapped = unpickled_wrapped_obj
 
@@ -442,11 +442,11 @@ class _FastSlowAttribute:
             result = property(result.func)
 
         if isinstance(result, (_MethodProxy, property)):
-            from .module_finder import disable_transparent_mode_if_enabled
+            from .module_accelerator import disable_module_accelerator
 
             type_ = owner if owner else type(obj)
             slow_result_type = getattr(type_._xdf_slow, self._name)
-            with disable_transparent_mode_if_enabled():
+            with disable_module_accelerator():
                 result.__doc__ = inspect.getdoc(  # type: ignore
                     slow_result_type
                 )
@@ -815,7 +815,7 @@ def _fast_slow_function_call(func: Callable, /, *args, **kwargs) -> Any:
     Wrap the result in a fast-slow proxy if it is a type we know how
     to wrap.
     """
-    from .module_finder import disable_transparent_mode_if_enabled
+    from .module_accelerator import disable_module_accelerator
 
     fast = False
     try:
@@ -837,7 +837,7 @@ def _fast_slow_function_call(func: Callable, /, *args, **kwargs) -> Any:
             domain="xdf_python",
         ):
             slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
-            with disable_transparent_mode_if_enabled():
+            with disable_module_accelerator():
                 result = func(*slow_args, **slow_kwargs)
     return _maybe_wrap_result(result, func, *args, **kwargs), fast
 
