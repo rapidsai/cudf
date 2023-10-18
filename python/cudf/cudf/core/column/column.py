@@ -2425,8 +2425,15 @@ def as_column(
                         # since 'boolean' & 'pd.BooleanDtype' are not
                         # understood by np.dtype below.
                         dtype = "bool"
-                    np_type = np.dtype(dtype).type
-                    pa_type = np_to_pa_dtype(np.dtype(dtype))
+                    np_dtype = np.dtype(dtype)
+                    if np_dtype.kind in {"m", "M"}:
+                        unit = np.datetime_data(np_dtype)[0]
+                        if unit not in {"ns", "us", "ms", "s", "D"}:
+                            raise NotImplementedError(
+                                f"{np_dtype=} is not supported."
+                            )
+                    np_type = np_dtype.type
+                    pa_type = np_to_pa_dtype(np_dtype)
                 else:
                     # By default cudf constructs a 64-bit column. Setting
                     # the `default_*_bitwidth` to 32 will result in a 32-bit
