@@ -1208,12 +1208,64 @@ NamedAgg = make_final_proxy_type(
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
 
+ArrowExtensionArray = make_final_proxy_type(
+    "ExtensionArray",
+    _Unusable,
+    pd.core.arrays.arrow.ArrowExtensionArray,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+)
+
 
 # make proxies for every PandasObject:
 def get_all_subclasses(klass):
-    for kls in klass.__subclasses__():
-        yield from get_all_subclasses(kls)
-        yield kls
+    # for kls in klass.__subclasses__():
+    #     yield from get_all_subclasses(kls)
+    #     yield kls
+    return [
+        pd.core.arrays.categorical.Categorical,
+        pd.core.arrays.categorical.CategoricalAccessor,
+        pd.core.arrays.sparse.array.SparseArray,
+        pd.core.indexes.frozen.FrozenList,
+        pd.core.indexes.category.CategoricalIndex,
+        pd.core.indexes.datetimes.DatetimeIndex,
+        pd.core.indexes.timedeltas.TimedeltaIndex,
+        pd.core.indexes.datetimelike.DatetimeTimedeltaMixin,
+        pd.core.indexes.period.PeriodIndex,
+        pd.core.indexes.datetimelike.DatetimeIndexOpsMixin,
+        pd.core.indexes.extension.NDArrayBackedExtensionIndex,
+        pd.core.indexes.interval.IntervalIndex,
+        pd.core.indexes.extension.ExtensionIndex,
+        pd.core.indexes.numeric.Int64Index,
+        pd.core.indexes.numeric.UInt64Index,
+        pd.core.indexes.numeric.IntegerIndex,
+        pd.core.indexes.numeric.Float64Index,
+        pd.core.indexes.range.RangeIndex,
+        pd.core.indexes.numeric.NumericIndex,
+        pd.core.indexes.multi.MultiIndex,
+        pd.core.indexes.base.Index,
+        pd.core.series.Series,
+        pd.core.frame.DataFrame,
+        pd.core.generic.NDFrame,
+        pd.core.indexes.accessors.CombinedDatetimelikeProperties,
+        pd.core.indexes.accessors.DatetimeProperties,
+        pd.core.indexes.accessors.CombinedDatetimelikeProperties,
+        pd.core.indexes.accessors.TimedeltaProperties,
+        pd.core.indexes.accessors.CombinedDatetimelikeProperties,
+        pd.core.indexes.accessors.PeriodProperties,
+        pd.core.indexes.accessors.Properties,
+        pd.plotting._core.PlotAccessor,
+        pd.core.groupby.groupby.GroupByPlot,
+        pd.core.groupby.generic.SeriesGroupBy,
+        pd.core.groupby.generic.DataFrameGroupBy,
+        pd.core.groupby.groupby.GroupBy,
+        pd.core.groupby.groupby.BaseGroupBy,
+        pd.io.sql.SQLiteTable,
+        pd.io.sql.SQLTable,
+        pd.io.sql.SQLDatabase,
+        pd.io.sql.SQLiteDatabase,
+        pd.io.sql.PandasSQL,
+    ]
 
 
 all_pandas_obj_types = get_all_subclasses(pd.core.base.PandasObject)
