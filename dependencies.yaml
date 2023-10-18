@@ -237,11 +237,11 @@ dependencies:
           - matrix:
               arch: x86_64
             packages:
-              - libarrow==12.0.1.*=hb6645e0_10_cpu
+              - libarrow==12.0.1=hb6645e0_10_cpu
           - matrix:
               arch: aarch64
             packages:
-              - libarrow==12.0.1.*=hf79fbb4_10_cpu
+              - libarrow==12.0.1=hf79fbb4_10_cpu
   build_wheels:
     common:
       - output_types: pyproject
@@ -277,11 +277,11 @@ dependencies:
           - matrix:
               arch: x86_64
             packages:
-              - libarrow==12.0.1.*=hb6645e0_10_cpu
+              - libarrow==12.0.1=hb6645e0_10_cpu
           - matrix:
               arch: aarch64
             packages:
-              - libarrow==12.0.1.*=hf79fbb4_10_cpu
+              - libarrow==12.0.1=hf79fbb4_10_cpu
   pyarrow_run:
     common:
       - output_types: [conda, requirements, pyproject]
