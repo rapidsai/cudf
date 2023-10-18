@@ -62,6 +62,7 @@ files:
     includes:
       - cudatoolkit
       - docs
+      - libarrow_run
       - py_version
   py_build_cudf:
     output: pyproject
