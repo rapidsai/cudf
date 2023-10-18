@@ -2335,6 +2335,14 @@ def test_series_empty_warning():
     assert_eq(expected, actual)
 
 
+@pytest.mark.filterwarnings("ignore::FutureWarning")  # tested above
+@pytest.mark.parametrize("data", [None, {}, []])
+def test_series_empty_index_rangeindex(data):
+    expected = cudf.RangeIndex(0)
+    result = cudf.Series(data).index
+    assert_eq(result, expected)
+
+
 def test_series_count_invalid_param():
     s = cudf.Series([], dtype="float64")
     with pytest.raises(TypeError):

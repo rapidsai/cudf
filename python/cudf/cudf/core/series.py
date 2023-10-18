@@ -598,7 +598,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 data = data.astype(dtype)
 
         if isinstance(data, dict):
-            current_index = data.keys()
+            if not data:
+                current_index = RangeIndex(0)
+            else:
+                current_index = data.keys()
             if index is not None:
                 series = Series(
                     list(data.values()),
