@@ -130,7 +130,6 @@
  *   @defgroup strings_replace Replacing
  *   @defgroup strings_split Splitting
  *   @defgroup strings_extract Extracting
- *   @defgroup strings_json JSON
  *   @defgroup strings_regex Regex
  * @}
  * @defgroup dictionary_apis Dictionary
@@ -146,7 +145,10 @@
  *   @defgroup io_datasources Data Sources
  *   @defgroup io_datasinks Data Sinks
  * @}
- * @defgroup json_object JSON
+ * @defgroup json_apis JSON
+ * @{
+ *   @defgroup json_object JSON Path
+ * @}
  * @defgroup lists_apis Lists
  * @{
  *   @defgroup lists_combine Combining
