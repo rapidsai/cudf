@@ -169,7 +169,7 @@ class ModuleAcceleratorBase(
 
     def __repr__(self) -> str:
         return (
-            f"{self.__class__.__name__} "
+            f"{self.__class__.__name__}"
             f"(fast={self.fast_lib}, slow={self.slow_lib})"
         )
 

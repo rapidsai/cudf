@@ -51,7 +51,7 @@ def main():
         description=(
             "Run a Python script with Pandas Accelerator Mode enabled. "
             "In Pandas Accelerator Mode, all imports of pandas will "
-            "automaticallyu se GPU accelerated cuDF equivalents where "
+            "automatically use GPU accelerated cuDF equivalents where "
             "possible."
         ),
     )
