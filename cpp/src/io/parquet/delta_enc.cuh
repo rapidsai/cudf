@@ -30,10 +30,10 @@ namespace delta {
 inline __device__ void put_uleb128(uint8_t*& p, uleb128_t v)
 {
   while (v > 0x7f) {
-    *p++ = v | 0x80;
+    *(p++) = v | 0x80;
     v >>= 7;
   }
-  *p++ = v;
+  *(p++) = v;
 }
 
 inline __device__ void put_zz128(uint8_t*& p, zigzag128_t v)
@@ -42,16 +42,16 @@ inline __device__ void put_zz128(uint8_t*& p, zigzag128_t v)
   put_uleb128(p, (v ^ -s) * 2 + s);
 }
 
-// a block size of 128, with 4 mini-blocks of 32 values each fits nicely without consuming
+// A block size of 128, with 4 mini-blocks of 32 values each fits nicely without consuming
 // too much shared memory.
-// the parquet spec requires block_size to be a multiple of 128, and values_per_mini_block
+// The parquet spec requires block_size to be a multiple of 128, and values_per_mini_block
 // to be a multiple of 32.
 constexpr int block_size            = 128;
 constexpr int num_mini_blocks       = 4;
 constexpr int values_per_mini_block = block_size / num_mini_blocks;
 constexpr int buffer_size           = 2 * block_size;
 
-// extra sanity checks to enforce compliance with the parquet specification
+// An extra sanity checks to enforce compliance with the parquet specification.
 static_assert(block_size % 128 == 0);
 static_assert(values_per_mini_block % 32 == 0);
 
@@ -61,7 +61,7 @@ using index_scan   = cub::BlockScan<size_type, block_size>;
 
 constexpr int rolling_idx(int index) { return rolling_index<buffer_size>(index); }
 
-// version of bit packer that can handle up to 64 bits values.
+// Version of bit packer that can handle up to 64 bits values.
 // T is the type to use for processing. if nbits <= 32 use uint32_t, otherwise unsigned long long
 // (not uint64_t because of atomicOr's typing). allowing this to be selectable since there's a
 // measurable impact to using the wider types.
@@ -97,7 +97,7 @@ inline __device__ void bitpack_mini_block(
   }
 
   if (lane_id <= count) {
-    // shift symbol left by up to mask bits
+    // Shift symbol left by up to mask bits.
     wide_type v2 = val;
     v2 <<= (lane_id * nbits) & mask;
 
@@ -105,13 +105,13 @@ inline __device__ void bitpack_mini_block(
     scratch_type v1[2];
     memcpy(&v1, &v2, sizeof(wide_type));
 
-    // Atomically write result to scratch
+    // Atomically write result to scratch.
     if (v1[0]) { atomicOr(scratch + ((lane_id * nbits) / div), v1[0]); }
     if (v1[1]) { atomicOr(scratch + ((lane_id * nbits) / div) + 1, v1[1]); }
   }
   __syncwarp();
 
-  // Copy scratch data to final destination
+  // Copy scratch data to final destination.
   auto const available_bytes = util::div_rounding_up_safe(count * nbits, 8U);
   auto const scratch_bytes   = reinterpret_cast<uint8_t const*>(scratch);
 
@@ -126,15 +126,15 @@ inline __device__ void bitpack_mini_block(
 // Object used to turn a stream of integers into a DELTA_BINARY_PACKED stream. This takes as input
 // 128 values with validity at a time, saving them until there are enough values for a block
 // to be written.
-// T is the input data type (either zigzag128_t or uleb128_t)
+// T is the input data type (either zigzag128_t or uleb128_t).
 template <typename T>
 class delta_binary_packer {
  private:
   uint8_t* _dst;                             // sink to dump encoded values to
+  T* _buffer;                                // buffer to store values to be encoded
   size_type _current_idx;                    // index of first value in buffer
   uint32_t _num_values;                      // total number of values to encode
   size_type _values_in_buffer;               // current number of values stored in _buffer
-  T* _buffer;                                // buffer to store values to be encoded
   uint8_t _mb_bits[delta::num_mini_blocks];  // bitwidth for each mini-block
 
   // pointers to shared scratch memory for the warp and block scans/reduces
@@ -144,7 +144,7 @@ class delta_binary_packer {
 
   void* _bitpack_tmp;  // pointer to shared scratch memory used in bitpacking
 
-  // write the delta binary header. only call from thread 0
+  // Write the delta binary header. Only call from thread 0.
   inline __device__ void write_header()
   {
     delta::put_uleb128(_dst, delta::block_size);
@@ -153,7 +153,7 @@ class delta_binary_packer {
     delta::put_zz128(_dst, _buffer[0]);
   }
 
-  // write the block header. only call from thread 0
+  // Write the block header. Only call from thread 0.
   inline __device__ void write_block_header(zigzag128_t block_min)
   {
     delta::put_zz128(_dst, block_min);
@@ -161,7 +161,7 @@ class delta_binary_packer {
     _dst += 4;
   }
 
-  // signed subtraction with defined wrapping behavior
+  // Signed subtraction with defined wrapping behavior.
   inline __device__ zigzag128_t subtract(zigzag128_t a, zigzag128_t b)
   {
     return static_cast<zigzag128_t>(static_cast<uleb128_t>(a) - static_cast<uleb128_t>(b));
@@ -170,7 +170,7 @@ class delta_binary_packer {
  public:
   inline __device__ auto num_values() const { return _num_values; }
 
-  // initialize the object. only call from thread 0
+  // Initialize the object. Only call from thread 0.
   inline __device__ void init(uint8_t* dest, uint32_t num_values, T* buffer, void* temp_storage)
   {
     _dst              = dest;
@@ -184,10 +184,10 @@ class delta_binary_packer {
     _values_in_buffer = 0;
   }
 
-  // each thread calls this to add its current value
+  // Each thread calls this to add its current value.
   inline __device__ void add_value(T value, bool is_valid)
   {
-    // figure out the correct position for the given value
+    // Figure out the correct position for the given value.
     size_type const valid = is_valid;
     size_type pos;
     size_type num_valid;
@@ -210,7 +210,7 @@ class delta_binary_packer {
     if (_values_in_buffer >= delta::block_size) { flush(); }
   }
 
-  // called by each thread to flush data to the sink.
+  // Called by each thread to flush data to the sink.
   inline __device__ uint8_t const* flush()
   {
     using cudf::detail::warp_size;
@@ -222,23 +222,23 @@ class delta_binary_packer {
 
     if (_values_in_buffer <= 0) { return _dst; }
 
-    // calculate delta for this thread
+    // Calculate delta for this thread.
     size_type const idx     = _current_idx + t;
     zigzag128_t const delta = idx < _num_values ? subtract(_buffer[delta::rolling_idx(idx)],
                                                            _buffer[delta::rolling_idx(idx - 1)])
                                                 : std::numeric_limits<zigzag128_t>::max();
 
-    // find min delta for the block
+    // Find min delta for the block.
     auto const min_delta = delta::block_reduce(*_block_tmp).Reduce(delta, cub::Min());
 
     if (t == 0) { block_min = min_delta; }
     __syncthreads();
 
-    // compute frame of reference for the block
+    // Compute frame of reference for the block.
     uleb128_t const norm_delta = idx < _num_values ? subtract(delta, block_min) : 0;
 
-    // get max normalized delta for each warp, and use that to determine how many bits to use
-    // for the bitpacking of this warp
+    // Get max normalized delta for each warp, and use that to determine how many bits to use
+    // for the bitpacking of this warp.
     zigzag128_t const warp_max =
       delta::warp_reduce(_warp_tmp[warp_id]).Reduce(norm_delta, cub::Max());
     __syncwarp();
@@ -250,7 +250,7 @@ class delta_binary_packer {
     if (t == 0) { write_block_header(block_min); }
     __syncthreads();
 
-    // now each warp encodes its data...can calculate starting offset with _mb_bits
+    // Now each warp encodes its data...can calculate starting offset with _mb_bits.
     // NOTE: using a switch here rather than a loop because the compiler produces code that
     // uses fewer registers.
     int cumulative_bits = 0;
@@ -275,7 +275,7 @@ class delta_binary_packer {
     }
     __syncthreads();
 
-    // last warp updates global delta ptr
+    // Last warp updates global delta ptr.
     if (warp_id == delta::num_mini_blocks - 1 && lane_id == 0) {
       _dst              = mb_ptr + _mb_bits[warp_id] * delta::values_per_mini_block / 8;
       _current_idx      = min(warp_idx + delta::values_per_mini_block, _num_values);
