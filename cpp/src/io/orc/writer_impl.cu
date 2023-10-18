@@ -2184,9 +2184,8 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
                         string_rows_less{orc_table.d_columns, sd.column_idx});
 
     // Create the inverse permutation - i.e. the mapping from the original order to the sorted
-    auto order_copy = make_device_uvector_async(device_span<uint32_t const>{sd.data_order},
-                                                current_stream,
-                                                rmm::mr::get_current_device_resource());
+    auto order_copy = cudf::detail::make_device_uvector_async<uint32_t>(
+      sd.data_order, current_stream, rmm::mr::get_current_device_resource());
     thrust::scatter(rmm::exec_policy_nosync(current_stream),
                     thrust::make_counting_iterator<uint32_t>(0),
                     thrust::make_counting_iterator<uint32_t>(sd.data_order.size()),
