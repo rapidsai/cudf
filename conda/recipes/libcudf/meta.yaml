@@ -105,7 +105,8 @@ outputs:
         - nvcomp {{ nvcomp_version }}
         - librmm ={{ minor_version }}
         - libkvikio ={{ minor_version }}
-        - libarrow {{ libarrow_version }}
+        - libarrow {{ libarrow_x86_version }} # [linux64]
+        - libarrow {{ libarrow_aarch64_version }} # [aarch64]
         - dlpack {{ dlpack_version }}
         - gtest {{ gtest_version }}
         - gmock {{ gtest_version }}
