@@ -48,7 +48,8 @@ comment = (
     f"{pr_passed}/{pr_total} ({passing_percentage:.2f}%) "
     "Pandas tests passing, "
     f"{rate_change_type} in the test pass rate by "
-    f"{pass_rate_change:.2f}%."
+    f"{pass_rate_change:.2f}%.\n"
+    f"Trunk stats: {main_passed}/{main_total}."
 )
 
 
