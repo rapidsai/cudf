@@ -2504,6 +2504,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return iter(self._column_names)
 
     @_cudf_nvtx_annotate
+    def __contains__(self, item):
+        # This must check against containment in the pandas Index and not
+        # self._column_names to handle NA, None, nan, etc. correctly.
+        return item in self._data.to_pandas_index()
+
+    @_cudf_nvtx_annotate
     def items(self):
         """Iterate over column names and series pairs"""
         for k in self:
