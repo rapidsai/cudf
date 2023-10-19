@@ -51,6 +51,9 @@ requirements:
     - cudf ={{ version }}
     - libcudf_kafka ={{ version }}
     - setuptools
+    {% if cuda_major == "12" %}
+    - cuda-cudart-dev
+    {% endif %}
   run:
     - python
     - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
