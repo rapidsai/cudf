@@ -215,7 +215,6 @@ RangeIndex = make_final_proxy_type(
     pd.RangeIndex,
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
-    bases=(Index,),
     additional_attributes={"__init__": _DELETE},
 )
 
@@ -242,7 +241,6 @@ CategoricalIndex = make_final_proxy_type(
     pd.CategoricalIndex,
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
-    bases=(Index,),
     additional_attributes={"__init__": _DELETE},
 )
 
@@ -269,7 +267,6 @@ DatetimeIndex = make_final_proxy_type(
     pd.DatetimeIndex,
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
-    bases=(Index,),
     additional_attributes={"__init__": _DELETE},
 )
 
@@ -305,7 +302,6 @@ TimedeltaIndex = make_final_proxy_type(
     pd.TimedeltaIndex,
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
-    bases=(Index,),
     additional_attributes={"__init__": _DELETE},
 )
 
@@ -332,7 +328,6 @@ PeriodIndex = make_final_proxy_type(
     pd.PeriodIndex,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(Index,),
     additional_attributes={"__init__": _DELETE},
 )
 
@@ -367,7 +362,6 @@ MultiIndex = make_final_proxy_type(
     pd.MultiIndex,
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
-    bases=(Index,),
     additional_attributes={"__init__": _DELETE},
 )
 
@@ -489,7 +483,6 @@ Int64Index = make_final_proxy_type(
     pd.core.indexes.numeric.Int64Index,
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
-    bases=(Index,),
     additional_attributes={"__init__": _DELETE},
 )
 
@@ -535,7 +528,6 @@ UInt64Index = make_final_proxy_type(
     pd.core.indexes.numeric.UInt64Index,
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
-    bases=(Index,),
     additional_attributes={"__init__": _DELETE},
 )
 
@@ -545,7 +537,6 @@ IntervalIndex = make_final_proxy_type(
     pd.IntervalIndex,
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
-    bases=(Index,),
     additional_attributes={"__init__": _DELETE},
 )
 
@@ -610,7 +601,6 @@ Float64Index = make_final_proxy_type(
     pd.core.indexes.numeric.Float64Index,
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
-    bases=(Index,),
     additional_attributes={"__init__": _DELETE},
 )
 
