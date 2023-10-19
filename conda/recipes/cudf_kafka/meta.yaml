@@ -41,6 +41,8 @@ requirements:
     - {{ compiler('cxx') }}
     - ninja
     - sysroot_{{ target_platform }} {{ sysroot_version }}
+    # TODO: Remove after https://github.com/rapidsai/cudf/pull/14292 updates
+    # cudf_kafka to use scikit-build
     {% if cuda_major == "12" %}
     - cuda-gdb
     {% endif %}

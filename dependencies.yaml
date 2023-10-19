@@ -226,8 +226,6 @@ dependencies:
           - &gmock gmock>=1.13.0
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          # Temporarily building a specific build string in order to choose one
-          # that is compatible with the aws-sdk-cpp version required above
           - librdkafka>=1.9.0,<1.10.0a0
           # Align nvcomp version with rapids-cmake
           - nvcomp==2.6.1
@@ -235,14 +233,18 @@ dependencies:
     specific:
       - output_types: conda
         matrices:
+          # Temporarily pinning a specific build string for libarrow in order
+          # to choose one that is compatible with the aws-sdk-cpp version
+          # we require due to https://github.com/aws/aws-sdk-cpp/issues/2681
+          # (see also https://github.com/rapidsai/cudf/pull/14173).
           - matrix:
               arch: x86_64
             packages:
-              - libarrow==12.0.1=hb6645e0_10_cpu
+              - &libarrow_x86 libarrow==12.0.1=hb6645e0_10_cpu
           - matrix:
               arch: aarch64
             packages:
-              - libarrow==12.0.1=hf79fbb4_10_cpu
+              - &libarrow_aarch libarrow==12.0.1=hf79fbb4_10_cpu
   build_wheels:
     common:
       - output_types: pyproject
@@ -278,11 +280,11 @@ dependencies:
           - matrix:
               arch: x86_64
             packages:
-              - libarrow==12.0.1=hb6645e0_10_cpu
+              - *libarrow_x86
           - matrix:
               arch: aarch64
             packages:
-              - libarrow==12.0.1=hf79fbb4_10_cpu
+              - *libarrow_aarch
   pyarrow_run:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -301,6 +303,8 @@ dependencies:
               - cuda-nvrtc-dev
               - cuda-nvtx-dev
               - libcurand-dev
+              # TODO: Remove after https://github.com/rapidsai/cudf/pull/14292 updates
+              # cudf_kafka to use scikit-build
               - cuda-gdb
           - matrix:
               cuda: "11.8"
