@@ -793,7 +793,7 @@ class _CallableProxyMixin:
             # _fast_slow_function_call) to avoid infinite recursion.
             # TODO: When Python 3.11 is the minimum supported Python version
             # this can use operator.call
-            lambda x, *args, **kwargs: x(*args, **kwargs),
+            lambda __x, *args, **kwargs: __x(*args, **kwargs),
             self,
             *args,
             **kwargs,
@@ -989,7 +989,7 @@ def _maybe_wrap_result(result: Any, func: Callable, /, *args, **kwargs) -> Any:
         else:
             return type(result)(wrapped)
     elif isinstance(result, Iterator):
-        return (_maybe_wrap_result(r, lambda x: x, r) for r in result)
+        return (_maybe_wrap_result(r, lambda __x: __x, r) for r in result)
     elif _is_function_or_method(result):
         return _MethodProxy._xdf_wrap(
             result, method_chain=(func, args, kwargs)
@@ -1110,6 +1110,7 @@ _SPECIAL_METHODS: Set[str] = {
     "__copy__",
     "__deepcopy__",
     "__dataframe__",
+    "__call__",
     # Added on a per-proxy basis
     # https://github.com/rapidsai/xdf/pull/306#pullrequestreview-1636155428
     # "__hash__",
