@@ -99,7 +99,8 @@ cat ../python/cudf/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftes
 cd pandas-tests/
 
 # TODO: Get a postgres & mysql container set up on the CI
-PANDAS_CI="1" python -m pytest -p cudf.pandas -m "not single_cpu and not db" --durations=50 --import-mode=importlib -o xfail_strict=True ${PYTEST_IGNORES} $@
+# test_overwrite_warns unsafely patchs over Series.mean affecting other tests when run in parallel
+PANDAS_CI="1" python -m pytest -p cudf.pandas -m "not single_cpu and not db" -k "not test_overwrite_warns" --durations=50 --import-mode=importlib -o xfail_strict=True ${PYTEST_IGNORES} $@
 
 mv *.json ..
 cd ..
