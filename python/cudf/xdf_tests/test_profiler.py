@@ -65,3 +65,9 @@ def test_profiler():
         assert call in line_stats[1]
         # No CPU time
         assert line_stats[3] == 0 if "Time" not in call else line_stats[2] == 0
+
+
+def test_profiler_hasattr_exception():
+    with Profiler():
+        df = pd.DataFrame({"data": [1, 2, 3]})
+        hasattr(df, "this_does_not_exist")
