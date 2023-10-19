@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 # This assumes the script is executed from the root of the repo directory
 # Need to set CUDA_HOME inside conda environments because the hacked together
