@@ -20,6 +20,7 @@ from cudf.core.buffer.buffer import (
     get_ptr_and_size,
     host_memory_allocation,
 )
+from cudf.utils.nvtx_annotation import _get_color_for_nvtx, annotate
 from cudf.utils.string import format_bytes
 
 if TYPE_CHECKING:
@@ -291,8 +292,15 @@ class SpillableBuffer(Buffer):
                 )
 
             if (ptr_type, target) == ("gpu", "cpu"):
-                host_mem = host_memory_allocation(self.size)
-                rmm._lib.device_buffer.copy_ptr_to_host(self._ptr, host_mem)
+                with annotate(
+                    message="SpillDtoH",
+                    color=_get_color_for_nvtx("SpillDtoH"),
+                    domain="cudf_python-spill",
+                ):
+                    host_mem = host_memory_allocation(self.size)
+                    rmm._lib.device_buffer.copy_ptr_to_host(
+                        self._ptr, host_mem
+                    )
                 self._ptr_desc["memoryview"] = host_mem
                 self._ptr = 0
                 self._owner = None
@@ -302,9 +310,15 @@ class SpillableBuffer(Buffer):
                 # trigger a new call to this buffer's `spill()`.
                 # Therefore, it is important that spilling-on-demand doesn't
                 # try to unspill an already locked buffer!
-                dev_mem = rmm.DeviceBuffer.to_device(
-                    self._ptr_desc.pop("memoryview")
-                )
+                with annotate(
+                    message="SpillHtoD",
+                    color=_get_color_for_nvtx("SpillHtoD"),
+                    domain="cudf_python-spill",
+                ):
+
+                    dev_mem = rmm.DeviceBuffer.to_device(
+                        self._ptr_desc.pop("memoryview")
+                    )
                 self._ptr = dev_mem.ptr
                 self._owner = dev_mem
                 assert self._size == dev_mem.size
