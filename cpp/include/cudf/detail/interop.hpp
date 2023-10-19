@@ -197,11 +197,12 @@ std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
 
 /**
  * @brief Return a maximum precision for a given type.
- * 
+ *
  * @tparam T the type to get the maximum precision for
  */
-template<typename T>
-constexpr std::size_t max_precision() {
+template <typename T>
+constexpr std::size_t max_precision()
+{
   auto constexpr num_bits = sizeof(T) * 8;
   return std::floor(num_bits * std::log(2) / std::log(10));
 }
