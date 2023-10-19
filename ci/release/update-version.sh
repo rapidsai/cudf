@@ -51,10 +51,10 @@ sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g'
 sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g' java/src/main/native/CMakeLists.txt
 
 # Python _version.py updates
-sed_runner "/__version__ / s/= .*/= \"${NEXT_FULL_TAG}\"/g" python/cudf/cudf/_version.py
-sed_runner "/__version__ / s/= .*/= \"${NEXT_FULL_TAG}\"/g" python/dask_cudf/dask_cudf/_version.py
-sed_runner "/__version__ / s/= .*/= \"${NEXT_FULL_TAG}\"/g" python/cudf_kafka/cudf_kafka/_version.py
-sed_runner "/__version__ / s/= .*/= \"${NEXT_FULL_TAG}\"/g" python/custreamz/custreamz/_version.py
+sed_runner "/^__version__ / s/= .*/= \"${NEXT_FULL_TAG}\"/g" python/cudf/cudf/_version.py
+sed_runner "/^__version__ / s/= .*/= \"${NEXT_FULL_TAG}\"/g" python/dask_cudf/dask_cudf/_version.py
+sed_runner "/^__version__ / s/= .*/= \"${NEXT_FULL_TAG}\"/g" python/cudf_kafka/cudf_kafka/_version.py
+sed_runner "/^__version__ / s/= .*/= \"${NEXT_FULL_TAG}\"/g" python/custreamz/custreamz/_version.py
 
 # Wheel testing script
 sed_runner "s/branch-.*/branch-${NEXT_SHORT_TAG}/g" ci/test_wheel_dask_cudf.sh
