@@ -212,7 +212,7 @@ class Profiler:
             line_no, _, line = key
             list_data.append([line_no, line, gpu_time, cpu_time])
 
-        return list_data
+        return sorted(list_data, key=lambda line: line[0])
 
     @property
     def per_function_stats(self):

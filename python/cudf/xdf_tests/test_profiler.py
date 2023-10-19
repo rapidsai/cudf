@@ -46,8 +46,8 @@ def test_profiler():
         "pd.DataFrame",
         "np.random.randint",
         "np.random.rand",
-        "df.groupby('idx').sum",
-        "df.sum()['data']",
+        'df.groupby("idx").sum',
+        'df.sum()["data"]',
         "np.isclose",
     ]
     for line_stats, call in zip(per_line_stats, calls):
