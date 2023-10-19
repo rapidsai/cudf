@@ -215,6 +215,12 @@ void __device__ calculate_frag_size(frag_init_state_s* const s, int t)
   }
 }
 
+/**
+ * @brief Determine the correct page encoding for the given page parameters.
+ *
+ * This is only used by the plain and dictionary encoders. Delta encoders will set the page
+ * encoding directly.
+ */
 Encoding __device__ determine_encoding(PageType page_type,
                                        Type physical_type,
                                        bool use_dictionary,
@@ -226,7 +232,6 @@ Encoding __device__ determine_encoding(PageType page_type,
   switch (page_type) {
     case PageType::DATA_PAGE: return use_dictionary ? Encoding::PLAIN_DICTIONARY : Encoding::PLAIN;
     case PageType::DATA_PAGE_V2:
-      // TODO need to work in delta encodings here when they're added
       return physical_type == BOOLEAN ? Encoding::RLE
              : use_dictionary         ? Encoding::RLE_DICTIONARY
                                       : Encoding::PLAIN;
