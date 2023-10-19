@@ -2203,6 +2203,13 @@ def test_series_init_error():
     )
 
 
+def test_series_init_from_series_and_index():
+    ser = cudf.Series([4, 7, -5, 3], index=["d", "b", "a", "c"])
+    result = cudf.Series(ser, index=list("abcd"))
+    expected = cudf.Series([-5, 7, 3, 4], index=list("abcd"))
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize(
     "dtype", ["datetime64[ns]", "timedelta64[ns]", "object", "str"]
 )
