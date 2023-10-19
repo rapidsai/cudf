@@ -44,6 +44,7 @@ def test_profiler():
     per_line_stats = profiler.per_line_stats
     calls = [
         "pd.DataFrame",
+        "",
         "np.random.randint",
         "np.random.rand",
         'df.groupby("idx").sum',
