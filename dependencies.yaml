@@ -226,25 +226,11 @@ dependencies:
           - &gmock gmock>=1.13.0
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
+          - &libarrow libarrow==12.0.0.*
           - librdkafka>=1.9.0,<1.10.0a0
           # Align nvcomp version with rapids-cmake
           - nvcomp==2.6.1
           - spdlog>=1.11.0,<1.12
-    specific:
-      - output_types: conda
-        matrices:
-          # Temporarily pinning a specific build string for libarrow in order
-          # to choose one that is compatible with the aws-sdk-cpp version
-          # we require due to https://github.com/aws/aws-sdk-cpp/issues/2681
-          # (see also https://github.com/rapidsai/cudf/pull/14173).
-          - matrix:
-              arch: x86_64
-            packages:
-              - &libarrow_x86 libarrow==12.0.1=hb6645e0_10_cpu
-          - matrix:
-              arch: aarch64
-            packages:
-              - &libarrow_aarch libarrow==12.0.1=hf79fbb4_10_cpu
   build_wheels:
     common:
       - output_types: pyproject
@@ -258,7 +244,7 @@ dependencies:
           - cython>=3.0.0
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - pyarrow==12.0.1.*
+          - &pyarrow pyarrow==12.0.0.*
           # TODO: Pin to numpy<1.25 until cudf requires pandas 2
           - &numpy numpy>=1.21,<1.25
   build_python:
@@ -274,23 +260,15 @@ dependencies:
         packages:
           - protoc-wheel
   libarrow_run:
-    specific:
+    common:
       - output_types: conda
-        matrices:
-          - matrix:
-              arch: x86_64
-            packages:
-              - *libarrow_x86
-          - matrix:
-              arch: aarch64
-            packages:
-              - *libarrow_aarch
+        packages:
+          - *libarrow
   pyarrow_run:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          # Allow runtime version to float up to minor version
-          - pyarrow==12.*
+          - *pyarrow
   cudatoolkit:
     specific:
       - output_types: conda
