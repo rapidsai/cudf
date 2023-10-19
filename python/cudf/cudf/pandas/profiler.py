@@ -299,5 +299,5 @@ class Profiler:
 
 
 def load_stats(file_name):
-    pickle_file = open(file_name, "rb")
-    return pickle.load(pickle_file)
+    with open(file_name, "rb") as f:
+        return pickle.load(f)
