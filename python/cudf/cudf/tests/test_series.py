@@ -2556,3 +2556,10 @@ def test_series_arrow_list_types_roundtrip():
     with cudf.option_context("mode.pandas_compatible", True):
         with pytest.raises(NotImplementedError):
             cudf.from_pandas(pdf)
+
+
+@pytest.mark.parametrize("reso", ["M", "ps"])
+@pytest.mark.parametrize("typ", ["M", "m"])
+def test_series_invalid_reso_dtype(reso, typ):
+    with pytest.raises(NotImplementedError):
+        cudf.Series([], dtype=f"{typ}8[{reso}]")
