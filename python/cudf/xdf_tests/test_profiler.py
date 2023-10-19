@@ -71,3 +71,9 @@ def test_profiler_hasattr_exception():
     with Profiler():
         df = pd.DataFrame({"data": [1, 2, 3]})
         hasattr(df, "this_does_not_exist")
+
+
+def test_profiler_fast_slow_name_mismatch():
+    with Profiler():
+        df = pd.DataFrame({"a": [1, 2, 3], "b": [3, 4, 5]})
+        df.iloc[0, 1] = "foo"
