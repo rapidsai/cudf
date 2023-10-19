@@ -10,6 +10,7 @@
 # its affiliates is strictly prohibited.
 
 import inspect
+import operator
 import pickle
 import sys
 import time
@@ -189,10 +190,11 @@ class Profiler:
                 and issubclass(func_obj, (_FinalProxy, _IntermediateProxy))
             ):
                 func_name, start = self._call_stack.pop()
-                key = "gpu" if arg[1] else "cpu"
-                self._per_func_results[func_name][key].append(
-                    time.perf_counter() - start
-                )
+                if arg is not None:
+                    key = "gpu" if arg[1] else "cpu"
+                    self._per_func_results[func_name][key].append(
+                        time.perf_counter() - start
+                    )
 
         return self._tracefunc
 
@@ -205,7 +207,7 @@ class Profiler:
             line_no, _, line = key
             list_data.append([line_no, line, gpu_time, cpu_time])
 
-        return sorted(list_data, key=lambda line: line[0])
+        return sorted(list_data, key=operator.itemgetter(0))
 
     @property
     def per_function_stats(self):
