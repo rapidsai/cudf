@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -14,12 +14,14 @@
 
 # This function finds cuCollections and performs any additional configuration.
 function(find_and_configure_cucollections)
-  include(${rapids-cmake-dir}/cpm/cuco.cmake)
-  if(BUILD_SHARED_LIBS)
-    rapids_cpm_cuco(BUILD_EXPORT_SET cudf-exports)
-  else()
-    rapids_cpm_cuco(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
-  endif()
+  rapids_cpm_find(
+    cuco 0.0.1
+    GLOBAL_TARGETS cuco::cuco
+    CPM_ARGS
+    GIT_REPOSITORY https://github.com/NVIDIA/cuCollections.git
+    GIT_TAG 7c76a124df0c2cd3fd66e3e080b9470a3b4707c6
+    OPTIONS "BUILD_TESTS OFF" ￼ "BUILD_BENCHMARKS OFF" ￼ "BUILD_EXAMPLES OFF"
+  )
 endfunction()
 
 find_and_configure_cucollections()
