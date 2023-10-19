@@ -1074,6 +1074,18 @@ def test_index_append(data, other):
         assert_eq(expected, actual)
 
 
+def test_index_empty_append_name_conflict():
+    empty = cudf.Index([], name="foo")
+    non_empty = cudf.Index([1], name="bar")
+    expected = cudf.Index([1])
+
+    result = non_empty.append(empty)
+    assert_eq(result, expected)
+
+    result = empty.append(non_empty)
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -1457,6 +1469,11 @@ def test_index_drop_duplicates(data, dtype):
     assert_eq(pdi.drop_duplicates(), gdi.drop_duplicates())
 
 
+def test_dropna_bad_how():
+    with pytest.raises(ValueError):
+        cudf.Index([1]).dropna(how="foo")
+
+
 @pytest.mark.parametrize("data", [[1, 2, 3, 1, 2, 3, 4], []])
 @pytest.mark.parametrize(
     "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
@@ -1584,7 +1601,7 @@ def test_multiindex_to_arrow():
     )
     pdf["a"] = pdf["a"].astype("category")
     df = cudf.from_pandas(pdf)
-    gdi = cudf.Index(df)
+    gdi = cudf.MultiIndex.from_frame(df)
 
     expected = pa.Table.from_pandas(pdf)
     got = gdi.to_arrow()
@@ -2870,3 +2887,13 @@ def test_period_index_error():
         cudf.Series(pd.Series(pidx))
     with pytest.raises(NotImplementedError):
         cudf.Series(pd.array(pidx))
+
+
+def test_index_from_dataframe_valueerror():
+    with pytest.raises(ValueError):
+        cudf.Index(cudf.DataFrame(range(1)))
+
+
+def test_index_from_scalar_valueerror():
+    with pytest.raises(ValueError):
+        cudf.Index(11)

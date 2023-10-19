@@ -163,44 +163,36 @@ class Profiler:
             event == "return"
             and frame.f_code.co_name == "_fast_slow_function_call"
         ):
-            if arg is None:
-                # Call raised an exception, just pop the stack
-                self._call_stack.pop()
-            else:
-                if self._currkey is not None:
-                    if arg[1]:  # fast
-                        run_time = (
-                            time.perf_counter() - self._timer[self._currkey]
-                        )
-                        self._results[self._currkey][
-                            "gpu_time"
-                        ] = run_time + self._results[self._currkey].get(
-                            "gpu_time", 0
-                        )
-                    else:
-                        run_time = (
-                            time.perf_counter() - self._timer[self._currkey]
-                        )
-                        self._results[self._currkey][
-                            "cpu_time"
-                        ] = run_time + self._results[self._currkey].get(
-                            "cpu_time", 0
-                        )
+            if self._currkey is not None and arg is not None:
+                if arg[1]:  # fast
+                    run_time = time.perf_counter() - self._timer[self._currkey]
+                    self._results[self._currkey][
+                        "gpu_time"
+                    ] = run_time + self._results[self._currkey].get(
+                        "gpu_time", 0
+                    )
+                else:
+                    run_time = time.perf_counter() - self._timer[self._currkey]
+                    self._results[self._currkey][
+                        "cpu_time"
+                    ] = run_time + self._results[self._currkey].get(
+                        "cpu_time", 0
+                    )
 
-                frame_locals = inspect.getargvalues(frame).locals
-                if (
-                    isinstance(
-                        func_obj := frame_locals["args"][0],
-                        (_MethodProxy, _FunctionProxy),
-                    )
-                    or isinstance(func_obj, type)
-                    and issubclass(func_obj, (_FinalProxy, _IntermediateProxy))
-                ):
-                    func_name, start = self._call_stack.pop()
-                    key = "gpu" if arg[1] else "cpu"
-                    self._per_func_results[func_name][key].append(
-                        time.perf_counter() - start
-                    )
+            frame_locals = inspect.getargvalues(frame).locals
+            if (
+                isinstance(
+                    func_obj := frame_locals["args"][0],
+                    (_MethodProxy, _FunctionProxy),
+                )
+                or isinstance(func_obj, type)
+                and issubclass(func_obj, (_FinalProxy, _IntermediateProxy))
+            ):
+                func_name, start = self._call_stack.pop()
+                key = "gpu" if arg[1] else "cpu"
+                self._per_func_results[func_name][key].append(
+                    time.perf_counter() - start
+                )
 
         return self._tracefunc
 
