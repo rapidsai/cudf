@@ -10446,3 +10446,20 @@ def test_data_frame_values_no_cols_but_index():
     result = cudf.DataFrame(index=range(5)).values
     expected = pd.DataFrame(index=range(5)).values
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("name", ["a", 0, None, np.nan, cudf.NA])
+@pytest.mark.parametrize("contains", ["a", 0, None, np.nan, cudf.NA])
+@pytest.mark.parametrize("other_names", [[], ["b", "c"], [1, 2]])
+def test_dataframe_contains(name, contains, other_names):
+    column_names = [name] + other_names
+    gdf = cudf.DataFrame({c: [0] for c in column_names})
+    pdf = pd.DataFrame({c: [0] for c in column_names})
+
+    assert_eq(gdf, pdf)
+
+    if contains == name or contains is name:
+        assert contains in gdf
+        assert contains in pdf
+
+    assert (contains in gdf) == (contains in pdf)

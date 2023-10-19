@@ -268,6 +268,10 @@ class Frame(BinaryOperand, Scannable):
         return self._num_rows
 
     @_cudf_nvtx_annotate
+    def __contains__(self, item):
+        return item in self._data.names
+
+    @_cudf_nvtx_annotate
     def astype(self, dtype, copy=False, **kwargs):
         result_data = {}
         for col_name, col in self._data.items():
