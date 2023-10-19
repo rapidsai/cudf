@@ -911,7 +911,11 @@ def _transform_arg(
         transformed = [
             _transform_arg(a, attribute_name, seen) for a in arg.flat
         ]
-        result = np.empty(int(np.prod(arg.shape)), dtype=object)
+        if arg.flags["F_CONTIGUOUS"] and not arg.flags["C_CONTIGUOUS"]:
+            order = "F"
+        else:
+            order = "C"
+        result = np.empty(int(np.prod(arg.shape)), dtype=object, order=order)
         result[...] = transformed
         return result.reshape(arg.shape)
     elif isinstance(arg, Iterator) and attribute_name == "_xdf_fast":
