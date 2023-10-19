@@ -1130,7 +1130,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
     }
     if (n_data_type.id() == cudf::type_id::STRING) {
       switch (column->type().id()) {
-        case cudf::type_id::BOOL8: return release_as_jlong(cudf::strings::from_booleans(*column));
+        case cudf::type_id::BOOL8: {
+          auto const true_scalar = cudf::string_scalar("true");
+          auto const false_scalar = cudf::string_scalar("false");
+          return release_as_jlong(cudf::strings::from_booleans(*column, true_scalar, false_scalar));
+        }
         case cudf::type_id::FLOAT32:
         case cudf::type_id::FLOAT64: return release_as_jlong(cudf::strings::from_floats(*column));
         case cudf::type_id::INT8:
@@ -1149,7 +1153,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
       }
     } else if (column->type().id() == cudf::type_id::STRING) {
       switch (n_data_type.id()) {
-        case cudf::type_id::BOOL8: return release_as_jlong(cudf::strings::to_booleans(*column));
+        case cudf::type_id::BOOL8: {
+          auto const true_scalar = cudf::string_scalar("true");
+          return release_as_jlong(cudf::strings::to_booleans(*column, true_scalar));
+        }
         case cudf::type_id::FLOAT32:
         case cudf::type_id::FLOAT64:
           return release_as_jlong(cudf::strings::to_floats(*column, n_data_type));
