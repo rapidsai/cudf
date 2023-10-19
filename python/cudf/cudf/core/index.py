@@ -3399,8 +3399,8 @@ def as_index(
         return cudf.MultiIndex.from_pandas(
             arbitrary.copy(deep=copy), nan_as_null=nan_as_null
         )
-    elif isinstance(arbitrary, cudf.DataFrame):
-        raise ValueError("Index data must be 1-dimensional")
+    elif isinstance(arbitrary, cudf.DataFrame) or is_scalar(arbitrary):
+        raise ValueError("Index data must be 1-dimensional and list-like")
     else:
         return as_index(
             column.as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null),

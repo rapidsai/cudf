@@ -33,6 +33,7 @@ from .fast_slow_proxy import (
     _is_function_or_method,
     _Unusable,
     get_final_type_map,
+    get_intermediate_type_map,
     get_registered_functions,
 )
 
@@ -111,10 +112,10 @@ def deduce_xdf_mode(slow_lib: str, fast_lib: str) -> DeducedMode:
     )
 
 
-class ModuleFinderAndLoaderBase(
+class ModuleAcceleratorBase(
     importlib.abc.MetaPathFinder, importlib.abc.Loader
 ):
-    _instance: ModuleFinderAndLoaderBase | None = None
+    _instance: ModuleAcceleratorBase | None = None
     mod_name: str
     fast_lib: str
     slow_lib: str
@@ -145,9 +146,9 @@ class ModuleFinderAndLoaderBase(
         slow_lib
              Name of package that provides "slow" fallback implementation
         """
-        if ModuleFinderAndLoaderBase._instance is not None:
+        if ModuleAcceleratorBase._instance is not None:
             raise RuntimeError(
-                "Only one instance of ModuleFinderAndLoaderBase allowed"
+                "Only one instance of ModuleAcceleratorBase allowed"
             )
         self = object.__new__(cls)
         self.mod_name = mod_name
@@ -162,10 +163,17 @@ class ModuleFinderAndLoaderBase(
         # attribute before
         self._wrapped_objs = {}
         self._wrapped_objs.update(get_final_type_map())
+        self._wrapped_objs.update(get_intermediate_type_map())
         self._wrapped_objs.update(get_registered_functions())
 
-        ModuleFinderAndLoaderBase._instance = self
+        ModuleAcceleratorBase._instance = self
         return self
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}"
+            f"(fast={self.fast_lib}, slow={self.slow_lib})"
+        )
 
     def find_spec(
         self, fullname: str, path, target=None
@@ -370,18 +378,17 @@ class ModuleFinderAndLoaderBase(
         pass
 
 
-class TransparentModuleFinderAndLoader(ModuleFinderAndLoaderBase):
+class ModuleAccelerator(ModuleAcceleratorBase):
     """
-    A finder and loader for importing xdf whenever someone attempts to
-    import the slow library
+    A finder and loader that produces "accelerated" modules.
 
     When someone attempts to import the specified slow library with
-    xdf transparent mode enabled, we intercept the import and deliver
-    an xdf-equivalent version of the module. This provides attributes
-    and modules that check if they are being used from "within" the
-    slow (or fast) library themselves. If this is the case, the
-    implementation is forwarded to the actual slow library
-    implementation, otherwise the xdf implementation is used (which
+    this finder enabled, we intercept the import and deliver an
+    equivalent, accelerated, version of the module. This provides
+    attributes and modules that check if they are being used from
+    "within" the slow (or fast) library themselves. If this is the
+    case, the implementation is forwarded to the actual slow library
+    implementation, otherwise a proxy implementation is used (which
     attempts to call the fast version first).
     """
 
@@ -499,7 +506,7 @@ class TransparentModuleFinderAndLoader(ModuleFinderAndLoaderBase):
 
     @contextlib.contextmanager
     def disabled(self):
-        """Return a context manager for disabling transparent mode.
+        """Return a context manager for disabling the module accelerator.
 
         Within the block, any wrapped objects will instead deliver
         attributes from their real counterparts (as if the current
@@ -527,7 +534,7 @@ class TransparentModuleFinderAndLoader(ModuleFinderAndLoaderBase):
         *,
         real: Dict[str, Any],
         wrapped: Dict[str, Any],
-        loader: TransparentModuleFinderAndLoader,
+        loader: ModuleAccelerator,
     ) -> Any:
         """
         Obtain an attribute from a module from either the real or
@@ -610,13 +617,13 @@ class TransparentModuleFinderAndLoader(ModuleFinderAndLoaderBase):
             return self
 
 
-def disable_transparent_mode_if_enabled() -> contextlib.ExitStack:
+def disable_module_accelerator() -> contextlib.ExitStack:
     """
-    Temporarily disable transparent mode if it is enabled.
+    Temporarily disable any module acceleration.
     """
     with contextlib.ExitStack() as stack:
         for finder in sys.meta_path:
-            if isinstance(finder, ModuleFinderAndLoaderBase):
+            if isinstance(finder, ModuleAcceleratorBase):
                 stack.enter_context(finder.disabled())
         return stack.pop_all()
     assert False  # pacify type checker

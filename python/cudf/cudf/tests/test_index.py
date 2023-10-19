@@ -1469,6 +1469,11 @@ def test_index_drop_duplicates(data, dtype):
     assert_eq(pdi.drop_duplicates(), gdi.drop_duplicates())
 
 
+def test_dropna_bad_how():
+    with pytest.raises(ValueError):
+        cudf.Index([1]).dropna(how="foo")
+
+
 @pytest.mark.parametrize("data", [[1, 2, 3, 1, 2, 3, 4], []])
 @pytest.mark.parametrize(
     "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
@@ -2887,3 +2892,8 @@ def test_period_index_error():
 def test_index_from_dataframe_valueerror():
     with pytest.raises(ValueError):
         cudf.Index(cudf.DataFrame(range(1)))
+
+
+def test_index_from_scalar_valueerror():
+    with pytest.raises(ValueError):
+        cudf.Index(11)

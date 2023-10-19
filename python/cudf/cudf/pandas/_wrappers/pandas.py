@@ -23,8 +23,8 @@ from ..fast_slow_proxy import (
     _FastSlowAttribute,
     _FunctionProxy,
     _Unusable,
-    make_final_proxy_type,
-    make_intermediate_proxy_type,
+    make_final_proxy_type as _make_final_proxy_type,
+    make_intermediate_proxy_type as _make_intermediate_proxy_type,
     register_proxy_func,
 )
 from .common import (
@@ -43,6 +43,24 @@ from pandas.core.resample import (  # isort: skip
 
 
 cudf.set_option("mode.pandas_compatible", True)
+
+
+def make_final_proxy_type(
+    name,
+    fast_type,
+    slow_type,
+    **kwargs,
+):
+    assert "module" not in kwargs
+    return _make_final_proxy_type(
+        name, fast_type, slow_type, module=slow_type.__module__, **kwargs
+    )
+
+
+def make_intermediate_proxy_type(name, fast_type, slow_type):
+    return _make_intermediate_proxy_type(
+        name, fast_type, slow_type, module=slow_type.__module__
+    )
 
 
 class _AccessorAttr:
