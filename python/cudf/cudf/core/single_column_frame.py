@@ -19,7 +19,8 @@ from cudf.api.types import (
 )
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.frame import Frame
-from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.utils import NotIterable
 
 
 class SingleColumnFrame(Frame, NotIterable):
