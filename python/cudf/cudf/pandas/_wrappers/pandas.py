@@ -1238,7 +1238,7 @@ NamedAgg = make_final_proxy_type(
 ArrowExtensionArray = make_final_proxy_type(
     "ExtensionArray",
     _Unusable,
-    pd.core.arrays.arrow.ArrowExtensionArray,
+    pd.arrays.ArrowExtensionArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
 )
