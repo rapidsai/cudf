@@ -197,7 +197,8 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal32>(
   arrow::MemoryPool* ar_mr,
   rmm::cuda_stream_view stream)
 {
-  return unsupported_decimals_to_arrow<int32_t>(input, 9, ar_mr, stream);
+  using DeviceType = int32_t;
+  return unsupported_decimals_to_arrow<DeviceType>(input, cudf::detail::max_precision<DeviceType>(), ar_mr, stream);
 }
 
 template <>
@@ -208,7 +209,8 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
   arrow::MemoryPool* ar_mr,
   rmm::cuda_stream_view stream)
 {
-  return unsupported_decimals_to_arrow<int64_t>(input, 18, ar_mr, stream);
+  using DeviceType = int64_t;
+  return unsupported_decimals_to_arrow<DeviceType>(input, cudf::detail::max_precision<DeviceType>(), ar_mr, stream);
 }
 
 template <>
@@ -220,7 +222,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal128>
   rmm::cuda_stream_view stream)
 {
   using DeviceType = __int128_t;
-  auto constexpr max_precision = 38;
+  auto const max_precision = cudf::detail::max_precision<DeviceType>();
 
   rmm::device_uvector<DeviceType> buf(input.size(), stream);
 
