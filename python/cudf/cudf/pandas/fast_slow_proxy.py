@@ -500,7 +500,6 @@ class _FastSlowProxyMeta(type):
         return False
 
     def __instancecheck__(self, __instance: Any) -> bool:
-        breakpoint()
         if super().__instancecheck__(__instance):
             return True
         elif hasattr(type(__instance), "_xdf_slow"):
