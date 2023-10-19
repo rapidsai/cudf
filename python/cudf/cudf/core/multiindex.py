@@ -209,7 +209,14 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     @names.setter  # type: ignore
     @_cudf_nvtx_annotate
     def names(self, value):
-        value = [None] * self.nlevels if value is None else value
+        if value is None:
+            value = [None] * self.nlevels
+        elif not is_list_like(value):
+            raise ValueError("Names should be list-like for a MultiIndex")
+        elif len(value) != self.nlevels:
+            raise ValueError(
+                "Length of names must match number of levels in MultiIndex."
+            )
 
         if len(value) == len(set(value)):
             # IMPORTANT: if the provided names are unique,
