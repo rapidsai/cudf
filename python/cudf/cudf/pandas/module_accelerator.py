@@ -33,6 +33,7 @@ from .fast_slow_proxy import (
     _is_function_or_method,
     _Unusable,
     get_final_type_map,
+    get_intermediate_type_map,
     get_registered_functions,
 )
 
@@ -162,6 +163,7 @@ class ModuleAcceleratorBase(
         # attribute before
         self._wrapped_objs = {}
         self._wrapped_objs.update(get_final_type_map())
+        self._wrapped_objs.update(get_intermediate_type_map())
         self._wrapped_objs.update(get_registered_functions())
 
         ModuleAcceleratorBase._instance = self
