@@ -2018,6 +2018,13 @@ def test_multiindex_to_frame_allow_duplicates(
             assert_eq(expected, actual)
 
 
+@pytest.mark.parametrize("bad", ["foo", ["foo"]])
+def test_multiindex_set_names_validation(bad):
+    mi = cudf.MultiIndex.from_tuples([(0, 0), (0, 1), (1, 0), (1, 1)])
+    with pytest.raises(ValueError):
+        mi.names = bad
+
+
 def test_multiindex_values_pandas_compatible():
     midx = cudf.MultiIndex.from_tuples([(10, 12), (8, 9), (3, 4)])
     with cudf.option_context("mode.pandas_compatible", True):
