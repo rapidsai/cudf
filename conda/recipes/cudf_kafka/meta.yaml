@@ -33,6 +33,8 @@ build:
     - SCCACHE_S3_KEY_PREFIX=cudf-kafka-linux64 # [linux64]
     - SCCACHE_S3_USE_SSL
     - SCCACHE_S3_NO_CREDENTIALS
+    # TODO: Remove after https://github.com/rapidsai/cudf/pull/14292 updates
+    # cudf_kafka to use scikit-build
     - RAPIDS_CUDA_VERSION
 
 requirements:
