@@ -14,4 +14,4 @@ if [[ ${CUDA_MAJOR} == "12" ]]; then
     export CUDA_HOME="${PREFIX}/targets/${target_name}/"
     echo ${CUDA_HOME}
 fi
-#./build.sh -v cudf_kafka
+./build.sh -v cudf_kafka
