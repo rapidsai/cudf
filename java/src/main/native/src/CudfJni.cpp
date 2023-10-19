@@ -175,6 +175,14 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *) {
     return JNI_ERR;
   }
 
+  if (!cudf::jni::cache_data_source_jni(env)) {
+    if (!env->ExceptionCheck()) {
+      env->ThrowNew(env->FindClass("java/lang/RuntimeException"),
+                    "Unable to locate data source helper methods needed by JNI");
+    }
+    return JNI_ERR;
+  }
+
   return cudf::jni::MINIMUM_JNI_VERSION;
 }
 

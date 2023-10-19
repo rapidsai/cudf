@@ -90,7 +90,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     to_cudf_compatible_scalar,
 )
-from cudf.utils.utils import _cudf_nvtx_annotate
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 
 
 def _format_percentile_names(percentiles):
