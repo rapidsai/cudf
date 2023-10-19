@@ -67,7 +67,7 @@ class Profiler:
     def __init__(self):
         self._results = {}
         # Map func-name to list of calls (was_fast, time)
-        self._per_func_results = defaultdict(list)
+        self._per_func_results = defaultdict(lambda: defaultdict(list))
         # Current fast_slow_function_call stack frame recording name
         # and start time
         self._call_stack = []
@@ -197,8 +197,9 @@ class Profiler:
                     and issubclass(func_obj, (_FinalProxy, _IntermediateProxy))
                 ):
                     func_name, start = self._call_stack.pop()
-                    self._per_func_results[func_name].append(
-                        (arg[1], time.perf_counter() - start)
+                    key = "gpu" if arg[1] else "cpu"
+                    self._per_func_results[func_name][key].append(
+                        time.perf_counter() - start
                     )
 
         return self._tracefunc
@@ -216,14 +217,7 @@ class Profiler:
 
     @property
     def per_function_stats(self):
-        data = {}
-        for func_name, func_data in self._per_func_results.items():
-            data[func_name] = {"cpu": [], "gpu": []}
-
-            for is_gpu, runtime in func_data:
-                key = "gpu" if is_gpu else "cpu"
-                data[func_name][key].append(runtime)
-        return data
+        return self._per_func_results
 
     def print_per_line_stats(self):
         table = Table()
