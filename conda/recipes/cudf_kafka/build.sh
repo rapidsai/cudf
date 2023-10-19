@@ -12,6 +12,5 @@ if [[ ${CUDA_MAJOR} == "12" ]]; then
         target_name="sbsa-linux"
     fi
     export CUDA_HOME="${PREFIX}/targets/${target_name}/"
-    echo ${CUDA_HOME}
 fi
 ./build.sh -v cudf_kafka

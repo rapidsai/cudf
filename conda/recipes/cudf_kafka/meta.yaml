@@ -33,6 +33,7 @@ build:
     - SCCACHE_S3_KEY_PREFIX=cudf-kafka-linux64 # [linux64]
     - SCCACHE_S3_USE_SSL
     - SCCACHE_S3_NO_CREDENTIALS
+    - RAPIDS_CUDA_VERSION
 
 requirements:
   build:
