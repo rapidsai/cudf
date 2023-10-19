@@ -1144,6 +1144,12 @@ def test_pos():
     tm.assert_equal(xser, ser)
 
 
+def test_intermediates_are_proxied():
+    df = xpd.DataFrame({"a": [1, 2, 3]})
+    grouper = df.groupby("a")
+    assert isinstance(grouper, xpd.core.groupby.generic.DataFrameGroupBy)
+
+
 def test_from_dataframe():
     cudf = pytest.importorskip("cudf")
     from cudf.testing._utils import assert_eq
