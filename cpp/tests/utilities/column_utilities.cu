@@ -52,6 +52,11 @@
 #include <numeric>
 #include <sstream>
 
+// This check should be placed after including all header files.
+#ifdef GTEST_INCLUDE_GTEST_GTEST_H_
+#error "This file should not include any header that directly or indirectly depends on gtest."
+#endif
+
 namespace cudf {
 
 namespace test {

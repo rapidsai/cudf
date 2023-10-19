@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 
-//
-// Do NOT include any header that directly or indirectly depends on gtest.
-// It is to make sure this file can be used and compiled outside of the test framework.
-//
-
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/debug_utilities.hpp>
 
@@ -38,6 +33,11 @@
 
 #include <iomanip>
 #include <sstream>
+
+// This check should be placed after including all header files.
+#ifdef GTEST_INCLUDE_GTEST_GTEST_H_
+#error "This file should not include any header that directly or indirectly depends on gtest."
+#endif
 
 namespace cudf::test {
 

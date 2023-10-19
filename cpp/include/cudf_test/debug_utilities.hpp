@@ -20,10 +20,6 @@
 // Do NOT include any header that directly or indirectly depends on gtest.
 // It is to make sure this file can be used and compiled outside of the test framework.
 //
-// In order to use the APIs listed below outside of the test framework, simply include this header
-// and add the corresponding source file `test/utilities/debug_utilities.cu` into the CMake
-// target build.
-//
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/null_mask.hpp>
