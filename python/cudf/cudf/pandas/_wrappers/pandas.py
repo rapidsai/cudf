@@ -201,14 +201,11 @@ get_final_type_map()[cudf.Int8Index] = Index
 get_final_type_map()[cudf.Int8Index] = Index
 get_final_type_map()[cudf.Int16Index] = Index
 get_final_type_map()[cudf.Int32Index] = Index
-get_final_type_map()[cudf.Int64Index] = Index
-get_final_type_map()[cudf.UInt64Index] = Index
 get_final_type_map()[cudf.UInt8Index] = Index
 get_final_type_map()[cudf.UInt16Index] = Index
 get_final_type_map()[cudf.UInt32Index] = Index
 get_final_type_map()[cudf.UInt64Index] = Index
 get_final_type_map()[cudf.Float32Index] = Index
-get_final_type_map()[cudf.Float64Index] = Index
 get_final_type_map()[cudf.GenericIndex] = Index
 
 
@@ -486,6 +483,16 @@ Int64Dtype = make_final_proxy_type(
 )
 
 
+Int64Index = make_final_proxy_type(
+    "Int64Index",
+    cudf.Int64Index,
+    pd.core.indexes.numeric.Int64Index,
+    fast_to_slow=lambda fast: fast.to_pandas(),
+    slow_to_fast=cudf.from_pandas,
+    bases=(Index,),
+    additional_attributes={"__init__": _DELETE},
+)
+
 UInt8Dtype = make_final_proxy_type(
     "UInt8Dtype",
     _Unusable,
@@ -520,6 +527,16 @@ UInt64Dtype = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+UInt64Index = make_final_proxy_type(
+    "UInt64Index",
+    cudf.UInt64Index,
+    pd.core.indexes.numeric.UInt64Index,
+    fast_to_slow=lambda fast: fast.to_pandas(),
+    slow_to_fast=cudf.from_pandas,
+    bases=(Index,),
+    additional_attributes={"__init__": _DELETE},
 )
 
 IntervalIndex = make_final_proxy_type(
@@ -585,6 +602,16 @@ Float64Dtype = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+Float64Index = make_final_proxy_type(
+    "Float64Index",
+    cudf.Float64Index,
+    pd.core.indexes.numeric.Float64Index,
+    fast_to_slow=lambda fast: fast.to_pandas(),
+    slow_to_fast=cudf.from_pandas,
+    bases=(Index,),
+    additional_attributes={"__init__": _DELETE},
 )
 
 SeriesGroupBy = make_intermediate_proxy_type(

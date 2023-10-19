@@ -997,10 +997,29 @@ def test_subclass_series():
         xpd.PeriodIndex,
         xpd.MultiIndex,
         xpd.IntervalIndex,
+        xpd.UInt64Index,
+        xpd.Int64Index,
+        xpd.Float64Index,
     ],
 )
 def test_index_subclass(index_type):
+    # test that proxy index types are derived
+    # from Index
     assert issubclass(index_type, xpd.Index)
+
+
+def test_index_internal_subclass():
+    # test that proxy index types that are not related by inheritance
+    # still appear to be so if the underlying slow types are related
+    # by inheritance:
+    assert issubclass(
+        xpd.core.indexes.numeric.Int64Index,
+        xpd.core.indexes.numeric.NumericIndex,
+    )
+
+    assert isinstance(
+        xpd.Index([1, 2, 3]), xpd.core.indexes.numeric.NumericIndex
+    )
 
 
 def test_np_array_of_timestamps():
