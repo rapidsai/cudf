@@ -19,12 +19,10 @@ LOADED = False
 
 
 def install():
-    """Install xdf in transparent mode."""
-    from .module_finder import TransparentModuleFinderAndLoader
+    """Enable Pandas Accelerator Mode."""
+    from .module_accelerator import ModuleAccelerator
 
-    loader = TransparentModuleFinderAndLoader.install(
-        "pandas", "cudf", "pandas"
-    )
+    loader = ModuleAccelerator.install("pandas", "cudf", "pandas")
     global LOADED
     LOADED = loader is not None
 

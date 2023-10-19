@@ -31,7 +31,7 @@ if not LOADED:
 import pandas as xpd
 import pandas._testing as tm
 
-# Transparent-provided pandas has the real pandas module as an attribute
+# Accelerated pandas has the real pandas module as an attribute
 pd = xpd._xdf_slow
 
 
@@ -1084,7 +1084,7 @@ def test_index_new():
     tm.assert_equal(expected, got)
 
 
-@pytest.mark.xfail(not LOADED, reason="Should not fail in transparent mode")
+@pytest.mark.xfail(not LOADED, reason="Should not fail in accelerated mode")
 def test_groupby_apply_callable_referencing_pandas(dataframe):
 
     pdf, df = dataframe
@@ -1123,6 +1123,12 @@ def test_pos():
     xser = +xpd.Series([-1])
     ser = +pd.Series([-1])
     tm.assert_equal(xser, ser)
+
+
+def test_intermediates_are_proxied():
+    df = xpd.DataFrame({"a": [1, 2, 3]})
+    grouper = df.groupby("a")
+    assert isinstance(grouper, xpd.core.groupby.generic.DataFrameGroupBy)
 
 
 def test_from_dataframe():
