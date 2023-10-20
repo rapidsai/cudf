@@ -69,7 +69,8 @@ from cudf.core.udf.utils import (
 )
 from cudf.utils import docutils
 from cudf.utils._numba import _CUDFNumbaConfig
-from cudf.utils.utils import _cudf_nvtx_annotate, _warn_no_dask_cudf
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.utils import _warn_no_dask_cudf
 
 doc_reset_index_template = """
         Reset the index of the {klass}, or a level of it.
@@ -2661,7 +2662,9 @@ class IndexedFrame(Frame):
             data=cudf.core.column_accessor.ColumnAccessor(
                 cols,
                 multiindex=self._data.multiindex,
-                level_names=self._data.level_names,
+                level_names=tuple(column_names.names)
+                if isinstance(column_names, pd.Index)
+                else None,
             ),
             index=index,
         )
@@ -5437,6 +5440,13 @@ def _is_same_dtype(lhs_dtype, rhs_dtype):
     # Utility specific to `_reindex` to check
     # for matching column dtype.
     if lhs_dtype == rhs_dtype:
+        return True
+    elif (
+        is_categorical_dtype(lhs_dtype)
+        and is_categorical_dtype(rhs_dtype)
+        and lhs_dtype.categories.dtype == rhs_dtype.categories.dtype
+    ):
+        # OK if categories are not all the same
         return True
     elif (
         is_categorical_dtype(lhs_dtype)
