@@ -11,13 +11,19 @@ import warnings
 import weakref
 from collections import defaultdict
 from dataclasses import dataclass
+from functools import partial
 from typing import Dict, List, Optional, Tuple
 
 import rmm.mr
 
 from cudf.core.buffer.spillable_buffer import SpillableBuffer
 from cudf.options import get_option
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.string import format_bytes
+
+_spill_cudf_nvtx_annotate = partial(
+    _cudf_nvtx_annotate, domain="cudf_python-spill"
+)
 
 
 def get_traceback() -> str:
@@ -329,6 +335,7 @@ class SpillManager:
             ret = tuple(sorted(ret, key=lambda b: b.last_accessed))
         return ret
 
+    @_spill_cudf_nvtx_annotate
     def spill_device_memory(self, nbytes: int) -> int:
         """Try to spill device memory
 

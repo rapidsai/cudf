@@ -65,7 +65,7 @@ requirements:
     {% endif %}
     - cuda-version ={{ cuda_version }}
     - nvcomp {{ nvcomp_version }}
-    - libarrow {{ libarrow_version }}
+    - libarrow {{ libarrow }}
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
     - fmt {{ fmt_version }}
@@ -104,7 +104,7 @@ outputs:
         - nvcomp {{ nvcomp_version }}
         - librmm ={{ minor_version }}
         - libkvikio ={{ minor_version }}
-        - libarrow {{ libarrow_version }}
+        - libarrow {{ libarrow }}
         - dlpack {{ dlpack_version }}
         - gtest {{ gtest_version }}
         - gmock {{ gtest_version }}
