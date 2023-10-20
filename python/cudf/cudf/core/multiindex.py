@@ -979,13 +979,14 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     @_cudf_nvtx_annotate
     def __eq__(self, other):
         if isinstance(other, MultiIndex):
-            for self_col, other_col in zip(
-                self._data.values(),
-                other._data.values(),
-            ):
-                if not self_col.equals(other_col):
-                    return False
-            return self.names == other.names
+            return np.array(
+                [
+                    self_col.equals(other_col)
+                    for self_col, other_col in zip(
+                        self._data.values(), other._data.values()
+                    )
+                ]
+            )
         return NotImplemented
 
     @property  # type: ignore
