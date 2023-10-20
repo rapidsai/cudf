@@ -40,7 +40,7 @@ dependencies:
 - hypothesis
 - identify>=2.5.20
 - ipython
-- libarrow==12.0.1.*
+- libarrow==12.0.0.*
 - libcufile-dev=1.4.0.31
 - libcufile=1.4.0.31
 - libcurand-dev=10.3.0.86
@@ -69,7 +69,7 @@ dependencies:
 - pre-commit
 - protobuf>=4.21,<5
 - ptxcompiler
-- pyarrow==12.0.1.*
+- pyarrow==12.0.0.*
 - pydata-sphinx-theme
 - pyorc
 - pytest

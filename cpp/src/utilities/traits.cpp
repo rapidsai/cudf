@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -157,6 +157,19 @@ struct is_integral_impl {
 };
 
 bool is_integral(data_type type) { return cudf::type_dispatcher(type, is_integral_impl{}); }
+
+struct is_integral_not_bool_impl {
+  template <typename T>
+  constexpr bool operator()()
+  {
+    return is_integral_not_bool<T>();
+  }
+};
+
+bool is_integral_not_bool(data_type type)
+{
+  return cudf::type_dispatcher(type, is_integral_not_bool_impl{});
+}
 
 struct is_floating_point_impl {
   template <typename T>
