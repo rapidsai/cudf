@@ -1987,6 +1987,13 @@ def test_loc_repeated_label_ordering_issue_13658(series):
     assert_eq(actual, expect)
 
 
+@pytest.mark.parametrize("index", [None, [2, 1, 3, 5, 4]])
+def test_loc_bool_key_numeric_index_raises(index):
+    ser = cudf.Series(range(5), index=index)
+    with pytest.raises(KeyError):
+        ser.loc[True]
+
+
 class TestLocIndexWithOrder:
     # https://github.com/rapidsai/cudf/issues/12833
     @pytest.fixture(params=["increasing", "decreasing", "neither"])

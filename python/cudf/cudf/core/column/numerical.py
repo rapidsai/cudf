@@ -120,6 +120,11 @@ class NumericalColumn(NumericalBaseColumn):
         ).any()
 
     def indices_of(self, value: ScalarLike) -> NumericalColumn:
+        if isinstance(value, (bool, np.bool_)) and self.dtype.kind != "b":
+            raise ValueError(
+                f"Cannot use a {type(value).__name__} to find an index of "
+                f"a {self.dtype} Index."
+            )
         if (
             value is not None
             and self.dtype.kind in {"c", "f"}
