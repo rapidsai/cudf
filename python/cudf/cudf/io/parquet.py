@@ -22,7 +22,7 @@ from cudf._lib import parquet as libparquet
 from cudf.api.types import is_list_like
 from cudf.core.column import build_categorical_column, column_empty, full
 from cudf.utils import ioutils
-from cudf.utils.utils import _cudf_nvtx_annotate
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 
 BYTE_SIZES = {
     "kb": 1000,
