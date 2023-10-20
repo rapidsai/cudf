@@ -1640,6 +1640,14 @@ def test_index_equals_categories():
     assert_eq(expect, got)
 
 
+def test_rangeindex_name_not_hashable():
+    with pytest.raises(ValueError):
+        RangeIndex(range(2), name=["foo"])
+
+    with pytest.raises(ValueError):
+        RangeIndex(range(2)).copy(name=["foo"])
+
+
 def test_index_rangeindex_search_range():
     # step > 0
     ridx = RangeIndex(-13, 17, 4)
@@ -2897,3 +2905,15 @@ def test_index_from_dataframe_valueerror():
 def test_index_from_scalar_valueerror():
     with pytest.raises(ValueError):
         cudf.Index(11)
+
+
+@pytest.mark.parametrize("idx", [0, np.int64(0)])
+def test_index_getitem_from_int(idx):
+    result = cudf.Index([1, 2])[idx]
+    assert result == 1
+
+
+@pytest.mark.parametrize("idx", [1.5, True, "foo"])
+def test_index_getitem_from_nonint_raises(idx):
+    with pytest.raises(ValueError):
+        cudf.Index([1, 2])[idx]

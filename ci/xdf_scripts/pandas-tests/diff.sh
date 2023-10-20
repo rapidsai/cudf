@@ -28,4 +28,4 @@ COMMENT=$(head -1 summary.txt)
 echo "$COMMENT"
 
 # Magic name that the custom-job.yaml workflow reads and re-exports
-echo "job_output=$COMMENT" >> "${GITHUB_OUTPUT}"
+echo "job_output=${COMMENT}" >> "${GITHUB_OUTPUT}"
