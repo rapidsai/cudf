@@ -25,8 +25,8 @@ gtest_version:
 aws_sdk_cpp_version:
   - "<1.11"
 
-libarrow_version:
-  - "=12"
+libarrow:
+  - "==12.0.0"
 
 dlpack_version:
   - ">=0.5,<0.6.0a0"

@@ -543,7 +543,7 @@ TEST_F(JsonTest, RecoveringTokenStream)
 {
   // Test input. Inline comments used to indicate character indexes
   //                           012345678 <= line 0
-  std::string const input = R"({"a":-2},)"
+  std::string const input = R"({"a":2 {})"
                             // 9
                             "\n"
                             // 01234 <= line 1
