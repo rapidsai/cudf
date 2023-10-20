@@ -617,22 +617,44 @@ def test_datetime_dataframe():
 @pytest.mark.parametrize("infer_datetime_format", [True, False])
 def test_cudf_to_datetime(data, dayfirst, infer_datetime_format):
     pd_data = data
+    is_string_data = False
     if isinstance(pd_data, (pd.Series, pd.DataFrame, pd.Index)):
         gd_data = cudf.from_pandas(pd_data)
+        is_string_data = (
+            gd_data.ndim == 1
+            and not gd_data.empty
+            and gd_data.dtype.kind == "O"
+        )
     else:
         if type(pd_data).__module__ == np.__name__:
             gd_data = cp.array(pd_data)
         else:
             gd_data = pd_data
+            is_string_data = isinstance(gd_data, list) and isinstance(
+                next(iter(gd_data), None), str
+            )
 
-    expected = pd.to_datetime(
-        pd_data, dayfirst=dayfirst, infer_datetime_format=infer_datetime_format
-    )
-    actual = cudf.to_datetime(
-        gd_data, dayfirst=dayfirst, infer_datetime_format=infer_datetime_format
-    )
-
-    assert_eq(actual, expected)
+    if dayfirst and not infer_datetime_format and is_string_data:
+        # Note: pandas<2.0 also does not respect dayfirst=True correctly
+        # for object data
+        with pytest.raises(NotImplementedError):
+            cudf.to_datetime(
+                gd_data,
+                dayfirst=dayfirst,
+                infer_datetime_format=infer_datetime_format,
+            )
+    else:
+        expected = pd.to_datetime(
+            pd_data,
+            dayfirst=dayfirst,
+            infer_datetime_format=infer_datetime_format,
+        )
+        actual = cudf.to_datetime(
+            gd_data,
+            dayfirst=dayfirst,
+            infer_datetime_format=infer_datetime_format,
+        )
+        assert_eq(actual, expected)
 
 
 @pytest.mark.parametrize(
@@ -1250,40 +1272,31 @@ def test_datetime_reductions(data, op, dtype):
         assert_eq(expected, actual)
 
 
+@pytest.mark.parametrize("timezone", ["naive", "UTC"])
 @pytest.mark.parametrize(
     "data",
     [
-        np.datetime_as_string(
-            np.arange("2002-10-27T04:30", 4 * 60, 60, dtype="M8[m]"),
-            timezone="UTC",
-        ),
-        np.datetime_as_string(
-            np.arange("2002-10-27T04:30", 10 * 60, 1, dtype="M8[m]"),
-            timezone="UTC",
-        ),
-        np.datetime_as_string(
-            np.arange("2002-10-27T04:30", 10 * 60, 1, dtype="M8[ns]"),
-            timezone="UTC",
-        ),
-        np.datetime_as_string(
-            np.arange("2002-10-27T04:30", 10 * 60, 1, dtype="M8[us]"),
-            timezone="UTC",
-        ),
-        np.datetime_as_string(
-            np.arange("2002-10-27T04:30", 4 * 60, 60, dtype="M8[s]"),
-            timezone="UTC",
-        ),
+        np.arange("2002-10-27T04:30", 4 * 60, 60, dtype="M8[m]"),
+        np.arange("2002-10-27T04:30", 10 * 60, 1, dtype="M8[m]"),
+        np.arange("2002-10-27T04:30", 10 * 60, 1, dtype="M8[ns]"),
+        np.arange("2002-10-27T04:30", 10 * 60, 1, dtype="M8[us]"),
+        np.arange("2002-10-27T04:30", 4 * 60, 60, dtype="M8[s]"),
     ],
 )
 @pytest.mark.parametrize("dtype", DATETIME_TYPES)
-def test_datetime_infer_format(data, dtype):
-    sr = cudf.Series(data)
-    psr = pd.Series(data)
+def test_datetime_infer_format(data, timezone, dtype):
+    ts_data = np.datetime_as_string(data, timezone=timezone)
+    sr = cudf.Series(ts_data)
+    if timezone == "naive":
+        psr = pd.Series(ts_data)
 
-    expected = psr.astype(dtype)
-    actual = sr.astype(dtype)
+        expected = psr.astype(dtype)
+        actual = sr.astype(dtype)
 
-    assert_eq(expected, actual)
+        assert_eq(expected, actual)
+    else:
+        with pytest.raises(NotImplementedError):
+            sr.astype(dtype)
 
 
 def test_dateoffset_instance_subclass_check():
@@ -2148,3 +2161,29 @@ def test_daterange_pandas_compatibility():
             "2010-01-01", "2010-02-01", periods=10, name="times"
         )
     assert_eq(expected, actual)
+
+
+def test_strings_with_utc_offset_not_implemented():
+    with pytest.warns(DeprecationWarning, match="parsing timezone"):  # cupy
+        with pytest.raises(NotImplementedError):
+            DatetimeIndex(["2022-07-22 00:00:00+02:00"])
+
+
+@pytest.mark.parametrize("code", ["z", "Z"])
+def test_format_timezone_not_implemented(code):
+    with pytest.raises(NotImplementedError):
+        cudf.to_datetime(
+            ["2020-01-01 00:00:00 UTC"], format=f"%Y-%m-%d %H:%M:%S %{code}"
+        )
+
+
+@pytest.mark.parametrize("tz", ["Z", "UTC-3", "+01:00"])
+def test_no_format_timezone_not_implemented(tz):
+    with pytest.raises(NotImplementedError):
+        cudf.to_datetime([f"2020-01-01 00:00:00{tz}"])
+
+
+@pytest.mark.parametrize("arg", [True, False])
+def test_args_not_datetime_typerror(arg):
+    with pytest.raises(TypeError):
+        cudf.to_datetime([arg])

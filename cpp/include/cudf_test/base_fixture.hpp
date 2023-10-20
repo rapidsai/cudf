@@ -331,9 +331,9 @@ inline auto parse_cudf_test_opts(int argc, char** argv)
     cxxopts::Options options(argv[0], " - cuDF tests command line options");
     char const* env_rmm_mode = std::getenv("GTEST_CUDF_RMM_MODE");  // Overridden by CLI options
     char const* env_stream_mode =
-      std::getenv("GTEST_CUDF_STREAM_MODE");                        // Overridden by CLI options
+      std::getenv("GTEST_CUDF_STREAM_MODE");  // Overridden by CLI options
     char const* env_stream_error_mode =
-      std::getenv("GTEST_CUDF_STREAM_ERROR_MODE");                  // Overridden by CLI options
+      std::getenv("GTEST_CUDF_STREAM_ERROR_MODE");  // Overridden by CLI options
     auto default_rmm_mode          = env_rmm_mode ? env_rmm_mode : "pool";
     auto default_stream_mode       = env_stream_mode ? env_stream_mode : "default";
     auto default_stream_error_mode = env_stream_error_mode ? env_stream_error_mode : "error";
@@ -392,6 +392,7 @@ inline auto parse_cudf_test_opts(int argc, char** argv)
       auto adaptor                       = make_stream_checking_resource_adaptor(             \
         resource.get(), error_on_invalid_stream, check_default_stream); \
       rmm::mr::set_current_device_resource(&adaptor);                                         \
+      return RUN_ALL_TESTS();                                                                 \
     }                                                                                         \
                                                                                               \
     return RUN_ALL_TESTS();                                                                   \

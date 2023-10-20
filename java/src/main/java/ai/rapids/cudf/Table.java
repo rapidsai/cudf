@@ -235,16 +235,31 @@ public final class Table implements AutoCloseable {
                                        byte comment, String[] nullValues,
                                        String[] trueValues, String[] falseValues) throws CudfException;
 
+  private static native long[] readCSVFromDataSource(String[] columnNames,
+                                       int[] dTypeIds, int[] dTypeScales,
+                                       String[] filterColumnNames,
+                                       int headerRow, byte delim, int quoteStyle, byte quote,
+                                       byte comment, String[] nullValues,
+                                       String[] trueValues, String[] falseValues,
+                                       long dataSourceHandle) throws CudfException;
+
   /**
    * read JSON data and return a pointer to a TableWithMeta object.
    */
   private static native long readJSON(String[] columnNames,
                                         int[] dTypeIds, int[] dTypeScales,
                                         String filePath, long address, long length,
-                                        boolean dayFirst, boolean lines) throws CudfException;
+                                        boolean dayFirst, boolean lines,
+                                        boolean recoverWithNulls) throws CudfException;
+
+  private static native long readJSONFromDataSource(String[] columnNames,
+                                      int[] dTypeIds, int[] dTypeScales,
+                                      boolean dayFirst, boolean lines,
+                                      boolean recoverWithNulls,
+                                      long dsHandle) throws CudfException;
 
   private static native long readAndInferJSON(long address, long length,
-      boolean dayFirst, boolean lines) throws CudfException;
+      boolean dayFirst, boolean lines, boolean recoverWithNulls) throws CudfException;
 
   /**
    * Read in Parquet formatted data.
@@ -259,6 +274,10 @@ public final class Table implements AutoCloseable {
   private static native long[] readParquet(String[] filterColumnNames, boolean[] binaryToString, String filePath,
                                            long address, long length, int timeUnit) throws CudfException;
 
+  private static native long[] readParquetFromDataSource(String[] filterColumnNames,
+                                                         boolean[] binaryToString, int timeUnit,
+                                                         long dataSourceHandle) throws CudfException;
+
   /**
    * Read in Avro formatted data.
    * @param filterColumnNames  name of the columns to read, or an empty array if we want to read
@@ -269,6 +288,9 @@ public final class Table implements AutoCloseable {
    */
   private static native long[] readAvro(String[] filterColumnNames, String filePath,
                                         long address, long length) throws CudfException;
+
+  private static native long[] readAvroFromDataSource(String[] filterColumnNames,
+                                                      long dataSourceHandle) throws CudfException;
 
   /**
    * Setup everything to write parquet formatted data to a file.
@@ -370,6 +392,11 @@ public final class Table implements AutoCloseable {
                                        String filePath, long address, long length,
                                        boolean usingNumPyTypes, int timeUnit,
                                        String[] decimal128Columns) throws CudfException;
+
+  private static native long[] readORCFromDataSource(String[] filterColumnNames,
+                                                     boolean usingNumPyTypes, int timeUnit,
+                                                     String[] decimal128Columns,
+                                                     long dataSourceHandle) throws CudfException;
 
   /**
    * Setup everything to write ORC formatted data to a file.
@@ -880,6 +907,27 @@ public final class Table implements AutoCloseable {
         opts.getFalseValues()));
   }
 
+  public static Table readCSV(Schema schema, CSVOptions opts, DataSource ds) {
+    long dsHandle = DataSourceHelper.createWrapperDataSource(ds);
+    try {
+      return new Table(readCSVFromDataSource(schema.getColumnNames(),
+              schema.getTypeIds(),
+              schema.getTypeScales(),
+              opts.getIncludeColumnNames(),
+              opts.getHeaderRow(),
+              opts.getDelim(),
+              opts.getQuoteStyle().nativeId,
+              opts.getQuote(),
+              opts.getComment(),
+              opts.getNullValues(),
+              opts.getTrueValues(),
+              opts.getFalseValues(),
+              dsHandle));
+    } finally {
+      DataSourceHelper.destroyWrapperDataSource(dsHandle);
+    }
+  }
+
   private static native void writeCSVToFile(long table,
                                             String[] columnNames,
                                             boolean includeHeader,
@@ -1047,7 +1095,7 @@ public final class Table implements AutoCloseable {
             readJSON(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
                     path.getAbsolutePath(),
                     0, 0,
-                    opts.isDayFirst(), opts.isLines()))) {
+                    opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull()))) {
 
       return gatherJSONColumns(schema, twm);
     }
@@ -1099,7 +1147,7 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
     return new TableWithMeta(readAndInferJSON(buffer.getAddress() + offset, len,
-        opts.isDayFirst(), opts.isLines()));
+        opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull()));
   }
 
   /**
@@ -1121,8 +1169,27 @@ public final class Table implements AutoCloseable {
     assert offset >= 0 && offset < buffer.length;
     try (TableWithMeta twm = new TableWithMeta(readJSON(schema.getColumnNames(),
             schema.getTypeIds(), schema.getTypeScales(), null,
-            buffer.getAddress() + offset, len, opts.isDayFirst(), opts.isLines()))) {
+            buffer.getAddress() + offset, len, opts.isDayFirst(), opts.isLines(),
+            opts.isRecoverWithNull()))) {
       return gatherJSONColumns(schema, twm);
+    }
+  }
+
+  /**
+   * Read JSON formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param ds the DataSource to read from.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, DataSource ds) {
+    long dsHandle = DataSourceHelper.createWrapperDataSource(ds);
+    try (TableWithMeta twm = new TableWithMeta(readJSONFromDataSource(schema.getColumnNames(),
+            schema.getTypeIds(), schema.getTypeScales(), opts.isDayFirst(), opts.isLines(),
+            opts.isRecoverWithNull(), dsHandle))) {
+      return gatherJSONColumns(schema, twm);
+    } finally {
+      DataSourceHelper.destroyWrapperDataSource(dsHandle);
     }
   }
 
@@ -1212,6 +1279,17 @@ public final class Table implements AutoCloseable {
         null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId()));
   }
 
+  public static Table readParquet(ParquetOptions opts, DataSource ds) {
+    long dataSourceHandle = DataSourceHelper.createWrapperDataSource(ds);
+    try {
+      return new Table(readParquetFromDataSource(opts.getIncludeColumnNames(),
+              opts.getReadBinaryAsString(), opts.timeUnit().typeId.getNativeId(),
+              dataSourceHandle));
+    } finally {
+      DataSourceHelper.destroyWrapperDataSource(dataSourceHandle);
+    }
+  }
+
   /**
    * Read an Avro file using the default AvroOptions.
    * @param path the local file to read.
@@ -1293,6 +1371,16 @@ public final class Table implements AutoCloseable {
 
     return new Table(readAvro(opts.getIncludeColumnNames(),
         null, buffer.getAddress() + offset, len));
+  }
+
+  public static Table readAvro(AvroOptions opts, DataSource ds) {
+    long dataSourceHandle = DataSourceHelper.createWrapperDataSource(ds);
+    try {
+      return new Table(readAvroFromDataSource(opts.getIncludeColumnNames(),
+              dataSourceHandle));
+    } finally {
+      DataSourceHelper.destroyWrapperDataSource(dataSourceHandle);
+    }
   }
 
   /**
@@ -1384,6 +1472,17 @@ public final class Table implements AutoCloseable {
         null, buffer.getAddress() + offset, len,
         opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
         opts.getDecimal128Columns()));
+  }
+
+  public static Table readORC(ORCOptions opts, DataSource ds) {
+    long dataSourceHandle = DataSourceHelper.createWrapperDataSource(ds);
+    try {
+      return new Table(readORCFromDataSource(opts.getIncludeColumnNames(),
+              opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
+              opts.getDecimal128Columns(), dataSourceHandle));
+    } finally {
+      DataSourceHelper.destroyWrapperDataSource(dataSourceHandle);
+    }
   }
 
   private static class ParquetTableWriter extends TableWriter {
@@ -2260,7 +2359,7 @@ public final class Table implements AutoCloseable {
 
   /**
    * Count how many rows in the table are distinct from one another.
-   * @param nullEqual if nulls should be considered equal to each other or not.
+   * @param nullsEqual if nulls should be considered equal to each other or not.
    */
   public int distinctCount(NullEquality nullsEqual) {
     return distinctCount(nativeHandle, nullsEqual.nullsEqual);

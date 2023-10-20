@@ -13,6 +13,7 @@ from typing import (
     List,
     MutableMapping,
     Optional,
+    Sequence,
     Tuple,
     Type,
     Union,
@@ -28,6 +29,7 @@ from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
 from cudf._lib.types import size_type_dtype
+from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_categorical_dtype,
@@ -62,12 +64,8 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     numeric_normalize_types,
 )
-from cudf.utils.utils import (
-    _cudf_nvtx_annotate,
-    _is_same_name,
-    _warn_no_dask_cudf,
-    search_range,
-)
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.utils import _is_same_name, _warn_no_dask_cudf, search_range
 
 
 def _lexsorted_equal_range(
@@ -95,7 +93,7 @@ def _lexsorted_equal_range(
     return lower_bound, upper_bound, sort_inds
 
 
-def _index_from_data(data: MutableMapping, name: Any = None):
+def _index_from_data(data: MutableMapping, name: Any = no_default):
     """Construct an index of the appropriate type from some data."""
 
     if len(data) == 0:
@@ -131,7 +129,7 @@ def _index_from_data(data: MutableMapping, name: Any = None):
 
 
 def _index_from_columns(
-    columns: List[cudf.core.column.ColumnBase], name: Any = None
+    columns: List[cudf.core.column.ColumnBase], name: Any = no_default
 ):
     """Construct an index from ``columns``, with levels named 0, 1, 2..."""
     return _index_from_data(dict(zip(range(len(columns)), columns)), name=name)
@@ -681,7 +679,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_cudf_nvtx_annotate
     def _intersection(self, other, sort=False):
         if not isinstance(other, RangeIndex):
-            return super()._intersection(other, sort=sort)
+            return self._try_reconstruct_range_index(
+                super()._intersection(other, sort=sort)
+            )
 
         if not len(self) or not len(other):
             return RangeIndex(0)
@@ -722,7 +722,29 @@ class RangeIndex(BaseIndex, BinaryOperand):
         if sort is None:
             new_index = new_index.sort_values()
 
-        return new_index
+        return self._try_reconstruct_range_index(new_index)
+
+    @_cudf_nvtx_annotate
+    def difference(self, other, sort=None):
+        if isinstance(other, RangeIndex) and self.equals(other):
+            return self[:0]._get_reconciled_name_object(other)
+
+        return self._try_reconstruct_range_index(
+            super().difference(other, sort=sort)
+        )
+
+    def _try_reconstruct_range_index(self, index):
+        if isinstance(index, RangeIndex) or index.dtype.kind == "f":
+            return index
+        # Evenly spaced values can return a
+        # RangeIndex instead of a materialized Index.
+        if not index._column.has_nulls():
+            uniques = cupy.unique(cupy.diff(index.values))
+            if len(uniques) == 1 and uniques[0].get() != 0:
+                diff = uniques[0].get()
+                new_range = range(index[0], index[-1] + diff, diff)
+                return type(self)(new_range, name=index.name)
+        return index
 
     def sort_values(
         self,
@@ -1010,10 +1032,10 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     @classmethod
     @_cudf_nvtx_annotate
     def _from_data(
-        cls, data: MutableMapping, name: Any = None
+        cls, data: MutableMapping, name: Any = no_default
     ) -> GenericIndex:
         out = super()._from_data(data=data)
-        if name is not None:
+        if name is not no_default:
             out.name = name
         return out
 
@@ -3312,6 +3334,7 @@ def as_index(arbitrary, nan_as_null=None, **kwargs) -> BaseIndex:
         - DatetimeIndex for Datetime input.
         - GenericIndex for all other inputs.
     """
+
     kwargs = _setdefault_name(arbitrary, **kwargs)
     if isinstance(arbitrary, cudf.MultiIndex):
         return arbitrary
@@ -3441,7 +3464,7 @@ class Index(BaseIndex, metaclass=IndexMeta):
                 "tupleize_cols != True is not yet supported"
             )
 
-        return as_index(
+        res = as_index(
             data,
             copy=copy,
             dtype=dtype,
@@ -3449,6 +3472,15 @@ class Index(BaseIndex, metaclass=IndexMeta):
             nan_as_null=nan_as_null,
             **kwargs,
         )
+        if (
+            isinstance(data, Sequence)
+            and not isinstance(data, range)
+            and len(data) == 0
+            and dtype is None
+            and getattr(data, "dtype", None) is None
+        ):
+            return res.astype("str")
+        return res
 
     @classmethod
     @_cudf_nvtx_annotate

@@ -16,6 +16,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.api.extensions import no_default
 from cudf.core._compat import PANDAS_GE_200
 from cudf.core.column import as_column
 from cudf.core.index import as_index
@@ -1897,3 +1898,114 @@ def test_multiindex_empty_slice_pandas_compatibility():
     with cudf.option_context("mode.pandas_compatible", True):
         actual = cudf.from_pandas(expected)
     assert_eq(expected, actual, exact=False)
+
+
+@pytest.mark.parametrize(
+    "levels",
+    itertools.chain.from_iterable(
+        itertools.permutations(range(3), n) for n in range(1, 4)
+    ),
+    ids=str,
+)
+def test_multiindex_sort_index_partial(levels):
+    df = pd.DataFrame(
+        {
+            "a": [3, 3, 3, 1, 1, 1, 2, 2],
+            "b": [4, 2, 7, -1, 11, -2, 7, 7],
+            "c": [4, 4, 2, 3, 3, 3, 1, 1],
+            "val": [1, 2, 3, 4, 5, 6, 7, 8],
+        }
+    ).set_index(["a", "b", "c"])
+    cdf = cudf.from_pandas(df)
+
+    expect = df.sort_index(level=levels, sort_remaining=True)
+    got = cdf.sort_index(level=levels, sort_remaining=True)
+    assert_eq(expect, got)
+
+
+def test_multiindex_to_series_error():
+    midx = cudf.MultiIndex.from_tuples([("a", "b")])
+    with pytest.raises(NotImplementedError):
+        midx.to_series()
+
+
+@pytest.mark.parametrize(
+    "pidx",
+    [
+        pd.MultiIndex.from_arrays(
+            [[1, 2, 3, 4], [5, 6, 7, 10], [11, 12, 12, 13]],
+            names=["a", "b", "c"],
+        ),
+        pd.MultiIndex.from_arrays(
+            [[1, 2, 3, 4], [5, 6, 7, 10], [11, 12, 12, 13]],
+            names=["a", "a", "a"],
+        ),
+        pd.MultiIndex.from_arrays(
+            [[1, 2, 3, 4], [5, 6, 7, 10], [11, 12, 12, 13]],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "name", [None, no_default, ["x", "y", "z"], ["rapids", "rapids", "rapids"]]
+)
+@pytest.mark.parametrize("allow_duplicates", [True, False])
+@pytest.mark.parametrize("index", [True, False])
+def test_multiindex_to_frame_allow_duplicates(
+    pidx, name, allow_duplicates, index
+):
+    gidx = cudf.from_pandas(pidx)
+
+    if (
+        (
+            len(pidx.names) != len(set(pidx.names))
+            and not all(x is None for x in pidx.names)
+        )
+        and not allow_duplicates
+        and (name is None or name is no_default)
+    ):
+        assert_exceptions_equal(
+            pidx.to_frame,
+            gidx.to_frame,
+            lfunc_args_and_kwargs=(
+                [],
+                {
+                    "index": index,
+                    "name": name,
+                    "allow_duplicates": allow_duplicates,
+                },
+            ),
+            rfunc_args_and_kwargs=(
+                [],
+                {
+                    "index": index,
+                    "name": name,
+                    "allow_duplicates": allow_duplicates,
+                },
+            ),
+        )
+    else:
+        if (
+            len(pidx.names) != len(set(pidx.names))
+            and not all(x is None for x in pidx.names)
+            and not isinstance(name, list)
+        ) or (isinstance(name, list) and len(name) != len(set(name))):
+            # cudf doesn't have the ability to construct dataframes
+            # with duplicate column names
+            with expect_warning_if(name is None):
+                with pytest.raises(ValueError):
+                    gidx.to_frame(
+                        index=index,
+                        name=name,
+                        allow_duplicates=allow_duplicates,
+                    )
+        else:
+            with expect_warning_if(name is None):
+                expected = pidx.to_frame(
+                    index=index, name=name, allow_duplicates=allow_duplicates
+                )
+            with expect_warning_if(name is None):
+                actual = gidx.to_frame(
+                    index=index, name=name, allow_duplicates=allow_duplicates
+                )
+
+            assert_eq(expected, actual)

@@ -97,7 +97,7 @@ struct replace_row_parallel_fn {
       } else {
         bytes += d_repl.size_bytes() - d_target.size_bytes();
       }
-      position = d_str.find(d_target, position + d_target.size_bytes());
+      position = d_str.find(d_target, position + d_target.length());
       --max_n;
     }
     if (out_ptr)  // copy whats left (or right depending on your point of view)
@@ -751,21 +751,23 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
 std::unique_ptr<column> replace(strings_column_view const& strings,
                                 string_scalar const& target,
                                 string_scalar const& repl,
-                                int32_t maxrepl,
+                                cudf::size_type maxrepl,
+                                rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace(strings, target, repl, maxrepl, cudf::get_default_stream(), mr);
+  return detail::replace(strings, target, repl, maxrepl, stream, mr);
 }
 
 std::unique_ptr<column> replace_slice(strings_column_view const& strings,
                                       string_scalar const& repl,
                                       size_type start,
                                       size_type stop,
+                                      rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_slice(strings, repl, start, stop, cudf::get_default_stream(), mr);
+  return detail::replace_slice(strings, repl, start, stop, stream, mr);
 }
 
 }  // namespace strings

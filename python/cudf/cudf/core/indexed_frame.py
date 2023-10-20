@@ -69,7 +69,8 @@ from cudf.core.udf.utils import (
 )
 from cudf.utils import docutils
 from cudf.utils._numba import _CUDFNumbaConfig
-from cudf.utils.utils import _cudf_nvtx_annotate, _warn_no_dask_cudf
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.utils import _warn_no_dask_cudf
 
 doc_reset_index_template = """
         Reset the index of the {klass}, or a level of it.
@@ -357,6 +358,12 @@ class IndexedFrame(Frame):
             include_index=bool(index_names),
             override_dtypes=override_dtypes,
         )
+
+    def __round__(self, digits=0):
+        # Shouldn't be added to BinaryOperand
+        # because pandas Index doesn't implement
+        # this method.
+        return self.round(decimals=digits)
 
     def _mimic_inplace(
         self, result: Self, inplace: bool = False
@@ -1526,7 +1533,9 @@ class IndexedFrame(Frame):
         na_position : {'first', 'last'}, default 'last'
             Puts NaNs at the beginning if first; last puts NaNs at the end.
         sort_remaining : bool, default True
-            Not yet supported
+            When sorting a multiindex on a subset of its levels,
+            should entries be lexsorted by the remaining
+            (non-specified) levels as well?
         ignore_index : bool, default False
             if True, index will be replaced with RangeIndex.
         key : callable, optional
@@ -1592,11 +1601,6 @@ class IndexedFrame(Frame):
         if kind is not None:
             raise NotImplementedError("kind is not yet supported")
 
-        if not sort_remaining:
-            raise NotImplementedError(
-                "sort_remaining == False is not yet supported"
-            )
-
         if key is not None:
             raise NotImplementedError("key is not yet supported.")
 
@@ -1609,16 +1613,22 @@ class IndexedFrame(Frame):
                 if level is not None:
                     # Pandas doesn't handle na_position in case of MultiIndex.
                     na_position = "first" if ascending is True else "last"
-                    labels = [
-                        idx._get_level_label(lvl)
-                        for lvl in (level if is_list_like(level) else (level,))
-                    ]
-                    # Explicitly construct a Frame rather than using type(self)
-                    # to avoid constructing a SingleColumnFrame (e.g. Series).
-                    idx = Frame._from_data(idx._data.select_by_label(labels))
+                    if not is_list_like(level):
+                        level = [level]
+                    by = list(map(idx._get_level_label, level))
+                    if sort_remaining:
+                        handled = set(by)
+                        by.extend(
+                            filter(
+                                lambda n: n not in handled,
+                                self.index._data.names,
+                            )
+                        )
+                else:
+                    by = list(idx._data.names)
 
                 inds = idx._get_sorted_inds(
-                    ascending=ascending, na_position=na_position
+                    by=by, ascending=ascending, na_position=na_position
                 )
                 out = self._gather(
                     GatherMap.from_column_unchecked(
@@ -1958,6 +1968,11 @@ class IndexedFrame(Frame):
         ignore_index: bool, default False
             If True, the resulting axis will be labeled 0, 1, ..., n - 1.
         """
+        if not isinstance(ignore_index, (np.bool_, bool)):
+            raise ValueError(
+                f"{ignore_index=} must be bool, "
+                f"not {type(ignore_index).__name__}"
+            )
         subset = self._preprocess_subset(subset)
         subset_cols = [name for name in self._column_names if name in subset]
         if len(subset_cols) == 0:
@@ -2647,7 +2662,9 @@ class IndexedFrame(Frame):
             data=cudf.core.column_accessor.ColumnAccessor(
                 cols,
                 multiindex=self._data.multiindex,
-                level_names=self._data.level_names,
+                level_names=tuple(column_names.names)
+                if isinstance(column_names, pd.Index)
+                else None,
             ),
             index=index,
         )
@@ -5423,6 +5440,13 @@ def _is_same_dtype(lhs_dtype, rhs_dtype):
     # Utility specific to `_reindex` to check
     # for matching column dtype.
     if lhs_dtype == rhs_dtype:
+        return True
+    elif (
+        is_categorical_dtype(lhs_dtype)
+        and is_categorical_dtype(rhs_dtype)
+        and lhs_dtype.categories.dtype == rhs_dtype.categories.dtype
+    ):
+        # OK if categories are not all the same
         return True
     elif (
         is_categorical_dtype(lhs_dtype)

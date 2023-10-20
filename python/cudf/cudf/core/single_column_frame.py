@@ -19,7 +19,8 @@ from cudf.api.types import (
 )
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.frame import Frame
-from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.utils import NotIterable
 
 
 class SingleColumnFrame(Frame, NotIterable):
@@ -49,9 +50,11 @@ class SingleColumnFrame(Frame, NotIterable):
         if level is not None:
             raise NotImplementedError("level parameter is not implemented yet")
 
-        if numeric_only:
+        if numeric_only and not isinstance(
+            self._column, cudf.core.column.numerical_base.NumericalBaseColumn
+        ):
             raise NotImplementedError(
-                f"Series.{op} does not implement numeric_only"
+                f"Series.{op} does not implement numeric_only."
             )
         try:
             return getattr(self._column, op)(**kwargs)

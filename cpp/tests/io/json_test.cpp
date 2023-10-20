@@ -26,6 +26,7 @@
 #include <cudf/io/arrow_io_source.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
+#include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -1370,6 +1371,124 @@ TEST_F(JsonReaderTest, JsonExperimentalLines)
   CUDF_TEST_EXPECT_TABLES_EQUAL(legacy_reader_table.tbl->view(), table.tbl->view());
 }
 
+TEST_F(JsonReaderTest, JsonLongString)
+{
+  // Unicode
+  // 0000-FFFF     Basic Multilingual Plane
+  // 10000-10FFFF  Supplementary Plane
+  cudf::test::strings_column_wrapper col1{
+    {
+      "\"\\/\b\f\n\r\t",
+      "\"",
+      "\\",
+      "/",
+      "\b",
+      "\f\n",
+      "\r\t",
+      "$€",
+      "ராபிட்ஸ்",
+      "C𝞵𝓓𝒻",
+      "",  // null
+      "",  // null
+      "கார்த்தி",
+      "CႮ≪ㇳ䍏凹沦王辿龸ꁗ믜스폶ﴠ",  //  0000-FFFF
+      "𐀀𑿪𒐦𓃰𔙆 𖦆𗿿𘳕𚿾[↳] 𜽆𝓚𞤁🄰",                            // 10000-1FFFF
+      "𠘨𡥌𢗉𣇊𤊩𥅽𦉱𧴱𨁲𩁹𪐢𫇭𬬭𭺷𮊦屮",                // 20000-2FFFF
+      "𰾑𱔈𲍉",                                          // 30000-3FFFF
+      R"("$€ \u0024\u20ac \\u0024\\u20ac  \\\u0024\\\u20ac \\\\u0024\\\\u20ac)",
+      R"(        \\\\\\\\\\\\\\\\)",
+      R"(\\\\\\\\\\\\\\\\)",
+      R"(\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\)",
+      R"( \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\)",
+      R"(                      \\abcd)",
+      R"(                 \\\\\\\\\\\\\\\\                 \\\\\\\\\\\\\\\\)",
+      R"(                \\\\\\\\\\\\\\\\                 \\\\\\\\\\\\\\\\)",
+    },
+    cudf::test::iterators::nulls_at({10, 11})};
+
+  cudf::test::fixed_width_column_wrapper<int16_t> repeat_times{
+    {1, 2, 3, 4, 5, 6, 7, 8, 9, 13, 19, 37, 81, 161, 323, 631, 1279, 10, 1, 2, 1, 100, 1000, 1, 3},
+    cudf::test::iterators::no_nulls()};
+  auto d_col2 = cudf::strings::repeat_strings(cudf::strings_column_view{col1}, repeat_times);
+  auto col2   = d_col2->view();
+  cudf::table_view const tbl_view{{col1, col2, repeat_times}};
+  cudf::io::table_metadata mt{{{"col1"}, {"col2"}, {"int16"}}};
+
+  std::vector<char> out_buffer;
+  auto destination     = cudf::io::sink_info(&out_buffer);
+  auto options_builder = cudf::io::json_writer_options_builder(destination, tbl_view)
+                           .include_nulls(true)
+                           .metadata(mt)
+                           .lines(true)
+                           .na_rep("null");
+
+  cudf::io::write_json(options_builder.build(), rmm::mr::get_current_device_resource());
+
+  cudf::table_view const expected = tbl_view;
+  std::map<std::string, data_type> types;
+  types["col1"]  = data_type{type_id::STRING};
+  types["col2"]  = data_type{type_id::STRING};
+  types["int16"] = data_type{type_id::INT16};
+
+  // Initialize parsing options (reading json lines)
+  cudf::io::json_reader_options json_lines_options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{out_buffer.data(), out_buffer.size()})
+      .lines(true)
+      .dtypes(types);
+
+  // Read test data via nested JSON reader
+  auto const table = cudf::io::read_json(json_lines_options);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, table.tbl->view());
+}
+
+TEST_F(JsonReaderTest, ErrorStrings)
+{
+  // cases of invalid escape characters, invalid unicode encodings.
+  // Error strings will decode to nulls
+  auto const buffer = std::string{R"(
+    {"col0": "\"\a"}
+    {"col0": "\u"}
+    {"col0": "\u0"}
+    {"col0": "\u0b"}
+    {"col0": "\u00b"}
+    {"col0": "\u00bz"}
+    {"col0": "\t34567890123456\t9012345678901\ug0bc"}
+    {"col0": "\t34567890123456\t90123456789012\u0hbc"}
+    {"col0": "\t34567890123456\t90123456789012\u00ic"}
+    {"col0": "\u0b95\u0bbe\u0bb0\u0bcd\u0ba4\u0bcd\u0ba4\u0bbfகார்த்தி"}
+)"};
+  // Last one is not an error case, but shows that unicode in json is copied string column output.
+
+  cudf::io::json_reader_options const in_opts =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
+      .dtypes({data_type{cudf::type_id::STRING}})
+      .lines(true)
+      .legacy(false);
+
+  auto const result      = cudf::io::read_json(in_opts);
+  auto const result_view = result.tbl->view().column(0);
+
+  EXPECT_EQ(result.metadata.schema_info[0].name, "col0");
+  EXPECT_EQ(result_view.null_count(), 9);
+  cudf::test::strings_column_wrapper expected{
+    {"",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "கார்த்தி\xe0\xae\x95\xe0\xae\xbe\xe0\xae\xb0\xe0\xaf\x8d\xe0\xae\xa4\xe0\xaf\x8d\xe0\xae\xa4"
+     "\xe0\xae\xbf"},
+    // unicode hex 0xe0 0xae 0x95 0xe0 0xae 0xbe 0xe0 0xae 0xb0 0xe0 0xaf 0x8d
+    //             0xe0 0xae 0xa4 0xe0 0xaf 0x8d 0xe0 0xae 0xa4 0xe0 0xae 0xbf
+    cudf::test::iterators::nulls_at({0, 1, 2, 3, 4, 5, 6, 7, 8})};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_view, expected);
+}
+
 TEST_F(JsonReaderTest, TokenAllocation)
 {
   std::array<std::string const, 3> const json_inputs{
@@ -1838,12 +1957,36 @@ TEST_F(JsonReaderTest, JSONLinesRecovering)
     // 2 -> (invalid)
     R"({"b":{"a":[321})"
     "\n"
-    // 3 -> c: [1] (valid)
+    // 3 -> c: 1.2 (valid)
     R"({"c":1.2})"
     "\n"
     "\n"
-    // 4 -> a: 123 (valid)
-    R"({"a":123})";
+    // 4 -> a: 4 (valid)
+    R"({"a":4})"
+    "\n"
+    // 5 -> (invalid)
+    R"({"a":5)"
+    "\n"
+    // 6 -> (invalid)
+    R"({"a":6 )"
+    "\n"
+    // 7 -> (invalid)
+    R"({"b":[7 )"
+    "\n"
+    // 8 -> a: 8 (valid)
+    R"({"a":8})"
+    "\n"
+    // 9 -> (invalid)
+    R"({"d":{"unterminated_field_name)"
+    "\n"
+    // 10 -> (invalid)
+    R"({"d":{)"
+    "\n"
+    // 11 -> (invalid)
+    R"({"d":{"123",)"
+    "\n"
+    // 12 -> a: 12 (valid)
+    R"({"a":12})";
 
   auto filepath = temp_env->get_temp_dir() + "RecoveringLines.json";
   {
@@ -1859,17 +2002,89 @@ TEST_F(JsonReaderTest, JSONLinesRecovering)
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
   EXPECT_EQ(result.tbl->num_columns(), 2);
-  EXPECT_EQ(result.tbl->num_rows(), 5);
+  EXPECT_EQ(result.tbl->num_rows(), 13);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
   EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
 
-  std::vector<bool> a_validity{true, false, false, false, true};
-  std::vector<bool> c_validity{false, false, false, true, false};
+  std::vector<bool> a_validity{
+    true, false, false, false, true, false, false, false, true, false, false, false, true};
+  std::vector<bool> c_validity{
+    false, false, false, true, false, false, false, false, false, false, false, false, false};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    result.tbl->get_column(0),
+    int64_wrapper{{-2, 0, 0, 0, 4, 0, 0, 0, 8, 0, 0, 0, 12}, a_validity.cbegin()});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    result.tbl->get_column(1),
+    float64_wrapper{{0.0, 0.0, 0.0, 1.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+                    c_validity.cbegin()});
+}
+
+TEST_F(JsonReaderTest, JSONLinesRecoveringIgnoreExcessChars)
+{
+  /**
+   * @brief Spark has the specific need to ignore extra characters that come after the first record
+   * on a JSON line
+   */
+  std::string data =
+    // 0 -> a: -2 (valid)
+    R"({"a":-2}{})"
+    "\n"
+    // 1 -> (invalid)
+    R"({"b":{}should_be_invalid})"
+    "\n"
+    // 2 -> b (valid)
+    R"({"b":{"a":3} })"
+    "\n"
+    // 3 -> c: (valid)
+    R"({"c":1.2 } )"
+    "\n"
+    "\n"
+    // 4 -> (valid)
+    R"({"a":4} 123)"
+    "\n"
+    // 5 -> (valid)
+    R"({"a":5}//Comment after record)"
+    "\n"
+    // 6 -> (valid)
+    R"({"a":6} //Comment after whitespace)"
+    "\n"
+    // 7 -> (invalid)
+    R"({"a":5 //Invalid Comment within record})";
+
+  auto filepath = temp_env->get_temp_dir() + "RecoveringLinesExcessChars.json";
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    outfile << data;
+  }
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{filepath})
+      .lines(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 3);
+  EXPECT_EQ(result.tbl->num_rows(), 8);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::STRUCT);
+  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::FLOAT64);
+
+  std::vector<bool> a_validity{true, false, false, false, true, true, true, false};
+  std::vector<bool> b_validity{false, false, true, false, false, false, false, false};
+  std::vector<bool> c_validity{false, false, false, true, false, false, false, false};
+
+  // Child column b->a
+  auto b_a_col = int64_wrapper({0, 0, 3, 0, 0, 0, 0, 0});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
-                                 int64_wrapper{{-2, 0, 0, 0, 123}, a_validity.cbegin()});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
-                                 float64_wrapper{{0.0, 0.0, 0.0, 1.2, 0.0}, c_validity.cbegin()});
+                                 int64_wrapper{{-2, 0, 0, 0, 4, 5, 6, 0}, a_validity.cbegin()});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    result.tbl->get_column(1), cudf::test::structs_column_wrapper({b_a_col}, b_validity.cbegin()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    result.tbl->get_column(2),
+    float64_wrapper{{0.0, 0.0, 0.0, 1.2, 0.0, 0.0, 0.0, 0.0}, c_validity.cbegin()});
 }
 
 CUDF_TEST_PROGRAM_MAIN()

@@ -32,9 +32,24 @@
 #include <tuple>
 #include <vector>
 
-namespace cudf::io::detail::parquet {
+namespace cudf::io::parquet::detail {
 
-using namespace cudf::io::parquet;
+/**
+ * @brief The row_group_info class
+ */
+struct row_group_info {
+  size_type index;  // row group index within a file. aggregate_reader_metadata::get_row_group() is
+                    // called with index and source_index
+  size_t start_row;
+  size_type source_index;  // file index.
+
+  row_group_info() = default;
+
+  row_group_info(size_type index, size_t start_row, size_type source_index)
+    : index{index}, start_row{start_row}, source_index{source_index}
+  {
+  }
+};
 
 /**
  * @brief Function that translates Parquet datatype to cuDF type enum
@@ -54,23 +69,11 @@ using namespace cudf::io::parquet;
 }
 
 /**
- * @brief The row_group_info class
- */
-struct row_group_info {
-  size_type const index;
-  size_t const start_row;  // TODO source index
-  size_type const source_index;
-  row_group_info(size_type index, size_t start_row, size_type source_index)
-    : index(index), start_row(start_row), source_index(source_index)
-  {
-  }
-};
-
-/**
  * @brief Class for parsing dataset metadata
  */
 struct metadata : public FileMetaData {
   explicit metadata(datasource* source);
+  void sanitize_schema();
 };
 
 class aggregate_reader_metadata {
@@ -214,12 +217,13 @@ class aggregate_reader_metadata {
    * @return input column information, output column information, list of output column schema
    * indices
    */
-  [[nodiscard]] std::
-    tuple<std::vector<input_column_info>, std::vector<inline_column_buffer>, std::vector<size_type>>
-    select_columns(std::optional<std::vector<std::string>> const& use_names,
-                   bool include_index,
-                   bool strings_to_categorical,
-                   type_id timestamp_type_id) const;
+  [[nodiscard]] std::tuple<std::vector<input_column_info>,
+                           std::vector<cudf::io::detail::inline_column_buffer>,
+                           std::vector<size_type>>
+  select_columns(std::optional<std::vector<std::string>> const& use_names,
+                 bool include_index,
+                 bool strings_to_categorical,
+                 type_id timestamp_type_id) const;
 };
 
 /**
@@ -288,4 +292,4 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
   std::list<ast::operation> _operators;
 };
 
-}  // namespace cudf::io::detail::parquet
+}  // namespace cudf::io::parquet::detail

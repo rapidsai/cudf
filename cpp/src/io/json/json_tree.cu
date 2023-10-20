@@ -15,8 +15,6 @@
  */
 
 #include "nested_json.hpp"
-#include <hash/hash_allocator.cuh>
-#include <hash/helper_functions.cuh>
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -24,7 +22,9 @@
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
+#include <cudf/hashing/detail/hash_allocator.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
+#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 

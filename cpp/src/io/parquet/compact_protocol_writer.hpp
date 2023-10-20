@@ -25,9 +25,7 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
-namespace parquet {
+namespace cudf::io::parquet::detail {
 
 /**
  * @brief Class for parsing Parquet's Thrift Compact Protocol encoded metadata
@@ -53,6 +51,7 @@ class CompactProtocolWriter {
   size_t write(Statistics const&);
   size_t write(PageLocation const&);
   size_t write(OffsetIndex const&);
+  size_t write(ColumnOrder const&);
 
  protected:
   std::vector<uint8_t>& m_buf;
@@ -94,6 +93,8 @@ class CompactProtocolFieldWriter {
   template <typename T>
   inline void field_struct(int field, T const& val);
 
+  inline void field_empty_struct(int field);
+
   template <typename T>
   inline void field_struct_list(int field, std::vector<T> const& val);
 
@@ -112,6 +113,4 @@ class CompactProtocolFieldWriter {
   inline void set_current_field(int const& field);
 };
 
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

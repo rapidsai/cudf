@@ -18,7 +18,7 @@
 
 #include "page_decode.cuh"
 
-namespace cudf::io::parquet::gpu {
+namespace cudf::io::parquet::detail {
 
 // DELTA_XXX encoding support
 //
@@ -45,12 +45,6 @@ namespace cudf::io::parquet::gpu {
 // and a suffix is stored. The prefix lengths are DELTA_BINARY_PACKED encoded. The suffixes are
 // encoded with DELTA_LENGTH_BYTE_ARRAY encoding, which is a DELTA_BINARY_PACKED list of suffix
 // lengths, followed by the concatenated suffix data.
-
-// TODO: The delta encodings use ULEB128 integers, but for now we're only
-// using max 64 bits. Need to see what the performance impact is of using
-// __int128_t rather than int64_t.
-using uleb128_t   = uint64_t;
-using zigzag128_t = int64_t;
 
 // we decode one mini-block at a time. max mini-block size seen is 64.
 constexpr int delta_rolling_buf_size = 128;
@@ -90,16 +84,16 @@ inline __device__ zigzag128_t get_zz128(uint8_t const*& cur, uint8_t const* end)
 }
 
 struct delta_binary_decoder {
-  uint8_t const* block_start;    // start of data, but updated as data is read
-  uint8_t const* block_end;      // end of data
-  uleb128_t block_size;          // usually 128, must be multiple of 128
-  uleb128_t mini_block_count;    // usually 4, chosen such that block_size/mini_block_count is a
-                                 // multiple of 32
-  uleb128_t value_count;         // total values encoded in the block
-  zigzag128_t last_value;        // last value decoded, initialized to first_value from header
+  uint8_t const* block_start;  // start of data, but updated as data is read
+  uint8_t const* block_end;    // end of data
+  uleb128_t block_size;        // usually 128, must be multiple of 128
+  uleb128_t mini_block_count;  // usually 4, chosen such that block_size/mini_block_count is a
+                               // multiple of 32
+  uleb128_t value_count;       // total values encoded in the block
+  zigzag128_t last_value;      // last value decoded, initialized to first_value from header
 
-  uint32_t values_per_mb;        // block_size / mini_block_count, must be multiple of 32
-  uint32_t current_value_idx;    // current value index, initialized to 0 at start of block
+  uint32_t values_per_mb;      // block_size / mini_block_count, must be multiple of 32
+  uint32_t current_value_idx;  // current value index, initialized to 0 at start of block
 
   zigzag128_t cur_min_delta;     // min delta for the block
   uint32_t cur_mb;               // index of the current mini-block within the block
@@ -291,4 +285,4 @@ struct delta_binary_decoder {
   }
 };
 
-}  // namespace cudf::io::parquet::gpu
+}  // namespace cudf::io::parquet::detail
