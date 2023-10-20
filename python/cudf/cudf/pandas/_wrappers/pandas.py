@@ -1263,6 +1263,7 @@ _PANDAS_OBJ_FINAL_TYPES = [
     pd.core.indexes.datetimelike.DatetimeIndexOpsMixin,
     pd.core.indexes.extension.NDArrayBackedExtensionIndex,
     pd.core.indexes.numeric.IntegerIndex,
+    pd.core.indexes.numeric.NumericIndex,
     pd.core.generic.NDFrame,
     pd.core.indexes.accessors.PeriodProperties,
     pd.core.indexes.accessors.Properties,
