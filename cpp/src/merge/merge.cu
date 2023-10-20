@@ -13,25 +13,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/gather.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/merge.cuh>
+#include <cudf/detail/merge.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/detail/merge.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
+#include <cudf/lists/detail/concatenate.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/strings/detail/merge.cuh>
 #include <cudf/structs/structs_column_view.hpp>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
@@ -48,7 +53,56 @@
 
 namespace cudf {
 namespace detail {
+
 namespace {
+
+template <bool has_nulls>
+struct row_lexicographic_tagged_comparator {
+  row_lexicographic_tagged_comparator(table_device_view lhs,
+                                      table_device_view rhs,
+                                      device_span<order const> column_order,
+                                      device_span<null_order const> null_precedence)
+    : _lhs{lhs}, _rhs{rhs}, _column_order{column_order}, _null_precedence{null_precedence}
+  {
+    // Add check for types to be the same.
+    CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
+  }
+
+  __device__ bool operator()(index_type lhs_tagged_index,
+                             index_type rhs_tagged_index) const noexcept
+  {
+    auto const [l_side, l_indx] = lhs_tagged_index;
+    auto const [r_side, r_indx] = rhs_tagged_index;
+
+    // Not sure why `const_cast` is needed here
+    table_device_view* ptr_left_dview{l_side == side::LEFT
+                                        ? const_cast<cudf::table_device_view*>(&_lhs)
+                                        : const_cast<cudf::table_device_view*>(&_rhs)};
+    table_device_view* ptr_right_dview{r_side == side::LEFT
+                                         ? const_cast<cudf::table_device_view*>(&_lhs)
+                                         : const_cast<cudf::table_device_view*>(&_rhs)};
+
+    auto comparator = [&]() {
+      if (has_nulls) {
+        return cudf::experimental::row::lexicographic::device_row_comparator<false, bool>{
+          has_nulls, *ptr_left_dview, *ptr_right_dview, _column_order, _null_precedence};
+      } else {
+        return cudf::experimental::row::lexicographic::device_row_comparator<false, bool>{
+          has_nulls, *ptr_left_dview, *ptr_right_dview, _column_order};
+      }
+    }();
+
+    auto weak_order = comparator(l_indx, r_indx);
+
+    return weak_order == weak_ordering::LESS;
+  }
+
+ private:
+  table_device_view _lhs;
+  table_device_view _rhs;
+  device_span<null_order const> _null_precedence;
+  device_span<order const> _column_order;
+};
 
 using detail::side;
 using index_type = detail::index_type;
@@ -417,6 +471,32 @@ std::unique_ptr<column> column_merger::operator()<cudf::dictionary32>(
       lcol, rcol, merged_view.null_mask(), merged_view.size(), row_order_.data(), stream);
   }
   return result;
+}
+
+// specialization for lists
+template <>
+std::unique_ptr<column> column_merger::operator()<cudf::list_view>(
+  column_view const& lcol,
+  column_view const& rcol,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr) const
+{
+  std::vector<column_view> columns{lcol, rcol};
+  auto concatenated_list = cudf::lists::detail::concatenate(columns, stream, mr);
+
+  auto const iter_gather = cudf::detail::make_counting_transform_iterator(
+    0, [row_order = row_order_.data(), lsize = lcol.size()] __device__(auto const idx) {
+      auto const [side, index] = row_order[idx];
+      return side == side::LEFT ? index : lsize + index;
+    });
+
+  auto result = cudf::detail::gather(table_view{{concatenated_list->view()}},
+                                     iter_gather,
+                                     iter_gather + concatenated_list->size(),
+                                     out_of_bounds_policy::DONT_CHECK,
+                                     stream,
+                                     mr);
+  return std::move(result->release()[0]);
 }
 
 // specialization for structs
