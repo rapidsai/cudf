@@ -62,6 +62,7 @@ files:
     includes:
       - cudatoolkit
       - docs
+      - libarrow_run
       - py_version
   py_build_cudf:
     output: pyproject
@@ -225,7 +226,7 @@ dependencies:
           - &gmock gmock>=1.13.0
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - libarrow==12.0.1.*
+          - &libarrow libarrow==12.0.0.*
           - librdkafka>=1.9.0,<1.10.0a0
           # Align nvcomp version with rapids-cmake
           - nvcomp==2.6.1
@@ -243,7 +244,7 @@ dependencies:
           - cython>=3.0.0
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - pyarrow==12.0.1.*
+          - &pyarrow pyarrow==12.0.0.*
           # TODO: Pin to numpy<1.25 until cudf requires pandas 2
           - &numpy numpy>=1.21,<1.25
   build_python:
@@ -260,16 +261,14 @@ dependencies:
           - protoc-wheel
   libarrow_run:
     common:
-      - output_types: [conda, requirements]
+      - output_types: conda
         packages:
-          # Allow runtime version to float up to minor version
-          - libarrow==12.*
+          - *libarrow
   pyarrow_run:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          # Allow runtime version to float up to minor version
-          - pyarrow==12.*
+          - *pyarrow
   cudatoolkit:
     specific:
       - output_types: conda
@@ -282,6 +281,9 @@ dependencies:
               - cuda-nvrtc-dev
               - cuda-nvtx-dev
               - libcurand-dev
+              # TODO: Remove after https://github.com/rapidsai/cudf/pull/14292 updates
+              # cudf_kafka to use scikit-build
+              - cuda-gdb
           - matrix:
               cuda: "11.8"
             packages:
