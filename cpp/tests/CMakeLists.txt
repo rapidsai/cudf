@@ -357,6 +357,7 @@ ConfigureTest(
 ConfigureTest(
   UTILITIES_TEST
   utilities_tests/type_list_tests.cpp
+  utilities_tests/column_debug_tests.cpp
   utilities_tests/column_utilities_tests.cpp
   utilities_tests/column_wrapper_tests.cpp
   utilities_tests/lists_column_wrapper_tests.cpp
