@@ -1339,12 +1339,14 @@ def test_delta_binary(nrows, add_nulls, tmpdir):
     assert_eq(cdf, pcdf)
 
     # just to check if the new option can be used
-    cudf.from_pandas(test_pdf).to_parquet(
-        pdf_fname,
+    pd.read_parquet(pdf_fname)
+    cudf_fname = tmpdir.join("cudfv2.parquet")
+    pcdf.to_parquet(
+        cudf_fname,
         header_version="2.0",
         use_dictionary=False,
     )
-    assert_eq(cudf.read_parquet(pdf_fname), test_pdf)
+    assert_eq(cudf.from_pandas(pd.read_parquet(cudf_fname)), cdf)
 
 
 @pytest.mark.parametrize(
