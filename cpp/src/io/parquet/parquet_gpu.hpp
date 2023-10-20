@@ -313,7 +313,7 @@ struct ColumnChunkDesc {
                            uint8_t rep_level_bits_,
                            int8_t codec_,
                            int8_t converted_type_,
-                           LogicalType logical_type_,
+                           thrust::optional<LogicalType> logical_type_,
                            int8_t decimal_precision_,
                            int32_t ts_clock_rate_,
                            int32_t src_col_index_,
@@ -355,20 +355,20 @@ struct ColumnChunkDesc {
   uint16_t data_type{};  // basic column data type, ((type_length << 3) |
                          // parquet::Type)
   uint8_t
-    level_bits[level_type::NUM_LEVEL_TYPES]{};  // bits to encode max definition/repetition levels
-  int32_t num_data_pages{};                     // number of data pages
-  int32_t num_dict_pages{};                     // number of dictionary pages
-  int32_t max_num_pages{};                      // size of page_info array
-  PageInfo* page_info{};                        // output page info for up to num_dict_pages +
-                                                // num_data_pages (dictionary pages first)
-  string_index_pair* str_dict_index{};          // index for string dictionary
-  bitmask_type** valid_map_base{};              // base pointers of valid bit map for this column
-  void** column_data_base{};                    // base pointers of column data
-  void** column_string_base{};                  // base pointers of column string data
-  int8_t codec{};                               // compressed codec enum
-  int8_t converted_type{};                      // converted type enum
-  LogicalType logical_type{};                   // logical type
-  int8_t decimal_precision{};                   // Decimal precision
+    level_bits[level_type::NUM_LEVEL_TYPES]{};   // bits to encode max definition/repetition levels
+  int32_t num_data_pages{};                      // number of data pages
+  int32_t num_dict_pages{};                      // number of dictionary pages
+  int32_t max_num_pages{};                       // size of page_info array
+  PageInfo* page_info{};                         // output page info for up to num_dict_pages +
+                                                 // num_data_pages (dictionary pages first)
+  string_index_pair* str_dict_index{};           // index for string dictionary
+  bitmask_type** valid_map_base{};               // base pointers of valid bit map for this column
+  void** column_data_base{};                     // base pointers of column data
+  void** column_string_base{};                   // base pointers of column string data
+  int8_t codec{};                                // compressed codec enum
+  int8_t converted_type{};                       // converted type enum
+  thrust::optional<LogicalType> logical_type{};  // logical type
+  int8_t decimal_precision{};                    // Decimal precision
   int32_t ts_clock_rate{};  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 
   int32_t src_col_index{};   // my input column index
