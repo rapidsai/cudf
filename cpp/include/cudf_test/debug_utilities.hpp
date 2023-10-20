@@ -16,11 +16,6 @@
 
 #pragma once
 
-//
-// Do NOT include any header that directly or indirectly depends on gtest.
-// It is to make sure this file can be used and compiled outside of the test framework.
-//
-
 #include <cudf/column/column_view.hpp>
 #include <cudf/null_mask.hpp>
 
