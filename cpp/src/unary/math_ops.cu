@@ -291,8 +291,12 @@ std::unique_ptr<column> unary_op_with(column_view const& input,
        std::is_same_v<FixedPointUnaryOpFunctor, fixed_point_floor<Type>>))
     return std::make_unique<cudf::column>(input, stream, mr);
 
-  auto result = cudf::make_fixed_width_column(
-    input.type(), input.size(), copy_bitmask(input, stream, mr), input.null_count(), stream, mr);
+  auto result = cudf::make_fixed_width_column(input.type(),
+                                              input.size(),
+                                              detail::copy_bitmask(input, stream, mr),
+                                              input.null_count(),
+                                              stream,
+                                              mr);
 
   auto out_view = result->mutable_view();
 
