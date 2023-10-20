@@ -483,7 +483,7 @@ struct column_gatherer_impl<struct_view> {
     auto const nullable =
       nullify_out_of_bounds || std::any_of(sliced_children.begin(),
                                            sliced_children.end(),
-                                           [](auto const& col) { return col.nullable(); });
+                                           [](auto const& col) { return col.has_nulls(); });
 
     if (nullable) {
       gather_bitmask(
@@ -569,8 +569,8 @@ void gather_bitmask(table_view const& source,
 
   // Create null mask if source is nullable but target is not
   for (size_t i = 0; i < target.size(); ++i) {
-    if ((source.column(i).nullable() or op == gather_bitmask_op::NULLIFY) and
-        not target[i]->nullable()) {
+    if ((source.column(i).has_nulls() or op == gather_bitmask_op::NULLIFY) and
+        not target[i]->has_nulls()) {
       auto const state =
         op == gather_bitmask_op::PASSTHROUGH ? mask_state::ALL_VALID : mask_state::UNINITIALIZED;
       auto mask = detail::create_null_mask(target[i]->size(), state, stream, mr);
@@ -613,7 +613,7 @@ void gather_bitmask(table_view const& source,
   // Copy the valid counts into each column
   auto const valid_counts = make_std_vector_sync(d_valid_counts, stream);
   for (size_t i = 0; i < target.size(); ++i) {
-    if (target[i]->nullable()) {
+    if (target[i]->has_nulls()) {
       auto const null_count = target_rows - valid_counts[i];
       target[i]->set_null_count(null_count);
     }
