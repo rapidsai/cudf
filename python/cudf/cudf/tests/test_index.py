@@ -1640,6 +1640,14 @@ def test_index_equals_categories():
     assert_eq(expect, got)
 
 
+def test_rangeindex_name_not_hashable():
+    with pytest.raises(ValueError):
+        RangeIndex(range(2), name=["foo"])
+
+    with pytest.raises(ValueError):
+        RangeIndex(range(2)).copy(name=["foo"])
+
+
 def test_index_rangeindex_search_range():
     # step > 0
     ridx = RangeIndex(-13, 17, 4)
