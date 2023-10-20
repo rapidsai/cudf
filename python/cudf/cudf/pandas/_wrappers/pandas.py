@@ -1251,48 +1251,22 @@ ArrowExtensionArray = make_final_proxy_type(
 
 
 # The following are subclasses of `pandas.core.base.PandasObj`,
-# excluding subclasses defined in pandas.core.internals.  These are
+# excluding subclasses defined in `pandas.core.internals`.  These are
 # not strictly part of the Pandas public API, but they do appear as
 # return types.
 
-_PANDAS_OBJ_TYPES = [
-    pd.core.arrays.categorical.Categorical,
-    pd.core.arrays.categorical.CategoricalAccessor,
+_PANDAS_OBJ_FINAL_TYPES = [
     pd.core.arrays.sparse.array.SparseArray,
     pd.core.indexes.frozen.FrozenList,
     pd.core.indexes.category.CategoricalIndex,
-    pd.core.indexes.datetimes.DatetimeIndex,
-    pd.core.indexes.timedeltas.TimedeltaIndex,
     pd.core.indexes.datetimelike.DatetimeTimedeltaMixin,
-    pd.core.indexes.period.PeriodIndex,
     pd.core.indexes.datetimelike.DatetimeIndexOpsMixin,
     pd.core.indexes.extension.NDArrayBackedExtensionIndex,
-    pd.core.indexes.interval.IntervalIndex,
-    pd.core.indexes.extension.ExtensionIndex,
-    pd.core.indexes.numeric.Int64Index,
-    pd.core.indexes.numeric.UInt64Index,
     pd.core.indexes.numeric.IntegerIndex,
-    pd.core.indexes.numeric.Float64Index,
-    pd.core.indexes.range.RangeIndex,
-    pd.core.indexes.numeric.NumericIndex,
-    pd.core.indexes.multi.MultiIndex,
-    pd.core.indexes.base.Index,
-    pd.core.series.Series,
-    pd.core.frame.DataFrame,
     pd.core.generic.NDFrame,
-    pd.core.indexes.accessors.CombinedDatetimelikeProperties,
-    pd.core.indexes.accessors.DatetimeProperties,
-    pd.core.indexes.accessors.CombinedDatetimelikeProperties,
-    pd.core.indexes.accessors.TimedeltaProperties,
-    pd.core.indexes.accessors.CombinedDatetimelikeProperties,
     pd.core.indexes.accessors.PeriodProperties,
     pd.core.indexes.accessors.Properties,
     pd.plotting._core.PlotAccessor,
-    pd.core.groupby.groupby.GroupByPlot,
-    pd.core.groupby.generic.SeriesGroupBy,
-    pd.core.groupby.generic.DataFrameGroupBy,
-    pd.core.groupby.groupby.GroupBy,
-    pd.core.groupby.groupby.BaseGroupBy,
     pd.io.sql.SQLiteTable,
     pd.io.sql.SQLTable,
     pd.io.sql.SQLDatabase,
@@ -1300,7 +1274,13 @@ _PANDAS_OBJ_TYPES = [
     pd.io.sql.PandasSQL,
 ]
 
-for typ in _PANDAS_OBJ_TYPES:
+_PANDAS_OBJ_INTERMEDIATE_TYPES = [
+    pd.core.groupby.groupby.GroupByPlot,
+    pd.core.groupby.groupby.GroupBy,
+    pd.core.groupby.groupby.BaseGroupBy,
+]
+
+for typ in _PANDAS_OBJ_FINAL_TYPES:
     if typ.__name__ in globals():
         # if we already defined a proxy type
         # corresponding to this type, use that.
@@ -1319,4 +1299,16 @@ for typ in _PANDAS_OBJ_TYPES:
             "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
             "__hash__": _FastSlowAttribute("__hash__"),
         },
+    )
+
+
+for typ in _PANDAS_OBJ_INTERMEDIATE_TYPES:
+    if typ.__name__ in globals():
+        # if we already defined a proxy type
+        # corresponding to this type, use that.
+        continue
+    globals()[typ.__name__] = make_intermediate_proxy_type(
+        typ.__name__,
+        _Unusable,
+        typ,
     )
