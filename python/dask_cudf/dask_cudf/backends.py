@@ -42,7 +42,7 @@ from dask.utils import Dispatch, is_arraylike
 
 import cudf
 from cudf.api.types import is_string_dtype
-from cudf.utils.utils import _dask_cudf_nvtx_annotate
+from cudf.utils.nvtx_annotation import _dask_cudf_nvtx_annotate
 
 from .core import DataFrame, Index, Series
 
