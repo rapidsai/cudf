@@ -911,6 +911,7 @@ def _transform_arg(
         transformed = [
             _transform_arg(a, attribute_name, seen) for a in arg.flat
         ]
+        # Keep the same memory layout as arg (the default is C_CONTIGUOUS)
         if arg.flags["F_CONTIGUOUS"] and not arg.flags["C_CONTIGUOUS"]:
             order = "F"
         else:
