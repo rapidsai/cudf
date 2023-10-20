@@ -4075,11 +4075,12 @@ int32_t compare(T& v1, T& v2)
 int32_t compare_binary(std::vector<uint8_t> const& v1,
                        std::vector<uint8_t> const& v2,
                        cudf::io::parquet::detail::Type ptype,
-                       cudf::io::parquet::detail::ConvertedType ctype)
+                       thrust::optional<cudf::io::parquet::detail::ConvertedType> const& ctype)
 {
+  auto ctype_val = ctype.value_or(cudf::io::parquet::detail::UNKNOWN);
   switch (ptype) {
     case cudf::io::parquet::detail::INT32:
-      switch (ctype) {
+      switch (ctype_val) {
         case cudf::io::parquet::detail::UINT_8:
         case cudf::io::parquet::detail::UINT_16:
         case cudf::io::parquet::detail::UINT_32:
@@ -4091,7 +4092,7 @@ int32_t compare_binary(std::vector<uint8_t> const& v1,
       }
 
     case cudf::io::parquet::detail::INT64:
-      if (ctype == cudf::io::parquet::detail::UINT_64) {
+      if (ctype_val == cudf::io::parquet::detail::UINT_64) {
         return compare(*(reinterpret_cast<uint64_t const*>(v1.data())),
                        *(reinterpret_cast<uint64_t const*>(v2.data())));
       }
