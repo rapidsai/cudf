@@ -31,6 +31,8 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/atomic>
+
 #include <cuda_runtime.h>
 
 #include <vector>
@@ -52,6 +54,30 @@ template <int rolling_size>
 constexpr int rolling_index(int index)
 {
   return index % rolling_size;
+}
+
+// see setupLocalPageInfo() in page_decode.cuh for supported page encodings
+constexpr bool is_supported_encoding(Encoding enc)
+{
+  switch (enc) {
+    case Encoding::PLAIN:
+    case Encoding::PLAIN_DICTIONARY:
+    case Encoding::RLE:
+    case Encoding::RLE_DICTIONARY:
+    case Encoding::DELTA_BINARY_PACKED: return true;
+    default: return false;
+  }
+}
+
+/**
+ * @brief Atomically OR `error` into `error_code`.
+ */
+constexpr void set_error(int32_t error, int32_t* error_code)
+{
+  if (error != 0) {
+    cuda::atomic_ref<int32_t, cuda::thread_scope_device> ref{*error_code};
+    ref.fetch_or(error, cuda::std::memory_order_relaxed);
+  }
 }
 
 /**
@@ -495,9 +521,13 @@ constexpr bool is_string_col(ColumnChunkDesc const& chunk)
  *
  * @param[in] chunks List of column chunks
  * @param[in] num_chunks Number of column chunks
+ * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
-void DecodePageHeaders(ColumnChunkDesc* chunks, int32_t num_chunks, rmm::cuda_stream_view stream);
+void DecodePageHeaders(ColumnChunkDesc* chunks,
+                       int32_t num_chunks,
+                       int32_t* error_code,
+                       rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for building the dictionary index for the column
