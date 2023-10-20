@@ -1285,6 +1285,9 @@ def test_parquet_reader_v2(tmpdir, simple_pdf):
     simple_pdf.to_parquet(pdf_fname, data_page_version="2.0")
     assert_eq(cudf.read_parquet(pdf_fname), simple_pdf)
 
+    cudf.from_pandas(simple_pdf).to_parquet(pdf_fname, header_version="2.0")
+    assert_eq(cudf.read_parquet(pdf_fname), simple_pdf)
+
 
 @pytest.mark.parametrize("nrows", [1, 100000])
 @pytest.mark.parametrize("add_nulls", [True, False])
@@ -1469,7 +1472,6 @@ def test_parquet_writer_int96_timestamps(tmpdir, pdf, gdf):
 
 
 def test_multifile_parquet_folder(tmpdir):
-
     test_pdf1 = make_pdf(nrows=10, nvalids=10 // 2)
     test_pdf2 = make_pdf(nrows=20)
     expect = pd.concat([test_pdf1, test_pdf2])
