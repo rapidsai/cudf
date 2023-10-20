@@ -646,6 +646,12 @@ ConfigureTest(
 ConfigureTest(STREAM_SORTING_TEST streams/sorting_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_TEXT_TEST streams/text/ngrams_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_LISTS_TEST streams/lists_test.cpp STREAM_MODE testing)
+ConfigureTest(
+    STREAM_IO_TEST
+    streams/io/functions_test.cpp
+    STREAM_MODE
+    testing
+)
 
 # ##################################################################################################
 # Install tests ####################################################################################

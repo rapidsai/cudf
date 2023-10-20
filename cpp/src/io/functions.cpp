@@ -200,7 +200,9 @@ compression_type infer_compression_type(compression_type compression, source_inf
   return compression_type::NONE;
 }
 
-table_with_metadata read_json(json_reader_options options, rmm::mr::device_memory_resource* mr)
+table_with_metadata read_json(json_reader_options options,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -210,10 +212,12 @@ table_with_metadata read_json(json_reader_options options, rmm::mr::device_memor
                                       options.get_byte_range_offset(),
                                       options.get_byte_range_size_with_padding());
 
-  return json::detail::read_json(datasources, options, cudf::get_default_stream(), mr);
+  return json::detail::read_json(datasources, options, stream, mr);
 }
 
-void write_json(json_writer_options const& options, rmm::mr::device_memory_resource* mr)
+void write_json(json_writer_options const& options,
+                rmm::cuda_stream_view stream,
+                rmm::mr::device_memory_resource* mr)
 {
   auto sinks = make_datasinks(options.get_sink());
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for JSON writing");
@@ -222,7 +226,7 @@ void write_json(json_writer_options const& options, rmm::mr::device_memory_resou
     sinks[0].get(),
     options.get_table(),
     options,
-    cudf::get_default_stream(),
+    stream,
     mr);
 }
 
