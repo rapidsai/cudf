@@ -930,6 +930,8 @@ def to_parquet(
             partitions_info=partition_info,
             storage_options=storage_options,
             force_nullable_schema=force_nullable_schema,
+            header_version=header_version,
+            use_dictionary=use_dictionary,
         )
 
     else:
@@ -1238,11 +1240,7 @@ class ParquetDatasetWriter:
         """
         Write a dataframe to the file/dataset
         """
-        (
-            part_names,
-            grouped_df,
-            part_offsets,
-        ) = _get_groups_and_offsets(
+        (part_names, grouped_df, part_offsets,) = _get_groups_and_offsets(
             df=df,
             partition_cols=self.partition_cols,
             preserve_index=self.common_args["index"],

@@ -53,9 +53,9 @@ cdef extern from "cudf/io/types.hpp" \
         STATISTICS_COLUMN = 3,
 
     ctypedef enum dictionary_policy:
-        ALWAYS = 0,
+        NEVER = 0,
         ADAPTIVE = 1,
-        NEVER = 2,
+        ALWAYS = 2,
 
     cdef cppclass column_name_info:
         string name
