@@ -52,6 +52,11 @@ cdef extern from "cudf/io/types.hpp" \
         STATISTICS_PAGE = 2,
         STATISTICS_COLUMN = 3,
 
+    ctypedef enum dictionary_policy:
+        ALWAYS = 0,
+        ADAPTIVE = 1,
+        NEVER = 2,
+
     cdef cppclass column_name_info:
         string name
         vector[column_name_info] children

@@ -67,6 +67,7 @@ def _write_parquet(
     storage_options=None,
     force_nullable_schema=False,
     header_version="1.0",
+    use_dictionary=True,
 ):
     if is_list_like(paths) and len(paths) > 1:
         if partitions_info is None:
@@ -854,6 +855,7 @@ def to_parquet(
     return_metadata=False,
     force_nullable_schema=False,
     header_version="1.0",
+    use_dictionary=True,
     *args,
     **kwargs,
 ):

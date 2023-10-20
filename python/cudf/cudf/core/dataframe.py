@@ -6370,6 +6370,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         max_page_size_rows=None,
         storage_options=None,
         return_metadata=False,
+        dictionary_policy=True,
         *args,
         **kwargs,
     ):
