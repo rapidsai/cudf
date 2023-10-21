@@ -10068,3 +10068,82 @@ def test_dataframe_transpose_complex_types(data):
     actual = gdf.T
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"col": [{"a": 1.1}, {"a": 2.1}, {"a": 10.0}, {"a": 11.2323}, None]},
+        {"a": [[{"b": 567}], None] * 10},
+        {"a": [decimal.Decimal(10), decimal.Decimal(20), None]},
+    ],
+)
+def test_dataframe_values_complex_types(data):
+    gdf = cudf.DataFrame(data)
+    with pytest.raises(NotImplementedError):
+        gdf.values
+
+
+def test_dataframe_from_arrow_slice():
+    table = pa.Table.from_pandas(
+        pd.DataFrame.from_dict(
+            {"a": ["aa", "bb", "cc"] * 3, "b": [1, 2, 3] * 3}
+        )
+    )
+    table_slice = table.slice(3, 7)
+
+    expected = table_slice.to_pandas()
+    actual = cudf.DataFrame.from_arrow(table_slice)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [1, 2, 3], "b": ["x", "y", "z"], "c": 4},
+        {"c": 4, "a": [1, 2, 3], "b": ["x", "y", "z"]},
+        {"a": [1, 2, 3], "c": 4},
+    ],
+)
+def test_dataframe_init_from_scalar_and_lists(data):
+    actual = cudf.DataFrame(data)
+    expected = pd.DataFrame(data)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data,index",
+    [
+        ({"a": [1, 2, 3], "b": ["x", "y", "z", "z"], "c": 4}, None),
+        (
+            {
+                "a": [1, 2, 3],
+                "b": ["x", "y", "z"],
+            },
+            [10, 11],
+        ),
+        (
+            {
+                "a": [1, 2, 3],
+                "b": ["x", "y", "z"],
+            },
+            [10, 11],
+        ),
+        ([[10, 11], [12, 13]], ["a", "b", "c"]),
+    ],
+)
+def test_dataframe_init_length_error(data, index):
+   assert_exceptions_equal(
+        lfunc=pd.DataFrame,
+        rfunc=cudf.DataFrame,
+        lfunc_args_and_kwargs=(
+            [],
+            {"data": data, "index": index},
+        ),
+        rfunc_args_and_kwargs=(
+            [],
+            {"data": data, "index": index},
+        ),
+    )
