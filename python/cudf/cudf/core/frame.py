@@ -2526,6 +2526,12 @@ class Frame(BinaryOperand, Scannable):
 
             Parameters currently not supported are `axis`, `bool_only`,
             `level`.
+
+        .. pandas-compat::
+            **DataFrame.all, Series.all**
+
+            Parameters currently not supported are `axis`, `bool_only`,
+            `level`.
         """
         return self._reduce(
             "all",
@@ -2580,6 +2586,12 @@ class Frame(BinaryOperand, Scannable):
 
             Parameters currently not supported are `axis`, `bool_only`,
             `level`.
+
+        .. pandas-compat::
+            **DataFrame.any, Series.any**
+
+            Parameters currently not supported are `axis`, `bool_only`,
+            `level`.
         """
         return self._reduce(
             "any",
@@ -2619,6 +2631,11 @@ class Frame(BinaryOperand, Scannable):
         dtype: int64
         >>> ser.median()
         17.0
+
+        .. pandas-compat::
+            **DataFrame.median, Series.median**
+
+            Parameters currently not supported are `level` and `numeric_only`.
 
         .. pandas-compat::
             **DataFrame.median, Series.median**
