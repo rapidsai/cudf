@@ -344,10 +344,6 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   StackSymbolToStackOpT stack_sym_to_kv_op{symbol_to_stack_op};
   TransformInputItT stack_symbols_in(d_symbols, stack_sym_to_kv_op);
 
-  // Iterator that returns `1` for every symbol that corresponds to a `reset` operation
-  auto reset_segments_it = thrust::make_transform_iterator(
-    d_symbols, detail::NewlineToResetStackSegmentOp<StackSymbolToStackOpTypeT>{symbol_to_stack_op});
-
   // Double-buffer for sorting along the given sequence of symbol positions (the sparse
   // representation)
   cub::DoubleBuffer<SymbolPositionT> d_symbol_positions_db{nullptr, nullptr};
@@ -380,6 +376,11 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   // Getting temporary storage requirements for the prefix sum of the stack level after each
   // operation
   if constexpr (supports_reset_op) {
+    // Iterator that returns `1` for every symbol that corresponds to a `reset` operation
+    auto reset_segments_it = thrust::make_transform_iterator(
+      d_symbols,
+      detail::NewlineToResetStackSegmentOp<StackSymbolToStackOpTypeT>{symbol_to_stack_op});
+
     auto const fake_key_segment_it      = static_cast<StackSegmentT*>(nullptr);
     std::size_t gen_segments_scan_bytes = 0;
     std::size_t scan_by_key_bytes       = 0;
@@ -476,6 +477,11 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
 
   // Compute prefix sum of the stack level after each operation
   if constexpr (supports_reset_op) {
+    // Iterator that returns `1` for every symbol that corresponds to a `reset` operation
+    auto reset_segments_it = thrust::make_transform_iterator(
+      d_symbols,
+      detail::NewlineToResetStackSegmentOp<StackSymbolToStackOpTypeT>{symbol_to_stack_op});
+
     rmm::device_uvector<StackSegmentT> key_segments{num_symbols_in, stream};
     CUDF_CUDA_TRY(cub::DeviceScan::InclusiveSum(
       temp_storage.data(),
