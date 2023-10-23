@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/detail/contains.hpp>
 #include <cudf/lists/detail/lists_column_factories.hpp>
@@ -274,12 +275,13 @@ std::unique_ptr<column> index_of(lists_column_view const& lists,
                                  rmm::mr::device_memory_resource* mr)
 {
   if (!search_key.is_valid(stream)) {
-    return make_numeric_column(data_type{cudf::type_to_id<size_type>()},
-                               lists.size(),
-                               cudf::create_null_mask(lists.size(), mask_state::ALL_NULL, mr),
-                               lists.size(),
-                               stream,
-                               mr);
+    return make_numeric_column(
+      data_type{cudf::type_to_id<size_type>()},
+      lists.size(),
+      cudf::detail::create_null_mask(lists.size(), mask_state::ALL_NULL, stream, mr),
+      lists.size(),
+      stream,
+      mr);
   }
   if (lists.size() == 0) {
     return make_numeric_column(
@@ -337,7 +339,7 @@ std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
   auto const lists_cv      = lists.parent();
   auto output              = make_numeric_column(data_type{type_to_id<bool>()},
                                     lists.size(),
-                                    copy_bitmask(lists_cv, stream, mr),
+                                    cudf::detail::copy_bitmask(lists_cv, stream, mr),
                                     lists_cv.null_count(),
                                     stream,
                                     mr);

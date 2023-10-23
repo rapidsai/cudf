@@ -381,7 +381,7 @@ std::unique_ptr<column> column_merger::operator()<cudf::struct_view>(
   // materialize the output buffer
   rmm::device_buffer validity =
     lcol.has_nulls() || rcol.has_nulls()
-      ? create_null_mask(merged_size, mask_state::UNINITIALIZED, stream, mr)
+      ? detail::create_null_mask(merged_size, mask_state::UNINITIALIZED, stream, mr)
       : rmm::device_buffer{};
   if (lcol.has_nulls() || rcol.has_nulls()) {
     materialize_bitmask(lcol,
