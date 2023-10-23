@@ -1167,3 +1167,11 @@ def test_from_dataframe():
 
     # pd_df = pd.DataFrame(data)
     # assert_eq(pd_df, pd.api.interchange.from_dataframe(xdf_df))
+
+
+def test_multiindex_values_returns_1d_tuples():
+    mi = xpd.MultiIndex.from_tuples([(1, 2), (3, 4)])
+    result = mi.values
+    expected = np.empty(2, dtype=object)
+    expected[...] = [(1, 2), (3, 4)]
+    tm.assert_equal(result, expected)
