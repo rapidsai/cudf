@@ -259,7 +259,7 @@ dependencies:
           - protoc-wheel
   libarrow_run:
     common:
-      - output_types: [conda, requirements]
+      - output_types: conda
         packages:
           # Allow runtime version to float up to minor version
           - libarrow==12.*
