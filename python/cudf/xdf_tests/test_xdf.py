@@ -653,7 +653,7 @@ def test_maintain_container_subclasses(multiindex):
     got = mi.names.difference(["b"])
     expect = pmi.names.difference(["b"])
     assert got == expect
-    assert isinstance(got, type(expect))
+    assert isinstance(got, xpd.core.indexes.frozen.FrozenList)
 
 
 def test_rolling_win_type():
@@ -997,10 +997,32 @@ def test_subclass_series():
         xpd.PeriodIndex,
         xpd.MultiIndex,
         xpd.IntervalIndex,
+        xpd.core.indexes.numeric.UInt64Index,
+        xpd.core.indexes.numeric.Int64Index,
+        xpd.core.indexes.numeric.Float64Index,
     ],
 )
 def test_index_subclass(index_type):
+    # test that proxy index types are derived
+    # from Index
     assert issubclass(index_type, xpd.Index)
+    assert not issubclass(xpd.Index, index_type)
+
+
+def test_index_internal_subclass():
+    # test that proxy index types that are not related by inheritance
+    # still appear to be so if the underlying slow types are related
+    # by inheritance:
+    assert issubclass(
+        xpd.core.indexes.numeric.Int64Index,
+        xpd.core.indexes.numeric.NumericIndex,
+    ) == issubclass(
+        pd.core.indexes.numeric.Int64Index,
+        pd.core.indexes.numeric.NumericIndex,
+    )
+    assert isinstance(
+        xpd.Index([1, 2, 3]), xpd.core.indexes.numeric.NumericIndex
+    ) == isinstance(pd.Index([1, 2, 3]), pd.core.indexes.numeric.NumericIndex)
 
 
 def test_np_array_of_timestamps():

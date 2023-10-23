@@ -385,7 +385,7 @@ def get_final_type_map():
     Return the mapping of all known fast and slow final types to their
     corresponding proxy types.
     """
-    return _DictOfTypes()
+    return dict()
 
 
 @functools.lru_cache(maxsize=None)
@@ -394,7 +394,7 @@ def get_intermediate_type_map():
     Return a mapping of all known fast and slow intermediate types to their
     corresponding proxy types.
     """
-    return _DictOfTypes()
+    return dict()
 
 
 @functools.lru_cache(maxsize=None)
@@ -491,6 +491,20 @@ class _FastSlowProxyMeta(type):
 
         attr = _FastSlowAttribute(name)
         return attr.__get__(None, owner=self)
+
+    def __subclasscheck__(self, __subclass: type) -> bool:
+        if super().__subclasscheck__(__subclass):
+            return True
+        if hasattr(__subclass, "_xdf_slow"):
+            return issubclass(__subclass._xdf_slow, self._xdf_slow)
+        return False
+
+    def __instancecheck__(self, __instance: Any) -> bool:
+        if super().__instancecheck__(__instance):
+            return True
+        elif hasattr(type(__instance), "_xdf_slow"):
+            return issubclass(type(__instance), self)
+        return False
 
 
 class _FastSlowProxy:
@@ -779,7 +793,7 @@ class _CallableProxyMixin:
             # _fast_slow_function_call) to avoid infinite recursion.
             # TODO: When Python 3.11 is the minimum supported Python version
             # this can use operator.call
-            lambda x, *args, **kwargs: x(*args, **kwargs),
+            lambda __x, *args, **kwargs: __x(*args, **kwargs),
             self,
             *args,
             **kwargs,
@@ -992,17 +1006,17 @@ def _maybe_wrap_result(result: Any, func: Callable, /, *args, **kwargs) -> Any:
 
 
 def _is_final_type(result: Any) -> bool:
-    return isinstance(result, tuple(get_final_type_map().keys()))
+    return type(result) in get_final_type_map()
 
 
 def _is_final_class(result: Any) -> bool:
     if not isinstance(result, type):
         return False
-    return any(issubclass(result, k) for k in get_final_type_map().keys())
+    return result in get_final_type_map()
 
 
 def _is_intermediate_type(result: Any) -> bool:
-    return isinstance(result, tuple(get_intermediate_type_map().keys()))
+    return type(result) in get_intermediate_type_map()
 
 
 def _is_function_or_method(obj: Any) -> bool:
@@ -1018,19 +1032,6 @@ def _is_function_or_method(obj: Any) -> bool:
             types.BuiltinMethodType,
         ),
     )
-
-
-class _DictOfTypes(dict):
-    # a `dict` meant to be used with types as keys, accepting subtypes
-    # for lookup
-    def __missing__(self, key: type):
-        # if `key` was not found, see if a superclass of `key` is
-        # found:
-        for k in self.keys():
-            if issubclass(key, k):
-                return self[k]
-        else:
-            raise KeyError(key)
 
 
 def _replace_closurevars(
@@ -1116,6 +1117,7 @@ _SPECIAL_METHODS: Set[str] = {
     "__copy__",
     "__deepcopy__",
     "__dataframe__",
+    "__call__",
     # Added on a per-proxy basis
     # https://github.com/rapidsai/xdf/pull/306#pullrequestreview-1636155428
     # "__hash__",
