@@ -151,6 +151,7 @@ Series = make_final_proxy_type(
     additional_attributes={
         "__array__": array_method,
         "__array_function__": array_function_method,
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "__arrow_array__": arrow_array_method,
         "__cuda_array_interface__": cuda_array_interface,
         "__iter__": custom_iter,

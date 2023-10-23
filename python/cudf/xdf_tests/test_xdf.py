@@ -515,11 +515,17 @@ def test_binop_array_series(series):
     tm.assert_series_equal(expect, got)
 
 
-def test_array_ufunc(series):
+def test_array_ufunc_reduction(series):
     psr, sr = series
     expect = np.ufunc.reduce(np.subtract, psr)
-    with pytest.warns(DeprecationWarning):
-        got = np.ufunc.reduce(np.subtract, sr)
+    got = np.ufunc.reduce(np.subtract, sr)
+    tm.assert_equal(expect, got)
+
+
+def test_array_ufunc(series):
+    psr, sr = series
+    expect = np.subtract(psr, psr)
+    got = np.subtract(sr, sr)
     tm.assert_equal(expect, got)
 
 
