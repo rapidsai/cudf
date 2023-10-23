@@ -377,35 +377,39 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
     offset_data_type, input.size() + 1, cudf::mask_state::UNALLOCATED, stream, mr);
   auto d_offsets = offsets->mutable_view().data<cudf::size_type>();
 
-  rmm::device_uvector<int8_t> d_spaces(chars_size, stream);
-  rmm::device_uvector<cudf::size_type> d_ranks(chars_size, stream);  // rank per string pair;
-  rmm::device_uvector<int8_t> d_rerank(chars_size, stream);          // re-ranking identifiers
+  rmm::device_uvector<int8_t> d_spaces(chars_size, stream);  // identifies non-merged pairs
+  rmm::device_uvector<int8_t> d_rerank(chars_size, stream);  // re-ranking identifiers
+  // used for various purposes below: unpairable-offsets, pair ranks, separator insert positions
+  rmm::device_uvector<cudf::size_type> d_working(chars_size, stream);
 
   {
-    // this kernel locates unpairable sections of code to create artificial string row boundaries;
-    // the boundary values are recorded as offsets and stored temporarily in the d_ranks vector
-    auto const mp_map = merge_pairs.impl->get_mp_table_ref();
+    // this kernel locates unpairable sections of strings to create artificial string row
+    // boundaries; the boundary values are recorded as offsets in d_up_offsets
+    auto const d_up_offsets = d_working.data();  // store unpairable offsets here
+    auto const mp_map       = merge_pairs.impl->get_mp_table_ref();  // lookup table
     cudf::detail::grid_1d grid(chars_size, block_size);
     bpe_unpairable_offsets_fn<decltype(mp_map)><<<grid.num_blocks, block_size, 0, stream.value()>>>(
-      d_input_chars, chars_size, first_offset, mp_map, d_ranks.data());
-    auto const up_end = thrust::remove(rmm::exec_policy(stream), d_ranks.begin(), d_ranks.end(), 0);
-    auto const unpairables = thrust::distance(d_ranks.begin(), up_end);  // number of unpairables
+      d_input_chars, chars_size, first_offset, mp_map, d_up_offsets);
+    auto const up_end =  // remove all but the unpairable offsets
+      thrust::remove(rmm::exec_policy(stream), d_up_offsets, d_up_offsets + chars_size, 0);
+    auto const unpairables = thrust::distance(d_up_offsets, up_end);  // number of unpairables
 
-    // the new boundaries are combined with the existing offsets
+    // the new boundaries created by combining unpairable offsets with the existing offsets
     auto tmp_offsets = rmm::device_uvector<cudf::size_type>(unpairables + input.size() + 1, stream);
     thrust::merge(rmm::exec_policy(stream),
                   input.offsets_begin(),
                   input.offsets_end(),
-                  d_ranks.begin(),
+                  d_up_offsets,
                   up_end,
                   tmp_offsets.begin());
-    // remove adjacent duplicate offsets (empty or null rows)
+    // remove any adjacent duplicate offsets (empty or null rows)
     auto const offsets_end =
       thrust::unique(rmm::exec_policy(stream), tmp_offsets.begin(), tmp_offsets.end());
     auto const offsets_total =
       static_cast<cudf::size_type>(thrust::distance(tmp_offsets.begin(), offsets_end));
+    tmp_offsets.resize(offsets_total, stream);
 
-    // temp column created for the encoding which parallelizes between the unpairable boundaries
+    // temp column created with the merged offsets and the original chars data
     auto const col_offsets =
       cudf::column_view(cudf::device_span<cudf::size_type const>(tmp_offsets));
     auto const tmp_size  = offsets_total - 1;
@@ -413,9 +417,10 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
       input.parent().type(), tmp_size, nullptr, nullptr, 0, 0, {col_offsets, input.chars()});
     auto const d_tmp_strings = cudf::column_device_view::create(tmp_input, stream);
     // launch the byte-pair-encoding kernel
+    auto const d_ranks  = d_working.data();  // store pair ranks here
     auto const pair_map = merge_pairs.impl->get_merge_pairs_ref();
     bpe_parallel_fn<decltype(pair_map)><<<tmp_size, block_size, 0, stream.value()>>>(
-      *d_tmp_strings, pair_map, d_spaces.data(), d_ranks.data(), d_rerank.data());
+      *d_tmp_strings, pair_map, d_spaces.data(), d_ranks, d_rerank.data());
   }
 
   // compute the output sizes into the output d_offsets vector
@@ -429,28 +434,25 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
                "Size of output exceeds the column size limit",
                std::overflow_error);
 
-  // build the output: adding separators to the input character data
+  // build the output: inserting separators to the input character data
   auto chars   = cudf::strings::detail::create_chars_child_column(bytes, stream, mr);
   auto d_chars = chars->mutable_view().data<char>();
 
-  // we can reuse the ranks working memory to store some temporary offsets;
-  // the offsets are produced by the index of the d_spaces values
-  auto const d_inserts = d_ranks.data();
-  // create offsets where separators will be inserted
+  auto const d_inserts     = d_working.data();  // stores the insert positions
   auto offsets_at_non_zero = [d_spaces = d_spaces.data()] __device__(auto idx) {
     return d_spaces[idx] > 0;  // separator to be inserted here
   };
-  auto const zero_itr  = thrust::counting_iterator<cudf::size_type>(0);
-  auto const chars_end = thrust::counting_iterator<cudf::size_type>(chars_size);
-  auto const copy_end  = thrust::copy_if(
-    rmm::exec_policy(stream), zero_itr + 1, chars_end, d_inserts, offsets_at_non_zero);
+  auto const chars_begin = thrust::counting_iterator<cudf::size_type>(0);
+  auto const chars_end   = thrust::counting_iterator<cudf::size_type>(chars_size);
+  auto const copy_end    = thrust::copy_if(
+    rmm::exec_policy(stream), chars_begin + 1, chars_end, d_inserts, offsets_at_non_zero);
 
-  // this will insert the single-byte separator in positions specified in d_inserts
+  // this will insert the single-byte separator into positions specified in d_inserts
   auto const sep_char = thrust::constant_iterator<char>(separator.to_string(stream)[0]);
   thrust::merge_by_key(rmm::exec_policy(stream),
                        d_inserts,      // where to insert separator byte
                        copy_end,       //
-                       zero_itr,       // all positions
+                       chars_begin,    // all positions
                        chars_end,      //
                        sep_char,       // byte to insert
                        d_input_chars,  // original data
