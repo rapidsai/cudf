@@ -526,6 +526,7 @@ def test_array_ufunc(series):
     psr, sr = series
     expect = np.subtract(psr, psr)
     got = np.subtract(sr, sr)
+    assert isinstance(got, sr.__class__)
     tm.assert_equal(expect, got)
 
 
