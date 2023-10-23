@@ -932,8 +932,13 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self._try_reconstruct_range_index(result)
 
     def _indices_of(self, value) -> cudf.core.column.NumericalColumn:
+        if isinstance(value, (bool, np.bool_)):
+            raise ValueError(
+                f"Cannot use {type(value).__name__} to get an index of a "
+                f"{type(self).__name__}."
+            )
         try:
-            i = [range(self._start, self._stop, self._step).index(value)]
+            i = [self._range.index(value)]
         except ValueError:
             i = []
         return as_column(i, dtype=size_type_dtype)
