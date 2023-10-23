@@ -1291,8 +1291,6 @@ for typ in _PANDAS_OBJ_FINAL_TYPES:
         fast_to_slow=_Unusable(),
         slow_to_fast=_Unusable(),
         additional_attributes={
-            # this is an ad-hoc list, based on what was found
-            # while running pandas test-suite:
             "__array__": array_method,
             "__array_function__": array_function_method,
             "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
