@@ -200,8 +200,6 @@ Index = make_final_proxy_type(
     },
 )
 
-# TODO: an incomplete list; just doing as much as necessary to get all
-# pytests to collect:
 get_final_type_map()[cudf.StringIndex] = Index
 get_final_type_map()[cudf.Int8Index] = Index
 get_final_type_map()[cudf.Int8Index] = Index
