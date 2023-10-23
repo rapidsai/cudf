@@ -200,8 +200,6 @@ Index = make_final_proxy_type(
     },
 )
 
-# TODO: an incomplete list; just doing as much as necessary to get all
-# pytests to collect:
 get_final_type_map()[cudf.StringIndex] = Index
 get_final_type_map()[cudf.Int8Index] = Index
 get_final_type_map()[cudf.Int8Index] = Index
@@ -1293,8 +1291,6 @@ for typ in _PANDAS_OBJ_FINAL_TYPES:
         fast_to_slow=_Unusable(),
         slow_to_fast=_Unusable(),
         additional_attributes={
-            # this is an ad-hoc list, based on what was found
-            # while running pandas test-suite:
             "__array__": array_method,
             "__array_function__": array_function_method,
             "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
