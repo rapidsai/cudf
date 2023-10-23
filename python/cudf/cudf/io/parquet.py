@@ -99,6 +99,7 @@ def _write_parquet(
         "partitions_info": partitions_info,
         "force_nullable_schema": force_nullable_schema,
         "header_version": header_version,
+        "use_dictionary": use_dictionary,
     }
     if all(ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs):
         with ExitStack() as stack:
