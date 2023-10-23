@@ -353,6 +353,9 @@ struct ParquetWriterSchemaTest : public ParquetWriterTest {
 template <typename T>
 struct ParquetReaderSourceTest : public ParquetReaderTest {};
 
+template <typename T>
+struct ParquetWriterDeltaTest : public ParquetWriterTest {};
+
 // Declare typed test cases
 // TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5352
 using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool, float, double>;
@@ -384,7 +387,6 @@ TYPED_TEST_SUITE(ParquetChunkedWriterNumericTypeTest, SupportedTypes);
 class ParquetSizedTest : public ::cudf::test::BaseFixtureWithParam<int> {};
 
 // test the allowed bit widths for dictionary encoding
-// values chosen to trigger 1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, and 24 bit dictionaries
 INSTANTIATE_TEST_SUITE_P(ParquetDictionaryTest,
                          ParquetSizedTest,
                          testing::Range(1, 25),
@@ -4073,11 +4075,12 @@ int32_t compare(T& v1, T& v2)
 int32_t compare_binary(std::vector<uint8_t> const& v1,
                        std::vector<uint8_t> const& v2,
                        cudf::io::parquet::detail::Type ptype,
-                       cudf::io::parquet::detail::ConvertedType ctype)
+                       thrust::optional<cudf::io::parquet::detail::ConvertedType> const& ctype)
 {
+  auto ctype_val = ctype.value_or(cudf::io::parquet::detail::UNKNOWN);
   switch (ptype) {
     case cudf::io::parquet::detail::INT32:
-      switch (ctype) {
+      switch (ctype_val) {
         case cudf::io::parquet::detail::UINT_8:
         case cudf::io::parquet::detail::UINT_16:
         case cudf::io::parquet::detail::UINT_32:
@@ -4089,7 +4092,7 @@ int32_t compare_binary(std::vector<uint8_t> const& v1,
       }
 
     case cudf::io::parquet::detail::INT64:
-      if (ctype == cudf::io::parquet::detail::UINT_64) {
+      if (ctype_val == cudf::io::parquet::detail::UINT_64) {
         return compare(*(reinterpret_cast<uint64_t const*>(v1.data())),
                        *(reinterpret_cast<uint64_t const*>(v2.data())));
       }
@@ -4161,8 +4164,10 @@ TEST_P(ParquetV2Test, LargeColumnIndex)
       // check trunc(page.min) <= stats.min && trun(page.max) >= stats.max
       auto const ptype = fmd.schema[c + 1].type;
       auto const ctype = fmd.schema[c + 1].converted_type;
-      EXPECT_TRUE(compare_binary(ci.min_values[0], stats.min_value, ptype, ctype) <= 0);
-      EXPECT_TRUE(compare_binary(ci.max_values[0], stats.max_value, ptype, ctype) >= 0);
+      ASSERT_TRUE(stats.min_value.has_value());
+      ASSERT_TRUE(stats.max_value.has_value());
+      EXPECT_TRUE(compare_binary(ci.min_values[0], stats.min_value.value(), ptype, ctype) <= 0);
+      EXPECT_TRUE(compare_binary(ci.max_values[0], stats.max_value.value(), ptype, ctype) >= 0);
     }
   }
 }
@@ -4242,6 +4247,9 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndex)
       auto const ci    = read_column_index(source, chunk);
       auto const stats = get_statistics(chunk);
 
+      ASSERT_TRUE(stats.min_value.has_value());
+      ASSERT_TRUE(stats.max_value.has_value());
+
       // schema indexing starts at 1
       auto const ptype = fmd.schema[c + 1].type;
       auto const ctype = fmd.schema[c + 1].converted_type;
@@ -4250,10 +4258,10 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndex)
         EXPECT_FALSE(ci.null_pages[p]);
         // null_counts should always be 0
         EXPECT_EQ(ci.null_counts[p], 0);
-        EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
+        EXPECT_TRUE(compare_binary(stats.min_value.value(), ci.min_values[p], ptype, ctype) <= 0);
       }
       for (size_t p = 0; p < ci.max_values.size(); p++)
-        EXPECT_TRUE(compare_binary(stats.max_value, ci.max_values[p], ptype, ctype) >= 0);
+        EXPECT_TRUE(compare_binary(stats.max_value.value(), ci.max_values[p], ptype, ctype) >= 0);
     }
   }
 }
@@ -4344,7 +4352,10 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNulls)
       auto const stats = get_statistics(chunk);
 
       // should be half nulls, except no nulls in column 0
-      EXPECT_EQ(stats.null_count, c == 0 ? 0 : num_rows / 2);
+      ASSERT_TRUE(stats.min_value.has_value());
+      ASSERT_TRUE(stats.max_value.has_value());
+      ASSERT_TRUE(stats.null_count.has_value());
+      EXPECT_EQ(stats.null_count.value(), c == 0 ? 0 : num_rows / 2);
 
       // schema indexing starts at 1
       auto const ptype = fmd.schema[c + 1].type;
@@ -4356,10 +4367,10 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNulls)
         } else {
           EXPECT_EQ(ci.null_counts[p], 0);
         }
-        EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
+        EXPECT_TRUE(compare_binary(stats.min_value.value(), ci.min_values[p], ptype, ctype) <= 0);
       }
       for (size_t p = 0; p < ci.max_values.size(); p++) {
-        EXPECT_TRUE(compare_binary(stats.max_value, ci.max_values[p], ptype, ctype) >= 0);
+        EXPECT_TRUE(compare_binary(stats.max_value.value(), ci.max_values[p], ptype, ctype) >= 0);
       }
     }
   }
@@ -4436,7 +4447,12 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNullColumn)
       auto const stats = get_statistics(chunk);
 
       // there should be no nulls except column 1 which is all nulls
-      EXPECT_EQ(stats.null_count, c == 1 ? num_rows : 0);
+      if (c != 1) {
+        ASSERT_TRUE(stats.min_value.has_value());
+        ASSERT_TRUE(stats.max_value.has_value());
+      }
+      ASSERT_TRUE(stats.null_count.has_value());
+      EXPECT_EQ(stats.null_count.value(), c == 1 ? num_rows : 0);
 
       // schema indexing starts at 1
       auto const ptype = fmd.schema[c + 1].type;
@@ -4449,12 +4465,12 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNullColumn)
         }
         if (not ci.null_pages[p]) {
           EXPECT_EQ(ci.null_counts[p], 0);
-          EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
+          EXPECT_TRUE(compare_binary(stats.min_value.value(), ci.min_values[p], ptype, ctype) <= 0);
         }
       }
       for (size_t p = 0; p < ci.max_values.size(); p++) {
         if (not ci.null_pages[p]) {
-          EXPECT_TRUE(compare_binary(stats.max_value, ci.max_values[p], ptype, ctype) >= 0);
+          EXPECT_TRUE(compare_binary(stats.max_value.value(), ci.max_values[p], ptype, ctype) >= 0);
         }
       }
     }
@@ -4533,13 +4549,16 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStruct)
       auto const ci    = read_column_index(source, chunk);
       auto const stats = get_statistics(chunk);
 
+      ASSERT_TRUE(stats.min_value.has_value());
+      ASSERT_TRUE(stats.max_value.has_value());
+
       auto const ptype = fmd.schema[colidx].type;
       auto const ctype = fmd.schema[colidx].converted_type;
       for (size_t p = 0; p < ci.min_values.size(); p++) {
-        EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
+        EXPECT_TRUE(compare_binary(stats.min_value.value(), ci.min_values[p], ptype, ctype) <= 0);
       }
       for (size_t p = 0; p < ci.max_values.size(); p++) {
-        EXPECT_TRUE(compare_binary(stats.max_value, ci.max_values[p], ptype, ctype) >= 0);
+        EXPECT_TRUE(compare_binary(stats.max_value.value(), ci.max_values[p], ptype, ctype) >= 0);
       }
     }
   }
@@ -4829,11 +4848,14 @@ TEST_F(ParquetWriterTest, CheckColumnIndexTruncation)
       auto const ci    = read_column_index(source, chunk);
       auto const stats = get_statistics(chunk);
 
+      ASSERT_TRUE(stats.min_value.has_value());
+      ASSERT_TRUE(stats.max_value.has_value());
+
       // check trunc(page.min) <= stats.min && trun(page.max) >= stats.max
       auto const ptype = fmd.schema[c + 1].type;
       auto const ctype = fmd.schema[c + 1].converted_type;
-      EXPECT_TRUE(compare_binary(ci.min_values[0], stats.min_value, ptype, ctype) <= 0);
-      EXPECT_TRUE(compare_binary(ci.max_values[0], stats.max_value, ptype, ctype) >= 0);
+      EXPECT_TRUE(compare_binary(ci.min_values[0], stats.min_value.value(), ptype, ctype) <= 0);
+      EXPECT_TRUE(compare_binary(ci.max_values[0], stats.max_value.value(), ptype, ctype) >= 0);
 
       // check that truncated values == expected
       EXPECT_EQ(memcmp(ci.min_values[0].data(), truncated_min[c], ci.min_values[0].size()), 0);
@@ -4890,8 +4912,10 @@ TEST_F(ParquetWriterTest, BinaryColumnIndexTruncation)
       // check trunc(page.min) <= stats.min && trun(page.max) >= stats.max
       auto const ptype = fmd.schema[c + 1].type;
       auto const ctype = fmd.schema[c + 1].converted_type;
-      EXPECT_TRUE(compare_binary(ci.min_values[0], stats.min_value, ptype, ctype) <= 0);
-      EXPECT_TRUE(compare_binary(ci.max_values[0], stats.max_value, ptype, ctype) >= 0);
+      ASSERT_TRUE(stats.min_value.has_value());
+      ASSERT_TRUE(stats.max_value.has_value());
+      EXPECT_TRUE(compare_binary(ci.min_values[0], stats.min_value.value(), ptype, ctype) <= 0);
+      EXPECT_TRUE(compare_binary(ci.max_values[0], stats.max_value.value(), ptype, ctype) >= 0);
 
       // check that truncated values == expected
       EXPECT_EQ(ci.min_values[0], truncated_min[c]);
@@ -6677,7 +6701,7 @@ TEST_P(ParquetV2Test, CheckEncodings)
   // data should be PLAIN for v1, RLE for V2
   auto col0_data =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) -> bool { return i % 2 == 0; });
-  // data should be PLAIN for both
+  // data should be PLAIN for v1, DELTA_BINARY_PACKED for v2
   auto col1_data = random_values<int32_t>(num_rows);
   // data should be PLAIN_DICTIONARY for v1, PLAIN and RLE_DICTIONARY for v2
   auto col2_data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return 1; });
@@ -6712,10 +6736,10 @@ TEST_P(ParquetV2Test, CheckEncodings)
     // col0 should have RLE for rep/def and data
     EXPECT_TRUE(chunk0_enc.size() == 1);
     EXPECT_TRUE(contains(chunk0_enc, Encoding::RLE));
-    // col1 should have RLE for rep/def and PLAIN for data
+    // col1 should have RLE for rep/def and DELTA_BINARY_PACKED for data
     EXPECT_TRUE(chunk1_enc.size() == 2);
     EXPECT_TRUE(contains(chunk1_enc, Encoding::RLE));
-    EXPECT_TRUE(contains(chunk1_enc, Encoding::PLAIN));
+    EXPECT_TRUE(contains(chunk1_enc, Encoding::DELTA_BINARY_PACKED));
     // col2 should have RLE for rep/def, PLAIN for dict, and RLE_DICTIONARY for data
     EXPECT_TRUE(chunk2_enc.size() == 3);
     EXPECT_TRUE(contains(chunk2_enc, Encoding::RLE));
@@ -6735,6 +6759,136 @@ TEST_P(ParquetV2Test, CheckEncodings)
     EXPECT_TRUE(contains(chunk2_enc, Encoding::RLE));
     EXPECT_TRUE(contains(chunk2_enc, Encoding::PLAIN_DICTIONARY));
   }
+}
+
+// removing duration_D, duration_s, and timestamp_s as they don't appear to be supported properly.
+// see definition of UnsupportedChronoTypes above.
+using DeltaDecimalTypes = cudf::test::Types<numeric::decimal32, numeric::decimal64>;
+using DeltaBinaryTypes =
+  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::ChronoTypes, DeltaDecimalTypes>;
+using SupportedDeltaTestTypes =
+  cudf::test::RemoveIf<cudf::test::ContainedIn<UnsupportedChronoTypes>, DeltaBinaryTypes>;
+TYPED_TEST_SUITE(ParquetWriterDeltaTest, SupportedDeltaTestTypes);
+
+TYPED_TEST(ParquetWriterDeltaTest, SupportedDeltaTestTypes)
+{
+  using T   = TypeParam;
+  auto col0 = testdata::ascending<T>();
+  auto col1 = testdata::unordered<T>();
+
+  auto const expected = table_view{{col0, col1}};
+
+  auto const filepath = temp_env->get_temp_filepath("DeltaBinaryPacked.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .write_v2_headers(true)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(in_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+TYPED_TEST(ParquetWriterDeltaTest, SupportedDeltaTestTypesSliced)
+{
+  using T                = TypeParam;
+  constexpr int num_rows = 4'000;
+  auto col0              = testdata::ascending<T>();
+  auto col1              = testdata::unordered<T>();
+
+  auto const expected = table_view{{col0, col1}};
+  auto expected_slice = cudf::slice(expected, {num_rows, 2 * num_rows});
+  ASSERT_EQ(expected_slice[0].num_rows(), num_rows);
+
+  auto const filepath = temp_env->get_temp_filepath("DeltaBinaryPackedSliced.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected_slice)
+      .write_v2_headers(true)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(in_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_slice, result.tbl->view());
+}
+
+TYPED_TEST(ParquetWriterDeltaTest, SupportedDeltaListSliced)
+{
+  using T = TypeParam;
+
+  constexpr int num_slice = 4'000;
+  constexpr int num_rows  = 32 * 1024;
+
+  std::mt19937 gen(6542);
+  std::bernoulli_distribution bn(0.7f);
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
+  auto values = thrust::make_counting_iterator(0);
+
+  // list<T>
+  constexpr int vals_per_row = 4;
+  auto c1_offset_iter        = cudf::detail::make_counting_transform_iterator(
+    0, [vals_per_row](cudf::size_type idx) { return idx * vals_per_row; });
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> c1_offsets(c1_offset_iter,
+                                                                     c1_offset_iter + num_rows + 1);
+  cudf::test::fixed_width_column_wrapper<T> c1_vals(
+    values, values + (num_rows * vals_per_row), valids);
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
+
+  auto _c1 = cudf::make_lists_column(
+    num_rows, c1_offsets.release(), c1_vals.release(), null_count, std::move(null_mask));
+  auto c1 = cudf::purge_nonempty_nulls(*_c1);
+
+  auto const expected = table_view{{*c1}};
+  auto expected_slice = cudf::slice(expected, {num_slice, 2 * num_slice});
+  ASSERT_EQ(expected_slice[0].num_rows(), num_slice);
+
+  auto const filepath = temp_env->get_temp_filepath("DeltaBinaryPackedListSliced.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected_slice)
+      .write_v2_headers(true)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(in_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_slice, result.tbl->view());
+}
+
+TEST_F(ParquetWriterTest, EmptyMinStringStatistics)
+{
+  char const* const min_val = "";
+  char const* const max_val = "zzz";
+  std::vector<char const*> strings{min_val, max_val, "pining", "for", "the", "fjords"};
+
+  column_wrapper<cudf::string_view> string_col{strings.begin(), strings.end()};
+  auto const output   = table_view{{string_col}};
+  auto const filepath = temp_env->get_temp_filepath("EmptyMinStringStatistics.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, output);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::detail::FileMetaData fmd;
+  read_footer(source, &fmd);
+
+  ASSERT_TRUE(fmd.row_groups.size() > 0);
+  ASSERT_TRUE(fmd.row_groups[0].columns.size() > 0);
+  auto const& chunk = fmd.row_groups[0].columns[0];
+  auto const stats  = get_statistics(chunk);
+
+  ASSERT_TRUE(stats.min_value.has_value());
+  ASSERT_TRUE(stats.max_value.has_value());
+  auto const min_value = std::string{reinterpret_cast<char const*>(stats.min_value.value().data()),
+                                     stats.min_value.value().size()};
+  auto const max_value = std::string{reinterpret_cast<char const*>(stats.max_value.value().data()),
+                                     stats.max_value.value().size()};
+  EXPECT_EQ(min_value, std::string(min_val));
+  EXPECT_EQ(max_value, std::string(max_val));
 }
 
 TEST_F(ParquetReaderTest, RepeatedNoAnnotations)
