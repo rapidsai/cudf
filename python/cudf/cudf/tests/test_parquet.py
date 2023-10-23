@@ -1332,7 +1332,7 @@ def test_delta_binary(nrows, add_nulls, dtype, tmpdir):
     pcdf = cudf.from_pandas(test_pdf)
     assert_eq(cdf, pcdf)
 
-    # just to check if the new option can be used
+    # Write back out with cudf and make sure pyarrow can read it
     cudf_fname = tmpdir.join("cudfv2.parquet")
     pcdf.to_parquet(
         cudf_fname,
