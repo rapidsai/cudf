@@ -996,7 +996,7 @@ def _maybe_wrap_result(result: Any, func: Callable, /, *args, **kwargs) -> Any:
         else:
             return type(result)(wrapped)
     elif isinstance(result, Iterator):
-        return (_maybe_wrap_result(r, lambda __x: __x, r) for r in result)
+        return (_maybe_wrap_result(r, lambda x: x, r) for r in result)
     elif _is_function_or_method(result):
         return _MethodProxy._xdf_wrap(
             result, method_chain=(func, args, kwargs)
@@ -1006,17 +1006,17 @@ def _maybe_wrap_result(result: Any, func: Callable, /, *args, **kwargs) -> Any:
 
 
 def _is_final_type(result: Any) -> bool:
-    return type(result) in get_final_type_map().keys()
+    return type(result) in get_final_type_map()
 
 
 def _is_final_class(result: Any) -> bool:
     if not isinstance(result, type):
         return False
-    return result in get_final_type_map().keys()
+    return result in get_final_type_map()
 
 
 def _is_intermediate_type(result: Any) -> bool:
-    return type(result) in get_intermediate_type_map().keys()
+    return type(result) in get_intermediate_type_map()
 
 
 def _is_function_or_method(obj: Any) -> bool:

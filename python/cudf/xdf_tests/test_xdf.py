@@ -1006,6 +1006,7 @@ def test_index_subclass(index_type):
     # test that proxy index types are derived
     # from Index
     assert issubclass(index_type, xpd.Index)
+    assert not issubclass(xpd.Index, index_type)
 
 
 def test_index_internal_subclass():
@@ -1015,11 +1016,13 @@ def test_index_internal_subclass():
     assert issubclass(
         xpd.core.indexes.numeric.Int64Index,
         xpd.core.indexes.numeric.NumericIndex,
+    ) == issubclass(
+        pd.core.indexes.numeric.Int64Index,
+        pd.core.indexes.numeric.NumericIndex,
     )
-
     assert isinstance(
         xpd.Index([1, 2, 3]), xpd.core.indexes.numeric.NumericIndex
-    )
+    ) == isinstance(pd.Index([1, 2, 3]), pd.core.indexes.numeric.NumericIndex)
 
 
 def test_np_array_of_timestamps():
