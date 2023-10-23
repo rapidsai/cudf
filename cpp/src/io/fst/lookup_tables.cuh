@@ -753,7 +753,7 @@ class TranslationOp {
                                              RelativeOffsetT const relative_offset,
                                              SymbolT const read_symbol) const
   {
-    return translation_op(*this, state_id, match_id, relative_offset, read_symbol);
+    return translation_op(state_id, match_id, relative_offset, read_symbol);
   }
 
   template <typename StateIndexT, typename SymbolIndexT, typename SymbolT>
@@ -761,7 +761,7 @@ class TranslationOp {
                                              SymbolIndexT const match_id,
                                              SymbolT const read_symbol) const
   {
-    return translation_op(*this, state_id, match_id, read_symbol);
+    return translation_op(state_id, match_id, read_symbol);
   }
 };
 
