@@ -67,7 +67,7 @@ std::unique_ptr<string_scalar> repeat_string(string_scalar const& input,
                       return in_ptr[idx % str_size];
                     });
 
-  return std::make_unique<string_scalar>(std::move(buff));
+  return std::make_unique<string_scalar>(std::move(buff), true, stream, mr);
 }
 
 namespace {
@@ -260,26 +260,29 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
 
 std::unique_ptr<string_scalar> repeat_string(string_scalar const& input,
                                              size_type repeat_times,
+                                             rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat_string(input, repeat_times, cudf::get_default_stream(), mr);
+  return detail::repeat_string(input, repeat_times, stream, mr);
 }
 
 std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                        size_type repeat_times,
+                                       rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat_strings(input, repeat_times, cudf::get_default_stream(), mr);
+  return detail::repeat_strings(input, repeat_times, stream, mr);
 }
 
 std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                        column_view const& repeat_times,
+                                       rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat_strings(input, repeat_times, cudf::get_default_stream(), mr);
+  return detail::repeat_strings(input, repeat_times, stream, mr);
 }
 
 }  // namespace strings
