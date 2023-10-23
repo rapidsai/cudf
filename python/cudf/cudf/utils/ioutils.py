@@ -13,7 +13,6 @@ import numpy as np
 import pandas as pd
 from fsspec.core import get_fs_token_paths
 from pyarrow import PythonFile as ArrowPythonFile
-from pyarrow.fs import FSSpecHandler, PyFileSystem
 from pyarrow.lib import NativeFile
 
 from cudf.utils.docutils import docfmt_partial
@@ -1582,6 +1581,8 @@ def _open_remote_files(
         Key-word arguments to be passed to format-specific
         open functions.
     """
+    # Avoid top-level pyarrow.fs import
+    from pyarrow.fs import FSSpecHandler, PyFileSystem
 
     # Just use call-back function if one was specified
     if open_file_func is not None:
