@@ -25,44 +25,42 @@ namespace cudf::io::parquet::detail {
 
 namespace {
 
-ConvertedType logical_type_to_converted_type(LogicalType const& logical)
+ConvertedType logical_type_to_converted_type(thrust::optional<LogicalType> const& logical)
 {
-  if (logical.isset.STRING) {
-    return UTF8;
-  } else if (logical.isset.MAP) {
-    return MAP;
-  } else if (logical.isset.LIST) {
-    return LIST;
-  } else if (logical.isset.ENUM) {
-    return ENUM;
-  } else if (logical.isset.DECIMAL) {
-    return DECIMAL;  // TODO set decimal values
-  } else if (logical.isset.DATE) {
-    return DATE;
-  } else if (logical.isset.TIME) {
-    if (logical.TIME.unit.isset.MILLIS)
-      return TIME_MILLIS;
-    else if (logical.TIME.unit.isset.MICROS)
-      return TIME_MICROS;
-  } else if (logical.isset.TIMESTAMP) {
-    if (logical.TIMESTAMP.unit.isset.MILLIS)
-      return TIMESTAMP_MILLIS;
-    else if (logical.TIMESTAMP.unit.isset.MICROS)
-      return TIMESTAMP_MICROS;
-  } else if (logical.isset.INTEGER) {
-    switch (logical.INTEGER.bitWidth) {
-      case 8: return logical.INTEGER.isSigned ? INT_8 : UINT_8;
-      case 16: return logical.INTEGER.isSigned ? INT_16 : UINT_16;
-      case 32: return logical.INTEGER.isSigned ? INT_32 : UINT_32;
-      case 64: return logical.INTEGER.isSigned ? INT_64 : UINT_64;
-      default: break;
-    }
-  } else if (logical.isset.UNKNOWN) {
-    return NA;
-  } else if (logical.isset.JSON) {
-    return JSON;
-  } else if (logical.isset.BSON) {
-    return BSON;
+  if (not logical.has_value()) { return UNKNOWN; }
+  switch (logical->type) {
+    case LogicalType::STRING: return UTF8;
+    case LogicalType::MAP: return MAP;
+    case LogicalType::LIST: return LIST;
+    case LogicalType::ENUM: return ENUM;
+    case LogicalType::DECIMAL: return DECIMAL;  // TODO use decimal scale/precision
+    case LogicalType::DATE: return DATE;
+    case LogicalType::TIME:
+      if (logical->is_time_millis()) {
+        return TIME_MILLIS;
+      } else if (logical->is_time_micros()) {
+        return TIME_MICROS;
+      }
+      break;
+    case LogicalType::TIMESTAMP:
+      if (logical->is_timestamp_millis()) {
+        return TIMESTAMP_MILLIS;
+      } else if (logical->is_timestamp_micros()) {
+        return TIMESTAMP_MICROS;
+      }
+      break;
+    case LogicalType::INTEGER:
+      switch (logical->bit_width()) {
+        case 8: return logical->is_signed() ? INT_8 : UINT_8;
+        case 16: return logical->is_signed() ? INT_16 : UINT_16;
+        case 32: return logical->is_signed() ? INT_32 : UINT_32;
+        case 64: return logical->is_signed() ? INT_64 : UINT_64;
+        default: break;
+      }
+    case LogicalType::UNKNOWN: return NA;
+    case LogicalType::JSON: return JSON;
+    case LogicalType::BSON: return BSON;
+    default: break;
   }
   return UNKNOWN;
 }
@@ -76,20 +74,20 @@ type_id to_type_id(SchemaElement const& schema,
                    bool strings_to_categorical,
                    type_id timestamp_type_id)
 {
-  Type const physical            = schema.type;
-  LogicalType const logical_type = schema.logical_type;
-  ConvertedType converted_type   = schema.converted_type;
-  int32_t decimal_precision      = schema.decimal_precision;
+  auto const physical       = schema.type;
+  auto const logical_type   = schema.logical_type;
+  auto converted_type       = schema.converted_type;
+  int32_t decimal_precision = schema.decimal_precision;
 
+  // FIXME(ets): this should just use logical type to deduce the type_id. then fall back to
+  // converted_type if logical_type isn't set
   // Logical type used for actual data interpretation; the legacy converted type
   // is superseded by 'logical' type whenever available.
   auto const inferred_converted_type = logical_type_to_converted_type(logical_type);
   if (inferred_converted_type != UNKNOWN) { converted_type = inferred_converted_type; }
-  if (inferred_converted_type == DECIMAL) {
-    decimal_precision = schema.logical_type.DECIMAL.precision;
-  }
+  if (inferred_converted_type == DECIMAL) { decimal_precision = schema.logical_type->precision(); }
 
-  switch (converted_type) {
+  switch (converted_type.value_or(UNKNOWN)) {
     case UINT_8: return type_id::UINT8;
     case INT_8: return type_id::INT8;
     case UINT_16: return type_id::UINT16;
@@ -140,15 +138,13 @@ type_id to_type_id(SchemaElement const& schema,
     default: break;
   }
 
-  if (inferred_converted_type == UNKNOWN and physical == INT64 and
-      logical_type.TIMESTAMP.unit.isset.NANOS) {
-    return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
-                                                 : type_id::TIMESTAMP_NANOSECONDS;
-  }
-
-  if (inferred_converted_type == UNKNOWN and physical == INT64 and
-      logical_type.TIME.unit.isset.NANOS) {
-    return type_id::DURATION_NANOSECONDS;
+  if (inferred_converted_type == UNKNOWN and physical == INT64 and logical_type.has_value()) {
+    if (logical_type->is_timestamp_nanos()) {
+      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
+                                                   : type_id::TIMESTAMP_NANOSECONDS;
+    } else if (logical_type->is_time_nanos()) {
+      return type_id::DURATION_NANOSECONDS;
+    }
   }
 
   // is it simply a struct?
