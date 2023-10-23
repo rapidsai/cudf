@@ -396,7 +396,9 @@ __device__ size_t delta_data_len(Type physical_type, cudf::type_id type_id, uint
   // need max dtype_len + 1 bytes for min_delta
   // one byte per mini block for the bitwidth
   // and block_size * dtype_len bytes for the actual encoded data
-  auto const block_size = dtype_len + 1 + delta::num_mini_blocks + vals_per_block * dtype_len;
+  auto const max_bits        = dtype_len * 8 + 1;
+  auto const bytes_per_block = max_bits * vals_per_block / 8;
+  auto const block_size      = dtype_len + 1 + delta::num_mini_blocks + bytes_per_block;
 
   // delta header is 2 bytes for the block_size, 1 byte for number of mini-blocks,
   // max 5 bytes for number of values, and max dtype_len + 1 for first value.
@@ -1279,6 +1281,7 @@ __device__ void finish_page_encode(state_buf* s,
     uint8_t const* const base   = s->page.page_data + s->page.max_hdr_size;
     auto const actual_data_size = static_cast<uint32_t>(end_ptr - base);
     if (actual_data_size > s->page.max_data_size) {
+      // FIXME(ets): this needs to do error propagation back to the host
       CUDF_UNREACHABLE("detected possible page data corruption");
     }
     s->page.max_data_size = actual_data_size;
