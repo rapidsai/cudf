@@ -22,6 +22,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/default_stream.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 
 #include <string>
@@ -40,7 +41,7 @@ TEST_F(FunctionsTest, JSONreader)
       .lines(true)
       .legacy(true);
   cudf::io::table_with_metadata result = cudf::io::read_json(
-    in_options, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    in_options, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
 }
 
 TEST_F(FunctionsTest, JSONwriter)
@@ -62,6 +63,7 @@ TEST_F(FunctionsTest, JSONwriter)
                            .lines(false)
                            .na_rep("null");
 
-  cudf::io::write_json(
-    options_builder.build(), cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  cudf::io::write_json(options_builder.build(),
+                       cudf::test::get_default_stream(),
+                       rmm::mr::get_current_device_resource());
 }

@@ -512,7 +512,7 @@ class json_reader_options_builder {
  * @endcode
  *
  * @param options Settings for controlling reading behavior
- * @param stream Cuda stream to use for device memory operations
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the table in the returned
  * table_with_metadata.
  *
@@ -863,7 +863,7 @@ class json_writer_options_builder {
  * @endcode
  *
  * @param options Settings for controlling writing behavior
- * @param stream Cuda stream to use for device memory operations
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource to use for device memory allocation
  */
 void write_json(json_writer_options const& options,
