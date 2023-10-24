@@ -70,7 +70,7 @@ struct offsetalator_factory {
                 nullptr>
     output_offsetalator operator()(Args&&... args)
     {
-      CUDF_FAIL("offsets must be an index type");
+      CUDF_FAIL("offsets must be int32 or int64 type");
     }
   };
 
