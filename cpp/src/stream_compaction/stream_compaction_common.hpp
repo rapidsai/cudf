@@ -15,11 +15,10 @@
  */
 #pragma once
 
+#include <cudf/hashing/detail/hash_allocator.cuh>
+#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
-
-#include <hash/hash_allocator.cuh>
-#include <hash/helper_functions.cuh>
 
 #include <rmm/mr/device/polymorphic_allocator.hpp>
 

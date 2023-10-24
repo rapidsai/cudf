@@ -90,6 +90,18 @@ void aggregate_result_functor::operator()<aggregation::COUNT_ALL>(aggregation co
 }
 
 template <>
+void aggregate_result_functor::operator()<aggregation::HISTOGRAM>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) return;
+
+  cache.add_result(
+    values,
+    agg,
+    detail::group_histogram(
+      get_grouped_values(), helper.group_labels(stream), helper.num_groups(stream), stream, mr));
+}
+
+template <>
 void aggregate_result_functor::operator()<aggregation::SUM>(aggregation const& agg)
 {
   if (cache.has_result(values, agg)) return;
@@ -531,6 +543,24 @@ void aggregate_result_functor::operator()<aggregation::MERGE_M2>(aggregation con
     values,
     agg,
     detail::group_merge_m2(
+      get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), stream, mr));
+}
+
+/**
+ * @brief Perform merging for multiple histograms that correspond to the same key value.
+ *
+ * The partial results input to this aggregation is a structs column that is concatenated from
+ * multiple outputs of HISTOGRAM aggregations.
+ */
+template <>
+void aggregate_result_functor::operator()<aggregation::MERGE_HISTOGRAM>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) { return; }
+
+  cache.add_result(
+    values,
+    agg,
+    detail::group_merge_histogram(
       get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), stream, mr));
 }
 

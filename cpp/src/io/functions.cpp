@@ -470,8 +470,8 @@ void orc_chunked_writer::close()
   writer->close();
 }
 
-using namespace cudf::io::detail::parquet;
-namespace detail_parquet = cudf::io::detail::parquet;
+using namespace cudf::io::parquet::detail;
+namespace detail_parquet = cudf::io::parquet::detail;
 
 table_with_metadata read_parquet(parquet_reader_options const& options,
                                  rmm::mr::device_memory_resource* mr)
@@ -562,6 +562,23 @@ chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
                                                parquet_reader_options const& options,
                                                rmm::mr::device_memory_resource* mr)
   : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
+                                                            0,
+                                                            make_datasources(options.get_source()),
+                                                            options,
+                                                            cudf::get_default_stream(),
+                                                            mr)}
+{
+}
+
+/**
+ * @copydoc cudf::io::chunked_parquet_reader::chunked_parquet_reader
+ */
+chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
+                                               std::size_t pass_read_limit,
+                                               parquet_reader_options const& options,
+                                               rmm::mr::device_memory_resource* mr)
+  : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
+                                                            pass_read_limit,
                                                             make_datasources(options.get_source()),
                                                             options,
                                                             cudf::get_default_stream(),

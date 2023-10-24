@@ -233,10 +233,11 @@ std::unique_ptr<column> format_list_column(lists_column_view const& input,
 std::unique_ptr<column> format_list_column(lists_column_view const& input,
                                            string_scalar const& na_rep,
                                            strings_column_view const& separators,
+                                           rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::format_list_column(input, na_rep, separators, cudf::get_default_stream(), mr);
+  return detail::format_list_column(input, na_rep, separators, stream, mr);
 }
 
 }  // namespace strings
