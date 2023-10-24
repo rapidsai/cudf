@@ -54,6 +54,10 @@ TEST_F(FunctionsTest, JSONwriter)
                                                        cudf::test::iterators::nulls_at({0, 2})};
   cudf::table_view tbl_view{{col1, col2, col3, col4, col5}};
   cudf::io::table_metadata mt{{{"col1"}, {"col2"}, {"int"}, {"float"}, {"int16"}}};
+  /*
+  cudf::table_view tbl_view{{col1}};
+  cudf::io::table_metadata mt{{{"col1"}}};
+  */
 
   std::vector<char> out_buffer;
   auto destination     = cudf::io::sink_info(&out_buffer);

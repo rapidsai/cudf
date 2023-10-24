@@ -504,6 +504,20 @@ struct column_to_strings_fn {
   {
   }
 
+  column_to_strings_fn(column_to_strings_fn const& other)
+    : options_{other.options_},
+      stream_{other.stream_},
+      mr_{other.mr_},
+      narep(other.narep, other.stream_),
+      struct_value_separator(other.struct_value_separator, other.stream_),
+      struct_row_begin_wrap(other.struct_row_begin_wrap, other.stream_),
+      struct_row_end_wrap(other.struct_row_end_wrap, other.stream_),
+      list_value_separator(other.list_value_separator, other.stream_),
+      list_row_begin_wrap(other.list_row_begin_wrap, other.stream_),
+      list_row_end_wrap(other.list_row_end_wrap, other.stream_)
+  {
+  }
+
   // unsupported type of column:
   template <typename column_type>
   std::enable_if_t<is_not_handled<column_type>(), std::unique_ptr<column>> operator()(
