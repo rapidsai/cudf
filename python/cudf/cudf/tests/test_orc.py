@@ -1021,15 +1021,13 @@ def generate_list_struct_buff(size=100_000):
         rd.choice(
             [
                 None,
-                *(
-                    {"a": rd.choice([None, np.random.randint(0, 3)])},
-                    {
-                        "lvl1_struct": {
-                            "c": rd.choice([None, np.random.randint(0, 3)]),
-                            "d": np.random.randint(0, 3),
-                        },
+                {"a": rd.choice([None, np.random.randint(0, 3)])},
+                {
+                    "lvl1_struct": {
+                        "c": rd.choice([None, np.random.randint(0, 3)]),
+                        "d": np.random.randint(0, 3),
                     },
-                ),
+                },
             ]
         )
         for _ in range(size)
@@ -1140,7 +1138,7 @@ def gen_map_buff(size=10000):
                     },
                 ]
             )
-            for x in range(size)
+            for _ in range(size)
         ],
         type=pa.map_(pa.string(), pa.int64()),
     )
@@ -1158,16 +1156,16 @@ def gen_map_buff(size=10000):
                                         rd.choice(
                                             [None, np.random.randint(1, 1500)]
                                         )
-                                        for z in range(5)
+                                        for _ in range(5)
                                     ],
                                 ]
                             )
                         }
-                        for y in range(2)
+                        for _ in range(2)
                     ),
                 ]
             )
-            for x in range(size)
+            for _ in range(size)
         ],
         type=pa.map_(pa.string(), pa.list_(pa.int64())),
     )
@@ -1192,11 +1190,11 @@ def gen_map_buff(size=10000):
                                 ]
                             )
                         }
-                        for y in range(2)
+                        for _ in range(2)
                     ),
                 ]
             )
-            for x in range(size)
+            for _ in range(size)
         ],
         type=pa.map_(
             pa.string(), pa.struct({"a": pa.int64(), "b": pa.int64()})
