@@ -478,8 +478,8 @@ def test_profiler():
         df = xpd.DataFrame({"a": [1, 2, 3], "b": "b"})
         df.groupby("a").max()
 
-    assert len(p.get_stats) == 2
-    for line_no, line, gpu_time, cpu_time in p.get_stats:
+    assert len(p.per_line_stats) == 2
+    for line_no, line, gpu_time, cpu_time in p.per_line_stats:
         assert gpu_time
         assert not cpu_time
 
@@ -487,8 +487,8 @@ def test_profiler():
         s = xpd.Series([1, "a"])
         s = s + s
 
-    assert len(p.get_stats) == 2
-    for line_no, line, gpu_time, cpu_time in p.get_stats:
+    assert len(p.per_line_stats) == 2
+    for line_no, line, gpu_time, cpu_time in p.per_line_stats:
         assert cpu_time
 
 
