@@ -2116,7 +2116,9 @@ def test_series_hasnans(data):
     gs = _create_cudf_series_float64_default(data, nan_as_null=False)
     ps = gs.to_pandas(nullable=True)
 
-    assert_eq(gs.hasnans, ps.hasnans)
+    # Check type to avoid mixing Python bool and NumPy bool
+    assert isinstance(gs.hasnans, bool)
+    assert gs.hasnans == ps.hasnans
 
 
 @pytest.mark.parametrize(

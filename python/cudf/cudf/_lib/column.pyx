@@ -131,7 +131,7 @@ cdef class Column:
         return self.base_mask is not None
 
     def has_nulls(self, include_nan=False):
-        return self.null_count != 0
+        return int(self.null_count) != 0
 
     @property
     def base_mask(self):

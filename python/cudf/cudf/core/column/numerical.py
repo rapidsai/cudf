@@ -140,8 +140,8 @@ class NumericalColumn(NumericalBaseColumn):
             return super().indices_of(value)
 
     def has_nulls(self, include_nan=False):
-        return self.null_count != 0 or (
-            self.nan_count != 0 if include_nan else False
+        return bool(self.null_count != 0) or (
+            include_nan and bool(self.nan_count != 0)
         )
 
     def __setitem__(self, key: Any, value: Any):

@@ -2722,7 +2722,9 @@ def test_index_hasnans(data):
     gs = cudf.Index(data, nan_as_null=False)
     ps = gs.to_pandas(nullable=True)
 
-    assert_eq(gs.hasnans, ps.hasnans)
+    # Check type to avoid mixing Python bool and NumPy bool
+    assert isinstance(gs.hasnans, bool)
+    assert gs.hasnans == ps.hasnans
 
 
 @pytest.mark.parametrize(
