@@ -22,11 +22,8 @@ gbench_version:
 gtest_version:
   - ">=1.13.0"
 
-aws_sdk_cpp_version:
-  - "<1.11"
-
-libarrow:
-  - "==12.0.0"
+libarrow_version:
+  - "==12.0.1"
 
 dlpack_version:
   - ">=0.5,<0.6.0a0"
