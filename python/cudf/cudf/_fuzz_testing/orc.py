@@ -7,7 +7,6 @@ import random
 
 import numpy as np
 import pyarrow as pa
-import pyarrow.orc
 
 import cudf
 from cudf._fuzz_testing.io import IOFuzz

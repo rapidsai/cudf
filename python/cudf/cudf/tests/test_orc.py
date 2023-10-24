@@ -10,7 +10,6 @@ from string import ascii_lowercase
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-import pyarrow.orc
 import pytest
 
 import cudf
@@ -1085,7 +1084,7 @@ def test_lists_struct_nests(columns, num_rows, use_index, list_struct_buff):
         use_index=use_index,
     )
 
-    pyarrow_tbl = pyarrow.orc.ORCFile(list_struct_buff).read()
+    pyarrow_tbl = pa.orc.ORCFile(list_struct_buff).read()
 
     pyarrow_tbl = (
         pyarrow_tbl[:num_rows]
@@ -1208,7 +1207,7 @@ def gen_map_buff(size=10000):
         [lvl1_map, lvl2_map, lvl2_struct_map],
         ["lvl1_map", "lvl2_map", "lvl2_struct_map"],
     )
-    pyarrow.orc.write_table(
+    pa.orc.write_table(
         pa_table, buff, stripe_size=1024, compression="UNCOMPRESSED"
     )
 
@@ -1439,7 +1438,7 @@ def test_writer_lists_structs(list_struct_buff):
     buff = BytesIO()
     df_in.to_orc(buff)
 
-    pyarrow_tbl = pyarrow.orc.ORCFile(buff).read()
+    pyarrow_tbl = pa.orc.ORCFile(buff).read()
 
     assert pyarrow_tbl.equals(df_in.to_arrow())
 
@@ -1509,7 +1508,7 @@ def test_empty_statistics():
         ],
         ["a", "b", "c", "d", "e", "f", "g", "h", "i"],
     )
-    pyarrow.orc.write_table(pa_table, buff)
+    pa.orc.write_table(pa_table, buff)
 
     got = cudf.io.orc.read_orc_statistics([buff])
 
@@ -1594,8 +1593,8 @@ def test_orc_reader_zstd_compression(list_struct_buff):
     expected = cudf.read_orc(list_struct_buff)
     # save with ZSTD compression
     buffer = BytesIO()
-    pyarrow_tbl = pyarrow.orc.ORCFile(list_struct_buff).read()
-    writer = pyarrow.orc.ORCWriter(buffer, compression="zstd")
+    pyarrow_tbl = pa.orc.ORCFile(list_struct_buff).read()
+    writer = pa.orc.ORCWriter(buffer, compression="zstd")
     writer.write(pyarrow_tbl)
     writer.close()
     try:
@@ -1797,7 +1796,7 @@ def test_orc_reader_negative_timestamp(negative_timestamp_df, engine):
     orc_table = pa.Table.from_pandas(
         negative_timestamp_df.to_pandas(), preserve_index=False
     )
-    pyarrow.orc.write_table(orc_table, buffer)
+    pa.orc.write_table(orc_table, buffer)
 
     # We warn the user that this function will fall back to the CPU for reading
     # when the engine is pyarrow.
@@ -1812,7 +1811,7 @@ def test_orc_writer_negative_timestamp(negative_timestamp_df):
     negative_timestamp_df.to_orc(buffer)
 
     assert_eq(negative_timestamp_df, pd.read_orc(buffer))
-    assert_eq(negative_timestamp_df, pyarrow.orc.ORCFile(buffer).read())
+    assert_eq(negative_timestamp_df, pa.orc.ORCFile(buffer).read())
 
 
 def test_orc_reader_apache_negative_timestamp(datadir):
