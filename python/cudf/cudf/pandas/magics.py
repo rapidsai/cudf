@@ -21,7 +21,7 @@ try:
         def profile(self, _, cell):
             with Profiler() as profiler:
                 get_ipython().run_cell(cell)  # noqa: F821
-            profiler.print_per_func_stats()
+            profiler.print_per_function_stats()
 
         @cell_magic("cudf.pandas.line_profile")
         def line_profile(self, _, cell):
