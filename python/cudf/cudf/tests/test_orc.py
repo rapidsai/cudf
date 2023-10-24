@@ -11,7 +11,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.orc
-import pyorc
 import pytest
 
 import cudf
@@ -295,28 +294,29 @@ def test_orc_read_rows(datadir, skiprows, num_rows):
 
 def test_orc_read_skiprows():
     buff = BytesIO()
-    data = [
-        True,
-        False,
-        True,
-        False,
-        None,
-        True,
-        True,
-        True,
-        False,
-        None,
-        False,
-        False,
-        True,
-        True,
-        True,
-        True,
-    ]
-    writer = pyorc.Writer(buff, pyorc.Struct(a=pyorc.Boolean()))
-    writer.writerows([(d,) for d in data])
-    writer.close()
-
+    df = pd.DataFrame(
+        {
+            "a": [
+                True,
+                False,
+                True,
+                False,
+                None,
+                True,
+                True,
+                True,
+                False,
+                None,
+                False,
+                False,
+                True,
+                True,
+                True,
+                True,
+            ]
+        }
+    )
+    df.to_orc(buff)
     # testing 10 skiprows due to a boolean specific bug fix that didn't
     # repro for other sizes of data
     skiprows = 10
@@ -978,43 +978,11 @@ def test_orc_string_stream_offset_issue():
     assert_eq(df, cudf.read_orc(buffer))
 
 
-# Data is generated using pyorc module
 def generate_list_struct_buff(size=100_000):
     rd = random.Random(1)
     np.random.seed(seed=1)
 
     buff = BytesIO()
-
-    schema = {
-        "lvl3_list": pyorc.Array(pyorc.Array(pyorc.Array(pyorc.BigInt()))),
-        "lvl1_list": pyorc.Array(pyorc.BigInt()),
-        "lvl1_struct": pyorc.Struct(
-            **{"a": pyorc.BigInt(), "b": pyorc.BigInt()}
-        ),
-        "lvl2_struct": pyorc.Struct(
-            **{
-                "a": pyorc.BigInt(),
-                "lvl1_struct": pyorc.Struct(
-                    **{"c": pyorc.BigInt(), "d": pyorc.BigInt()}
-                ),
-            }
-        ),
-        "list_nests_struct": pyorc.Array(
-            pyorc.Array(
-                pyorc.Struct(**{"a": pyorc.BigInt(), "b": pyorc.BigInt()})
-            )
-        ),
-        "struct_nests_list": pyorc.Struct(
-            **{
-                "struct": pyorc.Struct(
-                    **{"a": pyorc.BigInt(), "b": pyorc.BigInt()}
-                ),
-                "list": pyorc.Array(pyorc.BigInt()),
-            }
-        ),
-    }
-
-    schema = pyorc.Struct(**schema)
 
     lvl3_list = [
         rd.choice(
@@ -1024,37 +992,44 @@ def generate_list_struct_buff(size=100_000):
                     [
                         [
                             rd.choice([None, np.random.randint(1, 3)])
-                            for z in range(np.random.randint(1, 3))
+                            for _ in range(np.random.randint(1, 3))
                         ]
-                        for z in range(np.random.randint(0, 3))
+                        for _ in range(np.random.randint(0, 3))
                     ]
-                    for y in range(np.random.randint(0, 3))
+                    for _ in range(np.random.randint(0, 3))
                 ],
             ]
         )
-        for x in range(size)
+        for _ in range(size)
     ]
     lvl1_list = [
         [
             rd.choice([None, np.random.randint(0, 3)])
-            for y in range(np.random.randint(1, 4))
+            for _ in range(np.random.randint(1, 4))
         ]
-        for x in range(size)
+        for _ in range(size)
     ]
     lvl1_struct = [
-        rd.choice([None, (np.random.randint(0, 3), np.random.randint(0, 3))])
-        for x in range(size)
+        rd.choice(
+            [
+                None,
+                {"a": np.random.randint(0, 3), "b": np.random.randint(0, 3)},
+            ]
+        )
+        for _ in range(size)
     ]
     lvl2_struct = [
         rd.choice(
             [
                 None,
-                (
-                    rd.choice([None, np.random.randint(0, 3)]),
-                    (
-                        rd.choice([None, np.random.randint(0, 3)]),
-                        np.random.randint(0, 3),
-                    ),
+                *(
+                    {"a": rd.choice([None, np.random.randint(0, 3)])},
+                    {
+                        "lvl1_struct": {
+                            "c": rd.choice([None, np.random.randint(0, 3)]),
+                            "d": np.random.randint(0, 3),
+                        },
+                    },
                 ),
             ]
         )
@@ -1062,12 +1037,14 @@ def generate_list_struct_buff(size=100_000):
     ]
     list_nests_struct = [
         [
-            [rd.choice(lvl1_struct), rd.choice(lvl1_struct)]
+            {"a": rd.choice(lvl1_struct), "b": rd.choice(lvl1_struct)}
             for y in range(np.random.randint(1, 4))
         ]
-        for x in range(size)
+        for _ in range(size)
     ]
-    struct_nests_list = [(lvl1_struct[x], lvl1_list[x]) for x in range(size)]
+    struct_nests_list = [
+        {"struct": lvl1_struct[x], "list": lvl1_list[x]} for x in range(size)
+    ]
 
     df = pd.DataFrame(
         {
@@ -1080,15 +1057,7 @@ def generate_list_struct_buff(size=100_000):
         }
     )
 
-    writer = pyorc.Writer(buff, schema, stripe_size=1024)
-    tuples = list(
-        map(
-            lambda x: (None,) if x[0] is pd.NA else x,
-            list(df.itertuples(index=False, name=None)),
-        )
-    )
-    writer.writerows(tuples)
-    writer.close()
+    df.to_orc(buff, engine="pyarrow", engine_kwargs={"stripe_size": 1024})
 
     return buff
 
@@ -1160,106 +1129,88 @@ def gen_map_buff(size=10000):
 
     buff = BytesIO()
 
-    schema = {
-        "lvl1_map": pyorc.Map(key=pyorc.String(), value=pyorc.BigInt()),
-        "lvl2_map": pyorc.Map(
-            key=pyorc.String(), value=pyorc.Array(pyorc.BigInt())
-        ),
-        "lvl2_struct_map": pyorc.Map(
-            key=pyorc.String(),
-            value=pyorc.Struct(**{"a": pyorc.BigInt(), "b": pyorc.BigInt()}),
-        ),
-    }
-
-    schema = pyorc.Struct(**schema)
-
-    lvl1_map = [
-        rd.choice(
-            [
-                None,
+    lvl1_map = pa.array(
+        [
+            rd.choice(
                 [
-                    (
-                        rd.choice(al),
-                        rd.choice([None, np.random.randint(1, 1500)]),
-                    )
-                    for y in range(2)
-                ],
-            ]
-        )
-        for x in range(size)
-    ]
-    lvl2_map = [
-        rd.choice(
-            [
-                None,
+                    None,
+                    {
+                        rd.choice(al): rd.choice(
+                            [None, np.random.randint(1, 1500)]
+                        ),
+                    },
+                ]
+            )
+            for x in range(size)
+        ],
+        type=pa.map_(pa.string(), pa.int64()),
+    )
+    lvl2_map = pa.array(
+        [
+            rd.choice(
                 [
-                    (
-                        rd.choice(al),
-                        rd.choice(
-                            [
-                                None,
+                    None,
+                    *(
+                        {
+                            rd.choice(al): rd.choice(
                                 [
-                                    rd.choice(
-                                        [None, np.random.randint(1, 1500)]
-                                    )
-                                    for z in range(5)
-                                ],
-                            ]
-                        ),
-                    )
-                    for y in range(2)
-                ],
-            ]
-        )
-        for x in range(size)
-    ]
-    lvl2_struct_map = [
-        rd.choice(
-            [
-                None,
+                                    None,
+                                    [
+                                        rd.choice(
+                                            [None, np.random.randint(1, 1500)]
+                                        )
+                                        for z in range(5)
+                                    ],
+                                ]
+                            )
+                        }
+                        for y in range(2)
+                    ),
+                ]
+            )
+            for x in range(size)
+        ],
+        type=pa.map_(pa.string(), pa.list_(pa.int64())),
+    )
+    lvl2_struct_map = pa.array(
+        [
+            rd.choice(
                 [
-                    (
-                        rd.choice(al),
-                        rd.choice(
-                            [
-                                None,
-                                (
-                                    rd.choice(
-                                        [None, np.random.randint(1, 1500)]
-                                    ),
-                                    rd.choice(
-                                        [None, np.random.randint(1, 1500)]
-                                    ),
-                                ),
-                            ]
-                        ),
-                    )
-                    for y in range(2)
-                ],
-            ]
-        )
-        for x in range(size)
-    ]
-
-    pdf = pd.DataFrame(
-        {
-            "lvl1_map": lvl1_map,
-            "lvl2_map": lvl2_map,
-            "lvl2_struct_map": lvl2_struct_map,
-        }
-    )
-    writer = pyorc.Writer(
-        buff, schema, stripe_size=1024, compression=pyorc.CompressionKind.NONE
-    )
-    tuples = list(
-        map(
-            lambda x: (None,) if x[0] is pd.NA else x,
-            list(pdf.itertuples(index=False, name=None)),
-        )
+                    None,
+                    *(
+                        {
+                            rd.choice(al): rd.choice(
+                                [
+                                    None,
+                                    {
+                                        "a": rd.choice(
+                                            [None, np.random.randint(1, 1500)]
+                                        ),
+                                        "b": rd.choice(
+                                            [None, np.random.randint(1, 1500)]
+                                        ),
+                                    },
+                                ]
+                            )
+                        }
+                        for y in range(2)
+                    ),
+                ]
+            )
+            for x in range(size)
+        ],
+        type=pa.map_(
+            pa.string(), pa.struct({"a": pa.int64(), "b": pa.int64()})
+        ),
     )
 
-    writer.writerows(tuples)
-    writer.close()
+    pa_table = pa.Table.from_arrays(
+        [lvl1_map, lvl2_map, lvl2_struct_map],
+        ["lvl1_map", "lvl2_map", "lvl2_struct_map"],
+    )
+    pyarrow.orc.write_table(
+        pa_table, buff, stripe_size=1024, compression="UNCOMPRESSED"
+    )
 
     return buff
 
@@ -1527,12 +1478,10 @@ def test_statistics_sum_overflow():
     minint64 = np.iinfo(np.int64).min
 
     buff = BytesIO()
-    with pyorc.Writer(
-        buff,
-        pyorc.Struct(a=pyorc.BigInt(), b=pyorc.BigInt(), c=pyorc.BigInt()),
-    ) as writer:
-        writer.write((maxint64, minint64, minint64))
-        writer.write((1, -1, 1))
+    df = pd.DataFrame(
+        {"a": [maxint64, 1], "b": [minint64, -1], "c": [minint64, 1]}
+    )
+    df.to_orc(buff)
 
     file_stats, stripe_stats = cudf.io.orc.read_orc_statistics([buff])
     assert file_stats[0]["a"].get("sum") is None
@@ -1546,21 +1495,21 @@ def test_statistics_sum_overflow():
 
 def test_empty_statistics():
     buff = BytesIO()
-    orc_schema = pyorc.Struct(
-        a=pyorc.BigInt(),
-        b=pyorc.Double(),
-        c=pyorc.String(),
-        d=pyorc.Decimal(11, 2),
-        e=pyorc.Date(),
-        f=pyorc.Timestamp(),
-        g=pyorc.Boolean(),
-        h=pyorc.Binary(),
-        i=pyorc.BigInt(),
-        # One column with non null value, else cudf/pyorc readers crash
+    pa_table = pa.Table.from_arrays(
+        [
+            pa.array([None], type=pa.int64()),
+            pa.array([None], type=pa.float64()),
+            pa.array([None], type=pa.string()),
+            pa.array([None], type=pa.decimal128(11, 2)),
+            pa.array([None], type=pa.timestamp("ns")),
+            pa.array([None], type=pa.date64()),
+            pa.array([None], type=pa.bool_()),
+            pa.array([None], type=pa.binary()),
+            pa.array([1], type=pa.int64()),
+        ],
+        ["a", "b", "c", "d", "e", "f", "g", "h", "i"],
     )
-    data = tuple([None] * (len(orc_schema.fields) - 1) + [1])
-    with pyorc.Writer(buff, orc_schema) as writer:
-        writer.write(data)
+    pyarrow.orc.write_table(pa_table, buff)
 
     got = cudf.io.orc.read_orc_statistics([buff])
 
@@ -1845,10 +1794,10 @@ def negative_timestamp_df():
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
 def test_orc_reader_negative_timestamp(negative_timestamp_df, engine):
     buffer = BytesIO()
-    pyorc_table = pa.Table.from_pandas(
+    orc_table = pa.Table.from_pandas(
         negative_timestamp_df.to_pandas(), preserve_index=False
     )
-    pyarrow.orc.write_table(pyorc_table, buffer)
+    pyarrow.orc.write_table(orc_table, buffer)
 
     # We warn the user that this function will fall back to the CPU for reading
     # when the engine is pyarrow.
