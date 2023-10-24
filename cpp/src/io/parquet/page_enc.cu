@@ -283,7 +283,7 @@ __device__ uint8_t const* delta_encode(page_enc_state_s<0>* s,
 
     cur_val_idx += nvals;
 
-    output_type v = s->col.leaf_column->element<I>(val_idx);
+    output_type v = is_valid ? s->col.leaf_column->element<I>(val_idx) : 0;
     if (scale < 0) {
       v /= -scale;
     } else {
