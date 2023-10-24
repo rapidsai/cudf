@@ -1033,12 +1033,12 @@ def generate_list_struct_buff(size=100_000):
                 ),
             ]
         )
-        for x in range(size)
+        for _ in range(size)
     ]
     list_nests_struct = [
         [
             {"a": rd.choice(lvl1_struct), "b": rd.choice(lvl1_struct)}
-            for y in range(np.random.randint(1, 4))
+            for _ in range(np.random.randint(1, 4))
         ]
         for _ in range(size)
     ]
