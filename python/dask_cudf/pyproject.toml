@@ -52,7 +52,7 @@ Homepage = "https://github.com/rapidsai/cudf"
 license-files = ["LICENSE"]
 
 [tool.setuptools.dynamic]
-version = {attr = "dask_cudf._version.__version__"}
+version = {file = "dask_cudf/VERSION"}
 
 [tool.isort]
 line_length = 79

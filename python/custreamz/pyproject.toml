@@ -49,7 +49,7 @@ license-files = ["LICENSE"]
 zip-safe = false
 
 [tool.setuptools.dynamic]
-version = {attr = "custreamz._version.__version__"}
+version = {file = "custreamz/VERSION"}
 
 [tools.setuptools.packages.find]
 include = [

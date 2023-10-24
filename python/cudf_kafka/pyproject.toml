@@ -39,7 +39,7 @@ Documentation = "https://docs.rapids.ai/api/cudf/stable/"
 license-files = ["LICENSE"]
 
 [tool.setuptools.dynamic]
-version = {attr = "cudf_kafka._version.__version__"}
+version = {file = "cudf_kafka/VERSION"}
 
 [tool.isort]
 line_length = 79

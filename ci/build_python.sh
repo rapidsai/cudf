@@ -13,10 +13,9 @@ package_dir="python"
 version=$(rapids-generate-version)
 commit=$(git rev-parse HEAD)
 
+echo "${version}" | tr -d '"' > VERSION
 for package_name in cudf dask_cudf cudf_kafka custreamz; do
-    version_file="${package_dir}/${package_name}/${package_name}/_version.py"
-    sed -i "/^__version__/ s/= .*/= ${version}/g" ${version_file}
-    sed -i "/^__git_commit__/ s/= .*/= \"${commit}\"/g" ${version_file}
+    sed -i "/^__git_commit__/ s/= .*/= \"${commit}\"/g" ${package_dir}/${package_name}/${package_name}/_version.py
 done
 
 rapids-logger "Begin py build"

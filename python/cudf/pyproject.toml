@@ -79,7 +79,7 @@ Documentation = "https://docs.rapids.ai/api/cudf/stable/"
 license-files = ["LICENSE"]
 
 [tool.setuptools.dynamic]
-version = {attr = "cudf._version.__version__"}
+version = {file = "cudf/VERSION"}
 
 [tool.isort]
 line_length = 79
