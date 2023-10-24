@@ -171,10 +171,10 @@ def Index__new__(cls, *args, **kwargs):
     # with a removal of the defaulted __init__ that
     # make_final_proxy_type provides.
     self, _ = _fast_slow_function_call(
-        lambda cls, *args, **kwargs: cls(*args, **kwargs),
+        lambda cls, args, kwargs: cls(*args, **kwargs),
         cls,
-        *args,
-        **kwargs,
+        args,
+        kwargs,
     )
     return self
 

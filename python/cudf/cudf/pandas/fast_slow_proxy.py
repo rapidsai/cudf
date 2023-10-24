@@ -156,12 +156,12 @@ def make_final_proxy_type(
 
     def __init__(self, *args, **kwargs):
         _fast_slow_function_call(
-            lambda cls, *args, **kwargs: setattr(
+            lambda cls, args, kwargs: setattr(
                 self, "_xdf_wrapped", cls(*args, **kwargs)
             ),
             type(self),
-            *args,
-            **kwargs,
+            args,
+            kwargs,
         )
 
     @nvtx.annotate(
@@ -793,10 +793,10 @@ class _CallableProxyMixin:
             # _fast_slow_function_call) to avoid infinite recursion.
             # TODO: When Python 3.11 is the minimum supported Python version
             # this can use operator.call
-            lambda __x, *args, **kwargs: __x(*args, **kwargs),
+            lambda fn, args, kwargs: fn(*args, **kwargs),
             self,
-            *args,
-            **kwargs,
+            args,
+            kwargs,
         )
         return result
 
