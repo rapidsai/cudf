@@ -404,7 +404,7 @@ struct leaf_schema_fn {
     col_schema.ts_scale    = 1000;
     if (not timestamp_is_int96) {
       col_schema.converted_type = ConvertedType::TIMESTAMP_MILLIS;
-      col_schema.logical_type   = LogicalType{TimestampType{false, TimeUnit::MILLIS}};
+      col_schema.logical_type   = LogicalType{TimestampType{TimeUnit::MILLIS}};
     }
   }
 
@@ -415,7 +415,7 @@ struct leaf_schema_fn {
     col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
     if (not timestamp_is_int96) {
       col_schema.converted_type = ConvertedType::TIMESTAMP_MILLIS;
-      col_schema.logical_type   = LogicalType{TimestampType{false, TimeUnit::MILLIS}};
+      col_schema.logical_type   = LogicalType{TimestampType{TimeUnit::MILLIS}};
     }
   }
 
@@ -426,7 +426,7 @@ struct leaf_schema_fn {
     col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
     if (not timestamp_is_int96) {
       col_schema.converted_type = ConvertedType::TIMESTAMP_MICROS;
-      col_schema.logical_type   = LogicalType{TimestampType{false, TimeUnit::MICROS}};
+      col_schema.logical_type   = LogicalType{TimestampType{TimeUnit::MICROS}};
     }
   }
 
@@ -441,7 +441,7 @@ struct leaf_schema_fn {
     }
     // set logical type if it's not int96
     else {
-      col_schema.logical_type = LogicalType{TimestampType{false, TimeUnit::NANOS}};
+      col_schema.logical_type = LogicalType{TimestampType{TimeUnit::NANOS}};
     }
   }
 
@@ -453,7 +453,7 @@ struct leaf_schema_fn {
     col_schema.converted_type = ConvertedType::TIME_MILLIS;
     col_schema.stats_dtype    = statistics_dtype::dtype_int32;
     col_schema.ts_scale       = 24 * 60 * 60 * 1000;
-    col_schema.logical_type   = LogicalType{TimeType{false, TimeUnit::MILLIS}};
+    col_schema.logical_type   = LogicalType{TimeType{TimeUnit::MILLIS}};
   }
 
   template <typename T>
@@ -463,7 +463,7 @@ struct leaf_schema_fn {
     col_schema.converted_type = ConvertedType::TIME_MILLIS;
     col_schema.stats_dtype    = statistics_dtype::dtype_int32;
     col_schema.ts_scale       = 1000;
-    col_schema.logical_type   = LogicalType{TimeType{false, TimeUnit::MILLIS}};
+    col_schema.logical_type   = LogicalType{TimeType{TimeUnit::MILLIS}};
   }
 
   template <typename T>
@@ -472,7 +472,7 @@ struct leaf_schema_fn {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::TIME_MILLIS;
     col_schema.stats_dtype    = statistics_dtype::dtype_int32;
-    col_schema.logical_type   = LogicalType{TimeType{false, TimeUnit::MILLIS}};
+    col_schema.logical_type   = LogicalType{TimeType{TimeUnit::MILLIS}};
   }
 
   template <typename T>
@@ -481,7 +481,7 @@ struct leaf_schema_fn {
     col_schema.type           = Type::INT64;
     col_schema.converted_type = ConvertedType::TIME_MICROS;
     col_schema.stats_dtype    = statistics_dtype::dtype_int64;
-    col_schema.logical_type   = LogicalType{TimeType{false, TimeUnit::MICROS}};
+    col_schema.logical_type   = LogicalType{TimeType{TimeUnit::MICROS}};
   }
 
   //  unsupported outside cudf for parquet 1.0.
@@ -490,7 +490,7 @@ struct leaf_schema_fn {
   {
     col_schema.type         = Type::INT64;
     col_schema.stats_dtype  = statistics_dtype::dtype_int64;
-    col_schema.logical_type = LogicalType{TimeType{false, TimeUnit::NANOS}};
+    col_schema.logical_type = LogicalType{TimeType{TimeUnit::NANOS}};
   }
 
   template <typename T>
