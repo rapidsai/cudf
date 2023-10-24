@@ -15,7 +15,7 @@ from uuid import uuid4
 
 import numpy as np
 import pandas as pd
-from pyarrow import dataset as ds, parquet as pq
+from pyarrow import dataset as ds
 
 import cudf
 from cudf._lib import parquet as libparquet
@@ -266,6 +266,7 @@ def write_to_dataset(
 @_cudf_nvtx_annotate
 def read_parquet_metadata(path):
     """{docstring}"""
+    import pyarrow.parquet as pq
 
     pq_file = pq.ParquetFile(path)
 
@@ -303,7 +304,9 @@ def _process_dataset(
 
     # Convert filters to ds.Expression
     if filters is not None:
-        filters = pq.filters_to_expression(filters)
+        from pyarrow.parquet import filters_to_expression
+
+        filters = filters_to_expression(filters)
 
     # Initialize ds.FilesystemDataset
     # TODO: Remove the if len(paths) workaround after following bug is fixed:
@@ -825,6 +828,8 @@ def _read_parquet(
             use_pandas_metadata=use_pandas_metadata,
         )
     else:
+        import pyarrow.parquet as pq
+
         return cudf.DataFrame.from_arrow(
             pq.ParquetDataset(filepaths_or_buffers).read_pandas(
                 columns=columns, *args, **kwargs
@@ -930,6 +935,8 @@ def to_parquet(
         )
 
     else:
+        import pyarrow.parquet as pq
+
         if partition_offsets is not None:
             warnings.warn(
                 "partition_offsets will be ignored when engine is not cudf"
