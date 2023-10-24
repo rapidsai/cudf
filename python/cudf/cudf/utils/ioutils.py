@@ -1581,8 +1581,6 @@ def _open_remote_files(
         Key-word arguments to be passed to format-specific
         open functions.
     """
-    # Avoid top-level pyarrow.fs import
-    from pyarrow.fs import FSSpecHandler, PyFileSystem
 
     # Just use call-back function if one was specified
     if open_file_func is not None:
@@ -1630,6 +1628,15 @@ def _open_remote_files(
             )
             for path, rgs in zip(paths, row_groups)
         ]
+
+    # Avoid top-level pyarrow.fs import.
+    # Importing pyarrow.fs initializes a S3 SDK with a finalizer
+    # that runs atexit. In some circumstances it appears this
+    # runs a call into a logging system that is already shutdown.
+    # To avoid this, we only import this subsystem if it is
+    # really needed.
+    # See https://github.com/aws/aws-sdk-cpp/issues/2681
+    from pyarrow.fs import FSSpecHandler, PyFileSystem
 
     # Default open - Use pyarrow filesystem API
     pa_fs = PyFileSystem(FSSpecHandler(fs))
