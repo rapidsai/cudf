@@ -3982,6 +3982,12 @@ def test_dataframe_round(decimals):
     assert_eq(result, expected)
 
 
+def test_dataframe_round_dict_decimal_validation():
+    df = cudf.DataFrame({"A": [0.12], "B": [0.13]})
+    with pytest.raises(TypeError):
+        df.round({"A": 1, "B": 0.5})
+
+
 @pytest.mark.parametrize(
     "data",
     [
