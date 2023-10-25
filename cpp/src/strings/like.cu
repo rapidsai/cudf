@@ -185,19 +185,21 @@ std::unique_ptr<column> like(strings_column_view const& input,
 std::unique_ptr<column> like(strings_column_view const& input,
                              string_scalar const& pattern,
                              string_scalar const& escape_character,
+                             rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::like(input, pattern, escape_character, cudf::get_default_stream(), mr);
+  return detail::like(input, pattern, escape_character, stream, mr);
 }
 
 std::unique_ptr<column> like(strings_column_view const& input,
                              strings_column_view const& patterns,
                              string_scalar const& escape_character,
+                             rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::like(input, patterns, escape_character, cudf::get_default_stream(), mr);
+  return detail::like(input, patterns, escape_character, stream, mr);
 }
 
 }  // namespace strings

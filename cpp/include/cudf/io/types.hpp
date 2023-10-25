@@ -293,14 +293,20 @@ struct source_info {
    *
    * @param file_paths Input files paths
    */
-  explicit source_info(std::vector<std::string> const& file_paths) : _filepaths(file_paths) {}
+  explicit source_info(std::vector<std::string> const& file_paths)
+    : _type(io_type::FILEPATH), _filepaths(file_paths)
+  {
+  }
 
   /**
    * @brief Construct a new source info object for a single file
    *
    * @param file_path Single input file
    */
-  explicit source_info(std::string const& file_path) : _filepaths({file_path}) {}
+  explicit source_info(std::string const& file_path)
+    : _type(io_type::FILEPATH), _filepaths({file_path})
+  {
+  }
 
   /**
    * @brief Construct a new source info object for multiple buffers in host memory
@@ -444,7 +450,7 @@ struct source_info {
   [[nodiscard]] auto const& user_sources() const { return _user_sources; }
 
  private:
-  io_type _type = io_type::FILEPATH;
+  io_type _type = io_type::VOID;
   std::vector<std::string> _filepaths;
   std::vector<cudf::host_span<std::byte const>> _host_buffers;
   std::vector<cudf::device_span<std::byte const>> _device_buffers;

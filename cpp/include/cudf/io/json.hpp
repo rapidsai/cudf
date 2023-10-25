@@ -121,7 +121,7 @@ class json_reader_options {
    *
    * @param src source information used to read parquet file
    */
-  explicit json_reader_options(source_info const& src) : _source(src) {}
+  explicit json_reader_options(source_info src) : _source{std::move(src)} {}
 
   friend json_reader_options_builder;
 
@@ -139,7 +139,7 @@ class json_reader_options {
    * @param src source information used to read json file
    * @returns builder to build the options
    */
-  static json_reader_options_builder builder(source_info const& src);
+  static json_reader_options_builder builder(source_info src);
 
   /**
    * @brief Returns source info.
@@ -351,7 +351,7 @@ class json_reader_options_builder {
    *
    * @param src The source information used to read avro file
    */
-  explicit json_reader_options_builder(source_info const& src) : options(src) {}
+  explicit json_reader_options_builder(source_info src) : options{std::move(src)} {}
 
   /**
    * @brief Set data types for columns to be read.
