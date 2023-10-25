@@ -58,7 +58,6 @@ test = [
     "hypothesis",
     "mimesis>=4.1.0",
     "msgpack",
-    "pyorc",
     "pytest",
     "pytest-benchmark",
     "pytest-cases",
