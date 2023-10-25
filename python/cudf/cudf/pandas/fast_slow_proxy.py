@@ -157,7 +157,7 @@ def make_final_proxy_type(
     def __init__(self, *args, **kwargs):
         _fast_slow_function_call(
             lambda cls, args, kwargs: setattr(
-                self, "_xdf_wrapped", cls(*args, **kwargs)
+                self, "_fsproxy_wrapped", cls(*args, **kwargs)
             ),
             type(self),
             args,
@@ -173,8 +173,8 @@ def make_final_proxy_type(
         # if we are wrapping a slow object,
         # convert it to a fast one
         if self._xdf_state is _State.SLOW:
-            return slow_to_fast(self._xdf_wrapped)
-        return self._xdf_wrapped
+            return slow_to_fast(self._fsproxy_wrapped)
+        return self._fsproxy_wrapped
 
     @nvtx.annotate(
         "COPY_FAST_TO_SLOW",
@@ -185,14 +185,14 @@ def make_final_proxy_type(
         # if we are wrapping a fast object,
         # convert it to a slow one
         if self._xdf_state is _State.FAST:
-            return fast_to_slow(self._xdf_wrapped)
-        return self._xdf_wrapped
+            return fast_to_slow(self._fsproxy_wrapped)
+        return self._fsproxy_wrapped
 
     @property  # type: ignore
     def _xdf_state(self) -> _State:
         return (
             _State.FAST
-            if isinstance(self._xdf_wrapped, self._xdf_fast_type)
+            if isinstance(self._fsproxy_wrapped, self._xdf_fast_type)
             else _State.SLOW
         )
 
@@ -201,7 +201,7 @@ def make_final_proxy_type(
         from .module_accelerator import disable_module_accelerator
 
         with disable_module_accelerator():
-            pickled_wrapped_obj = pickle.dumps(self._xdf_wrapped)
+            pickled_wrapped_obj = pickle.dumps(self._fsproxy_wrapped)
         return (_PickleConstructor(type(self)), (), pickled_wrapped_obj)
 
     def __setstate__(self, state):
@@ -210,7 +210,7 @@ def make_final_proxy_type(
 
         with disable_module_accelerator():
             unpickled_wrapped_obj = pickle.loads(state)
-        self._xdf_wrapped = unpickled_wrapped_obj
+        self._fsproxy_wrapped = unpickled_wrapped_obj
 
     slow_dir = dir(slow_type)
     cls_dict = {
@@ -294,7 +294,7 @@ def make_intermediate_proxy_type(
     def _xdf_state(self):
         return (
             _State.FAST
-            if isinstance(self._xdf_wrapped, self._xdf_fast_type)
+            if isinstance(self._fsproxy_wrapped, self._xdf_fast_type)
             else _State.SLOW
         )
 
@@ -306,7 +306,7 @@ def make_intermediate_proxy_type(
     def _xdf_slow_to_fast(self):
         if self._xdf_state is _State.SLOW:
             return super(type(self), self)._xdf_slow_to_fast()
-        return self._xdf_wrapped
+        return self._fsproxy_wrapped
 
     @nvtx.annotate(
         "COPY_FAST_TO_SLOW",
@@ -316,7 +316,7 @@ def make_intermediate_proxy_type(
     def _xdf_fast_to_slow(self):
         if self._xdf_state is _State.FAST:
             return super(type(self), self)._xdf_fast_to_slow()
-        return self._xdf_wrapped
+        return self._fsproxy_wrapped
 
     slow_dir = dir(slow_type)
     cls_dict = {
@@ -519,7 +519,7 @@ class _FastSlowProxy:
     type.
     """
 
-    _xdf_wrapped: Any
+    _fsproxy_wrapped: Any
 
     def _xdf_fast_to_slow(self) -> Any:
         """
@@ -544,8 +544,8 @@ class _FastSlowProxy:
         type, replaces it with the corresponding "fast" object before
         returning it.
         """
-        self._xdf_wrapped = self._xdf_slow_to_fast()
-        return self._xdf_wrapped
+        self._fsproxy_wrapped = self._xdf_slow_to_fast()
+        return self._fsproxy_wrapped
 
     @property
     def _xdf_slow(self) -> Any:
@@ -554,8 +554,8 @@ class _FastSlowProxy:
         type, replaces it with the corresponding "slow" object before
         returning it.
         """
-        self._xdf_wrapped = self._xdf_fast_to_slow()
-        return self._xdf_wrapped
+        self._fsproxy_wrapped = self._xdf_fast_to_slow()
+        return self._fsproxy_wrapped
 
     def __dir__(self):
         # Try to return the cached dir of the slow object, but if it
@@ -718,7 +718,7 @@ class _FinalProxy(_FastSlowProxy):
         need particular behaviour when wrapped up.
         """
         proxy = object.__new__(cls)
-        proxy._xdf_wrapped = value
+        proxy._fsproxy_wrapped = value
         return proxy
 
 
@@ -753,7 +753,7 @@ class _IntermediateProxy(_FastSlowProxy):
             to `func`.
         """
         proxy = object.__new__(cls)
-        proxy._xdf_wrapped = obj
+        proxy._fsproxy_wrapped = obj
         proxy._method_chain = method_chain
         return proxy
 

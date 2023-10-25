@@ -118,10 +118,10 @@ class Profiler:
     ):
         if isinstance(func_obj, _MethodProxy):
             # Extract classname from method object
-            type_name = type(func_obj._xdf_wrapped.__self__).__name__
-            # Explicitly ask for __name__ on _xdf_wrapped to avoid
+            type_name = type(func_obj._fsproxy_wrapped.__self__).__name__
+            # Explicitly ask for __name__ on _fsproxy_wrapped to avoid
             # getting a private attribute and forcing a slow-path copy
-            func_name = func_obj._xdf_wrapped.__name__
+            func_name = func_obj._fsproxy_wrapped.__name__
             return ".".join([type_name, func_name])
         elif isinstance(func_obj, _FunctionProxy) or issubclass(
             func_obj, (_FinalProxy, _IntermediateProxy)
