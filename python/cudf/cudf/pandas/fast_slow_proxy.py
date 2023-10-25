@@ -169,7 +169,7 @@ def make_final_proxy_type(
         color=_XDF_NVTX_COLORS["COPY_SLOW_TO_FAST"],
         domain="cudf_pandas",
     )
-    def _xdf_slow_to_fast(self):
+    def _fsproxy_slow_to_fast(self):
         # if we are wrapping a slow object,
         # convert it to a fast one
         if self._xdf_state is _State.SLOW:
@@ -181,7 +181,7 @@ def make_final_proxy_type(
         color=_XDF_NVTX_COLORS["COPY_FAST_TO_SLOW"],
         domain="cudf_pandas",
     )
-    def _xdf_fast_to_slow(self):
+    def _fsproxy_fast_to_slow(self):
         # if we are wrapping a fast object,
         # convert it to a slow one
         if self._xdf_state is _State.FAST:
@@ -192,7 +192,7 @@ def make_final_proxy_type(
     def _xdf_state(self) -> _State:
         return (
             _State.FAST
-            if isinstance(self._fsproxy_wrapped, self._xdf_fast_type)
+            if isinstance(self._fsproxy_wrapped, self._fsproxy_fast_type)
             else _State.SLOW
         )
 
@@ -216,11 +216,11 @@ def make_final_proxy_type(
     cls_dict = {
         "__init__": __init__,
         "__doc__": inspect.getdoc(slow_type),
-        "_xdf_slow_dir": slow_dir,
-        "_xdf_fast_type": fast_type,
-        "_xdf_slow_type": slow_type,
-        "_xdf_slow_to_fast": _xdf_slow_to_fast,
-        "_xdf_fast_to_slow": _xdf_fast_to_slow,
+        "_fsproxy_slow_dir": slow_dir,
+        "_fsproxy_fast_type": fast_type,
+        "_fsproxy_slow_type": slow_type,
+        "_fsproxy_slow_to_fast": _fsproxy_slow_to_fast,
+        "_fsproxy_fast_to_slow": _fsproxy_fast_to_slow,
         "_xdf_state": _xdf_state,
         "__reduce__": __reduce__,
         "__setstate__": __setstate__,
@@ -294,7 +294,7 @@ def make_intermediate_proxy_type(
     def _xdf_state(self):
         return (
             _State.FAST
-            if isinstance(self._fsproxy_wrapped, self._xdf_fast_type)
+            if isinstance(self._fsproxy_wrapped, self._fsproxy_fast_type)
             else _State.SLOW
         )
 
@@ -303,9 +303,9 @@ def make_intermediate_proxy_type(
         color=_XDF_NVTX_COLORS["COPY_SLOW_TO_FAST"],
         domain="cudf_pandas",
     )
-    def _xdf_slow_to_fast(self):
+    def _fsproxy_slow_to_fast(self):
         if self._xdf_state is _State.SLOW:
-            return super(type(self), self)._xdf_slow_to_fast()
+            return super(type(self), self)._fsproxy_slow_to_fast()
         return self._fsproxy_wrapped
 
     @nvtx.annotate(
@@ -313,20 +313,20 @@ def make_intermediate_proxy_type(
         color=_XDF_NVTX_COLORS["COPY_FAST_TO_SLOW"],
         domain="cudf_pandas",
     )
-    def _xdf_fast_to_slow(self):
+    def _fsproxy_fast_to_slow(self):
         if self._xdf_state is _State.FAST:
-            return super(type(self), self)._xdf_fast_to_slow()
+            return super(type(self), self)._fsproxy_fast_to_slow()
         return self._fsproxy_wrapped
 
     slow_dir = dir(slow_type)
     cls_dict = {
         "__init__": __init__,
         "__doc__": inspect.getdoc(slow_type),
-        "_xdf_slow_dir": slow_dir,
-        "_xdf_fast_type": fast_type,
-        "_xdf_slow_type": slow_type,
-        "_xdf_slow_to_fast": _xdf_slow_to_fast,
-        "_xdf_fast_to_slow": _xdf_fast_to_slow,
+        "_fsproxy_slow_dir": slow_dir,
+        "_fsproxy_fast_type": fast_type,
+        "_fsproxy_slow_type": slow_type,
+        "_fsproxy_slow_to_fast": _fsproxy_slow_to_fast,
+        "_fsproxy_fast_to_slow": _fsproxy_fast_to_slow,
         "_xdf_state": _xdf_state,
     }
 
@@ -445,7 +445,7 @@ class _FastSlowAttribute:
             from .module_accelerator import disable_module_accelerator
 
             type_ = owner if owner else type(obj)
-            slow_result_type = getattr(type_._xdf_slow, self._name)
+            slow_result_type = getattr(type_._fsproxy_slow, self._name)
             with disable_module_accelerator():
                 result.__doc__ = inspect.getdoc(  # type: ignore
                     slow_result_type
@@ -456,7 +456,9 @@ class _FastSlowAttribute:
                 # methods because dir for the method won't be the same as for
                 # the pure unbound function, but the alternative is
                 # materializing the slow object when we don't really want to.
-                result._xdf_slow_dir = dir(slow_result_type)  # type: ignore
+                result._fsproxy_slow_dir = dir(
+                    slow_result_type
+                )  # type: ignore
 
         return result
 
@@ -468,18 +470,18 @@ class _FastSlowProxyMeta(type):
     """
 
     @property
-    def _xdf_slow(self) -> type:
-        return self._xdf_slow_type
+    def _fsproxy_slow(self) -> type:
+        return self._fsproxy_slow_type
 
     @property
-    def _xdf_fast(self) -> type:
-        return self._xdf_fast_type
+    def _fsproxy_fast(self) -> type:
+        return self._fsproxy_fast_type
 
     def __dir__(self):
         # Try to return the cached dir of the slow object, but if it
         # doesn't exist, fall back to the default implementation.
         try:
-            return self._xdf_slow_dir
+            return self._fsproxy_slow_dir
         except AttributeError:
             return type.__dir__(self)
 
@@ -495,14 +497,14 @@ class _FastSlowProxyMeta(type):
     def __subclasscheck__(self, __subclass: type) -> bool:
         if super().__subclasscheck__(__subclass):
             return True
-        if hasattr(__subclass, "_xdf_slow"):
-            return issubclass(__subclass._xdf_slow, self._xdf_slow)
+        if hasattr(__subclass, "_fsproxy_slow"):
+            return issubclass(__subclass._fsproxy_slow, self._fsproxy_slow)
         return False
 
     def __instancecheck__(self, __instance: Any) -> bool:
         if super().__instancecheck__(__instance):
             return True
-        elif hasattr(type(__instance), "_xdf_slow"):
+        elif hasattr(type(__instance), "_fsproxy_slow"):
             return issubclass(type(__instance), self)
         return False
 
@@ -521,7 +523,7 @@ class _FastSlowProxy:
 
     _fsproxy_wrapped: Any
 
-    def _xdf_fast_to_slow(self) -> Any:
+    def _fsproxy_fast_to_slow(self) -> Any:
         """
         If the wrapped object is of "fast" type, returns the
         corresponding "slow" object. Otherwise, returns the wrapped
@@ -529,7 +531,7 @@ class _FastSlowProxy:
         """
         raise NotImplementedError("Abstract base class")
 
-    def _xdf_slow_to_fast(self) -> Any:
+    def _fsproxy_slow_to_fast(self) -> Any:
         """
         If the wrapped object is of "slow" type, returns the
         corresponding "fast" object. Otherwise, returns the wrapped
@@ -538,30 +540,30 @@ class _FastSlowProxy:
         raise NotImplementedError("Abstract base class")
 
     @property
-    def _xdf_fast(self) -> Any:
+    def _fsproxy_fast(self) -> Any:
         """
         Returns the wrapped object. If the wrapped object is of "slow"
         type, replaces it with the corresponding "fast" object before
         returning it.
         """
-        self._fsproxy_wrapped = self._xdf_slow_to_fast()
+        self._fsproxy_wrapped = self._fsproxy_slow_to_fast()
         return self._fsproxy_wrapped
 
     @property
-    def _xdf_slow(self) -> Any:
+    def _fsproxy_slow(self) -> Any:
         """
         Returns the wrapped object. If the wrapped object is of "fast"
         type, replaces it with the corresponding "slow" object before
         returning it.
         """
-        self._fsproxy_wrapped = self._xdf_fast_to_slow()
+        self._fsproxy_wrapped = self._fsproxy_fast_to_slow()
         return self._fsproxy_wrapped
 
     def __dir__(self):
         # Try to return the cached dir of the slow object, but if it
         # doesn't exist, fall back to the default implementation.
         try:
-            return self._xdf_slow_dir
+            return self._fsproxy_slow_dir
         except AttributeError:
             return object.__dir__(self)
 
@@ -588,8 +590,8 @@ class _FastSlowProxy:
             # implements special display fallbacks.
             _raise_attribute_error(self.__class__.__name__, name)
         if name.startswith("_"):
-            # private attributes always come from `._xdf_slow`:
-            return getattr(self._xdf_slow, name)
+            # private attributes always come from `._fsproxy_slow`:
+            return getattr(self._fsproxy_slow, name)
         attr = _FastSlowAttribute(name)
         return attr.__get__(self)
 
@@ -762,7 +764,7 @@ class _IntermediateProxy(_FastSlowProxy):
         color=_XDF_NVTX_COLORS["COPY_SLOW_TO_FAST"],
         domain="cudf_pandas",
     )
-    def _xdf_slow_to_fast(self) -> Any:
+    def _fsproxy_slow_to_fast(self) -> Any:
         func, args, kwargs = self._method_chain
         args, kwargs = _fast_arg(args), _fast_arg(kwargs)
         return func(*args, **kwargs)
@@ -772,7 +774,7 @@ class _IntermediateProxy(_FastSlowProxy):
         color=_XDF_NVTX_COLORS["COPY_FAST_TO_SLOW"],
         domain="cudf_pandas",
     )
-    def _xdf_fast_to_slow(self) -> Any:
+    def _fsproxy_fast_to_slow(self) -> Any:
         func, args, kwargs = self._method_chain
         args, kwargs = _slow_arg(args), _slow_arg(kwargs)
         return func(*args, **kwargs)
@@ -809,8 +811,8 @@ class _FunctionProxy(_CallableProxyMixin):
     __name__: str
 
     def __init__(self, fast: Callable | _Unusable, slow: Callable):
-        self._xdf_fast = fast
-        self._xdf_slow = slow
+        self._fsproxy_fast = fast
+        self._fsproxy_slow = slow
         functools.update_wrapper(self, slow)
 
 
@@ -857,7 +859,9 @@ def _fast_slow_function_call(func: Callable, /, *args, **kwargs) -> Any:
 
 
 def _transform_arg(
-    arg: Any, attribute_name: Literal["_xdf_slow", "_xdf_fast"], seen: Set[int]
+    arg: Any,
+    attribute_name: Literal["_fsproxy_slow", "_fsproxy_fast"],
+    seen: Set[int],
 ) -> Any:
     """
     Transform "arg" into its corresponding slow (or fast) type.
@@ -933,7 +937,7 @@ def _transform_arg(
         result = np.empty(int(np.prod(arg.shape)), dtype=object, order=order)
         result[...] = transformed
         return result.reshape(arg.shape)
-    elif isinstance(arg, Iterator) and attribute_name == "_xdf_fast":
+    elif isinstance(arg, Iterator) and attribute_name == "_fsproxy_fast":
         # this may include consumable objects like generators or
         # IOBase objects, which we don't want unavailable to the slow
         # path in case of fallback. So, we raise here and ensure the
@@ -955,7 +959,7 @@ def _fast_arg(arg: Any) -> Any:
     Transform "arg" into its corresponding fast type.
     """
     seen: Set[int] = set()
-    return _transform_arg(arg, "_xdf_fast", seen)
+    return _transform_arg(arg, "_fsproxy_fast", seen)
 
 
 def _slow_arg(arg: Any) -> Any:
@@ -963,7 +967,7 @@ def _slow_arg(arg: Any) -> Any:
     Transform "arg" into its corresponding slow type.
     """
     seen: Set[int] = set()
-    return _transform_arg(arg, "_xdf_slow", seen)
+    return _transform_arg(arg, "_fsproxy_slow", seen)
 
 
 def _maybe_wrap_result(result: Any, func: Callable, /, *args, **kwargs) -> Any:
@@ -1036,7 +1040,7 @@ def _is_function_or_method(obj: Any) -> bool:
 
 def _replace_closurevars(
     f: types.FunctionType,
-    attribute_name: Literal["_xdf_slow", "_xdf_fast"],
+    attribute_name: Literal["_fsproxy_slow", "_fsproxy_fast"],
     seen: Set[int],
 ) -> types.FunctionType:
     """

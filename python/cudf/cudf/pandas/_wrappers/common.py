@@ -19,7 +19,7 @@ from ..fast_slow_proxy import (
 
 
 def array_method(self: _FastSlowProxy, *args, **kwargs):
-    return self._xdf_slow.__array__(*args, **kwargs)
+    return self._fsproxy_slow.__array__(*args, **kwargs)
 
 
 def array_function_method(self, func, types, args, kwargs):
@@ -43,15 +43,15 @@ def arrow_array_method(self: _FastSlowProxy, *args, **kwargs):
     import pyarrow as pa
 
     try:
-        return self._xdf_fast.to_arrow(*args, **kwargs)
+        return self._fsproxy_fast.to_arrow(*args, **kwargs)
     except Exception:
-        return pa.array(self._xdf_slow, *args, **kwargs)
+        return pa.array(self._fsproxy_slow, *args, **kwargs)
 
 
 @property  # type: ignore
 def cuda_array_interface(self: _FastSlowProxy):
-    return self._xdf_fast.__cuda_array_interface__
+    return self._fsproxy_fast.__cuda_array_interface__
 
 
 def custom_iter(self: _FastSlowProxy):
-    return iter(self._xdf_slow)
+    return iter(self._fsproxy_slow)
