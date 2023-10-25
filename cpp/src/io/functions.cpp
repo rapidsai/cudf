@@ -41,9 +41,9 @@
 namespace cudf {
 namespace io {
 // Returns builder for csv_reader_options
-csv_reader_options_builder csv_reader_options::builder(source_info const& src)
+csv_reader_options_builder csv_reader_options::builder(source_info src)
 {
-  return csv_reader_options_builder{src};
+  return csv_reader_options_builder{std::move(src)};
 }
 
 // Returns builder for csv_writer_options
@@ -54,9 +54,9 @@ csv_writer_options_builder csv_writer_options::builder(sink_info const& sink,
 }
 
 // Returns builder for orc_reader_options
-orc_reader_options_builder orc_reader_options::builder(source_info const& src)
+orc_reader_options_builder orc_reader_options::builder(source_info src)
 {
-  return orc_reader_options_builder{src};
+  return orc_reader_options_builder{std::move(src)};
 }
 
 // Returns builder for orc_writer_options
@@ -73,15 +73,15 @@ chunked_orc_writer_options_builder chunked_orc_writer_options::builder(sink_info
 }
 
 // Returns builder for avro_reader_options
-avro_reader_options_builder avro_reader_options::builder(source_info const& src)
+avro_reader_options_builder avro_reader_options::builder(source_info src)
 {
-  return avro_reader_options_builder(src);
+  return avro_reader_options_builder(std::move(src));
 }
 
 // Returns builder for json_reader_options
-json_reader_options_builder json_reader_options::builder(source_info const& src)
+json_reader_options_builder json_reader_options::builder(source_info src)
 {
-  return json_reader_options_builder(src);
+  return json_reader_options_builder(std::move(src));
 }
 
 // Returns builder for orc_writer_options
@@ -92,9 +92,9 @@ json_writer_options_builder json_writer_options::builder(sink_info const& sink,
 }
 
 // Returns builder for parquet_reader_options
-parquet_reader_options_builder parquet_reader_options::builder(source_info const& src)
+parquet_reader_options_builder parquet_reader_options::builder(source_info src)
 {
-  return parquet_reader_options_builder{src};
+  return parquet_reader_options_builder{std::move(src)};
 }
 
 // Returns builder for parquet_writer_options
