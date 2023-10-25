@@ -104,7 +104,7 @@ class OrcReader(IOFuzz):
                 elif param == "stripes":
                     f = io.BytesIO(self._current_buffer)
                     orcFile = pa.orc.ORCFile(f)
-                    stripes = [i for i in range(orcFile.nstripes)]
+                    stripes = list(range(orcFile.nstripes))
                     params_dict[param] = np.random.choice(
                         [
                             None,
