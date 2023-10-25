@@ -62,7 +62,6 @@ files:
     includes:
       - cudatoolkit
       - docs
-      - libarrow_run
       - py_version
   py_build_cudf:
     output: pyproject
@@ -219,14 +218,13 @@ dependencies:
           - libkvikio==23.12.*
       - output_types: conda
         packages:
-          - aws-sdk-cpp<1.11
           - fmt>=9.1.0,<10
           - &gbench benchmark==1.8.0
           - &gtest gtest>=1.13.0
           - &gmock gmock>=1.13.0
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - &libarrow libarrow==12.0.0.*
+          - libarrow==12.0.1.*
           - librdkafka>=1.9.0,<1.10.0a0
           # Align nvcomp version with rapids-cmake
           - nvcomp==2.6.1
@@ -244,7 +242,7 @@ dependencies:
           - cython>=3.0.0
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - &pyarrow pyarrow==12.0.0.*
+          - pyarrow==12.0.1.*
           # TODO: Pin to numpy<1.25 until cudf requires pandas 2
           - &numpy numpy>=1.21,<1.25
   build_python:
@@ -263,12 +261,14 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - *libarrow
+          # Allow runtime version to float up to minor version
+          - libarrow==12.*
   pyarrow_run:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - *pyarrow
+          # Allow runtime version to float up to minor version
+          - pyarrow==12.*
   cudatoolkit:
     specific:
       - output_types: conda
