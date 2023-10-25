@@ -1847,7 +1847,11 @@ class Frame(BinaryOperand, Scannable):
 
         result = lhs.dot(rhs)
         if len(result.shape) == 1:
-            return cudf.Series(result)
+            # TODO: Remove if/else once misaligned indexes are addressed
+            return cudf.Series(
+                result,
+                index=self.index if len(result) == len(self.index) else None,
+            )
         if len(result.shape) == 2:
             return cudf.DataFrame(result)
         return result.item()
