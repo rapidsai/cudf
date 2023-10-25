@@ -518,6 +518,11 @@ struct column_to_strings_fn {
   {
   }
 
+  ~column_to_strings_fn()                                      = default;
+  column_to_strings_fn& operator=(column_to_strings_fn const&) = delete;
+  column_to_strings_fn(column_to_strings_fn&&)                 = default;
+  column_to_strings_fn& operator=(column_to_strings_fn&&)      = default;
+
   // unsupported type of column:
   template <typename column_type>
   std::enable_if_t<is_not_handled<column_type>(), std::unique_ptr<column>> operator()(
