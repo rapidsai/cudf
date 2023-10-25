@@ -17,5 +17,4 @@ python -m pip install git+https://github.com/dask/dask.git@2023.9.2 git+https://
 python -m pip install $(echo ./dist/dask_cudf*.whl)[test]
 
 # Run tests in dask_cudf/tests and dask_cudf/io/tests
-python -m pytest -n 8 ./python/dask_cudf/dask_cudf/tests
-python -m pytest -n 8 ./python/dask_cudf/dask_cudf/io/tests
+python -m pytest -n 8 ./python/dask_cudf/dask_cudf/
