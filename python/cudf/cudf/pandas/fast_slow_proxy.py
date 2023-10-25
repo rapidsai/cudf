@@ -486,7 +486,7 @@ class _FastSlowProxyMeta(type):
             return type.__dir__(self)
 
     def __getattr__(self, name: str) -> Any:
-        if name.startswith("_xdf") or name.startswith("__"):
+        if name.startswith("_fsproxy") or name.startswith("__"):
             # an AttributeError was raised when trying to evaluate
             # an internal attribute, we just need to propagate this
             _raise_attribute_error(self.__class__.__name__, name)
@@ -568,7 +568,7 @@ class _FastSlowProxy:
             return object.__dir__(self)
 
     def __getattr__(self, name: str) -> Any:
-        if name.startswith("_xdf"):
+        if name.startswith("_fsproxy"):
             # an AttributeError was raised when trying to evaluate
             # an internal attribute, we just need to propagate this
             _raise_attribute_error(self.__class__.__name__, name)
