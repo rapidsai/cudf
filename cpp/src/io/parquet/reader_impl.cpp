@@ -15,6 +15,7 @@
  */
 
 #include "reader_impl.hpp"
+#include "error.hpp"
 
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/transform.hpp>
@@ -163,7 +164,8 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   chunk_nested_valids.host_to_device_async(_stream);
   chunk_nested_data.host_to_device_async(_stream);
 
-  rmm::device_scalar<int32_t> error_code(0, _stream);
+  // create this before we fork streams
+  kernel_error error_code(_stream);
 
   // get the number of streams we need from the pool and tell them to wait on the H2D copies
   int const nkernels = std::bitset<32>(kernel_mask).count();
@@ -199,11 +201,8 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   page_nesting.device_to_host_async(_stream);
   page_nesting_decode.device_to_host_async(_stream);
 
-  auto const decode_error = error_code.value(_stream);
-  if (decode_error != 0) {
-    std::stringstream stream;
-    stream << std::hex << decode_error;
-    CUDF_FAIL("Parquet data decode failed with code(s) 0x" + stream.str());
+  if (error_code.value() != 0) {
+    CUDF_FAIL("Parquet data decode failed with code(s) " + error_code.str());
   }
 
   // for list columns, add the final offset to every offset buffer.

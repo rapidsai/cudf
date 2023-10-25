@@ -218,7 +218,6 @@ dependencies:
           - libkvikio==23.12.*
       - output_types: conda
         packages:
-          - aws-sdk-cpp<1.11
           - fmt>=9.1.0,<10
           - &gbench benchmark==1.8.0
           - &gtest gtest>=1.13.0
@@ -260,7 +259,7 @@ dependencies:
           - protoc-wheel
   libarrow_run:
     common:
-      - output_types: [conda, requirements]
+      - output_types: conda
         packages:
           # Allow runtime version to float up to minor version
           - libarrow==12.*
@@ -282,6 +281,9 @@ dependencies:
               - cuda-nvrtc-dev
               - cuda-nvtx-dev
               - libcurand-dev
+              # TODO: Remove after https://github.com/rapidsai/cudf/pull/14292 updates
+              # cudf_kafka to use scikit-build
+              - cuda-gdb
           - matrix:
               cuda: "11.8"
             packages:
