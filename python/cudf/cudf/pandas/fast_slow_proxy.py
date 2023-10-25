@@ -698,7 +698,7 @@ class _FinalProxy(_FastSlowProxy):
     """
 
     @classmethod
-    def _xdf_wrap(cls, value, func):
+    def _fsproxy_wrap(cls, value, func):
         """Default mechanism to wrap a value in a proxy type
 
         Parameters
@@ -740,7 +740,7 @@ class _IntermediateProxy(_FastSlowProxy):
     _method_chain: Tuple[Callable, Tuple, Dict]
 
     @classmethod
-    def _xdf_wrap(
+    def _fsproxy_wrap(
         cls,
         obj: Any,
         method_chain: Tuple[Callable, Tuple, Dict],
@@ -976,10 +976,10 @@ def _maybe_wrap_result(result: Any, func: Callable, /, *args, **kwargs) -> Any:
     """
     if _is_final_type(result):
         typ = get_final_type_map()[type(result)]
-        return typ._xdf_wrap(result, func)
+        return typ._fsproxy_wrap(result, func)
     elif _is_intermediate_type(result):
         typ = get_intermediate_type_map()[type(result)]
-        return typ._xdf_wrap(result, method_chain=(func, args, kwargs))
+        return typ._fsproxy_wrap(result, method_chain=(func, args, kwargs))
     elif _is_final_class(result):
         return get_final_type_map()[result]
     elif isinstance(result, list):
@@ -1002,7 +1002,7 @@ def _maybe_wrap_result(result: Any, func: Callable, /, *args, **kwargs) -> Any:
     elif isinstance(result, Iterator):
         return (_maybe_wrap_result(r, lambda x: x, r) for r in result)
     elif _is_function_or_method(result):
-        return _MethodProxy._xdf_wrap(
+        return _MethodProxy._fsproxy_wrap(
             result, method_chain=(func, args, kwargs)
         )
     else:
