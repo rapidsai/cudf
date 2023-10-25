@@ -379,7 +379,7 @@ dependencies:
           - nbsphinx
           - numpydoc
           - pandoc
-          - pydata-sphinx-theme
+          - pydata-sphinx-theme!=0.14.2
           - scipy
           - sphinx
           - sphinx-autobuild
