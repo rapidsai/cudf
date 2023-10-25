@@ -13,7 +13,6 @@ import numpy as np
 import pandas as pd
 from fsspec.core import get_fs_token_paths
 from pyarrow import PythonFile as ArrowPythonFile
-from pyarrow.fs import FSSpecHandler, PyFileSystem
 from pyarrow.lib import NativeFile
 
 from cudf.utils.docutils import docfmt_partial
@@ -1629,6 +1628,15 @@ def _open_remote_files(
             )
             for path, rgs in zip(paths, row_groups)
         ]
+
+    # Avoid top-level pyarrow.fs import.
+    # Importing pyarrow.fs initializes a S3 SDK with a finalizer
+    # that runs atexit. In some circumstances it appears this
+    # runs a call into a logging system that is already shutdown.
+    # To avoid this, we only import this subsystem if it is
+    # really needed.
+    # See https://github.com/aws/aws-sdk-cpp/issues/2681
+    from pyarrow.fs import FSSpecHandler, PyFileSystem
 
     # Default open - Use pyarrow filesystem API
     pa_fs = PyFileSystem(FSSpecHandler(fs))
