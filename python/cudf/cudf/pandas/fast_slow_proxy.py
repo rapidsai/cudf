@@ -172,7 +172,7 @@ def make_final_proxy_type(
     def _fsproxy_slow_to_fast(self):
         # if we are wrapping a slow object,
         # convert it to a fast one
-        if self._xdf_state is _State.SLOW:
+        if self._fsproxy_state is _State.SLOW:
             return slow_to_fast(self._fsproxy_wrapped)
         return self._fsproxy_wrapped
 
@@ -184,12 +184,12 @@ def make_final_proxy_type(
     def _fsproxy_fast_to_slow(self):
         # if we are wrapping a fast object,
         # convert it to a slow one
-        if self._xdf_state is _State.FAST:
+        if self._fsproxy_state is _State.FAST:
             return fast_to_slow(self._fsproxy_wrapped)
         return self._fsproxy_wrapped
 
     @property  # type: ignore
-    def _xdf_state(self) -> _State:
+    def _fsproxy_state(self) -> _State:
         return (
             _State.FAST
             if isinstance(self._fsproxy_wrapped, self._fsproxy_fast_type)
@@ -221,7 +221,7 @@ def make_final_proxy_type(
         "_fsproxy_slow_type": slow_type,
         "_fsproxy_slow_to_fast": _fsproxy_slow_to_fast,
         "_fsproxy_fast_to_slow": _fsproxy_fast_to_slow,
-        "_xdf_state": _xdf_state,
+        "_fsproxy_state": _fsproxy_state,
         "__reduce__": __reduce__,
         "__setstate__": __setstate__,
     }
@@ -291,7 +291,7 @@ def make_intermediate_proxy_type(
         )
 
     @property  # type: ignore
-    def _xdf_state(self):
+    def _fsproxy_state(self):
         return (
             _State.FAST
             if isinstance(self._fsproxy_wrapped, self._fsproxy_fast_type)
@@ -304,7 +304,7 @@ def make_intermediate_proxy_type(
         domain="cudf_pandas",
     )
     def _fsproxy_slow_to_fast(self):
-        if self._xdf_state is _State.SLOW:
+        if self._fsproxy_state is _State.SLOW:
             return super(type(self), self)._fsproxy_slow_to_fast()
         return self._fsproxy_wrapped
 
@@ -314,7 +314,7 @@ def make_intermediate_proxy_type(
         domain="cudf_pandas",
     )
     def _fsproxy_fast_to_slow(self):
-        if self._xdf_state is _State.FAST:
+        if self._fsproxy_state is _State.FAST:
             return super(type(self), self)._fsproxy_fast_to_slow()
         return self._fsproxy_wrapped
 
@@ -327,7 +327,7 @@ def make_intermediate_proxy_type(
         "_fsproxy_slow_type": slow_type,
         "_fsproxy_slow_to_fast": _fsproxy_slow_to_fast,
         "_fsproxy_fast_to_slow": _fsproxy_fast_to_slow,
-        "_xdf_state": _xdf_state,
+        "_fsproxy_state": _fsproxy_state,
     }
 
     for method in _SPECIAL_METHODS:
