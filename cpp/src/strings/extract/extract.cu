@@ -131,12 +131,13 @@ std::unique_ptr<table> extract(strings_column_view const& input,
 
 // external API
 
-std::unique_ptr<table> extract(strings_column_view const& strings,
+std::unique_ptr<table> extract(strings_column_view const& input,
                                regex_program const& prog,
+                               rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract(strings, prog, cudf::get_default_stream(), mr);
+  return detail::extract(input, prog, stream, mr);
 }
 
 }  // namespace strings
