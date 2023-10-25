@@ -59,14 +59,12 @@ struct TimeUnit {
 
 struct TimeType {
   bool isAdjustedToUTC = true;
-  TimeUnit unit;
-  explicit TimeType(TimeUnit::Type t = TimeUnit::MILLIS) : unit{t} {}
+  TimeUnit unit        = {TimeUnit::MILLIS};
 };
 
 struct TimestampType {
   bool isAdjustedToUTC = true;
-  TimeUnit unit;
-  explicit TimestampType(TimeUnit::Type t = TimeUnit::MILLIS) : unit{t} {}
+  TimeUnit unit        = {TimeUnit::MILLIS};
 };
 
 struct IntType {
