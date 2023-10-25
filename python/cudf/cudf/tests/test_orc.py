@@ -148,9 +148,11 @@ def test_orc_reader_trailing_nulls(datadir):
     ["TestOrcFile.testDate1900.orc", "TestOrcFile.testDate2038.orc"],
 )
 def test_orc_reader_datetimestamp(datadir, inputfile, use_index):
+    from pyarrow import orc
+
     path = datadir / inputfile
     try:
-        orcfile = pa.orc.ORCFile(path)
+        orcfile = orc.ORCFile(path)
     except pa.ArrowIOError as e:
         pytest.skip(".orc file is not found: %s" % e)
 
@@ -604,6 +606,8 @@ def normalized_equals(value1, value2):
 @pytest.mark.parametrize("stats_freq", ["STRIPE", "ROWGROUP"])
 @pytest.mark.parametrize("nrows", [1, 100, 6000000])
 def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
+    from pyarrow import orc
+
     supported_stat_types = supported_numpy_dtypes + ["str"]
     # Can't write random bool columns until issue #6763 is fixed
     if nrows == 6000000:
@@ -622,7 +626,7 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
     gdf.to_orc(fname.strpath, statistics=stats_freq)
 
     # Read back written ORC's statistics
-    orc_file = pa.orc.ORCFile(fname)
+    orc_file = orc.ORCFile(fname)
     (
         file_stats,
         stripes_stats,
@@ -676,6 +680,8 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
 @pytest.mark.parametrize("stats_freq", ["STRIPE", "ROWGROUP"])
 @pytest.mark.parametrize("nrows", [2, 100, 6000000])
 def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
+    from pyarrow import orc
+
     np.random.seed(0)
     supported_stat_types = supported_numpy_dtypes + ["str"]
     # Can't write random bool columns until issue #6763 is fixed
@@ -728,7 +734,7 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
     expect = cudf.DataFrame(pd.concat([pdf1, pdf2]).reset_index(drop=True))
 
     # Read back written ORC's statistics
-    orc_file = pa.orc.ORCFile(gdf_fname)
+    orc_file = orc.ORCFile(gdf_fname)
     (
         file_stats,
         stripes_stats,
@@ -781,6 +787,8 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
 
 @pytest.mark.parametrize("nrows", [1, 100, 6000000])
 def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
+    from pyarrow import orc
+
     # Make a dataframe
     gdf = cudf.DataFrame({"col_bool": gen_rand_series("bool", nrows)})
     fname = tmpdir.join("gdf.orc")
@@ -789,7 +797,7 @@ def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
     gdf.to_orc(fname.strpath)
 
     # Read back written ORC's statistics
-    orc_file = pa.orc.ORCFile(fname)
+    orc_file = orc.ORCFile(fname)
     (
         file_stats,
         stripes_stats,
@@ -1075,6 +1083,8 @@ def list_struct_buff():
 @pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 100_000])
 @pytest.mark.parametrize("use_index", [True, False])
 def test_lists_struct_nests(columns, num_rows, use_index, list_struct_buff):
+    from pyarrow import orc
+
     gdf = cudf.read_orc(
         list_struct_buff,
         columns=columns,
@@ -1082,7 +1092,7 @@ def test_lists_struct_nests(columns, num_rows, use_index, list_struct_buff):
         use_index=use_index,
     )
 
-    pyarrow_tbl = pa.orc.ORCFile(list_struct_buff).read()
+    pyarrow_tbl = orc.ORCFile(list_struct_buff).read()
 
     pyarrow_tbl = (
         pyarrow_tbl[:num_rows]
@@ -1119,6 +1129,7 @@ def test_pyspark_struct(datadir):
 
 
 def gen_map_buff(size=10000):
+    from pyarrow import orc
     from string import ascii_letters as al
 
     rd = random.Random(1)
@@ -1205,7 +1216,8 @@ def gen_map_buff(size=10000):
         [lvl1_map, lvl2_map, lvl2_struct_map],
         ["lvl1_map", "lvl2_map", "lvl2_struct_map"],
     )
-    pa.orc.write_table(
+
+    orc.write_table(
         pa_table, buff, stripe_size=1024, compression="UNCOMPRESSED"
     )
 
@@ -1222,7 +1234,9 @@ map_buff = gen_map_buff(size=100000)
 @pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 100000])
 @pytest.mark.parametrize("use_index", [True, False])
 def test_map_type_read(columns, num_rows, use_index):
-    tbl = pa.orc.ORCFile(map_buff).read()
+    from pyarrow import orc
+
+    tbl = orc.read_table(map_buff)
 
     lvl1_map = (
         tbl["lvl1_map"]
@@ -1408,18 +1422,22 @@ def test_writer_timestamp_stream_size(datadir, tmpdir):
     ],
 )
 def test_no_row_group_index_orc_read(datadir, fname):
+    from pyarrow import orc
+
     fpath = datadir / fname
 
-    expect = pa.orc.ORCFile(fpath).read()
+    expect = orc.ORCFile(fpath).read()
     got = cudf.read_orc(fpath)
 
     assert expect.equals(got.to_arrow())
 
 
 def test_names_in_struct_dtype_nesting(datadir):
+    from pyarrow import orc
+
     fname = datadir / "TestOrcFile.NestedStructDataFrame.orc"
 
-    expect = pa.orc.ORCFile(fname).read()
+    expect = orc.ORCFile(fname).read()
     got = cudf.read_orc(fname)
 
     # test dataframes
@@ -1431,12 +1449,14 @@ def test_names_in_struct_dtype_nesting(datadir):
 
 
 def test_writer_lists_structs(list_struct_buff):
+    from pyarrow import orc
+
     df_in = cudf.read_orc(list_struct_buff)
 
     buff = BytesIO()
     df_in.to_orc(buff)
 
-    pyarrow_tbl = pa.orc.ORCFile(buff).read()
+    pyarrow_tbl = orc.ORCFile(buff).read()
 
     assert pyarrow_tbl.equals(df_in.to_arrow())
 
@@ -1491,6 +1511,8 @@ def test_statistics_sum_overflow():
 
 
 def test_empty_statistics():
+    from pyarrow import orc
+
     buff = BytesIO()
     pa_table = pa.Table.from_arrays(
         [
@@ -1506,7 +1528,7 @@ def test_empty_statistics():
         ],
         ["a", "b", "c", "d", "e", "f", "g", "h", "i"],
     )
-    pa.orc.write_table(pa_table, buff)
+    orc.write_table(pa_table, buff)
 
     got = cudf.io.orc.read_orc_statistics([buff])
 
@@ -1561,6 +1583,8 @@ def test_select_nested(list_struct_buff, equivalent_columns):
 
 
 def test_orc_writer_rle_stream_size(datadir, tmpdir):
+    from pyarrow import orc
+
     original = datadir / "TestOrcFile.int16.rle.size.orc"
     reencoded = tmpdir.join("int16_map.orc")
 
@@ -1568,7 +1592,7 @@ def test_orc_writer_rle_stream_size(datadir, tmpdir):
     df.to_orc(reencoded)
 
     # Segfaults when RLE stream sizes don't account for varint length
-    pa_out = pa.orc.ORCFile(reencoded).read()
+    pa_out = orc.ORCFile(reencoded).read()
     assert df.to_arrow().equals(pa_out)
 
 
@@ -1588,11 +1612,13 @@ def test_empty_columns():
 
 
 def test_orc_reader_zstd_compression(list_struct_buff):
+    from pyarrow import orc
+
     expected = cudf.read_orc(list_struct_buff)
     # save with ZSTD compression
     buffer = BytesIO()
-    pyarrow_tbl = pa.orc.ORCFile(list_struct_buff).read()
-    writer = pa.orc.ORCWriter(buffer, compression="zstd")
+    pyarrow_tbl = orc.ORCFile(list_struct_buff).read()
+    writer = orc.ORCWriter(buffer, compression="zstd")
     writer.write(pyarrow_tbl)
     writer.close()
     try:
@@ -1791,10 +1817,7 @@ def negative_timestamp_df():
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
 def test_orc_reader_negative_timestamp(negative_timestamp_df, engine):
     buffer = BytesIO()
-    orc_table = pa.Table.from_pandas(
-        negative_timestamp_df.to_pandas(), preserve_index=False
-    )
-    pa.orc.write_table(orc_table, buffer)
+    negative_timestamp_df.to_orc(buffer)
 
     # We warn the user that this function will fall back to the CPU for reading
     # when the engine is pyarrow.
@@ -1805,11 +1828,13 @@ def test_orc_reader_negative_timestamp(negative_timestamp_df, engine):
 
 
 def test_orc_writer_negative_timestamp(negative_timestamp_df):
+    from pyarrow import orc
+
     buffer = BytesIO()
     negative_timestamp_df.to_orc(buffer)
 
     assert_eq(negative_timestamp_df, pd.read_orc(buffer))
-    assert_eq(negative_timestamp_df, pa.orc.ORCFile(buffer).read())
+    assert_eq(negative_timestamp_df, orc.ORCFile(buffer).read())
 
 
 def test_orc_reader_apache_negative_timestamp(datadir):
