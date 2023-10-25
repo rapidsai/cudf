@@ -53,10 +53,10 @@ constexpr int block_size = 512;
  * @brief Produces offsets to unpairable locations in the given chars array
  *
  * Launched as a thread per byte of the chars array.
- * The output is non-zero offsets to locations of unpairable substring.
+ * The output is non-zero offsets to locations of unpairable substrings.
  * An unpairable substring does not exist in the given map and so will
  * never be paired :-(. Fortunately, this can be used as an artificial
- * boundary providing better parallelism in the BPE kernel.
+ * boundary providing increased parallelism in the BPE kernel.
  *
  * @tparam MapRefType The type of the map finder object
  * @param d_chars Input chars memory
@@ -65,8 +65,8 @@ constexpr int block_size = 512;
  * @param d_offsets Output is the offset location of unpairables
  */
 template <typename MapRefType>
-__global__ void bpe_unpairable_offsets_fn(char const* d_chars,
-                                          cudf::size_type chars_size,  // use device_span
+__global__ void bpe_unpairable_offsets_fn(char const* d_chars,  // use device_span
+                                          cudf::size_type chars_size,
                                           cudf::size_type offset,
                                           MapRefType const d_map,
                                           cudf::size_type* d_offsets)
@@ -78,27 +78,16 @@ __global__ void bpe_unpairable_offsets_fn(char const* d_chars,
     return;
   }
 
-  auto const itr = d_chars + idx;
-  auto const end = d_chars + chars_size;
-
-  auto next_str = [end](char const* begin) {
-    auto next = begin + (begin < end);
-    while (next < end && !cudf::strings::detail::is_begin_utf8_char(*next)) {
-      ++next;
-    }
-    return cudf::string_view(begin, static_cast<cudf::size_type>(thrust::distance(begin, next)));
-  };
-
-  auto const lhs      = next_str(itr);
-  auto const next_itr = itr + lhs.size_bytes();
-  auto output         = 0;
-  if (next_itr < end) {
-    auto const rhs = next_str(next_itr);
-    if (!rhs.empty()) {
-      // see if both halves exist anywhere in the table
-      if (d_map.find(lhs) == d_map.end() && d_map.find(rhs) == d_map.end()) {
-        output = idx + lhs.size_bytes() + offset;  // offset for artificial boundary
-      }
+  auto const itr  = d_chars + idx;
+  auto const end  = d_chars + chars_size;
+  auto const lhs  = cudf::string_view(itr, cudf::strings::detail::bytes_in_utf8_byte(*itr));
+  auto const next = itr + lhs.size_bytes();
+  auto output     = 0;
+  if (next < end) {
+    auto const rhs = cudf::string_view(next, cudf::strings::detail::bytes_in_utf8_byte(*next));
+    // see if both halves exist anywhere in the table, if not these are unpairable
+    if (d_map.find(lhs) == d_map.end() && d_map.find(rhs) == d_map.end()) {
+      output = idx + lhs.size_bytes() + offset;  // offset for artificial boundary
     }
   }
   d_offsets[idx] = output;
@@ -187,17 +176,25 @@ __global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
   }
   __syncthreads();
 
+  // for finding the next half of a pair
   auto next_substr = [d_str, d_spaces, end = end_spaces](int8_t* begin) {
-    auto const next = thrust::find_if(thrust::seq, begin + 1, end, [](auto v) { return v != 0; });
+    auto const next = thrust::find(thrust::seq, begin + 1, end, 1);
     auto const size = static_cast<cudf::size_type>(thrust::distance(begin, next));
     return cudf::string_view(d_str.data() + thrust::distance(d_spaces, begin), size);
+  };
+  // for locating adjacent pairs after merging a pair
+  auto find_prev = [begin = d_spaces](int8_t* ptr) {
+    while (ptr > begin && *ptr == 0) {
+      --ptr;
+    }
+    return ptr;
   };
 
   auto min_rank = max_rank;
 
   // store all the initial ranks for each pair
   for (auto itr = d_spaces + lane_idx; itr < end_spaces; itr += block_size) {
-    if (*itr == 0) { continue; }  // start on valid bytes only
+    if (*itr == 0) { continue; }  // skips any UTF-8 continuation bytes
     // resolve pair and lookup its rank
     auto const lhs      = next_substr(itr);  // retrieve lhs of the pair
     auto const next_itr = itr + lhs.size_bytes();
@@ -218,20 +215,6 @@ __global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
   if (lane_idx == 0) { block_min_rank = reduce_rank; }
   __syncthreads();
 
-  // these are used to locate adjacent pairs after merging a pair
-  auto find_prev = [begin = d_spaces](int8_t* ptr) {
-    while (ptr > begin && *ptr == 0) {
-      --ptr;
-    }
-    return ptr;
-  };
-  auto find_next = [end = end_spaces](int8_t* ptr) {
-    while (ptr < end && *ptr == 0) {
-      ++ptr;
-    }
-    return ptr;
-  };
-
   // loop through the ranks processing the current minimum until there are no more
   while (block_min_rank < max_rank) {
     // search the d_min_ranks for matches to block_min_rank
@@ -241,19 +224,21 @@ __global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
         while (ptr > d_min_ranks && *ptr == max_rank) {
           --ptr;
         }
-        // set the output value to 0 at this position (erases separator)
+        // set the output value to 0 at this position (erases separator, merges pair)
         if (*ptr != block_min_rank) { d_spaces[thrust::distance(d_min_ranks, itr)] = 0; }
       }
     }
     __syncthreads();
 
-    // identify all the re-rank locations (logic above created new pairs)
+    // identify all the re-rank locations (logic above invalidated adjacent pairs)
     for (auto itr = d_min_ranks + lane_idx; itr < end_ranks; itr += block_size) {
       auto const index = thrust::distance(d_min_ranks, itr);
       if (*itr == block_min_rank && d_spaces[index] == 0) {
-        auto ptr = find_prev(d_spaces + index - 1);  // find previous pair mid-point
+        // find previous pair mid-point
+        auto ptr = find_prev(d_spaces + index - 1);
         if (ptr > d_spaces) { d_rerank[thrust::distance(d_spaces, ptr)] = 1; }
-        ptr = find_next(d_spaces + index + 1);  // find next pair mid-point
+        // find next pair mid-point
+        ptr = thrust::find(thrust::seq, d_spaces + index + 1, end_spaces, 1);
         if (ptr < end_spaces) { d_rerank[thrust::distance(d_spaces, ptr)] = 1; }
         *itr = max_rank;  // reset this rank
       }
@@ -287,7 +272,7 @@ __global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
     auto const reduce_rank = block_reduce(temp_storage).Reduce(min_rank, cub::Min(), num_valid);
     if (lane_idx == 0) { block_min_rank = reduce_rank; }
     __syncthreads();
-  }  // if no mins were found we are done, otherwise start again
+  }  // if no min ranks are found we are done, otherwise start again
 }
 
 /**
@@ -340,8 +325,8 @@ __global__ void bpe_finalize(cudf::column_device_view const d_strings,
   for (auto itr = d_spaces + lane_idx; itr < end_spaces; itr += block_size) {
     bytes += (*itr > 0);
   }
-  auto const size = block_reduce(temp_storage).Sum(bytes, num_valid);
-  if (lane_idx == 0) { d_sizes[str_idx] = size + d_str.size_bytes(); }
+  auto const total_bytes = block_reduce(temp_storage).Sum(bytes, num_valid);
+  if (lane_idx == 0) { d_sizes[str_idx] = total_bytes + d_str.size_bytes(); }
 }
 
 }  // namespace
@@ -394,7 +379,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
       thrust::remove(rmm::exec_policy(stream), d_up_offsets, d_up_offsets + chars_size, 0);
     auto const unpairables = thrust::distance(d_up_offsets, up_end);  // number of unpairables
 
-    // the new boundaries created by combining unpairable offsets with the existing offsets
+    // new string boundaries created by combining unpairable offsets with the existing offsets
     auto tmp_offsets = rmm::device_uvector<cudf::size_type>(unpairables + input.size() + 1, stream);
     thrust::merge(rmm::exec_policy(stream),
                   input.offsets_begin(),
@@ -402,7 +387,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
                   d_up_offsets,
                   up_end,
                   tmp_offsets.begin());
-    // remove any adjacent duplicate offsets (empty or null rows)
+    // remove any adjacent duplicate offsets (i.e. empty or null rows)
     auto const offsets_end =
       thrust::unique(rmm::exec_policy(stream), tmp_offsets.begin(), tmp_offsets.end());
     auto const offsets_total =
@@ -416,7 +401,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
     auto const tmp_input = cudf::column_view(
       input.parent().type(), tmp_size, nullptr, nullptr, 0, 0, {col_offsets, input.chars()});
     auto const d_tmp_strings = cudf::column_device_view::create(tmp_input, stream);
-    // launch the byte-pair-encoding kernel
+    // launch the byte-pair-encoding kernel on the temp column
     auto const d_ranks  = d_working.data();  // store pair ranks here
     auto const pair_map = merge_pairs.impl->get_merge_pairs_ref();
     bpe_parallel_fn<decltype(pair_map)><<<tmp_size, block_size, 0, stream.value()>>>(
@@ -452,7 +437,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
   thrust::merge_by_key(rmm::exec_policy(stream),
                        d_inserts,      // where to insert separator byte
                        copy_end,       //
-                       chars_begin,    // all positions
+                       chars_begin,    // all indices
                        chars_end,      //
                        sep_char,       // byte to insert
                        d_input_chars,  // original data
