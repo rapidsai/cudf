@@ -427,7 +427,7 @@ void rowgroup_char_counts(device_2dspan<size_type> counts,
 /**
  * @brief Converts sizes of decimal elements to offsets within the rowgroup.
  *
- * @param rowgroup_bounds Ranges of rows in each rowgroup [rowgroup][column]
+ * @param rg_bounds Ranges of rows in each rowgroup [rowgroup][column]
  * @param elem_sizes Map between column indexes and decimal element sizes
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
