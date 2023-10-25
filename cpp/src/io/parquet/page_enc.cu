@@ -246,11 +246,11 @@ void __device__ gen_hist(uint32_t* hist,
                          rle_page_enc_state_s const* s,
                          uint32_t nrows,
                          uint32_t rle_numvals,
-                         uint32_t maxlvl,
-                         typename cub::BlockReduce<uint32_t, block_size>::TempStorage& temp_storage)
+                         uint32_t maxlvl)
 {
   using block_reduce = cub::BlockReduce<uint32_t, block_size>;
-  auto const t       = threadIdx.x;
+  __shared__ typename block_reduce::TempStorage temp_storage;
+  auto const t = threadIdx.x;
 
   auto const mylvl = s->vals[rolling_index<rle_buffer_size>(rle_numvals + t)];
   for (uint32_t lvl = 0; lvl < maxlvl; lvl++) {
@@ -1228,12 +1228,8 @@ __global__ void __launch_bounds__(block_size, 8) gpuEncodePageLevels(device_span
         s->vals[rolling_idx(rle_numvals + t)] = def_lvl;
         __syncthreads();
         if (s->page.def_histogram != nullptr) {
-          gen_hist<block_size>(s->page.def_histogram,
-                               s,
-                               nrows,
-                               rle_numvals,
-                               s->col.max_def_level + 1,
-                               temp_storage.reduce_storage);
+          gen_hist<block_size>(
+            s->page.def_histogram, s, nrows, rle_numvals, s->col.max_def_level + 1);
         }
         rle_numvals += nrows;
         RleEncode(s, rle_numvals, def_lvl_bits, (rle_numvals == s->page.num_rows), t);
@@ -1283,9 +1279,7 @@ __global__ void __launch_bounds__(block_size, 8) gpuEncodePageLevels(device_span
           (rle_numvals + t < s->page.num_values && idx < col_last_val_idx) ? lvl_val_data[idx] : 0;
         s->vals[rolling_idx(rle_numvals + t)] = lvl_val;
         __syncthreads();
-        if (hist != nullptr) {
-          gen_hist<block_size>(hist, s, nvals, rle_numvals, max_lvl, temp_storage.reduce_storage);
-        }
+        if (hist != nullptr) { gen_hist<block_size>(hist, s, nvals, rle_numvals, max_lvl); }
         rle_numvals += nvals;
         RleEncode(s, rle_numvals, nbits, (rle_numvals == s->page.num_values), t);
         __syncthreads();
