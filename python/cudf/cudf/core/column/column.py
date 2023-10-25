@@ -934,7 +934,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     @property
     def is_unique(self) -> bool:
-        return self.distinct_count() == len(self)
+        return self.distinct_count(dropna=False) == len(self)
 
     @property
     def is_monotonic_increasing(self) -> bool:

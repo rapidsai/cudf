@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf import MultiIndex, Series
+from cudf import Index, MultiIndex, Series
 from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
@@ -352,3 +352,43 @@ testdata = [
 def test_is_monotonic_always_falls_for_null(data, expected):
     assert_eq(expected, data.is_monotonic_increasing)
     assert_eq(expected, data.is_monotonic_decreasing)
+
+
+@pytest.mark.parametrize("box", [Series, Index])
+@pytest.mark.parametrize(
+    "value,na_like",
+    [
+        [1, None],
+        [np.datetime64("2020-01-01", "ns"), np.datetime64("nat", "ns")],
+        ["s", None],
+        [1.0, np.nan],
+    ],
+    ids=repr,
+)
+def test_is_unique(box, value, na_like):
+    obj = box([value], nan_as_null=False)
+    assert obj.is_unique
+
+    obj = box([value, value], nan_as_null=False)
+    assert not obj.is_unique
+
+    obj = box([None, value], nan_as_null=False)
+    assert obj.is_unique
+
+    obj = box([None, None, value], nan_as_null=False)
+    assert not obj.is_unique
+
+    if na_like is not None:
+        obj = box([na_like, value], nan_as_null=False)
+        assert obj.is_unique
+
+        obj = box([na_like, na_like], nan_as_null=False)
+        assert not obj.is_unique
+
+        try:
+            if not np.isnat(na_like):
+                # pyarrow coerces nat to null
+                obj = box([None, na_like, value], nan_as_null=False)
+                assert obj.is_unique
+        except TypeError:
+            pass
