@@ -29,7 +29,7 @@ def ipython_magics_cpu_test():
 
     # confirm pandas is not aliased
     ip.run_cell("import pandas as pd; s = pd.Series(range(5))")
-    result = ip.run_cell("assert not hasattr(s, '_xdf_state')")
+    result = ip.run_cell("assert not hasattr(s, '_fsproxy_state')")
     result.raise_error()
 
 
