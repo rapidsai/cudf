@@ -835,6 +835,7 @@ if(CUDF_BUILD_TESTUTIL)
     tests/io/metadata_utilities.cpp
     tests/utilities/base_fixture.cpp
     tests/utilities/column_utilities.cu
+    tests/utilities/debug_utilities.cu
     tests/utilities/table_utilities.cu
     tests/utilities/tdigest_utilities.cu
   )
