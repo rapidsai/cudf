@@ -100,7 +100,7 @@ std::unique_ptr<cudf::column> normalize_spaces(
  * @return Normalized strings column
  */
 std::unique_ptr<cudf::column> normalize_characters(
-  cudf::strings_column_view const& strings,
+  cudf::strings_column_view const& input,
   bool do_lower_case,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
