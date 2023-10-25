@@ -36,7 +36,7 @@ namespace nvtext {
  */
 struct bpe_merge_pairs {
   struct bpe_merge_pairs_impl;
-  bpe_merge_pairs_impl* impl{};  ///< Implementation of the BPE merge pairs table.
+  std::unique_ptr<bpe_merge_pairs_impl> impl{};  ///< Implementation of the BPE merge pairs table.
 
   /**
    * @brief Construct a new bpe merge pairs object
@@ -61,14 +61,12 @@ struct bpe_merge_pairs {
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   ~bpe_merge_pairs();
-
-  bpe_merge_pairs();
 };
 
 /**
  * @brief Create a nvtext::bpe_merge_pairs from an input file.
  *
- * @deprecated Since 23.10
+ * @deprecated Since 23.12
  *
  * The file should contain a pair of strings per line separated by
  * a single space.
