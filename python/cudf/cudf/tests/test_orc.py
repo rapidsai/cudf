@@ -1129,8 +1129,9 @@ def test_pyspark_struct(datadir):
 
 
 def gen_map_buff(size=10000):
-    from pyarrow import orc
     from string import ascii_letters as al
+
+    from pyarrow import orc
 
     rd = random.Random(1)
     np.random.seed(seed=1)
