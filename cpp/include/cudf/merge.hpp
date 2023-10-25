@@ -34,7 +34,7 @@ namespace cudf {
  * @brief Merge a set of sorted tables.
  *
  * Merges sorted tables into one sorted table
- * containing data from all tables. Each column
+ * containing data from all tables. The key columns
  * of each table must be sorted according to the
  * parameters (cudf::column_order and cudf::null_order)
  * specified for that column.
