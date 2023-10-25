@@ -2394,6 +2394,15 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_row_group_metadata(
     }
   }
 
+  // Remove any LogicalType::UNKNOWN annotations that were passed in as they can confuse
+  // column type inferencing.
+  // See https://github.com/rapidsai/cudf/pull/14264#issuecomment-1778311615
+  for (auto& se : md.schema) {
+    if (se.logical_type.has_value() && se.logical_type.value().type == LogicalType::UNKNOWN) {
+      se.logical_type = thrust::nullopt;
+    }
+  }
+
   // Thrift-encode the resulting output
   file_header_s fhdr;
   file_ender_s fendr;
