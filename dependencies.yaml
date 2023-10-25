@@ -548,7 +548,6 @@ dependencies:
           - fastavro>=0.22.9
           - hypothesis
           - mimesis>=4.1.0
-          - pyorc
           - pytest-benchmark
           - pytest-cases
           - python-snappy>=0.6.0
