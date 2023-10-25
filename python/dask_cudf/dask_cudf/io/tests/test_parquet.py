@@ -481,7 +481,9 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
     # call `compute` on `ddf1`, because the dtype of
     # the inconsistent column ("a") may be "object"
     # before computing, and "int" after
-    dd.assert_eq(ddf1.compute(), ddf2)
+    # TODO: Uncomment after cudf#14326 is closed
+    # (See: https://github.com/rapidsai/cudf/issues/14326)
+    # dd.assert_eq(ddf1.compute(), ddf2)
     dd.assert_eq(ddf1.compute(), ddf2.compute())
 
 
