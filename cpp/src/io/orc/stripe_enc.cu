@@ -1261,15 +1261,14 @@ __global__ void __launch_bounds__(1024)
   }
 }
 
+// Holds a non-owning view of a decimal column's element sizes
 struct decimal_column_element_sizes {
   uint32_t col_idx;
   device_span<uint32_t> sizes;
-  decimal_column_element_sizes(uint32_t col_idx, device_span<uint32_t> sizes)
-    : col_idx(col_idx), sizes(sizes)
-  {
-  }
 };
 
+// Converts sizes of individual decimal elements to offfsets within each row group
+// Conversion is done in-place
 template <int block_size>
 __global__ void decimal_sizes_to_offsets_kernel(device_2dspan<rowgroup_rows const> rg_bounds,
                                                 device_span<decimal_column_element_sizes> sizes)
@@ -1283,8 +1282,8 @@ __global__ void decimal_sizes_to_offsets_kernel(device_2dspan<rowgroup_rows cons
   auto const elem_sizes      = col_elem_sizes.sizes.data() + row_group.begin;
 
   uint32_t initial_value = 0;
-  // do a series of block sums, storing results in the array as we go
-  for (int pos = 0; pos < row_group.size(); pos += block_size) {
+  // Do a series of block sums, storing results in the array as we go
+  for (int64_t pos = 0; pos < row_group.size(); pos += block_size) {
     auto const tidx    = pos + t;
     auto tval          = tidx < row_group.size() ? elem_sizes[tidx] : 0u;
     uint32_t block_sum = 0;
@@ -1407,12 +1406,15 @@ void decimal_sizes_to_offsets(device_2dspan<rowgroup_rows const> rg_bounds,
                               rmm::cuda_stream_view stream)
 {
   if (rg_bounds.count() == 0) return;
+
+  // Convert map to a vector of views of the `elem_sizes` device buffers
   std::vector<decimal_column_element_sizes> h_sizes;
   h_sizes.reserve(elem_sizes.size());
   std::transform(elem_sizes.begin(), elem_sizes.end(), std::back_inserter(h_sizes), [](auto& p) {
     return decimal_column_element_sizes{p.first, p.second};
   });
 
+  // Copy the vector of views to the device so that we can pass it to the kernel
   auto d_sizes = cudf::detail::make_device_uvector_async<decimal_column_element_sizes>(
     h_sizes, stream, rmm::mr::get_current_device_resource());
 
