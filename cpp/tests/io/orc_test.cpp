@@ -1299,20 +1299,16 @@ TEST_F(OrcStatisticsTest, Overflow)
 
 TEST_F(OrcStatisticsTest, HasNull)
 {
-  // This test can now be implemented with libcudf; keeping the pyorc version to keep the test
+  // This test can now be implemented with libcudf; keeping the pandas version to keep the test
   // inputs diversified
   // Method to create file:
-  // >>> import pyorc
-  // >>> output = open("./temp.orc", "wb")
-  // >>> writer = pyorc.Writer(output, pyorc.Struct(a=pyorc.BigInt(), b=pyorc.BigInt()))
-  // >>> writer.write((1, 3))
-  // >>> writer.write((2, 4))
-  // >>> writer.write((None, 5))
-  // >>> writer.close()
+  // >>> import pandas as pd
+  // >>> df = pd.DataFrame({'a':pd.Series([1, 2, None], dtype="Int64"), 'b':[3, 4, 5]})
+  // >>> df.to_orc("temp.orc")
   //
   // Contents of file:
   // >>> import pyarrow.orc as po
-  // >>> po.ORCFile('new.orc').read()
+  // >>> po.ORCFile('temp.orc').read()
   // pyarrow.Table
   // a: int64
   // b: int64
