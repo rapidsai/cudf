@@ -29,8 +29,8 @@ RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}
 mkdir -p "${RAPIDS_TESTS_DIR}" "${RAPIDS_COVERAGE_DIR}"
 
 rapids-print-env
-ls ${CPP_CHANNEL}
-ls ${PYTHON_CHANNEL}
+
 rapids-mamba-retry install \
-  file://"${CPP_CHANNEL}"::libcudf* \
-  file://"${PYTHON_CHANNEL}"::cudf*
+  --channel "${CPP_CHANNEL}" \
+  --channel "${PYTHON_CHANNEL}" \
+  cudf libcudf
