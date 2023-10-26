@@ -99,14 +99,14 @@ files:
       key: pandas_tests
     includes:
       - test_python_pandas_cudf
-  py_test_xdf_cudf:
+  py_test_cudf_pandas:
     output: pyproject
     pyproject_dir: python/cudf
     extras:
       table: project.optional-dependencies
-      key: xdf_tests
+      key: cudf_pandas_tests
     includes:
-      - test_python_xdf_cudf
+      - test_python_cudf_pandas
   py_build_dask_cudf:
     output: pyproject
     pyproject_dir: python/dask_cudf
@@ -661,7 +661,7 @@ dependencies:
           - xlrd
           - xlsxwriter
           - zstandard
-  test_python_xdf_cudf:
+  test_python_cudf_pandas:
     common:
       - output_types: pyproject
         packages:
