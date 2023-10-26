@@ -58,10 +58,10 @@ namespace {
 
 template <bool has_nulls>
 struct row_lexicographic_tagged_comparator {
-  row_lexicographic_tagged_comparator(table_device_view lhs,
-                                      table_device_view rhs,
-                                      device_span<order const> column_order,
-                                      device_span<null_order const> null_precedence)
+  row_lexicographic_tagged_comparator(table_device_view const lhs,
+                                      table_device_view const rhs,
+                                      device_span<order const> const column_order,
+                                      device_span<null_order const> const null_precedence)
     : _lhs{lhs}, _rhs{rhs}, _column_order{column_order}, _null_precedence{null_precedence}
   {
     // Add check for types to be the same.
@@ -74,14 +74,8 @@ struct row_lexicographic_tagged_comparator {
     auto const [l_side, l_indx] = lhs_tagged_index;
     auto const [r_side, r_indx] = rhs_tagged_index;
 
-    // Not sure why `const_cast` is needed here
-    table_device_view* ptr_left_dview{l_side == side::LEFT
-                                        ? const_cast<cudf::table_device_view*>(&_lhs)
-                                        : const_cast<cudf::table_device_view*>(&_rhs)};
-    table_device_view* ptr_right_dview{r_side == side::LEFT
-                                         ? const_cast<cudf::table_device_view*>(&_lhs)
-                                         : const_cast<cudf::table_device_view*>(&_rhs)};
-
+    table_device_view const* ptr_left_dview{l_side == side::LEFT ? &_lhs : &_rhs};
+    table_device_view const* ptr_right_dview{r_side == side::LEFT ? &_lhs : &_rhs};
     auto comparator = [&]() {
       if (has_nulls) {
         return cudf::experimental::row::lexicographic::device_row_comparator<false, bool>{
@@ -98,10 +92,10 @@ struct row_lexicographic_tagged_comparator {
   }
 
  private:
-  table_device_view _lhs;
-  table_device_view _rhs;
-  device_span<null_order const> _null_precedence;
-  device_span<order const> _column_order;
+  table_device_view const _lhs;
+  table_device_view const _rhs;
+  device_span<null_order const> const _null_precedence;
+  device_span<order const> const _column_order;
 };
 
 using detail::side;
@@ -254,7 +248,7 @@ index_vector generate_merged_indices(table_view const& left_table,
     column_order, stream, rmm::mr::get_current_device_resource());
 
   if (has_nulls) {
-    auto new_null_precedence = [&]() {
+    auto const new_null_precedence = [&]() {
       if (null_precedence.size() > 0) {
         CUDF_EXPECTS(static_cast<size_type>(null_precedence.size()) == left_table.num_columns(),
                      "Null precedence vector size mismatched");
