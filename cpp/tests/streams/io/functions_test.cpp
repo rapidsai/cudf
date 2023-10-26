@@ -40,8 +40,8 @@ TEST_F(FunctionsTest, JSONreader)
                                            cudf::data_type{cudf::type_id::FLOAT64}})
       .lines(true)
       .legacy(true);
-  cudf::io::table_with_metadata result = cudf::io::read_json(
-    in_options, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
+  cudf::io::table_with_metadata result =
+    cudf::io::read_json(in_options, cudf::test::get_default_stream());
 }
 
 TEST_F(FunctionsTest, JSONwriter)
@@ -67,7 +67,5 @@ TEST_F(FunctionsTest, JSONwriter)
                            .lines(false)
                            .na_rep("null");
 
-  cudf::io::write_json(options_builder.build(),
-                       cudf::test::get_default_stream(),
-                       rmm::mr::get_current_device_resource());
+  cudf::io::write_json(options_builder.build(), cudf::test::get_default_stream());
 }
