@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "error.hpp"
 #include "reader_impl.hpp"
 
 #include <io/comp/nvcomp_adapter.hpp>
@@ -263,28 +264,20 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
 {
   size_t total_pages = 0;
 
+  kernel_error error_code(stream);
   chunks.host_to_device_async(stream);
-  DecodePageHeaders(chunks.device_ptr(), chunks.size(), stream);
+  DecodePageHeaders(chunks.device_ptr(), chunks.size(), error_code.data(), stream);
   chunks.device_to_host_sync(stream);
+
+  if (error_code.value() != 0) {
+    CUDF_FAIL("Parquet header parsing failed with code(s) " + error_code.str());
+  }
 
   for (size_t c = 0; c < chunks.size(); c++) {
     total_pages += chunks[c].num_data_pages + chunks[c].num_dict_pages;
   }
 
   return total_pages;
-}
-
-// see setupLocalPageInfo() in page_data.cu for supported page encodings
-constexpr bool is_supported_encoding(Encoding enc)
-{
-  switch (enc) {
-    case Encoding::PLAIN:
-    case Encoding::PLAIN_DICTIONARY:
-    case Encoding::RLE:
-    case Encoding::RLE_DICTIONARY:
-    case Encoding::DELTA_BINARY_PACKED: return true;
-    default: return false;
-  }
 }
 
 /**
@@ -307,8 +300,14 @@ int decode_page_headers(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks
     page_count += chunks[c].max_num_pages;
   }
 
+  kernel_error error_code(stream);
   chunks.host_to_device_async(stream);
-  DecodePageHeaders(chunks.device_ptr(), chunks.size(), stream);
+  DecodePageHeaders(chunks.device_ptr(), chunks.size(), error_code.data(), stream);
+
+  if (error_code.value() != 0) {
+    // TODO(ets): if an unsupported encoding was detected, do extra work to figure out which one
+    CUDF_FAIL("Parquet header parsing failed with code(s)" + error_code.str());
+  }
 
   // compute max bytes needed for level data
   auto level_bit_size =
@@ -318,22 +317,13 @@ int decode_page_headers(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks
         max(c.level_bits[level_type::REPETITION], c.level_bits[level_type::DEFINITION]));
     });
   // max level data bit size.
-  int const max_level_bits   = thrust::reduce(rmm::exec_policy(stream),
+  int const max_level_bits = thrust::reduce(rmm::exec_policy(stream),
                                             level_bit_size,
                                             level_bit_size + chunks.size(),
                                             0,
                                             thrust::maximum<int>());
-  auto const level_type_size = std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 
-  pages.device_to_host_sync(stream);
-
-  // validate page encodings
-  CUDF_EXPECTS(std::all_of(pages.begin(),
-                           pages.end(),
-                           [](auto const& page) { return is_supported_encoding(page.encoding); }),
-               "Unsupported page encoding detected");
-
-  return level_type_size;
+  return std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 }
 
 /**
@@ -771,6 +761,7 @@ void reader::impl::load_and_decompress_data()
 
   // decoding of column/page information
   _pass_itm_data->level_type_size = decode_page_headers(chunks, pages, _stream);
+  pages.device_to_host_sync(_stream);
   if (has_compressed_data) {
     decomp_page_data = decompress_page_data(chunks, pages, _stream);
     // Free compressed data
@@ -795,7 +786,6 @@ void reader::impl::load_and_decompress_data()
   // std::vector<output_column_info> output_info = build_output_column_info();
 
   // the following two allocate functions modify the page data
-  pages.device_to_host_sync(_stream);
   {
     // nesting information (sizes, etc) stored -per page-
     // note : even for flat schemas, we allocate 1 level of "nesting" info
