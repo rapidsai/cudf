@@ -249,9 +249,9 @@ class ModuleAcceleratorBase(
         This post-processing routine should be kept up to date with any
         requirements encoded by fast_slow_proxy.py
         """
-        mod.__dict__["_xdf_slow"] = slow_mod
+        mod.__dict__["_fsproxy_slow"] = slow_mod
         if fast_mod is not None:
-            mod.__dict__["_xdf_fast"] = fast_mod
+            mod.__dict__["_fsproxy_fast"] = fast_mod
         return mod
 
     @abstractmethod
@@ -277,8 +277,8 @@ class ModuleAcceleratorBase(
         In addition to the attributes of the slow module,
         the returned module must have the following attributes:
 
-        - '_xdf_slow': the corresponding slow module
-        - '_xdf_fast': the corresponding fast module
+        - '_fsproxy_slow': the corresponding slow module
+        - '_fsproxy_fast': the corresponding fast module
 
         This is necessary for correct rewriting of UDFs when calling
         to the respective fast/slow libraries.
@@ -433,17 +433,17 @@ class ModuleAccelerator(ModuleAcceleratorBase):
     def _populate_module(self, mod: ModuleType):
         mod_name = mod.__name__
 
-        # Here we attempt to import "_xdf_slow_lib.x.y.z", but
-        # "_xdf_slow_lib" does not exist anywhere as a real file, so
+        # Here we attempt to import "_fsproxy_slow_lib.x.y.z", but
+        # "_fsproxy_slow_lib" does not exist anywhere as a real file, so
         # how does this work?
         # The importer attempts to import ".z" by first importing
-        # "_xdf_slow_lib.x.y", this recurses until we find
-        # "_xdf_slow_lib.x" (say), which does exist because we set that up
+        # "_fsproxy_slow_lib.x.y", this recurses until we find
+        # "_fsproxy_slow_lib.x" (say), which does exist because we set that up
         # in __init__. Now the importer looks at the __path__
         # attribute of "x" and uses that to find the relative location
         # to look for "y". This __path__ points to the real location
         # of "slow_lib.x". So, as long as we rewire the _already imported_
-        # slow_lib modules in sys.modules to _xdf_slow_lib, when we
+        # slow_lib modules in sys.modules to _fsproxy_slow_lib, when we
         # get here this will find the right thing.
         # The above exposition is for lazily imported submodules (e.g.
         # avoiding circular imports by putting an import at function

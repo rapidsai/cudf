@@ -23,9 +23,9 @@ def ipython_magics_gpu_test():
     ip = InteractiveShell(config=c)
     ip.run_line_magic("load_ext", "cudf.pandas")
 
-    # Directly check for private xdf attribute
+    # Directly check for private proxy attribute
     ip.run_cell("import pandas as pd; s = pd.Series(range(5))")
-    result = ip.run_cell("assert hasattr(s, '_xdf_state')")
+    result = ip.run_cell("assert hasattr(s, '_fsproxy_state')")
     result.raise_error()
 
 
