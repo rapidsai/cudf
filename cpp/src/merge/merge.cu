@@ -64,8 +64,6 @@ struct row_lexicographic_tagged_comparator {
                                       device_span<null_order const> const null_precedence)
     : _lhs{lhs}, _rhs{rhs}, _column_order{column_order}, _null_precedence{null_precedence}
   {
-    // Add check for types to be the same.
-    CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
   }
 
   __device__ bool operator()(index_type lhs_tagged_index,
