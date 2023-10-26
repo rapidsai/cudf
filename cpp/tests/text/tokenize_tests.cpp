@@ -209,18 +209,15 @@ TEST_F(TextTokenizeTest, Vocabulary)
   auto vocab = nvtext::load_vocabulary(cudf::strings_column_view(vocabulary));
 
   auto validity = cudf::test::iterators::null_at(5);
-  //      the fox jumped over the dog the dog chased the catthe cat chased the mouse the mousé  ate
-  //      cheese
-  //     012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678
-
-  auto input      = cudf::test::strings_column_wrapper({" the fox jumped over the dog ",
-                                                        " the dog chased the cat",
-                                                        "",
-                                                        "the cat chased the mouse ",
-                                                        "the mousé  ate  cheese",
-                                                        "",
-                                                        "dog"},
+  auto input    = cudf::test::strings_column_wrapper({" the fox jumped over the dog ",
+                                                      " the dog chased the cat",
+                                                      "",
+                                                      "the cat chased the mouse ",
+                                                      "the mousé  ate  cheese",
+                                                      "",
+                                                      "dog"},
                                                   validity);
+
   auto input_view = cudf::strings_column_view(input);
   auto delimiter  = cudf::string_scalar(" ");
   auto default_id = -7;  // should be the token for the missing 'cat'
