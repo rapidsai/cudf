@@ -32,5 +32,5 @@ rapids-print-env
 ls ${CPP_CHANNEL}
 ls ${PYTHON_CHANNEL}
 rapids-mamba-retry install \
-  file://"${CPP_CHANNEL}"::libcudf \
-  file://"${PYTHON_CHANNEL}"::cudf
+  file://"${CPP_CHANNEL}"::libcudf* \
+  file://"${PYTHON_CHANNEL}"::cudf*
