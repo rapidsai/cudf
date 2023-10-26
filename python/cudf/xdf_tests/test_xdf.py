@@ -312,8 +312,7 @@ def test_shape(dataframe):
 def test_isnull():
     psr = pd.Series([1, 2, 3])
     sr = xpd.Series(psr)
-    # Test that invoking `Pandas` functions
-    # on a xdf DataFrame works.
+    # Test that invoking `Pandas` functions works.
     tm.assert_series_equal(pd.isnull(psr), xpd.isnull(sr))
 
 

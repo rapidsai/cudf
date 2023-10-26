@@ -10,7 +10,7 @@
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
 
-# Builds the pandas docs with xdf.
+# Builds the pandas docs with cudf.pandas.
 #
 # Usage:
 #   run-pandas-docs.sh

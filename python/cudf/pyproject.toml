@@ -137,7 +137,6 @@ known_rapids = [
 ]
 known_first_party = [
     "cudf",
-    "xdf",
 ]
 default_section = "THIRDPARTY"
 sections = [
