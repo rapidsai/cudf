@@ -123,28 +123,31 @@ std::unique_ptr<column> count_re(strings_column_view const& input,
 
 // external APIs
 
-std::unique_ptr<column> contains_re(strings_column_view const& strings,
+std::unique_ptr<column> contains_re(strings_column_view const& input,
                                     regex_program const& prog,
+                                    rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains_re(strings, prog, cudf::get_default_stream(), mr);
+  return detail::contains_re(input, prog, stream, mr);
 }
 
-std::unique_ptr<column> matches_re(strings_column_view const& strings,
+std::unique_ptr<column> matches_re(strings_column_view const& input,
                                    regex_program const& prog,
+                                   rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::matches_re(strings, prog, cudf::get_default_stream(), mr);
+  return detail::matches_re(input, prog, stream, mr);
 }
 
-std::unique_ptr<column> count_re(strings_column_view const& strings,
+std::unique_ptr<column> count_re(strings_column_view const& input,
                                  regex_program const& prog,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_re(strings, prog, cudf::get_default_stream(), mr);
+  return detail::count_re(input, prog, stream, mr);
 }
 
 }  // namespace strings
