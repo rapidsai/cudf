@@ -523,11 +523,11 @@ struct EncPage {
   uint32_t num_nulls;              //!< Number of null values (V2 only) (down here for alignment)
   encode_kernel_mask kernel_mask;  //!< Mask used to control which encoding kernels to run
   // additions for SizeStatistics
-  uint32_t var_bytes_size;  //!< number of variable length bytes in the page (strings only)
   // FIXME(ets): these should probably be uint64_t
   uint32_t* def_histogram;  //!< histogram of counts for each definition level
   uint32_t* rep_histogram;  //!< histogram of counts for each repetition level
-                            //!< histograms should be sized as max(level) + 1
+  //!< histograms should be sized as max(level) + 1
+  uint32_t var_bytes_size;  //!< number of variable length bytes in the page (strings only)
 };
 
 /**

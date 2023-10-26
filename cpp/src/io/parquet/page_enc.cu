@@ -652,6 +652,14 @@ __global__ void __launch_bounds__(128)
         __syncwarp();
         if (t == 0) {
           if (not pages.empty()) {
+            // set encoding
+            if (is_use_delta) {
+              page_g.kernel_mask = encode_kernel_mask::DELTA_BINARY;
+            } else if (ck_g.use_dictionary || physical_type == BOOLEAN) {
+              page_g.kernel_mask = encode_kernel_mask::DICTIONARY;
+            } else {
+              page_g.kernel_mask = encode_kernel_mask::PLAIN;
+            }
             // need space for the chunk histograms plus data page histograms
             auto const num_histograms = num_pages - (ck_g.use_dictionary ? 1 : 0);
             if (ck_g.def_histogram_data != nullptr && col_g.max_def_level > 0) {
@@ -661,13 +669,6 @@ __global__ void __launch_bounds__(128)
             if (ck_g.rep_histogram_data != nullptr && col_g.max_rep_level > 0) {
               page_g.rep_histogram =
                 ck_g.rep_histogram_data + num_histograms * (col_g.max_rep_level + 1);
-            }
-            if (is_use_delta) {
-              page_g.kernel_mask = encode_kernel_mask::DELTA_BINARY;
-            } else if (ck_g.use_dictionary || physical_type == BOOLEAN) {
-              page_g.kernel_mask = encode_kernel_mask::DICTIONARY;
-            } else {
-              page_g.kernel_mask = encode_kernel_mask::PLAIN;
             }
             pages[ck_g.first_page + num_pages] = page_g;
           }
