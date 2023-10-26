@@ -295,15 +295,6 @@ DatetimeTZDtype = make_final_proxy_type(
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
 
-Timestamp = make_final_proxy_type(
-    "Timestamp",
-    _Unusable,
-    pd.Timestamp,
-    fast_to_slow=_Unusable(),
-    slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
-)
-
 TimedeltaIndex = make_final_proxy_type(
     "TimedeltaIndex",
     cudf.TimedeltaIndex,
@@ -320,15 +311,6 @@ TimedeltaArray = make_final_proxy_type(
     pd.arrays.TimedeltaArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-)
-
-Timedelta = make_final_proxy_type(
-    "Timedelta",
-    _Unusable,
-    pd.Timedelta,
-    fast_to_slow=_Unusable(),
-    slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
 
 PeriodIndex = make_final_proxy_type(

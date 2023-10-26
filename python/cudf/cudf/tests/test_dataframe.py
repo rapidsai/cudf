@@ -4767,6 +4767,18 @@ def test_isin_dataframe(data, values):
         assert_eq(got, expected)
 
 
+def test_isin_axis_duplicated_error():
+    df = cudf.DataFrame(range(2))
+    with pytest.raises(ValueError):
+        df.isin(cudf.Series(range(2), index=[1, 1]))
+
+    with pytest.raises(ValueError):
+        df.isin(cudf.DataFrame(range(2), index=[1, 1]))
+
+    with pytest.raises(ValueError):
+        df.isin(cudf.DataFrame([[1, 2]], columns=[1, 1]))
+
+
 def test_constructor_properties():
     df = cudf.DataFrame()
     key1 = "a"
@@ -10647,3 +10659,56 @@ def test_dataframe_contains(name, contains, other_names):
         assert (contains in gdf) == expectation
 
     assert (contains in pdf) == (contains in gdf)
+
+
+def test_dataframe_series_dot():
+    pser = pd.Series(range(2))
+    gser = cudf.from_pandas(pser)
+
+    expected = pser @ pser
+    actual = gser @ gser
+
+    assert_eq(expected, actual)
+
+    pdf = pd.DataFrame([[1, 2], [3, 4]], columns=list("ab"))
+    gdf = cudf.from_pandas(pdf)
+
+    expected = pser @ pdf
+    actual = gser @ gdf
+
+    assert_eq(expected, actual)
+
+    assert_exceptions_equal(
+        lfunc=pdf.dot,
+        rfunc=gdf.dot,
+        lfunc_args_and_kwargs=([pser], {}),
+        rfunc_args_and_kwargs=([gser], {}),
+    )
+
+    assert_exceptions_equal(
+        lfunc=pdf.dot,
+        rfunc=gdf.dot,
+        lfunc_args_and_kwargs=([pdf], {}),
+        rfunc_args_and_kwargs=([gdf], {}),
+    )
+
+    pser = pd.Series(range(2), index=["a", "k"])
+    gser = cudf.from_pandas(pser)
+
+    pdf = pd.DataFrame([[1, 2], [3, 4]], columns=list("ab"), index=["a", "k"])
+    gdf = cudf.from_pandas(pdf)
+
+    expected = pser @ pdf
+    actual = gser @ gdf
+
+    assert_eq(expected, actual)
+
+    actual = gdf @ [2, 3]
+    expected = pdf @ [2, 3]
+
+    assert_eq(expected, actual)
+
+    actual = pser @ [12, 13]
+    expected = gser @ [12, 13]
+
+    assert_eq(expected, actual)

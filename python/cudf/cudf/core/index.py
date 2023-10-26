@@ -34,9 +34,11 @@ from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_categorical_dtype,
     is_dtype_equal,
+    is_integer,
     is_interval_dtype,
     is_list_like,
     is_scalar,
+    is_signed_integer_dtype,
     is_string_dtype,
 )
 from cudf.core._base_index import BaseIndex
@@ -190,6 +192,8 @@ class RangeIndex(BaseIndex, BinaryOperand):
             raise ValueError("Step must not be zero.")
         if not cudf.api.types.is_hashable(name):
             raise ValueError("Name must be a hashable value.")
+        if dtype is not None and not is_signed_integer_dtype(dtype):
+            raise ValueError(f"{dtype=} must be a signed integer type")
 
         if isinstance(start, range):
             therange = start
@@ -198,9 +202,24 @@ class RangeIndex(BaseIndex, BinaryOperand):
             step = therange.step
         if stop is None:
             start, stop = 0, start
+        if not is_integer(start):
+            raise TypeError(
+                f"start must be an integer, not {type(start).__name__}"
+            )
         self._start = int(start)
+        if not is_integer(stop):
+            raise TypeError(
+                f"stop must be an integer, not {type(stop).__name__}"
+            )
         self._stop = int(stop)
-        self._step = int(step) if step is not None else 1
+        if step is not None:
+            if not is_integer(step):
+                raise TypeError(
+                    f"step must be an integer, not {type(step).__name__}"
+                )
+            self._step = int(step)
+        else:
+            self._step = 1
         self._index = None
         self._name = name
         self._range = range(self._start, self._stop, self._step)
