@@ -31,5 +31,5 @@ mkdir -p "${RAPIDS_TESTS_DIR}" "${RAPIDS_COVERAGE_DIR}"
 rapids-print-env
 
 rapids-mamba-retry install \
-  file:///"${CPP_CHANNEL}"::libcudf \
-  file:///"${PYTHON_CHANNEL}"::cudf
+  file://"${CPP_CHANNEL}"::libcudf \
+  file://"${PYTHON_CHANNEL}"::cudf
