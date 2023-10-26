@@ -46,6 +46,8 @@ inline __device__ void put_zz128(uint8_t*& p, zigzag128_t v)
 // too much shared memory.
 // The parquet spec requires block_size to be a multiple of 128, and values_per_mini_block
 // to be a multiple of 32.
+// TODO: if these are ever made configurable, be sure to fix the page size calculation in
+// delta_data_len() (page_enc.cu).
 constexpr int block_size            = 128;
 constexpr int num_mini_blocks       = 4;
 constexpr int values_per_mini_block = block_size / num_mini_blocks;
