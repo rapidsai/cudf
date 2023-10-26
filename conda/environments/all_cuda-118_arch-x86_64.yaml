@@ -69,7 +69,7 @@ dependencies:
 - protobuf>=4.21,<5
 - ptxcompiler
 - pyarrow==12.0.1.*
-- pydata-sphinx-theme
+- pydata-sphinx-theme!=0.14.2
 - pytest
 - pytest-benchmark
 - pytest-cases
