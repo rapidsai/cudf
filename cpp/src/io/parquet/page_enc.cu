@@ -399,7 +399,7 @@ __device__ size_t delta_data_len(Type physical_type, cudf::type_id type_id, uint
   // each encoded value can be at most sizeof(type) * 8 + 1 bits
   auto const max_bits = dtype_len * 8 + 1;
   // each data block will then be max_bits * values per block. vals_per_block is guaranteed to be
-  // divisible by 128 (via static assert on delta::block_size), but do save division anyway.
+  // divisible by 128 (via static assert on delta::block_size), but do safe division anyway.
   auto const bytes_per_block = cudf::util::div_rounding_up_unsafe(max_bits * vals_per_block, 8);
   auto const block_size      = mini_block_header_size + bytes_per_block;
 
