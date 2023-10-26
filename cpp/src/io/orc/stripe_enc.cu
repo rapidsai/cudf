@@ -1267,7 +1267,7 @@ struct decimal_column_element_sizes {
   device_span<uint32_t> sizes;
 };
 
-// Converts sizes of individual decimal elements to offfsets within each row group
+// Converts sizes of individual decimal elements to offsets within each row group
 // Conversion is done in-place
 template <int block_size>
 __global__ void decimal_sizes_to_offsets_kernel(device_2dspan<rowgroup_rows const> rg_bounds,
