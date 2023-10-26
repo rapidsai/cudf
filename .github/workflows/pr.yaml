@@ -100,7 +100,7 @@ jobs:
     with:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
-      script: ci/xdf_scripts/run_tests.sh
+      script: ci/cudf_pandas_scripts/run_tests.sh
   pandas-tests-main:
     # run the Pandas unit tests using main branch
     needs: wheel-build-cudf-main
@@ -109,7 +109,7 @@ jobs:
     with:
       matrix_filter: map(select(.ARCH == "amd64")) | max_by(.CUDA_VER) | [.]
       build_type: pull-request
-      script: ci/xdf_scripts/pandas-tests/run.sh main
+      script: ci/cudf_pandas_scripts/pandas-tests/run.sh main
   pandas-tests-pr:
     # run the Pandas unit tests using PR branch
     needs: wheel-build-cudf
@@ -118,7 +118,7 @@ jobs:
     with:
       matrix_filter: map(select(.ARCH == "amd64")) | max_by(.CUDA_VER) | [.]
       build_type: pull-request
-      script: ci/xdf_scripts/pandas-tests/run.sh pr
+      script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
   pandas-tests-diff:
     # diff the results of running the Pandas unit tests and publish a job summary
     needs: [pandas-tests-main, pandas-tests-xdf-pr]
@@ -128,7 +128,7 @@ jobs:
     with:
       node_type: cpu4
       build_type: pull-request
-      run_script: ci/xdf_scripts/pandas-tests/diff.sh
+      run_script: ci/cudf_pandas_scripts/pandas-tests/diff.sh
   pandas-tests-diff-comment:
     # Post comment of pass/fail rate on PR
     runs-on: ubuntu-latest
