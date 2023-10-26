@@ -80,7 +80,7 @@ class DeducedMode(NamedTuple):
     fast_lib: str
 
 
-def deduce_xdf_mode(slow_lib: str, fast_lib: str) -> DeducedMode:
+def deduce_cudf_pandas_mode(slow_lib: str, fast_lib: str) -> DeducedMode:
     """
     Determine if xdf should use the requested fast library.
 
@@ -598,7 +598,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
                     f"Destination module '{destination_module}' must match"
                     f"'{slow_lib}' for this to work."
                 )
-            mode = deduce_xdf_mode(slow_lib, fast_lib)
+            mode = deduce_cudf_pandas_mode(slow_lib, fast_lib)
             if mode.use_fast_lib:
                 importlib.import_module(
                     f".._wrappers.{mode.slow_lib}", __name__
