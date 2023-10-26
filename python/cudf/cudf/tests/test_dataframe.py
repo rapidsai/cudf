@@ -4767,6 +4767,18 @@ def test_isin_dataframe(data, values):
         assert_eq(got, expected)
 
 
+def test_isin_axis_duplicated_error():
+    df = cudf.DataFrame(range(2))
+    with pytest.raises(ValueError):
+        df.isin(cudf.Series(range(2), index=[1, 1]))
+
+    with pytest.raises(ValueError):
+        df.isin(cudf.DataFrame(range(2), index=[1, 1]))
+
+    with pytest.raises(ValueError):
+        df.isin(cudf.DataFrame([[1, 2]], columns=[1, 1]))
+
+
 def test_constructor_properties():
     df = cudf.DataFrame()
     key1 = "a"
