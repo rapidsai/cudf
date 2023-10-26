@@ -32,7 +32,7 @@ import pandas as xpd
 import pandas._testing as tm
 
 # Accelerated pandas has the real pandas module as an attribute
-pd = xpd._xdf_slow
+pd = xpd._fsproxy_slow
 
 
 @pytest.fixture
