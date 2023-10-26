@@ -121,7 +121,7 @@ jobs:
       script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
   pandas-tests-diff:
     # diff the results of running the Pandas unit tests and publish a job summary
-    needs: [pandas-tests-main, pandas-tests-xdf-pr]
+    needs: [pandas-tests-main, pandas-tests-pr]
     secrets: inherit
     # This branch exports a `job_output` output that the downstream job reads.
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@wence/fea/custom-job-output

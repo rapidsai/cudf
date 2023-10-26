@@ -399,8 +399,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
 
     # TODO: Add possibility for either an explicit allow-list of
     # libraries where the slow_lib should be wrapped, or, more likely
-    # a block-list that adds to the set of libraries where xdf is not
-    # interposed.
+    # a block-list that adds to the set of libraries where no proxying occurs.
     def __new__(
         cls,
         fast_lib,
