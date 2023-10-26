@@ -12,8 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os.path
+import importlib.resources
 
-with open(os.path.join(os.path.dirname(__file__), "VERSION")) as version_file:
-    __version__ = version_file.read().strip()
+__version__ = (
+    importlib.resources.files("custreamz")
+    .joinpath("VERSION")
+    .read_text()
+    .strip()
+)
 __git_commit__ = ""
