@@ -40,7 +40,7 @@ if [ "$no_cudf" = true ]; then
 else
     RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
     RAPIDS_PY_WHEEL_NAME="cudf_private_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
-    python -m pip install $(ls ./local-cudf-dep/cudf*.whl)[test,xdf_tests]
+    python -m pip install $(ls ./local-cudf-dep/cudf*.whl)[test,cudf_pandas_tests]
 fi
 
-python -m pytest -p cudf.pandas ./python/cudf/xdf_tests/
+python -m pytest -p cudf.pandas ./python/cudf/cudf_pandas_tests/
