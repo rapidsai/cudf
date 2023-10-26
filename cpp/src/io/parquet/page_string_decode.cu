@@ -745,10 +745,7 @@ __global__ void __launch_bounds__(decode_block_size)
   auto const offptr = reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out);
   block_excl_sum<decode_block_size>(offptr, value_count, s->page.str_offset);
 
-  if (t == 0 and s->error != 0) {
-    cuda::atomic_ref<int32_t, cuda::thread_scope_device> ref{*error_code};
-    ref.fetch_or(s->error, cuda::std::memory_order_relaxed);
-  }
+  if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
 }
 
 }  // anonymous namespace
