@@ -208,7 +208,7 @@ TEST_F(TextTokenizeTest, Vocabulary)
     {"ate", "chased", "cheese", "dog", "fox", "jumped", "mouse", "mousé", "over", "the"});
   auto vocab = nvtext::load_vocabulary(cudf::strings_column_view(vocabulary));
 
-  auto validity = cudf::test::iterators::null_at(1);
+  auto validity = cudf::test::iterators::null_at(4);
   cudf::test::strings_column_wrapper input({"the fox jumped over the dog",
                                             "the dog chased the cat",
                                             "the cat chased the mouse",

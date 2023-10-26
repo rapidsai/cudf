@@ -240,11 +240,18 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cython>=3.0.0
+          # TODO: Pin to numpy<1.25 until cudf requires pandas 2
+          - &numpy numpy>=1.21,<1.25
+      - output_types: [conda]
+        packages:
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
           - pyarrow==13.0.0.*
-          # TODO: Pin to numpy<1.25 until cudf requires pandas 2
-          - &numpy numpy>=1.21,<1.25
+      - output_types: [requirements, pyproject]
+        packages:
+          # Hard pin the patch version used during the build. This must be kept
+          # in sync with the version pinned in get_arrow.cmake.
+          - pyarrow==12.0.1.*
   build_python:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -265,10 +272,14 @@ dependencies:
           - libarrow==13.*
   pyarrow_run:
     common:
-      - output_types: [conda, requirements, pyproject]
+      - output_types: [conda]
         packages:
           # Allow runtime version to float up to minor version
           - pyarrow==13.*
+      - output_types: [requirements, pyproject]
+        packages:
+          # Allow runtime version to float up to minor version
+          - pyarrow==12.*
   cudatoolkit:
     specific:
       - output_types: conda
@@ -478,12 +489,12 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - dask==2023.9.2
-          - distributed==2023.9.2
+          - dask>=2023.9.2
+          - distributed>=2023.9.2
       - output_types: conda
         packages:
           - cupy>=12.0.0
-          - dask-core==2023.9.2  # dask-core in conda is the actual package & dask is the meta package
+          - dask-core>=2023.9.2  # dask-core in conda is the actual package & dask is the meta package
       - output_types: pyproject
         packages:
           - &cudf cudf==23.12.*

@@ -55,13 +55,13 @@ requirements:
     - cuda-version ={{ cuda_version }}
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
-    - protobuf ==4.21.*
+    - protobuf ==4.23.*
     - python
     - cython >=3.0.0
     - scikit-build >=0.13.1
     - setuptools
     - dlpack >=0.5,<0.6.0a0
-    - pyarrow ==12.0.1.*
+    - pyarrow ==13.0.0.*
     - libcudf ={{ version }}
     - rmm ={{ minor_version }}
     {% if cuda_major == "11" %}
@@ -82,7 +82,7 @@ requirements:
     - numba >=0.57,<0.58
     # TODO: Pin to numpy<1.25 until cudf requires pandas 2
     - numpy >=1.21,<1.25
-    - {{ pin_compatible('pyarrow', max_pin='x.x.x') }}
+    - {{ pin_compatible('pyarrow', max_pin='x') }}
     - libcudf ={{ version }}
     - {{ pin_compatible('rmm', max_pin='x.x') }}
     - fsspec >=0.6.0
