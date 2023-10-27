@@ -312,13 +312,12 @@ class Profiler:
                 "https://github.com/rapidsai/cudf/issues/new/choose"
                 "[/link]."
             )
-            if cpu_funcs:
-                console.print(
-                    _cpu_issue_text.format(
-                        cpu_functions_used=format_cpu_functions_used(cpu_funcs)
-                    )
+            console.print(
+                _cpu_issue_text.format(
+                    cpu_functions_used=format_cpu_functions_used(cpu_funcs)
                 )
-                console.print(call_to_action)
+            )
+            console.print(call_to_action)
 
     def dump_stats(self, file_name):
         with open(file_name, "wb") as f:
