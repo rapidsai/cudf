@@ -62,14 +62,16 @@ function(find_libarrow_in_python_wheel PYARROW_VERSION)
   # to builds of GTest. Similarly, benchmarks will not work without updating GBench (and possibly
   # NVBench) builds. We are currently ignoring these limitations since we don't anticipate using
   # this feature except for building wheels.
-  EXECUTE_PROCESS (
-     COMMAND ${CMAKE_C_COMPILER} -print-file-name=libc.so.6
-      OUTPUT_VARIABLE GLIBC_EXECUTABLE
-      OUTPUT_STRIP_TRAILING_WHITESPACE)
-  EXECUTE_PROCESS (
-      COMMAND ${GLIBC_EXECUTABLE}
-      OUTPUT_VARIABLE GLIBC_OUTPUT
-      OUTPUT_STRIP_TRAILING_WHITESPACE)
+  EXECUTE_PROCESS(
+    COMMAND ${CMAKE_C_COMPILER} -print-file-name=libc.so.6
+    OUTPUT_VARIABLE GLIBC_EXECUTABLE
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  EXECUTE_PROCESS(
+    COMMAND ${GLIBC_EXECUTABLE}
+    OUTPUT_VARIABLE GLIBC_OUTPUT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
   STRING(REGEX MATCH "stable release version ([0-9]+\\.[0-9]+)" GLIBC_VERSION ${GLIBC_OUTPUT})
   STRING(REPLACE "stable release version " "" GLIBC_VERSION ${GLIBC_VERSION})
   STRING(REPLACE "." ";" GLIBC_VERSION_LIST ${GLIBC_VERSION})
