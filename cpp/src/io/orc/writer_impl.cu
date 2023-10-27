@@ -2052,7 +2052,7 @@ struct string_rows_less {
   __device__ bool operator()(size_type lhs_idx, size_type rhs_idx) const
   {
     auto const& col = cols[col_idx];
-    return col.element<string_view>(lhs_idx).compare(col.element<string_view>(rhs_idx)) < 0;
+    return col.element<string_view>(lhs_idx) < col.element<string_view>(rhs_idx);
   }
 };
 
