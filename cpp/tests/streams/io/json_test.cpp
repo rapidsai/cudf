@@ -28,10 +28,9 @@
 #include <string>
 #include <vector>
 
-class FunctionsTest : public cudf::test::BaseFixture {};
+class JSONTest : public cudf::test::BaseFixture {};
 
-//.dtypes(std::vector<cudf::data_type>{dtype<int32_t>(), dtype<double>()})
-TEST_F(FunctionsTest, JSONreader)
+TEST_F(JSONTest, JSONreader)
 {
   std::string data = "[1, 1.1]\n[2, 2.2]\n[3, 3.3]\n";
   cudf::io::json_reader_options in_options =
@@ -44,7 +43,7 @@ TEST_F(FunctionsTest, JSONreader)
     cudf::io::read_json(in_options, cudf::test::get_default_stream());
 }
 
-TEST_F(FunctionsTest, JSONwriter)
+TEST_F(JSONTest, JSONwriter)
 {
   cudf::test::strings_column_wrapper col1{"a", "b", "c"};
   cudf::test::strings_column_wrapper col2{"d", "e", "f"};
@@ -54,10 +53,6 @@ TEST_F(FunctionsTest, JSONwriter)
                                                        cudf::test::iterators::nulls_at({0, 2})};
   cudf::table_view tbl_view{{col1, col2, col3, col4, col5}};
   cudf::io::table_metadata mt{{{"col1"}, {"col2"}, {"int"}, {"float"}, {"int16"}}};
-  /*
-  cudf::table_view tbl_view{{col1}};
-  cudf::io::table_metadata mt{{{"col1"}}};
-  */
 
   std::vector<char> out_buffer;
   auto destination     = cudf::io::sink_info(&out_buffer);
