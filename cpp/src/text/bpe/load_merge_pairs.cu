@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <text/subword/bpe_tokenizer.cuh>
+#include <text/bpe/byte_pair_encoding.cuh>
 
-#include <nvtext/bpe_tokenize.hpp>
+#include <nvtext/byte_pair_encoding.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
