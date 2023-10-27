@@ -641,8 +641,10 @@ ConfigureTest(
   streams/strings/contains_test.cpp
   streams/strings/convert_test.cpp
   streams/strings/extract_test.cpp
+  streams/strings/filter_test.cpp
   streams/strings/find_test.cpp
   streams/strings/replace_test.cpp
+  streams/strings/reverse_test.cpp
   streams/strings/split_test.cpp
   streams/strings/strings_tests.cpp
   STREAM_MODE
