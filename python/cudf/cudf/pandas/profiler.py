@@ -310,7 +310,7 @@ class Profiler:
 functions, please file a Github issue here: \
 [link=https://github.com/rapidsai/cudf/issues/new?assignees=&labels=\
 %3F+-+Needs+Triage%2C+feature+request&projects=&template=\
-profiler_cpu_request.md&title=%5BFEA%5D]https://github.com/rapidsai/cudf/issues/new[/link]\n"
+pandas_function_request.md&title=%5BFEA%5D]https://github.com/rapidsai/cudf/issues/new[/link]\n"
             console.print(call_to_action)
 
     def dump_stats(self, file_name):
