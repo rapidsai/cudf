@@ -10,7 +10,7 @@
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
 
-# Run Pandas unit tests with xdf.
+# Run Pandas unit tests with cudf.pandas.
 #
 # Usage:
 #   run-pandas-tests.sh <pytest args> <path to pandas tests (optional)>

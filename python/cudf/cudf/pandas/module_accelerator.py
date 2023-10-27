@@ -80,9 +80,9 @@ class DeducedMode(NamedTuple):
     fast_lib: str
 
 
-def deduce_xdf_mode(slow_lib: str, fast_lib: str) -> DeducedMode:
+def deduce_cudf_pandas_mode(slow_lib: str, fast_lib: str) -> DeducedMode:
     """
-    Determine if xdf should use the requested fast library.
+    Determine if cudf.pandas should use the requested fast library.
 
     Parameters
     ----------
@@ -122,7 +122,7 @@ class ModuleAcceleratorBase(
 
     # When walking the module tree and wrapping module attributes,
     # we often will come across the same object more than once. We
-    # don't want to create separate xdf wrappers for each
+    # don't want to create separate wrappers for each
     # instance, so we keep a registry of all module attributes
     # that we can look up to see if we have already wrapped an
     # attribute before
@@ -157,7 +157,7 @@ class ModuleAcceleratorBase(
 
         # When walking the module tree and wrapping module attributes,
         # we often will come across the same object more than once. We
-        # don't want to create separate xdf wrappers for each
+        # don't want to create separate wrappers for each
         # instance, so we keep a registry of all module attributes
         # that we can look up to see if we have already wrapped an
         # attribute before
@@ -242,7 +242,7 @@ class ModuleAcceleratorBase(
         Notes
         -----
         The implementation of fast-slow proxies imposes certain
-        requirements on the wrapped modules that xdf delivers. This
+        requirements on the wrapped modules that it delivers. This
         function encodes those requirements and raises if the module
         does not satisfy them.
 
@@ -395,12 +395,11 @@ class ModuleAccelerator(ModuleAcceleratorBase):
     _denylist: List[str]
     _use_fast_lib: bool
     _use_fast_lib_lock: threading.RLock
-    _module_cache_prefix: str = "_xdf_"
+    _module_cache_prefix: str = "_slow_lib_"
 
     # TODO: Add possibility for either an explicit allow-list of
     # libraries where the slow_lib should be wrapped, or, more likely
-    # a block-list that adds to the set of libraries where xdf is not
-    # interposed.
+    # a block-list that adds to the set of libraries where no proxying occurs.
     def __new__(
         cls,
         fast_lib,
@@ -598,7 +597,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
                     f"Destination module '{destination_module}' must match"
                     f"'{slow_lib}' for this to work."
                 )
-            mode = deduce_xdf_mode(slow_lib, fast_lib)
+            mode = deduce_cudf_pandas_mode(slow_lib, fast_lib)
             if mode.use_fast_lib:
                 importlib.import_module(
                     f".._wrappers.{mode.slow_lib}", __name__
