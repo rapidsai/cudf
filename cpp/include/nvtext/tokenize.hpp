@@ -49,7 +49,7 @@ namespace nvtext {
  *
  * All null row entries are ignored and the output contains all valid rows.
  *
- * @param input Strings column tokenize
+ * @param input Strings column to tokenize
  * @param delimiter UTF-8 characters used to separate each string into tokens.
  *                  The default of empty string will separate tokens using whitespace.
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -116,7 +116,7 @@ std::unique_ptr<cudf::column> tokenize(
  * All null row entries are ignored and the output contains all valid rows.
  * The number of tokens for a null element is set to 0 in the output column.
  *
- * @param input Strings column to use for this operation
+ * @param input Strings column to count tokens
  * @param delimiter Strings used to separate each string into tokens.
  *                  The default of empty string will separate tokens using whitespace.
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -149,7 +149,7 @@ std::unique_ptr<cudf::column> count_tokens(
  *
  * @throw cudf::logic_error if the delimiters column is empty or contains nulls
  *
- * @param input Strings column to use for this operation
+ * @param input Strings column to count tokens
  * @param delimiters Strings used to separate each string into tokens
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
