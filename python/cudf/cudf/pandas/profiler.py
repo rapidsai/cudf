@@ -309,7 +309,7 @@ class Profiler:
                 "[link=https://github.com/rapidsai/cudf/issues/new?assignees"
                 "=&labels=%3F+-+Needs+Triage%2C+feature+request&projects="
                 "&template=pandas_function_request.md&title=%5BFEA%5D]"
-                "https://github.com/rapidsai/cudf/issues/new"
+                "https://github.com/rapidsai/cudf/issues/new/choose"
                 "[/link]."
             )
             if cpu_funcs:
