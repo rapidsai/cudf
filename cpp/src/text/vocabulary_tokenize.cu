@@ -364,7 +364,7 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
 
   auto const output_type = cudf::data_type{cudf::type_to_id<cudf::size_type>()};
-  if (input.is_empty()) { return cudf::make_empty_column(output_type); }
+  if (input.size() == input.null_count()) { return cudf::make_empty_column(output_type); }
 
   // count the tokens per string and build the offsets from the counts
   auto const d_strings   = cudf::column_device_view::create(input.parent(), stream);
