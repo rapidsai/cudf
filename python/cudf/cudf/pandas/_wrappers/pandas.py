@@ -36,6 +36,14 @@ from .common import (
     custom_iter,
 )
 
+from pandas.io.sas.sas7bdat import (  # isort: skip
+    SAS7BDATReader as pd_SAS7BDATReader,
+)
+from pandas.io.sas.sas_xport import (  # isort: skip
+    XportReader as pd_XportReader,
+)
+
+
 # TODO(pandas2.1): Can import from pandas.api.typing
 from pandas.core.resample import (  # isort: skip
     Resampler as pd_Resampler,
@@ -834,6 +842,15 @@ _JsonReader = make_intermediate_proxy_type(
 _TextFileReader = make_intermediate_proxy_type(
     "_TextFileReader", _Unusable, pd.io.parsers.readers.TextFileReader
 )
+
+_XportReader = make_intermediate_proxy_type(
+    "_XportReader", _Unusable, pd_XportReader
+)
+
+_SAS7BDATReader = make_intermediate_proxy_type(
+    "_SAS7BDATReader", _Unusable, pd_SAS7BDATReader
+)
+
 
 FY5253 = make_final_proxy_type(
     "FY5253",

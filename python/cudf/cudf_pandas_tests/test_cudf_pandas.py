@@ -13,6 +13,7 @@ import collections
 import copy
 import datetime
 import operator
+import pathlib
 import pickle
 import tempfile
 import types
@@ -1200,3 +1201,11 @@ def test_multiindex_values_returns_1d_tuples():
     expected = np.empty(2, dtype=object)
     expected[...] = [(1, 2), (3, 4)]
     tm.assert_equal(result, expected)
+
+
+def test_read_sas_context():
+    cudf_path = pathlib.Path(__file__).parent.parent
+    path = cudf_path / "cudf" / "tests" / "data" / "sas" / "cars.sas7bdat"
+    with xpd.read_sas(path, format="sas7bdat", iterator=True) as reader:
+        df = reader.read()
+    assert isinstance(df, xpd.DataFrame)
