@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <nvtext/bpe_tokenize.hpp>
+#include <nvtext/byte_pair_encoding.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
