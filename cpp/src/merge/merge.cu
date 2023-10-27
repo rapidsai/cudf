@@ -36,6 +36,8 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <limits>
+#include <numeric>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -74,8 +76,8 @@ struct row_lexicographic_tagged_comparator {
 
     table_device_view const* ptr_left_dview{l_side == side::LEFT ? &_lhs : &_rhs};
     table_device_view const* ptr_right_dview{r_side == side::LEFT ? &_lhs : &_rhs};
-    auto comparator = [&]() {
-      if (has_nulls) {
+    auto const comparator = [&]() {
+      if constexpr (has_nulls) {
         return cudf::experimental::row::lexicographic::device_row_comparator<false, bool>{
           has_nulls, *ptr_left_dview, *ptr_right_dview, _column_order, _null_precedence};
       } else {
@@ -84,9 +86,7 @@ struct row_lexicographic_tagged_comparator {
       }
     }();
 
-    auto weak_order = comparator(l_indx, r_indx);
-
-    return weak_order == weak_ordering::LESS;
+    return comparator(l_indx, r_indx) == weak_ordering::LESS;
   }
 
  private:
@@ -638,6 +638,13 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
 
   CUDF_EXPECTS(key_cols.size() == column_order.size(),
                "Mismatched size between key_cols and column_order");
+  CUDF_EXPECTS(std::accumulate(tables_to_merge.cbegin(),
+                               tables_to_merge.cend(),
+                               cudf::size_type{0},
+                               [](auto const& running_sum, auto const& tbl) {
+                                 return running_sum + tbl.num_rows();
+                               }) <= std::numeric_limits<cudf::size_type>::max(),
+               "Total number of merged rows exceeds row limit");
 
   // This utility will ensure all corresponding dictionary columns have matching keys.
   // It will return any new dictionary columns created as well as updated table_views.
