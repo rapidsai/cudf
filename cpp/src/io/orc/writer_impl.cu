@@ -2059,6 +2059,7 @@ struct string_rows_less {
 // Build stripe dictionaries for string columns
 stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
                                        file_segmentation const& segmentation,
+                                       bool sort_dictionaries,
                                        rmm::cuda_stream_view stream)
 {
   std::vector<std::vector<rmm::device_uvector<gpu::slot_type>>> hash_maps_storage(
@@ -2161,41 +2162,47 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
     if (not sd.is_enabled) { continue; }
 
     sd.map_slots = {};
-    dict_order_owner.emplace_back(sd.entry_count, stream);
-    sd.data_order = dict_order_owner.back();
+    if (sort_dictionaries) {
+      dict_order_owner.emplace_back(sd.entry_count, stream);
+      sd.data_order = dict_order_owner.back();
+    } else {
+      sd.data_order = {};
+    }
   }
   stripe_dicts.host_to_device_async(stream);
 
   // Sort stripe dictionaries alphabetically
-  auto streams = cudf::detail::fork_streams(stream, std::min<size_t>(dict_order_owner.size(), 8));
-  auto stream_idx = 0;
-  for (auto& sd : dictionaries_flat) {
-    if (not sd.is_enabled) { continue; }
+  if (sort_dictionaries) {
+    auto streams = cudf::detail::fork_streams(stream, std::min<size_t>(dict_order_owner.size(), 8));
+    auto stream_idx = 0;
+    for (auto& sd : dictionaries_flat) {
+      if (not sd.is_enabled) { continue; }
 
-    auto const& current_stream = streams[stream_idx];
+      auto const& current_stream = streams[stream_idx];
 
-    // Sort the dictionary data and create a mapping from the sorted order to the original
-    thrust::sequence(
-      rmm::exec_policy_nosync(current_stream), sd.data_order.begin(), sd.data_order.end());
-    thrust::sort_by_key(rmm::exec_policy_nosync(current_stream),
-                        sd.data.begin(),
-                        sd.data.end(),
-                        sd.data_order.begin(),
-                        string_rows_less{orc_table.d_columns, sd.column_idx});
+      // Sort the dictionary data and create a mapping from the sorted order to the original
+      thrust::sequence(
+        rmm::exec_policy_nosync(current_stream), sd.data_order.begin(), sd.data_order.end());
+      thrust::sort_by_key(rmm::exec_policy_nosync(current_stream),
+                          sd.data.begin(),
+                          sd.data.end(),
+                          sd.data_order.begin(),
+                          string_rows_less{orc_table.d_columns, sd.column_idx});
 
-    // Create the inverse permutation - i.e. the mapping from the original order to the sorted
-    auto order_copy = cudf::detail::make_device_uvector_async<uint32_t>(
-      sd.data_order, current_stream, rmm::mr::get_current_device_resource());
-    thrust::scatter(rmm::exec_policy_nosync(current_stream),
-                    thrust::counting_iterator<uint32_t>(0),
-                    thrust::counting_iterator<uint32_t>(sd.data_order.size()),
-                    order_copy.begin(),
-                    sd.data_order.begin());
+      // Create the inverse permutation - i.e. the mapping from the original order to the sorted
+      auto order_copy = cudf::detail::make_device_uvector_async<uint32_t>(
+        sd.data_order, current_stream, rmm::mr::get_current_device_resource());
+      thrust::scatter(rmm::exec_policy_nosync(current_stream),
+                      thrust::counting_iterator<uint32_t>(0),
+                      thrust::counting_iterator<uint32_t>(sd.data_order.size()),
+                      order_copy.begin(),
+                      sd.data_order.begin());
 
-    stream_idx = (stream_idx + 1) % streams.size();
+      stream_idx = (stream_idx + 1) % streams.size();
+    }
+
+    cudf::detail::join_streams(streams, stream);
   }
-
-  cudf::detail::join_streams(streams, stream);
 
   return {std::move(stripe_dicts),
           std::move(dict_data_owner),
@@ -2212,6 +2219,7 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
  * @param max_stripe_size Maximum size of stripes in the output file
  * @param row_index_stride The row index stride
  * @param enable_dictionary Whether dictionary is enabled
+ * @param sort_dictionaries Whether to sort the dictionaries
  * @param compression_kind The compression kind
  * @param compression_blocksize The block size used for compression
  * @param stats_freq Column statistics granularity type for parquet/orc writers
@@ -2226,6 +2234,7 @@ auto convert_table_to_orc_data(table_view const& input,
                                stripe_size_limits max_stripe_size,
                                size_type row_index_stride,
                                bool enable_dictionary,
+                               bool sort_dictionaries,
                                CompressionKind compression_kind,
                                size_t compression_blocksize,
                                statistics_freq stats_freq,
@@ -2250,7 +2259,7 @@ auto convert_table_to_orc_data(table_view const& input,
   auto segmentation =
     calculate_segmentation(orc_table.columns, std::move(rowgroup_bounds), max_stripe_size);
 
-  auto stripe_dicts    = build_dictionaries(orc_table, segmentation, stream);
+  auto stripe_dicts    = build_dictionaries(orc_table, segmentation, sort_dictionaries, stream);
   auto dec_chunk_sizes = decimal_chunk_sizes(orc_table, segmentation, stream);
 
   auto const uncompressed_block_align = uncomp_block_alignment(compression_kind);
@@ -2384,6 +2393,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     _compression_blocksize(compression_block_size(_compression_kind)),
     _compression_statistics(options.get_compression_statistics()),
     _stats_freq(options.get_statistics_freq()),
+    _sort_dictionaries{options.get_enable_dictionary_sort()},
     _single_write_mode(mode),
     _kv_meta(options.get_key_value_metadata()),
     _out_sink(std::move(sink))
@@ -2405,6 +2415,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     _compression_blocksize(compression_block_size(_compression_kind)),
     _compression_statistics(options.get_compression_statistics()),
     _stats_freq(options.get_statistics_freq()),
+    _sort_dictionaries{options.get_enable_dictionary_sort()},
     _single_write_mode(mode),
     _kv_meta(options.get_key_value_metadata()),
     _out_sink(std::move(sink))
@@ -2452,6 +2463,7 @@ void writer::impl::write(table_view const& input)
                                        _max_stripe_size,
                                        _row_index_stride,
                                        _enable_dictionary,
+                                       _sort_dictionaries,
                                        _compression_kind,
                                        _compression_blocksize,
                                        _stats_freq,

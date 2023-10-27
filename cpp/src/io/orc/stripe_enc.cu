@@ -836,7 +836,11 @@ __global__ void __launch_bounds__(block_size)
               if (dict_idx > 0x7fff'ffffu) {
                 dict_idx = s->chunk.dict_index[dict_idx & 0x7fff'ffffu];
               }
-              s->vals.u32[nz_idx] = s->chunk.dict_data_order[dict_idx];
+              // translate dictionary index to sorted order, if enabled
+              if (s->chunk.dict_data_order != nullptr) {
+                dict_idx = s->chunk.dict_data_order[dict_idx];
+              }
+              s->vals.u32[nz_idx] = dict_idx;
             } else {
               string_view value                       = column.element<string_view>(row);
               s->u.strenc.str_data[s->buf.u32[t] - 1] = value.data();
