@@ -91,6 +91,8 @@ outputs:
     requirements:
       build:
         - cmake {{ cmake_version }}
+      host:
+        - libarrow {{ libarrow_version }}
       run:
         {% if cuda_major == "11" %}
         - cudatoolkit
@@ -103,7 +105,6 @@ outputs:
         - nvcomp {{ nvcomp_version }}
         - librmm ={{ minor_version }}
         - libkvikio ={{ minor_version }}
-        - libarrow {{ libarrow_version }}
         - dlpack {{ dlpack_version }}
         - gtest {{ gtest_version }}
         - gmock {{ gtest_version }}
