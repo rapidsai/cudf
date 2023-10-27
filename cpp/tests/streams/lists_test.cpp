@@ -25,6 +25,7 @@
 #include <cudf/lists/filling.hpp>
 #include <cudf/lists/gather.hpp>
 #include <cudf/lists/reverse.hpp>
+#include <cudf/lists/set_operations.hpp>
 #include <cudf/lists/sorting.hpp>
 #include <cudf/lists/stream_compaction.hpp>
 
@@ -165,4 +166,48 @@ TEST_F(ListTest, Distinct)
                         cudf::null_equality::EQUAL,
                         cudf::nan_equality::ALL_EQUAL,
                         cudf::test::get_default_stream());
+}
+
+TEST_F(ListTest, DifferenceDistinct)
+{
+  cudf::test::lists_column_wrapper<int> list_col_a{{0, 1}, {2, 3, 7, 8}, {4, 5}};
+  cudf::test::lists_column_wrapper<int> list_col_b{{0, 1}, {1, 3, 6, 8}, {5}};
+  cudf::lists::difference_distinct(list_col_a,
+                                   list_col_b,
+                                   cudf::null_equality::EQUAL,
+                                   cudf::nan_equality::ALL_EQUAL,
+                                   cudf::test::get_default_stream());
+}
+
+TEST_F(ListTest, IntersectDistinct)
+{
+  cudf::test::lists_column_wrapper<int> list_col_a{{0, 1}, {2, 3, 7, 8}, {4, 5}};
+  cudf::test::lists_column_wrapper<int> list_col_b{{0, 1}, {1, 3, 6, 8}, {5}};
+  cudf::lists::intersect_distinct(list_col_a,
+                                  list_col_b,
+                                  cudf::null_equality::EQUAL,
+                                  cudf::nan_equality::ALL_EQUAL,
+                                  cudf::test::get_default_stream());
+}
+
+TEST_F(ListTest, UnionDistinct)
+{
+  cudf::test::lists_column_wrapper<int> list_col_a{{0, 1}, {2, 3, 7, 8}, {4, 5}};
+  cudf::test::lists_column_wrapper<int> list_col_b{{0, 1}, {1, 3, 6, 8}, {5}};
+  cudf::lists::union_distinct(list_col_a,
+                              list_col_b,
+                              cudf::null_equality::EQUAL,
+                              cudf::nan_equality::ALL_EQUAL,
+                              cudf::test::get_default_stream());
+}
+
+TEST_F(ListTest, HaveOverlap)
+{
+  cudf::test::lists_column_wrapper<int> list_col_a{{0, 1}, {2, 3, 7, 8}, {4, 5}};
+  cudf::test::lists_column_wrapper<int> list_col_b{{0, 1}, {1, 3, 6, 8}, {5}};
+  cudf::lists::have_overlap(list_col_a,
+                            list_col_b,
+                            cudf::null_equality::EQUAL,
+                            cudf::nan_equality::ALL_EQUAL,
+                            cudf::test::get_default_stream());
 }
