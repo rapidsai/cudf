@@ -226,7 +226,9 @@ void write_json(json_writer_options const& options, rmm::mr::device_memory_resou
     mr);
 }
 
-table_with_metadata read_csv(csv_reader_options options, rmm::mr::device_memory_resource* mr)
+table_with_metadata read_csv(csv_reader_options options,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -241,12 +243,14 @@ table_with_metadata read_csv(csv_reader_options options, rmm::mr::device_memory_
   return cudf::io::detail::csv::read_csv(  //
     std::move(datasources[0]),
     options,
-    cudf::get_default_stream(),
+    stream,
     mr);
 }
 
 // Freeform API wraps the detail writer class API
-void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resource* mr)
+void write_csv(csv_writer_options const& options,
+               rmm::cuda_stream_view stream,
+               rmm::mr::device_memory_resource* mr)
 {
   using namespace cudf::io::detail;
 
@@ -258,7 +262,7 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
     options.get_table(),
     options.get_names(),
     options,
-    cudf::get_default_stream(),
+    stream,
     mr);
 }
 
