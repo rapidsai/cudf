@@ -13,15 +13,13 @@
 # Run Pandas unit tests with xdf.
 #
 # Usage:
-#   run-pandas-tests.sh --rewrite-imports|--transparent <pytest args> <path to pandas tests (optional)>
+#   run-pandas-tests.sh <pytest args> <path to pandas tests (optional)>
 #
 # Examples
-# Run a single test in rewrite-imports mode
-#   run-pandas-tests.sh --rewrite-imports -n auto -v tests/groupby/test_groupby_dropna.py
-# Run all tests rewriting imports
-#   run-pandas-tests.sh --rewrite-imports --tb=line --report-log=log.json
-# Run all tests in transparent mode
-#   run-pandas-tests.sh --transparent --tb=line --report-log=log.json
+# Run a single test
+#   run-pandas-tests.sh -n auto -v tests/groupby/test_groupby_dropna.py
+# Run all tests
+#   run-pandas-tests.sh --tb=line --report-log=log.json
 #
 # This script creates a `pandas-testing` directory if it doesn't exist
 
@@ -40,17 +38,6 @@ if [ ! -d "pandas" ]; then
 fi
 cd pandas && git clean -fdx && git checkout v$PANDAS_VERSION && cd ../
 
-
-XDF_MODE=${1}
-# Consume first argument
-shift
-
-if [ -f "pandas-tests/.xdf-run-mode" ]; then
-    LAST_RUN_MODE=$(<pandas-tests/.xdf-run-mode)
-    if [[ "${LAST_RUN_MODE}" != "${XDF_MODE}" ]]; then
-        rm -rf pandas-tests
-    fi
-fi
 
 if [ ! -d "pandas-tests" ]; then
     # Copy just the tests out of the Pandas source tree.
@@ -105,31 +92,22 @@ EOF
     done
 fi
 
-
-if [[ "${XDF_MODE}" == "--rewrite-imports" ]]; then
-    # Substitute `xdf` for `pandas` in the tests
-    find pandas-tests/ -iname "*.py" | xargs sed -i 's/import\ pandas/import\ cudf.pandas.pandas/g'
-    find pandas-tests/ -iname "*.py" | xargs sed -i 's/from\ pandas/from\ cudf.pandas.pandas/g'
-    find pandas-tests/ -iname "*.py" | xargs sed -i 's/cudf.pandas.pandas_dtype/pandas_dtype/g'
-
-    EXTRA_PYTEST_ARGS=""
-elif [[ "${XDF_MODE}" == "--transparent" ]]; then
-    EXTRA_PYTEST_ARGS="-p cudf.pandas"
-else
-    echo "Unknown XDF mode ${XDF_MODE}, expecting '--rewrite-imports' or '--transparent'"
-    exit 1
-fi
-
 # append the contents of patch-confest.py to conftest.py
 cat ../python/cudf/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftest.py
-
-echo -n "${XDF_MODE}" > pandas-tests/.xdf-run-mode
 
 # Run the tests
 cd pandas-tests/
 
 # TODO: Get a postgres & mysql container set up on the CI
-PANDAS_CI="1" python -m pytest -m "not single_cpu and not db" --durations=50 --import-mode=importlib -o xfail_strict=True ${PYTEST_IGNORES} ${EXTRA_PYTEST_ARGS} $@
+# test_overwrite_warns unsafely patchs over Series.mean affecting other tests when run in parallel
+# test_complex_series_frame_alignment randomly selects a DataFrames and axis to test but particular random selection(s) always fails
+PANDAS_CI="1" python -m pytest -p cudf.pandas \
+    -m "not single_cpu and not db" \
+    -k "not test_overwrite_warns and not test_complex_series_frame_alignment" \
+    --durations=50 \
+    --import-mode=importlib \
+    -o xfail_strict=True \
+    ${PYTEST_IGNORES} $@
 
 mv *.json ..
 cd ..

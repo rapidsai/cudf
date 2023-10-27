@@ -934,7 +934,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     @property
     def is_unique(self) -> bool:
-        return self.distinct_count() == len(self)
+        return self.distinct_count(dropna=False) == len(self)
 
     @property
     def is_monotonic_increasing(self) -> bool:
@@ -1535,7 +1535,7 @@ def build_column(
 
     if _is_non_decimal_numeric_dtype(dtype):
         assert data is not None
-        return cudf.core.column.NumericalColumn(
+        col = cudf.core.column.NumericalColumn(
             data=data,
             dtype=dtype,
             mask=mask,
@@ -1543,6 +1543,8 @@ def build_column(
             offset=offset,
             null_count=null_count,
         )
+        return col
+
     if is_categorical_dtype(dtype):
         if not len(children) == 1:
             raise ValueError(
@@ -2423,8 +2425,15 @@ def as_column(
                         # since 'boolean' & 'pd.BooleanDtype' are not
                         # understood by np.dtype below.
                         dtype = "bool"
-                    np_type = np.dtype(dtype).type
-                    pa_type = np_to_pa_dtype(np.dtype(dtype))
+                    np_dtype = np.dtype(dtype)
+                    if np_dtype.kind in {"m", "M"}:
+                        unit = np.datetime_data(np_dtype)[0]
+                        if unit not in {"ns", "us", "ms", "s", "D"}:
+                            raise NotImplementedError(
+                                f"{dtype=} is not supported."
+                            )
+                    np_type = np_dtype.type
+                    pa_type = np_to_pa_dtype(np_dtype)
                 else:
                     # By default cudf constructs a 64-bit column. Setting
                     # the `default_*_bitwidth` to 32 will result in a 32-bit
@@ -2487,6 +2496,16 @@ def as_column(
                     raise MixedTypeError(
                         "Cannot create column with mixed types"
                     )
+
+                if (
+                    cudf.get_option("mode.pandas_compatible")
+                    and pa.types.is_integer(pyarrow_array.type)
+                    and pyarrow_array.null_count
+                ):
+                    pyarrow_array = pyarrow_array.cast("float64").fill_null(
+                        np.nan
+                    )
+
                 data = as_column(
                     pyarrow_array,
                     dtype=dtype,

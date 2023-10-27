@@ -120,6 +120,11 @@ class NumericalColumn(NumericalBaseColumn):
         ).any()
 
     def indices_of(self, value: ScalarLike) -> NumericalColumn:
+        if isinstance(value, (bool, np.bool_)) and self.dtype.kind != "b":
+            raise ValueError(
+                f"Cannot use a {type(value).__name__} to find an index of "
+                f"a {self.dtype} Index."
+            )
         if (
             value is not None
             and self.dtype.kind in {"c", "f"}
@@ -135,8 +140,8 @@ class NumericalColumn(NumericalBaseColumn):
             return super().indices_of(value)
 
     def has_nulls(self, include_nan=False):
-        return self.null_count != 0 or (
-            self.nan_count != 0 if include_nan else False
+        return bool(self.null_count != 0) or (
+            include_nan and bool(self.nan_count != 0)
         )
 
     def __setitem__(self, key: Any, value: Any):

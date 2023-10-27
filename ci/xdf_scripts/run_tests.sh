@@ -43,6 +43,4 @@ else
     python -m pip install $(ls ./local-cudf-dep/cudf*.whl)[test,xdf_tests]
 fi
 
-python -m pytest ./python/cudf/xdf_tests/
-
 python -m pytest -p cudf.pandas ./python/cudf/xdf_tests/

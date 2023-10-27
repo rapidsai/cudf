@@ -26,6 +26,7 @@ def get_total_and_passed(results):
     total_tests = total_failed + total_errored + total_passed
     return total_tests, total_passed
 
+
 main_json = sys.argv[1]
 pr_json = sys.argv[2]
 
@@ -43,28 +44,32 @@ pass_rate_change = abs(pr_passed - main_passed) / main_passed * 100
 rate_change_type = "a decrease" if pr_passed < main_passed else "an increase"
 
 comment = (
-    "Merging this PR would result in " +
-    f"{pr_passed}/{pr_total} ({passing_percentage:.2f}%) " +
-    "Pandas tests passing, " +
-    f"{rate_change_type} in the test pass rate by " +
-    f"{pass_rate_change:.2f}%."
+    "Merging this PR would result in "
+    f"{pr_passed}/{pr_total} ({passing_percentage:.2f}%) "
+    "Pandas tests passing, "
+    f"{rate_change_type} in the test pass rate by "
+    f"{pass_rate_change:.2f}%. "
+    f"Trunk stats: {main_passed}/{main_total}."
 )
+
 
 def emoji_passed(x):
     if x > 0:
-        return f'{x}✅'
+        return f"{x}✅"
     elif x < 0:
-        return f'{x}❌'
+        return f"{x}❌"
     else:
-        return f'{x}'
+        return f"{x}"
+
 
 def emoji_failed(x):
     if x > 0:
-        return f'{x}❌'
+        return f"{x}❌"
     elif x < 0:
-        return f'{x}✅'
+        return f"{x}✅"
     else:
-        return f'{x}'
+        return f"{x}"
+
 
 # convert pr_results to a pandas DataFrame and then a markdown table
 pr_df = pd.DataFrame.from_dict(pr_results, orient="index").sort_index()
@@ -81,7 +86,18 @@ diff_df["skipped_diff"] = diff_df["skipped_diff"].map(emoji_failed)
 df = pd.concat([pr_df, diff_df], axis=1)
 df = df.rename_axis("Test module")
 
-df = df.rename(columns={"total": "Total tests", "passed": "Passed tests", "failed": "Failed tests", "skipped": "Skipped tests", "total_diff": "Total delta", "passed_diff": "Passed delta", "failed_diff": "Failed delta", "skipped_diff": "Skipped delta"})
+df = df.rename(
+    columns={
+        "total": "Total tests",
+        "passed": "Passed tests",
+        "failed": "Failed tests",
+        "skipped": "Skipped tests",
+        "total_diff": "Total delta",
+        "passed_diff": "Passed delta",
+        "failed_diff": "Failed delta",
+        "skipped_diff": "Skipped delta",
+    }
+)
 df = df.sort_values(by=["Failed tests", "Skipped tests"], ascending=False)
 
 print(comment)

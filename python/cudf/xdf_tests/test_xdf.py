@@ -23,21 +23,16 @@ import pyarrow as pa
 import pytest
 from numba import NumbaDeprecationWarning
 
-from cudf.pandas import LOADED
+from cudf.pandas import LOADED, Profiler
 
 if not LOADED:
-    import pandas as pd
+    raise ImportError("These tests must be run with cudf.pandas loaded")
 
-    import cudf.pandas.pandas as xpd
-    import cudf.pandas.pandas._testing as tm
-else:
-    import pandas as xpd
-    import pandas._testing as tm
+import pandas as xpd
+import pandas._testing as tm
 
-    # Transparent-provided pandas has the real pandas module as an attribute
-    pd = xpd._xdf_slow
-
-from cudf.pandas import Profiler
+# Accelerated pandas has the real pandas module as an attribute
+pd = xpd._fsproxy_slow
 
 
 @pytest.fixture
@@ -483,8 +478,8 @@ def test_profiler():
         df = xpd.DataFrame({"a": [1, 2, 3], "b": "b"})
         df.groupby("a").max()
 
-    assert len(p.get_stats) == 2
-    for line_no, line, gpu_time, cpu_time in p.get_stats:
+    assert len(p.per_line_stats) == 2
+    for line_no, line, gpu_time, cpu_time in p.per_line_stats:
         assert gpu_time
         assert not cpu_time
 
@@ -492,8 +487,8 @@ def test_profiler():
         s = xpd.Series([1, "a"])
         s = s + s
 
-    assert len(p.get_stats) == 2
-    for line_no, line, gpu_time, cpu_time in p.get_stats:
+    assert len(p.per_line_stats) == 2
+    for line_no, line, gpu_time, cpu_time in p.per_line_stats:
         assert cpu_time
 
 
@@ -520,11 +515,18 @@ def test_binop_array_series(series):
     tm.assert_series_equal(expect, got)
 
 
-def test_array_ufunc(series):
+def test_array_ufunc_reduction(series):
     psr, sr = series
     expect = np.ufunc.reduce(np.subtract, psr)
-    with pytest.warns(DeprecationWarning):
-        got = np.ufunc.reduce(np.subtract, sr)
+    got = np.ufunc.reduce(np.subtract, sr)
+    tm.assert_equal(expect, got)
+
+
+def test_array_ufunc(series):
+    psr, sr = series
+    expect = np.subtract(psr, psr)
+    got = np.subtract(sr, sr)
+    assert isinstance(got, sr.__class__)
     tm.assert_equal(expect, got)
 
 
@@ -658,7 +660,7 @@ def test_maintain_container_subclasses(multiindex):
     got = mi.names.difference(["b"])
     expect = pmi.names.difference(["b"])
     assert got == expect
-    assert isinstance(got, type(expect))
+    assert isinstance(got, xpd.core.indexes.frozen.FrozenList)
 
 
 def test_rolling_win_type():
@@ -1002,10 +1004,32 @@ def test_subclass_series():
         xpd.PeriodIndex,
         xpd.MultiIndex,
         xpd.IntervalIndex,
+        xpd.core.indexes.numeric.UInt64Index,
+        xpd.core.indexes.numeric.Int64Index,
+        xpd.core.indexes.numeric.Float64Index,
     ],
 )
 def test_index_subclass(index_type):
+    # test that proxy index types are derived
+    # from Index
     assert issubclass(index_type, xpd.Index)
+    assert not issubclass(xpd.Index, index_type)
+
+
+def test_index_internal_subclass():
+    # test that proxy index types that are not related by inheritance
+    # still appear to be so if the underlying slow types are related
+    # by inheritance:
+    assert issubclass(
+        xpd.core.indexes.numeric.Int64Index,
+        xpd.core.indexes.numeric.NumericIndex,
+    ) == issubclass(
+        pd.core.indexes.numeric.Int64Index,
+        pd.core.indexes.numeric.NumericIndex,
+    )
+    assert isinstance(
+        xpd.Index([1, 2, 3]), xpd.core.indexes.numeric.NumericIndex
+    ) == isinstance(pd.Index([1, 2, 3]), pd.core.indexes.numeric.NumericIndex)
 
 
 def test_np_array_of_timestamps():
@@ -1089,7 +1113,7 @@ def test_index_new():
     tm.assert_equal(expected, got)
 
 
-@pytest.mark.xfail(not LOADED, reason="Should not fail in transparent mode")
+@pytest.mark.xfail(not LOADED, reason="Should not fail in accelerated mode")
 def test_groupby_apply_callable_referencing_pandas(dataframe):
 
     pdf, df = dataframe
@@ -1130,6 +1154,12 @@ def test_pos():
     tm.assert_equal(xser, ser)
 
 
+def test_intermediates_are_proxied():
+    df = xpd.DataFrame({"a": [1, 2, 3]})
+    grouper = df.groupby("a")
+    assert isinstance(grouper, xpd.core.groupby.generic.DataFrameGroupBy)
+
+
 def test_from_dataframe():
     cudf = pytest.importorskip("cudf")
     from cudf.testing._utils import assert_eq
@@ -1147,3 +1177,11 @@ def test_from_dataframe():
 
     # pd_df = pd.DataFrame(data)
     # assert_eq(pd_df, pd.api.interchange.from_dataframe(xdf_df))
+
+
+def test_multiindex_values_returns_1d_tuples():
+    mi = xpd.MultiIndex.from_tuples([(1, 2), (3, 4)])
+    result = mi.values
+    expected = np.empty(2, dtype=object)
+    expected[...] = [(1, 2), (3, 4)]
+    tm.assert_equal(result, expected)

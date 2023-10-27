@@ -10,9 +10,11 @@
 # its affiliates is strictly prohibited.
 
 import inspect
+import operator
 import pickle
 import sys
 import time
+from collections import defaultdict
 from typing import Union
 
 from rich.console import Console
@@ -42,7 +44,7 @@ for (lineno, currfile, line), v in profiler._results.items():
     new_results[(lineno - 2, currfile, line)] = v
 
 profiler._results = new_results
-profiler.print_stats()
+profiler.print_per_line_stats()
 {function_profile_printer}
 """
 
@@ -50,8 +52,15 @@ _cpu_issue_text = """\
 This workflow could not be completed entirely on the GPU. \
 The following functions required CPU fallback:
 
-{cpu_functions}
+{cpu_functions_used}
 """
+
+
+def format_cpu_functions_used(cpu_funcs):
+    output_str = ""
+    for each in cpu_funcs:
+        output_str += f"- {each}\n"
+    return output_str
 
 
 def lines_with_profiling(lines, print_function_profile=False):
@@ -61,7 +70,7 @@ def lines_with_profiling(lines, print_function_profile=False):
     )
     return _profile_injection_text.format(
         original_lines=cleaned_lines,
-        function_profile_printer="profiler.print_per_func_stats()"
+        function_profile_printer="profiler.print_per_function_stats()"
         if print_function_profile
         else "",
     )
@@ -72,7 +81,11 @@ class Profiler:
 
     def __init__(self):
         self._results = {}
-        self._per_func_results = {}
+        # Map func-name to list of calls (was_fast, time)
+        self._per_func_results = defaultdict(lambda: defaultdict(list))
+        # Current fast_slow_function_call stack frame recording name
+        # and start time
+        self._call_stack = []
         self._currkey = None
         self._timer = {}
         self._currfile = None
@@ -119,8 +132,11 @@ class Profiler:
     ):
         if isinstance(func_obj, _MethodProxy):
             # Extract classname from method object
-            type_name = type(func_obj._xdf_wrapped.__self__).__name__
-            return ".".join([type_name, func_obj.__name__])
+            type_name = type(func_obj._fsproxy_wrapped.__self__).__name__
+            # Explicitly ask for __name__ on _fsproxy_wrapped to avoid
+            # getting a private attribute and forcing a slow-path copy
+            func_name = func_obj._fsproxy_wrapped.__name__
+            return ".".join([type_name, func_name])
         elif isinstance(func_obj, _FunctionProxy) or issubclass(
             func_obj, (_FinalProxy, _IntermediateProxy)
         ):
@@ -157,18 +173,12 @@ class Profiler:
                 and issubclass(func_obj, (_FinalProxy, _IntermediateProxy))
             ):
                 func_name = self.get_namespaced_function_name(func_obj)
-                func_values = self._per_func_results.setdefault(
-                    func_name, {"current": [], "finished": []}
-                )
-                func_values["current"].append(time.perf_counter())
+                self._call_stack.append((func_name, time.perf_counter()))
         elif (
             event == "return"
             and frame.f_code.co_name == "_fast_slow_function_call"
-            # if arg is None the event is caused by an exception which
-            # we should not try and handle
-            and arg is not None
         ):
-            if self._currkey is not None:
+            if self._currkey is not None and arg is not None:
                 if arg[1]:  # fast
                     run_time = time.perf_counter() - self._timer[self._currkey]
                     self._results[self._currkey][
@@ -193,19 +203,17 @@ class Profiler:
                 or isinstance(func_obj, type)
                 and issubclass(func_obj, (_FinalProxy, _IntermediateProxy))
             ):
-                func_name = self.get_namespaced_function_name(func_obj)
-                self._per_func_results[func_name]["finished"].append(
-                    (
-                        arg[1],
-                        time.perf_counter()
-                        - self._per_func_results[func_name]["current"].pop(),
+                func_name, start = self._call_stack.pop()
+                if arg is not None:
+                    key = "gpu" if arg[1] else "cpu"
+                    self._per_func_results[func_name][key].append(
+                        time.perf_counter() - start
                     )
-                )
 
         return self._tracefunc
 
     @property
-    def get_stats(self):
+    def per_line_stats(self):
         list_data = []
         for key, val in self._results.items():
             cpu_time = val.get("cpu_time", 0)
@@ -213,15 +221,19 @@ class Profiler:
             line_no, _, line = key
             list_data.append([line_no, line, gpu_time, cpu_time])
 
-        return list_data
+        return sorted(list_data, key=operator.itemgetter(0))
 
-    def print_stats(self):
+    @property
+    def per_function_stats(self):
+        return self._per_func_results
+
+    def print_per_line_stats(self):
         table = Table()
         table.add_column("Line no.")
         table.add_column("Line")
         table.add_column("GPU TIME(s)")
         table.add_column("CPU TIME(s)")
-        for line_no, line, gpu_time, cpu_time in self.get_stats:
+        for line_no, line, gpu_time, cpu_time in self.per_line_stats:
             table.add_row(
                 str(line_no),
                 Syntax(str(line), "python"),
@@ -237,22 +249,12 @@ class Profiler:
         console = Console()
         console.print(table)
 
-    def print_per_func_stats(self):
+    def print_per_function_stats(self):
         cpu_funcs = []
         n_gpu_func_calls = 0
         n_cpu_func_calls = 0
         total_gpu_time = 0
         total_cpu_time = 0
-
-        final_data = {}
-        for func_name, func_data in self._per_func_results.items():
-            final_data[func_name] = {"cpu": [], "gpu": []}
-
-            for is_gpu, runtime in func_data["finished"]:
-                key = "gpu" if is_gpu else "cpu"
-                final_data[func_name][key].append(runtime)
-                if key == "cpu" and func_name not in cpu_funcs:
-                    cpu_funcs.append(func_name)
 
         table = Table()
         for col in (
@@ -266,22 +268,25 @@ class Profiler:
         ):
             table.add_column(col)
 
-        for func_name, func_data in final_data.items():
+        for func_name, func_data in self.per_function_stats.items():
             gpu_times = func_data["gpu"]
             cpu_times = func_data["cpu"]
             table.add_row(
                 func_name,
                 f"{len(gpu_times)}",
-                f"{sum(gpu_times)}",
-                f"{sum(gpu_times) / max(len(gpu_times), 1)}",
+                f"{sum(gpu_times):.3f}",
+                f"{sum(gpu_times) / max(len(gpu_times), 1):.3f}",
                 f"{len(cpu_times)}",
-                f"{sum(cpu_times)}",
-                f"{sum(cpu_times) / max(len(cpu_times), 1)}",
+                f"{sum(cpu_times):.3f}",
+                f"{sum(cpu_times) / max(len(cpu_times), 1):.3f}",
             )
             total_gpu_time += sum(gpu_times)
             total_cpu_time += sum(cpu_times)
             n_gpu_func_calls += len(gpu_times)
             n_cpu_func_calls += len(cpu_times)
+
+            if cpu_times and func_name not in cpu_funcs:
+                cpu_funcs.append(func_name)
 
         time_elapsed = self.end_time - self.start_time
         table.title = f"""\n\
@@ -295,21 +300,24 @@ class Profiler:
         console.print(table)
 
         if cpu_funcs:
-            console.print(_cpu_issue_text.format(cpu_functions=cpu_funcs))
+            console.print(
+                _cpu_issue_text.format(
+                    cpu_functions_used=format_cpu_functions_used(cpu_funcs)
+                )
+            )
 
             call_to_action = "To request GPU support for any of these \
-functions, \
+functions, please file a Github issue here: \
 [link=https://github.com/rapidsai/cudf/issues/new?assignees=&labels=\
 %3F+-+Needs+Triage%2C+feature+request&projects=&template=\
-profiler_cpu_request.md&title=%5BFEA%5D]please file a Github issue[/link].\n"
+profiler_cpu_request.md&title=%5BFEA%5D]https://github.com/rapidsai/cudf/issues/new[/link]\n"
             console.print(call_to_action)
 
     def dump_stats(self, file_name):
-        pickle_file = open(file_name, "wb")
-        pickle.dump(self, pickle_file)
-        pickle_file.close()
+        with open(file_name, "wb") as f:
+            pickle.dump(self, f)
 
 
 def load_stats(file_name):
-    pickle_file = open(file_name, "rb")
-    return pickle.load(pickle_file)
+    with open(file_name, "rb") as f:
+        return pickle.load(f)

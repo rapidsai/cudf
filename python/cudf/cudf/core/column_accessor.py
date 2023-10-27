@@ -17,6 +17,7 @@ from typing import (
     Union,
 )
 
+import numpy as np
 import pandas as pd
 from packaging.version import Version
 from pandas.api.types import is_bool
@@ -95,6 +96,9 @@ class ColumnAccessor(abc.MutableMapping):
         Tuple containing names for each of the levels.
         For a non-hierarchical index, a tuple of size 1
         may be passe.
+    rangeindex : bool, optional
+        Whether the keys should be returned as a RangeIndex
+        in `to_pandas_index` (default=False).
     """
 
     _data: "Dict[Any, ColumnBase]"
@@ -106,7 +110,9 @@ class ColumnAccessor(abc.MutableMapping):
         data: Union[abc.MutableMapping, ColumnAccessor, None] = None,
         multiindex: bool = False,
         level_names=None,
+        rangeindex: bool = False,
     ):
+        self.rangeindex = rangeindex
         if data is None:
             data = {}
         # TODO: we should validate the keys of `data`
@@ -116,6 +122,7 @@ class ColumnAccessor(abc.MutableMapping):
             self._data = data._data
             self.multiindex = multiindex
             self._level_names = level_names
+            self.rangeindex = data.rangeindex
         else:
             # This code path is performance-critical for copies and should be
             # modified with care.
@@ -266,6 +273,25 @@ class ColumnAccessor(abc.MutableMapping):
                     ),
                 )
         else:
+            # Determine if we can return a RangeIndex
+            if self.rangeindex:
+                if not self.names:
+                    return pd.RangeIndex(
+                        start=0, stop=0, step=1, name=self.name
+                    )
+                elif cudf.api.types.infer_dtype(self.names) == "integer":
+                    if len(self.names) == 1:
+                        start = self.names[0]
+                        return pd.RangeIndex(
+                            start=start, stop=start + 1, step=1, name=self.name
+                        )
+                    uniques = np.unique(np.diff(np.array(self.names)))
+                    if len(uniques) == 1 and uniques[0] != 0:
+                        diff = uniques[0]
+                        new_range = range(
+                            self.names[0], self.names[-1] + diff, diff
+                        )
+                        return pd.RangeIndex(new_range, name=self.name)
             result = pd.Index(self.names, name=self.name, tupleize_cols=False)
         return result
 

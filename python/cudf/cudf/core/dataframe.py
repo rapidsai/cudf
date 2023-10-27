@@ -378,7 +378,11 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             elif self._frame.empty and isinstance(key[0], slice):
                 idx = None
             else:
-                idx = cudf.Index(key[0])
+                if is_scalar(key[0]):
+                    arr = [key[0]]
+                else:
+                    arr = key[0]
+                idx = cudf.Index(arr)
             if is_scalar(value):
                 length = len(idx) if idx is not None else 1
                 value = as_column(value, length=length)
@@ -682,8 +686,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 self._reindex(
                     column_names=columns, index=index, deep=False, inplace=True
                 )
+                if isinstance(
+                    columns, (range, pd.RangeIndex, cudf.RangeIndex)
+                ):
+                    self._data.rangeindex = True
             else:
                 self._data = data._data
+                self._data.rangeindex = True
         elif isinstance(data, (cudf.Series, pd.Series)):
             if isinstance(data, pd.Series):
                 data = cudf.Series.from_pandas(data, nan_as_null=nan_as_null)
@@ -717,6 +726,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             else:
                 self._index = as_index(index)
             if columns is not None:
+                rangeindex = isinstance(
+                    columns, (range, pd.RangeIndex, cudf.RangeIndex)
+                )
                 self._data = ColumnAccessor(
                     {
                         k: column.column_empty(
@@ -727,6 +739,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     level_names=tuple(columns.names)
                     if isinstance(columns, pd.Index)
                     else None,
+                    rangeindex=rangeindex,
                 )
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
@@ -769,8 +782,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 if len(data) > 0 and is_scalar(data[0]):
                     if columns is not None:
                         data = dict(zip(columns, [data]))
+                        rangeindex = isinstance(
+                            columns, (range, pd.RangeIndex, cudf.RangeIndex)
+                        )
                     else:
                         data = dict(enumerate([data]))
+                        rangeindex = True
                     new_df = DataFrame(data=data, index=index)
 
                     self._data = new_df._data
@@ -780,6 +797,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         if isinstance(columns, pd.Index)
                         else self._data._level_names
                     )
+                    self._data.rangeindex = rangeindex
                 elif len(data) > 0 and isinstance(data[0], Series):
                     self._init_from_series_list(
                         data=data, columns=columns, index=index
@@ -863,6 +881,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # Calculating the final dataframe columns by
             # getting union of all `index` of the Series objects.
             final_columns = _get_union_of_indices([d.index for d in data])
+            if isinstance(final_columns, cudf.RangeIndex):
+                self._data.rangeindex = True
 
             for idx, series in enumerate(data):
                 if not series.index.is_unique:
@@ -908,6 +928,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 else self._data._level_names
             )
             self._data = self._data.select_by_label(columns)
+            self._data.rangeindex = isinstance(
+                columns, (range, cudf.RangeIndex, pd.RangeIndex)
+            )
+        else:
+            self._data.rangeindex = True
 
     @_cudf_nvtx_annotate
     def _init_from_list_like(self, data, index=None, columns=None):
@@ -922,7 +947,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             data = DataFrame.from_pandas(pd.DataFrame(data))
             self._data = data._data
         # interval in a list
-        elif len(data) > 0 and isinstance(data[0], pd._libs.interval.Interval):
+        elif len(data) > 0 and isinstance(data[0], pd.Interval):
             data = DataFrame.from_pandas(pd.DataFrame(data))
             self._data = data._data
         elif any(
@@ -952,6 +977,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             for col_name, col in enumerate(data):
                 self._data[col_name] = column.as_column(col)
+            self._data.rangeindex = True
 
         if columns is not None:
             if len(columns) != len(data):
@@ -961,6 +987,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
 
             self.columns = columns
+            self._data.rangeindex = isinstance(
+                columns, (range, pd.RangeIndex, cudf.RangeIndex)
+            )
 
     @_cudf_nvtx_annotate
     def _init_from_dict_like(
@@ -2473,6 +2502,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @_cudf_nvtx_annotate
     def __iter__(self):
         return iter(self._column_names)
+
+    @_cudf_nvtx_annotate
+    def __contains__(self, item):
+        # This must check against containment in the pandas Index and not
+        # self._column_names to handle NA, None, nan, etc. correctly.
+        return item in self._data.to_pandas_index()
 
     @_cudf_nvtx_annotate
     def items(self):
@@ -5210,8 +5245,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             df = cls._from_data(data, index)
             df._data._level_names = tuple(dataframe.columns.names)
 
+            if isinstance(dataframe.columns, pd.RangeIndex):
+                df._data.rangeindex = True
             # Set columns only if it is a MultiIndex
-            if isinstance(dataframe.columns, pd.MultiIndex):
+            elif isinstance(dataframe.columns, pd.MultiIndex):
                 df.columns = dataframe.columns
 
             return df
@@ -5523,6 +5560,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
         if isinstance(columns, pd.Index):
             df._data._level_names = tuple(columns.names)
+        if isinstance(columns, (range, pd.RangeIndex, cudf.RangeIndex)):
+            df._data.rangeindex = True
 
         if index is None:
             df._index = RangeIndex(start=0, stop=len(data))
@@ -5779,6 +5818,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # precomputed variables inside the loop requires nontrivial logic.
             # This optimization could be attempted if `isin` ever becomes a
             # bottleneck.
+            if (
+                isinstance(values, (Series, DataFrame))
+                and not values.index.is_unique
+            ):
+                # if DataFrame ever supports duplicate columns
+                # would need to check that here
+                raise ValueError("cannot compute isin with a duplicate axis.")
             values = values.reindex(self.index)
             other_cols = (
                 values._data

@@ -188,6 +188,8 @@ class RangeIndex(BaseIndex, BinaryOperand):
     ):
         if step == 0:
             raise ValueError("Step must not be zero.")
+        if not cudf.api.types.is_hashable(name):
+            raise ValueError("Name must be a hashable value.")
 
         if isinstance(start, range):
             therange = start
@@ -930,8 +932,13 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self._try_reconstruct_range_index(result)
 
     def _indices_of(self, value) -> cudf.core.column.NumericalColumn:
+        if isinstance(value, (bool, np.bool_)):
+            raise ValueError(
+                f"Cannot use {type(value).__name__} to get an index of a "
+                f"{type(self).__name__}."
+            )
         try:
-            i = [range(self._start, self._stop, self._step).index(value)]
+            i = [self._range.index(value)]
         except ValueError:
             i = []
         return as_column(i, dtype=size_type_dtype)
@@ -1098,15 +1105,16 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     @classmethod
     @_cudf_nvtx_annotate
     def _concat(cls, objs):
-        if all(isinstance(obj, RangeIndex) for obj in objs):
-            result = _concat_range_index(objs)
+        non_empties = [index for index in objs if len(index)]
+        if all(isinstance(obj, RangeIndex) for obj in non_empties):
+            result = _concat_range_index(non_empties)
         else:
-            data = concat_columns([o._values for o in objs])
+            data = concat_columns([o._values for o in non_empties])
             result = as_index(data)
 
         names = {obj.name for obj in objs}
         if len(names) == 1:
-            [name] = names
+            name = names.pop()
         else:
             name = None
 
@@ -1550,19 +1558,18 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     def append(self, other):
         if is_list_like(other):
             to_concat = [self]
-            to_concat.extend(other)
+            for obj in other:
+                if not isinstance(obj, BaseIndex):
+                    raise TypeError("all inputs must be Index")
+                to_concat.append(obj)
         else:
             this = self
-            if len(other) == 0:
-                # short-circuit and return a copy
-                to_concat = [self]
-
             other = cudf.Index(other)
 
-            if len(self) == 0:
-                to_concat = [other]
-
-            if len(self) and len(other):
+            if len(this) == 0 or len(other) == 0:
+                # we'll filter out empties later in ._concat
+                to_concat = [this, other]
+            else:
                 if is_mixed_with_object_dtype(this, other):
                     got_dtype = (
                         other.dtype
@@ -1580,10 +1587,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                     if self.dtype != other.dtype:
                         this, other = numeric_normalize_types(self, other)
                 to_concat = [this, other]
-
-        for obj in to_concat:
-            if not isinstance(obj, BaseIndex):
-                raise TypeError("all inputs must be Index")
 
         return self._concat(to_concat)
 
@@ -3403,13 +3406,8 @@ def as_index(
         return cudf.MultiIndex.from_pandas(
             arbitrary.copy(deep=copy), nan_as_null=nan_as_null
         )
-    elif isinstance(arbitrary, cudf.DataFrame):
-        if dtype is not None:
-            raise TypeError(
-                "dtype must be `None` for inputs of type: "
-                f"{type(arbitrary).__name__}, found {dtype=} "
-            )
-        return cudf.MultiIndex.from_frame(arbitrary.copy(deep=copy))
+    elif isinstance(arbitrary, cudf.DataFrame) or is_scalar(arbitrary):
+        raise ValueError("Index data must be 1-dimensional and list-like")
     else:
         return as_index(
             column.as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null),
@@ -3490,11 +3488,6 @@ class Index(BaseIndex, metaclass=IndexMeta):
     >>> import cudf
     >>> cudf.Index([1, 2, 3], dtype="uint64", name="a")
     UInt64Index([1, 2, 3], dtype='uint64', name='a')
-
-    >>> cudf.Index(cudf.DataFrame({"a":[1, 2], "b":[2, 3]}))
-    MultiIndex([(1, 2),
-                (2, 3)],
-                names=['a', 'b'])
     """
 
     @_cudf_nvtx_annotate

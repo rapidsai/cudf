@@ -3185,6 +3185,14 @@ def test_binops_dot(df, other):
     utils.assert_eq(expected, got)
 
 
+def test_binop_dot_preserve_index():
+    ser = cudf.Series(range(2), index=["A", "B"])
+    df = cudf.DataFrame(np.eye(2), columns=["A", "B"])
+    result = ser @ df
+    expected = cudf.Series([0.0, 1.0], index=["A", "B"])
+    utils.assert_eq(result, expected)
+
+
 def test_binop_series_with_repeated_index():
     # GH: #11094
     psr1 = pd.Series([1, 1], index=["a", "a"])

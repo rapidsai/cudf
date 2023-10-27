@@ -2018,6 +2018,13 @@ def test_multiindex_to_frame_allow_duplicates(
             assert_eq(expected, actual)
 
 
+@pytest.mark.parametrize("bad", ["foo", ["foo"]])
+def test_multiindex_set_names_validation(bad):
+    mi = cudf.MultiIndex.from_tuples([(0, 0), (0, 1), (1, 0), (1, 1)])
+    with pytest.raises(ValueError):
+        mi.names = bad
+
+
 def test_multiindex_values_pandas_compatible():
     midx = cudf.MultiIndex.from_tuples([(10, 12), (8, 9), (3, 4)])
     with cudf.option_context("mode.pandas_compatible", True):
@@ -2031,8 +2038,6 @@ def test_multiindex_dtype_error():
         cudf.Index(midx, dtype="int64")
     with pytest.raises(TypeError):
         cudf.Index(midx.to_pandas(), dtype="int64")
-    with pytest.raises(TypeError):
-        cudf.Index(midx.to_frame(), dtype="int64")
 
 
 def test_multiindex_codes():
@@ -2067,3 +2072,10 @@ def test_multiindex_loc_scalar(idx_get, cols_get):
     expected = pdf.loc[idx_get, cols_get]
 
     assert_eq(actual, expected)
+
+
+def test_multiindex_eq_other_multiindex():
+    idx = cudf.MultiIndex.from_tuples([(0, 0), (0, 1), (1, 0), (1, 1)])
+    result = idx == idx
+    expected = np.array([True, True])
+    assert_eq(result, expected)

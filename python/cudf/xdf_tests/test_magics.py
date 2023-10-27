@@ -42,9 +42,9 @@ def test_magics_gpu():
 
 
 @pytest.mark.skip(
-    "This test was viable when xdf was separate from cudf, but now that it is "
-    "a subpackage we always require a GPU to be present and cannot run this "
-    "test."
+    "This test was viable when cudf.pandas was separate from cudf, but now "
+    "that it is a subpackage we always require a GPU to be present and cannot "
+    "run this test."
 )
 def test_magics_cpu():
     env = os.environ.copy()

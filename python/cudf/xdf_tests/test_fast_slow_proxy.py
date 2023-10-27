@@ -515,7 +515,9 @@ def test_tuple_with_attrs_transform():
     assert a != b
     assert b != c
     assert a != d
-    transform = partial(_transform_arg, attribute_name="_xdf_fast", seen=set())
+    transform = partial(
+        _transform_arg, attribute_name="_fsproxy_fast", seen=set()
+    )
     aprime = transform(a)
     bprime = transform(b)
     cprime = transform(c)

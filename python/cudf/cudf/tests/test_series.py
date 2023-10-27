@@ -2116,7 +2116,9 @@ def test_series_hasnans(data):
     gs = _create_cudf_series_float64_default(data, nan_as_null=False)
     ps = gs.to_pandas(nullable=True)
 
-    assert_eq(gs.hasnans, ps.hasnans)
+    # Check type to avoid mixing Python bool and NumPy bool
+    assert isinstance(gs.hasnans, bool)
+    assert gs.hasnans == ps.hasnans
 
 
 @pytest.mark.parametrize(
@@ -2201,6 +2203,13 @@ def test_series_init_error():
         lfunc_args_and_kwargs=([], {"data": [11], "index": [10, 11]}),
         rfunc_args_and_kwargs=([], {"data": [11], "index": [10, 11]}),
     )
+
+
+def test_series_init_from_series_and_index():
+    ser = cudf.Series([4, 7, -5, 3], index=["d", "b", "a", "c"])
+    result = cudf.Series(ser, index=list("abcd"))
+    expected = cudf.Series([-5, 7, 3, 4], index=list("abcd"))
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize(
@@ -2333,6 +2342,14 @@ def test_series_empty_warning():
     with pytest.warns(FutureWarning):
         actual = cudf.Series([])
     assert_eq(expected, actual)
+
+
+@pytest.mark.filterwarnings("ignore::FutureWarning")  # tested above
+@pytest.mark.parametrize("data", [None, {}, []])
+def test_series_empty_index_rangeindex(data):
+    expected = cudf.RangeIndex(0)
+    result = cudf.Series(data).index
+    assert_eq(result, expected)
 
 
 def test_series_count_invalid_param():
@@ -2541,3 +2558,10 @@ def test_series_arrow_list_types_roundtrip():
     with cudf.option_context("mode.pandas_compatible", True):
         with pytest.raises(NotImplementedError):
             cudf.from_pandas(pdf)
+
+
+@pytest.mark.parametrize("reso", ["M", "ps"])
+@pytest.mark.parametrize("typ", ["M", "m"])
+def test_series_invalid_reso_dtype(reso, typ):
+    with pytest.raises(NotImplementedError):
+        cudf.Series([], dtype=f"{typ}8[{reso}]")
