@@ -60,6 +60,9 @@ def format_cpu_functions_used(cpu_funcs):
     output_str = ""
     for each in cpu_funcs:
         output_str += f"- {each}\n"
+
+    # remove final newline character
+    output_str = output_str[:-1]
     return output_str
 
 
@@ -300,18 +303,22 @@ class Profiler:
         console.print(table)
 
         if cpu_funcs:
-            console.print(
-                _cpu_issue_text.format(
-                    cpu_functions_used=format_cpu_functions_used(cpu_funcs)
-                )
+            call_to_action = (
+                "To request GPU support for any of these functions, "
+                "please file a Github issue here: "
+                "[link=https://github.com/rapidsai/cudf/issues/new?assignees"
+                "=&labels=%3F+-+Needs+Triage%2C+feature+request&projects="
+                "&template=pandas_function_request.md&title=%5BFEA%5D]"
+                "https://github.com/rapidsai/cudf/issues/new"
+                "[/link]."
             )
-
-            call_to_action = "To request GPU support for any of these \
-functions, please file a Github issue here: \
-[link=https://github.com/rapidsai/cudf/issues/new?assignees=&labels=\
-%3F+-+Needs+Triage%2C+feature+request&projects=&template=\
-pandas_function_request.md&title=%5BFEA%5D]https://github.com/rapidsai/cudf/issues/new[/link]\n"
-            console.print(call_to_action)
+            if cpu_funcs:
+                console.print(
+                    _cpu_issue_text.format(
+                        cpu_functions_used=format_cpu_functions_used(cpu_funcs)
+                    )
+                )
+                console.print(call_to_action)
 
     def dump_stats(self, file_name):
         with open(file_name, "wb") as f:
