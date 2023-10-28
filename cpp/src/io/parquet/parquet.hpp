@@ -31,9 +31,6 @@ namespace cudf::io::parquet::detail {
 
 constexpr uint32_t parquet_magic = (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24));
 
-constexpr std::string_view COL_META_SIZES_OFFSET = "sizes_offset";
-constexpr std::string_view COL_META_SIZES_SIZE   = "sizes_size";
-
 /**
  * @brief Struct that describes the Parquet file data header
  */
@@ -261,14 +258,6 @@ struct Statistics {
 };
 
 /**
- * @brief Thrift-derived struct describing a key-value pair, for user metadata
- */
-struct KeyValue {
-  std::string key;
-  std::string value;
-};
-
-/**
  * @brief Thrift-derived struct containing statistics used to estimate page and column chunk sizes
  */
 struct SizeStatistics {
@@ -386,6 +375,14 @@ struct RowGroup {
   int64_t total_byte_size = 0;
   std::vector<ColumnChunk> columns;
   int64_t num_rows = 0;
+};
+
+/**
+ * @brief Thrift-derived struct describing a key-value pair, for user metadata
+ */
+struct KeyValue {
+  std::string key;
+  std::string value;
 };
 
 /**

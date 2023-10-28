@@ -178,7 +178,6 @@ size_t CompactProtocolWriter::write(ColumnChunkMetaData const& s)
   c.field_int(5, s.num_values);
   c.field_int(6, s.total_uncompressed_size);
   c.field_int(7, s.total_compressed_size);
-  if (s.key_value_metadata.size() != 0) { c.field_struct_list(8, s.key_value_metadata); }
   c.field_int(9, s.data_page_offset);
   if (s.index_page_offset != 0) { c.field_int(10, s.index_page_offset); }
   if (s.dictionary_page_offset != 0) { c.field_int(11, s.dictionary_page_offset); }
