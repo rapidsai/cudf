@@ -52,14 +52,14 @@ TEST_F(UnaryTest, Cast)
 
 TEST_F(UnaryTest, IsNan)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> const column{10, 20, 30, 40, 50};
+  cudf::test::fixed_width_column_wrapper<float> const column{10, 20, 30, 40, 50};
 
   cudf::is_nan(column, cudf::test::get_default_stream());
 }
 
 TEST_F(UnaryTest, IsNotNan)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> const column{10, 20, 30, 40, 50};
+  cudf::test::fixed_width_column_wrapper<float> const column{10, 20, 30, 40, 50};
 
   cudf::is_not_nan(column, cudf::test::get_default_stream());
 }

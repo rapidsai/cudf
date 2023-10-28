@@ -655,7 +655,7 @@ ConfigureTest(
 ConfigureTest(
   STREAM_TEXT_TEST streams/text/ngrams_test.cpp streams/text/tokenize_test.cpp STREAM_MODE testing
 )
-ConfigureTest(STREAM_UNARY_TEST streams/unary.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_UNARY_TEST streams/unary_test.cpp STREAM_MODE testing)
 
 # ##################################################################################################
 # Install tests ####################################################################################
