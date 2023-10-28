@@ -14,32 +14,41 @@
  * limitations under the License.
  */
 
-#include "rank_types_common.hpp"
 #include <benchmarks/common/generate_nested_types.hpp>
 
-#include <cudf/sorting.hpp>
+#include <cudf/detail/merge.hpp>
+#include <cudf/detail/sorting.hpp>
 
 #include <nvbench/nvbench.cuh>
 
-template <cudf::rank_method method>
-void nvbench_rank_structs(nvbench::state& state, nvbench::type_list<nvbench::enum_type<method>>)
+void nvbench_merge_struct(nvbench::state& state)
 {
-  auto const table = create_structs_data(state);
+  rmm::cuda_stream_view stream;
 
-  bool const nulls{static_cast<bool>(state.get_int64("Nulls"))};
+  auto const input1 = create_structs_data(state);
+  auto const sorted_input1 =
+    cudf::detail::sort(*input1, {}, {}, stream, rmm::mr::get_current_device_resource());
+
+  auto const input2 = create_structs_data(state);
+  auto const sorted_input2 =
+    cudf::detail::sort(*input2, {}, {}, stream, rmm::mr::get_current_device_resource());
+
+  stream.synchronize();
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    cudf::rank(table->view().column(0),
-               method,
-               cudf::order::ASCENDING,
-               nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE,
-               cudf::null_order::AFTER,
-               rmm::mr::get_current_device_resource());
+    rmm::cuda_stream_view stream_view{launch.get_stream()};
+
+    cudf::detail::merge({*sorted_input1, *sorted_input2},
+                        {0},
+                        {cudf::order::ASCENDING},
+                        {},
+                        stream_view,
+                        rmm::mr::get_current_device_resource());
   });
 }
 
-NVBENCH_BENCH_TYPES(nvbench_rank_structs, NVBENCH_TYPE_AXES(methods))
-  .set_name("rank_structs")
+NVBENCH_BENCH(nvbench_merge_struct)
+  .set_name("merge_struct")
   .add_int64_power_of_two_axis("NumRows", {10, 18, 26})
   .add_int64_axis("Depth", {0, 1, 8})
   .add_int64_axis("Nulls", {0, 1});
