@@ -6,6 +6,7 @@ set -euo pipefail
 package_name=$1
 package_dir=$2
 
+dnf install -y jq
 source rapids-configure-sccache
 source rapids-date-string
 
