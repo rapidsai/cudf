@@ -98,9 +98,10 @@ jobs:
   wheel-build-cudf:
     needs: checks
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-23.12
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@feat/2_28_wheels
     with:
       build_type: pull-request
+      build-2_28-wheels: "true"
       script: "ci/build_wheel_cudf.sh"
   wheel-tests-cudf:
     needs: wheel-build-cudf
