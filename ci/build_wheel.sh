@@ -6,9 +6,6 @@ set -euo pipefail
 package_name=$1
 package_dir=$2
 
-if command -v dnf >/dev/null 2>&1 ; then
-    dnf install -y jq
-fi
 source rapids-configure-sccache
 source rapids-date-string
 

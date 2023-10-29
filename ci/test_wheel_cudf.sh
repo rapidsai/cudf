@@ -3,7 +3,9 @@
 
 set -eou pipefail
 
-# Set the manylinux version to pull the newer ABI wheels when testing on Ubuntu 20.04 or later.
+# Set the manylinux version to pull the newer ABI wheels when testing on Ubuntu
+# 20.04 or later. Note that this logic is specific to the current set of
+# citestwheel images and would need to change if the images change.
 manylinux="manylinux_2_17"
 if command -v lsb_release >/dev/null 2>&1 ; then
     release_info=$(lsb_release -r)
