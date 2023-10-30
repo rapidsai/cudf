@@ -4653,6 +4653,8 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
   // []
   // [4, 5]
   // NULL
+  // def histogram [1, 1, 2, 3]
+  // rep histogram [4, 3]
   lcw col0{{{{1, 2, 3}, nulls_at({0, 2})}, {}, {4, 5}, {}}, null_at(3)};
 
   // 4 nulls
@@ -4660,6 +4662,8 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
   // [[7, 8]]
   // []
   // [[]]
+  // def histogram [1, 3, 10]
+  // rep histogram [4, 4, 6]
   lcw col1{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, {{7, 8}}, lcw{}, lcw{lcw{}}};
 
   // 4 nulls
@@ -4667,6 +4671,8 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
   // [[7, 8]]
   // []
   // [[]]
+  // def histogram [1, 1, 2, 10]
+  // rep histogram [4, 4, 6]
   lcw col2{{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, null_at(3)}, {{7, 8}}, lcw{}, lcw{lcw{}}};
 
   // 6 nulls
@@ -4674,6 +4680,8 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
   // [[7, 8]]
   // []
   // [[]]
+  // def histogram [1, 1, 2, 2, 8]
+  // rep histogram [4, 4, 6]
   using dlcw = cudf::test::lists_column_wrapper<double>;
   dlcw col3{{{{1., 2., 3.}, {}, {4., 5.}, {}, {{0., 6., 0.}, nulls_at({0, 2})}}, null_at(3)},
             {{7., 8.}},
@@ -4685,6 +4693,8 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
   // [[7, 8]]
   // []
   // NULL
+  // def histogram [1, 1, 1, 1, 10]
+  // rep histogram [4, 4, 6]
   using ui16lcw = cudf::test::lists_column_wrapper<uint16_t>;
   cudf::test::lists_column_wrapper<uint16_t> col4{
     {{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, null_at(3)}, {{7, 8}}, ui16lcw{}, ui16lcw{ui16lcw{}}},
@@ -4695,6 +4705,8 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
   // [[7, 8]]
   // []
   // NULL
+  // def histogram [1, 1, 1, 1, 2, 8]
+  // rep histogram [4, 4, 6]
   lcw col5{{{{{1, 2, 3}, {}, {4, 5}, {}, {{0, 6, 0}, nulls_at({0, 2})}}, null_at(3)},
             {{7, 8}},
             lcw{},
@@ -4702,6 +4714,8 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
            null_at(3)};
 
   // 4 nulls
+  // def histogram [1, 3, 9]
+  // rep histogram [4, 4, 5]
   using strlcw = cudf::test::lists_column_wrapper<cudf::string_view>;
   cudf::test::lists_column_wrapper<cudf::string_view> col6{
     {{"Monday", "Monday", "Friday"}, {}, {"Monday", "Friday"}, {}, {"Sunday", "Funday"}},
@@ -4710,10 +4724,20 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
     strlcw{strlcw{}}};
 
   // 11 nulls
+  // D   5   6   5  6        5  6  5      6 6
+  // R   0   3   3  3        1  3  3      2 3
   // [[[NULL,2,NULL,4]], [[NULL,6,NULL], [8,9]]]
+  // D 2      6    6   6  6      2
+  // R 0      1    2   3  3      1
   // [NULL, [[13],[14,15,16]],  NULL]
+  // D 2     3   2      4
+  // R 0     1   1      1
   // [NULL, [], NULL, [[]]]
+  // D 0
+  // R 0
   // NULL
+  // def histogram [1, 0, 4, 1, 1, 4, 9]
+  // rep histogram [4, 6, 2, 8]
   lcw col7{{
              {{{{1, 2, 3, 4}, nulls_at({0, 2})}}, {{{5, 6, 7}, nulls_at({0, 2})}, {8, 9}}},
              {{{{10, 11}, {12}}, {{13}, {14, 15, 16}}, {{17, 18}}}, nulls_at({0, 2})},
@@ -4724,7 +4748,17 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
 
   table_view expected({col0, col1, col2, col3, col4, col5, col6, col7});
 
-  int64_t const expected_null_counts[] = {4, 4, 4, 6, 4, 6, 4, 11};
+  int64_t const expected_null_counts[]            = {4, 4, 4, 6, 4, 6, 4, 11};
+  std::vector<int64_t> const expected_def_hists[] = {{1, 1, 2, 3},
+                                                     {1, 3, 10},
+                                                     {1, 1, 2, 10},
+                                                     {1, 1, 2, 2, 8},
+                                                     {1, 1, 1, 1, 10},
+                                                     {1, 1, 1, 1, 2, 8},
+                                                     {1, 3, 9},
+                                                     {1, 0, 4, 1, 1, 4, 9}};
+  std::vector<int64_t> const expected_rep_hists[] = {
+    {4, 3}, {4, 4, 6}, {4, 4, 6}, {4, 4, 6}, {4, 4, 6}, {4, 4, 6}, {4, 4, 5}, {4, 6, 2, 8}};
 
   auto const filepath = temp_env->get_temp_filepath("ColumnIndexListWithNulls.parquet");
   auto out_opts = cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
@@ -4764,6 +4798,19 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
       // should only be one page
       EXPECT_FALSE(ci.null_pages[0]);
       EXPECT_EQ(ci.null_counts[0], expected_null_counts[c]);
+
+      ASSERT_TRUE(ci.definition_level_histogram.has_value());
+      EXPECT_EQ(ci.definition_level_histogram.value(), expected_def_hists[c]);
+
+      ASSERT_TRUE(ci.repetition_level_histogram.has_value());
+      EXPECT_EQ(ci.repetition_level_histogram.value(), expected_rep_hists[c]);
+
+      if (c != 6) {
+        EXPECT_FALSE(oi.unencoded_byte_array_data_bytes.has_value());
+      } else {
+        ASSERT_TRUE(oi.unencoded_byte_array_data_bytes.has_value());
+        EXPECT_EQ(oi.unencoded_byte_array_data_bytes.value()[0], 50L);
+      }
     }
   }
 }
