@@ -424,22 +424,12 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
 endfunction()
 
 if(NOT DEFINED CUDF_VERSION_Arrow)
-  # Temporarily use Arrow 12.0.1 in wheels and Arrow 13.0.0 otherwise
-  if(USE_LIBARROW_FROM_PYARROW)
-    set(CUDF_VERSION_Arrow
-        # This version must be kept in sync with the libarrow version pinned for builds in
-        # dependencies.yaml.
-        13.0.0
-        CACHE STRING "The version of Arrow to find (or build)"
-    )
-  else()
-    set(CUDF_VERSION_Arrow
-        # This version must be kept in sync with the libarrow version pinned for builds in
-        # dependencies.yaml.
-        13.0.0
-        CACHE STRING "The version of Arrow to find (or build)"
-    )
-  endif()
+  set(CUDF_VERSION_Arrow
+      # This version must be kept in sync with the libarrow version pinned for builds in
+      # dependencies.yaml.
+      13.0.0
+      CACHE STRING "The version of Arrow to find (or build)"
+  )
 endif()
 
 find_and_configure_arrow(
