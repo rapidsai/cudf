@@ -57,7 +57,7 @@ void parquet_read_common(cudf::io::parquet_writer_options const& write_opts,
 }
 
 template <data_type DataType>
-void BM_parquet_read_data(nvbench::state& state, nvbench::type_list < nvbench::enum_type<DataType>)
+void BM_parquet_read_data(nvbench::state& state, nvbench::type_list<nvbench::enum_type<DataType>>)
 {
   auto const d_type                 = get_type_or_group(static_cast<int32_t>(DataType));
   cudf::size_type const cardinality = state.get_int64("cardinality");
@@ -208,9 +208,7 @@ using io_list = nvbench::enum_type_list<cudf::io::io_type::FILEPATH,
 using compression_list =
   nvbench::enum_type_list<cudf::io::compression_type::SNAPPY, cudf::io::compression_type::NONE>;
 
-NVBENCH_BENCH_TYPES(BM_parquet_read_data,
-                    NVBENCH_TYPE_AXES(d_type_list,
-                                      nvbench::enum_type_list<cudf::io::io_type::DEVICE_BUFFER>))
+NVBENCH_BENCH_TYPES(BM_parquet_read_data, NVBENCH_TYPE_AXES(d_type_list))
   .set_name("parquet_read_decode")
   .set_type_axes_names({"data_type", "io"})
   .set_min_samples(4)
@@ -224,7 +222,9 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_io_compression, NVBENCH_TYPE_AXES(io_list, c
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
 
-NVBENCH_BENCH_TYPES(BM_parquet_read_chunks, NVBENCH_TYPE_AXES(d_type_list))
+NVBENCH_BENCH_TYPES(BM_parquet_read_chunks,
+                    NVBENCH_TYPE_AXES(d_type_list,
+                                      nvbench::enum_type_list<cudf::io::io_type::DEVICE_BUFFER>))
   .set_name("parquet_read_chunks")
   .set_type_axes_names({"data_type", "io"})
   .set_min_samples(4)
