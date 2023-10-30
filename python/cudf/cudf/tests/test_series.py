@@ -2565,3 +2565,13 @@ def test_series_arrow_list_types_roundtrip():
 def test_series_invalid_reso_dtype(reso, typ):
     with pytest.raises(NotImplementedError):
         cudf.Series([], dtype=f"{typ}8[{reso}]")
+
+
+def test_series_categorical_missing_value_count():
+    ps = pd.Series(pd.Categorical(list("abcccb"), categories=list("cabd")))
+    gs = cudf.from_pandas(ps)
+
+    expected = ps.value_counts()
+    actual = gs.value_counts()
+
+    assert_eq(expected, actual, check_dtype=False)

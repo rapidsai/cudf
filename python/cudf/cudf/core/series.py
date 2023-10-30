@@ -3174,6 +3174,17 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             res = res[res.index.notna()]
         else:
             res = self.groupby(self, dropna=dropna).count(dropna=dropna)
+            if isinstance(self.dtype, cudf.CategoricalDtype) and len(
+                res
+            ) != len(self.dtype.categories):
+                # For categorical dtypes: When there exists
+                # categories in dtypes and they are missing in the
+                # column, `value_counts` will have to return
+                # their occurrences as 0.
+                # TODO: Remove this workaround once `observed`
+                # parameter support is added to `groupby`
+                res = res.reindex(self.dtype.categories).fillna(0)
+                res._index = res._index.astype(self.dtype)
 
         res.index.name = None
 
