@@ -230,6 +230,7 @@ ConfigureNVBench(HASHING_NVBENCH hashing/hash.cpp)
 # ##################################################################################################
 # * merge benchmark -------------------------------------------------------------------------------
 ConfigureBench(MERGE_BENCH merge/merge.cpp)
+ConfigureNVBench(MERGE_NVBENCH merge/merge_structs.cpp merge/merge_lists.cpp)
 
 # ##################################################################################################
 # * null_mask benchmark ---------------------------------------------------------------------------
