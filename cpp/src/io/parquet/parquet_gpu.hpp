@@ -489,10 +489,9 @@ struct EncColumnChunk {
   size_type* dict_index;  //!< Index of value in dictionary page. column[dict_data[dict_index[row]]]
   uint8_t dict_rle_bits;  //!< Bit size for encoding dictionary indices
   bool use_dictionary;    //!< True if the chunk uses dictionary encoding
-  uint8_t* column_index_blob;  //!< Binary blob containing encoded column index for this chunk
-  uint32_t column_index_size;  //!< Size of column index blob
-  uint32_t encodings;          //!< Mask representing the set of encodings used for this chunk
-  // FIXME(ets): these should probably be uint64_t
+  uint8_t* column_index_blob;    //!< Binary blob containing encoded column index for this chunk
+  uint32_t column_index_size;    //!< Size of column index blob
+  uint32_t encodings;            //!< Mask representing the set of encodings used for this chunk
   uint32_t* def_histogram_data;  //!< Buffers for size histograms. One for chunk and one per page.
   uint32_t* rep_histogram_data;  //!< Size is (max(level) + 1) * (num_data_pages + 1).
   size_t var_bytes_size;         //!< Sum of var_bytes_size from the pages (byte arrays only)
