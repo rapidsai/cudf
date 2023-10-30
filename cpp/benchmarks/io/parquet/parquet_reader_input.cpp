@@ -56,14 +56,13 @@ void parquet_read_common(cudf::io::parquet_writer_options const& write_opts,
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
 }
 
-template <data_type DataType, cudf::io::io_type IOType>
-void BM_parquet_read_data(
-  nvbench::state& state,
-  nvbench::type_list<nvbench::enum_type<DataType>, nvbench::enum_type<IOType>>)
+template <data_type DataType>
+void BM_parquet_read_data(nvbench::state& state, nvbench::type_list < nvbench::enum_type<DataType>)
 {
   auto const d_type                 = get_type_or_group(static_cast<int32_t>(DataType));
   cudf::size_type const cardinality = state.get_int64("cardinality");
   cudf::size_type const run_length  = state.get_int64("run_length");
+  cudf::io::io_type const io_type   = retrieve_io_type_enum(state.get_string("io_type"));
   auto const compression            = cudf::io::compression_type::SNAPPY;
 
   auto const tbl =
@@ -72,7 +71,7 @@ void BM_parquet_read_data(
                         data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
   auto const view = tbl->view();
 
-  cuio_source_sink_pair source_sink(IOType);
+  cuio_source_sink_pair source_sink(io_type);
   cudf::io::parquet_writer_options write_opts =
     cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
       .compression(compression);
@@ -225,12 +224,11 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_io_compression, NVBENCH_TYPE_AXES(io_list, c
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
 
-NVBENCH_BENCH_TYPES(BM_parquet_read_chunks,
-                    NVBENCH_TYPE_AXES(d_type_list,
-                                      nvbench::enum_type_list<cudf::io::io_type::DEVICE_BUFFER>))
+NVBENCH_BENCH_TYPES(BM_parquet_read_chunks, NVBENCH_TYPE_AXES(d_type_list))
   .set_name("parquet_read_chunks")
   .set_type_axes_names({"data_type", "io"})
   .set_min_samples(4)
+  .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32})
   .add_int64_axis("byte_limit", {0, 500'000});
