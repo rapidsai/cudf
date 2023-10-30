@@ -36,6 +36,14 @@ from .common import (
     custom_iter,
 )
 
+from pandas.io.sas.sas7bdat import (  # isort: skip
+    SAS7BDATReader as pd_SAS7BDATReader,
+)
+from pandas.io.sas.sas_xport import (  # isort: skip
+    XportReader as pd_XportReader,
+)
+
+
 # TODO(pandas2.1): Can import from pandas.api.typing
 from pandas.core.resample import (  # isort: skip
     Resampler as pd_Resampler,
@@ -295,15 +303,6 @@ DatetimeTZDtype = make_final_proxy_type(
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
 
-Timestamp = make_final_proxy_type(
-    "Timestamp",
-    _Unusable,
-    pd.Timestamp,
-    fast_to_slow=_Unusable(),
-    slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
-)
-
 TimedeltaIndex = make_final_proxy_type(
     "TimedeltaIndex",
     cudf.TimedeltaIndex,
@@ -320,15 +319,6 @@ TimedeltaArray = make_final_proxy_type(
     pd.arrays.TimedeltaArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-)
-
-Timedelta = make_final_proxy_type(
-    "Timedelta",
-    _Unusable,
-    pd.Timedelta,
-    fast_to_slow=_Unusable(),
-    slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
 
 PeriodIndex = make_final_proxy_type(
@@ -852,6 +842,15 @@ _JsonReader = make_intermediate_proxy_type(
 _TextFileReader = make_intermediate_proxy_type(
     "_TextFileReader", _Unusable, pd.io.parsers.readers.TextFileReader
 )
+
+_XportReader = make_intermediate_proxy_type(
+    "_XportReader", _Unusable, pd_XportReader
+)
+
+_SAS7BDATReader = make_intermediate_proxy_type(
+    "_SAS7BDATReader", _Unusable, pd_SAS7BDATReader
+)
+
 
 FY5253 = make_final_proxy_type(
     "FY5253",

@@ -13,6 +13,7 @@ import collections
 import copy
 import datetime
 import operator
+import pathlib
 import pickle
 import tempfile
 import types
@@ -312,8 +313,7 @@ def test_shape(dataframe):
 def test_isnull():
     psr = pd.Series([1, 2, 3])
     sr = xpd.Series(psr)
-    # Test that invoking `Pandas` functions
-    # on a xdf DataFrame works.
+    # Test that invoking `Pandas` functions works.
     tm.assert_series_equal(pd.isnull(psr), xpd.isnull(sr))
 
 
@@ -378,29 +378,31 @@ def test_histogram_ndarray(array):
 def test_pickle_round_trip(dataframe):
     pdf, df = dataframe
     pickled_pdf = BytesIO()
-    pickled_xdf = BytesIO()
+    pickled_cudf_pandas = BytesIO()
     pdf.to_pickle(pickled_pdf)
-    df.to_pickle(pickled_xdf)
+    df.to_pickle(pickled_cudf_pandas)
 
     pickled_pdf.seek(0)
-    pickled_xdf.seek(0)
+    pickled_cudf_pandas.seek(0)
 
     tm.assert_frame_equal(
-        pd.read_pickle(pickled_pdf), xpd.read_pickle(pickled_xdf)
+        pd.read_pickle(pickled_pdf), xpd.read_pickle(pickled_cudf_pandas)
     )
 
 
 def test_excel_round_trip(dataframe):
     pdf, df = dataframe
     excel_pdf = BytesIO()
-    excel_xdf = BytesIO()
+    excel_cudf_pandas = BytesIO()
     pdf.to_excel(excel_pdf)
-    df.to_excel(excel_xdf)
+    df.to_excel(excel_cudf_pandas)
 
     excel_pdf.seek(0)
-    excel_xdf.seek(0)
+    excel_cudf_pandas.seek(0)
 
-    tm.assert_frame_equal(pd.read_excel(excel_pdf), xpd.read_excel(excel_xdf))
+    tm.assert_frame_equal(
+        pd.read_excel(excel_pdf), xpd.read_excel(excel_cudf_pandas)
+    )
 
 
 def test_hash_array(series):
@@ -539,8 +541,8 @@ def test_groupby_apply_func_returns_series(dataframe):
 
 @pytest.mark.parametrize("data", [[1, 2, 3], ["a", None, "b"]])
 def test_pyarrow_array_construction(data):
-    xdf_series = xpd.Series(data)
-    actual_pa_array = pa.array(xdf_series)
+    cudf_pandas_series = xpd.Series(data)
+    actual_pa_array = pa.array(cudf_pandas_series)
     expected_pa_array = pa.array(data)
     assert actual_pa_array.equals(expected_pa_array)
 
@@ -548,7 +550,7 @@ def test_pyarrow_array_construction(data):
 @pytest.mark.parametrize(
     "op", [">", "<", "==", "<=", ">=", "+", "%", "-", "*", "/"]
 )
-def test_xdf_eval_series(op):
+def test_cudf_pandas_eval_series(op):
     lhs = xpd.Series([10, 11, 12])  # noqa: F841
     rhs = xpd.Series([100, 1, 12])  # noqa: F841
 
@@ -565,7 +567,7 @@ def test_xdf_eval_series(op):
 @pytest.mark.parametrize(
     "op", [">", "<", "==", "<=", ">=", "+", "%", "-", "*", "/"]
 )
-def test_xdf_eval_dataframe(op):
+def test_cudf_pandas_eval_dataframe(op):
     lhs = xpd.DataFrame({"a": [10, 11, 12], "b": [1, 2, 3]})  # noqa: F841
     rhs = xpd.DataFrame({"a": [100, 1, 12], "b": [15, -10, 3]})  # noqa: F841
 
@@ -582,7 +584,7 @@ def test_xdf_eval_dataframe(op):
 @pytest.mark.parametrize(
     "expr", ["((a + b) * c % d) > e", "((a + b) * c % d)"]
 )
-def test_xdf_eval_complex(expr):
+def test_cudf_pandas_eval_complex(expr):
     data = {
         "a": [10, 11, 12],
         "b": [1, 2, 3],
@@ -590,9 +592,9 @@ def test_xdf_eval_complex(expr):
         "d": [15, -10, 3],
         "e": [100, 200, 300],
     }
-    xdf_frame = xpd.DataFrame(data)
+    cudf_pandas_frame = xpd.DataFrame(data)
     pd_frame = pd.DataFrame(data)
-    actual = xdf_frame.eval(expr)
+    actual = cudf_pandas_frame.eval(expr)
     expected = pd_frame.eval(expr)
     tm.assert_series_equal(expected, actual)
 
@@ -704,14 +706,14 @@ def test_pipe_with_data_creating_func():
         df2 = pd.DataFrame({"b": np.arange(len(df))})
         return df.join(df2)
 
-    def xdf_func(df):
+    def cudf_pandas_func(df):
         df2 = xpd.DataFrame({"b": np.arange(len(df))})
         return df.join(df2)
 
     pdf = pd.DataFrame({"a": [1, 2, 3]})
     df = xpd.DataFrame({"a": [1, 2, 3]})
 
-    tm.assert_frame_equal(pdf.pipe(pandas_func), df.pipe(xdf_func))
+    tm.assert_frame_equal(pdf.pipe(pandas_func), df.pipe(cudf_pandas_func))
 
 
 @pytest.mark.parametrize(
@@ -809,9 +811,13 @@ def test_construct_timedelta_index():
 )
 def test_datetime_ops(op):
     pd_dt_idx1 = pd.DatetimeIndex([10, 20, 30], dtype="datetime64[ns]")
-    xdf_dt_idx = xpd.DatetimeIndex([10, 20, 30], dtype="datetime64[ns]")
+    cudf_pandas_dt_idx = xpd.DatetimeIndex(
+        [10, 20, 30], dtype="datetime64[ns]"
+    )
 
-    tm.assert_equal(op(pd_dt_idx1, pd_dt_idx1), op(xdf_dt_idx, xdf_dt_idx))
+    tm.assert_equal(
+        op(pd_dt_idx1, pd_dt_idx1), op(cudf_pandas_dt_idx, cudf_pandas_dt_idx)
+    )
 
 
 @pytest.mark.parametrize(
@@ -828,20 +834,30 @@ def test_datetime_ops(op):
 )
 def test_timedelta_ops(op):
     pd_td_idx1 = pd.TimedeltaIndex([10, 20, 30], dtype="timedelta64[ns]")
-    xdf_td_idx = xpd.TimedeltaIndex([10, 20, 30], dtype="timedelta64[ns]")
+    cudf_pandas_td_idx = xpd.TimedeltaIndex(
+        [10, 20, 30], dtype="timedelta64[ns]"
+    )
 
-    tm.assert_equal(op(pd_td_idx1, pd_td_idx1), op(xdf_td_idx, xdf_td_idx))
+    tm.assert_equal(
+        op(pd_td_idx1, pd_td_idx1), op(cudf_pandas_td_idx, cudf_pandas_td_idx)
+    )
 
 
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
 def test_datetime_timedelta_ops(op):
     pd_dt_idx1 = pd.DatetimeIndex([10, 20, 30], dtype="datetime64[ns]")
-    xdf_dt_idx = xpd.DatetimeIndex([10, 20, 30], dtype="datetime64[ns]")
+    cudf_pandas_dt_idx = xpd.DatetimeIndex(
+        [10, 20, 30], dtype="datetime64[ns]"
+    )
 
     pd_td_idx1 = pd.TimedeltaIndex([10, 20, 30], dtype="timedelta64[ns]")
-    xdf_td_idx = xpd.TimedeltaIndex([10, 20, 30], dtype="timedelta64[ns]")
+    cudf_pandas_td_idx = xpd.TimedeltaIndex(
+        [10, 20, 30], dtype="timedelta64[ns]"
+    )
 
-    tm.assert_equal(op(pd_dt_idx1, pd_td_idx1), op(xdf_dt_idx, xdf_td_idx))
+    tm.assert_equal(
+        op(pd_dt_idx1, pd_td_idx1), op(cudf_pandas_dt_idx, cudf_pandas_td_idx)
+    )
 
 
 def test_itertuples():
@@ -1075,16 +1091,16 @@ def test_pickle(obj):
 
 
 def test_dataframe_query():
-    xdf_df = xpd.DataFrame({"foo": [1, 2, 3], "bar": [4, 5, 6]})
+    cudf_pandas_df = xpd.DataFrame({"foo": [1, 2, 3], "bar": [4, 5, 6]})
     pd_df = pd.DataFrame({"foo": [1, 2, 3], "bar": [4, 5, 6]})
 
-    actual = xdf_df.query("foo > 2")
+    actual = cudf_pandas_df.query("foo > 2")
     expected = pd_df.query("foo > 2")
 
     tm.assert_equal(actual, expected)
 
     bizz = 2  # noqa: F841
-    actual = xdf_df.query("foo > @bizz")
+    actual = cudf_pandas_df.query("foo > @bizz")
     expected = pd_df.query("foo > @bizz")
 
     tm.assert_equal(actual, expected)
@@ -1166,17 +1182,17 @@ def test_from_dataframe():
 
     data = {"foo": [1, 2, 3], "bar": [4, 5, 6]}
 
-    xdf_df = xpd.DataFrame(data)
+    cudf_pandas_df = xpd.DataFrame(data)
     cudf_df = cudf.DataFrame(data)
 
-    # test construction of a cuDF DataFrame from an xdf DataFrame
-    assert_eq(cudf_df, cudf.DataFrame.from_pandas(xdf_df))
-    assert_eq(cudf_df, cudf.from_dataframe(xdf_df))
+    # test construction of a cuDF DataFrame from an cudf_pandas DataFrame
+    assert_eq(cudf_df, cudf.DataFrame.from_pandas(cudf_pandas_df))
+    assert_eq(cudf_df, cudf.from_dataframe(cudf_pandas_df))
 
     # ideally the below would work as well, but currently segfaults
 
     # pd_df = pd.DataFrame(data)
-    # assert_eq(pd_df, pd.api.interchange.from_dataframe(xdf_df))
+    # assert_eq(pd_df, pd.api.interchange.from_dataframe(cudf_pandas_df))
 
 
 def test_multiindex_values_returns_1d_tuples():
@@ -1185,3 +1201,11 @@ def test_multiindex_values_returns_1d_tuples():
     expected = np.empty(2, dtype=object)
     expected[...] = [(1, 2), (3, 4)]
     tm.assert_equal(result, expected)
+
+
+def test_read_sas_context():
+    cudf_path = pathlib.Path(__file__).parent.parent
+    path = cudf_path / "cudf" / "tests" / "data" / "sas" / "cars.sas7bdat"
+    with xpd.read_sas(path, format="sas7bdat", iterator=True) as reader:
+        df = reader.read()
+    assert isinstance(df, xpd.DataFrame)

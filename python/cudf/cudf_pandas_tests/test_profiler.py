@@ -34,8 +34,6 @@ def test_profiler():
 
     per_function_stats = profiler.per_function_stats
     assert set(per_function_stats) == {
-        "Timestamp",
-        "Timedelta",
         "DataFrame",
         "DataFrame.groupby",
         "DataFrameGroupBy.sum",
