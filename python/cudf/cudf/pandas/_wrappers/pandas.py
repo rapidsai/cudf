@@ -23,8 +23,9 @@ from ..fast_slow_proxy import (
     _FastSlowAttribute,
     _FunctionProxy,
     _Unusable,
-    make_final_proxy_type,
-    make_intermediate_proxy_type,
+    get_final_type_map,
+    make_final_proxy_type as _make_final_proxy_type,
+    make_intermediate_proxy_type as _make_intermediate_proxy_type,
     register_proxy_func,
 )
 from .common import (
@@ -35,6 +36,14 @@ from .common import (
     custom_iter,
 )
 
+from pandas.io.sas.sas7bdat import (  # isort: skip
+    SAS7BDATReader as pd_SAS7BDATReader,
+)
+from pandas.io.sas.sas_xport import (  # isort: skip
+    XportReader as pd_XportReader,
+)
+
+
 # TODO(pandas2.1): Can import from pandas.api.typing
 from pandas.core.resample import (  # isort: skip
     Resampler as pd_Resampler,
@@ -43,6 +52,24 @@ from pandas.core.resample import (  # isort: skip
 
 
 cudf.set_option("mode.pandas_compatible", True)
+
+
+def make_final_proxy_type(
+    name,
+    fast_type,
+    slow_type,
+    **kwargs,
+):
+    assert "module" not in kwargs
+    return _make_final_proxy_type(
+        name, fast_type, slow_type, module=slow_type.__module__, **kwargs
+    )
+
+
+def make_intermediate_proxy_type(name, fast_type, slow_type):
+    return _make_intermediate_proxy_type(
+        name, fast_type, slow_type, module=slow_type.__module__
+    )
 
 
 class _AccessorAttr:
@@ -133,6 +160,7 @@ Series = make_final_proxy_type(
     additional_attributes={
         "__array__": array_method,
         "__array_function__": array_function_method,
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "__arrow_array__": arrow_array_method,
         "__cuda_array_interface__": cuda_array_interface,
         "__iter__": custom_iter,
@@ -151,10 +179,10 @@ def Index__new__(cls, *args, **kwargs):
     # with a removal of the defaulted __init__ that
     # make_final_proxy_type provides.
     self, _ = _fast_slow_function_call(
-        lambda cls, *args, **kwargs: cls(*args, **kwargs),
+        lambda cls, args, kwargs: cls(*args, **kwargs),
         cls,
-        *args,
-        **kwargs,
+        args,
+        kwargs,
     )
     return self
 
@@ -177,8 +205,22 @@ Index = make_final_proxy_type(
         "__init__": _DELETE,
         "__new__": Index__new__,
         "_constructor": _FastSlowAttribute("_constructor"),
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )
+
+get_final_type_map()[cudf.StringIndex] = Index
+get_final_type_map()[cudf.Int8Index] = Index
+get_final_type_map()[cudf.Int8Index] = Index
+get_final_type_map()[cudf.Int16Index] = Index
+get_final_type_map()[cudf.Int32Index] = Index
+get_final_type_map()[cudf.UInt8Index] = Index
+get_final_type_map()[cudf.UInt16Index] = Index
+get_final_type_map()[cudf.UInt32Index] = Index
+get_final_type_map()[cudf.UInt64Index] = Index
+get_final_type_map()[cudf.Float32Index] = Index
+get_final_type_map()[cudf.GenericIndex] = Index
+
 
 RangeIndex = make_final_proxy_type(
     "RangeIndex",
@@ -261,15 +303,6 @@ DatetimeTZDtype = make_final_proxy_type(
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
 
-Timestamp = make_final_proxy_type(
-    "Timestamp",
-    _Unusable,
-    pd.Timestamp,
-    fast_to_slow=_Unusable(),
-    slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
-)
-
 TimedeltaIndex = make_final_proxy_type(
     "TimedeltaIndex",
     cudf.TimedeltaIndex,
@@ -286,15 +319,6 @@ TimedeltaArray = make_final_proxy_type(
     pd.arrays.TimedeltaArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-)
-
-Timedelta = make_final_proxy_type(
-    "Timedelta",
-    _Unusable,
-    pd.Timedelta,
-    fast_to_slow=_Unusable(),
-    slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
 
 PeriodIndex = make_final_proxy_type(
@@ -391,6 +415,9 @@ BooleanArray = make_final_proxy_type(
     pd.arrays.BooleanArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__")
+    },
 )
 
 BooleanDtype = make_final_proxy_type(
@@ -408,6 +435,9 @@ IntegerArray = make_final_proxy_type(
     pd.arrays.IntegerArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__")
+    },
 )
 
 Int8Dtype = make_final_proxy_type(
@@ -418,6 +448,7 @@ Int8Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
+
 
 Int16Dtype = make_final_proxy_type(
     "Int16Dtype",
@@ -444,6 +475,17 @@ Int64Dtype = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+
+Int64Index = make_final_proxy_type(
+    "Int64Index",
+    cudf.Int64Index,
+    pd.core.indexes.numeric.Int64Index,
+    fast_to_slow=lambda fast: fast.to_pandas(),
+    slow_to_fast=cudf.from_pandas,
+    bases=(Index,),
+    additional_attributes={"__init__": _DELETE},
 )
 
 UInt8Dtype = make_final_proxy_type(
@@ -480,6 +522,16 @@ UInt64Dtype = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+UInt64Index = make_final_proxy_type(
+    "UInt64Index",
+    cudf.UInt64Index,
+    pd.core.indexes.numeric.UInt64Index,
+    fast_to_slow=lambda fast: fast.to_pandas(),
+    slow_to_fast=cudf.from_pandas,
+    bases=(Index,),
+    additional_attributes={"__init__": _DELETE},
 )
 
 IntervalIndex = make_final_proxy_type(
@@ -524,6 +576,9 @@ FloatingArray = make_final_proxy_type(
     pd.arrays.FloatingArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__")
+    },
 )
 
 Float32Dtype = make_final_proxy_type(
@@ -542,6 +597,16 @@ Float64Dtype = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+Float64Index = make_final_proxy_type(
+    "Float64Index",
+    cudf.Float64Index,
+    pd.core.indexes.numeric.Float64Index,
+    fast_to_slow=lambda fast: fast.to_pandas(),
+    slow_to_fast=cudf.from_pandas,
+    bases=(Index,),
+    additional_attributes={"__init__": _DELETE},
 )
 
 SeriesGroupBy = make_intermediate_proxy_type(
@@ -707,7 +772,7 @@ def _get_eval_locals_and_globals(level, local_dict=None, global_dict=None):
 
 @register_proxy_func(pd.eval)
 @nvtx.annotate(
-    "XDF_EVAL", color=_XDF_NVTX_COLORS["EXECUTE_SLOW"], domain="xdf_python"
+    "XDF_EVAL", color=_XDF_NVTX_COLORS["EXECUTE_SLOW"], domain="cudf_pandas"
 )
 def _eval(
     *args,
@@ -736,7 +801,7 @@ def _eval(
 @nvtx.annotate(
     "XDF_DATAFRAME_EVAL",
     color=_XDF_NVTX_COLORS["EXECUTE_SLOW"],
-    domain="xdf_python",
+    domain="cudf_pandas",
 )
 def _df_eval_method(self, *args, local_dict=None, global_dict=None, **kwargs):
     level = kwargs.get("level", 0)
@@ -751,7 +816,7 @@ def _df_eval_method(self, *args, local_dict=None, global_dict=None, **kwargs):
 @nvtx.annotate(
     "XDF_DATAFRAME_QUERY",
     color=_XDF_NVTX_COLORS["EXECUTE_SLOW"],
-    domain="xdf_python",
+    domain="cudf_pandas",
 )
 def _df_query_method(self, *args, local_dict=None, global_dict=None, **kwargs):
     # `query` API internally calls `eval`, hence we are making use of
@@ -777,6 +842,15 @@ _JsonReader = make_intermediate_proxy_type(
 _TextFileReader = make_intermediate_proxy_type(
     "_TextFileReader", _Unusable, pd.io.parsers.readers.TextFileReader
 )
+
+_XportReader = make_intermediate_proxy_type(
+    "_XportReader", _Unusable, pd_XportReader
+)
+
+_SAS7BDATReader = make_intermediate_proxy_type(
+    "_SAS7BDATReader", _Unusable, pd_SAS7BDATReader
+)
+
 
 FY5253 = make_final_proxy_type(
     "FY5253",
@@ -1164,3 +1238,74 @@ NamedAgg = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
+
+ArrowExtensionArray = make_final_proxy_type(
+    "ExtensionArray",
+    _Unusable,
+    pd.arrays.ArrowExtensionArray,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+)
+
+
+# The following are subclasses of `pandas.core.base.PandasObj`,
+# excluding subclasses defined in `pandas.core.internals`.  These are
+# not strictly part of the Pandas public API, but they do appear as
+# return types.
+
+_PANDAS_OBJ_FINAL_TYPES = [
+    pd.core.arrays.sparse.array.SparseArray,
+    pd.core.indexes.frozen.FrozenList,
+    pd.core.indexes.category.CategoricalIndex,
+    pd.core.indexes.datetimelike.DatetimeTimedeltaMixin,
+    pd.core.indexes.datetimelike.DatetimeIndexOpsMixin,
+    pd.core.indexes.extension.NDArrayBackedExtensionIndex,
+    pd.core.indexes.numeric.IntegerIndex,
+    pd.core.indexes.numeric.NumericIndex,
+    pd.core.generic.NDFrame,
+    pd.core.indexes.accessors.PeriodProperties,
+    pd.core.indexes.accessors.Properties,
+    pd.plotting._core.PlotAccessor,
+    pd.io.sql.SQLiteTable,
+    pd.io.sql.SQLTable,
+    pd.io.sql.SQLDatabase,
+    pd.io.sql.SQLiteDatabase,
+    pd.io.sql.PandasSQL,
+]
+
+_PANDAS_OBJ_INTERMEDIATE_TYPES = [
+    pd.core.groupby.groupby.GroupByPlot,
+    pd.core.groupby.groupby.GroupBy,
+    pd.core.groupby.groupby.BaseGroupBy,
+]
+
+for typ in _PANDAS_OBJ_FINAL_TYPES:
+    if typ.__name__ in globals():
+        # if we already defined a proxy type
+        # corresponding to this type, use that.
+        continue
+    globals()[typ.__name__] = make_final_proxy_type(
+        typ.__name__,
+        _Unusable,
+        typ,
+        fast_to_slow=_Unusable(),
+        slow_to_fast=_Unusable(),
+        additional_attributes={
+            "__array__": array_method,
+            "__array_function__": array_function_method,
+            "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+            "__hash__": _FastSlowAttribute("__hash__"),
+        },
+    )
+
+
+for typ in _PANDAS_OBJ_INTERMEDIATE_TYPES:
+    if typ.__name__ in globals():
+        # if we already defined a proxy type
+        # corresponding to this type, use that.
+        continue
+    globals()[typ.__name__] = make_intermediate_proxy_type(
+        typ.__name__,
+        _Unusable,
+        typ,
+    )

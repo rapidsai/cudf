@@ -20,6 +20,7 @@ import os
 import sys
 import threading
 import warnings
+from abc import abstractmethod
 from importlib._bootstrap import _ImportLockContext as ImportLock
 from types import ModuleType
 from typing import Any, ContextManager, Dict, List, NamedTuple, Tuple
@@ -32,6 +33,7 @@ from .fast_slow_proxy import (
     _is_function_or_method,
     _Unusable,
     get_final_type_map,
+    get_intermediate_type_map,
     get_registered_functions,
 )
 
@@ -78,9 +80,9 @@ class DeducedMode(NamedTuple):
     fast_lib: str
 
 
-def deduce_xdf_mode(slow_lib: str, fast_lib: str) -> DeducedMode:
+def deduce_cudf_pandas_mode(slow_lib: str, fast_lib: str) -> DeducedMode:
     """
-    Determine if xdf should use the requested fast library.
+    Determine if cudf.pandas should use the requested fast library.
 
     Parameters
     ----------
@@ -110,17 +112,17 @@ def deduce_xdf_mode(slow_lib: str, fast_lib: str) -> DeducedMode:
     )
 
 
-class ModuleFinderAndLoaderBase(
+class ModuleAcceleratorBase(
     importlib.abc.MetaPathFinder, importlib.abc.Loader
 ):
-    _instance: ModuleFinderAndLoaderBase | None = None
+    _instance: ModuleAcceleratorBase | None = None
     mod_name: str
     fast_lib: str
     slow_lib: str
 
     # When walking the module tree and wrapping module attributes,
     # we often will come across the same object more than once. We
-    # don't want to create separate xdf wrappers for each
+    # don't want to create separate wrappers for each
     # instance, so we keep a registry of all module attributes
     # that we can look up to see if we have already wrapped an
     # attribute before
@@ -144,9 +146,9 @@ class ModuleFinderAndLoaderBase(
         slow_lib
              Name of package that provides "slow" fallback implementation
         """
-        if ModuleFinderAndLoaderBase._instance is not None:
+        if ModuleAcceleratorBase._instance is not None:
             raise RuntimeError(
-                "Only one instance of ModuleFinderAndLoaderBase allowed"
+                "Only one instance of ModuleAcceleratorBase allowed"
             )
         self = object.__new__(cls)
         self.mod_name = mod_name
@@ -155,16 +157,23 @@ class ModuleFinderAndLoaderBase(
 
         # When walking the module tree and wrapping module attributes,
         # we often will come across the same object more than once. We
-        # don't want to create separate xdf wrappers for each
+        # don't want to create separate wrappers for each
         # instance, so we keep a registry of all module attributes
         # that we can look up to see if we have already wrapped an
         # attribute before
         self._wrapped_objs = {}
         self._wrapped_objs.update(get_final_type_map())
+        self._wrapped_objs.update(get_intermediate_type_map())
         self._wrapped_objs.update(get_registered_functions())
 
-        ModuleFinderAndLoaderBase._instance = self
+        ModuleAcceleratorBase._instance = self
         return self
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}"
+            f"(fast={self.fast_lib}, slow={self.slow_lib})"
+        )
 
     def find_spec(
         self, fullname: str, path, target=None
@@ -204,8 +213,9 @@ class ModuleFinderAndLoaderBase(
         # importlib calls this function with the global import lock held.
         self._populate_module(mod)
 
+    @abstractmethod
     def disabled(self) -> ContextManager:
-        raise NotImplementedError("Abstract base class")
+        pass
 
     def _postprocess_module(
         self,
@@ -232,18 +242,19 @@ class ModuleFinderAndLoaderBase(
         Notes
         -----
         The implementation of fast-slow proxies imposes certain
-        requirements on the wrapped modules that xdf delivers. This
+        requirements on the wrapped modules that it delivers. This
         function encodes those requirements and raises if the module
         does not satisfy them.
 
         This post-processing routine should be kept up to date with any
         requirements encoded by fast_slow_proxy.py
         """
-        mod.__dict__["_xdf_slow"] = slow_mod
+        mod.__dict__["_fsproxy_slow"] = slow_mod
         if fast_mod is not None:
-            mod.__dict__["_xdf_fast"] = fast_mod
+            mod.__dict__["_fsproxy_fast"] = fast_mod
         return mod
 
+    @abstractmethod
     def _populate_module(self, mod: ModuleType) -> ModuleType:
         """Populate given module with appropriate attributes.
 
@@ -266,8 +277,8 @@ class ModuleFinderAndLoaderBase(
         In addition to the attributes of the slow module,
         the returned module must have the following attributes:
 
-        - '_xdf_slow': the corresponding slow module
-        - '_xdf_fast': the corresponding fast module
+        - '_fsproxy_slow': the corresponding slow module
+        - '_fsproxy_fast': the corresponding fast module
 
         This is necessary for correct rewriting of UDFs when calling
         to the respective fast/slow libraries.
@@ -275,7 +286,7 @@ class ModuleFinderAndLoaderBase(
         The necessary invariants are checked and applied in
         :meth:`_postprocess_module`.
         """
-        raise NotImplementedError("Abstract base class")
+        pass
 
     def _wrap_attribute(
         self,
@@ -337,6 +348,7 @@ class ModuleFinderAndLoaderBase(
         return wrapped_attr
 
     @classmethod
+    @abstractmethod
     def install(
         cls, destination_module: str, fast_lib: str, slow_lib: str
     ) -> Self | None:
@@ -363,117 +375,31 @@ class ModuleFinderAndLoaderBase(
         returns the existing loader from ``sys.meta_path``.
 
         """
-        raise NotImplementedError("Abstract base class")
+        pass
 
 
-class XDFModuleFinderAndLoader(ModuleFinderAndLoaderBase):
+class ModuleAccelerator(ModuleAcceleratorBase):
     """
-    A finder and loader for importing xdf submodules.
-
-    When someone attempts to import xdf submodules that don't
-    actually exist, this importer is used. It creates new modules on
-    the fly that have the same named attributes as the corresponding
-    submodules in the slow library. The difference is that the module
-    attributes are wrapped in xdf wrappers that dispatch to the fast
-    library when possible.
-    """
-
-    def _populate_module(self, mod: ModuleType):
-        mod_name = mod.__name__
-        slow_mod = importlib.import_module(
-            rename_root_module(mod_name, self.mod_name, self.slow_lib)
-        )
-        try:
-            fast_mod = importlib.import_module(
-                rename_root_module(mod_name, self.mod_name, self.fast_lib)
-            )
-        except Exception:
-            fast_mod = None
-
-        # for any attribute in the corresponding slow module,
-        # replace it with a "fast-slow" version in xdf:
-        for key, _ in sorted_module_items(slow_mod):
-            # Only copy attributes that don't already exist
-            slow_attr = getattr(slow_mod, key)
-            fast_attr = getattr(fast_mod, key, _Unusable())
-            mod.__dict__.setdefault(
-                key, self._wrap_attribute(slow_attr, fast_attr, key)
-            )
-        return self._postprocess_module(mod, slow_mod, fast_mod)
-
-    def disabled(self):
-        """Return a no-op context manager.
-
-        This doesn't actually disable this loader (if you need to
-        access the real objects, don't use the xdf-wrapped types)
-
-        Notes
-        -----
-        This is for API-compatibility with the transparent loader.
-
-        Returns
-        -------
-        No-op context manager
-        """
-        return contextlib.nullcontext()
-
-    @classmethod
-    def install(cls, destination_module, fast_lib, slow_lib) -> Self:
-        mode = deduce_xdf_mode(slow_lib, fast_lib)
-        # Although we can't race against other threads importing
-        # slow_lib, we might race against another thread populating
-        # the module (or modifying sys.meta_path). In particular
-        # holding the lock here avoids racing against ourselves and
-        # the transparent module finder.
-        with ImportLock():
-            if mode.use_fast_lib:
-                importlib.import_module(
-                    f".._wrappers.{mode.slow_lib}", __name__
-                )
-            try:
-                (self,) = (
-                    p
-                    for p in sys.meta_path
-                    if isinstance(p, cls)
-                    and p.mod_name == destination_module
-                    and p.slow_lib == mode.slow_lib
-                    and p.fast_lib == mode.fast_lib
-                )
-            except ValueError:
-                self = cls(
-                    destination_module,
-                    mode.fast_lib,
-                    mode.slow_lib,
-                )
-                sys.meta_path.append(self)
-                self._populate_module(sys.modules[destination_module])
-            return self
-
-
-class TransparentModuleFinderAndLoader(ModuleFinderAndLoaderBase):
-    """
-    A finder and loader for importing xdf whenever someone attempts to
-    import the slow library
+    A finder and loader that produces "accelerated" modules.
 
     When someone attempts to import the specified slow library with
-    xdf transparent mode enabled, we intercept the import and deliver
-    an xdf-equivalent version of the module. This provides attributes
-    and modules that check if they are being used from "within" the
-    slow (or fast) library themselves. If this is the case, the
-    implementation is forwarded to the actual slow library
-    implementation, otherwise the xdf implementation is used (which
+    this finder enabled, we intercept the import and deliver an
+    equivalent, accelerated, version of the module. This provides
+    attributes and modules that check if they are being used from
+    "within" the slow (or fast) library themselves. If this is the
+    case, the implementation is forwarded to the actual slow library
+    implementation, otherwise a proxy implementation is used (which
     attempts to call the fast version first).
     """
 
     _denylist: List[str]
     _use_fast_lib: bool
     _use_fast_lib_lock: threading.RLock
-    _module_cache_prefix: str = "_xdf_"
+    _module_cache_prefix: str = "_slow_lib_"
 
     # TODO: Add possibility for either an explicit allow-list of
     # libraries where the slow_lib should be wrapped, or, more likely
-    # a block-list that adds to the set of libraries where xdf is not
-    # interposed.
+    # a block-list that adds to the set of libraries where no proxying occurs.
     def __new__(
         cls,
         fast_lib,
@@ -506,17 +432,17 @@ class TransparentModuleFinderAndLoader(ModuleFinderAndLoaderBase):
     def _populate_module(self, mod: ModuleType):
         mod_name = mod.__name__
 
-        # Here we attempt to import "_xdf_slow_lib.x.y.z", but
-        # "_xdf_slow_lib" does not exist anywhere as a real file, so
+        # Here we attempt to import "_fsproxy_slow_lib.x.y.z", but
+        # "_fsproxy_slow_lib" does not exist anywhere as a real file, so
         # how does this work?
         # The importer attempts to import ".z" by first importing
-        # "_xdf_slow_lib.x.y", this recurses until we find
-        # "_xdf_slow_lib.x" (say), which does exist because we set that up
+        # "_fsproxy_slow_lib.x.y", this recurses until we find
+        # "_fsproxy_slow_lib.x" (say), which does exist because we set that up
         # in __init__. Now the importer looks at the __path__
         # attribute of "x" and uses that to find the relative location
         # to look for "y". This __path__ points to the real location
         # of "slow_lib.x". So, as long as we rewire the _already imported_
-        # slow_lib modules in sys.modules to _xdf_slow_lib, when we
+        # slow_lib modules in sys.modules to _fsproxy_slow_lib, when we
         # get here this will find the right thing.
         # The above exposition is for lazily imported submodules (e.g.
         # avoiding circular imports by putting an import at function
@@ -579,7 +505,7 @@ class TransparentModuleFinderAndLoader(ModuleFinderAndLoaderBase):
 
     @contextlib.contextmanager
     def disabled(self):
-        """Return a context manager for disabling transparent mode.
+        """Return a context manager for disabling the module accelerator.
 
         Within the block, any wrapped objects will instead deliver
         attributes from their real counterparts (as if the current
@@ -607,7 +533,7 @@ class TransparentModuleFinderAndLoader(ModuleFinderAndLoaderBase):
         *,
         real: Dict[str, Any],
         wrapped: Dict[str, Any],
-        loader: TransparentModuleFinderAndLoader,
+        loader: ModuleAccelerator,
     ) -> Any:
         """
         Obtain an attribute from a module from either the real or
@@ -671,7 +597,7 @@ class TransparentModuleFinderAndLoader(ModuleFinderAndLoaderBase):
                     f"Destination module '{destination_module}' must match"
                     f"'{slow_lib}' for this to work."
                 )
-            mode = deduce_xdf_mode(slow_lib, fast_lib)
+            mode = deduce_cudf_pandas_mode(slow_lib, fast_lib)
             if mode.use_fast_lib:
                 importlib.import_module(
                     f".._wrappers.{mode.slow_lib}", __name__
@@ -690,13 +616,13 @@ class TransparentModuleFinderAndLoader(ModuleFinderAndLoaderBase):
             return self
 
 
-def disable_transparent_mode_if_enabled() -> contextlib.ExitStack:
+def disable_module_accelerator() -> contextlib.ExitStack:
     """
-    Temporarily disable transparent mode if it is enabled.
+    Temporarily disable any module acceleration.
     """
     with contextlib.ExitStack() as stack:
         for finder in sys.meta_path:
-            if isinstance(finder, ModuleFinderAndLoaderBase):
+            if isinstance(finder, ModuleAcceleratorBase):
                 stack.enter_context(finder.disabled())
         return stack.pop_all()
     assert False  # pacify type checker

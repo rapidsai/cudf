@@ -1074,6 +1074,18 @@ def test_index_append(data, other):
         assert_eq(expected, actual)
 
 
+def test_index_empty_append_name_conflict():
+    empty = cudf.Index([], name="foo")
+    non_empty = cudf.Index([1], name="bar")
+    expected = cudf.Index([1])
+
+    result = non_empty.append(empty)
+    assert_eq(result, expected)
+
+    result = empty.append(non_empty)
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -1457,6 +1469,11 @@ def test_index_drop_duplicates(data, dtype):
     assert_eq(pdi.drop_duplicates(), gdi.drop_duplicates())
 
 
+def test_dropna_bad_how():
+    with pytest.raises(ValueError):
+        cudf.Index([1]).dropna(how="foo")
+
+
 @pytest.mark.parametrize("data", [[1, 2, 3, 1, 2, 3, 4], []])
 @pytest.mark.parametrize(
     "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
@@ -1584,7 +1601,7 @@ def test_multiindex_to_arrow():
     )
     pdf["a"] = pdf["a"].astype("category")
     df = cudf.from_pandas(pdf)
-    gdi = cudf.Index(df)
+    gdi = cudf.MultiIndex.from_frame(df)
 
     expected = pa.Table.from_pandas(pdf)
     got = gdi.to_arrow()
@@ -1621,6 +1638,31 @@ def test_index_equals_categories():
     expect = lhs.to_pandas().equals(rhs.to_pandas())
 
     assert_eq(expect, got)
+
+
+def test_rangeindex_arg_validation():
+    with pytest.raises(TypeError):
+        RangeIndex("1")
+
+    with pytest.raises(TypeError):
+        RangeIndex(1, "2")
+
+    with pytest.raises(TypeError):
+        RangeIndex(1, 3, "1")
+
+    with pytest.raises(ValueError):
+        RangeIndex(1, dtype="float64")
+
+    with pytest.raises(ValueError):
+        RangeIndex(1, dtype="uint64")
+
+
+def test_rangeindex_name_not_hashable():
+    with pytest.raises(ValueError):
+        RangeIndex(range(2), name=["foo"])
+
+    with pytest.raises(ValueError):
+        RangeIndex(range(2)).copy(name=["foo"])
 
 
 def test_index_rangeindex_search_range():
@@ -2697,7 +2739,9 @@ def test_index_hasnans(data):
     gs = cudf.Index(data, nan_as_null=False)
     ps = gs.to_pandas(nullable=True)
 
-    assert_eq(gs.hasnans, ps.hasnans)
+    # Check type to avoid mixing Python bool and NumPy bool
+    assert isinstance(gs.hasnans, bool)
+    assert gs.hasnans == ps.hasnans
 
 
 @pytest.mark.parametrize(
@@ -2870,3 +2914,25 @@ def test_period_index_error():
         cudf.Series(pd.Series(pidx))
     with pytest.raises(NotImplementedError):
         cudf.Series(pd.array(pidx))
+
+
+def test_index_from_dataframe_valueerror():
+    with pytest.raises(ValueError):
+        cudf.Index(cudf.DataFrame(range(1)))
+
+
+def test_index_from_scalar_valueerror():
+    with pytest.raises(ValueError):
+        cudf.Index(11)
+
+
+@pytest.mark.parametrize("idx", [0, np.int64(0)])
+def test_index_getitem_from_int(idx):
+    result = cudf.Index([1, 2])[idx]
+    assert result == 1
+
+
+@pytest.mark.parametrize("idx", [1.5, True, "foo"])
+def test_index_getitem_from_nonint_raises(idx):
+    with pytest.raises(ValueError):
+        cudf.Index([1, 2])[idx]

@@ -101,13 +101,13 @@ def wrap_ndarray(cls, arr: cupy.ndarray | numpy.ndarray, constructor):
     else:
         # Note, this super call means that the constructed ndarray
         # class cannot be subclassed (because then super(cls,
-        # cls)._xdf_wrap produces an infinite loop). Really this
+        # cls)._fsproxy_wrap produces an infinite loop). Really this
         # should be super(ndarray, cls), but we don't have access to
         # the ndarray type until after we need to pass this function
         # in. So it works for now since without subclassing,
         # super(ndarray, cls) == super(ndarray, ndarray) == super(cls,
         # cls)
-        return super(cls, cls)._xdf_wrap(arr, constructor)
+        return super(cls, cls)._fsproxy_wrap(arr, constructor)
 
 
 ndarray = make_final_proxy_type(
@@ -128,7 +128,7 @@ ndarray = make_final_proxy_type(
         # iter(numpy-array) produces an iterable of scalars)
         "__iter__": custom_iter,
         # Special wrapping to handle scalar values
-        "_xdf_wrap": classmethod(wrap_ndarray),
+        "_fsproxy_wrap": classmethod(wrap_ndarray),
     },
 )
 

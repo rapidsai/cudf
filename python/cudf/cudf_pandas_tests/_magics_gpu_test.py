@@ -12,7 +12,6 @@
 
 def ipython_magics_gpu_test():
     from IPython.core.interactiveshell import InteractiveShell
-    from IPython.utils.io import capture_output
 
     # Use in-memory history file to avoid file handles leaking
     # https://github.com/pandas-dev/pandas/pull/35711
@@ -24,17 +23,10 @@ def ipython_magics_gpu_test():
     ip = InteractiveShell(config=c)
     ip.run_line_magic("load_ext", "cudf.pandas")
 
-    # Directly check for private xdf attribute
+    # Directly check for private proxy attribute
     ip.run_cell("import pandas as pd; s = pd.Series(range(5))")
-    result = ip.run_cell("assert hasattr(s, '_xdf_state')")
+    result = ip.run_cell("assert hasattr(s, '_fsproxy_state')")
     result.raise_error()
-
-    # Indirectly check correct type
-    with capture_output() as output:
-        ip.run_cell(
-            "import pandas as pd; s = pd.Series(range(5)); print(type(s))"
-        )
-    assert output.stdout == "<class 'cudf.pandas._wrappers.pandas.Series'>\n"
 
 
 if __name__ == "__main__":

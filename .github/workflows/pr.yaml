@@ -19,16 +19,16 @@ jobs:
       - wheel-tests-cudf
       - wheel-build-dask-cudf
       - wheel-tests-dask-cudf
-      - unit-tests-xdf
-      - pandas-tests-xdf-main
-      - pandas-tests-xdf-pr
-      - pandas-tests-xdf-diff
-      - pandas-tests-xdf-diff-comment
+      - unit-tests-cudf-pandas
+      - pandas-tests-main
+      - pandas-tests-pr
+      - pandas-tests-diff
+      - pandas-tests-diff-comment
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/pr-builder.yaml@branch-23.10
+    uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@branch-23.10
   checks:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/checks.yaml@branch-23.10
+    uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-23.10
     with:
       enable_check_generated_files: false
   changed_files:
@@ -55,7 +55,7 @@ jobs:
   wheel-build-cudf:
     needs: checks
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-build.yaml@branch-23.10
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-23.10
     with:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
@@ -63,7 +63,7 @@ jobs:
   wheel-build-cudf-main:
     needs: checks
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-build.yaml@branch-23.10
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-23.10
     with:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
@@ -72,7 +72,7 @@ jobs:
     if: needs.changed_files.outputs.cudf_files_changed == 'true'
     needs: [wheel-build-cudf, changed_files]
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-test.yaml@branch-23.10
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-23.10
     with:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
@@ -80,7 +80,7 @@ jobs:
   wheel-build-dask-cudf:
     needs: wheel-tests-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-build.yaml@branch-23.10
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-23.10
     with:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
@@ -88,51 +88,51 @@ jobs:
   wheel-tests-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-test.yaml@branch-23.10
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-23.10
     with:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
       script: ci/test_wheel_dask_cudf.sh
-  unit-tests-xdf:
+  unit-tests-cudf-pandas:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-test.yaml@branch-23.10
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-23.10
     with:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
-      script: ci/xdf_scripts/run_tests.sh
-  pandas-tests-xdf-main:
-    # run the Pandas unit tests using xdf (main branch)
+      script: ci/cudf_pandas_scripts/run_tests.sh
+  pandas-tests-main:
+    # run the Pandas unit tests using main branch
     needs: wheel-build-cudf-main
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-test.yaml@branch-23.10
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-23.10
     with:
       matrix_filter: map(select(.ARCH == "amd64")) | max_by(.CUDA_VER) | [.]
       build_type: pull-request
-      script: ci/xdf_scripts/pandas-tests/run.sh main --transparent
-  pandas-tests-xdf-pr:
-    # run the Pandas unit tests using xdf (PR branch)
+      script: ci/cudf_pandas_scripts/pandas-tests/run.sh main
+  pandas-tests-pr:
+    # run the Pandas unit tests using PR branch
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-test.yaml@branch-23.10
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-23.10
     with:
       matrix_filter: map(select(.ARCH == "amd64")) | max_by(.CUDA_VER) | [.]
       build_type: pull-request
-      script: ci/xdf_scripts/pandas-tests/run.sh pr --transparent
-  pandas-tests-xdf-diff:
+      script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
+  pandas-tests-diff:
     # diff the results of running the Pandas unit tests and publish a job summary
-    needs: [pandas-tests-xdf-main, pandas-tests-xdf-pr]
+    needs: [pandas-tests-main, pandas-tests-pr]
     secrets: inherit
     # This branch exports a `job_output` output that the downstream job reads.
-    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@wence/fea/custom-job-output
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@wence/fea/custom-job-output
     with:
       node_type: cpu4
       build_type: pull-request
-      run_script: ci/xdf_scripts/pandas-tests/diff.sh
-  pandas-tests-xdf-diff-comment:
+      run_script: ci/cudf_pandas_scripts/pandas-tests/diff.sh
+  pandas-tests-diff-comment:
     # Post comment of pass/fail rate on PR
     runs-on: ubuntu-latest
-    needs: pandas-tests-xdf-diff
+    needs: pandas-tests-diff
     steps:
       - uses: actions/github-script@v6
         with:
@@ -144,7 +144,7 @@ jobs:
             }
             const summary_url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const prNumber = branch.split("/")[1];
-            const summary_comment = `${{ needs.pandas-tests-xdf-diff.outputs.job_output }}`;
+            const summary_comment = `${{ needs.pandas-tests-diff.outputs.job_output }}`;
             github.rest.issues.createComment({
               issue_number: prNumber,
               owner: context.repo.owner,
