@@ -656,6 +656,7 @@ ConfigureTest(
   streams/text/tokenize_test.cpp STREAM_MODE testing
 )
 ConfigureTest(STREAM_LISTS_TEST streams/lists_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_JSONIO_TEST streams/io/json_test.cpp STREAM_MODE testing)
 
 # ##################################################################################################
 # Install tests ####################################################################################
