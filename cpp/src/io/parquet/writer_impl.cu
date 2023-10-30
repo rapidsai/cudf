@@ -1372,7 +1372,7 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
   EncodePageHeaders(batch_pages, comp_res, batch_pages_stats, chunk_stats, stream);
   GatherPages(d_chunks_in_batch.flat_view(), pages, stream);
 
-  // by now, the var_bytes has been calculated in InitPages, and the histograms in EncodePages.
+  // By now, the var_bytes has been calculated in InitPages, and the histograms in EncodePages.
   // EncodeColumnIndexes can encode the histograms in the ColumnIndex, and also sum up var_bytes
   // and the histograms for inclusion in the chunk's SizeStats.
   if (column_stats != nullptr) {
@@ -1438,7 +1438,7 @@ size_t column_index_buffer_size(EncColumnChunk* ck,
   auto const var_bytes_size = col.physical_type == BYTE_ARRAY ? 6 + 5 * num_pages : 0;
 
   // for the histograms, need 1 byte for marker, 1 byte vec type, 4 bytes length,
-  // (max_level + 1) * 5 byte per page
+  // (max_level + 1) * 5 bytes per page
   auto const has_def       = col.max_def_level > DEF_LVL_HIST_CUTOFF;
   auto const has_rep       = col.max_def_level > REP_LVL_HIST_CUTOFF;
   auto const def_hist_size = has_def ? 6 + 5 * num_pages * (col.max_def_level + 1) : 0;
@@ -1881,7 +1881,6 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
           // SizeStatistics are on the ColumnIndex, so only need to allocate the histograms data
           // if we're doing page-level indexes. add 1 to num_pages for per-chunk histograms.
-
           auto const num_histograms = ck->num_pages - (ck->use_dictionary ? 1 : 0) + 1;
 
           if (col.max_def_level > DEF_LVL_HIST_CUTOFF) {
@@ -2083,12 +2082,12 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           auto const& col         = col_desc[ck.col_desc_id];
           auto& column_chunk_meta = row_group.columns[i].meta_data;
 
-          // add SizeStatistics for the chunk. for now we're only going to do the column chunk
-          // stats if we're also doing them at the page level. there really isn't much value for
+          // Add SizeStatistics for the chunk. For now we're only going to do the column chunk
+          // stats if we're also doing them at the page level. There really isn't much value for
           // us in per-chunk stats since everything we do processing wise is at the page level.
           SizeStatistics chunk_stats;
 
-          // TODO(ets): this should only be set for byte array. for now use size as a proxy.
+          // var_byte_size will only be non-zero for byte array columns.
           if (ck.var_bytes_size > 0) {
             chunk_stats.unencoded_byte_array_data_bytes = ck.var_bytes_size;
           }

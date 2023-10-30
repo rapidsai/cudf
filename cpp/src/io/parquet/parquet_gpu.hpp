@@ -493,9 +493,9 @@ struct EncColumnChunk {
   uint32_t column_index_size;  //!< Size of column index blob
   uint32_t encodings;          //!< Mask representing the set of encodings used for this chunk
   // FIXME(ets): these should probably be uint64_t
-  uint32_t* def_histogram_data;  //!< buffers for size histograms. one for chunk and one per page.
-  uint32_t* rep_histogram_data;  //!< sized (max(level) + 1) * (num_data_pages + 1)
-  size_t var_bytes_size;         //!< sum of var_bytes_size from the pages (strings only)
+  uint32_t* def_histogram_data;  //!< Buffers for size histograms. One for chunk and one per page.
+  uint32_t* rep_histogram_data;  //!< Size is (max(level) + 1) * (num_data_pages + 1).
+  size_t var_bytes_size;         //!< Sum of var_bytes_size from the pages (byte arrays only)
 };
 
 /**
@@ -522,12 +522,9 @@ struct EncPage {
   compression_result* comp_res;    //!< Ptr to compression result
   uint32_t num_nulls;              //!< Number of null values (V2 only) (down here for alignment)
   encode_kernel_mask kernel_mask;  //!< Mask used to control which encoding kernels to run
-  // additions for SizeStatistics
-  // FIXME(ets): these should probably be uint64_t
-  uint32_t* def_histogram;  //!< histogram of counts for each definition level
-  uint32_t* rep_histogram;  //!< histogram of counts for each repetition level
-  //!< histograms should be sized as max(level) + 1
-  uint32_t var_bytes_size;  //!< number of variable length bytes in the page (strings only)
+  uint32_t* def_histogram;         //!< Histogram of counts for each definition level
+  uint32_t* rep_histogram;         //!< Histogram of counts for each repetition level
+  uint32_t var_bytes_size;  //!< Number of variable length bytes in the page (byte arrays only)
 };
 
 /**

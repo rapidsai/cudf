@@ -261,7 +261,7 @@ struct Statistics {
  * @brief Thrift-derived struct containing statistics used to estimate page and column chunk sizes
  */
 struct SizeStatistics {
-  // number of variable-width bytes stored for the page/chunk. should not be set for anything
+  // Number of variable-width bytes stored for the page/chunk. Should not be set for anything
   // but the BYTE_ARRAY physical type.
   thrust::optional<int64_t> unencoded_byte_array_data_bytes;
   /**
@@ -313,7 +313,7 @@ struct ColumnIndex {
   BoundaryOrder boundary_order =
     BoundaryOrder::UNORDERED;        // Indicates if min and max values are ordered
   std::vector<int64_t> null_counts;  // Optional count of null values per page
-  // repetition/definition level histograms for the column chunk
+  // Repetition/definition level histograms for the column chunk
   thrust::optional<std::vector<int64_t>> repetition_level_histogram;
   thrust::optional<std::vector<int64_t>> definition_level_histogram;
 };
@@ -358,7 +358,7 @@ struct ColumnChunk {
 
   // Following fields are derived from other fields
   int schema_idx = -1;  // Index in flattened schema (derived from path_in_schema)
-  // the indexes don't really live here, but it's a convenient place to hang them
+  // The indexes don't really live here, but it's a convenient place to hang them.
   std::optional<OffsetIndex> offset_index;
   std::optional<ColumnIndex> column_index;
 };

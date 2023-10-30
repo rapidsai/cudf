@@ -241,6 +241,9 @@ Encoding __device__ determine_encoding(PageType page_type,
   }
 }
 
+/**
+ * @brief Generate level histogram for a block of level values.
+ */
 template <int block_size>
 void __device__ gen_hist(uint32_t* hist,
                          rle_page_enc_state_s const* s,
@@ -252,6 +255,8 @@ void __device__ gen_hist(uint32_t* hist,
   __shared__ typename block_reduce::TempStorage temp_storage;
   auto const t = threadIdx.x;
 
+  // Do a block sum for each level rather than each thread trying an atomicAdd.
+  // This way is much faster.
   auto const mylvl = s->vals[rolling_index<rle_buffer_size>(rle_numvals + t)];
   for (uint32_t lvl = 0; lvl < maxlvl; lvl++) {
     uint32_t const is_yes = t < nrows and mylvl == lvl;
@@ -630,9 +635,9 @@ __global__ void __launch_bounds__(128)
           if (max_data_size > std::numeric_limits<int32_t>::max()) {
             CUDF_UNREACHABLE("page size exceeds maximum for i32");
           }
-          // if byte_array, then we need to save the variable bytes size
+          // if byte_array then save the variable bytes size
           if (ck_g.col_desc->physical_type == BYTE_ARRAY) {
-            // page size is the sum of frag sizes, and frag sizes for strings includes the
+            // Page size is the sum of frag sizes, and frag sizes for strings includes the
             // 4-byte length indicator, so subtract that.
             page_g.var_bytes_size = var_bytes_size - page_g.num_leaf_values * sizeof(size_type);
           }
@@ -2689,13 +2694,6 @@ __global__ void __launch_bounds__(1)
   auto const ck_rep_hist = ck_g->rep_histogram_data + (num_data_pages) * (cd->max_rep_level + 1);
 
   // optionally encode histograms and sum var_bytes.
-  auto const need_var_bytes = col_g.physical_type == BYTE_ARRAY;
-
-  // TODO(ets): if the spec retains the current organization for the histograms, then we should
-  // be able to do a linear scan here across all the histograms of the chunk.
-  // {ck_g->def_histogram_data,ck_def_hist} would be the start/end bounds. this might complicate
-  // the chunk histogram calculation though...would still need nested loop or use mod to get the
-  // level index.
   if (cd->max_rep_level > REP_LVL_HIST_CUTOFF) {
     encoder.field_list_begin(6, num_data_pages * (cd->max_rep_level + 1), ST_FLD_I64);
     for (uint32_t page = first_data_page; page < num_pages; page++) {
@@ -2720,7 +2718,7 @@ __global__ void __launch_bounds__(1)
     encoder.field_list_end(7);
   }
 
-  if (need_var_bytes) {
+  if (col_g.physical_type == BYTE_ARRAY) {
     for (uint32_t page = first_data_page; page < num_pages; page++) {
       auto const& pg = ck_g->pages[page];
       var_bytes += pg.var_bytes_size;
