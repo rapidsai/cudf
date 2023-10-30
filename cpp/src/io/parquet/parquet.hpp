@@ -263,7 +263,7 @@ struct Statistics {
 struct SizeStatistics {
   // number of variable-width bytes stored for the page/chunk. should not be set for anything
   // but the BYTE_ARRAY physical type.
-  thrust::optional<int64_t> unencoded_byte_array_data_bytes = thrust::nullopt;
+  thrust::optional<int64_t> unencoded_byte_array_data_bytes;
   /**
    * When present, there is expected to be one element corresponding to each
    * repetition (i.e. size=max repetition_level+1) where each element
@@ -272,14 +272,14 @@ struct SizeStatistics {
    *
    * This value should not be written if max_repetition_level is 0.
    */
-  thrust::optional<std::vector<int64_t>> repetition_level_histogram = thrust::nullopt;
+  thrust::optional<std::vector<int64_t>> repetition_level_histogram;
 
   /**
    * Same as repetition_level_histogram except for definition levels.
    *
    * This value should not be written if max_definition_level is 0 or 1.
    */
-  thrust::optional<std::vector<int64_t>> definition_level_histogram = thrust::nullopt;
+  thrust::optional<std::vector<int64_t>> definition_level_histogram;
 };
 
 /**
@@ -300,7 +300,7 @@ struct OffsetIndex {
   std::vector<PageLocation> page_locations;
   // per-page size info. see description of the same field in SizeStatistics. only present for
   // columns with a BYTE_ARRAY physical type.
-  thrust::optional<std::vector<int64_t>> unencoded_byte_array_data_bytes = thrust::nullopt;
+  thrust::optional<std::vector<int64_t>> unencoded_byte_array_data_bytes;
 };
 
 /**
@@ -314,8 +314,8 @@ struct ColumnIndex {
     BoundaryOrder::UNORDERED;        // Indicates if min and max values are ordered
   std::vector<int64_t> null_counts;  // Optional count of null values per page
   // repetition/definition level histograms for the column chunk
-  thrust::optional<std::vector<int64_t>> repetition_level_histogram = thrust::nullopt;
-  thrust::optional<std::vector<int64_t>> definition_level_histogram = thrust::nullopt;
+  thrust::optional<std::vector<int64_t>> repetition_level_histogram;
+  thrust::optional<std::vector<int64_t>> definition_level_histogram;
 };
 
 /**
@@ -336,8 +336,7 @@ struct ColumnChunkMetaData {
   int64_t dictionary_page_offset =
     0;                    // Byte offset from the beginning of file to first (only) dictionary page
   Statistics statistics;  // Encoded chunk-level statistics
-  thrust::optional<SizeStatistics> size_statistics =
-    thrust::nullopt;  // Size statistics for the chunk
+  thrust::optional<SizeStatistics> size_statistics;  // Size statistics for the chunk
 };
 
 /**
