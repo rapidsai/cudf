@@ -3,17 +3,8 @@
 
 set -eou pipefail
 
-# Set the manylinux version to pull the newer ABI wheels when testing on Ubuntu
-# 20.04 or later. Note that this logic is specific to the current set of
-# citestwheel images and would need to change if the images change.
-manylinux="manylinux_2_17"
-if command -v lsb_release >/dev/null 2>&1 ; then
-    release_info=$(lsb_release -r)
-    major_version=$(echo "$release_info" | awk '{print $2}' | cut -d. -f1)
-    if [[ ${major_version} -ge 20 ]]; then
-        manylinux="manylinux_2_28"
-    fi
-fi
+# Set the manylinux version used for downloading the wheels
+manylinux="manylinux_$(ldd --version | head -1 | grep -o "[0-9]\.[0-9]\+" | sed 's/\./_/g')"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 RAPIDS_PY_WHEEL_NAME="cudf_${manylinux}_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./dist
