@@ -56,12 +56,14 @@ function(find_libarrow_in_python_wheel PYARROW_VERSION)
   # When using the libarrow inside a wheel, whether or not libcudf may be built
   # using the new C++11 ABI is dependent on whether the libarrow inside the
   # wheel was compiled using that ABI because we need the arrow library that we
-  # bundle in cudf to be ABI-compatible with the one inside pyarrow.  Note that
-  # tests will not build successfully without also propagating these options to
-  # builds of GTest. Similarly, benchmarks will not work without updating
-  # GBench (and possibly NVBench) builds. We are currently ignoring these
-  # limitations since we don't anticipate using this feature except for
-  # building wheels.
+  # bundle in cudf to be ABI-compatible with the one inside pyarrow. We
+  # determine what options to use by checking the glibc version on the current
+  # system, which is also how pip determines which manylinux-versioned pyarrow
+  # wheel to install. Note that tests will not build successfully without also
+  # propagating these options to builds of GTest. Similarly, benchmarks will
+  # not work without updating GBench (and possibly NVBench) builds. We are
+  # currently ignoring these limitations since we don't anticipate using this
+  # feature except for building wheels.
   EXECUTE_PROCESS(
     COMMAND ${CMAKE_C_COMPILER} -print-file-name=libc.so.6
     OUTPUT_VARIABLE GLIBC_EXECUTABLE
