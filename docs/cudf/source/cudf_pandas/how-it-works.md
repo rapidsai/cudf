@@ -1,4 +1,5 @@
 # How it works
+
 When using cuDF’s pandas accelerator mode, operations execute on the GPU where
 possible and on the CPU otherwise, synchronizing under the hood as needed.
 
@@ -14,15 +15,18 @@ default sort and join ordering.
 
 ## Understanding Performance
 
-When using cuDF’s pandas accelerator mode, operations execute on the GPU where
-possible and on the CPU otherwise, synchronizing under the hood as needed.
+Because some operations in a workflow may run on the CPU, cuDF provides unique
+profiling tools to help understand performance specifically designed for pandas
+accelerator mode.
 
-As a result, it’s possible a workflow will run some operations on the GPU and
-some on the CPU, depending on the specific details.
+The function profiler gives visibility into which operations used the GPU or
+CPU, how many times each operation was executed, how much time each operation
+took, and the total time elapsed. It also provides a quick-link to file a
+Github issue to start a discussion about potential additional functionality
+based on the output of your profile.
 
-cuDF Pandas Accelerator Mode provides a profiling utility to help understand
-performance and provide visibility into which operations used the GPU or the
-CPU.
+When using cudf.pandas in a Jupyter Notebook, the function profiler can be used
+with the `%%cudf.pandas.profile` magic:
 
 
 ```python
@@ -32,22 +36,18 @@ import pandas as pd
 
 ```python
 %%cudf.pandas.profile
+df = pd.DataFrame({'a': [0, 1, 2], 'b': [3,4,3]})
 
-df = pd.DataFrame({'a': [0, 1, 2], 'b': "a"})
-df.max(skipna=True)
-
-axis = 0
-for i in range(0, 2):
-	df.min(axis=axis)
-	axis = 1
-
+df.min(axis=1)
 out = df.groupby('a').filter(
-	lambda group: len(group) > 1
+    lambda group: len(group) > 1
 )
 ```
 
 ![cudf.pandas profile](../_static/cudf.pandas-profile.png)
 
+When using cudf.pandas at the command line to profile a Python script, the
+function profiler can be used with `python -m cudf.pandas --profile script.py`.
 
 ## How is this different from other DataFrame-like libraries?
 
@@ -63,8 +63,14 @@ test suite coverage
 
 ## How We Ensure Consistency with Pandas
 
-Pandas unit testing
-Integration testing
+Every change to cuDF pandas accelerator mode is tested against the entire
+pandas unit test suite. Currently, we’re passing 93% of the 187,000+ unit
+tests, with a goal of passing 100%.
 
-Learn more in the #pandas_coverage FAQ
+We also run nightly continuous integration (CI) tests to track interactions
+between cudf.pandas and other third party libraries. These tests currently
+cover most canonical use cases between pandas and the corresponding libraries.
+
+To learn more about consistency with pandas and third-party library
+compatibility, please visit the [FAQ](/faq.html).
 
