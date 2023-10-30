@@ -39,12 +39,6 @@ namespace cudf::io::parquet::detail {
 // per mini-block. While encoding, the lowest delta value is subtracted from all the deltas in the
 // block to ensure that all encoded values are positive. The deltas for each mini-block are bit
 // packed using the same encoding as the RLE/Bit-Packing Hybrid encoder.
-//
-// DELTA_BYTE_ARRAY encoding (incremental encoding or front compression), is used for BYTE_ARRAY
-// columns. For each element in a sequence of strings, a prefix length from the preceding string
-// and a suffix is stored. The prefix lengths are DELTA_BINARY_PACKED encoded. The suffixes are
-// encoded with DELTA_LENGTH_BYTE_ARRAY encoding, which is a DELTA_BINARY_PACKED list of suffix
-// lengths, followed by the concatenated suffix data.
 
 // we decode one mini-block at a time. max mini-block size seen is 64.
 constexpr int delta_rolling_buf_size = 128;

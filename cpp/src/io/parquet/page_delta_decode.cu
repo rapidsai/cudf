@@ -29,14 +29,18 @@ namespace {
 
 constexpr int decode_block_size = 128;
 
+// DELTA_BYTE_ARRAY encoding (incremental encoding or front compression), is used for BYTE_ARRAY
+// columns. For each element in a sequence of strings, a prefix length from the preceding string
+// and a suffix is stored. The prefix lengths are DELTA_BINARY_PACKED encoded. The suffixes are
+// encoded with DELTA_LENGTH_BYTE_ARRAY encoding, which is a DELTA_BINARY_PACKED list of suffix
+// lengths, followed by the concatenated suffix data.
 struct delta_byte_array_decoder {
-  uint8_t const* last_string;
-  uint8_t const* suffix_data;
+  uint8_t const* last_string;       // pointer to last decoded string...needed for its prefix
+  uint8_t const* suffix_char_data;  // pointer to the start of character data
 
-  // used when skipping values
-  uint8_t* temp_buf;
-  uint32_t start_val;  // decoded strings up to this index will be dumped to temp_buf
-  uint32_t last_string_len;
+  uint8_t* temp_buf;         // buffer used when skipping values
+  uint32_t start_val;        // decoded strings up to this index will be dumped to temp_buf
+  uint32_t last_string_len;  // length of the last decoded string
 
   delta_binary_decoder prefixes;  // state of decoder for prefix lengths
   delta_binary_decoder suffixes;  // state of decoder for suffix lengths
@@ -45,7 +49,7 @@ struct delta_byte_array_decoder {
   __device__ void init(uint8_t const* start, uint8_t const* end, uint32_t start_idx, uint8_t* temp)
   {
     auto const* suffix_start = prefixes.find_end_of_block(start, end);
-    suffix_data              = suffixes.find_end_of_block(suffix_start, end);
+    suffix_char_data         = suffixes.find_end_of_block(suffix_start, end);
     last_string              = nullptr;
     temp_buf                 = temp;
     start_val                = start_idx;
@@ -154,7 +158,7 @@ struct delta_byte_array_decoder {
       auto const so_ptr = out + string_off;
 
       // copy suffixes into string data
-      if (ln_idx < end) { memcpy(so_ptr + prefix_len, suffix_data + suffix_off, suffix_len); }
+      if (ln_idx < end) { memcpy(so_ptr + prefix_len, suffix_char_data + suffix_off, suffix_len); }
       __syncwarp();
 
       // copy prefixes into string data.
@@ -166,8 +170,8 @@ struct delta_byte_array_decoder {
         // set last_string to this lane's string
         last_string     = out + string_off;
         last_string_len = string_len;
-        // and consume used suffix_data
-        suffix_data += suffix_off + suffix_len;
+        // and consume used suffix_char_data
+        suffix_char_data += suffix_off + suffix_len;
       }
 
       return warp_total;
@@ -229,10 +233,12 @@ struct delta_byte_array_decoder {
       // for longer strings use a 4-byte version stolen from gather_chars_fn_string_parallel.
       if (string_len > 64) {
         if (prefix_len > 0) { wideStrcpy(so_ptr, last_string, prefix_len, lane_id); }
-        if (suffix_len > 0) { wideStrcpy(so_ptr + prefix_len, suffix_data, suffix_len, lane_id); }
+        if (suffix_len > 0) {
+          wideStrcpy(so_ptr + prefix_len, suffix_char_data, suffix_len, lane_id);
+        }
       } else {
         for (int i = lane_id; i < string_len; i += warp_size) {
-          so_ptr[i] = i < prefix_len ? last_string[i] : suffix_data[i - prefix_len];
+          so_ptr[i] = i < prefix_len ? last_string[i] : suffix_char_data[i - prefix_len];
         }
       }
       __syncwarp();
@@ -242,7 +248,7 @@ struct delta_byte_array_decoder {
       if (lane_id == 0) {
         last_string     = so_ptr;
         last_string_len = string_len;
-        suffix_data += suffix_len;
+        suffix_char_data += suffix_len;
         if (idx == start_val - 1) {
           so_ptr = strings_out;
         } else {
