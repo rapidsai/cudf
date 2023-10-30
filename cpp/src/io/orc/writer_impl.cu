@@ -1882,7 +1882,7 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
       auto& current_sizes =
         elem_sizes.insert({orc_col.index(), rmm::device_uvector<uint32_t>(orc_col.size(), stream)})
           .first->second;
-      thrust::tabulate(rmm::exec_policy(stream),
+      thrust::tabulate(rmm::exec_policy_nosync(stream),
                        current_sizes.begin(),
                        current_sizes.end(),
                        [d_cols  = device_span<orc_column_device_view const>{orc_table.d_columns},
@@ -1908,24 +1908,13 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
                          return varint_size(zigzaged_value);
                        });
 
-      // Compute element offsets within each row group
-      thrust::for_each_n(rmm::exec_policy(stream),
-                         thrust::make_counting_iterator(0ul),
-                         segmentation.num_rowgroups(),
-                         [sizes     = device_span<uint32_t>{current_sizes},
-                          rg_bounds = device_2dspan<rowgroup_rows const>{segmentation.rowgroups},
-                          col_idx   = orc_col.index()] __device__(auto rg_idx) {
-                           auto const& range = rg_bounds[rg_idx][col_idx];
-                           thrust::inclusive_scan(thrust::seq,
-                                                  sizes.begin() + range.begin,
-                                                  sizes.begin() + range.end,
-                                                  sizes.begin() + range.begin);
-                         });
-
       orc_col.attach_decimal_offsets(current_sizes.data());
     }
   }
   if (elem_sizes.empty()) return {};
+
+  // Compute element offsets within each row group
+  gpu::decimal_sizes_to_offsets(segmentation.rowgroups, elem_sizes, stream);
 
   // Gather the row group sizes and copy to host
   auto d_tmp_rowgroup_sizes = rmm::device_uvector<uint32_t>(segmentation.num_rowgroups(), stream);

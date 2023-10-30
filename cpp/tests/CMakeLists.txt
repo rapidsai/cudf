@@ -641,15 +641,19 @@ ConfigureTest(
   streams/strings/contains_test.cpp
   streams/strings/convert_test.cpp
   streams/strings/extract_test.cpp
+  streams/strings/filter_test.cpp
   streams/strings/find_test.cpp
   streams/strings/replace_test.cpp
+  streams/strings/reverse_test.cpp
   streams/strings/split_test.cpp
   streams/strings/strings_tests.cpp
   STREAM_MODE
   testing
 )
 ConfigureTest(STREAM_SORTING_TEST streams/sorting_test.cpp STREAM_MODE testing)
-ConfigureTest(STREAM_TEXT_TEST streams/text/ngrams_test.cpp STREAM_MODE testing)
+ConfigureTest(
+  STREAM_TEXT_TEST streams/text/ngrams_test.cpp streams/text/tokenize_test.cpp STREAM_MODE testing
+)
 ConfigureTest(STREAM_LISTS_TEST streams/lists_test.cpp STREAM_MODE testing)
 
 # ##################################################################################################
