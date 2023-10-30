@@ -54,6 +54,7 @@ classifiers = [
 
 [project.optional-dependencies]
 test = [
+    "cramjam",
     "fastavro>=0.22.9",
     "hypothesis",
     "mimesis>=4.1.0",
