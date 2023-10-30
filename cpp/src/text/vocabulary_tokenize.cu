@@ -252,7 +252,6 @@ __global__ void token_counts_fn(cudf::column_device_view const d_strings,
 
   using warp_reduce = cub::WarpReduce<cudf::size_type>;
   __shared__ typename warp_reduce::TempStorage warp_storage;
-  // auto const num_valid = min(cudf::detail::warp_size, d_str.size_bytes());
 
   cudf::size_type count = 0;
   if (lane_idx == 0) {
