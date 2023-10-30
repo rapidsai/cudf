@@ -66,9 +66,12 @@ workflows today. If you are looking for accelerated OOC and distributed
 solutions for data processing we recommend Dask and Apache Spark.
 
 Both Dask and Apache Spark support accelerated computing through configuration
-based interfaces. Dask allows you to configure the dataframe backend to use
-cuDF (learn more in this blog) and the RAPIDS Accelerator for Apache Spark
-provides a similar
+based interfaces. Dask allows you to [configure the dataframe
+backend](https://docs.dask.org/en/latest/how-to/selecting-the-collection-backend.html) to use
+cuDF (learn more in [this
+blog](https://medium.com/rapids-ai/easy-cpu-gpu-arrays-and-dataframes-run-your-dask-code-where-youd-like-e349d92351d)) and the [RAPIDS Accelerator for Apache Spark](https://nvidia.github.io/spark-rapids/)
+provides a similar configuration-based plugin for Spark.
+
 
 ## Are there any known limitations?
 
@@ -81,25 +84,25 @@ formats using the NumPy C API
   - For example, you can `torch.tensor(df.values)` but not `torch.from_numpy(df.values), as the latter uses the NumPy C API
 - Joins are not currently guaranteed to maintain the same row ordering as
 standard pandas
-- `cudf.pandas` can’t currently directly convert a dataframe into PyArrow table cudf.pandas isn’t compatible with directly using `import cudf` in workflows and is intended for pandas users
+- cudf.pandas isn't compatible with directly using `import cudf` in workflows and is intended for pandas-based workflows.
 - Global variables can - be accessed but can’t be modified during CPU-fallback
 
-```python
-%load_ext cudf.pandas
-import pandas as pd
+  ```python
+   %load_ext cudf.pandas
+   import pandas as pd
 
-lst = [10]
+   lst = [10]
 
-def udf(x):
-    lst.append(x)
-    return x + lst[0]
+   def udf(x):
+       lst.append(x)
+       return x + lst[0]
 
-s = pd.Series(range(2)).apply(udf)
-print(s) # we can access the value in lst
-0    10
-1    11
-dtype: int64
-print(lst) # lst is unchanged, as this specific UDF could not run on the GPU
-[10]
-```
-
+   s = pd.Series(range(2)).apply(udf)
+   print(s) # we can access the value in lst
+   0    10
+   1    11
+   dtype: int64
+   print(lst) # lst is unchanged, as this specific UDF could not run on the GPU
+   [10]
+   ```
+- `cudf.pandas` (and cuDF in general) is currently only compatible with pandas 1.5.x

@@ -1,24 +1,18 @@
-cudf.pandas
-===========
+cuDF Pandas Accelerator Mode
+-----------------------------
 
-OPEN BETA: ACCELERATING PANDAS WITH ZERO CODE CHANGE
-----------------------------------------------------
+Open Beta: Accelerating pandas with zero coda change
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. image:: ../_static/colab.png
+    :width: 200px
 
 `Try it now on Colab <http://nvda.ws/rapids-cudf>`_
 
 
-
-cuDF Pandas Accelerator Mode
------------------------------
 A unified CPU/GPU experience that brings best-in-class performance to your
 pandas workflows, ``cudf.pandas`` is designed for people who want to keep using
 pandas as data sizes grow into the GBs and performance slows.
-
-
-Bringing the Speed of cuDF to Every pandas User
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-``cudf.pandas`` can be used with Jupyter Notebooks or any Python script:
 
 +---------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------+
 | **Zero Code Change Acceleration**                                                           | **Third-Party Library Compatible**                                                                                  |
@@ -30,6 +24,11 @@ Bringing the Speed of cuDF to Every pandas User
 | Develop, test, and run in production with a single codebase, regardless of hardware.        | Keep using pandas rather than learning new frameworks or paradigms as your data grows. Just accelerate it on a GPU. |
 +---------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------+
 
+
+Bringing the Speed of cuDF to Every pandas User
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``cudf.pandas`` can be used with Jupyter Notebooks or any Python script:
 
 
 .. list-table::
@@ -69,16 +68,19 @@ scales).
     :class: align-center
 
 Learn more about these benchmark results and how to reproduce them in the
-[announcement blog].
+:ref:`benchmarks`.
 
 Getting Started
 ---------------
+
+.. image:: ../_static/colab.png
+    :width: 200px
 
 `Try it now on Colab <http://nvda.ws/rapids-cudf>`_
 Take cuDF’s new pandas Accelerator Mode for a test-drive in a free `GPU-enabled
 notebook <http://nvda.ws/rapids-cudf>`_ environment using your Google account.
 
-Visit the `RAPIDS Quick Start <https://rapids.ai/#quick-start`_ to get
+Visit the `RAPIDS Quick Start <https://rapids.ai/#quick-start>`_ to get
 up-and-running on every other platform.
 
 .. toctree::
