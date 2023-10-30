@@ -1,7 +1,7 @@
 cuDF Pandas Accelerator Mode
 -----------------------------
 
-Open Beta: Accelerating pandas with zero coda change
+Open Beta: Accelerating pandas with zero code change
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. image:: ../_static/colab.png
