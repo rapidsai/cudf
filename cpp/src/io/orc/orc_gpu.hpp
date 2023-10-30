@@ -425,6 +425,20 @@ void rowgroup_char_counts(device_2dspan<size_type> counts,
                           rmm::cuda_stream_view stream);
 
 /**
+ * @brief Converts sizes of decimal elements to offsets within the rowgroup.
+ *
+ * @note The conversion is done in-place. After the conversion, the device vectors in \p elem_sizes
+ * hold the offsets.
+ *
+ * @param rg_bounds Ranges of rows in each rowgroup [rowgroup][column]
+ * @param elem_sizes Map between column indexes and decimal element sizes
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
+void decimal_sizes_to_offsets(device_2dspan<rowgroup_rows const> rg_bounds,
+                              std::map<uint32_t, rmm::device_uvector<uint32_t>>& elem_sizes,
+                              rmm::cuda_stream_view stream);
+
+/**
  * @brief Launches kernels to initialize statistics collection
  *
  * @param[out] groups Statistics groups (rowgroup-level)

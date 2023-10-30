@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -169,13 +169,14 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
 
 }  // namespace detail
 
-std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& input,
                                          cudf::column_view const& row_indices,
                                          cudf::string_scalar const& separator,
+                                         rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::detokenize(strings, row_indices, separator, cudf::get_default_stream(), mr);
+  return detail::detokenize(input, row_indices, separator, stream, mr);
 }
 
 }  // namespace nvtext

@@ -12,6 +12,7 @@ from pandas.core.tools.datetimes import is_datetime64tz_dtype
 
 import dask.dataframe as dd
 from dask import config
+from dask.array.dispatch import percentile_lookup
 from dask.dataframe.backends import (
     DataFrameBackendEntrypoint,
     PandasBackendEntrypoint,
@@ -320,56 +321,45 @@ def get_grouper_cudf(obj):
     return cudf.core.groupby.Grouper
 
 
-try:
-    try:
-        from dask.array.dispatch import percentile_lookup
-    except ImportError:
-        from dask.dataframe.dispatch import (
-            percentile_dispatch as percentile_lookup,
-        )
+@percentile_lookup.register((cudf.Series, cp.ndarray, cudf.BaseIndex))
+@_dask_cudf_nvtx_annotate
+def percentile_cudf(a, q, interpolation="linear"):
+    # Cudf dispatch to the equivalent of `np.percentile`:
+    # https://numpy.org/doc/stable/reference/generated/numpy.percentile.html
+    a = cudf.Series(a)
+    # a is series.
+    n = len(a)
+    if not len(a):
+        return None, n
+    if isinstance(q, Iterator):
+        q = list(q)
 
-    @percentile_lookup.register((cudf.Series, cp.ndarray, cudf.BaseIndex))
-    @_dask_cudf_nvtx_annotate
-    def percentile_cudf(a, q, interpolation="linear"):
-        # Cudf dispatch to the equivalent of `np.percentile`:
-        # https://numpy.org/doc/stable/reference/generated/numpy.percentile.html
-        a = cudf.Series(a)
-        # a is series.
-        n = len(a)
-        if not len(a):
-            return None, n
-        if isinstance(q, Iterator):
-            q = list(q)
+    if cudf.api.types.is_categorical_dtype(a.dtype):
+        result = cp.percentile(a.cat.codes, q, interpolation=interpolation)
 
-        if cudf.api.types.is_categorical_dtype(a.dtype):
-            result = cp.percentile(a.cat.codes, q, interpolation=interpolation)
-
-            return (
-                pd.Categorical.from_codes(
-                    result, a.dtype.categories, a.dtype.ordered
-                ),
-                n,
-            )
-        if np.issubdtype(a.dtype, np.datetime64):
-            result = a.quantile(
-                [i / 100.0 for i in q], interpolation=interpolation
-            )
-
-            if q[0] == 0:
-                # https://github.com/dask/dask/issues/6864
-                result[0] = min(result[0], a.min())
-            return result.to_pandas(), n
-        if not np.issubdtype(a.dtype, np.number):
-            interpolation = "nearest"
         return (
-            a.quantile(
-                [i / 100.0 for i in q], interpolation=interpolation
-            ).to_pandas(),
+            pd.Categorical.from_codes(
+                result, a.dtype.categories, a.dtype.ordered
+            ),
             n,
         )
+    if np.issubdtype(a.dtype, np.datetime64):
+        result = a.quantile(
+            [i / 100.0 for i in q], interpolation=interpolation
+        )
 
-except ImportError:
-    pass
+        if q[0] == 0:
+            # https://github.com/dask/dask/issues/6864
+            result[0] = min(result[0], a.min())
+        return result.to_pandas(), n
+    if not np.issubdtype(a.dtype, np.number):
+        interpolation = "nearest"
+    return (
+        a.quantile(
+            [i / 100.0 for i in q], interpolation=interpolation
+        ).to_pandas(),
+        n,
+    )
 
 
 @pyarrow_schema_dispatch.register((cudf.DataFrame,))
