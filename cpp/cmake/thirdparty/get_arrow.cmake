@@ -53,15 +53,15 @@ function(find_libarrow_in_python_wheel PYARROW_VERSION)
   find_package(Arrow ${PYARROW_VERSION} MODULE REQUIRED GLOBAL)
   add_library(arrow_shared ALIAS Arrow::Arrow)
 
-  # When using the libarrow inside a wheel we must build libcudf with the old ABI because pyarrow's
-  # `libarrow.so` is compiled for manylinux2014 (centos7 toolchain) which uses the old ABI. Note
-  # that these flags will often be redundant because we build wheels in manylinux containers that
-  # actually have the old libc++ anyway, but setting them explicitly ensures correct and consistent
-  # behavior in all other cases such as aarch builds on newer manylinux or testing builds in newer
-  # containers. Note that tests will not build successfully without also propagating these options
-  # to builds of GTest. Similarly, benchmarks will not work without updating GBench (and possibly
-  # NVBench) builds. We are currently ignoring these limitations since we don't anticipate using
-  # this feature except for building wheels.
+  # When using the libarrow inside a wheel, whether or not libcudf may be built
+  # using the new C++11 ABI is dependent on whether the libarrow inside the
+  # wheel was compiled using that ABI because we need the arrow library that we
+  # bundle in cudf to be ABI-compatible with the one inside pyarrow.  Note that
+  # tests will not build successfully without also propagating these options to
+  # builds of GTest. Similarly, benchmarks will not work without updating
+  # GBench (and possibly NVBench) builds. We are currently ignoring these
+  # limitations since we don't anticipate using this feature except for
+  # building wheels.
   EXECUTE_PROCESS(
     COMMAND ${CMAKE_C_COMPILER} -print-file-name=libc.so.6
     OUTPUT_VARIABLE GLIBC_EXECUTABLE
