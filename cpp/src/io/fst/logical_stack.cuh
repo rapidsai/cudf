@@ -163,9 +163,10 @@ struct NewlineToResetStackSegmentOp {
 template <typename TargetT>
 struct ModToTargetTypeOpT {
   template <typename T>
-  constexpr CUDF_HOST_DEVICE uint32_t operator()(T const& val) const
+  constexpr CUDF_HOST_DEVICE TargetT operator()(T const& val) const
   {
-    return val % (static_cast<T>(cuda::std::numeric_limits<TargetT>::max()) + static_cast<T>(1));
+    return static_cast<TargetT>(
+      val % (static_cast<T>(cuda::std::numeric_limits<TargetT>::max()) + static_cast<T>(1)));
   }
 };
 
