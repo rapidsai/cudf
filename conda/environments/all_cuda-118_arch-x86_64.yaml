@@ -15,6 +15,7 @@ dependencies:
 - c-compiler
 - cachetools
 - cmake>=3.26.4
+- cramjam
 - cubinlinker
 - cuda-nvtx=11.8
 - cuda-python>=11.7.1,<12.0a0
