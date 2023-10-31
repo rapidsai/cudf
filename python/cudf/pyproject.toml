@@ -17,7 +17,7 @@ requires = [
 
 [project]
 name = "cudf"
-version = "23.12.00"
+dynamic = ["version"]
 description = "cuDF - GPU Dataframe"
 readme = { file = "README.md", content-type = "text/markdown" }
 authors = [
@@ -77,6 +77,9 @@ Documentation = "https://docs.rapids.ai/api/cudf/stable/"
 
 [tool.setuptools]
 license-files = ["LICENSE"]
+
+[tool.setuptools.dynamic]
+version = {file = "cudf/VERSION"}
 
 [tool.isort]
 line_length = 79
