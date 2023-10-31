@@ -20,7 +20,7 @@ if [[ ${glibc_minor_version} -ge 28 ]]; then
 fi
 manylinux="manylinux_${manylinux_version}"
 
-RAPIDS_PY_WHEEL_NAME="cudf_${manylinux}_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./dist
+RAPIDS_PY_WHEEL_NAME="cudf_${manylinux}_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
 python -m pip install --no-deps ./local-cudf-dep/cudf*.whl
 
 # Always install latest dask for testing
