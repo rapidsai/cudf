@@ -638,13 +638,14 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
 
   CUDF_EXPECTS(key_cols.size() == column_order.size(),
                "Mismatched size between key_cols and column_order");
-  CUDF_EXPECTS(std::accumulate(tables_to_merge.cbegin(),
-                               tables_to_merge.cend(),
-                               cudf::size_type{0},
-                               [](auto const& running_sum, auto const& tbl) {
-                                 return running_sum + tbl.num_rows();
-                               }) <= std::numeric_limits<cudf::size_type>::max(),
-               "Total number of merged rows exceeds row limit");
+  CUDF_EXPECTS(
+    std::accumulate(tables_to_merge.cbegin(),
+                    tables_to_merge.cend(),
+                    std::size_t{0},
+                    [](auto const& running_sum, auto const& tbl) {
+                      return running_sum + static_cast<std::size_t>(tbl.num_rows());
+                    }) <= static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
+    "Total number of merged rows exceeds row limit");
 
   // This utility will ensure all corresponding dictionary columns have matching keys.
   // It will return any new dictionary columns created as well as updated table_views.
