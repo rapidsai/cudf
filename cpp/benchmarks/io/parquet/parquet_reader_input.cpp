@@ -210,7 +210,8 @@ using compression_list =
 
 NVBENCH_BENCH_TYPES(BM_parquet_read_data, NVBENCH_TYPE_AXES(d_type_list))
   .set_name("parquet_read_decode")
-  .set_type_axes_names({"data_type", "io"})
+  .set_type_axes_names({"data_type"})
+  .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
@@ -228,7 +229,6 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_chunks,
   .set_name("parquet_read_chunks")
   .set_type_axes_names({"data_type", "io"})
   .set_min_samples(4)
-  .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32})
   .add_int64_axis("byte_limit", {0, 500'000});
