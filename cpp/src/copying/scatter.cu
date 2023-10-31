@@ -268,8 +268,9 @@ struct column_scalar_scatterer_impl<struct_view, MapIterator> {
 
     // Compute null mask
     rmm::device_buffer null_mask =
-      target.nullable() ? copy_bitmask(target, stream, mr)
-                        : create_null_mask(target.size(), mask_state::UNALLOCATED, stream, mr);
+      target.nullable()
+        ? detail::copy_bitmask(target, stream, mr)
+        : detail::create_null_mask(target.size(), mask_state::UNALLOCATED, stream, mr);
     column null_mask_stub(data_type{type_id::STRUCT},
                           target.size(),
                           rmm::device_buffer{},

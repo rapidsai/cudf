@@ -2830,6 +2830,14 @@ def test_parquet_reader_unsupported_page_encoding(datadir):
         cudf.read_parquet(fname)
 
 
+def test_parquet_reader_detect_bad_dictionary(datadir):
+    fname = datadir / "bad_dict.parquet"
+
+    # expect a failure when reading the whole file
+    with pytest.raises(RuntimeError):
+        cudf.read_parquet(fname)
+
+
 @pytest.mark.parametrize("data", [{"a": [1, 2, 3, 4]}, {"b": [1, None, 2, 3]}])
 @pytest.mark.parametrize("force_nullable_schema", [True, False])
 def test_parquet_writer_schema_nullability(data, force_nullable_schema):

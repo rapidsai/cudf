@@ -619,10 +619,10 @@ add_library(
   src/text/normalize.cu
   src/text/replace.cu
   src/text/stemmer.cu
-  src/text/subword/bpe_tokenizer.cu
+  src/text/bpe/byte_pair_encoding.cu
+  src/text/bpe/load_merge_pairs.cu
   src/text/subword/data_normalizer.cu
   src/text/subword/load_hash_file.cu
-  src/text/subword/load_merges_file.cu
   src/text/subword/subword_tokenize.cu
   src/text/subword/wordpiece_tokenizer.cu
   src/text/tokenize.cu
@@ -840,6 +840,7 @@ if(CUDF_BUILD_TESTUTIL)
     tests/io/metadata_utilities.cpp
     tests/utilities/base_fixture.cpp
     tests/utilities/column_utilities.cu
+    tests/utilities/debug_utilities.cu
     tests/utilities/table_utilities.cu
     tests/utilities/tdigest_utilities.cu
   )

@@ -214,25 +214,26 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
 
 // external API
 
-std::unique_ptr<column> all_characters_of_type(strings_column_view const& strings,
+std::unique_ptr<column> all_characters_of_type(strings_column_view const& input,
                                                string_character_types types,
                                                string_character_types verify_types,
+                                               rmm::cuda_stream_view stream,
                                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::all_characters_of_type(
-    strings, types, verify_types, cudf::get_default_stream(), mr);
+  return detail::all_characters_of_type(input, types, verify_types, stream, mr);
 }
 
-std::unique_ptr<column> filter_characters_of_type(strings_column_view const& strings,
+std::unique_ptr<column> filter_characters_of_type(strings_column_view const& input,
                                                   string_character_types types_to_remove,
                                                   string_scalar const& replacement,
                                                   string_character_types types_to_keep,
+                                                  rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::filter_characters_of_type(
-    strings, types_to_remove, replacement, types_to_keep, cudf::get_default_stream(), mr);
+    input, types_to_remove, replacement, types_to_keep, stream, mr);
 }
 
 }  // namespace strings
