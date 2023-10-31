@@ -2575,3 +2575,10 @@ def test_series_categorical_missing_value_count():
     actual = gs.value_counts()
 
     assert_eq(expected, actual, check_dtype=False)
+
+
+def test_series_error_nan_mixed_types():
+    ps = pd.Series([np.nan, "ab", "cd"])
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(pa.ArrowInvalid):
+            cudf.from_pandas(ps)

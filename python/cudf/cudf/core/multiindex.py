@@ -1604,7 +1604,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @classmethod
     @_cudf_nvtx_annotate
-    def from_pandas(cls, multiindex, nan_as_null=None):
+    def from_pandas(cls, multiindex, nan_as_null=no_default):
         """
         Convert from a Pandas MultiIndex
 
@@ -1625,6 +1625,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         """
         if not isinstance(multiindex, pd.MultiIndex):
             raise TypeError("not a pandas.MultiIndex")
+        if nan_as_null is no_default:
+            nan_as_null = (
+                False if cudf.get_option("mode.pandas_compatible") else None
+            )
 
         # if `multiindex` has two or more levels that
         # have the same name, then `multiindex.to_frame()`
