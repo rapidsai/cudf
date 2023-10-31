@@ -661,6 +661,7 @@ dependencies:
           - xarray
           - xlrd
           - xlsxwriter
+          - xlwt
           - zstandard
   test_python_cudf_pandas:
     common:
