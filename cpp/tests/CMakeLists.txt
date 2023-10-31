@@ -357,6 +357,7 @@ ConfigureTest(
 ConfigureTest(
   UTILITIES_TEST
   utilities_tests/type_list_tests.cpp
+  utilities_tests/column_debug_tests.cpp
   utilities_tests/column_utilities_tests.cpp
   utilities_tests/column_wrapper_tests.cpp
   utilities_tests/lists_column_wrapper_tests.cpp
@@ -629,16 +630,32 @@ ConfigureTest(STREAM_FILLING_TEST streams/filling_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_GROUPBY_TEST streams/groupby_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_HASHING_TEST streams/hash_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_INTEROP_TEST streams/interop_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_NULL_MASK_TEST streams/null_mask_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_REPLACE_TEST streams/replace_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_SEARCH_TEST streams/search_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_DICTIONARY_TEST streams/dictionary_test.cpp STREAM_MODE testing)
 ConfigureTest(
-  STREAM_STRINGS_TEST streams/strings/case_test.cpp streams/strings/find_test.cpp STREAM_MODE
+  STREAM_STRINGS_TEST
+  streams/strings/case_test.cpp
+  streams/strings/combine_test.cpp
+  streams/strings/contains_test.cpp
+  streams/strings/convert_test.cpp
+  streams/strings/extract_test.cpp
+  streams/strings/filter_test.cpp
+  streams/strings/find_test.cpp
+  streams/strings/replace_test.cpp
+  streams/strings/reverse_test.cpp
+  streams/strings/split_test.cpp
+  streams/strings/strings_tests.cpp
+  STREAM_MODE
   testing
 )
 ConfigureTest(STREAM_SORTING_TEST streams/sorting_test.cpp STREAM_MODE testing)
-ConfigureTest(STREAM_TEXT_TEST streams/text/ngrams_test.cpp STREAM_MODE testing)
+ConfigureTest(
+  STREAM_TEXT_TEST streams/text/ngrams_test.cpp streams/text/tokenize_test.cpp STREAM_MODE testing
+)
 ConfigureTest(STREAM_LISTS_TEST streams/lists_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_JSONIO_TEST streams/io/json_test.cpp STREAM_MODE testing)
 
 # ##################################################################################################
 # Install tests ####################################################################################
