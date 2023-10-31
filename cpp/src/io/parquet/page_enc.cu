@@ -243,7 +243,46 @@ Encoding __device__ determine_encoding(PageType page_type,
 
 /**
  * @brief Generate level histogram for a block of level values.
+ *
+ * For definition levels, the histogram values h(0)...h(max_def-1) represent nulls at
+ * various levels of the hierarchy, and h(max_def) is the number of non-null values.
+ * If max_rep == 0, then the number of values equals the number of rows. To generate
+ * the histogram, we can just do the null values, and then calculate h(max_def) at the
+ * end as `num_values - sum(h(0)..h(max_def-1))`. Oh, so num_leaf_values is
+ * h(max_def-1) + h(max_def), btw. So we can just do the first max_def - 1 values.
+ *
+ * For repetition levels, h(0) equals the number of rows. Here we can calculate
+ * h(1)..h(max_rep-1), set h(0) directly, and then obtain h(max_rep) in the same way as
+ * for the definition levels.
  */
+template <int block_size, typename state_buf>
+void __device__ gen_histograms_list_col(
+  uint32_t* hist, state_buf const* s, bool is_repetition, int lvl_start, int lvl_end)
+{
+  using block_reduce = cub::BlockReduce<int, block_size>;
+  __shared__ typename block_reduce::TempStorage temp_storage;
+
+  auto const t                  = threadIdx.x;
+  auto const page_first_val_idx = s->col.level_offsets[s->page.start_row];
+  auto const col_last_val_idx   = s->col.level_offsets[s->col.num_rows];
+
+  uint8_t const* const lvl_data = is_repetition ? s->col.rep_values : s->col.def_values;
+
+  for (int lvl = lvl_start; lvl < lvl_end; lvl++) {
+    int nval_in_level = 0;
+    for (int i = 0; i < s->page.num_values; i += block_size) {
+      auto const lidx = i + t;
+      auto const gidx = page_first_val_idx + lidx;
+      if (lidx < s->page.num_values && gidx < col_last_val_idx && lvl_data[gidx] == lvl) {
+        nval_in_level++;
+      }
+    }
+    __syncthreads();
+    auto const lvl_sum = block_reduce(temp_storage).Sum(nval_in_level);
+    if (t == 0) { hist[lvl] = lvl_sum; }
+  }
+}
+
 template <int block_size>
 void __device__ gen_hist(uint32_t* hist,
                          rle_page_enc_state_s const* s,
@@ -258,13 +297,13 @@ void __device__ gen_hist(uint32_t* hist,
   // Do a block sum for each level rather than each thread trying an atomicAdd.
   // This way is much faster.
   auto const mylvl = s->vals[rolling_index<rle_buffer_size>(rle_numvals + t)];
-  for (uint32_t lvl = 0; lvl < maxlvl; lvl++) {
+  // This call is only used for def levels, so we can start at 1 because hist[0] can be derived.
+  for (uint32_t lvl = 1; lvl < maxlvl; lvl++) {
     uint32_t const is_yes = t < nrows and mylvl == lvl;
     auto const lvl_sum    = block_reduce(temp_storage).Sum(is_yes);
     if (t == 0) { hist[lvl] += lvl_sum; }
     __syncthreads();
   }
-  __syncthreads();
 }
 
 // operator to use with warp_reduce. stolen from cub::Sum
@@ -1234,8 +1273,9 @@ __global__ void __launch_bounds__(block_size, 8) gpuEncodePageLevels(device_span
         s->vals[rolling_idx(rle_numvals + t)] = def_lvl;
         __syncthreads();
         if (s->page.def_histogram != nullptr) {
-          gen_hist<block_size>(
-            s->page.def_histogram, s, nrows, rle_numvals, s->col.max_def_level + 1);
+          // Only calculate up to max_def_level...the last entry is valid_count and will be filled
+          // in later.
+          gen_hist<block_size>(s->page.def_histogram, s, nrows, rle_numvals, s->col.max_def_level);
         }
         rle_numvals += nrows;
         RleEncode(s, rle_numvals, def_lvl_bits, (rle_numvals == s->page.num_rows), t);
@@ -1258,11 +1298,7 @@ __global__ void __launch_bounds__(block_size, 8) gpuEncodePageLevels(device_span
   } else if (s->page.page_type != PageType::DICTIONARY_PAGE &&
              s->col.num_rep_level_bits() != 0  // This means there ARE repetition levels (has list)
   ) {
-    auto encode_levels = [&](uint8_t const* lvl_val_data,
-                             uint32_t nbits,
-                             uint32_t& lvl_bytes,
-                             uint32_t* hist,
-                             uint32_t max_lvl) {
+    auto encode_levels = [&](uint8_t const* lvl_val_data, uint32_t nbits, uint32_t& lvl_bytes) {
       // For list types, the repetition and definition levels are pre-calculated. We just need to
       // encode and write them now.
       if (!t) {
@@ -1285,7 +1321,6 @@ __global__ void __launch_bounds__(block_size, 8) gpuEncodePageLevels(device_span
           (rle_numvals + t < s->page.num_values && idx < col_last_val_idx) ? lvl_val_data[idx] : 0;
         s->vals[rolling_idx(rle_numvals + t)] = lvl_val;
         __syncthreads();
-        if (hist != nullptr) { gen_hist<block_size>(hist, s, nvals, rle_numvals, max_lvl); }
         rle_numvals += nvals;
         RleEncode(s, rle_numvals, nbits, (rle_numvals == s->page.num_values), t);
         __syncthreads();
@@ -1304,17 +1339,9 @@ __global__ void __launch_bounds__(block_size, 8) gpuEncodePageLevels(device_span
         }
       }
     };
-    encode_levels(s->col.rep_values,
-                  s->col.num_rep_level_bits(),
-                  s->page.rep_lvl_bytes,
-                  s->page.rep_histogram,
-                  s->col.max_rep_level + 1);
+    encode_levels(s->col.rep_values, s->col.num_rep_level_bits(), s->page.rep_lvl_bytes);
     __syncthreads();
-    encode_levels(s->col.def_values,
-                  s->col.num_def_level_bits(),
-                  s->page.def_lvl_bytes,
-                  s->page.def_histogram,
-                  s->col.max_def_level + 1);
+    encode_levels(s->col.def_values, s->col.num_def_level_bits(), s->page.def_lvl_bytes);
   }
 
   if (t == 0) { pages[blockIdx.x] = s->page; }
@@ -1330,11 +1357,61 @@ __device__ void finish_page_encode(state_buf* s,
                                    device_span<compression_result> comp_results,
                                    bool write_v2_headers)
 {
+  // valid_count is only valid on thread 0
+  __shared__ uint32_t num_valid;
   auto const t = threadIdx.x;
 
   // V2 does not compress rep and def level data
   size_t const skip_comp_size =
     write_v2_headers ? s->page.def_lvl_bytes + s->page.rep_lvl_bytes : 0;
+
+  // this will be true if max_rep > 0 (i.e. there are lists)
+  if (s->page.rep_histogram != nullptr) {
+    if (t == 0) { num_valid = valid_count; }
+
+    // for repetition we get hist[0] from num_rows, and can derive hist[max_rep_level]
+    gen_histograms_list_col<block_size>(s->page.rep_histogram, s, true, 1, s->col.max_rep_level);
+
+    if (t == 0) {
+      s->page.rep_histogram[0] = s->page.num_rows;
+      int hist_n               = s->page.num_values - s->page.num_rows;
+      for (int i = 1; i < s->col.max_rep_level; i++) {
+        hist_n -= s->page.rep_histogram[i];
+      }
+      s->page.rep_histogram[s->col.max_rep_level] = hist_n;
+    }
+    __syncthreads();
+
+    if (s->page.def_histogram != nullptr) {
+      // for definition, we know hist[max_rep_level] = valid_count,
+      // hist[max_rep_level - 1] = num_leaf_values - valid_count, and can derive hist[0]
+      // as num_values - sum(hist[1] - hist[max_rep_level])
+      // but if there are no leaf nulls, we lose a level and the above doesn't work.
+      int last_lvl = s->col.max_def_level;
+      if (num_valid != s->page.num_leaf_values) { last_lvl--; }
+      gen_histograms_list_col<block_size>(s->page.def_histogram, s, false, 1, last_lvl);
+
+      if (t == 0) {
+        s->page.def_histogram[s->col.max_def_level] = num_valid;
+        if (num_valid != s->page.num_leaf_values) {
+          s->page.def_histogram[s->col.max_def_level - 1] = s->page.num_leaf_values - num_valid;
+        }
+        int hist_0 = s->page.num_values - s->page.num_leaf_values;
+        for (int i = 1; i < last_lvl; i++) {
+          hist_0 -= s->page.def_histogram[i];
+        }
+        s->page.def_histogram[0] = hist_0;
+      }
+    }
+  } else if (s->page.def_histogram != nullptr) {
+    if (t == 0) {
+      s->page.def_histogram[s->col.max_def_level] = valid_count;
+      int hist_0                                  = s->page.num_values - valid_count;
+      for (int i = 1; i < s->col.max_def_level; i++) {
+        hist_0 -= s->page.def_histogram[i];
+      }
+    }
+  }
 
   if (t == 0) {
     // only need num_nulls for v2 data page headers
