@@ -69,7 +69,7 @@ struct bpe_unpairable_offsets_fn {
     if (!cudf::strings::detail::is_begin_utf8_char(d_chars[idx])) { return 0; }
 
     auto const itr  = d_chars.data() + idx;
-    auto const end  = d_chars.end();  // + chars_size;
+    auto const end  = d_chars.end();
     auto const lhs  = cudf::string_view(itr, cudf::strings::detail::bytes_in_utf8_byte(*itr));
     auto const next = itr + lhs.size_bytes();
     auto output     = 0;
@@ -81,20 +81,6 @@ struct bpe_unpairable_offsets_fn {
       }
     }
     return output;
-
-    // Alternate solution that only checks one substring.
-    // No noticeable performance improvement.
-    // auto const lhs = [begin = itr, end] {
-    //   auto next = begin + (begin < end);
-    //   while (next < end && !cudf::strings::detail::is_begin_utf8_char(*next)) {
-    //     ++next;
-    //   }
-    //   return cudf::string_view(begin, static_cast<cudf::size_type>(thrust::distance(begin,
-    //   next)));
-    // }();
-    // d_offsets[idx] = (((itr + lhs.size_bytes()) < end) && (d_map.find(lhs) == d_map.end()))
-    //                    ? idx + lhs.size_bytes() + offset  // offset for artificial boundary
-    //                    : 0;
   }
 };
 
@@ -185,6 +171,12 @@ __global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
   auto min_rank = max_rank;
 
   // store all the initial ranks for each pair
+  // every character but the first and last one will have a pair and a rank
+  //
+  // Example:
+  // string:   abcdefghij
+  // spaces:   1111111111
+  // ranks:    *948516327*
   for (auto itr = d_spaces + lane_idx; itr < end_spaces; itr += block_size) {
     if (*itr == 0) { continue; }  // skips any UTF-8 continuation bytes
     // resolve pair and lookup its rank
@@ -198,7 +190,7 @@ __global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
         auto const map_itr = d_map.find(mp);                     // lookup pair in merges table;
         if (map_itr != d_map.end()) { rank = map_itr->second; }  // found a match;
         d_ranks[thrust::distance(d_spaces, next_itr)] = rank;    // store the rank
-        if (rank < min_rank) min_rank = rank;
+        if (rank < min_rank) { min_rank = rank; }
       }
     }
   }
@@ -217,12 +209,19 @@ __global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
           --ptr;
         }
         // set the output value to 0 at this position (erases separator, merges pair)
+        // using example string above, the min-rank is 1 at position 5
+        // string: abcdefghij
+        // spaces: 1111101111  (set position 5 to 0)
         if (*ptr != block_min_rank) { d_spaces[thrust::distance(d_ranks, itr)] = 0; }
       }
     }
     __syncthreads();
 
     // identify all the re-rank locations (logic above invalidated adjacent pairs)
+    // using example string above, the adjacent pairs have to be re-ranked
+    // string: abcdefghij
+    // spaces: 1111101111
+    // rerank: 0000101000 ('ef' and 'fg' need re-ranking as 'def' and 'efg'
     for (auto itr = d_ranks + lane_idx; itr < end_ranks; itr += block_size) {
       auto const index = thrust::distance(d_ranks, itr);
       if (*itr == block_min_rank && d_spaces[index] == 0) {
