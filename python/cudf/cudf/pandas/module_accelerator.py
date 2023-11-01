@@ -17,6 +17,7 @@ import importlib
 import importlib.abc
 import importlib.machinery
 import os
+import pathlib
 import sys
 import threading
 import warnings
@@ -569,7 +570,8 @@ class ModuleAccelerator(ModuleAcceleratorBase):
             assert frame.f_back
             calling_module = frame.f_back.f_code.co_filename
             use_real = any(
-                calling_module.startswith(path) for path in loader._denylist
+                pathlib.PurePath(calling_module).is_relative_to(path)
+                for path in loader._denylist
             )
         try:
             if use_real:
