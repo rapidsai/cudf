@@ -1393,7 +1393,7 @@ __device__ void finish_page_encode(state_buf* s,
 
     if (t == 0) {
       s->page.rep_histogram[0] = s->page.num_rows;
-      int hist_n               = s->page.num_values - s->page.num_rows;
+      uint32_t hist_n          = s->page.num_values - s->page.num_rows;
       for (int i = 1; i < s->col.max_rep_level; i++) {
         hist_n -= s->page.rep_histogram[i];
       }
@@ -1402,20 +1402,19 @@ __device__ void finish_page_encode(state_buf* s,
     __syncthreads();
 
     if (s->page.def_histogram != nullptr) {
-      // for definition, we know hist[max_rep_level] = valid_count,
-      // hist[max_rep_level - 1] = num_leaf_values - valid_count, and can derive hist[0]
-      // as num_values - sum(hist[1] - hist[max_rep_level])
-      // but if there are no leaf nulls, we lose a level and the above doesn't work.
-      int last_lvl = s->col.max_def_level;
-      if (num_valid != s->page.num_leaf_values) { last_lvl--; }
+      // For definition, we know h`ist[max_rep_level] = valid_count`. If the leaf level is
+      // nullable, then `hist[max_rep_level - 1] = num_leaf_values - valid_count`. Finally,
+      // hist[0] can be derived as `num_values - sum(hist[1]..hist[max_rep_level])`.
+      bool const is_leaf_nullable = s->col.is_leaf_nullable;
+      auto const last_lvl = is_leaf_nullable ? s->col.max_def_level - 1 : s->col.max_def_level;
       gen_histograms_list_col<block_size>(s->page.def_histogram, s, s->col.def_values, 1, last_lvl);
 
       if (t == 0) {
         s->page.def_histogram[s->col.max_def_level] = num_valid;
-        if (num_valid != s->page.num_leaf_values) {
-          s->page.def_histogram[s->col.max_def_level - 1] = s->page.num_leaf_values - num_valid;
+        if (is_leaf_nullable) {
+          s->page.def_histogram[last_lvl] = s->page.num_leaf_values - num_valid;
         }
-        int hist_0 = s->page.num_values - s->page.num_leaf_values;
+        uint32_t hist_0 = s->page.num_values - s->page.num_leaf_values;
         for (int i = 1; i < last_lvl; i++) {
           hist_0 -= s->page.def_histogram[i];
         }
@@ -1423,12 +1422,15 @@ __device__ void finish_page_encode(state_buf* s,
       }
     }
   } else if (s->page.def_histogram != nullptr) {
+    // finish off what was started in generate_def_level_histogram
     if (t == 0) {
       s->page.def_histogram[s->col.max_def_level] = valid_count;
-      int hist_0                                  = s->page.num_values - valid_count;
+
+      uint32_t hist_0 = s->page.num_values - valid_count;
       for (int i = 1; i < s->col.max_def_level; i++) {
         hist_0 -= s->page.def_histogram[i];
       }
+      s->page.def_histogram[0] = hist_0;
     }
   }
 
