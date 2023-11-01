@@ -276,16 +276,13 @@ __global__ void token_counts_fn(cudf::column_device_view const d_strings,
   __syncwarp();
 
   for (auto itr = d_output + lane_idx + 1; itr < d_output_end; itr += cudf::detail::warp_size) {
-    auto index = static_cast<cudf::size_type>(thrust::distance(d_output, itr));
-    if (*itr) {
-      count += !(*(itr - 1));
-    } else if (itr + 1 == d_output_end) {
-      ++count;
-    }
+    // add one if at the edge of a token or at the string's end
+    count += ((*itr && !(*(itr - 1))) || (itr + 1 == d_output_end));
   }
   __syncwarp();
 
-  auto const total_count = warp_reduce(warp_storage).Reduce(count, cub::Sum());  //, num_valid);
+  // add up the counts from the other threads to compute the total token count for this string
+  auto const total_count = warp_reduce(warp_storage).Reduce(count, cub::Sum());
   if (lane_idx == 0) { d_counts[str_idx] = total_count; }
 }
 
