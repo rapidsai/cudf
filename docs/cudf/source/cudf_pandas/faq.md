@@ -2,14 +2,13 @@
 
 ## How closely does this match pandas?
 
-Every change to cuDF pandas accelerator mode is tested against the entire
-pandas unit test suite. Currently, we’re passing **93%** of the 187,000+ unit
-tests, with a goal of passing 100%.
+Every change to cuDF pandas Accelerator Mode is tested against the entire
+pandas unit test suite and [currently passing nearly 100%](./how-it-works.md#how-we-ensure-consistency-with-pandas).
 
 For most pandas workflows, things will “just work”. In a small set of
 scenarios, we may hit edge cases that throw errors or don’t perfectly match
 standard pandas. You can learn more about these edge cases in
-[Known Limitations](#known-limitations)
+[Known Limitations](#are-there-any-known-limitations)
 
 
 ## How can we tell if cudf.pandas is active?
@@ -106,3 +105,28 @@ standard pandas
    [10]
    ```
 - `cudf.pandas` (and cuDF in general) is currently only compatible with pandas 1.5.x
+
+
+
+## Can I force running on the GPU?
+
+If needed, GPU acceleration may be disabled when using cudf.pandas for testing
+or benchmarking purposes. To do so, set the `CUDF_PANDAS_FALLBACK_MODE`
+environment variable, e.g.
+
+```bash
+CUDF_PANDAS_FALLBACK_MODE=1 python -m cudf.pandas some_script.py
+```
+
+## When should I use cudf.pandas vs using cudf directly?
+
+- Although it largely mimics the pandas API, cuDF does offer some functionality
+that is not directly supported by pandas. If you need access to this
+functionality, you will need to use the `cudf` package directly because you
+cannot use `cudf` and the `cudf.pandas` module in the same script
+
+- If you know that all the functionality you require is supported by cudf and you
+do not need the additional pandas compatibility promised by cuDF’s pandas
+compatibility mode (e.g. join ordering) then you will benefit from
+increased performance by using `cudf` directly.
+
