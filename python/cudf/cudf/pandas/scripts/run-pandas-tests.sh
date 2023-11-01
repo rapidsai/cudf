@@ -101,9 +101,10 @@ cd pandas-tests/
 # TODO: Get a postgres & mysql container set up on the CI
 # test_overwrite_warns unsafely patchs over Series.mean affecting other tests when run in parallel
 # test_complex_series_frame_alignment randomly selects a DataFrames and axis to test but particular random selection(s) always fails
+# test_numpy_ufuncs_basic compares floating point values to unbounded precision, sometimes leading to failures
 PANDAS_CI="1" python -m pytest -p cudf.pandas \
     -m "not single_cpu and not db" \
-    -k "not test_overwrite_warns and not test_complex_series_frame_alignment" \
+    -k "not test_overwrite_warns and not test_complex_series_frame_alignment and not test_numpy_ufuncs_basic" \
     --durations=50 \
     --import-mode=importlib \
     -o xfail_strict=True \
