@@ -1387,7 +1387,8 @@ __device__ void finish_page_encode(state_buf* s,
     if (t == 0) { num_valid = valid_count; }
 
     // for repetition we get hist[0] from num_rows, and can derive hist[max_rep_level]
-    gen_histograms_list_col<block_size>(s->page.rep_histogram, s, true, 1, s->col.max_rep_level);
+    gen_histograms_list_col<block_size>(
+      s->page.rep_histogram, s, s->col.rep_values, 1, s->col.max_rep_level);
 
     if (t == 0) {
       s->page.rep_histogram[0] = s->page.num_rows;
@@ -1406,7 +1407,7 @@ __device__ void finish_page_encode(state_buf* s,
       // but if there are no leaf nulls, we lose a level and the above doesn't work.
       int last_lvl = s->col.max_def_level;
       if (num_valid != s->page.num_leaf_values) { last_lvl--; }
-      gen_histograms_list_col<block_size>(s->page.def_histogram, s, false, 1, last_lvl);
+      gen_histograms_list_col<block_size>(s->page.def_histogram, s, s->col.def_values, 1, last_lvl);
 
       if (t == 0) {
         s->page.def_histogram[s->col.max_def_level] = num_valid;
