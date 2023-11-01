@@ -42,6 +42,7 @@ from cudf.api.types import (
     is_bool_dtype,
     is_decimal_dtype,
     is_dict_like,
+    is_float_dtype,
     is_integer,
     is_integer_dtype,
     is_list_dtype,
@@ -232,7 +233,25 @@ class _SeriesIlocIndexer(_FrameIndexer):
                     f"Cannot assign {value=} to non-datetime/non-timedelta "
                     "columns"
                 )
-
+            if (
+                not (
+                    is_float_dtype(self._frame._column.dtype)
+                    or (
+                        isinstance(
+                            self._frame._column.dtype, cudf.CategoricalDtype
+                        )
+                        and is_float_dtype(
+                            self._frame._column.dtype.categories.dtype
+                        )
+                    )
+                )
+                and isinstance(value, (np.float32, np.float64))
+                and np.isnan(value)
+            ):
+                raise MixedTypeError(
+                    f"Cannot assign {value=} to "
+                    f"non-float dtype={self._frame._column.dtype}"
+                )
         elif not (
             isinstance(value, (list, dict))
             and isinstance(
