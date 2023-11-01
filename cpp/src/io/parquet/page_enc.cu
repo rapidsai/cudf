@@ -248,16 +248,23 @@ Encoding __device__ determine_encoding(PageType page_type,
  * various levels of the hierarchy, and h(max_def) is the number of non-null values.
  * If max_rep == 0, then the number of values equals the number of rows. To generate
  * the histogram, we can just do the null values, and then calculate h(max_def) at the
- * end as `num_values - sum(h(0)..h(max_def-1))`. Oh, so num_leaf_values is
- * h(max_def-1) + h(max_def), btw. So we can just do the first max_def - 1 values.
+ * end as `num_values - sum(h(0)..h(max_def-1))`. If the column is nullable, then
+ * num_leaf_values is h(max_def-1) + h(max_def). So we can just do the first max_def - 1
+ * values.
  *
  * For repetition levels, h(0) equals the number of rows. Here we can calculate
  * h(1)..h(max_rep-1), set h(0) directly, and then obtain h(max_rep) in the same way as
  * for the definition levels.
+ *
+ * @param hist Pointer to the histogram (size is max_level + 1)
+ * @param s Page encode state
+ * @param lvl_data Pointer to the global repetition or definition level data
+ * @param lvl_start First element of the histogram to encode (inclusive)
+ * @param lvl_end Last element of the histogram to encode (exclusive)
  */
 template <int block_size, typename state_buf>
 void __device__ gen_histograms_list_col(
-  uint32_t* hist, state_buf const* s, bool is_repetition, int lvl_start, int lvl_end)
+  uint32_t* hist, state_buf const* s, uint8_t const* lvl_data, int lvl_start, int lvl_end)
 {
   using block_reduce = cub::BlockReduce<int, block_size>;
   __shared__ typename block_reduce::TempStorage temp_storage;
@@ -265,8 +272,6 @@ void __device__ gen_histograms_list_col(
   auto const t                  = threadIdx.x;
   auto const page_first_val_idx = s->col.level_offsets[s->page.start_row];
   auto const col_last_val_idx   = s->col.level_offsets[s->col.num_rows];
-
-  uint8_t const* const lvl_data = is_repetition ? s->col.rep_values : s->col.def_values;
 
   for (int lvl = lvl_start; lvl < lvl_end; lvl++) {
     int nval_in_level = 0;
@@ -283,6 +288,18 @@ void __device__ gen_histograms_list_col(
   }
 }
 
+/**
+ * @brief Generate definition level histogram.
+ *
+ * This is used when the max repetition level is 0 (no lists) and the definition
+ * level data is not calculated in advance for the entire column.
+ *
+ * @param hist Pointer to the histogram (size is max_def_level + 1)
+ * @param s Page encode state
+ * @param nrows Number of rows to read
+ * @param rle_numvals Index (relative to start of page) of the first level value
+ * @param maxlvl Last element of the histogram to encode (exclusive)
+ */
 template <int block_size>
 void __device__ gen_hist(uint32_t* hist,
                          rle_page_enc_state_s const* s,
