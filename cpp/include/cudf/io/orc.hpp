@@ -450,6 +450,8 @@ class orc_writer_options {
   std::map<std::string, std::string> _user_data;
   // Optional compression statistics
   std::shared_ptr<writer_compression_statistics> _compression_stats;
+  // Specify whether string dictionaries should be alphabetically sorted
+  bool _enable_dictionary_sort = true;
 
   friend orc_writer_options_builder;
 
@@ -572,6 +574,13 @@ class orc_writer_options {
     return _compression_stats;
   }
 
+  /**
+   * @brief Returns whether string dictionaries should be sorted.
+   *
+   * @return `true` if string dictionaries should be sorted
+   */
+  [[nodiscard]] bool get_enable_dictionary_sort() const { return _enable_dictionary_sort; }
+
   // Setters
 
   /**
@@ -670,6 +679,13 @@ class orc_writer_options {
   {
     _compression_stats = std::move(comp_stats);
   }
+
+  /**
+   * @brief Sets whether string dictionaries should be sorted.
+   *
+   * @param val Boolean value to enable/disable
+   */
+  void set_enable_dictionary_sort(bool val) { _enable_dictionary_sort = val; }
 };
 
 /**
@@ -811,6 +827,18 @@ class orc_writer_options_builder {
   }
 
   /**
+   * @brief Sets whether string dictionaries should be sorted.
+   *
+   * @param val Boolean value to enable/disable
+   * @return this for chaining
+   */
+  orc_writer_options_builder& enable_dictionary_sort(bool val)
+  {
+    options._enable_dictionary_sort = val;
+    return *this;
+  }
+
+  /**
    * @brief move orc_writer_options member once it's built.
    */
   operator orc_writer_options&&() { return std::move(options); }
@@ -866,6 +894,8 @@ class chunked_orc_writer_options {
   std::map<std::string, std::string> _user_data;
   // Optional compression statistics
   std::shared_ptr<writer_compression_statistics> _compression_stats;
+  // Specify whether string dictionaries should be alphabetically sorted
+  bool _enable_dictionary_sort = true;
 
   friend chunked_orc_writer_options_builder;
 
@@ -966,6 +996,13 @@ class chunked_orc_writer_options {
     return _compression_stats;
   }
 
+  /**
+   * @brief Returns whether string dictionaries should be sorted.
+   *
+   * @return `true` if string dictionaries should be sorted
+   */
+  [[nodiscard]] bool get_enable_dictionary_sort() const { return _enable_dictionary_sort; }
+
   // Setters
 
   /**
@@ -1057,6 +1094,13 @@ class chunked_orc_writer_options {
   {
     _compression_stats = std::move(comp_stats);
   }
+
+  /**
+   * @brief Sets whether string dictionaries should be sorted.
+   *
+   * @param val Boolean value to enable/disable
+   */
+  void set_enable_dictionary_sort(bool val) { _enable_dictionary_sort = val; }
 };
 
 /**
@@ -1180,6 +1224,18 @@ class chunked_orc_writer_options_builder {
     std::shared_ptr<writer_compression_statistics> const& comp_stats)
   {
     options._compression_stats = comp_stats;
+    return *this;
+  }
+
+  /**
+   * @brief Sets whether string dictionaries should be sorted.
+   *
+   * @param val Boolean value to enable/disable
+   * @return this for chaining
+   */
+  chunked_orc_writer_options_builder& enable_dictionary_sort(bool val)
+  {
+    options._enable_dictionary_sort = val;
     return *this;
   }
 

@@ -415,6 +415,7 @@ def write_parquet(
         .int96_timestamps(_int96_timestamps)
         .write_v2_headers(header_version == "2.0")
         .dictionary_policy(dict_policy)
+        .utc_timestamps(False)
         .build()
     )
     if partitions_info is not None:
