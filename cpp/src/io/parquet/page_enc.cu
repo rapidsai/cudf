@@ -296,16 +296,16 @@ void __device__ gen_histograms_list_col(
  *
  * @param hist Pointer to the histogram (size is max_def_level + 1)
  * @param s Page encode state
- * @param nrows Number of rows to read
+ * @param nrows Number of rows to process
  * @param rle_numvals Index (relative to start of page) of the first level value
  * @param maxlvl Last element of the histogram to encode (exclusive)
  */
 template <int block_size>
-void __device__ gen_hist(uint32_t* hist,
-                         rle_page_enc_state_s const* s,
-                         uint32_t nrows,
-                         uint32_t rle_numvals,
-                         uint32_t maxlvl)
+void __device__ generate_def_level_histogram(uint32_t* hist,
+                                             rle_page_enc_state_s const* s,
+                                             uint32_t nrows,
+                                             uint32_t rle_numvals,
+                                             uint32_t maxlvl)
 {
   using block_reduce = cub::BlockReduce<uint32_t, block_size>;
   __shared__ typename block_reduce::TempStorage temp_storage;
@@ -1292,7 +1292,8 @@ __global__ void __launch_bounds__(block_size, 8) gpuEncodePageLevels(device_span
         if (s->page.def_histogram != nullptr) {
           // Only calculate up to max_def_level...the last entry is valid_count and will be filled
           // in later.
-          gen_hist<block_size>(s->page.def_histogram, s, nrows, rle_numvals, s->col.max_def_level);
+          generate_def_level_histogram<block_size>(
+            s->page.def_histogram, s, nrows, rle_numvals, s->col.max_def_level);
         }
         rle_numvals += nrows;
         RleEncode(s, rle_numvals, def_lvl_bits, (rle_numvals == s->page.num_rows), t);
