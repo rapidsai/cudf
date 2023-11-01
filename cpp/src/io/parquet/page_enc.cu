@@ -242,7 +242,7 @@ Encoding __device__ determine_encoding(PageType page_type,
 }
 
 /**
- * @brief Generate level histogram for a block of level values.
+ * @brief Generate level histogram for a page.
  *
  * For definition levels, the histogram values h(0)...h(max_def-1) represent nulls at
  * various levels of the hierarchy, and h(max_def) is the number of non-null values.
@@ -263,7 +263,7 @@ Encoding __device__ determine_encoding(PageType page_type,
  * @param lvl_end Last element of the histogram to encode (exclusive)
  */
 template <int block_size, typename state_buf>
-void __device__ gen_histograms_list_col(
+void __device__ generate_page_histogram(
   uint32_t* hist, state_buf const* s, uint8_t const* lvl_data, int lvl_start, int lvl_end)
 {
   using block_reduce = cub::BlockReduce<int, block_size>;
@@ -289,7 +289,7 @@ void __device__ gen_histograms_list_col(
 }
 
 /**
- * @brief Generate definition level histogram.
+ * @brief Generate definition level histogram for a block of values.
  *
  * This is used when the max repetition level is 0 (no lists) and the definition
  * level data is not calculated in advance for the entire column.
@@ -1389,8 +1389,10 @@ __device__ void finish_page_encode(state_buf* s,
     if (t == 0) { num_valid = valid_count; }
 
     // for repetition we get hist[0] from num_rows, and can derive hist[max_rep_level]
-    gen_histograms_list_col<block_size>(
-      s->page.rep_histogram, s, s->col.rep_values, 1, s->col.max_rep_level);
+    if (s->col.max_rep_level > 1) {
+      generate_page_histogram<block_size>(
+        s->page.rep_histogram, s, s->col.rep_values, 1, s->col.max_rep_level);
+    }
 
     if (t == 0) {
       s->page.rep_histogram[0] = s->page.num_rows;
@@ -1408,7 +1410,10 @@ __device__ void finish_page_encode(state_buf* s,
       // hist[0] can be derived as `num_values - sum(hist[1]..hist[max_rep_level])`.
       bool const is_leaf_nullable = s->col.nullability[s->col.max_rep_level] != 0;
       auto const last_lvl = is_leaf_nullable ? s->col.max_def_level - 1 : s->col.max_def_level;
-      gen_histograms_list_col<block_size>(s->page.def_histogram, s, s->col.def_values, 1, last_lvl);
+      if (last_lvl > 1) {
+        generate_page_histogram<block_size>(
+          s->page.def_histogram, s, s->col.def_values, 1, last_lvl);
+      }
 
       if (t == 0) {
         s->page.def_histogram[s->col.max_def_level] = num_valid;
