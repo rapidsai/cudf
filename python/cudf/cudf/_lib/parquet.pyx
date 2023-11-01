@@ -399,6 +399,7 @@ def write_parquet(
         .compression(comp_type)
         .stats_level(stat_freq)
         .int96_timestamps(_int96_timestamps)
+        .utc_timestamps(False)
         .build()
     )
     if partitions_info is not None:

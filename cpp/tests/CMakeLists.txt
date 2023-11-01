@@ -393,6 +393,7 @@ set_tests_properties(
 ConfigureTest(
   ITERATOR_TEST
   iterator/indexalator_test.cu
+  iterator/offsetalator_test.cu
   iterator/optional_iterator_test_chrono.cu
   iterator/optional_iterator_test_numeric.cu
   iterator/pair_iterator_test_chrono.cu
@@ -523,7 +524,6 @@ ConfigureTest(
   strings/format_lists_tests.cpp
   strings/integers_tests.cpp
   strings/ipv4_tests.cpp
-  strings/json_tests.cpp
   strings/like_tests.cpp
   strings/pad_tests.cpp
   strings/repeat_strings_tests.cpp
@@ -536,6 +536,10 @@ ConfigureTest(
   strings/translate_tests.cpp
   strings/urls_tests.cpp
 )
+
+# ##################################################################################################
+# * json path test --------------------------------------------------------------------------------
+ConfigureTest(JSON_PATH_TEST json/json_tests.cpp)
 
 # ##################################################################################################
 # * structs test ----------------------------------------------------------------------------------
@@ -641,16 +645,21 @@ ConfigureTest(
   streams/strings/contains_test.cpp
   streams/strings/convert_test.cpp
   streams/strings/extract_test.cpp
+  streams/strings/filter_test.cpp
   streams/strings/find_test.cpp
   streams/strings/replace_test.cpp
+  streams/strings/reverse_test.cpp
   streams/strings/split_test.cpp
   streams/strings/strings_tests.cpp
   STREAM_MODE
   testing
 )
 ConfigureTest(STREAM_SORTING_TEST streams/sorting_test.cpp STREAM_MODE testing)
-ConfigureTest(STREAM_TEXT_TEST streams/text/ngrams_test.cpp STREAM_MODE testing)
+ConfigureTest(
+  STREAM_TEXT_TEST streams/text/ngrams_test.cpp streams/text/tokenize_test.cpp STREAM_MODE testing
+)
 ConfigureTest(STREAM_LISTS_TEST streams/lists_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_JSONIO_TEST streams/io/json_test.cpp STREAM_MODE testing)
 
 # ##################################################################################################
 # Install tests ####################################################################################

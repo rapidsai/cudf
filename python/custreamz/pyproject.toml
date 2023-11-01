@@ -9,7 +9,7 @@ requires = [
 
 [project]
 name = "custreamz"
-version = "23.12.00"
+dynamic = ["version"]
 description = "cuStreamz - GPU Accelerated Streaming"
 readme = { file = "README.md", content-type = "text/markdown" }
 authors = [
@@ -47,6 +47,9 @@ Homepage = "https://github.com/rapidsai/cudf"
 [tool.setuptools]
 license-files = ["LICENSE"]
 zip-safe = false
+
+[tool.setuptools.dynamic]
+version = {file = "custreamz/VERSION"}
 
 [tools.setuptools.packages.find]
 include = [
