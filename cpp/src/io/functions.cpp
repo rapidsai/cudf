@@ -268,9 +268,9 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
 
 namespace detail_orc = cudf::io::detail::orc;
 
-raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
+raw_orc_statistics read_raw_orc_statistics(source_info const& src_info,
+                                           rmm::cuda_stream_view stream)
 {
-  auto stream = cudf::get_default_stream();
   // Get source to read statistics from
   std::unique_ptr<datasource> source;
   if (src_info.type() == io_type::FILEPATH) {
@@ -341,9 +341,10 @@ column_statistics::column_statistics(cudf::io::orc::column_statistics&& cs)
   }
 }
 
-parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info)
+parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info,
+                                                 rmm::cuda_stream_view stream)
 {
-  auto const raw_stats = read_raw_orc_statistics(src_info);
+  auto const raw_stats = read_raw_orc_statistics(src_info, stream);
 
   parsed_orc_statistics result;
   result.column_names = raw_stats.column_names;
@@ -394,12 +395,12 @@ orc_column_schema make_orc_column_schema(host_span<orc::SchemaType const> orc_sc
 }
 };  // namespace
 
-orc_metadata read_orc_metadata(source_info const& src_info)
+orc_metadata read_orc_metadata(source_info const& src_info, rmm::cuda_stream_view stream)
 {
   auto sources = make_datasources(src_info);
 
   CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
-  auto const footer = orc::metadata(sources.front().get(), cudf::detail::default_stream_value).ff;
+  auto const footer = orc::metadata(sources.front().get(), stream).ff;
 
   return {{make_orc_column_schema(footer.types, 0, "")},
           static_cast<size_type>(footer.numberOfRows),
@@ -409,13 +410,14 @@ orc_metadata read_orc_metadata(source_info const& src_info)
 /**
  * @copydoc cudf::io::read_orc
  */
-table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_memory_resource* mr)
+table_with_metadata read_orc(orc_reader_options const& options,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 
   auto datasources = make_datasources(options.get_source());
-  auto reader      = std::make_unique<detail_orc::reader>(
-    std::move(datasources), options, cudf::get_default_stream(), mr);
+  auto reader = std::make_unique<detail_orc::reader>(std::move(datasources), options, stream, mr);
 
   return reader->read(options);
 }
@@ -423,7 +425,7 @@ table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_
 /**
  * @copydoc cudf::io::write_orc
  */
-void write_orc(orc_writer_options const& options)
+void write_orc(orc_writer_options const& options, rmm::cuda_stream_view stream)
 {
   namespace io_detail = cudf::io::detail;
 
@@ -433,7 +435,7 @@ void write_orc(orc_writer_options const& options)
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for ORC writing");
 
   auto writer = std::make_unique<detail_orc::writer>(
-    std::move(sinks[0]), options, io_detail::single_write_mode::YES, cudf::get_default_stream());
+    std::move(sinks[0]), options, io_detail::single_write_mode::YES, stream);
 
   writer->write(options.get_table());
 }
@@ -441,7 +443,8 @@ void write_orc(orc_writer_options const& options)
 /**
  * @copydoc cudf::io::orc_chunked_writer::orc_chunked_writer
  */
-orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& options)
+orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& options,
+                                       rmm::cuda_stream_view stream)
 {
   namespace io_detail = cudf::io::detail;
 
@@ -449,7 +452,7 @@ orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& options
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for ORC writing");
 
   writer = std::make_unique<detail_orc::writer>(
-    std::move(sinks[0]), options, io_detail::single_write_mode::NO, cudf::get_default_stream());
+    std::move(sinks[0]), options, io_detail::single_write_mode::NO, stream);
 }
 
 /**
