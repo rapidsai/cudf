@@ -950,6 +950,9 @@ __global__ void __launch_bounds__(decode_block_size)
   if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
 }
 
+// Functor used to set the `temp_string_buf` pointer for each page. `data` points to a buffer
+// to be used when skipping rows in the delta_byte_array decoder. Given a page and an offset,
+// set the page's `temp_string_buf` to be `data + offset`.
 struct page_tform_functor {
   void* const data;
 
@@ -1011,6 +1014,7 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
     });
 
   if (need_sizes) {
+    // sum up all of the temp_string_sizes
     auto const page_sizes = [] __device__(PageInfo const& page) { return page.temp_string_size; };
     int64_t total_size    = thrust::transform_reduce(rmm::exec_policy(stream),
                                                   pages.d_begin(),
@@ -1019,6 +1023,8 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
                                                   0L,
                                                   thrust::plus<int64_t>{});
 
+    // now do an exclusive scan over the temp_string_sizes to get offsets for each
+    // page's chunk of the temp buffer
     rmm::device_uvector<int64_t> page_string_offsets(pages.size(), stream);
     thrust::transform_exclusive_scan(rmm::exec_policy(stream),
                                      pages.d_begin(),
@@ -1028,8 +1034,10 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
                                      0L,
                                      thrust::plus<int64_t>{});
 
+    // allocate the temp space
     temp_string_buf = rmm::device_buffer(total_size, stream);
 
+    // now use the offsets array to set each page's temp_string_buf pointers
     thrust::transform(rmm::exec_policy(stream),
                       pages.d_begin(),
                       pages.d_end(),
