@@ -121,7 +121,7 @@ struct delta_byte_array_decoder {
   // calculate a mini-batch of string values, writing the results to
   // `strings_out`. starting at global index `start_idx` and decoding
   // up to `num_values` strings.
-  // called by all threads in a warp. used for strings < 32 chars.
+  // called by all threads in a warp. used for strings <= 32 chars.
   // returns number of bytes written
   __device__ size_t calculate_string_values(uint8_t* strings_out,
                                             uint32_t start_idx,
