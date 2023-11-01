@@ -627,7 +627,7 @@ void ComputePageSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
  */
 void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
                             cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
-                            rmm::device_buffer& temp_string_buf,
+                            rmm::device_uvector<uint8_t>& temp_string_buf,
                             size_t min_row,
                             size_t num_rows,
                             int level_type_size,

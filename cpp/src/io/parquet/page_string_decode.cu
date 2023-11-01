@@ -546,7 +546,8 @@ __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* d
   // Sum up prefix and suffix max lengths to get a max possible string length. Multiply that
   // by the number of strings in a mini-block, plus one to save the last string.
   auto temp_bytes =
-    cudf::detail::single_lane_block_sum_reduce<delta_preproc_block_size, 0>(max_len) * (db->values_per_mb + 1);
+    cudf::detail::single_lane_block_sum_reduce<delta_preproc_block_size, 0>(max_len) *
+    (db->values_per_mb + 1);
 
   return {final_bytes, temp_bytes};
 }
@@ -954,11 +955,11 @@ __global__ void __launch_bounds__(decode_block_size)
 // to be used when skipping rows in the delta_byte_array decoder. Given a page and an offset,
 // set the page's `temp_string_buf` to be `data + offset`.
 struct page_tform_functor {
-  void* const data;
+  uint8_t* const data;
 
   __device__ PageInfo operator()(PageInfo& page, int64_t offset)
   {
-    if (page.temp_string_size != 0) { page.temp_string_buf = static_cast<uint8_t*>(data) + offset; }
+    if (page.temp_string_size != 0) { page.temp_string_buf = data + offset; }
     return page;
   }
 };
@@ -970,7 +971,7 @@ struct page_tform_functor {
  */
 void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
                             cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
-                            rmm::device_buffer& temp_string_buf,
+                            rmm::device_uvector<uint8_t>& temp_string_buf,
                             size_t min_row,
                             size_t num_rows,
                             int level_type_size,
@@ -1035,7 +1036,7 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
                                      thrust::plus<int64_t>{});
 
     // allocate the temp space
-    temp_string_buf = rmm::device_buffer(total_size, stream);
+    temp_string_buf.resize(total_size, stream);
 
     // now use the offsets array to set each page's temp_string_buf pointers
     thrust::transform(rmm::exec_policy(stream),

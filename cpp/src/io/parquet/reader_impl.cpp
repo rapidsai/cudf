@@ -37,7 +37,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 
   // temporary space for DELTA_BYTE_ARRAY decoding. this only needs to live until
   // gpu::DecodeDeltaByteArray returns.
-  rmm::device_buffer delta_temp_buf;
+  rmm::device_uvector<uint8_t> delta_temp_buf(0, _stream);
 
   // Should not reach here if there is no page data.
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
