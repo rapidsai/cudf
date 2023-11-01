@@ -1930,4 +1930,34 @@ TEST_F(OrcStatisticsTest, AllNulls)
   check_all_null_stats<cudf::io::string_statistics>(stats.file_stats[3]);
 }
 
+TEST_F(OrcWriterTest, UnorderedDictionary)
+{
+  std::vector<char const*> strings{
+    "BBBB", "BBBB", "CCCC", "BBBB", "CCCC", "EEEE", "CCCC", "AAAA", "DDDD", "EEEE"};
+  str_col col(strings.begin(), strings.end());
+
+  table_view expected({col});
+
+  std::vector<char> out_buffer_sorted;
+  cudf::io::orc_writer_options out_opts_sorted =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer_sorted}, expected);
+  cudf::io::write_orc(out_opts_sorted);
+
+  cudf::io::orc_reader_options in_opts_sorted = cudf::io::orc_reader_options::builder(
+    cudf::io::source_info{out_buffer_sorted.data(), out_buffer_sorted.size()});
+  auto const from_sorted = cudf::io::read_orc(in_opts_sorted).tbl;
+
+  std::vector<char> out_buffer_unsorted;
+  cudf::io::orc_writer_options out_opts_unsorted =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer_unsorted}, expected)
+      .enable_dictionary_sort(false);
+  cudf::io::write_orc(out_opts_unsorted);
+
+  cudf::io::orc_reader_options in_opts_unsorted = cudf::io::orc_reader_options::builder(
+    cudf::io::source_info{out_buffer_unsorted.data(), out_buffer_unsorted.size()});
+  auto const from_unsorted = cudf::io::read_orc(in_opts_unsorted).tbl;
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*from_sorted, *from_unsorted);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
