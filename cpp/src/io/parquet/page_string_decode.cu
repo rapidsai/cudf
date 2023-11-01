@@ -543,13 +543,10 @@ __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* d
   auto const final_bytes =
     cudf::detail::single_lane_block_sum_reduce<delta_preproc_block_size, 0>(total_bytes);
 
-  // sum up prefix and suffix max lengths
+  // Sum up prefix and suffix max lengths to get a max possible string length. Multiply that
+  // by the number of strings in a mini-block, plus one to save the last string.
   auto temp_bytes =
-    cudf::detail::single_lane_block_sum_reduce<delta_preproc_block_size, 0>(max_len);
-  if (t == 0) {
-    // save enough for one mimi-block plus some extra to save the last_string
-    temp_bytes *= db->values_per_mb + 1;
-  }
+    cudf::detail::single_lane_block_sum_reduce<delta_preproc_block_size, 0>(max_len) * (db->values_per_mb + 1);
 
   return {final_bytes, temp_bytes};
 }
