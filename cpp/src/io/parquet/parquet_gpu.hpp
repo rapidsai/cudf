@@ -95,6 +95,7 @@ enum class decode_error : int32_t {
   INVALID_DATA_TYPE    = 0x10,
   EMPTY_PAGE           = 0x20,
   INVALID_DICT_WIDTH   = 0x40,
+  DELTA_PARAM_MISMATCH = 0x80,
 };
 
 /**

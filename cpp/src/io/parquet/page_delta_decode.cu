@@ -271,7 +271,7 @@ struct delta_byte_array_decoder {
     // is this even necessary? return if asking to skip the whole block.
     if (start_val >= prefixes.num_encoded_values(true)) { return; }
 
-    // TODO: this assumes prefixes and suffixes will have the same parameters
+    // prefixes and suffixes will have the same parameters (it's checked earlier)
     auto const batch_size = prefixes.values_per_mb;
 
     uint32_t skip_pos = 0;
@@ -462,8 +462,6 @@ __global__ void __launch_bounds__(decode_block_size)
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
-  // TODO(ets) assert string_data != nullptr
-
   // choose a character parallel string copy when the average string is longer than a warp
   auto const use_char_ll = (s->page.str_bytes / s->page.num_valids) > cudf::detail::warp_size;
 
@@ -482,11 +480,18 @@ __global__ void __launch_bounds__(decode_block_size)
   }
   __syncthreads();
 
+  // assert that prefix and suffix have same mini-block size
+  if (prefix_db->values_per_mb != suffix_db->values_per_mb or
+      prefix_db->block_size != suffix_db->block_size or
+      prefix_db->value_count != suffix_db->value_count) {
+    set_error(static_cast<int32_t>(decode_error::DELTA_PARAM_MISMATCH), error_code);
+    return;
+  }
+
   // pointer to location to output final strings
   int const leaf_level_index = s->col.max_nesting_depth - 1;
   auto strings_data          = nesting_info_base[leaf_level_index].string_out;
 
-  // TODO(ets) assert that prefix and suffix have same mini-block size
   auto const batch_size = prefix_db->values_per_mb;
 
   // if this is a bounds page and nested, then we need to skip up front. non-nested will work
