@@ -1027,7 +1027,7 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
     // now do an exclusive scan over the temp_string_sizes to get offsets for each
     // page's chunk of the temp buffer
     rmm::device_uvector<int64_t> page_string_offsets(pages.size(), stream);
-    thrust::transform_exclusive_scan(rmm::exec_policy(stream),
+    thrust::transform_exclusive_scan(rmm::exec_policy_nosync(stream),
                                      pages.d_begin(),
                                      pages.d_end(),
                                      page_string_offsets.begin(),
@@ -1039,7 +1039,7 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
     temp_string_buf.resize(total_size, stream);
 
     // now use the offsets array to set each page's temp_string_buf pointers
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       pages.d_begin(),
                       pages.d_end(),
                       page_string_offsets.begin(),
