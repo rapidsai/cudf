@@ -401,7 +401,6 @@ struct parquet_column_device_view : stats_column_desc {
   constexpr uint8_t num_rep_level_bits() const { return level_bits >> 4; }
   uint8_t max_def_level;  //!< needed for SizeStatistics calculation
   uint8_t max_rep_level;
-  bool is_leaf_nullable;  //!< true if the column is nullable at the leaf level
 
   size_type const* level_offsets;  //!< Offset array for per-row pre-calculated rep/def level values
   uint8_t const* rep_values;       //!< Pre-calculated repetition level values

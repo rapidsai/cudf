@@ -248,8 +248,8 @@ Encoding __device__ determine_encoding(PageType page_type,
  * various levels of the hierarchy, and h(max_def) is the number of non-null values.
  * If max_rep == 0, then the number of values equals the number of rows. To generate
  * the histogram, we can just do the null values, and then calculate h(max_def) at the
- * end as `num_values - sum(h(0)..h(max_def-1))`. If the column is nullable, then
- * num_leaf_values is h(max_def-1) + h(max_def). So we can just do the first max_def - 1
+ * end as `num_values - sum(h(0)..h(max_def-1))`. If the leaf level of the column is nullable,
+ * then num_leaf_values is h(max_def-1) + h(max_def), and we can just do the first max_def - 1
  * values.
  *
  * For repetition levels, h(0) equals the number of rows. Here we can calculate
@@ -1289,7 +1289,8 @@ __global__ void __launch_bounds__(block_size, 8) gpuEncodePageLevels(device_span
         }();
         s->vals[rolling_idx(rle_numvals + t)] = def_lvl;
         __syncthreads();
-        if (s->page.def_histogram != nullptr) {
+        // if max_def <= 1, then the histogram is trivial to calculate
+        if (s->page.def_histogram != nullptr and s->col.max_def_level > 1) {
           // Only calculate up to max_def_level...the last entry is valid_count and will be filled
           // in later.
           generate_def_level_histogram<block_size>(
@@ -1405,7 +1406,7 @@ __device__ void finish_page_encode(state_buf* s,
       // For definition, we know h`ist[max_rep_level] = valid_count`. If the leaf level is
       // nullable, then `hist[max_rep_level - 1] = num_leaf_values - valid_count`. Finally,
       // hist[0] can be derived as `num_values - sum(hist[1]..hist[max_rep_level])`.
-      bool const is_leaf_nullable = s->col.is_leaf_nullable;
+      bool const is_leaf_nullable = s->col.nullability[s->col.max_rep_level] != 0;
       auto const last_lvl = is_leaf_nullable ? s->col.max_def_level - 1 : s->col.max_def_level;
       gen_histograms_list_col<block_size>(s->page.def_histogram, s, s->col.def_values, 1, last_lvl);
 
