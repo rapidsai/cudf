@@ -1403,6 +1403,7 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
  * column chunk.
  *
  * @param ck pointer to column chunk
+ * @param col `parquet_column_device_view` for the column
  * @param column_index_truncate_length maximum length of min or max values in column index, in bytes
  * @return Computed buffer size needed to encode the column index
  */
