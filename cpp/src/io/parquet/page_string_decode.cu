@@ -547,7 +547,7 @@ __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* d
   auto temp_bytes =
     cudf::detail::single_lane_block_sum_reduce<delta_preproc_block_size, 0>(max_len);
   if (t == 0) {
-    // save enough for one mimi-block plus some extra to save the last_string
+    // save enough for one mini-block plus some extra to save the last_string
     temp_bytes *= db->values_per_mb + 1;
   }
 
