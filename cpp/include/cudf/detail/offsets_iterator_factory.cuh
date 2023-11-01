@@ -34,7 +34,7 @@ struct offsetalator_factory {
               std::enable_if_t<std::is_same_v<T, int32_t> or std::is_same_v<T, int64_t>>* = nullptr>
     input_offsetalator operator()(column_view const& indices)
     {
-      return input_offsetalator(indices.data<IndexType>(), indices.type());
+      return input_offsetalator(indices.data<T>(), indices.type());
     }
     template <typename T,
               typename... Args,
@@ -62,7 +62,7 @@ struct offsetalator_factory {
               std::enable_if_t<std::is_same_v<T, int32_t> or std::is_same_v<T, int64_t>>* = nullptr>
     output_offsetalator operator()(mutable_column_view const& indices)
     {
-      return output_offsetalator(indices.data<IndexType>(), indices.type());
+      return output_offsetalator(indices.data<T>(), indices.type());
     }
     template <typename T,
               typename... Args,
