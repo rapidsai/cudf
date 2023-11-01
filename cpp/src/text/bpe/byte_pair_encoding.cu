@@ -220,8 +220,8 @@ __global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
     // identify all the re-rank locations (logic above invalidated adjacent pairs)
     // using example string above, the adjacent pairs have to be re-ranked
     // string: abcdefghij
-    // spaces: 1111101111
-    // rerank: 0000101000 ('ef' and 'fg' need re-ranking as 'def' and 'efg'
+    // spaces: 1111101111 (pair 'e,f' is now merged)
+    // rerank: 0000101000 ('ef' and 'fg' need re-ranking as 'd,ef' and 'ef,g'
     for (auto itr = d_ranks + lane_idx; itr < end_ranks; itr += block_size) {
       auto const index = thrust::distance(d_ranks, itr);
       if (*itr == block_min_rank && d_spaces[index] == 0) {
