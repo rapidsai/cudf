@@ -12,7 +12,7 @@ and replays the chain minimally to deliver a correct result. Data is
 automatically transferred from host to device (and vice versa) only when
 necessary, avoiding unnecessary device-host transfers.
 
-When using cudf.pandas, cuDF’s [pandas compatibility
+When using cudf.pandas, cuDF's [pandas compatibility
 mode](https://docs.rapids.ai/api/cudf/stable/api_docs/options/#available-options)
 is automatically enabled, ensuring consistency with pandas-specific
 semantics like default sort ordering.
@@ -66,4 +66,3 @@ out = df.groupby('a').filter(
 
 When using cudf.pandas at the command line to profile a Python script, the
 function profiler can be used with `python -m cudf.pandas --profile script.py`.
-

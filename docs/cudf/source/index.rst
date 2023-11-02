@@ -10,7 +10,7 @@ the details of CUDA programming.
 
 
 ``cudf.pandas`` is a 100% drop-in replacement for pandas that behaves identically on your
-CPU but lets you “hit the turbo button” and run supported functions on an
+CPU but lets you "hit the turbo button" and run supported functions on an
 NVIDIA GPU without code change.
 
 .. image:: _static/RAPIDS-logo-purple.png
@@ -25,4 +25,3 @@ NVIDIA GPU without code change.
    user_guide/index
    cudf_pandas/index
    developer_guide/index
-

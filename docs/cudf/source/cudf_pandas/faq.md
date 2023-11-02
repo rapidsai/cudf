@@ -6,15 +6,15 @@ Every change to cuDF pandas Accelerator Mode is tested against the entire
 pandas unit test suite.  Currently, we're passing **93%** of the 187,000+ unit
 tests, with a goal of passing 100%.
 
-For most pandas workflows, things will “just work”. In a small set of
-scenarios, we may hit edge cases that throw errors or don’t perfectly match
+For most pandas workflows, things will "just work". In a small set of
+scenarios, we may hit edge cases that throw errors or don't perfectly match
 standard pandas. You can learn more about these edge cases in
 [Known Limitations](#are-there-any-known-limitations)
 
 
 ## How can we tell if cudf.pandas is active?
 
-`cudf.pandas` will be active if you’ve loaded the extension or executed a Python
+`cudf.pandas` will be active if you've loaded the extension or executed a Python
 script with the module option. You should keep using pandas and things will
 just work.
 
@@ -80,12 +80,12 @@ There are a few known limitations that users should be aware of, depending on
 their workflow:
 
 
-- `cudf.pandas` can’t smoothly interact with tools or interfaces that convert data
+- `cudf.pandas` can't smoothly interact with tools or interfaces that convert data
 formats using the NumPy C API
   - For example, you can `torch.tensor(df.values)` but not `torch.from_numpy(df.values), as the latter uses the NumPy C API
 - Joins are not currently guaranteed to maintain the same row ordering as standard pandas
 - cudf.pandas isn't compatible with directly using `import cudf` in workflows and is intended for pandas-based workflows.
-- Global variables can - be accessed but can’t be modified during CPU-fallback
+- Global variables can - be accessed but can't be modified during CPU-fallback
 
   ```python
    %load_ext cudf.pandas
@@ -127,7 +127,6 @@ functionality, you will need to use the `cudf` package directly because you
 cannot use `cudf` and the `cudf.pandas` module in the same script
 
 - If you know that all the functionality you require is supported by cudf and you
-do not need the additional pandas compatibility promised by cuDF’s pandas
+do not need the additional pandas compatibility promised by cuDF's pandas
 compatibility mode (e.g. join ordering) then you will benefit from
 increased performance by using `cudf` directly.
-
