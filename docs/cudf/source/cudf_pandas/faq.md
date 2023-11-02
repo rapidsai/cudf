@@ -1,4 +1,4 @@
-# Frequently Asked Questions
+# FAQ and Known Issues
 
 ## How closely does this match pandas?
 
