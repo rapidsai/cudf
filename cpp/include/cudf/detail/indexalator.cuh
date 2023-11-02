@@ -56,7 +56,7 @@ namespace detail {
  *  auto result = thrust::find(thrust::device, begin, end, size_type{12} );
  * @endcode
  */
-struct input_indexalator : base_normalator<input_indexalator, cudf::size_type> {
+struct alignas(16) input_indexalator : base_normalator<input_indexalator, cudf::size_type> {
   friend struct base_normalator<input_indexalator, cudf::size_type>;  // for CRTP
 
   using reference = cudf::size_type const;  // this keeps STL and thrust happy
@@ -139,7 +139,7 @@ struct input_indexalator : base_normalator<input_indexalator, cudf::size_type> {
  *                      thrust::less<Element>());
  * @endcode
  */
-struct output_indexalator : base_normalator<output_indexalator, cudf::size_type> {
+struct alignas(16) output_indexalator : base_normalator<output_indexalator, cudf::size_type> {
   friend struct base_normalator<output_indexalator, cudf::size_type>;  // for CRTP
 
   using reference = output_indexalator const&;  // required for output iterators
