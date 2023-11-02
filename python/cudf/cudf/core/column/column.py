@@ -548,8 +548,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             idx = len(self) + idx
         if idx > len(self) - 1 or idx < 0:
             raise IndexError("single positional indexer is out-of-bounds")
-
-        return libcudf.copying.get_element(self, idx).value
+        result = libcudf.copying.get_element(self, idx).value
+        if cudf.get_option("mode.pandas_compatible"):
+            if isinstance(result, np.datetime64):
+                return pd.Timestamp(result)
+            elif isinstance(result, np.timedelta64):
+                return pd.Timedelta(result)
+        return result
 
     def slice(
         self, start: int, stop: int, stride: Optional[int] = None
