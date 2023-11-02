@@ -18,7 +18,7 @@ import cudf
 from ..annotation import nvtx
 from ..fast_slow_proxy import (
     _DELETE,
-    _XDF_NVTX_COLORS,
+    _CUDF_PANDAS_NVTX_COLORS,
     _fast_slow_function_call,
     _FastSlowAttribute,
     _FunctionProxy,
@@ -772,7 +772,7 @@ def _get_eval_locals_and_globals(level, local_dict=None, global_dict=None):
 
 @register_proxy_func(pd.eval)
 @nvtx.annotate(
-    "XDF_EVAL", color=_XDF_NVTX_COLORS["EXECUTE_SLOW"], domain="cudf_pandas"
+    "XDF_EVAL", color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"], domain="cudf_pandas"
 )
 def _eval(
     *args,
@@ -800,7 +800,7 @@ def _eval(
 
 @nvtx.annotate(
     "XDF_DATAFRAME_EVAL",
-    color=_XDF_NVTX_COLORS["EXECUTE_SLOW"],
+    color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
     domain="cudf_pandas",
 )
 def _df_eval_method(self, *args, local_dict=None, global_dict=None, **kwargs):
@@ -815,7 +815,7 @@ def _df_eval_method(self, *args, local_dict=None, global_dict=None, **kwargs):
 
 @nvtx.annotate(
     "XDF_DATAFRAME_QUERY",
-    color=_XDF_NVTX_COLORS["EXECUTE_SLOW"],
+    color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
     domain="cudf_pandas",
 )
 def _df_query_method(self, *args, local_dict=None, global_dict=None, **kwargs):
