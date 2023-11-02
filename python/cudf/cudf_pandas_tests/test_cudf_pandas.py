@@ -1023,6 +1023,9 @@ def test_subclass_series():
         xpd.UInt64Index,
         xpd.Int64Index,
         xpd.Float64Index,
+        xpd.core.indexes.numeric.UInt64Index,
+        xpd.core.indexes.numeric.Int64Index,
+        xpd.core.indexes.numeric.Float64Index,
     ],
 )
 def test_index_subclass(index_type):
