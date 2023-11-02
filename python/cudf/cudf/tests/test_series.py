@@ -2594,6 +2594,40 @@ def test_series_error_nan_non_float_dtypes():
         s[0] = np.nan
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        pd.ArrowDtype(pa.int8()),
+        pd.ArrowDtype(pa.int16()),
+        pd.ArrowDtype(pa.int32()),
+        pd.ArrowDtype(pa.int64()),
+        pd.ArrowDtype(pa.uint8()),
+        pd.ArrowDtype(pa.uint16()),
+        pd.ArrowDtype(pa.uint32()),
+        pd.ArrowDtype(pa.uint64()),
+        pd.ArrowDtype(pa.float32()),
+        pd.ArrowDtype(pa.float64()),
+        pd.Int8Dtype(),
+        pd.Int16Dtype(),
+        pd.Int32Dtype(),
+        pd.Int64Dtype(),
+        pd.UInt8Dtype(),
+        pd.UInt16Dtype(),
+        pd.UInt32Dtype(),
+        pd.UInt64Dtype(),
+        pd.Float32Dtype(),
+        pd.Float64Dtype(),
+    ],
+)
+@pytest.mark.parametrize("klass", [cudf.Series, cudf.DataFrame, cudf.Index])
+@pytest.mark.parametrize("kind", [lambda x: x, str], ids=["obj", "string"])
+def test_astype_pandas_nullable_pandas_compat(dtype, klass, kind):
+    ser = klass([1, 2, 3])
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            ser.astype(kind(dtype))
+
+
 def test_series_where_mixed_bool_dtype():
     s = cudf.Series([True, False, True])
     with pytest.raises(TypeError):
