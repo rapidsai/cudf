@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <nvtext/bpe_tokenize.hpp>
+#include <nvtext/byte_pair_encoding.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -24,9 +24,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-struct TextBPETokenize : public cudf::test::BaseFixture {};
+struct TextBytePairEncoding : public cudf::test::BaseFixture {};
 
-TEST_F(TextBPETokenize, BytePairEncoding)
+TEST_F(TextBytePairEncoding, BytePairEncoding)
 {
   // partial table based on values from https://huggingface.co/gpt2/raw/main/merges.txt
   auto mpt = cudf::test::strings_column_wrapper({
@@ -74,7 +74,7 @@ TEST_F(TextBPETokenize, BytePairEncoding)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), sliced_expected);
 }
 
-TEST_F(TextBPETokenize, BytePairEncodingSeparator)
+TEST_F(TextBytePairEncoding, BytePairEncodingSeparator)
 {
   auto mpt = cudf::test::strings_column_wrapper(
     {"e n", "i t", "e s", "en t", "c e", "es t", "en ce", "t est", "s ent"});
@@ -91,7 +91,7 @@ TEST_F(TextBPETokenize, BytePairEncodingSeparator)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
-TEST_F(TextBPETokenize, BPE_Empty)
+TEST_F(TextBytePairEncoding, BPE_Empty)
 {
   auto mpt = cudf::test::strings_column_wrapper({"i s", "i t"});
   nvtext::bpe_merge_pairs merge_pairs{mpt.release()};
@@ -100,7 +100,7 @@ TEST_F(TextBPETokenize, BPE_Empty)
   EXPECT_EQ(0, results->size());
 }
 
-TEST_F(TextBPETokenize, BPE_Error)
+TEST_F(TextBytePairEncoding, BPE_Error)
 {
   auto empty = cudf::make_empty_column(cudf::type_id::STRING);
   nvtext::bpe_merge_pairs merge_pairs{std::move(empty)};

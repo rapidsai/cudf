@@ -21,50 +21,48 @@
 #include <numeric>
 #include <regex>
 
-namespace cudf::io::detail::parquet {
+namespace cudf::io::parquet::detail {
 
 namespace {
 
-ConvertedType logical_type_to_converted_type(LogicalType const& logical)
+ConvertedType logical_type_to_converted_type(thrust::optional<LogicalType> const& logical)
 {
-  if (logical.isset.STRING) {
-    return parquet::UTF8;
-  } else if (logical.isset.MAP) {
-    return parquet::MAP;
-  } else if (logical.isset.LIST) {
-    return parquet::LIST;
-  } else if (logical.isset.ENUM) {
-    return parquet::ENUM;
-  } else if (logical.isset.DECIMAL) {
-    return parquet::DECIMAL;  // TODO set decimal values
-  } else if (logical.isset.DATE) {
-    return parquet::DATE;
-  } else if (logical.isset.TIME) {
-    if (logical.TIME.unit.isset.MILLIS)
-      return parquet::TIME_MILLIS;
-    else if (logical.TIME.unit.isset.MICROS)
-      return parquet::TIME_MICROS;
-  } else if (logical.isset.TIMESTAMP) {
-    if (logical.TIMESTAMP.unit.isset.MILLIS)
-      return parquet::TIMESTAMP_MILLIS;
-    else if (logical.TIMESTAMP.unit.isset.MICROS)
-      return parquet::TIMESTAMP_MICROS;
-  } else if (logical.isset.INTEGER) {
-    switch (logical.INTEGER.bitWidth) {
-      case 8: return logical.INTEGER.isSigned ? INT_8 : UINT_8;
-      case 16: return logical.INTEGER.isSigned ? INT_16 : UINT_16;
-      case 32: return logical.INTEGER.isSigned ? INT_32 : UINT_32;
-      case 64: return logical.INTEGER.isSigned ? INT_64 : UINT_64;
-      default: break;
-    }
-  } else if (logical.isset.UNKNOWN) {
-    return parquet::NA;
-  } else if (logical.isset.JSON) {
-    return parquet::JSON;
-  } else if (logical.isset.BSON) {
-    return parquet::BSON;
+  if (not logical.has_value()) { return UNKNOWN; }
+  switch (logical->type) {
+    case LogicalType::STRING: return UTF8;
+    case LogicalType::MAP: return MAP;
+    case LogicalType::LIST: return LIST;
+    case LogicalType::ENUM: return ENUM;
+    case LogicalType::DECIMAL: return DECIMAL;  // TODO use decimal scale/precision
+    case LogicalType::DATE: return DATE;
+    case LogicalType::TIME:
+      if (logical->is_time_millis()) {
+        return TIME_MILLIS;
+      } else if (logical->is_time_micros()) {
+        return TIME_MICROS;
+      }
+      break;
+    case LogicalType::TIMESTAMP:
+      if (logical->is_timestamp_millis()) {
+        return TIMESTAMP_MILLIS;
+      } else if (logical->is_timestamp_micros()) {
+        return TIMESTAMP_MICROS;
+      }
+      break;
+    case LogicalType::INTEGER:
+      switch (logical->bit_width()) {
+        case 8: return logical->is_signed() ? INT_8 : UINT_8;
+        case 16: return logical->is_signed() ? INT_16 : UINT_16;
+        case 32: return logical->is_signed() ? INT_32 : UINT_32;
+        case 64: return logical->is_signed() ? INT_64 : UINT_64;
+        default: break;
+      }
+    case LogicalType::UNKNOWN: return NA;
+    case LogicalType::JSON: return JSON;
+    case LogicalType::BSON: return BSON;
+    default: break;
   }
-  return parquet::UNKNOWN;
+  return UNKNOWN;
 }
 
 }  // namespace
@@ -76,39 +74,39 @@ type_id to_type_id(SchemaElement const& schema,
                    bool strings_to_categorical,
                    type_id timestamp_type_id)
 {
-  parquet::Type const physical            = schema.type;
-  parquet::LogicalType const logical_type = schema.logical_type;
-  parquet::ConvertedType converted_type   = schema.converted_type;
-  int32_t decimal_precision               = schema.decimal_precision;
+  auto const physical       = schema.type;
+  auto const logical_type   = schema.logical_type;
+  auto converted_type       = schema.converted_type;
+  int32_t decimal_precision = schema.decimal_precision;
 
+  // FIXME(ets): this should just use logical type to deduce the type_id. then fall back to
+  // converted_type if logical_type isn't set
   // Logical type used for actual data interpretation; the legacy converted type
   // is superseded by 'logical' type whenever available.
   auto const inferred_converted_type = logical_type_to_converted_type(logical_type);
-  if (inferred_converted_type != parquet::UNKNOWN) { converted_type = inferred_converted_type; }
-  if (inferred_converted_type == parquet::DECIMAL) {
-    decimal_precision = schema.logical_type.DECIMAL.precision;
-  }
+  if (inferred_converted_type != UNKNOWN) { converted_type = inferred_converted_type; }
+  if (inferred_converted_type == DECIMAL) { decimal_precision = schema.logical_type->precision(); }
 
-  switch (converted_type) {
-    case parquet::UINT_8: return type_id::UINT8;
-    case parquet::INT_8: return type_id::INT8;
-    case parquet::UINT_16: return type_id::UINT16;
-    case parquet::INT_16: return type_id::INT16;
-    case parquet::UINT_32: return type_id::UINT32;
-    case parquet::UINT_64: return type_id::UINT64;
-    case parquet::DATE: return type_id::TIMESTAMP_DAYS;
-    case parquet::TIME_MILLIS: return type_id::DURATION_MILLISECONDS;
-    case parquet::TIME_MICROS: return type_id::DURATION_MICROSECONDS;
-    case parquet::TIMESTAMP_MILLIS:
+  switch (converted_type.value_or(UNKNOWN)) {
+    case UINT_8: return type_id::UINT8;
+    case INT_8: return type_id::INT8;
+    case UINT_16: return type_id::UINT16;
+    case INT_16: return type_id::INT16;
+    case UINT_32: return type_id::UINT32;
+    case UINT_64: return type_id::UINT64;
+    case DATE: return type_id::TIMESTAMP_DAYS;
+    case TIME_MILLIS: return type_id::DURATION_MILLISECONDS;
+    case TIME_MICROS: return type_id::DURATION_MICROSECONDS;
+    case TIMESTAMP_MILLIS:
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                    : type_id::TIMESTAMP_MILLISECONDS;
-    case parquet::TIMESTAMP_MICROS:
+    case TIMESTAMP_MICROS:
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                    : type_id::TIMESTAMP_MICROSECONDS;
-    case parquet::DECIMAL:
-      if (physical == parquet::INT32) { return type_id::DECIMAL32; }
-      if (physical == parquet::INT64) { return type_id::DECIMAL64; }
-      if (physical == parquet::FIXED_LEN_BYTE_ARRAY) {
+    case DECIMAL:
+      if (physical == INT32) { return type_id::DECIMAL32; }
+      if (physical == INT64) { return type_id::DECIMAL64; }
+      if (physical == FIXED_LEN_BYTE_ARRAY) {
         if (schema.type_length <= static_cast<int32_t>(sizeof(int32_t))) {
           return type_id::DECIMAL32;
         }
@@ -119,7 +117,7 @@ type_id to_type_id(SchemaElement const& schema,
           return type_id::DECIMAL128;
         }
       }
-      if (physical == parquet::BYTE_ARRAY) {
+      if (physical == BYTE_ARRAY) {
         CUDF_EXPECTS(decimal_precision <= MAX_DECIMAL128_PRECISION, "Invalid decimal precision");
         if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
           return type_id::DECIMAL32;
@@ -133,22 +131,20 @@ type_id to_type_id(SchemaElement const& schema,
       break;
 
     // maps are just List<Struct<>>.
-    case parquet::MAP:
-    case parquet::LIST: return type_id::LIST;
-    case parquet::NA: return type_id::STRING;
+    case MAP:
+    case LIST: return type_id::LIST;
+    case NA: return type_id::STRING;
     // return type_id::EMPTY; //TODO(kn): enable after Null/Empty column support
     default: break;
   }
 
-  if (inferred_converted_type == parquet::UNKNOWN and physical == parquet::INT64 and
-      logical_type.TIMESTAMP.unit.isset.NANOS) {
-    return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
-                                                 : type_id::TIMESTAMP_NANOSECONDS;
-  }
-
-  if (inferred_converted_type == parquet::UNKNOWN and physical == parquet::INT64 and
-      logical_type.TIME.unit.isset.NANOS) {
-    return type_id::DURATION_NANOSECONDS;
+  if (inferred_converted_type == UNKNOWN and physical == INT64 and logical_type.has_value()) {
+    if (logical_type->is_timestamp_nanos()) {
+      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
+                                                   : type_id::TIMESTAMP_NANOSECONDS;
+    } else if (logical_type->is_time_nanos()) {
+      return type_id::DURATION_NANOSECONDS;
+    }
   }
 
   // is it simply a struct?
@@ -157,22 +153,97 @@ type_id to_type_id(SchemaElement const& schema,
   // Physical storage type supported by Parquet; controls the on-disk storage
   // format in combination with the encoding type.
   switch (physical) {
-    case parquet::BOOLEAN: return type_id::BOOL8;
-    case parquet::INT32: return type_id::INT32;
-    case parquet::INT64: return type_id::INT64;
-    case parquet::FLOAT: return type_id::FLOAT32;
-    case parquet::DOUBLE: return type_id::FLOAT64;
-    case parquet::BYTE_ARRAY:
-    case parquet::FIXED_LEN_BYTE_ARRAY:
+    case BOOLEAN: return type_id::BOOL8;
+    case INT32: return type_id::INT32;
+    case INT64: return type_id::INT64;
+    case FLOAT: return type_id::FLOAT32;
+    case DOUBLE: return type_id::FLOAT64;
+    case BYTE_ARRAY:
+    case FIXED_LEN_BYTE_ARRAY:
       // Can be mapped to INT32 (32-bit hash) or STRING
       return strings_to_categorical ? type_id::INT32 : type_id::STRING;
-    case parquet::INT96:
+    case INT96:
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                    : type_id::TIMESTAMP_NANOSECONDS;
     default: break;
   }
 
   return type_id::EMPTY;
+}
+
+void metadata::sanitize_schema()
+{
+  // Parquet isn't very strict about incoming metadata. Lots of things can and should be inferred.
+  // There are also a lot of rules that simply aren't followed and are expected to be worked around.
+  // This step sanitizes the metadata to something that isn't ambiguous.
+  //
+  // Take, for example, the following schema:
+  //
+  //  required group field_id=-1 user {
+  //    required int32 field_id=-1 id;
+  //    optional group field_id=-1 phoneNumbers {
+  //      repeated group field_id=-1 phone {
+  //        required int64 field_id=-1 number;
+  //        optional binary field_id=-1 kind (String);
+  //      }
+  //    }
+  //  }
+  //
+  // This real-world example has no annotations telling us what is a list or a struct. On the
+  // surface this looks like a column of id's and a column of list<struct<int64, string>>, but this
+  // actually should be interpreted as a struct<list<struct<int64, string>>>. The phoneNumbers field
+  // has to be a struct because it is a group with no repeated tag and we have no annotation. The
+  // repeated group is actually BOTH a struct due to the multiple children and a list due to
+  // repeated.
+  //
+  // This code attempts to make this less messy for the code that follows.
+
+  std::function<void(size_t)> process = [&](size_t schema_idx) -> void {
+    if (schema_idx < 0) { return; }
+    auto& schema_elem = schema[schema_idx];
+    if (schema_idx != 0 && schema_elem.type == UNDEFINED_TYPE) {
+      auto const parent_type = schema[schema_elem.parent_idx].converted_type;
+      if (schema_elem.repetition_type == REPEATED && schema_elem.num_children > 1 &&
+          parent_type != LIST && parent_type != MAP) {
+        // This is a list of structs, so we need to mark this as a list, but also
+        // add a struct child and move this element's children to the struct
+        schema_elem.converted_type  = LIST;
+        schema_elem.repetition_type = OPTIONAL;
+        auto const struct_node_idx  = static_cast<size_type>(schema.size());
+
+        SchemaElement struct_elem;
+        struct_elem.name            = "struct_node";
+        struct_elem.repetition_type = REQUIRED;
+        struct_elem.num_children    = schema_elem.num_children;
+        struct_elem.type            = UNDEFINED_TYPE;
+        struct_elem.converted_type  = UNKNOWN;
+
+        // swap children
+        struct_elem.children_idx = std::move(schema_elem.children_idx);
+        schema_elem.children_idx = {struct_node_idx};
+        schema_elem.num_children = 1;
+
+        struct_elem.max_definition_level = schema_elem.max_definition_level;
+        struct_elem.max_repetition_level = schema_elem.max_repetition_level;
+        schema_elem.max_definition_level--;
+        schema_elem.max_repetition_level = schema[schema_elem.parent_idx].max_repetition_level;
+
+        // change parent index on new node and on children
+        struct_elem.parent_idx = schema_idx;
+        for (auto& child_idx : struct_elem.children_idx) {
+          schema[child_idx].parent_idx = struct_node_idx;
+        }
+        // add our struct
+        schema.push_back(struct_elem);
+      }
+    }
+
+    for (auto& child_idx : schema_elem.children_idx) {
+      process(child_idx);
+    }
+  };
+
+  process(0);
 }
 
 metadata::metadata(datasource* source)
@@ -195,6 +266,7 @@ metadata::metadata(datasource* source)
   CompactProtocolReader cp(buffer->data(), ender->footer_len);
   CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
   CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
+  sanitize_schema();
 }
 
 std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
@@ -344,7 +416,7 @@ std::vector<std::string> aggregate_reader_metadata::get_pandas_index_names() con
   return names;
 }
 
-std::tuple<int64_t, size_type, std::vector<gpu::row_group_info>>
+std::tuple<int64_t, size_type, std::vector<row_group_info>>
 aggregate_reader_metadata::select_row_groups(
   host_span<std::vector<size_type> const> row_group_indices,
   int64_t skip_rows_opt,
@@ -362,7 +434,7 @@ aggregate_reader_metadata::select_row_groups(
         host_span<std::vector<size_type> const>(filtered_row_group_indices.value());
     }
   }
-  std::vector<gpu::row_group_info> selection;
+  std::vector<row_group_info> selection;
   auto [rows_to_skip, rows_to_read] = [&]() {
     if (not row_group_indices.empty()) { return std::pair<int64_t, size_type>{}; }
     auto const from_opts = cudf::io::detail::skip_rows_num_rows_from_options(
@@ -402,7 +474,7 @@ aggregate_reader_metadata::select_row_groups(
 }
 
 std::tuple<std::vector<input_column_info>,
-           std::vector<inline_column_buffer>,
+           std::vector<cudf::io::detail::inline_column_buffer>,
            std::vector<size_type>>
 aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>> const& use_names,
                                           bool include_index,
@@ -420,17 +492,18 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
              : -1;
   };
 
-  std::vector<inline_column_buffer> output_columns;
+  std::vector<cudf::io::detail::inline_column_buffer> output_columns;
   std::vector<input_column_info> input_columns;
   std::vector<int> nesting;
 
   // Return true if column path is valid. e.g. if the path is {"struct1", "child1"}, then it is
   // valid if "struct1.child1" exists in this file's schema. If "struct1" exists but "child1" is
   // not a child of "struct1" then the function will return false for "struct1"
-  std::function<bool(column_name_info const*, int, std::vector<inline_column_buffer>&, bool)>
+  std::function<bool(
+    column_name_info const*, int, std::vector<cudf::io::detail::inline_column_buffer>&, bool)>
     build_column = [&](column_name_info const* col_name_info,
                        int schema_idx,
-                       std::vector<inline_column_buffer>& out_col_array,
+                       std::vector<cudf::io::detail::inline_column_buffer>& out_col_array,
                        bool has_list_parent) {
       if (schema_idx < 0) { return false; }
       auto const& schema_elem = get_schema(schema_idx);
@@ -445,13 +518,16 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
           child_col_name_info, schema_elem.children_idx[0], out_col_array, has_list_parent);
       }
 
+      auto const one_level_list = schema_elem.is_one_level_list(get_schema(schema_elem.parent_idx));
+
       // if we're at the root, this is a new output column
-      auto const col_type = schema_elem.is_one_level_list(get_schema(schema_elem.parent_idx))
+      auto const col_type = one_level_list
                               ? type_id::LIST
                               : to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
       auto const dtype    = to_data_type(col_type, schema_elem);
 
-      inline_column_buffer output_col(dtype, schema_elem.repetition_type == OPTIONAL);
+      cudf::io::detail::inline_column_buffer output_col(dtype,
+                                                        schema_elem.repetition_type == OPTIONAL);
       if (has_list_parent) { output_col.user_data |= PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT; }
       // store the index of this element if inserted in out_col_array
       nesting.push_back(static_cast<int>(out_col_array.size()));
@@ -485,13 +561,14 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
           input_column_info{schema_idx, schema_elem.name, schema_elem.max_repetition_level > 0});
 
         // set up child output column for one-level encoding list
-        if (schema_elem.is_one_level_list(get_schema(schema_elem.parent_idx))) {
+        if (one_level_list) {
           // determine the element data type
           auto const element_type =
             to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
           auto const element_dtype = to_data_type(element_type, schema_elem);
 
-          inline_column_buffer element_col(element_dtype, schema_elem.repetition_type == OPTIONAL);
+          cudf::io::detail::inline_column_buffer element_col(
+            element_dtype, schema_elem.repetition_type == OPTIONAL);
           if (has_list_parent || col_type == type_id::LIST) {
             element_col.user_data |= PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT;
           }
@@ -506,9 +583,7 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
         std::copy(nesting.cbegin(), nesting.cend(), std::back_inserter(input_col.nesting));
 
         // pop off the extra nesting element.
-        if (schema_elem.is_one_level_list(get_schema(schema_elem.parent_idx))) {
-          nesting.pop_back();
-        }
+        if (one_level_list) { nesting.pop_back(); }
 
         path_is_valid = true;  // If we're able to reach leaf then path is valid
       }
@@ -656,4 +731,4 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
     std::move(input_columns), std::move(output_columns), std::move(output_column_schemas));
 }
 
-}  // namespace cudf::io::detail::parquet
+}  // namespace cudf::io::parquet::detail

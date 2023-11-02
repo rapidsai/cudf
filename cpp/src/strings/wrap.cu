@@ -19,10 +19,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/strings/case.hpp>
-#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/strings/wrap.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -134,10 +133,11 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
 
 std::unique_ptr<column> wrap(strings_column_view const& strings,
                              size_type width,
+                             rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::wrap<detail::execute_wrap>(strings, width, cudf::get_default_stream(), mr);
+  return detail::wrap<detail::execute_wrap>(strings, width, stream, mr);
 }
 
 }  // namespace strings

@@ -24,7 +24,7 @@
 #include <cuda/atomic>
 #include <cuda/std/tuple>
 
-namespace cudf::io::parquet::gpu {
+namespace cudf::io::parquet::detail {
 
 struct page_state_s {
   constexpr page_state_s() noexcept {}
@@ -753,7 +753,7 @@ __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value
           // for nested schemas, it's more complicated.  This warp will visit 32 incoming values,
           // however not all of them will necessarily represent a value at this nesting level. so
           // the validity bit for thread t might actually represent output value t-6. the correct
-          // position for thread t's bit is cur_value_count. for cuda 11 we could use
+          // position for thread t's bit is thread_value_count. for cuda 11 we could use
           // __reduce_or_sync(), but until then we have to do a warp reduce.
           WarpReduceOr32(is_valid << thread_value_count);
 
@@ -1143,7 +1143,8 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
               units = cudf::timestamp_ms::period::den;
             } else if (s->col.converted_type == TIMESTAMP_MICROS) {
               units = cudf::timestamp_us::period::den;
-            } else if (s->col.logical_type.TIMESTAMP.unit.isset.NANOS) {
+            } else if (s->col.logical_type.has_value() and
+                       s->col.logical_type->is_timestamp_nanos()) {
               units = cudf::timestamp_ns::period::den;
             }
             if (units and units != s->col.ts_clock_rate) {
@@ -1384,4 +1385,4 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
   return true;
 }
 
-}  // namespace cudf::io::parquet::gpu
+}  // namespace cudf::io::parquet::detail

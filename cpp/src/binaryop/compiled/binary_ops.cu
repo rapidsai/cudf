@@ -47,14 +47,16 @@ namespace {
 struct scalar_as_column_view {
   using return_type = typename std::pair<column_view, std::unique_ptr<column>>;
   template <typename T, CUDF_ENABLE_IF(is_fixed_width<T>())>
-  return_type operator()(scalar const& s, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
+  return_type operator()(scalar const& s,
+                         rmm::cuda_stream_view stream,
+                         rmm::mr::device_memory_resource*)
   {
     auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
     auto col_v               = column_view(s.type(),
                              1,
                              h_scalar_type_view.data(),
                              reinterpret_cast<bitmask_type const*>(s.validity_data()),
-                             !s.is_valid());
+                             !s.is_valid(stream));
     return std::pair{col_v, std::unique_ptr<column>(nullptr)};
   }
   template <typename T, CUDF_ENABLE_IF(!is_fixed_width<T>())>
