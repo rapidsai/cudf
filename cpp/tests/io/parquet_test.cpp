@@ -4614,6 +4614,12 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStructNulls)
 
   read_footer(source, &fmd);
 
+  // all struct columns will have num_ordered_rows / 5 nulls at level 0.
+  // col1 will have num_ordered_rows / 2 nulls total
+  // col2 will have num_ordered_rows / 3 nulls total
+  // col3 will have num_ordered_rows / 4 nulls total
+  int const null_mods[] = {0, 2, 3, 4};
+
   for (size_t r = 0; r < fmd.row_groups.size(); r++) {
     auto const& rg = fmd.row_groups[r];
     for (size_t c = 0; c < rg.columns.size(); c++) {
@@ -4623,6 +4629,21 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStructNulls)
       // the first row index is correct
       auto const oi = read_offset_index(source, chunk);
       auto const ci = read_column_index(source, chunk);
+
+      // check definition level histogram (repetition will not be present)
+      if (c != 0) {
+        ASSERT_TRUE(chunk.meta_data.size_statistics.has_value());
+        ASSERT_TRUE(chunk.meta_data.size_statistics->definition_level_histogram.has_value());
+        auto const& def_hist = chunk.meta_data.size_statistics->definition_level_histogram.value();
+        ASSERT_TRUE(def_hist.size() == 3L);
+        auto const l0_nulls    = num_ordered_rows / 5;
+        auto const l1_l0_nulls = num_ordered_rows / (5 * null_mods[c]);
+        auto const l1_nulls    = num_ordered_rows / null_mods[c] - l1_l0_nulls;
+        auto const l2_vals     = num_ordered_rows - l1_nulls - l0_nulls;
+        EXPECT_EQ(def_hist[0], l0_nulls);
+        EXPECT_EQ(def_hist[1], l1_nulls);
+        EXPECT_EQ(def_hist[2], l2_vals);
+      }
 
       int64_t num_vals = 0;
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
@@ -4777,6 +4798,19 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
     auto const& rg = fmd.row_groups[r];
     for (size_t c = 0; c < rg.columns.size(); c++) {
       auto const& chunk = rg.columns[c];
+
+      ASSERT_TRUE(chunk.meta_data.size_statistics.has_value());
+      ASSERT_TRUE(chunk.meta_data.size_statistics->definition_level_histogram.has_value());
+      ASSERT_TRUE(chunk.meta_data.size_statistics->repetition_level_histogram.has_value());
+      // there is only one page, so chunk stats should match the page stats
+      EXPECT_EQ(chunk.meta_data.size_statistics->definition_level_histogram.value(),
+                expected_def_hists[c]);
+      EXPECT_EQ(chunk.meta_data.size_statistics->repetition_level_histogram.value(),
+                expected_rep_hists[c]);
+      if (c == 6) {
+        ASSERT_TRUE(chunk.meta_data.size_statistics->unencoded_byte_array_data_bytes.has_value());
+        EXPECT_EQ(chunk.meta_data.size_statistics->unencoded_byte_array_data_bytes.value(), 50L);
+      }
 
       // loop over offsets, read each page header, make sure it's a data page and that
       // the first row index is correct
