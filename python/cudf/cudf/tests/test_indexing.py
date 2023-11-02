@@ -2154,3 +2154,27 @@ def test_dataframe_iloc_scalar_datetimelike_return_pd_scalar(
         result = getattr(obj, idx_method)[row_key, col_key]
     expected = getattr(obj.to_pandas(), idx_method)[row_key, col_key]
     assert result == expected
+
+
+@pytest.mark.parametrize("idx_method, key", [["iloc", 0], ["loc", "a"]])
+def test_series_iloc_scalar_interval_return_pd_scalar(idx_method, key):
+    iidx = cudf.IntervalIndex.from_breaks([1, 2, 3])
+    obj = cudf.Series(iidx, index=list("ab"))
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = getattr(obj, idx_method)[key]
+    expected = getattr(obj.to_pandas(), idx_method)[key]
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "idx_method, row_key, col_key", [["iloc", 0, 0], ["loc", "a", "a"]]
+)
+def test_dataframe_iloc_scalar_interval_return_pd_scalar(
+    idx_method, row_key, col_key
+):
+    iidx = cudf.IntervalIndex.from_breaks([1, 2, 3])
+    obj = cudf.DataFrame({"a": iidx}, index=list("ab"))
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = getattr(obj, idx_method)[row_key, col_key]
+    expected = getattr(obj.to_pandas(), idx_method)[row_key, col_key]
+    assert result == expected
