@@ -17,8 +17,8 @@ import sys
 import pytest
 
 
-# Proxy for whether we should expect to see XDF objects
-# without trying to import cuDF, (which could poison the global environment)
+# Proxy check for whether the proxy could be referencing GPU objects without
+# trying to import cuDF, which could poison the global environment
 def _gpu_available():
     try:
         import rmm
