@@ -4634,6 +4634,8 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStructNulls)
       if (c != 0) {
         ASSERT_TRUE(chunk.meta_data.size_statistics.has_value());
         ASSERT_TRUE(chunk.meta_data.size_statistics->definition_level_histogram.has_value());
+        // there are no lists so there should be no repetition level histogram
+        EXPECT_FALSE(chunk.meta_data.size_statistics->repetition_level_histogram.has_value());
         auto const& def_hist = chunk.meta_data.size_statistics->definition_level_histogram.value();
         ASSERT_TRUE(def_hist.size() == 3L);
         auto const l0_nulls    = num_ordered_rows / 5;
@@ -4643,6 +4645,9 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStructNulls)
         EXPECT_EQ(def_hist[0], l0_nulls);
         EXPECT_EQ(def_hist[1], l1_nulls);
         EXPECT_EQ(def_hist[2], l2_vals);
+      } else {
+        // column 0 has no lists and no nulls and no strings, so there should be no size stats
+        EXPECT_FALSE(chunk.meta_data.size_statistics.has_value());
       }
 
       int64_t num_vals = 0;
@@ -4807,9 +4812,12 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
                 expected_def_hists[c]);
       EXPECT_EQ(chunk.meta_data.size_statistics->repetition_level_histogram.value(),
                 expected_rep_hists[c]);
+      // only column 6 has string data
       if (c == 6) {
         ASSERT_TRUE(chunk.meta_data.size_statistics->unencoded_byte_array_data_bytes.has_value());
         EXPECT_EQ(chunk.meta_data.size_statistics->unencoded_byte_array_data_bytes.value(), 50L);
+      } else {
+        EXPECT_FALSE(chunk.meta_data.size_statistics->unencoded_byte_array_data_bytes.has_value());
       }
 
       // loop over offsets, read each page header, make sure it's a data page and that
