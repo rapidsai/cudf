@@ -42,7 +42,7 @@ loading a notebook extension or adding one command-line flag:
 
             import pandas as pd
             df = pd.read_csv("filepath")
-            df.groupby(“col”).mean()
+            df.groupby("col").mean()
             df.rolling(window=3).sum()
 
             # python -m cudf.pandas script.py
@@ -54,11 +54,11 @@ loading a notebook extension or adding one command-line flag:
 
             import pandas as pd
             df = pd.read_csv("filepath")
-            df.groupby(“col”).mean()
+            df.groupby("col").mean()
             df.rolling(window=3).sum()
 
 
-With cuDF’s pandas Accelerator Mode, you can take pandas from worst-to-first on
+With cuDF's pandas Accelerator Mode, you can take pandas from worst-to-first on
 the DuckDB dataset benchmarks without changing any code (0.5 GB and 5 GB
 scales).
 
@@ -77,7 +77,7 @@ Getting Started
     :width: 200px
 
 `Try it now on Colab <http://nvda.ws/rapids-cudf>`_
-Take cuDF’s new pandas Accelerator Mode for a test-drive in a free `GPU-enabled
+Take cuDF's new pandas Accelerator Mode for a test-drive in a free `GPU-enabled
 notebook <http://nvda.ws/rapids-cudf>`_ environment using your Google account.
 
 Visit the `RAPIDS Quick Start <https://rapids.ai/#quick-start>`_ to get
