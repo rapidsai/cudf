@@ -245,12 +245,10 @@ Encoding __device__ determine_encoding(PageType page_type,
  * @brief Generate level histogram for a page.
  *
  * For definition levels, the histogram values h(0)...h(max_def-1) represent nulls at
- * various levels of the hierarchy, and h(max_def) is the number of non-null values.
- * If max_rep == 0, then the number of values equals the number of rows. To generate
- * the histogram, we can just do the null values, and then calculate h(max_def) at the
- * end as `num_values - sum(h(0)..h(max_def-1))`. If the leaf level of the column is nullable,
- * then num_leaf_values is h(max_def-1) + h(max_def), and we can just do the first max_def - 1
- * values.
+ * various levels of the hierarchy, and h(max_def) is the number of non-null values (num_valid).
+ * If the leaf level is nullable, then num_leaf_values is h(max_def-1) + h(max_def),
+ * and h(max_def-1) is num_leaf_values - num_valid. h(0) is derivable as num_values -
+ * sum(h(1)..h(max_def)).
  *
  * For repetition levels, h(0) equals the number of rows. Here we can calculate
  * h(1)..h(max_rep-1), set h(0) directly, and then obtain h(max_rep) in the same way as
@@ -259,12 +257,11 @@ Encoding __device__ determine_encoding(PageType page_type,
  * @param hist Pointer to the histogram (size is max_level + 1)
  * @param s Page encode state
  * @param lvl_data Pointer to the global repetition or definition level data
- * @param lvl_start First element of the histogram to encode (inclusive)
  * @param lvl_end Last element of the histogram to encode (exclusive)
  */
 template <int block_size, typename state_buf>
-void __device__ generate_page_histogram(
-  uint32_t* hist, state_buf const* s, uint8_t const* lvl_data, int lvl_start, int lvl_end)
+void __device__
+generate_page_histogram(uint32_t* hist, state_buf const* s, uint8_t const* lvl_data, int lvl_end)
 {
   using block_reduce = cub::BlockReduce<int, block_size>;
   __shared__ typename block_reduce::TempStorage temp_storage;
@@ -273,7 +270,8 @@ void __device__ generate_page_histogram(
   auto const page_first_val_idx = s->col.level_offsets[s->page.start_row];
   auto const col_last_val_idx   = s->col.level_offsets[s->col.num_rows];
 
-  for (int lvl = lvl_start; lvl < lvl_end; lvl++) {
+  // h(0) is always derivable, so start at 1
+  for (int lvl = 1; lvl < lvl_end; lvl++) {
     int nval_in_level = 0;
     for (int i = 0; i < s->page.num_values; i += block_size) {
       auto const lidx = i + t;
@@ -1391,7 +1389,7 @@ __device__ void finish_page_encode(state_buf* s,
     // for repetition we get hist[0] from num_rows, and can derive hist[max_rep_level]
     if (s->col.max_rep_level > 1) {
       generate_page_histogram<block_size>(
-        s->page.rep_histogram, s, s->col.rep_values, 1, s->col.max_rep_level);
+        s->page.rep_histogram, s, s->col.rep_values, s->col.max_rep_level);
     }
 
     if (t == 0) {
@@ -1411,8 +1409,7 @@ __device__ void finish_page_encode(state_buf* s,
       bool const is_leaf_nullable = s->col.nullability[s->col.max_rep_level] != 0;
       auto const last_lvl = is_leaf_nullable ? s->col.max_def_level - 1 : s->col.max_def_level;
       if (last_lvl > 1) {
-        generate_page_histogram<block_size>(
-          s->page.def_histogram, s, s->col.def_values, 1, last_lvl);
+        generate_page_histogram<block_size>(s->page.def_histogram, s, s->col.def_values, last_lvl);
       }
 
       if (t == 0) {
