@@ -227,7 +227,7 @@ dependencies:
           - libarrow==13.0.0.*
           - librdkafka>=1.9.0,<1.10.0a0
           # Align nvcomp version with rapids-cmake
-          - nvcomp==2.6.1
+          - nvcomp==3.0.4
           - spdlog>=1.11.0,<1.12
   build_wheels:
     common:
