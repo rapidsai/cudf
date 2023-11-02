@@ -14,8 +14,8 @@ necessary, avoiding unnecessary device-host transfers.
 
 When using cudf.pandas, cuDF’s [pandas compatibility
 mode](https://docs.rapids.ai/api/cudf/stable/api_docs/options/#available-options)
-is automatically enabled, ensuring consistency with pandas-specific semantics like default sort
-ordering.
+is automatically enabled, ensuring consistency with pandas-specific
+semantics like default sort ordering.
 
 ## How We Ensure Consistency with Pandas
 
