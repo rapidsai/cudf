@@ -32,7 +32,7 @@ from typing import (
 
 from .annotation import nvtx
 
-_XDF_NVTX_COLORS = {
+_CUDF_PANDAS_NVTX_COLORS = {
     "COPY_SLOW_TO_FAST": 0xCA0020,
     "COPY_FAST_TO_SLOW": 0xF4A582,
     "EXECUTE_FAST": 0x92C5DE,
@@ -166,7 +166,7 @@ def make_final_proxy_type(
 
     @nvtx.annotate(
         "COPY_SLOW_TO_FAST",
-        color=_XDF_NVTX_COLORS["COPY_SLOW_TO_FAST"],
+        color=_CUDF_PANDAS_NVTX_COLORS["COPY_SLOW_TO_FAST"],
         domain="cudf_pandas",
     )
     def _fsproxy_slow_to_fast(self):
@@ -178,7 +178,7 @@ def make_final_proxy_type(
 
     @nvtx.annotate(
         "COPY_FAST_TO_SLOW",
-        color=_XDF_NVTX_COLORS["COPY_FAST_TO_SLOW"],
+        color=_CUDF_PANDAS_NVTX_COLORS["COPY_FAST_TO_SLOW"],
         domain="cudf_pandas",
     )
     def _fsproxy_fast_to_slow(self):
@@ -300,7 +300,7 @@ def make_intermediate_proxy_type(
 
     @nvtx.annotate(
         "COPY_SLOW_TO_FAST",
-        color=_XDF_NVTX_COLORS["COPY_SLOW_TO_FAST"],
+        color=_CUDF_PANDAS_NVTX_COLORS["COPY_SLOW_TO_FAST"],
         domain="cudf_pandas",
     )
     def _fsproxy_slow_to_fast(self):
@@ -310,7 +310,7 @@ def make_intermediate_proxy_type(
 
     @nvtx.annotate(
         "COPY_FAST_TO_SLOW",
-        color=_XDF_NVTX_COLORS["COPY_FAST_TO_SLOW"],
+        color=_CUDF_PANDAS_NVTX_COLORS["COPY_FAST_TO_SLOW"],
         domain="cudf_pandas",
     )
     def _fsproxy_fast_to_slow(self):
@@ -761,7 +761,7 @@ class _IntermediateProxy(_FastSlowProxy):
 
     @nvtx.annotate(
         "COPY_SLOW_TO_FAST",
-        color=_XDF_NVTX_COLORS["COPY_SLOW_TO_FAST"],
+        color=_CUDF_PANDAS_NVTX_COLORS["COPY_SLOW_TO_FAST"],
         domain="cudf_pandas",
     )
     def _fsproxy_slow_to_fast(self) -> Any:
@@ -771,7 +771,7 @@ class _IntermediateProxy(_FastSlowProxy):
 
     @nvtx.annotate(
         "COPY_FAST_TO_SLOW",
-        color=_XDF_NVTX_COLORS["COPY_FAST_TO_SLOW"],
+        color=_CUDF_PANDAS_NVTX_COLORS["COPY_FAST_TO_SLOW"],
         domain="cudf_pandas",
     )
     def _fsproxy_fast_to_slow(self) -> Any:
@@ -837,7 +837,7 @@ def _fast_slow_function_call(func: Callable, /, *args, **kwargs) -> Any:
     try:
         with nvtx.annotate(
             "EXECUTE_FAST",
-            color=_XDF_NVTX_COLORS["EXECUTE_FAST"],
+            color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_FAST"],
             domain="cudf_pandas",
         ):
             fast_args, fast_kwargs = _fast_arg(args), _fast_arg(kwargs)
@@ -849,7 +849,7 @@ def _fast_slow_function_call(func: Callable, /, *args, **kwargs) -> Any:
     except Exception:
         with nvtx.annotate(
             "EXECUTE_SLOW",
-            color=_XDF_NVTX_COLORS["EXECUTE_SLOW"],
+            color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
             domain="cudf_pandas",
         ):
             slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)

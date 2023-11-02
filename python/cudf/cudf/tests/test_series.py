@@ -2582,3 +2582,13 @@ def test_series_error_nan_mixed_types():
     with cudf.option_context("mode.pandas_compatible", True):
         with pytest.raises(pa.ArrowInvalid):
             cudf.from_pandas(ps)
+
+
+def test_series_error_nan_non_float_dtypes():
+    s = cudf.Series(["a", "b", "c"])
+    with pytest.raises(TypeError):
+        s[0] = np.nan
+
+    s = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
+    with pytest.raises(TypeError):
+        s[0] = np.nan
