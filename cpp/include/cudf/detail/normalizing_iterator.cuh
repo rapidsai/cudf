@@ -33,7 +33,7 @@ namespace detail {
  * @tparam Integer The type the iterator normalizes to
  */
 template <class Derived, typename Integer>
-struct base_normalator {
+struct alignas(16) base_normalator {
   static_assert(cudf::is_index_type<Integer>());
   using difference_type   = std::ptrdiff_t;
   using value_type        = Integer;
