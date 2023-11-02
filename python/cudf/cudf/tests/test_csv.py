@@ -1,5 +1,6 @@
 # Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
+import codecs
 import gzip
 import os
 import re
@@ -2222,3 +2223,14 @@ def test_column_selection_plus_column_names(usecols, names):
         pd.read_csv(StringIO(buffer), usecols=usecols, names=names),
         cudf.read_csv(StringIO(buffer), usecols=usecols, names=names),
     )
+
+
+def test_read_compressed_BOM(tmpdir):
+    buffer = 'int, string\n1, "a"\n2, "b"\n3, "c"\n'
+
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file20.gz")
+    with gzip.open(fname, "wt", encoding="utf-8") as f:
+        f.write(codecs.BOM_UTF8.decode("utf-8"))
+        f.write(buffer)
+
+    assert_eq(pd.read_csv(fname), cudf.read_csv(fname))

@@ -388,26 +388,30 @@ __device__ bool are_all_nans(cooperative_groups::thread_block const& block,
   return count == 0;
 }
 
-template <typename T>
-__device__ void device_sum(cooperative_groups::thread_block const& block,
-                           T const* data,
-                           int64_t size,
-                           T* sum)
+template <typename T, typename AccumT = std::conditional_t<std::is_integral_v<T>, int64_t, T>>
+__device__ AccumT device_sum(cooperative_groups::thread_block const& block,
+                             T const* data,
+                             int64_t size)
 {
-  T local_sum = 0;
+  __shared__ AccumT block_sum;
+  if (block.thread_rank() == 0) { block_sum = 0; }
+  block.sync();
+
+  AccumT local_sum = 0;
 
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
-    local_sum += data[idx];
+    local_sum += static_cast<AccumT>(data[idx]);
   }
 
-  cuda::atomic_ref<T, cuda::thread_scope_block> ref{*sum};
+  cuda::atomic_ref<AccumT, cuda::thread_scope_block> ref{block_sum};
   ref.fetch_add(local_sum, cuda::std::memory_order_relaxed);
 
   block.sync();
+  return block_sum;
 }
 
-template <typename T>
-__device__ T BlockSum(T const* data, int64_t size)
+template <typename T, typename AccumT = std::conditional_t<std::is_integral_v<T>, int64_t, T>>
+__device__ AccumT BlockSum(T const* data, int64_t size)
 {
   auto block = cooperative_groups::this_thread_block();
 
@@ -415,11 +419,7 @@ __device__ T BlockSum(T const* data, int64_t size)
     if (are_all_nans(block, data, size)) { return 0; }
   }
 
-  __shared__ T block_sum;
-  if (block.thread_rank() == 0) { block_sum = 0; }
-  block.sync();
-
-  device_sum<T>(block, data, size, &block_sum);
+  auto block_sum = device_sum<T>(block, data, size);
   return block_sum;
 }
 
@@ -428,11 +428,7 @@ __device__ double BlockMean(T const* data, int64_t size)
 {
   auto block = cooperative_groups::this_thread_block();
 
-  __shared__ T block_sum;
-  if (block.thread_rank() == 0) { block_sum = 0; }
-  block.sync();
-
-  device_sum<T>(block, data, size, &block_sum);
+  auto block_sum = device_sum<T>(block, data, size);
   return static_cast<double>(block_sum) / static_cast<double>(size);
 }
 
@@ -443,17 +439,11 @@ __device__ double BlockCoVar(T const* lhs, T const* rhs, int64_t size)
 
   __shared__ double block_covar;
 
-  __shared__ T block_sum_lhs;
-  __shared__ T block_sum_rhs;
-
-  if (block.thread_rank() == 0) {
-    block_covar   = 0;
-    block_sum_lhs = 0;
-    block_sum_rhs = 0;
-  }
+  if (block.thread_rank() == 0) { block_covar = 0; }
   block.sync();
 
-  device_sum<T>(block, lhs, size, &block_sum_lhs);
+  auto block_sum_lhs = device_sum<T>(block, lhs, size);
+
   auto const mu_l = static_cast<double>(block_sum_lhs) / static_cast<double>(size);
   auto const mu_r = [=]() {
     if (lhs == rhs) {
@@ -461,7 +451,7 @@ __device__ double BlockCoVar(T const* lhs, T const* rhs, int64_t size)
       // Thus we can assume mu_r = mu_l.
       return mu_l;
     } else {
-      device_sum<T>(block, rhs, size, &block_sum_rhs);
+      auto block_sum_rhs = device_sum<T>(block, rhs, size);
       return static_cast<double>(block_sum_rhs) / static_cast<double>(size);
     }
   }();
@@ -643,9 +633,8 @@ __device__ double BlockCorr(T* const lhs_ptr, T* const rhs_ptr, int64_t size)
 {
   auto numerator   = BlockCoVar(lhs_ptr, rhs_ptr, size);
   auto denominator = BlockStd(lhs_ptr, size) * BlockStd<T>(rhs_ptr, size);
-
   if (denominator == 0.0) {
-    return 0.0;
+    return std::numeric_limits<double>::quiet_NaN();
   } else {
     return numerator / denominator;
   }

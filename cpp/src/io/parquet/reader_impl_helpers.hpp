@@ -54,19 +54,6 @@ using namespace cudf::io::parquet;
 }
 
 /**
- * @brief The row_group_info class
- */
-struct row_group_info {
-  size_type const index;
-  size_t const start_row;  // TODO source index
-  size_type const source_index;
-  row_group_info(size_type index, size_t start_row, size_type source_index)
-    : index(index), start_row(start_row), source_index(source_index)
-  {
-  }
-};
-
-/**
  * @brief Class for parsing dataset metadata
  */
 struct metadata : public FileMetaData {
@@ -170,12 +157,14 @@ class aggregate_reader_metadata {
    * @param row_group_indices Lists of row groups to read, one per source
    * @param output_dtypes List of output column datatypes
    * @param filter AST expression to filter row groups based on Column chunk statistics
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Filtered row group indices, if any is filtered.
    */
   [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> filter_row_groups(
     host_span<std::vector<size_type> const> row_group_indices,
     host_span<data_type const> output_dtypes,
-    std::reference_wrapper<ast::expression const> filter) const;
+    std::reference_wrapper<ast::expression const> filter,
+    rmm::cuda_stream_view stream) const;
 
   /**
    * @brief Filters and reduces down to a selection of row groups
@@ -188,16 +177,17 @@ class aggregate_reader_metadata {
    * @param row_count Total number of rows selected
    * @param output_dtypes List of output column datatypes
    * @param filter Optional AST expression to filter row groups based on Column chunk statistics
-   *
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @return A tuple of corrected row_start, row_count and list of row group indexes and its
    *         starting row
    */
-  [[nodiscard]] std::tuple<int64_t, size_type, std::vector<row_group_info>> select_row_groups(
+  [[nodiscard]] std::tuple<int64_t, size_type, std::vector<gpu::row_group_info>> select_row_groups(
     host_span<std::vector<size_type> const> row_group_indices,
     int64_t row_start,
     std::optional<size_type> const& row_count,
     host_span<data_type const> output_dtypes,
-    std::optional<std::reference_wrapper<ast::expression const>> filter) const;
+    std::optional<std::reference_wrapper<ast::expression const>> filter,
+    rmm::cuda_stream_view stream) const;
 
   /**
    * @brief Filters and reduces down to a selection of columns

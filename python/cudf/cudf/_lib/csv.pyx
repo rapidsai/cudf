@@ -35,9 +35,9 @@ from cudf._lib.cpp.io.csv cimport (
     read_csv as cpp_read_csv,
     write_csv as cpp_write_csv,
 )
+from cudf._lib.cpp.io.data_sink cimport data_sink
 from cudf._lib.cpp.io.types cimport (
     compression_type,
-    data_sink,
     quote_style,
     sink_info,
     source_info,
@@ -543,7 +543,7 @@ def write_csv(
         )
 
 
-cdef data_type _get_cudf_data_type_from_dtype(object dtype) except +:
+cdef data_type _get_cudf_data_type_from_dtype(object dtype) except *:
     # TODO: Remove this work-around Dictionary types
     # in libcudf are fully mapped to categorical columns:
     # https://github.com/rapidsai/cudf/issues/3960

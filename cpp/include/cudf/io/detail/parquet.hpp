@@ -91,7 +91,8 @@ class reader {
 class chunked_reader : private reader {
  public:
   /**
-   * @brief Constructor from a read size limit and an array of data sources with reader options.
+   * @brief Constructor from an output size memory limit and an input size memory limit and an array
+   * of data sources with reader options.
    *
    * The typical usage should be similar to this:
    * ```
@@ -102,17 +103,45 @@ class chunked_reader : private reader {
    *
    * ```
    *
-   * If `chunk_read_limit == 0` (i.e., no reading limit), a call to `read_chunk()` will read the
-   * whole file and return a table containing all rows.
+   * If `chunk_read_limit == 0` (i.e., no output limit), and `pass_read_limit == 0` (no input
+   * temporary memory size limit) a call to `read_chunk()` will read the whole file and return a
+   * table containing all rows.
+   *
+   * The chunk_read_limit parameter controls the size of the output chunks produces.  If the user
+   * specifies 100 MB of data, the reader will attempt to return chunks containing tables that have
+   * a total bytes size (over all columns) of 100 MB or less.  This is a soft limit and the code
+   * will not fail if it cannot satisfy the limit.  It will make a best-effort atttempt only.
+   *
+   * The pass_read_limit parameter controls how much temporary memory is used in the process of
+   * decoding the file.  The primary contributor to this memory usage is the uncompressed size of
+   * the data read out of the file and the decompressed (but not yet decoded) size of the data. The
+   * granularity of a given pass is at the row group level. It will not attempt to read at the sub
+   * row-group level.
+   *
+   * Combined, the way to visualize passes and chunks is as follows:
+   *
+   * @code{.pseudo}
+   * for(each pass){
+   *    for(each output chunk within a pass){
+   *       return a table that fits within the output chunk limit
+   *    }
+   *  }
+   * @endcode
+   *
+   * With a pass_read_limit of `0` you are simply saying you have one pass that reads the entire
+   * file as normal.
    *
    * @param chunk_read_limit Limit on total number of bytes to be returned per read,
-   *        or `0` if there is no limit
+   * or `0` if there is no limit
+   * @param pass_read_limit Limit on total amount of memory used for temporary computations during
+   * loading, or `0` if there is no limit
    * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
-   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit chunked_reader(std::size_t chunk_read_limit,
+                          std::size_t pass_read_limit,
                           std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                           parquet_reader_options const& options,
                           rmm::cuda_stream_view stream,

@@ -104,13 +104,15 @@ __global__ void set_null_mask_kernel(bitmask_type* __restrict__ destination,
                                      bool valid,
                                      size_type number_of_mask_words)
 {
-  auto x                  = destination + word_index(begin_bit);
-  auto const last_word    = word_index(end_bit) - word_index(begin_bit);
-  bitmask_type fill_value = valid ? 0xffff'ffff : 0;
+  auto x                            = destination + word_index(begin_bit);
+  thread_index_type const last_word = word_index(end_bit) - word_index(begin_bit);
+  bitmask_type fill_value           = valid ? 0xffff'ffff : 0;
 
-  for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
+  auto const stride = cudf::detail::grid_1d::grid_stride();
+
+  for (thread_index_type destination_word_index = grid_1d::global_thread_id();
        destination_word_index < number_of_mask_words;
-       destination_word_index += blockDim.x * gridDim.x) {
+       destination_word_index += stride) {
     if (destination_word_index == 0 || destination_word_index == last_word) {
       bitmask_type mask = ~bitmask_type{0};
       if (destination_word_index == 0) {
@@ -189,9 +191,10 @@ __global__ void copy_offset_bitmask(bitmask_type* __restrict__ destination,
                                     size_type source_end_bit,
                                     size_type number_of_mask_words)
 {
-  for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
+  auto const stride = cudf::detail::grid_1d::grid_stride();
+  for (thread_index_type destination_word_index = grid_1d::global_thread_id();
        destination_word_index < number_of_mask_words;
-       destination_word_index += blockDim.x * gridDim.x) {
+       destination_word_index += stride) {
     destination[destination_word_index] = detail::get_mask_offset_word(
       source, destination_word_index, source_begin_bit, source_end_bit);
   }
@@ -261,14 +264,15 @@ __global__ void count_set_bits_kernel(bitmask_type const* bitmask,
 
   auto const first_word_index{word_index(first_bit_index)};
   auto const last_word_index{word_index(last_bit_index)};
-  auto const tid         = threadIdx.x + blockIdx.x * blockDim.x;
-  auto thread_word_index = tid + first_word_index;
+  thread_index_type const tid         = grid_1d::global_thread_id();
+  thread_index_type const stride      = grid_1d::grid_stride();
+  thread_index_type thread_word_index = tid + first_word_index;
   size_type thread_count{0};
 
   // First, just count the bits in all words
   while (thread_word_index <= last_word_index) {
     thread_count += __popc(bitmask[thread_word_index]);
-    thread_word_index += blockDim.x * gridDim.x;
+    thread_word_index += stride;
   }
 
   // Subtract any slack bits counted from the first and last word
