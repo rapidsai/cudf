@@ -9079,7 +9079,18 @@ def test_agg_for_dataframe_with_string_columns(aggs):
         },
     ],
 )
-def test_update_for_dataframes(data, data2, join, overwrite, errors):
+def test_update_for_dataframes(request, data, data2, join, overwrite, errors):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=request.node.name
+            in {
+                "test_update_for_dataframes[data21-data2-ignore-True-left]",
+                "test_update_for_dataframes[data24-data7-ignore-True-left]",
+                "test_update_for_dataframes[data25-data2-ignore-True-left]",
+            },
+            reason="mixing of bools & non-bools is not allowed.",
+        )
+    )
     pdf = pd.DataFrame(data)
     gdf = cudf.DataFrame(data, nan_as_null=False)
 

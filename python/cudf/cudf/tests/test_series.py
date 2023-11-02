@@ -2592,3 +2592,15 @@ def test_series_error_nan_non_float_dtypes():
     s = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
     with pytest.raises(TypeError):
         s[0] = np.nan
+
+
+def test_series_where_mixed_bool_dtype():
+    s = cudf.Series([True, False, True])
+    with pytest.raises(TypeError):
+        s.where(~s, 10)
+
+
+def test_series_setitem_mixed_bool_dtype():
+    s = cudf.Series([True, False, True])
+    with pytest.raises(TypeError):
+        s[0] = 10

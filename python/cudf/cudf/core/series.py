@@ -233,7 +233,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
                     f"Cannot assign {value=} to non-datetime/non-timedelta "
                     "columns"
                 )
-            if (
+            elif (
                 not (
                     is_float_dtype(self._frame._column.dtype)
                     or (
@@ -251,6 +251,15 @@ class _SeriesIlocIndexer(_FrameIndexer):
                 raise MixedTypeError(
                     f"Cannot assign {value=} to "
                     f"non-float dtype={self._frame._column.dtype}"
+                )
+            elif (
+                is_bool_dtype(self._frame._column.dtype)
+                and not is_bool_dtype(value)
+                and value not in {None, cudf.NA}
+            ):
+                raise MixedTypeError(
+                    f"Cannot assign {value=} to "
+                    f"bool dtype={self._frame._column.dtype}"
                 )
         elif not (
             isinstance(value, (list, dict))
