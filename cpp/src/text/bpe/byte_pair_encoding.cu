@@ -542,7 +542,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
   auto result =
     cudf::strings::detail::join_list_elements(cudf::lists_column_view(list_join),
                                               separator,
-                                              cudf::string_scalar(""),
+                                              cudf::string_scalar("", true, stream),
                                               cudf::strings::separator_on_nulls::NO,
                                               cudf::strings::output_if_empty_list::EMPTY_STRING,
                                               stream,

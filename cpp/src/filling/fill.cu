@@ -79,7 +79,7 @@ struct in_place_fill_range_dispatch {
   {
     auto unscaled = static_cast<cudf::fixed_point_scalar<T> const&>(value).value(stream);
     using RepType = typename T::rep;
-    auto s        = cudf::numeric_scalar<RepType>(unscaled, value.is_valid(stream));
+    auto s        = cudf::numeric_scalar<RepType>(unscaled, value.is_valid(stream), stream);
     in_place_fill<RepType>(destination, begin, end, s, stream);
   }
 

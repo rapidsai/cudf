@@ -161,7 +161,11 @@ struct column_to_strings_fn {
     column_view const& column) const
   {
     return cudf::strings::detail::from_booleans(
-      column, options_.get_true_value(), options_.get_false_value(), stream_, mr_);
+      column,
+      cudf::string_scalar(options_.get_true_value(), true, stream_),
+      cudf::string_scalar(options_.get_false_value(), true, stream_),
+      stream_,
+      mr_);
   }
 
   // strings:
@@ -367,10 +371,10 @@ void write_chunked(data_sink* out_sink,
 
   CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
 
-  cudf::string_scalar newline{options.get_line_terminator()};
+  cudf::string_scalar newline{options.get_line_terminator(), true, stream};
   auto p_str_col_w_nl = cudf::strings::detail::join_strings(str_column_view,
                                                             newline,
-                                                            string_scalar("", false),
+                                                            string_scalar("", false, stream),
                                                             stream,
                                                             rmm::mr::get_current_device_resource());
   strings_column_view strings_column{p_str_col_w_nl->view()};
@@ -472,14 +476,15 @@ void write_csv(data_sink* out_sink,
       //
       std::string delimiter_str{options.get_inter_column_delimiter()};
       auto str_concat_col = [&] {
+        cudf::string_scalar narep{options.get_na_rep(), true, stream};
         if (str_table_view.num_columns() > 1)
-          return cudf::strings::detail::concatenate(str_table_view,
-                                                    delimiter_str,
-                                                    options.get_na_rep(),
-                                                    strings::separator_on_nulls::YES,
-                                                    stream,
-                                                    rmm::mr::get_current_device_resource());
-        cudf::string_scalar narep{options.get_na_rep()};
+          return cudf::strings::detail::concatenate(
+            str_table_view,
+            cudf::string_scalar(delimiter_str, true, stream),
+            narep,
+            strings::separator_on_nulls::YES,
+            stream,
+            rmm::mr::get_current_device_resource());
         return cudf::strings::detail::replace_nulls(
           str_table_view.column(0), narep, stream, rmm::mr::get_current_device_resource());
       }();

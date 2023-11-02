@@ -527,7 +527,11 @@ struct column_to_strings_fn {
     column_view const& column) const
   {
     return cudf::strings::detail::from_booleans(
-      column, options_.get_true_value(), options_.get_false_value(), stream_, mr_);
+      column,
+      cudf::string_scalar(options_.get_true_value(), true, stream_),
+      cudf::string_scalar(options_.get_false_value(), true, stream_),
+      stream_,
+      mr_);
   }
 
   // strings:

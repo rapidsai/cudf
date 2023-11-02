@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ table::table(table const& other) : _num_rows{other.num_rows()}
   CUDF_FUNC_RANGE();
   _columns.reserve(other._columns.size());
   for (auto const& c : other._columns) {
-    _columns.emplace_back(std::make_unique<column>(*c));
+    _columns.emplace_back(std::make_unique<column>(*c, cudf::get_default_stream()));
   }
 }
 

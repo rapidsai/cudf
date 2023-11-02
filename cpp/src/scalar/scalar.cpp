@@ -421,7 +421,7 @@ duration_scalar<T>::duration_scalar(duration_scalar<T> const& other,
 template <typename T>
 typename duration_scalar<T>::rep_type duration_scalar<T>::count()
 {
-  return this->value().count();
+  return this->value(cudf::get_default_stream()).count();
 }
 
 /**
@@ -441,7 +441,7 @@ template class duration_scalar<duration_ns>;
 template <typename T>
 typename timestamp_scalar<T>::rep_type timestamp_scalar<T>::ticks_since_epoch()
 {
-  return this->value().time_since_epoch().count();
+  return this->value(cudf::get_default_stream()).time_since_epoch().count();
 }
 
 /**
@@ -541,7 +541,7 @@ struct_scalar::struct_scalar(table_view const& data,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
   : scalar(data_type(type_id::STRUCT), is_valid, stream, mr),
-    _data{init_data(table{data}, is_valid, stream, mr)}
+    _data{init_data(table{data, stream, mr}, is_valid, stream, mr)}
 {
   assert_valid_size();
 }
@@ -551,8 +551,11 @@ struct_scalar::struct_scalar(host_span<column_view const> data,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
   : scalar(data_type(type_id::STRUCT), is_valid, stream, mr),
-    _data{init_data(
-      table{table_view{std::vector<column_view>{data.begin(), data.end()}}}, is_valid, stream, mr)}
+    _data{
+      init_data(table{table_view{std::vector<column_view>{data.begin(), data.end()}}, stream, mr},
+                is_valid,
+                stream,
+                mr)}
 {
   assert_valid_size();
 }

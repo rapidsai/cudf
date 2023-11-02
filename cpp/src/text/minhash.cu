@@ -166,8 +166,8 @@ std::unique_ptr<cudf::column> build_list_result(cudf::strings_column_view const&
                                                 rmm::mr::device_memory_resource* mr)
 {
   // build the offsets for the output lists column
-  auto const zero = cudf::numeric_scalar<cudf::size_type>(0);
-  auto const size = cudf::numeric_scalar<cudf::size_type>(seeds_size);
+  auto const zero = cudf::numeric_scalar<cudf::size_type>(0, true, stream);
+  auto const size = cudf::numeric_scalar<cudf::size_type>(seeds_size, true, stream);
   auto offsets    = cudf::detail::sequence(input.size() + 1, zero, size, stream, mr);
   hashes->set_null_mask(rmm::device_buffer{}, 0);  // children have no nulls
 
@@ -188,7 +188,7 @@ std::unique_ptr<cudf::column> build_list_result(cudf::strings_column_view const&
 }  // namespace
 
 std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
-                                      cudf::numeric_scalar<uint32_t> seed,
+                                      cudf::numeric_scalar<uint32_t> const& seed,
                                       cudf::size_type width,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
@@ -212,7 +212,7 @@ std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
 }
 
 std::unique_ptr<cudf::column> minhash64(cudf::strings_column_view const& input,
-                                        cudf::numeric_scalar<uint64_t> seed,
+                                        cudf::numeric_scalar<uint64_t> const& seed,
                                         cudf::size_type width,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
