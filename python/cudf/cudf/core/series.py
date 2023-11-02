@@ -3135,7 +3135,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3.0    3
         2.0    2
         1.0    1
-        dtype: int32
+        dtype: int64
 
         The order of the counts can be changed by passing ``ascending=True``:
 
@@ -3143,7 +3143,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         1.0    1
         2.0    2
         3.0    3
-        dtype: int32
+        dtype: int64
 
         With ``normalize`` set to True, returns the relative frequency
         by dividing all values by the sum of values.
@@ -3152,7 +3152,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3.0    0.500000
         2.0    0.333333
         1.0    0.166667
-        dtype: float32
+        dtype: float64
 
         To include ``NA`` value counts, pass ``dropna=False``:
 
@@ -3172,14 +3172,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2.0     2
         <NA>    2
         1.0     1
-        dtype: int32
+        dtype: int64
 
         >>> s = cudf.Series([3, 1, 2, 3, 4, np.nan])
         >>> s.value_counts(bins=3)
         (2.0, 3.0]      2
         (0.996, 2.0]    2
         (3.0, 4.0]      1
-        dtype: int32
+        dtype: int64
         """
         if bins is not None:
             series_bins = cudf.cut(self, bins, include_lowest=True)
@@ -3187,7 +3187,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if dropna and self.null_count == len(self):
             return Series(
                 [],
-                dtype=np.int32,
+                dtype=np.int64,
                 name=self.name,
                 index=cudf.Index([], dtype=self.dtype),
             )
