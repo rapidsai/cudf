@@ -30,16 +30,14 @@ struct offsetalator_factory {
    * @brief A type_dispatcher functor to create an input iterator from an offsets column
    */
   struct input_offsetalator_fn {
-    template <typename T,
-              std::enable_if_t<std::is_same_v<T, int32_t> or std::is_same_v<T, int64_t>>* = nullptr>
+    template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, int32_t> or std::is_same_v<T, int64_t>)>
     input_offsetalator operator()(column_view const& indices)
     {
       return input_offsetalator(indices.data<T>(), indices.type());
     }
     template <typename T,
               typename... Args,
-              std::enable_if_t<not std::is_same_v<T, int32_t> and not std::is_same_v<T, int64_t>>* =
-                nullptr>
+              CUDF_ENABLE_IF(not std::is_same_v<T, int32_t> and not std::is_same_v<T, int64_t>)>
     input_offsetalator operator()(Args&&... args)
     {
       CUDF_FAIL("offsets must be int32 or int64 type");
@@ -58,16 +56,14 @@ struct offsetalator_factory {
    * @brief A type_dispatcher functor to create an output iterator from an offsets column
    */
   struct output_offsetalator_fn {
-    template <typename T,
-              std::enable_if_t<std::is_same_v<T, int32_t> or std::is_same_v<T, int64_t>>* = nullptr>
+    template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, int32_t> or std::is_same_v<T, int64_t>)>
     output_offsetalator operator()(mutable_column_view const& indices)
     {
       return output_offsetalator(indices.data<T>(), indices.type());
     }
     template <typename T,
               typename... Args,
-              std::enable_if_t<not std::is_same_v<T, int32_t> and not std::is_same_v<T, int64_t>>* =
-                nullptr>
+              CUDF_ENABLE_IF(not std::is_same_v<T, int32_t> and not std::is_same_v<T, int64_t>)>
     output_offsetalator operator()(Args&&... args)
     {
       CUDF_FAIL("offsets must be int32 or int64 type");
