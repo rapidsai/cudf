@@ -639,7 +639,7 @@ def test_series_value_counts(dropna, normalize):
         )
         got = sr.value_counts(dropna=dropna, normalize=normalize).sort_index()
 
-        assert_eq(expect, got, check_dtype=False, check_index_type=False)
+        assert_eq(expect, got, check_dtype=True, check_index_type=False)
 
 
 @pytest.mark.parametrize("bins", [1, 2, 3])
@@ -650,7 +650,7 @@ def test_series_value_counts_bins(bins):
     expected = psr.value_counts(bins=bins)
     got = gsr.value_counts(bins=bins)
 
-    assert_eq(expected.sort_index(), got.sort_index(), check_dtype=False)
+    assert_eq(expected.sort_index(), got.sort_index(), check_dtype=True)
 
 
 @pytest.mark.parametrize("bins", [1, 2, 3])
@@ -662,7 +662,7 @@ def test_series_value_counts_bins_dropna(bins, dropna):
     expected = psr.value_counts(bins=bins, dropna=dropna)
     got = gsr.value_counts(bins=bins, dropna=dropna)
 
-    assert_eq(expected.sort_index(), got.sort_index(), check_dtype=False)
+    assert_eq(expected.sort_index(), got.sort_index(), check_dtype=True)
 
 
 @pytest.mark.parametrize("ascending", [True, False])
@@ -679,11 +679,11 @@ def test_series_value_counts_optional_arguments(ascending, dropna, normalize):
         ascending=ascending, dropna=dropna, normalize=normalize
     )
 
-    assert_eq(expected.sort_index(), got.sort_index(), check_dtype=False)
+    assert_eq(expected.sort_index(), got.sort_index(), check_dtype=True)
     assert_eq(
         expected.reset_index(drop=True),
         got.reset_index(drop=True),
-        check_dtype=False,
+        check_dtype=True,
     )
 
 
@@ -2565,3 +2565,30 @@ def test_series_arrow_list_types_roundtrip():
 def test_series_invalid_reso_dtype(reso, typ):
     with pytest.raises(NotImplementedError):
         cudf.Series([], dtype=f"{typ}8[{reso}]")
+
+
+def test_series_categorical_missing_value_count():
+    ps = pd.Series(pd.Categorical(list("abcccb"), categories=list("cabd")))
+    gs = cudf.from_pandas(ps)
+
+    expected = ps.value_counts()
+    actual = gs.value_counts()
+
+    assert_eq(expected, actual, check_dtype=False)
+
+
+def test_series_error_nan_mixed_types():
+    ps = pd.Series([np.nan, "ab", "cd"])
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(pa.ArrowInvalid):
+            cudf.from_pandas(ps)
+
+
+def test_series_error_nan_non_float_dtypes():
+    s = cudf.Series(["a", "b", "c"])
+    with pytest.raises(TypeError):
+        s[0] = np.nan
+
+    s = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
+    with pytest.raises(TypeError):
+        s[0] = np.nan

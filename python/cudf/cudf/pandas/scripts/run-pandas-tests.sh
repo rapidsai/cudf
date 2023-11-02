@@ -101,9 +101,99 @@ cd pandas-tests/
 # TODO: Get a postgres & mysql container set up on the CI
 # test_overwrite_warns unsafely patchs over Series.mean affecting other tests when run in parallel
 # test_complex_series_frame_alignment randomly selects a DataFrames and axis to test but particular random selection(s) always fails
+# test_numpy_ufuncs_basic compares floating point values to unbounded precision, sometimes leading to failures
+TEST_NUMPY_UFUNCS_BASIC_FLAKY="test_numpy_ufuncs_basic[float-exp] \
+and not test_numpy_ufuncs_basic[float-exp2] \
+and not test_numpy_ufuncs_basic[float-expm1] \
+and not test_numpy_ufuncs_basic[float-log] \
+and not test_numpy_ufuncs_basic[float-log2] \
+and not test_numpy_ufuncs_basic[float-log10] \
+and not test_numpy_ufuncs_basic[float-log1p] \
+and not test_numpy_ufuncs_basic[float-sqrt] \
+and not test_numpy_ufuncs_basic[float-sin] \
+and not test_numpy_ufuncs_basic[float-cos] \
+and not test_numpy_ufuncs_basic[float-tan] \
+and not test_numpy_ufuncs_basic[float-arcsin] \
+and not test_numpy_ufuncs_basic[float-arccos] \
+and not test_numpy_ufuncs_basic[float-arctan] \
+and not test_numpy_ufuncs_basic[float-sinh] \
+and not test_numpy_ufuncs_basic[float-cosh] \
+and not test_numpy_ufuncs_basic[float-tanh] \
+and not test_numpy_ufuncs_basic[float-arcsinh] \
+and not test_numpy_ufuncs_basic[float-arccosh] \
+and not test_numpy_ufuncs_basic[float-arctanh] \
+and not test_numpy_ufuncs_basic[float-deg2rad] \
+and not test_numpy_ufuncs_basic[float-rad2deg] \
+and not test_numpy_ufuncs_basic[num_float64-exp] \
+and not test_numpy_ufuncs_basic[num_float64-exp2] \
+and not test_numpy_ufuncs_basic[num_float64-expm1] \
+and not test_numpy_ufuncs_basic[num_float64-log] \
+and not test_numpy_ufuncs_basic[num_float64-log2] \
+and not test_numpy_ufuncs_basic[num_float64-log10] \
+and not test_numpy_ufuncs_basic[num_float64-log1p] \
+and not test_numpy_ufuncs_basic[num_float64-sqrt] \
+and not test_numpy_ufuncs_basic[num_float64-sin] \
+and not test_numpy_ufuncs_basic[num_float64-cos] \
+and not test_numpy_ufuncs_basic[num_float64-tan] \
+and not test_numpy_ufuncs_basic[num_float64-arcsin] \
+and not test_numpy_ufuncs_basic[num_float64-arccos] \
+and not test_numpy_ufuncs_basic[num_float64-arctan] \
+and not test_numpy_ufuncs_basic[num_float64-sinh] \
+and not test_numpy_ufuncs_basic[num_float64-cosh] \
+and not test_numpy_ufuncs_basic[num_float64-tanh] \
+and not test_numpy_ufuncs_basic[num_float64-arcsinh] \
+and not test_numpy_ufuncs_basic[num_float64-arccosh] \
+and not test_numpy_ufuncs_basic[num_float64-arctanh] \
+and not test_numpy_ufuncs_basic[num_float64-deg2rad] \
+and not test_numpy_ufuncs_basic[num_float64-rad2deg] \
+and not test_numpy_ufuncs_basic[num_float32-exp] \
+and not test_numpy_ufuncs_basic[num_float32-exp2] \
+and not test_numpy_ufuncs_basic[num_float32-expm1] \
+and not test_numpy_ufuncs_basic[num_float32-log] \
+and not test_numpy_ufuncs_basic[num_float32-log2] \
+and not test_numpy_ufuncs_basic[num_float32-log10] \
+and not test_numpy_ufuncs_basic[num_float32-log1p] \
+and not test_numpy_ufuncs_basic[num_float32-sqrt] \
+and not test_numpy_ufuncs_basic[num_float32-sin] \
+and not test_numpy_ufuncs_basic[num_float32-cos] \
+and not test_numpy_ufuncs_basic[num_float32-tan] \
+and not test_numpy_ufuncs_basic[num_float32-arcsin] \
+and not test_numpy_ufuncs_basic[num_float32-arccos] \
+and not test_numpy_ufuncs_basic[num_float32-arctan] \
+and not test_numpy_ufuncs_basic[num_float32-sinh] \
+and not test_numpy_ufuncs_basic[num_float32-cosh] \
+and not test_numpy_ufuncs_basic[num_float32-tanh] \
+and not test_numpy_ufuncs_basic[num_float32-arcsinh] \
+and not test_numpy_ufuncs_basic[num_float32-arccosh] \
+and not test_numpy_ufuncs_basic[num_float32-arctanh] \
+and not test_numpy_ufuncs_basic[num_float32-deg2rad] \
+and not test_numpy_ufuncs_basic[num_float32-rad2deg] \
+and not test_numpy_ufuncs_basic[nullable_float-exp] \
+and not test_numpy_ufuncs_basic[nullable_float-exp2] \
+and not test_numpy_ufuncs_basic[nullable_float-expm1] \
+and not test_numpy_ufuncs_basic[nullable_float-log] \
+and not test_numpy_ufuncs_basic[nullable_float-log2] \
+and not test_numpy_ufuncs_basic[nullable_float-log10] \
+and not test_numpy_ufuncs_basic[nullable_float-log1p] \
+and not test_numpy_ufuncs_basic[nullable_float-sqrt] \
+and not test_numpy_ufuncs_basic[nullable_float-sin] \
+and not test_numpy_ufuncs_basic[nullable_float-cos] \
+and not test_numpy_ufuncs_basic[nullable_float-tan] \
+and not test_numpy_ufuncs_basic[nullable_float-arcsin] \
+and not test_numpy_ufuncs_basic[nullable_float-arccos] \
+and not test_numpy_ufuncs_basic[nullable_float-arctan] \
+and not test_numpy_ufuncs_basic[nullable_float-sinh] \
+and not test_numpy_ufuncs_basic[nullable_float-cosh] \
+and not test_numpy_ufuncs_basic[nullable_float-tanh] \
+and not test_numpy_ufuncs_basic[nullable_float-arcsinh] \
+and not test_numpy_ufuncs_basic[nullable_float-arccosh] \
+and not test_numpy_ufuncs_basic[nullable_float-arctanh] \
+and not test_numpy_ufuncs_basic[nullable_float-deg2rad] \
+and not test_numpy_ufuncs_basic[nullable_float-rad2deg]"
+
 PANDAS_CI="1" python -m pytest -p cudf.pandas \
     -m "not single_cpu and not db" \
-    -k "not test_overwrite_warns and not test_complex_series_frame_alignment" \
+    -k "not test_overwrite_warns and not test_complex_series_frame_alignment and not $TEST_NUMPY_UFUNCS_BASIC_FLAKY" \
     --durations=50 \
     --import-mode=importlib \
     -o xfail_strict=True \
