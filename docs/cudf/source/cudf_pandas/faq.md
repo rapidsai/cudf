@@ -83,8 +83,7 @@ their workflow:
 - `cudf.pandas` can’t smoothly interact with tools or interfaces that convert data
 formats using the NumPy C API
   - For example, you can `torch.tensor(df.values)` but not `torch.from_numpy(df.values), as the latter uses the NumPy C API
-- Joins are not currently guaranteed to maintain the same row ordering as
-standard pandas
+- Joins are not currently guaranteed to maintain the same row ordering as standard pandas
 - cudf.pandas isn't compatible with directly using `import cudf` in workflows and is intended for pandas-based workflows.
 - Global variables can - be accessed but can’t be modified during CPU-fallback
 
