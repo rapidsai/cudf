@@ -170,7 +170,7 @@ struct alignas(16) device_functor_fn {
   }
 };
 
-TYPED_TEST(IndexalatorTest, DISABLED_device_indexalator)
+TYPED_TEST(IndexalatorTest, device_indexalator)
 {
   using T = TypeParam;
 
