@@ -1836,7 +1836,7 @@ class BaseIndex(Serializable):
             return NotImplemented
 
     @classmethod
-    def from_pandas(cls, index, nan_as_null=None):
+    def from_pandas(cls, index, nan_as_null=no_default):
         """
         Convert from a Pandas Index.
 
@@ -1866,6 +1866,11 @@ class BaseIndex(Serializable):
         >>> cudf.Index.from_pandas(pdi, nan_as_null=False)
         Float64Index([10.0, 20.0, 30.0, nan], dtype='float64')
         """
+        if nan_as_null is no_default:
+            nan_as_null = (
+                False if cudf.get_option("mode.pandas_compatible") else None
+            )
+
         if not isinstance(index, pd.Index):
             raise TypeError("not a pandas.Index")
 

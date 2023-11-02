@@ -96,7 +96,7 @@ def deduce_cudf_pandas_mode(slow_lib: str, fast_lib: str) -> DeducedMode:
     Whether the fast library is being used, and the resulting names of
     the "slow" and "fast" libraries.
     """
-    if "XDF_FALLBACK_MODE" not in os.environ:
+    if "CUDF_PANDAS_FALLBACK_MODE" not in os.environ:
         try:
             importlib.import_module(fast_lib)
             return DeducedMode(

@@ -16,6 +16,7 @@ dependencies:
 - c-compiler
 - cachetools
 - cmake>=3.26.4
+- cramjam
 - cuda-cudart-dev
 - cuda-nvcc
 - cuda-nvrtc-dev

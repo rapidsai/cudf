@@ -397,7 +397,7 @@ class ListDtype(_BaseDtype):
         elif isinstance(self._typ.value_type, pa.StructType):
             return StructDtype.from_arrow(self._typ.value_type)
         else:
-            return cudf.dtype(self._typ.value_type.to_pandas_dtype()).name
+            return cudf.dtype(self._typ.value_type.to_pandas_dtype())
 
     @cached_property
     def leaf_type(self):
@@ -494,7 +494,9 @@ class ListDtype(_BaseDtype):
         if isinstance(self.element_type, _BaseDtype):
             header["element-type"], frames = self.element_type.serialize()
         else:
-            header["element-type"] = self.element_type
+            header["element-type"] = getattr(
+                self.element_type, "name", self.element_type
+            )
         header["frame_count"] = len(frames)
         return header, frames
 
@@ -508,6 +510,10 @@ class ListDtype(_BaseDtype):
         else:
             element_type = header["element-type"]
         return klass(element_type=element_type)
+
+    @cached_property
+    def itemsize(self):
+        return self.element_type.itemsize
 
 
 class StructDtype(_BaseDtype):

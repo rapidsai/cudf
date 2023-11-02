@@ -16,4 +16,4 @@ python -m pip install git+https://github.com/dask/dask.git@2023.9.2 git+https://
 # echo to expand wildcard before adding `[extra]` requires for pip
 python -m pip install $(echo ./dist/dask_cudf*.whl)[test]
 
-python -m pytest -n 8 ./python/dask_cudf/dask_cudf/tests
+python -m pytest -n 8 ./python/dask_cudf/dask_cudf/

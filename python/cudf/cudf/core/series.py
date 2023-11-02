@@ -42,6 +42,7 @@ from cudf.api.types import (
     is_bool_dtype,
     is_decimal_dtype,
     is_dict_like,
+    is_float_dtype,
     is_integer,
     is_integer_dtype,
     is_list_dtype,
@@ -232,7 +233,25 @@ class _SeriesIlocIndexer(_FrameIndexer):
                     f"Cannot assign {value=} to non-datetime/non-timedelta "
                     "columns"
                 )
-
+            if (
+                not (
+                    is_float_dtype(self._frame._column.dtype)
+                    or (
+                        isinstance(
+                            self._frame._column.dtype, cudf.CategoricalDtype
+                        )
+                        and is_float_dtype(
+                            self._frame._column.dtype.categories.dtype
+                        )
+                    )
+                )
+                and isinstance(value, (np.float32, np.float64))
+                and np.isnan(value)
+            ):
+                raise MixedTypeError(
+                    f"Cannot assign {value=} to "
+                    f"non-float dtype={self._frame._column.dtype}"
+                )
         elif not (
             isinstance(value, (list, dict))
             and isinstance(
@@ -688,7 +707,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @classmethod
     @_cudf_nvtx_annotate
-    def from_pandas(cls, s, nan_as_null=None):
+    def from_pandas(cls, s, nan_as_null=no_default):
         """
         Convert from a Pandas Series.
 
@@ -726,6 +745,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3     NaN
         dtype: float64
         """
+        if nan_as_null is no_default:
+            nan_as_null = (
+                False if cudf.get_option("mode.pandas_compatible") else None
+            )
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             result = cls(s, nan_as_null=nan_as_null)
@@ -3112,7 +3135,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3.0    3
         2.0    2
         1.0    1
-        dtype: int32
+        dtype: int64
 
         The order of the counts can be changed by passing ``ascending=True``:
 
@@ -3120,7 +3143,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         1.0    1
         2.0    2
         3.0    3
-        dtype: int32
+        dtype: int64
 
         With ``normalize`` set to True, returns the relative frequency
         by dividing all values by the sum of values.
@@ -3129,7 +3152,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3.0    0.500000
         2.0    0.333333
         1.0    0.166667
-        dtype: float32
+        dtype: float64
 
         To include ``NA`` value counts, pass ``dropna=False``:
 
@@ -3149,14 +3172,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2.0     2
         <NA>    2
         1.0     1
-        dtype: int32
+        dtype: int64
 
         >>> s = cudf.Series([3, 1, 2, 3, 4, np.nan])
         >>> s.value_counts(bins=3)
         (2.0, 3.0]      2
         (0.996, 2.0]    2
         (3.0, 4.0]      1
-        dtype: int32
+        dtype: int64
         """
         if bins is not None:
             series_bins = cudf.cut(self, bins, include_lowest=True)
@@ -3164,7 +3187,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if dropna and self.null_count == len(self):
             return Series(
                 [],
-                dtype=np.int32,
+                dtype=np.int64,
                 name=self.name,
                 index=cudf.Index([], dtype=self.dtype),
             )
@@ -3174,6 +3197,17 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             res = res[res.index.notna()]
         else:
             res = self.groupby(self, dropna=dropna).count(dropna=dropna)
+            if isinstance(self.dtype, cudf.CategoricalDtype) and len(
+                res
+            ) != len(self.dtype.categories):
+                # For categorical dtypes: When there exists
+                # categories in dtypes and they are missing in the
+                # column, `value_counts` will have to return
+                # their occurrences as 0.
+                # TODO: Remove this workaround once `observed`
+                # parameter support is added to `groupby`
+                res = res.reindex(self.dtype.categories).fillna(0)
+                res._index = res._index.astype(self.dtype)
 
         res.index.name = None
 

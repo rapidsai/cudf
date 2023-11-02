@@ -577,7 +577,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             result_columns,
             orig_dtypes,
         ):
-            for agg, col in zip(aggs, cols):
+            for agg_tuple, col in zip(aggs, cols):
+                agg, agg_kind = agg_tuple
                 agg_name = agg.__name__ if callable(agg) else agg
                 if multilevel:
                     key = (col_name, agg_name)
@@ -607,6 +608,8 @@ class GroupBy(Serializable, Reducible, Scannable):
                     )
                 ):
                     data[key] = col.astype(orig_dtype)
+                elif agg_kind in {"COUNT", "SIZE"}:
+                    data[key] = col.astype("int64")
                 else:
                     data[key] = col
         data = ColumnAccessor(data, multiindex=multilevel)
