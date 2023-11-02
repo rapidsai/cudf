@@ -3,7 +3,8 @@
 ## How closely does this match pandas?
 
 Every change to cuDF pandas Accelerator Mode is tested against the entire
-pandas unit test suite and [currently passing nearly 100%](./how-it-works.md#how-we-ensure-consistency-with-pandas).
+pandas unit test suite.  Currently, we're passing **93%** of the 187,000+ unit
+tests, with a goal of passing 100%.
 
 For most pandas workflows, things will “just work”. In a small set of
 scenarios, we may hit edge cases that throw errors or don’t perfectly match
@@ -47,6 +48,7 @@ following Python libraries:
 | Hvplot           | ✅      |
 | Holoview         | ✅      |
 | Ibis             | ✅      |
+| Joblib           | ❌      |
 | NumPy            | ✅      |
 | Matplotlib       | ✅      |
 | Plotly           | ✅      |
@@ -108,7 +110,7 @@ standard pandas
 
 
 
-## Can I force running on the GPU?
+## Can I force running on the CPU?
 
 If needed, GPU acceleration may be disabled when using cudf.pandas for testing
 or benchmarking purposes. To do so, set the `CUDF_PANDAS_FALLBACK_MODE`

@@ -25,11 +25,11 @@ pandas as data sizes grow into the GBs and performance slows.
 +---------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------+
 
 
-Bringing the Speed of cuDF to Every pandas User
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Speeding up pandas with cuDF
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``cudf.pandas`` can be used with Jupyter Notebooks or any Python script:
-
+``cudf.pandas`` can be used with Jupyter Notebooks or any Python script just by
+loading a notebook extension or adding one command-line flag:
 
 .. list-table::
    :widths: 1 1
