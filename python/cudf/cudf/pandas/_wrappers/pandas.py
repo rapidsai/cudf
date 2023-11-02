@@ -17,8 +17,8 @@ import cudf
 
 from ..annotation import nvtx
 from ..fast_slow_proxy import (
-    _DELETE,
     _CUDF_PANDAS_NVTX_COLORS,
+    _DELETE,
     _fast_slow_function_call,
     _FastSlowAttribute,
     _FunctionProxy,
@@ -772,7 +772,9 @@ def _get_eval_locals_and_globals(level, local_dict=None, global_dict=None):
 
 @register_proxy_func(pd.eval)
 @nvtx.annotate(
-    "CUDF_PANDAS_EVAL", color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"], domain="cudf_pandas"
+    "CUDF_PANDAS_EVAL",
+    color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
+    domain="cudf_pandas",
 )
 def _eval(
     *args,
