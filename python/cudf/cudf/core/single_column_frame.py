@@ -248,7 +248,10 @@ class SingleColumnFrame(Frame, NotIterable):
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def __cuda_array_interface__(self):
-        return self._column.__cuda_array_interface__
+        try:
+            return self._column.__cuda_array_interface__
+        except NotImplementedError:
+            raise AttributeError
 
     @_cudf_nvtx_annotate
     def factorize(self, sort=False, na_sentinel=None, use_na_sentinel=None):

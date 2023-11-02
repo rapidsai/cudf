@@ -7882,6 +7882,8 @@ def from_pandas(obj, nan_as_null=no_default):
         return DataFrame.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.Series):
         return Series.from_pandas(obj, nan_as_null=nan_as_null)
+    elif (ret := getattr(obj, "_fsproxy_wrapped", None)) is not None:
+        return ret
     elif isinstance(obj, pd.MultiIndex):
         return MultiIndex.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.RangeIndex):
