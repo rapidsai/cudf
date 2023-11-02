@@ -312,7 +312,7 @@ void __device__ generate_def_level_histogram(uint32_t* hist,
   // Do a block sum for each level rather than each thread trying an atomicAdd.
   // This way is much faster.
   auto const mylvl = s->vals[rolling_index<rle_buffer_size>(rle_numvals + t)];
-  // This call is only used for def levels, so we can start at 1 because hist[0] can be derived.
+  // We can start at 1 because hist[0] can be derived.
   for (uint32_t lvl = 1; lvl < maxlvl; lvl++) {
     uint32_t const is_yes = t < nrows and mylvl == lvl;
     auto const lvl_sum    = block_reduce(temp_storage).Sum(is_yes);
