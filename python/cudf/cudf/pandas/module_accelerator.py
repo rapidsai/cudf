@@ -32,6 +32,7 @@ from .fast_slow_proxy import (
     _FunctionProxy,
     _is_final_class,
     _is_function_or_method,
+    _maybe_wrap_result,
     _Unusable,
     get_final_type_map,
     get_intermediate_type_map,
@@ -71,7 +72,7 @@ def sorted_module_items(mod: ModuleType) -> List[Tuple[str, Any]]:
     # appear last: (GH:127)
     # Assume __dir__ contains all objects accessible under mod.__getattr__
     # GH 403
-    items = set(mod.__dict__.keys()).union(set(mod.__dir__()))
+    items = set(mod.__dict__.keys())
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", FutureWarning)
         return sorted(
@@ -493,6 +494,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
             "__getattr__",
             functools.partial(
                 self.getattr_real_or_wrapped,
+                slow_mod,
                 real=real_attributes,
                 wrapped=wrapped_attributes,
                 loader=self,
@@ -537,6 +539,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
 
     @staticmethod
     def getattr_real_or_wrapped(
+        slow_mod: ModuleType,
         name: str,
         *,
         real: Dict[str, Any],
@@ -584,6 +587,12 @@ class ModuleAccelerator(ModuleAcceleratorBase):
         try:
             return location[name]
         except KeyError:
+            if getattr(slow_mod, "__getattr__", False):
+                try:
+                    attr = getattr(slow_mod, name)
+                except Exception:
+                    raise
+                return _maybe_wrap_result(attr, lambda: None, None)
             raise AttributeError(f"No attribute '{name}'")
 
     @classmethod
