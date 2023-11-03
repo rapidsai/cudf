@@ -538,10 +538,10 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
         if (col.str_dict_index) {
           // String dictionary: use index
           dict_base = reinterpret_cast<const uint8_t*>(col.str_dict_index);
-          dict_size = col.page_info[0].num_input_values * sizeof(string_index_pair);
+          dict_size = col.dict_page->num_input_values * sizeof(string_index_pair);
         } else {
-          dict_base = col.page_info[0].page_data;  // dictionary is always stored in the first page
-          dict_size = col.page_info[0].uncompressed_page_size;
+          dict_base = col.dict_page->page_data;  // dictionary is always stored in the first page
+          dict_size = col.dict_page->uncompressed_page_size;
         }
 
         // FIXME: need to return an error condition...this won't actually do anything

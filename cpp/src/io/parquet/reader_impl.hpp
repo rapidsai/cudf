@@ -138,20 +138,57 @@ class reader::impl {
                     std::optional<std::reference_wrapper<ast::expression const>> filter);
 
   /**
-   * @brief Create chunk information and start file reads
+   * @brief Read the set of column chunks to be processed for this pass.
+   * 
+   * Does not decompress the chunk data.
    *
    * @return pair of boolean indicating if compressed chunks were found and a vector of futures for
    * read completion
    */
-  std::pair<bool, std::vector<std::future<void>>> read_and_decompress_column_chunks();
+  std::pair<bool, std::vector<std::future<void>>> read_column_chunks();
 
   /**
-   * @brief Load and decompress the input file(s) into memory.
+   * @brief Load compressed data and page information for the current pass.
    */
-  void load_and_decompress_data();
+  void load_compressed_data();
 
   /**
-   * @brief Perform some preprocessing for page data and also compute the split locations
+   * @brief Preprocess step for the entire file.
+   * 
+   * Only ever called once. This function reads in rowgroup and associated chunk
+   * information and computes the schedule of top level passes (see `pass_intermediate_data`).
+   * 
+   * @param skip_rows The number of rows to skip in the requested set of rowgroups to be read
+   * @param num_rows The total number of rows to read out of the selected rowgroups
+   * @param row_group_indices Lists of row groups to read, one per source
+   * @param filter Optional AST expression to filter output rows
+   */
+  void preprocess_file(int64_t skip_rows,
+                       std::optional<size_type> const& num_rows,
+                       host_span<std::vector<size_type> const> row_group_indices,
+                       std::optional<std::reference_wrapper<ast::expression const>> filter);
+
+  /**
+   * @brief Preprocess step for the next input read pass.
+   * 
+   * A 'pass' is defined as a subset of row groups read out of the globally
+   * requested set of all row groups.
+   */
+  void preprocess_next_pass();
+
+  /**
+   * @brief Ratchet the pass/subpass/chunk process forward.
+   */
+  void handle_chunking(bool uses_custom_row_bounds);
+
+  /**
+   * @brief Build string dictionary indices for a pass.
+   *
+   */
+  void build_string_dict_indices();
+
+  /**
+   * @brief Perform some preprocessing for subpass page data and also compute the split locations
    * {skip_rows, num_rows} for chunked reading.
    *
    * There are several pieces of information we can't compute directly from row counts in
@@ -166,7 +203,7 @@ class reader::impl {
    * @param chunk_read_limit Limit on total number of bytes to be returned per read,
    *        or `0` if there is no limit
    */
-  void preprocess_pages(bool uses_custom_row_bounds, size_t chunk_read_limit);
+  void preprocess_subpass_pages(bool uses_custom_row_bounds, size_t chunk_read_limit);
 
   /**
    * @brief Allocate nesting information storage for all pages and set pointers to it.
@@ -270,7 +307,7 @@ class reader::impl {
    * a limit on total read size, generate a set of {skip_rows, num_rows} pairs representing
    * a set of reads that will generate output columns of total size <= `chunk_read_limit` bytes.
    */
-  void compute_splits_for_pass();
+  void compute_chunks_for_subpass();
 
  private:
   rmm::cuda_stream_view _stream;
@@ -311,13 +348,9 @@ class reader::impl {
   bool _file_preprocessed{false};
 
   std::unique_ptr<pass_intermediate_data> _pass_itm_data;
-  bool _pass_preprocessed{false};
 
   std::size_t _output_chunk_read_limit{0};  // output chunk size limit in bytes
   std::size_t _input_pass_read_limit{0};    // input pass memory usage limit in bytes
-
-  std::size_t _current_input_pass{0};  // current input pass index
-  std::size_t _chunk_count{0};         // how many output chunks we have produced
 };
 
 }  // namespace cudf::io::parquet::detail

@@ -356,7 +356,7 @@ struct gpuParsePageHeader {
  */
 // blockDim {128,1,1}
 __global__ void __launch_bounds__(128)
-  gpuDecodePageHeaders(ColumnChunkDesc* chunks, int32_t num_chunks)
+  gpuDecodePageHeaders(ColumnChunkDesc* chunks, chunk_page_info *chunk_pages, int32_t num_chunks)
 {
   gpuParsePageHeader parse_page_header;
   __shared__ byte_stream_s bs_g[4];
@@ -365,7 +365,9 @@ __global__ void __launch_bounds__(128)
   int chunk               = (blockIdx.x * 4) + (threadIdx.x / 32);
   byte_stream_s* const bs = &bs_g[threadIdx.x / 32];
 
-  if (chunk < num_chunks and lane_id == 0) bs->ck = chunks[chunk];
+  if (chunk < num_chunks and lane_id == 0){
+    bs->ck = chunks[chunk];
+  }
   __syncthreads();
 
   if (chunk < num_chunks) {
@@ -392,8 +394,7 @@ __global__ void __launch_bounds__(128)
       bs->page.kernel_mask         = 0;
     }
     num_values     = bs->ck.num_values;
-    page_info      = bs->ck.page_info;
-    num_dict_pages = bs->ck.num_dict_pages;
+    page_info      = chunk_pages ? chunk_pages[chunk].pages : nullptr;
     max_num_pages  = (page_info) ? bs->ck.max_num_pages : 0;
     values_found   = 0;
     __syncwarp();
@@ -446,8 +447,9 @@ __global__ void __launch_bounds__(128)
         }
       }
       index_out = shuffle(index_out);
-      if (index_out >= 0 && index_out < max_num_pages && lane_id == 0)
+      if (index_out >= 0 && index_out < max_num_pages && lane_id == 0){
         page_info[index_out] = bs->page;
+      }
       num_values = shuffle(num_values);
       __syncwarp();
     }
@@ -485,9 +487,9 @@ __global__ void __launch_bounds__(128)
   if (!lane_id && ck->num_dict_pages > 0 && ck->str_dict_index) {
     // Data type to describe a string
     string_index_pair* dict_index = ck->str_dict_index;
-    uint8_t const* dict           = ck->page_info[0].page_data;
-    int dict_size                 = ck->page_info[0].uncompressed_page_size;
-    int num_entries               = ck->page_info[0].num_input_values;
+    uint8_t const* dict           = ck->dict_page->page_data;
+    int dict_size                 = ck->dict_page->uncompressed_page_size;
+    int num_entries               = ck->dict_page->num_input_values;
     int pos = 0, cur = 0;
     for (int i = 0; i < num_entries; i++) {
       int len = 0;
@@ -508,12 +510,13 @@ __global__ void __launch_bounds__(128)
 }
 
 void __host__ DecodePageHeaders(ColumnChunkDesc* chunks,
+                                chunk_page_info* chunk_pages,
                                 int32_t num_chunks,
                                 rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
-  gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_chunks);
+  gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, chunk_pages, num_chunks);
 }
 
 void __host__ BuildStringDictionaryIndex(ColumnChunkDesc* chunks,

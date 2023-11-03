@@ -1279,11 +1279,11 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           if (((s->col.data_type & 7) == BYTE_ARRAY) && (s->col.str_dict_index)) {
             // String dictionary: use index
             s->dict_base = reinterpret_cast<uint8_t const*>(s->col.str_dict_index);
-            s->dict_size = s->col.page_info[0].num_input_values * sizeof(string_index_pair);
+            s->dict_size = s->col.dict_page->num_input_values * sizeof(string_index_pair);
           } else {
             s->dict_base =
-              s->col.page_info[0].page_data;  // dictionary is always stored in the first page
-            s->dict_size = s->col.page_info[0].uncompressed_page_size;
+              s->col.dict_page->page_data;  // dictionary is always stored in the first page
+            s->dict_size = s->col.dict_page->uncompressed_page_size;
           }
           s->dict_run  = 0;
           s->dict_val  = 0;
