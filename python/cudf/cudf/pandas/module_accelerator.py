@@ -23,7 +23,7 @@ import warnings
 from abc import abstractmethod
 from importlib._bootstrap import _ImportLockContext as ImportLock
 from types import ModuleType
-from typing import Any, ContextManager, Dict, List, NamedTuple, Tuple
+from typing import Any, ContextManager, Dict, List, NamedTuple, Set
 
 from typing_extensions import Self
 
@@ -61,7 +61,7 @@ def rename_root_module(module: str, root: str, new_root: str) -> str:
         return module
 
 
-def sorted_module_items(mod: ModuleType) -> List[Tuple[str, Any]]:
+def all_module_items(mod: ModuleType) -> Set[str]:
     """
     Return the items of a module sorted such that submodules
     appear last.
@@ -70,13 +70,7 @@ def sorted_module_items(mod: ModuleType) -> List[Tuple[str, Any]]:
     # appear last: (GH:127)
     # Assume __dir__ contains all objects accessible under mod.__getattr__
     # GH 403
-    items = set(mod.__dict__.keys()).union(set(mod.__dir__()))
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", FutureWarning)
-        return sorted(
-            ((item, getattr(mod, item)) for item in items),
-            key=lambda x: isinstance(x[1], ModuleType),
-        )
+    return set(mod.__dict__.keys()).union(set(mod.__dir__()))
 
 
 class DeducedMode(NamedTuple):
@@ -315,18 +309,14 @@ class ModuleAcceleratorBase(
         -------
         Wrapped attribute
         """
+        wrapped_attr: Any
         # TODO: what else should we make sure not to get from the fast
         # library?
         if name in {"__all__", "__dir__", "__file__", "__doc__"}:
-            return slow_attr
+            wrapped_attr = slow_attr
         if self.fast_lib == self.slow_lib:
             # no need to create a fast-slow wrapper
-            return slow_attr
-        try:
-            return self._wrapped_objs[slow_attr]
-        except (KeyError, TypeError):
-            pass
-        wrapped_attr: Any
+            wrapped_attr = slow_attr
         if isinstance(slow_attr, ModuleType) and slow_attr.__name__.startswith(
             self.slow_lib
         ):
@@ -472,17 +462,13 @@ class ModuleAccelerator(ModuleAcceleratorBase):
         # package
         real_attributes = {}
         # The version that will be used outside denylist packages
-        wrapped_attributes = {}
-        for key, _ in sorted_module_items(slow_mod):
-            # Only copy attributes that don't already exist
+        for key in all_module_items(slow_mod):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", FutureWarning)
                 slow_attr = getattr(slow_mod, key)
             fast_attr = getattr(fast_mod, key, _Unusable())
             real_attributes[key] = slow_attr
-            wrapped_attributes[key] = self._wrap_attribute(
-                slow_attr, fast_attr, key
-            )
+            self._wrap_attribute(slow_attr, fast_attr, key)
 
         # Our module has (basically) no static attributes and instead
         # always delivers them dynamically where the behaviour is
@@ -493,7 +479,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
             functools.partial(
                 self.getattr_real_or_wrapped,
                 real=real_attributes,
-                wrapped=wrapped_attributes,
+                wrapped_objs=self._wrapped_objs,
                 loader=self,
             ),
         )
@@ -539,7 +525,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
         name: str,
         *,
         real: Dict[str, Any],
-        wrapped: Dict[str, Any],
+        wrapped_objs,
         loader: ModuleAccelerator,
     ) -> Any:
         """
@@ -578,11 +564,16 @@ class ModuleAccelerator(ModuleAcceleratorBase):
             use_real = any(
                 calling_module.startswith(path) for path in loader._denylist
             )
-        location = real if use_real else wrapped
         try:
-            return location[name]
-        except KeyError:
+            if use_real:
+                return real[name]
+            else:
+                return wrapped_objs[real[name]]
+        except (KeyError):
             raise AttributeError(f"No attribute '{name}'")
+        except (TypeError):
+            # real[name] is an unhashable type
+            return real[name]
 
     @classmethod
     def install(
