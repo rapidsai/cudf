@@ -30,7 +30,6 @@ from typing_extensions import Self
 
 from .fast_slow_proxy import (
     _FunctionProxy,
-    _is_final_class,
     _is_function_or_method,
     _Unusable,
     get_final_type_map,
@@ -315,9 +314,18 @@ class ModuleAcceleratorBase(
         # library?
         if name in {"__all__", "__dir__", "__file__", "__doc__"}:
             wrapped_attr = slow_attr
-        if self.fast_lib == self.slow_lib:
+        elif self.fast_lib == self.slow_lib:
             # no need to create a fast-slow wrapper
             wrapped_attr = slow_attr
+        if any(
+            [
+                slow_attr in get_registered_functions(),
+                slow_attr in get_final_type_map(),
+                slow_attr in get_intermediate_type_map(),
+            ]
+        ):
+            # attribute already registered in self._wrapped_objs
+            return self._wrapped_objs[slow_attr]
         if isinstance(slow_attr, ModuleType) and slow_attr.__name__.startswith(
             self.slow_lib
         ):
@@ -326,28 +334,21 @@ class ModuleAcceleratorBase(
             # name with "{self.mod_name}"
             # now, attempt to import the wrapped module, which will
             # recursively wrap all of its attributes:
-            wrapped_attr = importlib.import_module(
+            return importlib.import_module(
                 rename_root_module(
                     slow_attr.__name__, self.slow_lib, self.mod_name
                 )
             )
-        elif _is_final_class(slow_attr):
-            wrapped_attr = get_final_type_map()[slow_attr]
-        elif _is_function_or_method(slow_attr):
+        if slow_attr in self._wrapped_objs:
+            if type(fast_attr) is _Unusable:
+                # we don't want to replace a wrapped object that
+                # has a usable fast object with a wrapped object
+                # with a an unusable fast object.
+                return self._wrapped_objs[slow_attr]
+        if _is_function_or_method(slow_attr):
             wrapped_attr = _FunctionProxy(fast_attr, slow_attr)
         else:
             wrapped_attr = slow_attr
-
-        try:
-            if slow_attr in self._wrapped_objs:
-                if fast_attr is _Unusable:
-                    # we don't want to replace a wrapped object that
-                    # has a usable fast object with a wrapped object
-                    # with a an unusable fast object.
-                    return
-            self._wrapped_objs[slow_attr] = wrapped_attr
-        except TypeError:
-            pass
         return wrapped_attr
 
     @classmethod
@@ -476,7 +477,12 @@ class ModuleAccelerator(ModuleAcceleratorBase):
                 slow_attr = getattr(slow_mod, key)
             fast_attr = getattr(fast_mod, key, _Unusable())
             real_attributes[key] = slow_attr
-            self._wrap_attribute(slow_attr, fast_attr, key)
+            try:
+                wrapped_attr = self._wrap_attribute(slow_attr, fast_attr, key)
+                self._wrapped_objs[slow_attr] = wrapped_attr
+            except TypeError:
+                # slow_attr is not hashable
+                pass
 
         # Our module has (basically) no static attributes and instead
         # always delivers them dynamically where the behaviour is
