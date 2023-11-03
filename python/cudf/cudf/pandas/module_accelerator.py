@@ -24,7 +24,7 @@ import warnings
 from abc import abstractmethod
 from importlib._bootstrap import _ImportLockContext as ImportLock
 from types import ModuleType
-from typing import Any, ContextManager, Dict, List, NamedTuple, Set
+from typing import Any, ContextManager, Dict, List, NamedTuple
 
 from typing_extensions import Self
 
@@ -59,18 +59,6 @@ def rename_root_module(module: str, root: str, new_root: str) -> str:
         return new_root + module[len(root) :]
     else:
         return module
-
-
-def all_module_items(mod: ModuleType) -> Set[str]:
-    """
-    Return the items of a module sorted such that submodules
-    appear last.
-    """
-    # It is advantageous to sort the module items so that submodules
-    # appear last: (GH:127)
-    # Assume __dir__ contains all objects accessible under mod.__getattr__
-    # GH 403
-    return set(mod.__dict__.keys()).union(set(mod.__dir__()))
 
 
 class DeducedMode(NamedTuple):
@@ -471,7 +459,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
         # package
         real_attributes = {}
         # The version that will be used outside denylist packages
-        for key in all_module_items(slow_mod):
+        for key in slow_mod.__dir__():
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", FutureWarning)
                 slow_attr = getattr(slow_mod, key)
