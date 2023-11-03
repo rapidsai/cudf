@@ -1192,7 +1192,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             header["dtype-is-cudf-serialized"] = False
 
         if self.data is not None:
-            data_header, data_frames = self.data.serialize()
+            # special condition for string slice column
+            if (
+                self.dtype.type in (np.object_, np.str_)
+                and self.chars_data is not None
+            ):
+                data_header, data_frames = self.chars_data.serialize()
+            else:
+                data_header, data_frames = self.data.serialize()
             header["data"] = data_header
             frames.extend(data_frames)
 

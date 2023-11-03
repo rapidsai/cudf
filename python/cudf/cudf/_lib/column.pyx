@@ -128,6 +128,31 @@ cdef class Column:
         return self._data
 
     @property
+    def chars_data(self):
+        # special case of string column
+        # if dtype == np.dtype("object"):
+        # this is true for STRING, STRUCT. how to ensure it's string only?
+        if self.dtype != cudf.api.types.dtype("object"):
+            raise TypeError(
+                "Expected a Strings column, "
+                f"got {self.dtype}"
+            )
+        if self.base_data is None:
+            return None
+        cv = self.view()
+        if cv.num_children() == 0:
+            return self.base_data
+        # get the size from offset child column (device to host copy)
+        offsets_column_index = 0
+        offset_child_column = cv.child(offsets_column_index)
+        start = 0
+        end = self.base_data.size
+        if offset_child_column.size() != 0:
+            start = get_element(offset_child_column, cv.offset()).value
+            end = get_element(offset_child_column, cv.offset()+cv.size()).value
+        return self.base_data[start:end]
+
+    @property
     def data_ptr(self):
         if self.data is None:
             return 0
@@ -680,12 +705,17 @@ cdef class Column:
             if offset_child_column.size() == 0:
                 base_nbytes = 0
             else:
-                chars_size = get_element(offset_child_column, offset_child_column.size()-1).value
+                chars_size = get_element(
+                    offset_child_column, offset_child_column.size()-1).value
                 base_nbytes = chars_size * 1
 
         if data_ptr:
             if data_owner is None:
-                buffer_size = base_nbytes if is_string_column else ((size+offset) * dtype_itemsize)
+                buffer_size = (
+                    base_nbytes
+                    if is_string_column
+                    else ((size + offset) * dtype_itemsize)
+                )
                 data = as_buffer(
                     rmm.DeviceBuffer(ptr=data_ptr,
                                      size=buffer_size)
