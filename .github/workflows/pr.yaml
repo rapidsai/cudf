@@ -13,7 +13,6 @@ jobs:
   pr-builder:
     needs:
       - checks
-      - changed_files
       - conda-cpp-build
       - conda-cpp-tests
       - conda-python-build
@@ -39,27 +38,6 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-23.10
     with:
       enable_check_generated_files: false
-  changed_files:
-    runs-on: ubuntu-latest
-    name: Test changed files
-    outputs:
-      cudf_files_changed: ${{ steps.changed_files.outputs.cudf_files_changed }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Get changed files in cudf
-        id: changed_files
-        run: |
-          git fetch origin branch-23.10-xdf
-          diff=$(git diff --name-only origin/branch-23.10-xdf..HEAD python/cudf)
-          if [ -n "$diff" ]; then
-            has_changes='true'
-          else
-            has_changes='false'
-          fi
-          echo "Found changed: ${has_changes}"
-          echo "cudf_files_changed=${has_changes}" >> "$GITHUB_OUTPUT"
   conda-cpp-build:
     needs: checks
     secrets: inherit
@@ -138,8 +116,7 @@ jobs:
       build_type: pull-request
       script: "ci/build_wheel_cudf.sh"
   wheel-tests-cudf:
-    if: needs.changed_files.outputs.cudf_files_changed == 'true'
-    needs: [wheel-build-cudf, changed_files]
+    needs: wheel-build-cudf
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-23.10
     with:
