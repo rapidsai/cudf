@@ -26,7 +26,7 @@ def cuda_gdb(request):
         return gdb
     else:
         output = subprocess.run(
-            [gdb, "--version"], capture_output=True, text=True, cwd=".."
+            [gdb, "--version"], capture_output=True, text=True, cwd="/"
         )
         if output.returncode != 0:
             request.applymarker(
@@ -97,7 +97,7 @@ def test_cudf_create_series_cuinit(cuda_gdb):
         env=env,
         capture_output=True,
         text=True,
-        cwd="..",
+        cwd="/",
     )
 
     cuInit_called = output.stdout.find("in cuInit ()")
