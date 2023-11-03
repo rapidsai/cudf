@@ -4749,6 +4749,19 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
     strlcw{},
     strlcw{strlcw{}}};
 
+  // 5 nulls
+  // def histogram [1, 3, 1, 8]
+  // rep histogram [4, 4, 5]
+  using strlcw = cudf::test::lists_column_wrapper<cudf::string_view>;
+  cudf::test::lists_column_wrapper<cudf::string_view> col7{{{"Monday", "Monday", "Friday"},
+                                                            {},
+                                                            {{"Monday", "Friday"}, null_at(1)},
+                                                            {},
+                                                            {"Sunday", "Funday"}},
+                                                           {{"bee", "sting"}},
+                                                           strlcw{},
+                                                           strlcw{strlcw{}}};
+
   // 11 nulls
   // D   5   6   5  6        5  6  5      6 6
   // R   0   3   3  3        1  3  3      2 3
@@ -4764,7 +4777,7 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
   // NULL
   // def histogram [1, 0, 4, 1, 1, 4, 9]
   // rep histogram [4, 6, 2, 8]
-  lcw col7{{
+  lcw col8{{
              {{{{1, 2, 3, 4}, nulls_at({0, 2})}}, {{{5, 6, 7}, nulls_at({0, 2})}, {8, 9}}},
              {{{{10, 11}, {12}}, {{13}, {14, 15, 16}}, {{17, 18}}}, nulls_at({0, 2})},
              {{lcw{lcw{}}, lcw{}, lcw{}, lcw{lcw{}}}, nulls_at({0, 2})},
@@ -4774,7 +4787,7 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
 
   table_view expected({col0, col1, col2, col3, col4, col5, col6, col7});
 
-  int64_t const expected_null_counts[]            = {4, 4, 4, 6, 4, 6, 4, 11};
+  int64_t const expected_null_counts[]            = {4, 4, 4, 6, 4, 6, 4, 5, 11};
   std::vector<int64_t> const expected_def_hists[] = {{1, 1, 2, 3},
                                                      {1, 3, 10},
                                                      {1, 1, 2, 10},
@@ -4782,9 +4795,17 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
                                                      {1, 1, 1, 1, 10},
                                                      {1, 1, 1, 1, 2, 8},
                                                      {1, 3, 9},
+                                                     {1, 3, 1, 8},
                                                      {1, 0, 4, 1, 1, 4, 9}};
-  std::vector<int64_t> const expected_rep_hists[] = {
-    {4, 3}, {4, 4, 6}, {4, 4, 6}, {4, 4, 6}, {4, 4, 6}, {4, 4, 6}, {4, 4, 5}, {4, 6, 2, 8}};
+  std::vector<int64_t> const expected_rep_hists[] = {{4, 3},
+                                                     {4, 4, 6},
+                                                     {4, 4, 6},
+                                                     {4, 4, 6},
+                                                     {4, 4, 6},
+                                                     {4, 4, 6},
+                                                     {4, 4, 5},
+                                                     {4, 4, 5},
+                                                     {4, 6, 2, 8}};
 
   auto const filepath = temp_env->get_temp_filepath("ColumnIndexListWithNulls.parquet");
   auto out_opts = cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
@@ -4816,6 +4837,9 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
       if (c == 6) {
         ASSERT_TRUE(chunk.meta_data.size_statistics->unencoded_byte_array_data_bytes.has_value());
         EXPECT_EQ(chunk.meta_data.size_statistics->unencoded_byte_array_data_bytes.value(), 50L);
+      } else if (c == 7) {
+        ASSERT_TRUE(chunk.meta_data.size_statistics->unencoded_byte_array_data_bytes.has_value());
+        EXPECT_EQ(chunk.meta_data.size_statistics->unencoded_byte_array_data_bytes.value(), 44L);
       } else {
         EXPECT_FALSE(chunk.meta_data.size_statistics->unencoded_byte_array_data_bytes.has_value());
       }
@@ -4847,11 +4871,14 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
       ASSERT_TRUE(ci.repetition_level_histogram.has_value());
       EXPECT_EQ(ci.repetition_level_histogram.value(), expected_rep_hists[c]);
 
-      if (c != 6) {
-        EXPECT_FALSE(oi.unencoded_byte_array_data_bytes.has_value());
-      } else {
+      if (c == 6) {
         ASSERT_TRUE(oi.unencoded_byte_array_data_bytes.has_value());
         EXPECT_EQ(oi.unencoded_byte_array_data_bytes.value()[0], 50L);
+      } else if (c == 7) {
+        ASSERT_TRUE(oi.unencoded_byte_array_data_bytes.has_value());
+        EXPECT_EQ(oi.unencoded_byte_array_data_bytes.value()[0], 44L);
+      } else {
+        EXPECT_FALSE(oi.unencoded_byte_array_data_bytes.has_value());
       }
     }
   }

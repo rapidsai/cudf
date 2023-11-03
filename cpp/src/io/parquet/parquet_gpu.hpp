@@ -423,6 +423,7 @@ struct PageFragment {
   uint32_t start_value_idx;
   uint32_t num_leaf_values;  //!< Number of leaf values in fragment. Does not include nulls at
                              //!< non-leaf level
+  uint32_t num_valid;        //<! Number of non-null leaf values
   size_type start_row;       //!< First row in fragment
   uint16_t num_rows;         //!< Number of rows in fragment
   uint16_t num_dict_vals;    //!< Number of unique dictionary entries

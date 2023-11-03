@@ -180,13 +180,15 @@ void __device__ calculate_frag_size(frag_init_state_s* const s, int t)
   auto const nvals           = s->frag.num_leaf_values;
   auto const start_value_idx = s->frag.start_value_idx;
 
+  uint32_t num_valid = 0;
+  uint32_t len       = 0;
   for (uint32_t i = 0; i < nvals; i += block_size) {
     auto const val_idx  = start_value_idx + i + t;
     auto const is_valid = i + t < nvals && val_idx < s->col.leaf_column->size() &&
                           s->col.leaf_column->is_valid(val_idx);
-    uint32_t len;
     if (is_valid) {
-      len = dtype_len;
+      num_valid++;
+      len += dtype_len;
       if (physical_type == BYTE_ARRAY) {
         switch (leaf_type) {
           case type_id::STRING: {
@@ -201,17 +203,21 @@ void __device__ calculate_frag_size(frag_init_state_s* const s, int t)
           default: CUDF_UNREACHABLE("Unsupported data type for leaf column");
         }
       }
-    } else {
-      len = 0;
     }
+  }
+  __syncthreads();
+  auto const total_len   = block_reduce(reduce_storage).Sum(len);
+  auto const total_valid = block_reduce(reduce_storage).Sum(num_valid);
 
-    len = block_reduce(reduce_storage).Sum(len);
-    if (t == 0) { s->frag.fragment_data_size += len; }
-    __syncthreads();
-    // page fragment size must fit in a 32-bit signed integer
-    if (s->frag.fragment_data_size > std::numeric_limits<int32_t>::max()) {
-      CUDF_UNREACHABLE("page fragment size exceeds maximum for i32");
-    }
+  if (t == 0) {
+    s->frag.fragment_data_size = total_len;
+    s->frag.num_valid          = total_valid;
+  }
+
+  __syncthreads();
+  // page fragment size must fit in a 32-bit signed integer
+  if (s->frag.fragment_data_size > std::numeric_limits<int32_t>::max()) {
+    CUDF_UNREACHABLE("page fragment size exceeds maximum for i32");
   }
 }
 
@@ -693,7 +699,7 @@ __global__ void __launch_bounds__(128)
           if (ck_g.col_desc->physical_type == BYTE_ARRAY) {
             // Page size is the sum of frag sizes, and frag sizes for strings includes the
             // 4-byte length indicator, so subtract that.
-            page_g.var_bytes_size = var_bytes_size - page_g.num_leaf_values * sizeof(size_type);
+            page_g.var_bytes_size = var_bytes_size;
           }
           page_g.max_data_size    = static_cast<uint32_t>(max_data_size);
           pagestats_g.start_chunk = ck_g.first_fragment + page_start;
@@ -749,7 +755,8 @@ __global__ void __launch_bounds__(128)
       max_stats_len = max(max_stats_len, minmax_len);
       num_dict_entries += frag_g.num_dict_vals;
       page_size += fragment_data_size;
-      var_bytes_size += frag_g.fragment_data_size;
+      // fragment_data_size includes the length indicator...remove it
+      var_bytes_size += frag_g.fragment_data_size - frag_g.num_valid * sizeof(size_type);
       rows_in_page += frag_g.num_rows;
       values_in_page += frag_g.num_values;
       leaf_values_in_page += frag_g.num_leaf_values;
