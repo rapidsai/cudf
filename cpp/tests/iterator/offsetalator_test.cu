@@ -101,6 +101,7 @@ TYPED_TEST(OffsetalatorTest, output_iterator)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(d_col2, expected);
 }
 
+namespace {
 /**
  * For testing creating and using the offsetalator in device code.
  */
@@ -112,6 +113,7 @@ struct device_functor_fn {
     return static_cast<int32_t>(itr[idx] * 3);
   }
 };
+}  // namespace
 
 TYPED_TEST(OffsetalatorTest, device_offsetalator)
 {
