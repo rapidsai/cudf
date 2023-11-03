@@ -53,19 +53,35 @@ function(find_libarrow_in_python_wheel PYARROW_VERSION)
   find_package(Arrow ${PYARROW_VERSION} MODULE REQUIRED GLOBAL)
   add_library(arrow_shared ALIAS Arrow::Arrow)
 
-  # When using the libarrow inside a wheel we must build libcudf with the old ABI because pyarrow's
-  # `libarrow.so` is compiled for manylinux2014 (centos7 toolchain) which uses the old ABI. Note
-  # that these flags will often be redundant because we build wheels in manylinux containers that
-  # actually have the old libc++ anyway, but setting them explicitly ensures correct and consistent
-  # behavior in all other cases such as aarch builds on newer manylinux or testing builds in newer
-  # containers. Note that tests will not build successfully without also propagating these options
-  # to builds of GTest. Similarly, benchmarks will not work without updating GBench (and possibly
-  # NVBench) builds. We are currently ignoring these limitations since we don't anticipate using
-  # this feature except for building wheels.
-  target_compile_options(
-    Arrow::Arrow INTERFACE "$<$<COMPILE_LANGUAGE:CXX>:-D_GLIBCXX_USE_CXX11_ABI=0>"
-                           "$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-D_GLIBCXX_USE_CXX11_ABI=0>"
+  # When using the libarrow inside a wheel, whether or not libcudf may be built using the new C++11
+  # ABI is dependent on whether the libarrow inside the wheel was compiled using that ABI because we
+  # need the arrow library that we bundle in cudf to be ABI-compatible with the one inside pyarrow.
+  # We determine what options to use by checking the glibc version on the current system, which is
+  # also how pip determines which manylinux-versioned pyarrow wheel to install. Note that tests will
+  # not build successfully without also propagating these options to builds of GTest. Similarly,
+  # benchmarks will not work without updating GBench (and possibly NVBench) builds. We are currently
+  # ignoring these limitations since we don't anticipate using this feature except for building
+  # wheels.
+  EXECUTE_PROCESS(
+    COMMAND ${CMAKE_C_COMPILER} -print-file-name=libc.so.6
+    OUTPUT_VARIABLE GLIBC_EXECUTABLE
+    OUTPUT_STRIP_TRAILING_WHITESPACE
   )
+  EXECUTE_PROCESS(
+    COMMAND ${GLIBC_EXECUTABLE}
+    OUTPUT_VARIABLE GLIBC_OUTPUT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  STRING(REGEX MATCH "stable release version ([0-9]+\\.[0-9]+)" GLIBC_VERSION ${GLIBC_OUTPUT})
+  STRING(REPLACE "stable release version " "" GLIBC_VERSION ${GLIBC_VERSION})
+  STRING(REPLACE "." ";" GLIBC_VERSION_LIST ${GLIBC_VERSION})
+  LIST(GET GLIBC_VERSION_LIST 1 GLIBC_VERSION_MINOR)
+  if(GLIBC_VERSION_MINOR LESS 28)
+    target_compile_options(
+      Arrow::Arrow INTERFACE "$<$<COMPILE_LANGUAGE:CXX>:-D_GLIBCXX_USE_CXX11_ABI=0>"
+                             "$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-D_GLIBCXX_USE_CXX11_ABI=0>"
+    )
+  endif()
 
   rapids_export_package(BUILD Arrow cudf-exports)
   rapids_export_package(INSTALL Arrow cudf-exports)
@@ -408,22 +424,12 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
 endfunction()
 
 if(NOT DEFINED CUDF_VERSION_Arrow)
-  # Temporarily use Arrow 12.0.1 in wheels and Arrow 13.0.0 otherwise
-  if(USE_LIBARROW_FROM_PYARROW)
-    set(CUDF_VERSION_Arrow
-        # This version must be kept in sync with the libarrow version pinned for builds in
-        # dependencies.yaml.
-        12.0.1
-        CACHE STRING "The version of Arrow to find (or build)"
-    )
-  else()
-    set(CUDF_VERSION_Arrow
-        # This version must be kept in sync with the libarrow version pinned for builds in
-        # dependencies.yaml.
-        13.0.0
-        CACHE STRING "The version of Arrow to find (or build)"
-    )
-  endif()
+  set(CUDF_VERSION_Arrow
+      # This version must be kept in sync with the libarrow version pinned for builds in
+      # dependencies.yaml.
+      13.0.0
+      CACHE STRING "The version of Arrow to find (or build)"
+  )
 endif()
 
 find_and_configure_arrow(
