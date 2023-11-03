@@ -248,6 +248,10 @@ class SingleColumnFrame(Frame, NotIterable):
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def __cuda_array_interface__(self):
+        # While the parent column class has a `__cuda_array_interface__` method
+        # defined, it is not implemented for all column types. When it is not
+        # implemented, though, at the Frame level we really want to throw an
+        # AttributeError.
         try:
             return self._column.__cuda_array_interface__
         except NotImplementedError:
