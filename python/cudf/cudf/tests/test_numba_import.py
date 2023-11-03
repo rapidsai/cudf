@@ -43,6 +43,6 @@ def test_numba_mvc_enabled_cuda_11():
     cp = subprocess.run(
         [sys.executable, "-c", TEST_NUMBA_MVC_ENABLED],
         capture_output=True,
-        cwd="/",
+        cwd="..",
     )
     assert cp.returncode == 0
