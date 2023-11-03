@@ -17,6 +17,7 @@ from rmm.allocators.cupy import rmm_cupy_allocator
 from rmm.allocators.numba import RMMNumbaManager
 
 from cudf import api, core, datasets, testing
+from cudf._version import __git_commit__, __version__
 from cudf.api.extensions import (
     register_dataframe_accessor,
     register_index_accessor,
@@ -98,8 +99,6 @@ cupy.cuda.set_allocator(rmm_cupy_allocator)
 
 rmm.register_reinitialize_hook(clear_cache)
 
-
-__version__ = "23.12.00"
 
 __all__ = [
     "BaseIndex",

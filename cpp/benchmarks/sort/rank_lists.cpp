@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-#include "nested_types_common.hpp"
 #include "rank_types_common.hpp"
+
+#include <benchmarks/common/generate_nested_types.hpp>
 
 #include <cudf/sorting.hpp>
 
