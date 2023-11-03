@@ -360,6 +360,11 @@ class user_datasource_wrapper : public datasource {
     return source->supports_device_read();
   }
 
+  [[nodiscard]] bool is_device_read_preferred(size_t size) const override
+  {
+    return source->is_device_read_preferred(size);
+  }
+
   size_t device_read(size_t offset,
                      size_t size,
                      uint8_t* dst,
@@ -384,6 +389,8 @@ class user_datasource_wrapper : public datasource {
   }
 
   [[nodiscard]] size_t size() const override { return source->size(); }
+
+  [[nodiscard]] bool is_empty() const override { return source->is_empty(); }
 
  private:
   datasource* const source;  ///< A non-owning pointer to the user-implemented datasource
