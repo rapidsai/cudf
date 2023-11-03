@@ -7890,6 +7890,11 @@ def from_pandas(obj, nan_as_null=no_default):
         return DataFrame.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.Series):
         return Series.from_pandas(obj, nan_as_null=nan_as_null)
+    # This carveout for cudf.pandas is undesirable, but fixes crucial issues
+    # for core RAPIDS projects like cuML and cuGraph that rely on
+    # `cudf.from_pandas`, so we allow it for now.
+    elif (ret := getattr(obj, "_fsproxy_wrapped", None)) is not None:
+        return ret
     elif isinstance(obj, pd.MultiIndex):
         return MultiIndex.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.RangeIndex):
