@@ -318,7 +318,15 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     tmp_arg = ([tmp_arg[0]], tmp_arg[1])
                 if len(tmp_arg[0]) == 0:
                     return columns_df._empty_like(keep_index=True)
-                tmp_arg = (as_column(tmp_arg[0]), tmp_arg[1])
+                tmp_arg = (
+                    as_column(
+                        tmp_arg[0],
+                        dtype=self._frame.index.dtype
+                        if is_categorical_dtype(self._frame.index.dtype)
+                        else None,
+                    ),
+                    tmp_arg[1],
+                )
 
                 if is_bool_dtype(tmp_arg[0]):
                     df = columns_df._apply_boolean_mask(

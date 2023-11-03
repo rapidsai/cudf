@@ -2186,3 +2186,12 @@ def test_dataframe_iloc_scalar_interval_return_pd_scalar(
         result = getattr(obj, idx_method)[row_key, col_key]
     expected = getattr(obj.to_pandas(), idx_method)[row_key, col_key]
     assert result == expected
+
+
+def test_scalar_loc_row_categoricalindex():
+    df = cudf.DataFrame(
+        range(4), index=cudf.CategoricalIndex(["a", "a", "b", "c"])
+    )
+    result = df.loc["a"]
+    expected = df.to_pandas().loc["a"]
+    assert_eq(result, expected)
