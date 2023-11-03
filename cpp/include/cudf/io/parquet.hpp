@@ -440,11 +440,13 @@ class chunked_parquet_reader {
    * @param chunk_read_limit Limit on total number of bytes to be returned per read,
    *        or `0` if there is no limit
    * @param options The options used to read Parquet file
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
   chunked_parquet_reader(
     std::size_t chunk_read_limit,
     parquet_reader_options const& options,
+    rmm::cuda_stream_view stream        = cudf::get_default_stream(),
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -463,12 +465,14 @@ class chunked_parquet_reader {
    * @param pass_read_limit Limit on the amount of memory used for reading and decompressing data or
    * `0` if there is no limit
    * @param options The options used to read Parquet file
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
   chunked_parquet_reader(
     std::size_t chunk_read_limit,
     std::size_t pass_read_limit,
     parquet_reader_options const& options,
+    rmm::cuda_stream_view stream        = cudf::get_default_stream(),
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -1782,8 +1786,10 @@ class parquet_chunked_writer {
    * @brief Constructor with chunked writer options
    *
    * @param[in] options options used to write table
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches
    */
-  parquet_chunked_writer(chunked_parquet_writer_options const& options);
+  parquet_chunked_writer(chunked_parquet_writer_options const& options,
+                         rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * @brief Writes table to output.
