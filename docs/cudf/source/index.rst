@@ -9,17 +9,19 @@ they can use it to easily accelerate their workflows without going into
 the details of CUDA programming.
 
 
+``cudf.pandas`` is a 100% drop-in replacement for pandas that behaves identically on your
+CPU but lets you "hit the turbo button" and run supported functions on an
+NVIDIA GPU without code change.
+
+.. image:: _static/RAPIDS-logo-purple.png
+    :width: 300px
+    :class: align-right
+
+
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Contents:
 
    user_guide/index
-   api_docs/index
+   cudf_pandas/index
    developer_guide/index
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`search`

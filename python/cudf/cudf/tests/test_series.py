@@ -639,7 +639,7 @@ def test_series_value_counts(dropna, normalize):
         )
         got = sr.value_counts(dropna=dropna, normalize=normalize).sort_index()
 
-        assert_eq(expect, got, check_dtype=False, check_index_type=False)
+        assert_eq(expect, got, check_dtype=True, check_index_type=False)
 
 
 @pytest.mark.parametrize("bins", [1, 2, 3])
@@ -650,7 +650,7 @@ def test_series_value_counts_bins(bins):
     expected = psr.value_counts(bins=bins)
     got = gsr.value_counts(bins=bins)
 
-    assert_eq(expected.sort_index(), got.sort_index(), check_dtype=False)
+    assert_eq(expected.sort_index(), got.sort_index(), check_dtype=True)
 
 
 @pytest.mark.parametrize("bins", [1, 2, 3])
@@ -662,7 +662,7 @@ def test_series_value_counts_bins_dropna(bins, dropna):
     expected = psr.value_counts(bins=bins, dropna=dropna)
     got = gsr.value_counts(bins=bins, dropna=dropna)
 
-    assert_eq(expected.sort_index(), got.sort_index(), check_dtype=False)
+    assert_eq(expected.sort_index(), got.sort_index(), check_dtype=True)
 
 
 @pytest.mark.parametrize("ascending", [True, False])
@@ -679,11 +679,11 @@ def test_series_value_counts_optional_arguments(ascending, dropna, normalize):
         ascending=ascending, dropna=dropna, normalize=normalize
     )
 
-    assert_eq(expected.sort_index(), got.sort_index(), check_dtype=False)
+    assert_eq(expected.sort_index(), got.sort_index(), check_dtype=True)
     assert_eq(
         expected.reset_index(drop=True),
         got.reset_index(drop=True),
-        check_dtype=False,
+        check_dtype=True,
     )
 
 
@@ -2592,3 +2592,49 @@ def test_series_error_nan_non_float_dtypes():
     s = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
     with pytest.raises(TypeError):
         s[0] = np.nan
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        pd.ArrowDtype(pa.int8()),
+        pd.ArrowDtype(pa.int16()),
+        pd.ArrowDtype(pa.int32()),
+        pd.ArrowDtype(pa.int64()),
+        pd.ArrowDtype(pa.uint8()),
+        pd.ArrowDtype(pa.uint16()),
+        pd.ArrowDtype(pa.uint32()),
+        pd.ArrowDtype(pa.uint64()),
+        pd.ArrowDtype(pa.float32()),
+        pd.ArrowDtype(pa.float64()),
+        pd.Int8Dtype(),
+        pd.Int16Dtype(),
+        pd.Int32Dtype(),
+        pd.Int64Dtype(),
+        pd.UInt8Dtype(),
+        pd.UInt16Dtype(),
+        pd.UInt32Dtype(),
+        pd.UInt64Dtype(),
+        pd.Float32Dtype(),
+        pd.Float64Dtype(),
+    ],
+)
+@pytest.mark.parametrize("klass", [cudf.Series, cudf.DataFrame, cudf.Index])
+@pytest.mark.parametrize("kind", [lambda x: x, str], ids=["obj", "string"])
+def test_astype_pandas_nullable_pandas_compat(dtype, klass, kind):
+    ser = klass([1, 2, 3])
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            ser.astype(kind(dtype))
+
+
+def test_series_where_mixed_bool_dtype():
+    s = cudf.Series([True, False, True])
+    with pytest.raises(TypeError):
+        s.where(~s, 10)
+
+
+def test_series_setitem_mixed_bool_dtype():
+    s = cudf.Series([True, False, True])
+    with pytest.raises(TypeError):
+        s[0] = 10

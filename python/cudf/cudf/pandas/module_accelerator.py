@@ -69,10 +69,15 @@ def sorted_module_items(mod: ModuleType) -> List[Tuple[str, Any]]:
     """
     # It is advantageous to sort the module items so that submodules
     # appear last: (GH:127)
-    return sorted(
-        mod.__dict__.items(),
-        key=lambda x: isinstance(x[1], ModuleType),
-    )
+    # Assume __dir__ contains all objects accessible under mod.__getattr__
+    # GH 403
+    items = set(mod.__dict__.keys()).union(set(mod.__dir__()))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", FutureWarning)
+        return sorted(
+            ((item, getattr(mod, item)) for item in items),
+            key=lambda x: isinstance(x[1], ModuleType),
+        )
 
 
 class DeducedMode(NamedTuple):
@@ -471,7 +476,9 @@ class ModuleAccelerator(ModuleAcceleratorBase):
         wrapped_attributes = {}
         for key, _ in sorted_module_items(slow_mod):
             # Only copy attributes that don't already exist
-            slow_attr = getattr(slow_mod, key)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", FutureWarning)
+                slow_attr = getattr(slow_mod, key)
             fast_attr = getattr(fast_mod, key, _Unusable())
             real_attributes[key] = slow_attr
             wrapped_attributes[key] = self._wrap_attribute(

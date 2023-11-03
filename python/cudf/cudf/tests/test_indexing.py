@@ -2126,3 +2126,55 @@ def test_iloc_loc_mixed_dtype():
 
     assert_eq(df.iloc[0], pdf.iloc[0])
     assert_eq(df.loc[0], pdf.loc[0])
+
+
+@pytest.mark.parametrize("typ", ["datetime64[ns]", "timedelta64[ns]"])
+@pytest.mark.parametrize("idx_method, key", [["iloc", 0], ["loc", "a"]])
+def test_series_iloc_scalar_datetimelike_return_pd_scalar(
+    typ, idx_method, key
+):
+    obj = cudf.Series([1, 2, 3], index=list("abc"), dtype=typ)
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = getattr(obj, idx_method)[key]
+    expected = getattr(obj.to_pandas(), idx_method)[key]
+    assert result == expected
+
+
+@pytest.mark.parametrize("typ", ["datetime64[ns]", "timedelta64[ns]"])
+@pytest.mark.parametrize(
+    "idx_method, row_key, col_key", [["iloc", 0, 0], ["loc", "a", "a"]]
+)
+def test_dataframe_iloc_scalar_datetimelike_return_pd_scalar(
+    typ, idx_method, row_key, col_key
+):
+    obj = cudf.DataFrame(
+        [1, 2, 3], index=list("abc"), columns=["a"], dtype=typ
+    )
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = getattr(obj, idx_method)[row_key, col_key]
+    expected = getattr(obj.to_pandas(), idx_method)[row_key, col_key]
+    assert result == expected
+
+
+@pytest.mark.parametrize("idx_method, key", [["iloc", 0], ["loc", "a"]])
+def test_series_iloc_scalar_interval_return_pd_scalar(idx_method, key):
+    iidx = cudf.IntervalIndex.from_breaks([1, 2, 3])
+    obj = cudf.Series(iidx, index=list("ab"))
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = getattr(obj, idx_method)[key]
+    expected = getattr(obj.to_pandas(), idx_method)[key]
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "idx_method, row_key, col_key", [["iloc", 0, 0], ["loc", "a", "a"]]
+)
+def test_dataframe_iloc_scalar_interval_return_pd_scalar(
+    idx_method, row_key, col_key
+):
+    iidx = cudf.IntervalIndex.from_breaks([1, 2, 3])
+    obj = cudf.DataFrame({"a": iidx}, index=list("ab"))
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = getattr(obj, idx_method)[row_key, col_key]
+    expected = getattr(obj.to_pandas(), idx_method)[row_key, col_key]
+    assert result == expected

@@ -630,8 +630,11 @@ dependencies:
           - beautifulsoup4
           - blosc
           - brotlipy
+          - boto3
+          - botocore>=1.24.21
           - bottleneck
           - fastparquet
+          - flask
           - fsspec
           - html5lib
           - hypothesis
@@ -640,6 +643,7 @@ dependencies:
           - jinja2
           - lxml
           - matplotlib
+          - moto
           - numba
           - numexpr
           - openpyxl
@@ -657,6 +661,7 @@ dependencies:
           - scipy
           - sqlalchemy
           - tables
+          - pandas-gbq
           - tabulate
           - xarray
           - xlrd

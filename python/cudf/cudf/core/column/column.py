@@ -548,8 +548,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             idx = len(self) + idx
         if idx > len(self) - 1 or idx < 0:
             raise IndexError("single positional indexer is out-of-bounds")
-
-        return libcudf.copying.get_element(self, idx).value
+        result = libcudf.copying.get_element(self, idx).value
+        if cudf.get_option("mode.pandas_compatible"):
+            if isinstance(result, np.datetime64):
+                return pd.Timestamp(result)
+            elif isinstance(result, np.timedelta64):
+                return pd.Timedelta(result)
+        return result
 
     def slice(
         self, start: int, stop: int, stride: Optional[int] = None
@@ -975,11 +980,20 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype)
 
-        dtype = (
-            pandas_dtypes_alias_to_cudf_alias.get(dtype, dtype)
-            if isinstance(dtype, str)
-            else pandas_dtypes_to_np_dtypes.get(dtype, dtype)
-        )
+        if (
+            isinstance(dtype, str)
+            and dtype in pandas_dtypes_alias_to_cudf_alias
+        ):
+            if cudf.get_option("mode.pandas_compatible"):
+                raise NotImplementedError("not supported")
+            else:
+                dtype = pandas_dtypes_alias_to_cudf_alias[dtype]
+        elif _is_pandas_nullable_extension_dtype(dtype) and cudf.get_option(
+            "mode.pandas_compatible"
+        ):
+            raise NotImplementedError("not supported")
+        else:
+            dtype = pandas_dtypes_to_np_dtypes.get(dtype, dtype)
         if _is_non_decimal_numeric_dtype(dtype):
             return self.as_numerical_column(dtype, **kwargs)
         elif is_categorical_dtype(dtype):
