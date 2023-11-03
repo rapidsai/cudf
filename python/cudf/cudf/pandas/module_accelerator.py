@@ -336,7 +336,14 @@ class ModuleAcceleratorBase(
             wrapped_attr = _FunctionProxy(fast_attr, slow_attr)
         else:
             wrapped_attr = slow_attr
+
         try:
+            if slow_attr in self._wrapped_objs:
+                if fast_attr is _Unusable:
+                    # we don't want to replace a wrapped object that
+                    # has a usable fast object with a wrapped object
+                    # with a an unusable fast object.
+                    return
             self._wrapped_objs[slow_attr] = wrapped_attr
         except TypeError:
             pass
