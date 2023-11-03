@@ -1,6 +1,6 @@
 # How it Works
 
-When using cuDF's pandas Accelerator Mode, operations execute on the GPU where
+When using cuDF's pandas accelerator mode, operations execute on the GPU where
 possible and on the CPU otherwise, synchronizing under the hood as needed. This applies to pandas usage in both your code and third-party libraries you're using, ensuring it works with all of your pandas-based tools.
 
 ![cudf-pandas-execution-flow](../_static/cudf-pandas-execution-flow.png)
@@ -24,7 +24,7 @@ semantics like default sort ordering.
 
 ## How We Ensure Consistency with Pandas
 
-Every change to cuDF pandas Accelerator Mode is tested against the entire
+Every change to cuDF's pandas accelerator mode is tested against the entire
 pandas unit test suite. Currently, we're passing **93%** of the 187,000+ unit
 tests, with a goal of passing 100%.
 
