@@ -535,6 +535,7 @@ __global__ void __launch_bounds__(128)
     uint32_t rows_in_page        = 0;
     uint32_t values_in_page      = 0;
     uint32_t leaf_values_in_page = 0;
+    uint32_t num_valid           = 0;
     size_t page_size             = 0;
     size_t var_bytes_size        = 0;
     uint32_t num_pages           = 0;
@@ -683,6 +684,7 @@ __global__ void __launch_bounds__(128)
           page_g.num_rows           = rows_in_page;
           page_g.num_leaf_values    = leaf_values_in_page;
           page_g.num_values         = values_in_page;
+          page_g.num_valid          = num_valid;
           auto const def_level_size = max_RLE_page_size(col_g.num_def_level_bits(), values_in_page);
           auto const rep_level_size = max_RLE_page_size(col_g.num_rep_level_bits(), values_in_page);
           // get a different bound if using delta encoding
@@ -749,6 +751,7 @@ __global__ void __launch_bounds__(128)
         rows_in_page        = 0;
         values_in_page      = 0;
         leaf_values_in_page = 0;
+        num_valid           = 0;
         page_start          = fragments_in_chunk;
         max_stats_len       = 0;
       }
@@ -760,6 +763,7 @@ __global__ void __launch_bounds__(128)
       rows_in_page += frag_g.num_rows;
       values_in_page += frag_g.num_values;
       leaf_values_in_page += frag_g.num_leaf_values;
+      num_valid += frag_g.num_valid;
       num_rows += frag_g.num_rows;
       fragments_in_chunk++;
     } while (frag_g.num_rows != 0);
@@ -1373,7 +1377,6 @@ __global__ void __launch_bounds__(block_size, 8) gpuEncodePageLevels(device_span
 
 template <int block_size, typename state_buf>
 __device__ void finish_page_encode(state_buf* s,
-                                   uint32_t valid_count,
                                    uint8_t const* end_ptr,
                                    device_span<EncPage> pages,
                                    device_span<device_span<uint8_t const>> comp_in,
@@ -1381,8 +1384,6 @@ __device__ void finish_page_encode(state_buf* s,
                                    device_span<compression_result> comp_results,
                                    bool write_v2_headers)
 {
-  // valid_count is only valid on thread 0
-  __shared__ uint32_t num_valid;
   auto const t = threadIdx.x;
 
   // V2 does not compress rep and def level data
@@ -1391,8 +1392,6 @@ __device__ void finish_page_encode(state_buf* s,
 
   // this will be true if max_rep > 0 (i.e. there are lists)
   if (s->page.rep_histogram != nullptr) {
-    if (t == 0) { num_valid = valid_count; }
-
     // for repetition we get hist[0] from num_rows, and can derive hist[max_rep_level]
     if (s->col.max_rep_level > 1) {
       generate_page_histogram<block_size>(
@@ -1413,16 +1412,16 @@ __device__ void finish_page_encode(state_buf* s,
       // For definition, we know h`ist[max_rep_level] = valid_count`. If the leaf level is
       // nullable, then `hist[max_rep_level - 1] = num_leaf_values - valid_count`. Finally,
       // hist[0] can be derived as `num_values - sum(hist[1]..hist[max_rep_level])`.
-      bool const is_leaf_nullable = s->col.nullability[s->col.max_rep_level] != 0;
+      bool const is_leaf_nullable = s->col.leaf_column->nullable();
       auto const last_lvl = is_leaf_nullable ? s->col.max_def_level - 1 : s->col.max_def_level;
       if (last_lvl > 1) {
         generate_page_histogram<block_size>(s->page.def_histogram, s, s->col.def_values, last_lvl);
       }
 
       if (t == 0) {
-        s->page.def_histogram[s->col.max_def_level] = num_valid;
+        s->page.def_histogram[s->col.max_def_level] = s->page.num_valid;
         if (is_leaf_nullable) {
-          s->page.def_histogram[last_lvl] = s->page.num_leaf_values - num_valid;
+          s->page.def_histogram[last_lvl] = s->page.num_leaf_values - s->page.num_valid;
         }
         uint32_t hist_0 = s->page.num_values - s->page.num_leaf_values;
         for (int i = 1; i < last_lvl; i++) {
@@ -1434,9 +1433,9 @@ __device__ void finish_page_encode(state_buf* s,
   } else if (s->page.def_histogram != nullptr) {
     // finish off what was started in generate_def_level_histogram
     if (t == 0) {
-      s->page.def_histogram[s->col.max_def_level] = valid_count;
+      s->page.def_histogram[s->col.max_def_level] = s->page.num_valid;
 
-      uint32_t hist_0 = s->page.num_values - valid_count;
+      uint32_t hist_0 = s->page.num_values - s->page.num_valid;
       for (int i = 1; i < s->col.max_def_level; i++) {
         hist_0 -= s->page.def_histogram[i];
       }
@@ -1446,7 +1445,7 @@ __device__ void finish_page_encode(state_buf* s,
 
   if (t == 0) {
     // only need num_nulls for v2 data page headers
-    if (write_v2_headers) { s->page.num_nulls = s->page.num_values - valid_count; }
+    if (write_v2_headers) { s->page.num_nulls = s->page.num_values - s->page.num_valid; }
     uint8_t const* const base   = s->page.page_data + s->page.max_hdr_size;
     auto const actual_data_size = static_cast<uint32_t>(end_ptr - base);
     if (actual_data_size > s->page.max_data_size) {
@@ -1539,7 +1538,6 @@ __global__ void __launch_bounds__(block_size, 8)
   }
   __syncthreads();
 
-  uint32_t num_valid = 0;
   for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
     uint32_t nvals = min(s->page.num_leaf_values - cur_val_idx, block_size);
     uint32_t len, pos;
@@ -1565,7 +1563,6 @@ __global__ void __launch_bounds__(block_size, 8)
       return std::make_tuple(is_valid, val_idx);
     }();
 
-    if (is_valid) { num_valid++; }
     cur_val_idx += nvals;
 
     // Non-dictionary encoding
@@ -1712,10 +1709,8 @@ __global__ void __launch_bounds__(block_size, 8)
     __syncthreads();
   }
 
-  uint32_t const valid_count = block_reduce(temp_storage.reduce_storage).Sum(num_valid);
-
   finish_page_encode<block_size>(
-    s, valid_count, s->cur, pages, comp_in, comp_out, comp_results, write_v2_headers);
+    s, s->cur, pages, comp_in, comp_out, comp_results, write_v2_headers);
 }
 
 // DICTIONARY page data encoder
@@ -1795,7 +1790,6 @@ __global__ void __launch_bounds__(block_size, 8)
   }
   __syncthreads();
 
-  uint32_t num_valid = 0;
   for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
     uint32_t nvals = min(s->page.num_leaf_values - cur_val_idx, block_size);
 
@@ -1813,7 +1807,6 @@ __global__ void __launch_bounds__(block_size, 8)
       return std::make_tuple(is_valid, val_idx);
     }();
 
-    if (is_valid) { num_valid++; }
     cur_val_idx += nvals;
 
     // Dictionary encoding
@@ -1845,8 +1838,6 @@ __global__ void __launch_bounds__(block_size, 8)
     __syncthreads();
   }
 
-  uint32_t const valid_count = block_reduce(temp_storage.reduce_storage).Sum(num_valid);
-
   // save RLE length if necessary
   if (s->rle_len_pos != nullptr && t < 32) {
     // size doesn't include the 4 bytes for the length
@@ -1856,7 +1847,7 @@ __global__ void __launch_bounds__(block_size, 8)
   }
 
   finish_page_encode<block_size>(
-    s, valid_count, s->cur, pages, comp_in, comp_out, comp_results, write_v2_headers);
+    s, s->cur, pages, comp_in, comp_out, comp_results, write_v2_headers);
 }
 
 // DELTA_BINARY_PACKED page data encoder
@@ -1919,58 +1910,36 @@ __global__ void __launch_bounds__(block_size, 8)
   }
   __syncthreads();
 
-  // need to know the number of valid values for the null values calculation and to size
-  // the delta binary encoder.
-  uint32_t valid_count = 0;
-  if (not s->col.leaf_column->nullable()) {
-    valid_count = s->page.num_leaf_values;
-  } else {
-    uint32_t num_valid = 0;
-    for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
-      uint32_t const nvals                = min(s->page.num_leaf_values - cur_val_idx, block_size);
-      size_type const val_idx_in_block    = cur_val_idx + t;
-      size_type const val_idx_in_leaf_col = s->page_start_val + val_idx_in_block;
-
-      if (val_idx_in_leaf_col < s->col.leaf_column->size() &&
-          val_idx_in_block < s->page.num_leaf_values &&
-          s->col.leaf_column->is_valid(val_idx_in_leaf_col)) {
-        num_valid++;
-      }
-      cur_val_idx += nvals;
-    }
-    valid_count = block_reduce(temp_storage.reduce_storage).Sum(num_valid);
-  }
-
   uint8_t const* delta_ptr = nullptr;  // this will be the end of delta block pointer
 
   if (physical_type == INT32) {
     switch (dtype_len_in) {
       case 8: {
         // only DURATIONS map to 8 bytes, so safe to just use signed here?
-        delta_ptr = delta_encode<int64_t>(s, valid_count, delta_shared, &temp_storage);
+        delta_ptr = delta_encode<int64_t>(s, s->page.num_valid, delta_shared, &temp_storage);
         break;
       }
       case 4: {
         if (type_id == type_id::UINT32) {
-          delta_ptr = delta_encode<uint32_t>(s, valid_count, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<uint32_t>(s, s->page.num_valid, delta_shared, &temp_storage);
         } else {
-          delta_ptr = delta_encode<int32_t>(s, valid_count, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<int32_t>(s, s->page.num_valid, delta_shared, &temp_storage);
         }
         break;
       }
       case 2: {
         if (type_id == type_id::UINT16) {
-          delta_ptr = delta_encode<uint16_t>(s, valid_count, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<uint16_t>(s, s->page.num_valid, delta_shared, &temp_storage);
         } else {
-          delta_ptr = delta_encode<int16_t>(s, valid_count, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<int16_t>(s, s->page.num_valid, delta_shared, &temp_storage);
         }
         break;
       }
       case 1: {
         if (type_id == type_id::UINT8) {
-          delta_ptr = delta_encode<uint8_t>(s, valid_count, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<uint8_t>(s, s->page.num_valid, delta_shared, &temp_storage);
         } else {
-          delta_ptr = delta_encode<int8_t>(s, valid_count, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<int8_t>(s, s->page.num_valid, delta_shared, &temp_storage);
         }
         break;
       }
@@ -1978,14 +1947,13 @@ __global__ void __launch_bounds__(block_size, 8)
     }
   } else {
     if (type_id == type_id::UINT64) {
-      delta_ptr = delta_encode<uint64_t>(s, valid_count, delta_shared, &temp_storage);
+      delta_ptr = delta_encode<uint64_t>(s, s->page.num_valid, delta_shared, &temp_storage);
     } else {
-      delta_ptr = delta_encode<int64_t>(s, valid_count, delta_shared, &temp_storage);
+      delta_ptr = delta_encode<int64_t>(s, s->page.num_valid, delta_shared, &temp_storage);
     }
   }
 
-  finish_page_encode<block_size>(
-    s, valid_count, delta_ptr, pages, comp_in, comp_out, comp_results, true);
+  finish_page_encode<block_size>(s, delta_ptr, pages, comp_in, comp_out, comp_results, true);
 }
 
 constexpr int decide_compression_warps_in_block = 4;

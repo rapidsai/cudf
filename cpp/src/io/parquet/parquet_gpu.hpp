@@ -523,6 +523,7 @@ struct EncPage {
   uint32_t* def_histogram;         //!< Histogram of counts for each definition level
   uint32_t* rep_histogram;         //!< Histogram of counts for each repetition level
   uint32_t var_bytes_size;  //!< Number of variable length bytes in the page (byte arrays only)
+  uint32_t num_valid;       //!< Number of valid leaf values
 };
 
 /**
