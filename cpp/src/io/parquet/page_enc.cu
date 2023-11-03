@@ -1485,12 +1485,8 @@ __global__ void __launch_bounds__(block_size, 8)
                  bool write_v2_headers)
 {
   __shared__ __align__(8) page_enc_state_s<0> state_g;
-  using block_reduce = cub::BlockReduce<uint32_t, block_size>;
-  using block_scan   = cub::BlockScan<uint32_t, block_size>;
-  __shared__ union {
-    typename block_reduce::TempStorage reduce_storage;
-    typename block_scan::TempStorage scan_storage;
-  } temp_storage;
+  using block_scan = cub::BlockScan<uint32_t, block_size>;
+  __shared__ typename block_scan::TempStorage scan_storage;
 
   auto* const s = &state_g;
   uint32_t t    = threadIdx.x;
@@ -1582,7 +1578,7 @@ __global__ void __launch_bounds__(block_size, 8)
       len = 0;
     }
     uint32_t total_len = 0;
-    block_scan(temp_storage.scan_storage).ExclusiveSum(len, pos, total_len);
+    block_scan(scan_storage).ExclusiveSum(len, pos, total_len);
     __syncthreads();
     if (t == 0) { s->cur = dst + total_len; }
     if (is_valid) {
@@ -1724,12 +1720,8 @@ __global__ void __launch_bounds__(block_size, 8)
                      bool write_v2_headers)
 {
   __shared__ __align__(8) rle_page_enc_state_s state_g;
-  using block_reduce = cub::BlockReduce<uint32_t, block_size>;
-  using block_scan   = cub::BlockScan<uint32_t, block_size>;
-  __shared__ union {
-    typename block_reduce::TempStorage reduce_storage;
-    typename block_scan::TempStorage scan_storage;
-  } temp_storage;
+  using block_scan = cub::BlockScan<uint32_t, block_size>;
+  __shared__ typename block_scan::TempStorage scan_storage;
 
   auto* const s = &state_g;
   uint32_t t    = threadIdx.x;
@@ -1814,7 +1806,7 @@ __global__ void __launch_bounds__(block_size, 8)
       uint32_t rle_numvals;
       uint32_t rle_numvals_in_block;
       uint32_t pos;
-      block_scan(temp_storage.scan_storage).ExclusiveSum(is_valid, pos, rle_numvals_in_block);
+      block_scan(scan_storage).ExclusiveSum(is_valid, pos, rle_numvals_in_block);
       rle_numvals = s->rle_numvals;
       if (is_valid) {
         uint32_t v;
@@ -1862,9 +1854,7 @@ __global__ void __launch_bounds__(block_size, 8)
   // block of shared memory for value storage and bit packing
   __shared__ uleb128_t delta_shared[delta::buffer_size + delta::block_size];
   __shared__ __align__(8) page_enc_state_s<0> state_g;
-  using block_reduce = cub::BlockReduce<uint32_t, block_size>;
   __shared__ union {
-    typename block_reduce::TempStorage reduce_storage;
     typename delta::index_scan::TempStorage delta_index_tmp;
     typename delta::block_reduce::TempStorage delta_reduce_tmp;
     typename delta::warp_reduce::TempStorage delta_warp_red_tmp[delta::num_mini_blocks];
