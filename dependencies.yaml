@@ -290,9 +290,6 @@ dependencies:
               - cuda-nvrtc-dev
               - cuda-nvtx-dev
               - libcurand-dev
-              # TODO: Remove after https://github.com/rapidsai/cudf/pull/14292 updates
-              # cudf_kafka to use scikit-build
-              - cuda-gdb
           - matrix:
               cuda: "11.8"
             packages:

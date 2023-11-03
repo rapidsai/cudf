@@ -6,6 +6,8 @@ packages = find_packages(include=["cudf_kafka*"])
 
 setup(
     packages=packages,
-    package_data={key: ["VERSION", "*.pxd", "*.hpp", "*.cuh"] for key in packages},
+    package_data={
+        key: ["VERSION", "*.pxd", "*.hpp", "*.cuh"] for key in packages
+    },
     zip_safe=False,
 )
