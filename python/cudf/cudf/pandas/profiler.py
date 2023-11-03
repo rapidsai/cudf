@@ -48,6 +48,23 @@ profiler.print_per_line_stats()
 {function_profile_printer}
 """
 
+_cpu_issue_text = """\
+This workflow could not be completed entirely on the GPU. \
+The following functions required CPU fallback:
+
+{cpu_functions_used}
+"""
+
+
+def format_cpu_functions_used(cpu_funcs):
+    output_str = ""
+    for each in cpu_funcs:
+        output_str += f"- {each}\n"
+
+    # remove final newline character
+    output_str = output_str[:-1]
+    return output_str
+
 
 def lines_with_profiling(lines, print_function_profile=False):
     """Inject profiling code into the given lines of code."""
@@ -236,6 +253,7 @@ class Profiler:
         console.print(table)
 
     def print_per_function_stats(self):
+        cpu_funcs = []
         n_gpu_func_calls = 0
         n_cpu_func_calls = 0
         total_gpu_time = 0
@@ -270,6 +288,9 @@ class Profiler:
             n_gpu_func_calls += len(gpu_times)
             n_cpu_func_calls += len(cpu_times)
 
+            if cpu_times and func_name not in cpu_funcs:
+                cpu_funcs.append(func_name)
+
         time_elapsed = self.end_time - self.start_time
         table.title = f"""\n\
         Total time elapsed: {time_elapsed:.3f} seconds
@@ -280,6 +301,23 @@ class Profiler:
         """
         console = Console()
         console.print(table)
+
+        if cpu_funcs:
+            call_to_action = (
+                "To request GPU support for any of these functions, "
+                "please file a Github issue here: "
+                "[link=https://github.com/rapidsai/cudf/issues/new?assignees"
+                "=&labels=%3F+-+Needs+Triage%2C+feature+request&projects="
+                "&template=pandas_function_request.md&title=%5BFEA%5D]"
+                "https://github.com/rapidsai/cudf/issues/new/choose"
+                "[/link]."
+            )
+            console.print(
+                _cpu_issue_text.format(
+                    cpu_functions_used=format_cpu_functions_used(cpu_funcs)
+                )
+            )
+            console.print(call_to_action)
 
     def dump_stats(self, file_name):
         with open(file_name, "wb") as f:
