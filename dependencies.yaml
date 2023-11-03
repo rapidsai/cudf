@@ -234,7 +234,6 @@ dependencies:
           - libkvikio==23.10.*
       - output_types: conda
         packages:
-          - aws-sdk-cpp<1.11
           - fmt>=9.1.0,<10
           - &gbench benchmark==1.8.0
           - &gtest gtest>=1.13.0
