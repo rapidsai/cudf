@@ -478,13 +478,14 @@ using namespace cudf::io::parquet::detail;
 namespace detail_parquet = cudf::io::parquet::detail;
 
 table_with_metadata read_parquet(parquet_reader_options const& options,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 
   auto datasources = make_datasources(options.get_source());
-  auto reader      = std::make_unique<detail_parquet::reader>(
-    std::move(datasources), options, cudf::get_default_stream(), mr);
+  auto reader =
+    std::make_unique<detail_parquet::reader>(std::move(datasources), options, stream, mr);
 
   return reader->read(options);
 }
@@ -544,7 +545,8 @@ table_input_metadata::table_input_metadata(table_metadata const& metadata)
 /**
  * @copydoc cudf::io::write_parquet
  */
-std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const& options)
+std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const& options,
+                                                    rmm::cuda_stream_view stream)
 {
   namespace io_detail = cudf::io::detail;
 
@@ -552,7 +554,7 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
 
   auto sinks  = make_datasinks(options.get_sink());
   auto writer = std::make_unique<detail_parquet::writer>(
-    std::move(sinks), options, io_detail::single_write_mode::YES, cudf::get_default_stream());
+    std::move(sinks), options, io_detail::single_write_mode::YES, stream);
 
   writer->write(options.get_table(), options.get_partitions());
 

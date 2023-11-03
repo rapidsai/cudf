@@ -401,6 +401,7 @@ class parquet_reader_options_builder {
  * @endcode
  *
  * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the table in the returned
  * table_with_metadata
  *
@@ -408,6 +409,7 @@ class parquet_reader_options_builder {
  */
 table_with_metadata read_parquet(
   parquet_reader_options const& options,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -1163,11 +1165,13 @@ class parquet_writer_options_builder {
  * @endcode
  *
  * @param options Settings for controlling writing behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A blob that contains the file metadata (parquet FileMetadata thrift message) if
  *         requested in parquet_writer_options (empty blob otherwise).
  */
 
-std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const& options);
+std::unique_ptr<std::vector<uint8_t>> write_parquet(
+  parquet_writer_options const& options, rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Merges multiple raw metadata blobs that were previously created by write_parquet

@@ -15,6 +15,7 @@
  */
 
 #include <cudf/detail/utilities/stacktrace.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
@@ -72,7 +73,8 @@ bool stream_is_invalid(cudaStream_t stream)
 {
 #ifdef STREAM_MODE_TESTING
   // In this mode the _only_ valid stream is the one returned by cudf::test::get_default_stream.
-  return (stream != cudf::test::get_default_stream().value());
+  return (stream == cudf::get_default_stream().value() || stream == cudaStreamDefault ||
+          stream == cudaStreamLegacy || stream == cudaStreamPerThread);
 #else
   // We explicitly list the possibilities rather than using
   // `cudf::get_default_stream().value()` because there is no guarantee that
