@@ -233,7 +233,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
                     f"Cannot assign {value=} to non-datetime/non-timedelta "
                     "columns"
                 )
-            if (
+            elif (
                 not (
                     is_float_dtype(self._frame._column.dtype)
                     or (
@@ -251,6 +251,15 @@ class _SeriesIlocIndexer(_FrameIndexer):
                 raise MixedTypeError(
                     f"Cannot assign {value=} to "
                     f"non-float dtype={self._frame._column.dtype}"
+                )
+            elif (
+                is_bool_dtype(self._frame._column.dtype)
+                and not is_bool_dtype(value)
+                and value not in {None, cudf.NA}
+            ):
+                raise MixedTypeError(
+                    f"Cannot assign {value=} to "
+                    f"bool dtype={self._frame._column.dtype}"
                 )
         elif not (
             isinstance(value, (list, dict))
@@ -361,7 +370,11 @@ class _SeriesLocIndexer(_FrameIndexer):
                 raise IndexError("Too many Indexers")
             arg = arg[0]
         if _is_scalar_or_zero_d_array(arg):
-            if not _is_non_decimal_numeric_dtype(self._frame.index.dtype):
+            index_dtype = self._frame.index.dtype
+            if not _is_non_decimal_numeric_dtype(index_dtype) and not (
+                isinstance(index_dtype, cudf.CategoricalDtype)
+                and is_integer_dtype(index_dtype.categories.dtype)
+            ):
                 # TODO: switch to cudf.utils.dtypes.is_integer(arg)
                 if isinstance(arg, cudf.Scalar) and is_integer_dtype(
                     arg.dtype

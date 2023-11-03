@@ -1,30 +1,37 @@
-# How it works
+# How it Works
 
-When using cuDF's pandas Accelerator Mode, operations execute on the GPU where
-possible and on the CPU otherwise, synchronizing under the hood as needed.
+When using cuDF's pandas accelerator mode, operations execute on the GPU where
+possible and on the CPU otherwise, synchronizing under the hood as needed. This applies to pandas usage in both your code and third-party libraries you're using, ensuring it works with all of your pandas-based tools.
+
+![cudf-pandas-execution-flow](../_static/cudf-pandas-execution-flow.png)
+
 
 All `cudf.pandas` objects are a proxy to either a GPU (cuDF) or CPU (pandas)
 object at any given time. Attribute lookups and method calls are first
 attempted on the GPU object. If that fails, they're attempted on the CPU
-object. Additionally, `cudf.pandas` special cases chained method calls (for
+object. The result is then copied back to GPU memory and execution continues.
+
+Additionally, `cudf.pandas` special cases chained method calls (for
 example `groupby-apply`) that can fail at any level of the chain and rewinds
 and replays the chain minimally to deliver a correct result. Data is
 automatically transferred from host to device (and vice versa) only when
 necessary, avoiding unnecessary device-host transfers.
 
-When using cudf.pandas, cuDF's [pandas compatibility
+When using `cudf.pandas`, cuDF's [pandas compatibility
 mode](https://docs.rapids.ai/api/cudf/stable/api_docs/options/#available-options)
 is automatically enabled, ensuring consistency with pandas-specific
 semantics like default sort ordering.
 
 ## How We Ensure Consistency with Pandas
 
-Every change to cuDF pandas Accelerator Mode is tested against the entire
+Every change to cuDF's pandas accelerator mode is tested against the entire
 pandas unit test suite. Currently, we're passing **93%** of the 187,000+ unit
 tests, with a goal of passing 100%.
 
+
+
 We also run nightly continuous integration (CI) tests to track interactions
-between cudf.pandas and other third party libraries. These tests currently
+between `cudf.pandas` and other third party libraries. These tests currently
 cover most canonical use cases between pandas and the corresponding libraries.
 
 To learn more about consistency with pandas and third-party library
@@ -43,7 +50,7 @@ GitHub issue to start a discussion about potential additional GPU-accelerated
 functionality in cuDF if the output of your profile indicates that some tasks
 were performed on the CPU.
 
-When using cudf.pandas in a Jupyter Notebook, the function profiler can be used
+When using `cudf.pandas` in a Jupyter Notebook, the function profiler can be used
 with the `%%cudf.pandas.profile` magic:
 
 
@@ -62,7 +69,7 @@ out = df.groupby('a').filter(
 )
 ```
 
-![cudf.pandas profile](../_static/cudf.pandas-profile.png)
+![cudf-pandas-profile](../_static/cudf-pandas-profile.png)
 
-When using cudf.pandas at the command line to profile a Python script, the
+When using `cudf.pandas` at the command line to profile a Python script, the
 function profiler can be used with `python -m cudf.pandas --profile script.py`.
