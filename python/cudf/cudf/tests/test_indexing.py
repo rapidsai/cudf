@@ -2128,6 +2128,14 @@ def test_iloc_loc_mixed_dtype():
     assert_eq(df.loc[0], pdf.loc[0])
 
 
+def test_loc_setitem_categorical_integer_not_position_based():
+    gdf = cudf.DataFrame(range(3), index=cudf.CategoricalIndex([1, 2, 3]))
+    pdf = gdf.to_pandas()
+    gdf.loc[1] = 10
+    pdf.loc[1] = 10
+    assert_eq(gdf, pdf)
+
+
 @pytest.mark.parametrize("typ", ["datetime64[ns]", "timedelta64[ns]"])
 @pytest.mark.parametrize("idx_method, key", [["iloc", 0], ["loc", "a"]])
 def test_series_iloc_scalar_datetimelike_return_pd_scalar(
