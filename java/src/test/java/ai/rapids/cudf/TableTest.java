@@ -328,6 +328,25 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testReadJSONFromDataSource() throws IOException {
+    Schema schema = Schema.builder()
+            .column(DType.STRING, "name")
+            .column(DType.INT32, "age")
+            .build();
+    JSONOptions opts = JSONOptions.builder()
+            .withLines(true)
+            .build();
+    try (Table expected = new Table.TestBuilder()
+            .column("Michael", "Andy", "Justin")
+            .column(null, 30, 19)
+            .build();
+         MultiBufferDataSource source = sourceFrom(TEST_SIMPLE_JSON_FILE);
+         Table table = Table.readJSON(schema, opts, source)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
   void testReadJSONFileWithInvalidLines() {
     Schema schema = Schema.builder()
             .column(DType.STRING, "name")
@@ -556,6 +575,126 @@ public class TableTest extends CudfTestBase {
         .build();
          Table table = Table.readCSV(TableTest.CSV_DATA_BUFFER_SCHEMA, opts,
              TableTest.CSV_DATA_BUFFER)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  byte[][] sliceBytes(byte[] data, int slices) {
+    slices = Math.min(data.length, slices);
+    // We are not going to worry about making it super even here.
+    // The last one gets the extras.
+    int bytesPerSlice = data.length / slices;
+    byte[][] ret = new byte[slices][];
+    int startingAt = 0;
+    for (int i = 0; i < (slices - 1); i++) {
+      ret[i] = new byte[bytesPerSlice];
+      System.arraycopy(data, startingAt, ret[i], 0, bytesPerSlice);
+      startingAt += bytesPerSlice;
+    }
+    // Now for the last one
+    ret[slices - 1] = new byte[data.length - startingAt];
+    System.arraycopy(data, startingAt, ret[slices - 1], 0, data.length - startingAt);
+    return ret;
+  }
+
+  @Test
+  void testReadCSVBufferMultiBuffer() {
+    CSVOptions opts = CSVOptions.builder()
+            .includeColumn("A")
+            .includeColumn("B")
+            .hasHeader()
+            .withDelim('|')
+            .withQuote('\'')
+            .withNullValue("NULL")
+            .build();
+    byte[][] data = sliceBytes(CSV_DATA_BUFFER, 10);
+    try (Table expected = new Table.TestBuilder()
+            .column(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+            .column(110.0, 111.0, 112.0, 113.0, 114.0, 115.0, 116.0, null, 118.2, 119.8)
+            .build();
+         MultiBufferDataSource source = sourceFrom(data);
+         Table table = Table.readCSV(TableTest.CSV_DATA_BUFFER_SCHEMA, opts, source)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  public static byte[] arrayFrom(File f) throws IOException {
+    long len = f.length();
+    if (len > Integer.MAX_VALUE) {
+      throw new IllegalArgumentException("Sorry cannot read " + f +
+              " into an array it does not fit");
+    }
+    int remaining = (int)len;
+    byte[] ret = new byte[remaining];
+    try (java.io.FileInputStream fin = new java.io.FileInputStream(f)) {
+      int at = 0;
+      while (remaining > 0) {
+        int amount = fin.read(ret, at, remaining);
+        at += amount;
+        remaining -= amount;
+      }
+    }
+    return ret;
+  }
+
+  public static MultiBufferDataSource sourceFrom(File f) throws IOException {
+    long len = f.length();
+    byte[] tmp = new byte[(int)Math.min(32 * 1024, len)];
+    try (HostMemoryBuffer buffer = HostMemoryBuffer.allocate(len)) {
+      try (java.io.FileInputStream fin = new java.io.FileInputStream(f)) {
+        long at = 0;
+        while (at < len) {
+          int amount = fin.read(tmp);
+          buffer.setBytes(at, tmp, 0, amount);
+          at += amount;
+        }
+      }
+      return new MultiBufferDataSource(buffer);
+    }
+  }
+
+  public static MultiBufferDataSource sourceFrom(byte[] data) {
+    long len = data.length;
+    try (HostMemoryBuffer buffer = HostMemoryBuffer.allocate(len)) {
+      buffer.setBytes(0, data, 0, len);
+      return new MultiBufferDataSource(buffer);
+    }
+  }
+
+  public static MultiBufferDataSource sourceFrom(byte[][] data) {
+    HostMemoryBuffer[] buffers = new HostMemoryBuffer[data.length];
+    try {
+      for (int i = 0; i < data.length; i++) {
+        byte[] subData = data[i];
+        buffers[i] = HostMemoryBuffer.allocate(subData.length);
+        buffers[i].setBytes(0, subData, 0, subData.length);
+      }
+      return new MultiBufferDataSource(buffers);
+    } finally {
+      for (HostMemoryBuffer buffer: buffers) {
+        if (buffer != null) {
+          buffer.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testReadCSVDataSource() {
+    CSVOptions opts = CSVOptions.builder()
+            .includeColumn("A")
+            .includeColumn("B")
+            .hasHeader()
+            .withDelim('|')
+            .withQuote('\'')
+            .withNullValue("NULL")
+            .build();
+    try (Table expected = new Table.TestBuilder()
+            .column(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+            .column(110.0, 111.0, 112.0, 113.0, 114.0, 115.0, 116.0, null, 118.2, 119.8)
+            .build();
+         MultiBufferDataSource source = sourceFrom(TableTest.CSV_DATA_BUFFER);
+         Table table = Table.readCSV(TableTest.CSV_DATA_BUFFER_SCHEMA, opts, source)) {
       assertTablesAreEqual(expected, table);
     }
   }
@@ -865,6 +1004,37 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testReadParquetFromDataSource() throws IOException {
+    ParquetOptions opts = ParquetOptions.builder()
+            .includeColumn("loan_id")
+            .includeColumn("zip")
+            .includeColumn("num_units")
+            .build();
+    try (MultiBufferDataSource source = sourceFrom(TEST_PARQUET_FILE);
+         Table table = Table.readParquet(opts, source)) {
+      long rows = table.getRowCount();
+      assertEquals(1000, rows);
+      assertTableTypes(new DType[]{DType.INT64, DType.INT32, DType.INT32}, table);
+    }
+  }
+
+  @Test
+  void testReadParquetMultiBuffer() throws IOException {
+    ParquetOptions opts = ParquetOptions.builder()
+            .includeColumn("loan_id")
+            .includeColumn("zip")
+            .includeColumn("num_units")
+            .build();
+    byte [][] data = sliceBytes(arrayFrom(TEST_PARQUET_FILE), 10);
+    try (MultiBufferDataSource source = sourceFrom(data);
+         Table table = Table.readParquet(opts, source)) {
+      long rows = table.getRowCount();
+      assertEquals(1000, rows);
+      assertTableTypes(new DType[]{DType.INT64, DType.INT32, DType.INT32}, table);
+    }
+  }
+
+  @Test
   void testReadParquetBinary() {
     ParquetOptions opts = ParquetOptions.builder()
         .includeColumn("value1", true)
@@ -1019,6 +1189,23 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testChunkedReadParquetFromDataSource() throws IOException {
+    try (MultiBufferDataSource source = sourceFrom(TEST_PARQUET_FILE_CHUNKED_READ);
+         ParquetChunkedReader reader = new ParquetChunkedReader(240000, ParquetOptions.DEFAULT, source)) {
+      int numChunks = 0;
+      long totalRows = 0;
+      while(reader.hasNext()) {
+        ++numChunks;
+        try(Table chunk = reader.readChunk()) {
+          totalRows += chunk.getRowCount();
+        }
+      }
+      assertEquals(2, numChunks);
+      assertEquals(40000, totalRows);
+    }
+  }
+
+  @Test
   void testReadAvro() {
     AvroOptions opts = AvroOptions.builder()
         .includeColumn("bool_col")
@@ -1033,6 +1220,26 @@ public class TableTest extends CudfTestBase {
             1233446400000000L, 1233446460000000L, 1230768000000000L, 1230768060000000L)
         .build();
         Table table = Table.readAvro(opts, TEST_ALL_TYPES_PLAIN_AVRO_FILE)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadAvroFromDataSource() throws IOException {
+    AvroOptions opts = AvroOptions.builder()
+            .includeColumn("bool_col")
+            .includeColumn("int_col")
+            .includeColumn("timestamp_col")
+            .build();
+
+    try (Table expected = new Table.TestBuilder()
+            .column(true, false, true, false, true, false, true, false)
+            .column(0, 1, 0, 1, 0, 1, 0, 1)
+            .column(1235865600000000L, 1235865660000000L, 1238544000000000L, 1238544060000000L,
+                    1233446400000000L, 1233446460000000L, 1230768000000000L, 1230768060000000L)
+            .build();
+         MultiBufferDataSource source = sourceFrom(TEST_ALL_TYPES_PLAIN_AVRO_FILE);
+         Table table = Table.readAvro(opts, source)) {
       assertTablesAreEqual(expected, table);
     }
   }
@@ -1090,6 +1297,24 @@ public class TableTest extends CudfTestBase {
         .column(65536,65536)
         .build();
          Table table = Table.readORC(opts, TEST_ORC_FILE)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadORCFromDataSource() throws IOException {
+    ORCOptions opts = ORCOptions.builder()
+            .includeColumn("string1")
+            .includeColumn("float1")
+            .includeColumn("int1")
+            .build();
+    try (Table expected = new Table.TestBuilder()
+            .column("hi","bye")
+            .column(1.0f,2.0f)
+            .column(65536,65536)
+            .build();
+         MultiBufferDataSource source = sourceFrom(TEST_ORC_FILE);
+         Table table = Table.readORC(opts, source)) {
       assertTablesAreEqual(expected, table);
     }
   }

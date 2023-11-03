@@ -285,6 +285,123 @@ TEST_F(JsonTest, StackContextRecovering)
   CUDF_TEST_EXPECT_VECTOR_EQUAL(golden_stack_context, stack_context, stack_context.size());
 }
 
+TEST_F(JsonTest, StackContextRecoveringFuzz)
+{
+  // Type used to represent the atomic symbol type used within the finite-state machine
+  using SymbolT      = char;
+  using StackSymbolT = char;
+
+  std::random_device rd;
+  std::mt19937 gen(42);
+  std::uniform_int_distribution<int> distribution(0, 4);
+  constexpr std::size_t input_length = 1024 * 1024;
+  std::string input{};
+  input.reserve(input_length);
+
+  bool inside_quotes = false;
+  std::stack<StackSymbolT> host_stack{};
+  for (std::size_t i = 0; i < input_length; ++i) {
+    bool is_ok = true;
+    char current{};
+    do {
+      int rand_char = distribution(gen);
+      is_ok         = true;
+      switch (rand_char) {
+        case 0: current = '{'; break;
+        case 1: current = '['; break;
+        case 2: current = '}'; break;
+        case 3: current = '"'; break;
+        case 4: current = '\n'; break;
+      }
+      switch (current) {
+        case '"': inside_quotes = !inside_quotes; break;
+        case '{':
+          if (!inside_quotes) { host_stack.push('{'); }
+          break;
+        case '[':
+          if (!inside_quotes) { host_stack.push('['); }
+          break;
+        case '}':
+          if (!inside_quotes) {
+            if (host_stack.size() > 0) {
+              // Get the proper 'pop' stack symbol
+              current = (host_stack.top() == '{' ? '}' : ']');
+              host_stack.pop();
+            } else
+              is_ok = false;
+          }
+          break;
+        case '\n':
+          // Increase chance to have longer lines
+          if (distribution(gen) == 0) {
+            is_ok = false;
+            break;
+          } else {
+            host_stack    = {};
+            inside_quotes = false;
+            break;
+          }
+      }
+    } while (!is_ok);
+    input += current;
+  }
+
+  std::string expected_stack_context{};
+  expected_stack_context.reserve(input_length);
+  inside_quotes = false;
+  host_stack    = std::stack<StackSymbolT>{};
+  for (auto const current : input) {
+    // Write the stack context for the current input symbol
+    if (host_stack.empty()) {
+      expected_stack_context += '_';
+    } else {
+      expected_stack_context += host_stack.top();
+    }
+
+    switch (current) {
+      case '"': inside_quotes = !inside_quotes; break;
+      case '{':
+        if (!inside_quotes) { host_stack.push('{'); }
+        break;
+      case '[':
+        if (!inside_quotes) { host_stack.push('['); }
+        break;
+      case '}':
+        if (!inside_quotes && host_stack.size() > 0) { host_stack.pop(); }
+        break;
+      case ']':
+        if (!inside_quotes && host_stack.size() > 0) { host_stack.pop(); }
+        break;
+      case '\n':
+        host_stack    = {};
+        inside_quotes = false;
+        break;
+    }
+  }
+
+  // Prepare cuda stream for data transfers & kernels
+  auto const stream = cudf::get_default_stream();
+
+  // Prepare input & output buffers
+  cudf::string_scalar const d_scalar(input, true, stream);
+  auto const d_input =
+    cudf::device_span<SymbolT const>{d_scalar.data(), static_cast<size_t>(d_scalar.size())};
+  cudf::detail::hostdevice_vector<StackSymbolT> stack_context(input.size(), stream);
+
+  // Run algorithm
+  constexpr auto stack_behavior = cuio_json::stack_behavior_t::ResetOnDelimiter;
+  cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stack_behavior, stream);
+
+  // Copy back the results
+  stack_context.device_to_host_async(stream);
+
+  // Make sure we copied back the stack context
+  stream.synchronize();
+
+  ASSERT_EQ(expected_stack_context.size(), stack_context.size());
+  CUDF_TEST_EXPECT_VECTOR_EQUAL(expected_stack_context, stack_context, stack_context.size());
+}
+
 TEST_F(JsonTest, TokenStream)
 {
   using cuio_json::PdaTokenT;
@@ -543,7 +660,7 @@ TEST_F(JsonTest, RecoveringTokenStream)
 {
   // Test input. Inline comments used to indicate character indexes
   //                           012345678 <= line 0
-  std::string const input = R"({"a":-2},)"
+  std::string const input = R"({"a":2 {})"
                             // 9
                             "\n"
                             // 01234 <= line 1
@@ -569,23 +686,12 @@ TEST_F(JsonTest, RecoveringTokenStream)
     // Line 0 (invalid)
     {0, token_t::StructBegin},
     {0, token_t::StructEnd},
-    // Line 1 (valid)
-    {10, token_t::StructBegin},
-    {11, token_t::StructMemberBegin},
-    {11, token_t::FieldNameBegin},
-    {13, token_t::FieldNameEnd},
-    // Line 2 (valid)
-    {16, token_t::StructBegin},
-    {17, token_t::StructMemberBegin},
-    {17, token_t::FieldNameBegin},
-    {19, token_t::FieldNameEnd},
-    {21, token_t::StructBegin},
-    {22, token_t::StructMemberBegin},
-    {22, token_t::FieldNameBegin},
-    {24, token_t::FieldNameEnd},
-    {26, token_t::ListBegin},
-    {27, token_t::ValueBegin},
-    {30, token_t::ValueEnd},
+    // Line 1 (invalid)
+    {0, token_t::StructBegin},
+    {0, token_t::StructEnd},
+    // Line 2 (invalid)
+    {0, token_t::StructBegin},
+    {0, token_t::StructEnd},
     // Line 3 (valid)
     {31, token_t::StructBegin},
     {32, token_t::StructMemberBegin},

@@ -24,6 +24,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 
@@ -53,7 +54,7 @@ constexpr bool zero_pll_war = true;
 struct byterle_enc_state_s {
   uint32_t literal_run;
   uint32_t repeat_run;
-  volatile uint32_t rpt_map[(512 / 32) + 1];
+  uint32_t rpt_map[(512 / 32) + 1];
 };
 
 struct intrle_enc_state_s {
@@ -63,7 +64,7 @@ struct intrle_enc_state_s {
   uint32_t literal_w;
   uint32_t hdr_bytes;
   uint32_t pl_bytes;
-  volatile uint32_t delta_map[(512 / 32) + 1];
+  uint32_t delta_map[(512 / 32) + 1];
 };
 
 struct strdata_enc_state_s {
@@ -366,7 +367,7 @@ static __device__ uint32_t IntegerRLE(
   using block_reduce = cub::BlockReduce<T, block_size>;
   uint8_t* dst       = s->stream.data_ptrs[cid] + s->strm_pos[cid];
   uint32_t out_cnt   = 0;
-  __shared__ volatile uint64_t block_vmin;
+  __shared__ uint64_t block_vmin;
 
   while (numvals > 0) {
     T v0               = (t < numvals) ? inbuf[(inpos + t) & inmask] : 0;
@@ -615,7 +616,7 @@ static __device__ void StoreStringData(uint8_t* dst,
  * @param[in] t thread id
  */
 template <class T>
-inline __device__ void lengths_to_positions(volatile T* vals, uint32_t numvals, unsigned int t)
+inline __device__ void lengths_to_positions(T* vals, uint32_t numvals, unsigned int t)
 {
   for (uint32_t n = 1; n < numvals; n <<= 1) {
     __syncthreads();
@@ -835,6 +836,10 @@ __global__ void __launch_bounds__(block_size)
               uint32_t dict_idx = s->chunk.dict_index[row];
               if (dict_idx > 0x7fff'ffffu) {
                 dict_idx = s->chunk.dict_index[dict_idx & 0x7fff'ffffu];
+              }
+              // translate dictionary index to sorted order, if enabled
+              if (s->chunk.dict_data_order != nullptr) {
+                dict_idx = s->chunk.dict_data_order[dict_idx];
               }
               s->vals.u32[nz_idx] = dict_idx;
             } else {
@@ -1143,7 +1148,7 @@ __global__ void __launch_bounds__(256)
                            uint32_t comp_block_align)
 {
   __shared__ __align__(16) StripeStream ss;
-  __shared__ uint8_t* volatile uncomp_base_g;
+  __shared__ uint8_t* uncomp_base_g;
 
   auto const padded_block_header_size = util::round_up_unsafe(block_header_size, comp_block_align);
   auto const padded_comp_block_size   = util::round_up_unsafe(max_comp_blk_size, comp_block_align);
@@ -1196,8 +1201,8 @@ __global__ void __launch_bounds__(1024)
                              uint32_t max_comp_blk_size)
 {
   __shared__ __align__(16) StripeStream ss;
-  __shared__ uint8_t const* volatile comp_src_g;
-  __shared__ uint32_t volatile comp_len_g;
+  __shared__ uint8_t const* comp_src_g;
+  __shared__ uint32_t comp_len_g;
 
   auto const stripe_id = blockIdx.x;
   auto const stream_id = blockIdx.y;
@@ -1257,6 +1262,38 @@ __global__ void __launch_bounds__(1024)
   if (t == 0) {
     strm_desc[stripe_id][stream_id].stream_size =
       static_cast<uint32_t>(dst - (compressed_bfr.data() + ss.bfr_offset));
+  }
+}
+
+// Holds a non-owning view of a decimal column's element sizes
+struct decimal_column_element_sizes {
+  uint32_t col_idx;
+  device_span<uint32_t> sizes;
+};
+
+// Converts sizes of individual decimal elements to offsets within each row group
+// Conversion is done in-place
+template <int block_size>
+__global__ void decimal_sizes_to_offsets_kernel(device_2dspan<rowgroup_rows const> rg_bounds,
+                                                device_span<decimal_column_element_sizes> sizes)
+{
+  using block_scan = cub::BlockScan<uint32_t, block_size>;
+  __shared__ typename block_scan::TempStorage scan_storage;
+  int const t = threadIdx.x;
+
+  auto const& col_elem_sizes = sizes[blockIdx.x];
+  auto const& row_group      = rg_bounds[blockIdx.y][col_elem_sizes.col_idx];
+  auto const elem_sizes      = col_elem_sizes.sizes.data() + row_group.begin;
+
+  uint32_t initial_value = 0;
+  // Do a series of block sums, storing results in the array as we go
+  for (int64_t pos = 0; pos < row_group.size(); pos += block_size) {
+    auto const tidx    = pos + t;
+    auto tval          = tidx < row_group.size() ? elem_sizes[tidx] : 0u;
+    uint32_t block_sum = 0;
+    block_scan(scan_storage).InclusiveSum(tval, tval, block_sum);
+    if (tidx < row_group.size()) { elem_sizes[tidx] = tval + initial_value; }
+    initial_value += block_sum;
   }
 }
 
@@ -1366,6 +1403,30 @@ std::optional<writer_compression_statistics> CompressOrcDataStreams(
   } else {
     return std::nullopt;
   }
+}
+
+void decimal_sizes_to_offsets(device_2dspan<rowgroup_rows const> rg_bounds,
+                              std::map<uint32_t, rmm::device_uvector<uint32_t>>& elem_sizes,
+                              rmm::cuda_stream_view stream)
+{
+  if (rg_bounds.count() == 0) return;
+
+  // Convert map to a vector of views of the `elem_sizes` device buffers
+  std::vector<decimal_column_element_sizes> h_sizes;
+  h_sizes.reserve(elem_sizes.size());
+  std::transform(elem_sizes.begin(), elem_sizes.end(), std::back_inserter(h_sizes), [](auto& p) {
+    return decimal_column_element_sizes{p.first, p.second};
+  });
+
+  // Copy the vector of views to the device so that we can pass it to the kernel
+  auto d_sizes = cudf::detail::make_device_uvector_async<decimal_column_element_sizes>(
+    h_sizes, stream, rmm::mr::get_current_device_resource());
+
+  constexpr int block_size = 256;
+  dim3 const grid_size{static_cast<unsigned int>(elem_sizes.size()),        // num decimal columns
+                       static_cast<unsigned int>(rg_bounds.size().first)};  // num rowgroups
+  decimal_sizes_to_offsets_kernel<block_size>
+    <<<grid_size, block_size, 0, stream.value()>>>(rg_bounds, d_sizes);
 }
 
 }  // namespace gpu

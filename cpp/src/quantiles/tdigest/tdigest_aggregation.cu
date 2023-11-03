@@ -23,7 +23,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/merge.cuh>
+#include <cudf/detail/merge.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/utilities/cuda.cuh>

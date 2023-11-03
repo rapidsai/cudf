@@ -383,7 +383,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
                              std::move(offsets),
                              std::move(chars->release().children.back()),
                              input.null_count(),
-                             copy_bitmask(input.parent(), stream, mr));
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 /**
@@ -490,10 +490,11 @@ std::unique_ptr<column> replace(strings_column_view const& input,
 std::unique_ptr<column> replace(strings_column_view const& strings,
                                 strings_column_view const& targets,
                                 strings_column_view const& repls,
+                                rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace(strings, targets, repls, cudf::get_default_stream(), mr);
+  return detail::replace(strings, targets, repls, stream, mr);
 }
 
 }  // namespace strings

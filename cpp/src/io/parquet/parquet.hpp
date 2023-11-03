@@ -18,6 +18,8 @@
 
 #include "parquet_common.hpp"
 
+#include <cudf/types.hpp>
+
 #include <thrust/optional.h>
 
 #include <cstdint>
@@ -25,9 +27,8 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
-namespace parquet {
+namespace cudf::io::parquet::detail {
+
 constexpr uint32_t parquet_magic = (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24));
 
 /**
@@ -45,79 +46,102 @@ struct file_ender_s {
   uint32_t magic;
 };
 
-// thrift generated code simplified.
-struct StringType {};
-struct MapType {};
-struct ListType {};
-struct EnumType {};
+// thrift inspired code simplified.
 struct DecimalType {
   int32_t scale     = 0;
   int32_t precision = 0;
 };
-struct DateType {};
-
-struct MilliSeconds {};
-struct MicroSeconds {};
-struct NanoSeconds {};
-using TimeUnit_isset = struct TimeUnit_isset {
-  bool MILLIS{false};
-  bool MICROS{false};
-  bool NANOS{false};
-};
 
 struct TimeUnit {
-  TimeUnit_isset isset;
-  MilliSeconds MILLIS;
-  MicroSeconds MICROS;
-  NanoSeconds NANOS;
+  enum Type { UNDEFINED, MILLIS, MICROS, NANOS };
+  Type type;
 };
 
 struct TimeType {
-  bool isAdjustedToUTC = false;
-  TimeUnit unit;
+  // Default to true because the timestamps are implicitly in UTC
+  // Writer option overrides this default
+  bool isAdjustedToUTC = true;
+  TimeUnit unit        = {TimeUnit::MILLIS};
 };
+
 struct TimestampType {
-  bool isAdjustedToUTC = false;
-  TimeUnit unit;
+  // Default to true because the timestamps are implicitly in UTC
+  // Writer option overrides this default
+  bool isAdjustedToUTC = true;
+  TimeUnit unit        = {TimeUnit::MILLIS};
 };
+
 struct IntType {
   int8_t bitWidth = 0;
   bool isSigned   = false;
 };
-struct NullType {};
-struct JsonType {};
-struct BsonType {};
-
-// thrift generated code simplified.
-using LogicalType_isset = struct LogicalType_isset {
-  bool STRING{false};
-  bool MAP{false};
-  bool LIST{false};
-  bool ENUM{false};
-  bool DECIMAL{false};
-  bool DATE{false};
-  bool TIME{false};
-  bool TIMESTAMP{false};
-  bool INTEGER{false};
-  bool UNKNOWN{false};
-  bool JSON{false};
-  bool BSON{false};
-};
 
 struct LogicalType {
-  LogicalType_isset isset;
-  StringType STRING;
-  MapType MAP;
-  ListType LIST;
-  EnumType ENUM;
-  DecimalType DECIMAL;
-  DateType DATE;
-  TimeType TIME;
-  TimestampType TIMESTAMP;
-  IntType INTEGER;
-  NullType UNKNOWN;
-  JsonType JSON;
-  BsonType BSON;
+  enum Type {
+    UNDEFINED,
+    STRING,
+    MAP,
+    LIST,
+    ENUM,
+    DECIMAL,
+    DATE,
+    TIME,
+    TIMESTAMP,
+    // 9 is reserved
+    INTEGER = 10,
+    UNKNOWN,
+    JSON,
+    BSON
+  };
+  Type type;
+  thrust::optional<DecimalType> decimal_type;
+  thrust::optional<TimeType> time_type;
+  thrust::optional<TimestampType> timestamp_type;
+  thrust::optional<IntType> int_type;
+
+  LogicalType(Type tp = UNDEFINED) : type(tp) {}
+  LogicalType(DecimalType&& dt) : type(DECIMAL), decimal_type(dt) {}
+  LogicalType(TimeType&& tt) : type(TIME), time_type(tt) {}
+  LogicalType(TimestampType&& tst) : type(TIMESTAMP), timestamp_type(tst) {}
+  LogicalType(IntType&& it) : type(INTEGER), int_type(it) {}
+
+  constexpr bool is_time_millis() const
+  {
+    return type == TIME and time_type->unit.type == TimeUnit::MILLIS;
+  }
+
+  constexpr bool is_time_micros() const
+  {
+    return type == TIME and time_type->unit.type == TimeUnit::MICROS;
+  }
+
+  constexpr bool is_time_nanos() const
+  {
+    return type == TIME and time_type->unit.type == TimeUnit::NANOS;
+  }
+
+  constexpr bool is_timestamp_millis() const
+  {
+    return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::MILLIS;
+  }
+
+  constexpr bool is_timestamp_micros() const
+  {
+    return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::MICROS;
+  }
+
+  constexpr bool is_timestamp_nanos() const
+  {
+    return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::NANOS;
+  }
+
+  constexpr int8_t bit_width() const { return type == INTEGER ? int_type->bitWidth : -1; }
+
+  constexpr bool is_signed() const { return type == INTEGER and int_type->isSigned; }
+
+  constexpr int32_t scale() const { return type == DECIMAL ? decimal_type->scale : -1; }
+
+  constexpr int32_t precision() const { return type == DECIMAL ? decimal_type->precision : -1; }
 };
 
 /**
@@ -126,8 +150,6 @@ struct LogicalType {
 struct ColumnOrder {
   enum Type { UNDEFINED, TYPE_ORDER };
   Type type;
-
-  operator Type() const { return type; }
 };
 
 /**
@@ -137,24 +159,35 @@ struct ColumnOrder {
  * as a schema tree.
  */
 struct SchemaElement {
-  Type type                    = UNDEFINED_TYPE;
-  ConvertedType converted_type = UNKNOWN;
-  LogicalType logical_type;
-  int32_t type_length =
-    0;  // Byte length of FIXED_LENGTH_BYTE_ARRAY elements, or maximum bit length for other types
+  // 1: parquet physical type for output
+  Type type = UNDEFINED_TYPE;
+  // 2: byte length of FIXED_LENGTH_BYTE_ARRAY elements, or maximum bit length for other types
+  int32_t type_length = 0;
+  // 3: repetition of the field
   FieldRepetitionType repetition_type = REQUIRED;
-  std::string name                    = "";
-  int32_t num_children                = 0;
-  int32_t decimal_scale               = 0;
-  int32_t decimal_precision           = 0;
-  thrust::optional<int32_t> field_id  = thrust::nullopt;
-  bool output_as_byte_array           = false;
+  // 4: name of the field
+  std::string name = "";
+  // 5: nested fields
+  int32_t num_children = 0;
+  // 6: DEPRECATED: record the original type before conversion to parquet type
+  thrust::optional<ConvertedType> converted_type;
+  // 7: DEPRECATED: record the scale for DECIMAL converted type
+  int32_t decimal_scale = 0;
+  // 8: DEPRECATED: record the precision for DECIMAL converted type
+  int32_t decimal_precision = 0;
+  // 9: save field_id from original schema
+  thrust::optional<int32_t> field_id;
+  // 10: replaces converted type
+  thrust::optional<LogicalType> logical_type;
+
+  // extra cudf specific fields
+  bool output_as_byte_array = false;
 
   // The following fields are filled in later during schema initialization
   int max_definition_level = 0;
   int max_repetition_level = 0;
-  int parent_idx           = 0;
-  std::vector<size_t> children_idx;
+  size_type parent_idx     = 0;
+  std::vector<size_type> children_idx;
 
   bool operator==(SchemaElement const& other) const
   {
@@ -206,7 +239,7 @@ struct SchemaElement {
   {
     return type == UNDEFINED_TYPE &&
            // this assumption might be a little weak.
-           ((repetition_type != REPEATED) || (repetition_type == REPEATED && num_children == 2));
+           ((repetition_type != REPEATED) || (repetition_type == REPEATED && num_children > 1));
   }
 };
 
@@ -214,12 +247,18 @@ struct SchemaElement {
  * @brief Thrift-derived struct describing column chunk statistics
  */
 struct Statistics {
-  std::vector<uint8_t> max;        // deprecated max value in signed comparison order
-  std::vector<uint8_t> min;        // deprecated min value in signed comparison order
-  int64_t null_count     = -1;     // count of null values in the column
-  int64_t distinct_count = -1;     // count of distinct values occurring
-  std::vector<uint8_t> max_value;  // max value for column determined by ColumnOrder
-  std::vector<uint8_t> min_value;  // min value for column determined by ColumnOrder
+  // deprecated max value in signed comparison order
+  thrust::optional<std::vector<uint8_t>> max;
+  // deprecated min value in signed comparison order
+  thrust::optional<std::vector<uint8_t>> min;
+  // count of null values in the column
+  thrust::optional<int64_t> null_count;
+  // count of distinct values occurring
+  thrust::optional<int64_t> distinct_count;
+  // max value for column determined by ColumnOrder
+  thrust::optional<std::vector<uint8_t>> max_value;
+  // min value for column determined by ColumnOrder
+  thrust::optional<std::vector<uint8_t>> min_value;
 };
 
 /**
@@ -405,6 +444,4 @@ static inline int CountLeadingZeros32(uint32_t value)
 #endif
 }
 
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail
