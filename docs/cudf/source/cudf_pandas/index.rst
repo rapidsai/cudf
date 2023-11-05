@@ -31,31 +31,20 @@ Speeding up pandas with cuDF
 ``cudf.pandas`` can be used with Jupyter Notebooks or any Python script just by
 loading a notebook extension or adding one command-line flag:
 
-.. list-table::
-   :widths: 1 1
-   :header-rows: 1
 
-   *  -  Python Script
-      -  Notebook
-
-   *  -  .. code-block:: python
-
-            import pandas as pd
-            df = pd.read_csv("filepath")
-            df.groupby("col").mean()
-            df.rolling(window=3).sum()
-
-            # python -m cudf.pandas script.py
-
-
-      -  .. code-block:: python
-
-            %load_ext cudf.pandas
-
-            import pandas as pd
-            df = pd.read_csv("filepath")
-            df.groupby("col").mean()
-            df.rolling(window=3).sum()
++--------------------------------------+------------------------------------+
+| Python Script                        | Notebook                           |
++======================================+====================================+
+| .. code-block:: python               | .. code-block:: python             |
+|                                      |                                    |
+|    import pandas as pd               |    %load_ext cudf.pandas           |
+|    df = pd.read_csv("filepath")      |                                    |
+|    df.groupby("col").mean()          |    import pandas as pd             |
+|    df.rolling(window=3).sum()        |    df = pd.read_csv("filepath")    |
+|                                      |    df.groupby("col").mean()        |
+|    # python -m cudf.pandas script.py |    df.rolling(window=3).sum()      |
+|                                      |                                    |
++--------------------------------------+------------------------------------+
 
 
 With cuDF's pandas Accelerator Mode, you can take pandas from worst-to-first on
