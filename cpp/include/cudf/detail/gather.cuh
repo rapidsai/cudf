@@ -675,7 +675,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
 
   auto const nullable = bounds_policy == out_of_bounds_policy::NULLIFY ||
                         std::any_of(source_table.begin(), source_table.end(), [](auto const& col) {
-                          return col.has_nulls();
+                          return col.nullable();
                         });
   if (nullable) {
     auto const op = bounds_policy == out_of_bounds_policy::NULLIFY ? gather_bitmask_op::NULLIFY
