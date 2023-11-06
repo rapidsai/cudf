@@ -1,10 +1,12 @@
 # Comparison of cuDF and Pandas
 
 cuDF is a DataFrame library that closely matches the Pandas API, but
-it is *not* a full drop-in replacement for Pandas.  There are some
+when used directly is *not* a full drop-in replacement for Pandas.  There are some
 differences between cuDF and Pandas, both in terms of API and
 behaviour.  This page documents the similarities and differences
 between cuDF and Pandas.
+
+Starting with the v23.10 release, cuDF provides a pandas accelerator mode (`cudf.pandas`), allowing you to bring accelerated computing to your pandas workflows without requiring any code change. To learn more about this new feature, visit the [pandas accelerator mode documentation](../cudf_pandas/index).
 
 ## Supported operations
 

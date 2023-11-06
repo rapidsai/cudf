@@ -6,6 +6,7 @@
 api_docs/index
 10min
 pandas-comparison
+intro-to-cudf-pandas
 data-types
 io/index
 missing-data
