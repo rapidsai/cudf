@@ -342,8 +342,10 @@ struct gpuParsePageHeader {
  * @param[in] num_chunks Number of column chunks
  */
 // blockDim {128,1,1}
-__global__ void __launch_bounds__(128)
-  gpuDecodePageHeaders(ColumnChunkDesc* chunks, chunk_page_info *chunk_pages, int32_t num_chunks, int32_t* error_code)
+__global__ void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chunks,
+                                                            chunk_page_info* chunk_pages,
+                                                            int32_t num_chunks,
+                                                            int32_t* error_code)
 {
   using cudf::detail::warp_size;
   gpuParsePageHeader parse_page_header;
@@ -382,10 +384,10 @@ __global__ void __launch_bounds__(128)
       bs->page.str_bytes           = 0;
       bs->page.kernel_mask         = 0;
     }
-    num_values     = bs->ck.num_values;
-    page_info      = chunk_pages ? chunk_pages[chunk].pages : nullptr;
-    max_num_pages  = (page_info) ? bs->ck.max_num_pages : 0;
-    values_found   = 0;
+    num_values    = bs->ck.num_values;
+    page_info     = chunk_pages ? chunk_pages[chunk].pages : nullptr;
+    max_num_pages = (page_info) ? bs->ck.max_num_pages : 0;
+    values_found  = 0;
     __syncwarp();
     while (values_found < num_values && bs->cur < bs->end) {
       int index_out = -1;
@@ -442,7 +444,7 @@ __global__ void __launch_bounds__(128)
         }
       }
       index_out = shuffle(index_out);
-      if (index_out >= 0 && index_out < max_num_pages && lane_id == 0){
+      if (index_out >= 0 && index_out < max_num_pages && lane_id == 0) {
         page_info[index_out] = bs->page;
       }
       num_values = shuffle(num_values);
@@ -513,7 +515,8 @@ void __host__ DecodePageHeaders(ColumnChunkDesc* chunks,
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
-  gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, chunk_pages, num_chunks, error_code);
+  gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(
+    chunks, chunk_pages, num_chunks, error_code);
 }
 
 void __host__ BuildStringDictionaryIndex(ColumnChunkDesc* chunks,

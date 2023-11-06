@@ -139,7 +139,7 @@ class reader::impl {
 
   /**
    * @brief Read the set of column chunks to be processed for this pass.
-   * 
+   *
    * Does not decompress the chunk data.
    *
    * @return pair of boolean indicating if compressed chunks were found and a vector of futures for
@@ -154,10 +154,10 @@ class reader::impl {
 
   /**
    * @brief Preprocess step for the entire file.
-   * 
+   *
    * Only ever called once. This function reads in rowgroup and associated chunk
    * information and computes the schedule of top level passes (see `pass_intermediate_data`).
-   * 
+   *
    * @param skip_rows The number of rows to skip in the requested set of rowgroups to be read
    * @param num_rows The total number of rows to read out of the selected rowgroups
    * @param row_group_indices Lists of row groups to read, one per source
@@ -170,7 +170,7 @@ class reader::impl {
 
   /**
    * @brief Preprocess step for the next input read pass.
-   * 
+   *
    * A 'pass' is defined as a subset of row groups read out of the globally
    * requested set of all row groups.
    */

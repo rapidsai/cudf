@@ -36,7 +36,7 @@ struct file_intermediate_data {
   // an array of offsets into _file_itm_data::global_chunks. Each pair of offsets represents
   // the start/end of the chunks to be loaded for a given pass.
   std::vector<std::size_t> input_pass_row_group_offsets{};
-  
+
   // row counts per input-pass
   std::vector<std::size_t> input_pass_row_count{};
 
@@ -95,18 +95,18 @@ struct pass_intermediate_data {
   std::vector<row_group_info> row_groups{};
   cudf::detail::hostdevice_vector<ColumnChunkDesc> chunks{};
   cudf::detail::hostdevice_vector<PageInfo> pages{};
-  
+
   // offsets to each group of input pages (by column/schema)
   // so if we had 2 columns/schemas, with page keys
   //
   // 1 1 1 1 1 2 2 2
-  // 
+  //
   // page_offsets would be 0, 5, 8
   cudf::detail::hostdevice_vector<size_type> page_offsets{};
   // for each group of input pages (by column, schema), the count
   // of how many pages we have processed so far
-  std::vector<size_type> page_processed_counts{};  
-    
+  std::vector<size_type> page_processed_counts{};
+
   rmm::device_uvector<string_index_pair> str_dict_index{0, rmm::cuda_stream_default};
 
   int level_type_size{0};
@@ -114,9 +114,9 @@ struct pass_intermediate_data {
   // skip_rows / num_rows for this pass.
   // NOTE: skip_rows is the absolute row index in the file.
   size_t skip_rows;
-  size_t num_rows; 
+  size_t num_rows;
   // number of rows we have processed so far (out of num_rows)
-  size_t processed_rows{0}; 
+  size_t processed_rows{0};
 
   // currently active subpass
   std::unique_ptr<subpass_intermediate_data> subpass{};

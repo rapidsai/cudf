@@ -30,9 +30,9 @@ namespace cudf::io::parquet::detail {
 
 void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 {
-  auto& pass = *_pass_itm_data;
+  auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
-  
+
   auto& page_nesting        = subpass.page_nesting_info;
   auto& page_nesting_decode = subpass.page_nesting_decode_info;
 
@@ -90,12 +90,12 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 
     // get a slice of size `nesting depth` from `chunk_nested_valids` to store an array of pointers
     // to validity data
-    auto valids              = chunk_nested_valids.host_ptr(chunk_off);
+    auto valids                   = chunk_nested_valids.host_ptr(chunk_off);
     pass.chunks[c].valid_map_base = chunk_nested_valids.device_ptr(chunk_off);
 
     // get a slice of size `nesting depth` from `chunk_nested_data` to store an array of pointers to
     // out data
-    auto data                  = chunk_nested_data.host_ptr(chunk_off);
+    auto data                       = chunk_nested_data.host_ptr(chunk_off);
     pass.chunks[c].column_data_base = chunk_nested_data.device_ptr(chunk_off);
 
     auto str_data = has_strings ? chunk_nested_str_data.host_ptr(chunk_off) : nullptr;
@@ -185,14 +185,24 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 
   // launch delta binary decoder
   if ((kernel_mask & KERNEL_MASK_DELTA_BINARY) != 0) {
-    DecodeDeltaBinary(
-      subpass.pages, pass.chunks, num_rows, skip_rows, level_type_size, error_code.data(), streams[s_idx++]);
+    DecodeDeltaBinary(subpass.pages,
+                      pass.chunks,
+                      num_rows,
+                      skip_rows,
+                      level_type_size,
+                      error_code.data(),
+                      streams[s_idx++]);
   }
 
   // launch the catch-all page decoder
   if ((kernel_mask & KERNEL_MASK_GENERAL) != 0) {
-    DecodePageData(
-      subpass.pages, pass.chunks, num_rows, skip_rows, level_type_size, error_code.data(), streams[s_idx++]);
+    DecodePageData(subpass.pages,
+                   pass.chunks,
+                   num_rows,
+                   skip_rows,
+                   level_type_size,
+                   error_code.data(),
+                   streams[s_idx++]);
   }
 
   // synchronize the streams
@@ -371,14 +381,14 @@ table_with_metadata reader::impl::read_chunk_internal(
   auto out_columns = std::vector<std::unique_ptr<column>>{};
   out_columns.reserve(_output_buffers.size());
 
-  #if 0
+#if 0
   if (!has_next()/* || _pass_itm_data->output_chunk_read_info.empty()*/) {
     return finalize_output(out_metadata, out_columns, filter);
   }
-  #endif
+#endif
 
-  auto& pass = *_pass_itm_data;
-  auto& subpass = *pass.subpass;
+  auto& pass            = *_pass_itm_data;
+  auto& subpass         = *pass.subpass;
   auto const& read_info = subpass.output_chunk_read_info[subpass.current_output_chunk];
 
   // Allocate memory buffers for the output columns.
@@ -433,7 +443,7 @@ table_with_metadata reader::impl::finalize_output(
   }
 
   // advance output chunk/subpass/pass info
-  auto& pass = *_pass_itm_data;
+  auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
   subpass.current_output_chunk++;
   pass.processed_rows += subpass.num_rows;
@@ -495,11 +505,11 @@ bool reader::impl::has_next()
                true /*uses_custom_row_bounds*/,
                {} /*row_group_indices, empty means read all row groups*/,
                std::nullopt /*filter*/);
-  
+
   // current_input_pass will only be incremented to be == num_passes after
   // the last chunk in the last subpass in the last pass has been returned
-  auto const num_passes = _file_itm_data.input_pass_row_group_offsets.size() - 1;  
-  bool const more_work = _file_itm_data._current_input_pass < num_passes;  
+  auto const num_passes = _file_itm_data.input_pass_row_group_offsets.size() - 1;
+  bool const more_work  = _file_itm_data._current_input_pass < num_passes;
   return more_work;
 }
 
