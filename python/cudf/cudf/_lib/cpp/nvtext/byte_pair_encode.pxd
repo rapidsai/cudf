@@ -8,7 +8,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
 
 
-cdef extern from "nvtext/bpe_tokenize.hpp" namespace "nvtext" nogil:
+cdef extern from "nvtext/byte_pair_encoding.hpp" namespace "nvtext" nogil:
 
     cdef struct bpe_merge_pairs "nvtext::bpe_merge_pairs":
         pass

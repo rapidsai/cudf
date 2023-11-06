@@ -9,7 +9,7 @@ from libcpp.utility cimport move
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.nvtext.bpe_tokenize cimport (
+from cudf._lib.cpp.nvtext.byte_pair_encode cimport (
     bpe_merge_pairs as cpp_bpe_merge_pairs,
     byte_pair_encoding as cpp_byte_pair_encoding,
     load_merge_pairs as cpp_load_merge_pairs,

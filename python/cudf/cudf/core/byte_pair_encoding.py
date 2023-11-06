@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import cudf
-from cudf._lib.nvtext.bpe_tokenize import (
+from cudf._lib.nvtext.byte_pair_encode import (
     BPE_Merge_Pairs as cpp_merge_pairs,
     byte_pair_encoding as cpp_byte_pair_encoding,
 )
