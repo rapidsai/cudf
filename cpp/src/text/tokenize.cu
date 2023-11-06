@@ -232,43 +232,48 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
 
 // external APIs
 
-std::unique_ptr<cudf::column> tokenize(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> tokenize(cudf::strings_column_view const& input,
                                        cudf::string_scalar const& delimiter,
+                                       rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::tokenize(strings, delimiter, cudf::get_default_stream(), mr);
+  return detail::tokenize(input, delimiter, stream, mr);
 }
 
-std::unique_ptr<cudf::column> tokenize(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> tokenize(cudf::strings_column_view const& input,
                                        cudf::strings_column_view const& delimiters,
+                                       rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::tokenize(strings, delimiters, cudf::get_default_stream(), mr);
+  return detail::tokenize(input, delimiters, stream, mr);
 }
 
-std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& input,
                                            cudf::string_scalar const& delimiter,
+                                           rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_tokens(strings, delimiter, cudf::get_default_stream(), mr);
+  return detail::count_tokens(input, delimiter, stream, mr);
 }
 
-std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& input,
                                            cudf::strings_column_view const& delimiters,
+                                           rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_tokens(strings, delimiters, cudf::get_default_stream(), mr);
+  return detail::count_tokens(input, delimiters, stream, mr);
 }
 
-std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const& input,
+                                                 rmm::cuda_stream_view stream,
                                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::character_tokenize(strings, cudf::get_default_stream(), mr);
+  return detail::character_tokenize(input, stream, mr);
 }
 
 }  // namespace nvtext

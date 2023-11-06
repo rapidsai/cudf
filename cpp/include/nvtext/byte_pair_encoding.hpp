@@ -61,14 +61,13 @@ struct bpe_merge_pairs {
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   ~bpe_merge_pairs();
-
   bpe_merge_pairs();
 };
 
 /**
  * @brief Create a nvtext::bpe_merge_pairs from an input file.
  *
- * @deprecated Since 23.10
+ * @deprecated Since 23.12
  *
  * The file should contain a pair of strings per line separated by
  * a single space.

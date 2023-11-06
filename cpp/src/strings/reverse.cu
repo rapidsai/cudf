@@ -79,10 +79,11 @@ std::unique_ptr<column> reverse(strings_column_view const& input,
 }  // namespace detail
 
 std::unique_ptr<column> reverse(strings_column_view const& input,
+                                rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::reverse(input, cudf::get_default_stream(), mr);
+  return detail::reverse(input, stream, mr);
 }
 
 }  // namespace strings
