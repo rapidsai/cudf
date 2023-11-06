@@ -25,6 +25,7 @@ import pytest
 from numba import NumbaDeprecationWarning
 
 from cudf.pandas import LOADED, Profiler
+from cudf.pandas.fast_slow_proxy import _Unusable
 
 if not LOADED:
     raise ImportError("These tests must be run with cudf.pandas loaded")
@@ -1221,3 +1222,14 @@ def test_pandas_module_getattr_objects(idx_obj):
     # Objects that are behind pandas.__getattr__ (version 1.5 specific)
     idx = getattr(xpd, idx_obj)([1, 2, 3])
     assert isinstance(idx, xpd.Index)
+
+
+def test_concat_fast():
+    pytest.importorskip("cudf")
+
+    assert type(xpd.concat._fsproxy_fast) is not _Unusable
+
+
+def test_func_namespace():
+    # note: this test is sensitive to Pandas' internal module layout
+    assert xpd.concat is xpd.core.reshape.concat.concat
