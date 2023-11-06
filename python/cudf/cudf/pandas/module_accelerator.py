@@ -572,9 +572,9 @@ class ModuleAccelerator(ModuleAcceleratorBase):
                 return real[name]
             else:
                 return wrapped_objs[real[name]]
-        except (KeyError):
+        except KeyError:
             raise AttributeError(f"No attribute '{name}'")
-        except (TypeError):
+        except TypeError:
             # real[name] is an unhashable type
             return real[name]
 
