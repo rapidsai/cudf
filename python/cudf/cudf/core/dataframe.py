@@ -95,11 +95,8 @@ from cudf.utils.dtypes import (
     min_scalar_type,
     numeric_normalize_types,
 )
-from cudf.utils.utils import (
-    GetAttrGetItemMixin,
-    _cudf_nvtx_annotate,
-    _external_only_api,
-)
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.utils import GetAttrGetItemMixin, _external_only_api
 
 _cupy_nan_methods_map = {
     "min": "nanmin",

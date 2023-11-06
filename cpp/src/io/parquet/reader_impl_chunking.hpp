@@ -84,7 +84,8 @@ struct subpass_intermediate_data {
 /**
  * @brief Struct to store pass-level data that remains constant for a single pass.
  *
- * A pass is defined as 
+ * A pass is defined as a set of rowgroups read but not yet decompressed. This set of
+ * rowgroups may represent less than all of the rowgroups to be read for the file.
  */
 struct pass_intermediate_data {
   std::vector<std::unique_ptr<datasource::buffer>> raw_page_data;

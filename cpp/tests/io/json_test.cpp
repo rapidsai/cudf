@@ -18,6 +18,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/default_stream.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
@@ -1422,7 +1423,9 @@ TEST_F(JsonReaderTest, JsonLongString)
                            .lines(true)
                            .na_rep("null");
 
-  cudf::io::write_json(options_builder.build(), rmm::mr::get_current_device_resource());
+  cudf::io::write_json(options_builder.build(),
+                       cudf::test::get_default_stream(),
+                       rmm::mr::get_current_device_resource());
 
   cudf::table_view const expected = tbl_view;
   std::map<std::string, data_type> types;
@@ -1957,12 +1960,36 @@ TEST_F(JsonReaderTest, JSONLinesRecovering)
     // 2 -> (invalid)
     R"({"b":{"a":[321})"
     "\n"
-    // 3 -> c: [1] (valid)
+    // 3 -> c: 1.2 (valid)
     R"({"c":1.2})"
     "\n"
     "\n"
-    // 4 -> a: 123 (valid)
-    R"({"a":123})";
+    // 4 -> a: 4 (valid)
+    R"({"a":4})"
+    "\n"
+    // 5 -> (invalid)
+    R"({"a":5)"
+    "\n"
+    // 6 -> (invalid)
+    R"({"a":6 )"
+    "\n"
+    // 7 -> (invalid)
+    R"({"b":[7 )"
+    "\n"
+    // 8 -> a: 8 (valid)
+    R"({"a":8})"
+    "\n"
+    // 9 -> (invalid)
+    R"({"d":{"unterminated_field_name)"
+    "\n"
+    // 10 -> (invalid)
+    R"({"d":{)"
+    "\n"
+    // 11 -> (invalid)
+    R"({"d":{"123",)"
+    "\n"
+    // 12 -> a: 12 (valid)
+    R"({"a":12})";
 
   auto filepath = temp_env->get_temp_dir() + "RecoveringLines.json";
   {
@@ -1978,17 +2005,89 @@ TEST_F(JsonReaderTest, JSONLinesRecovering)
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
   EXPECT_EQ(result.tbl->num_columns(), 2);
-  EXPECT_EQ(result.tbl->num_rows(), 5);
+  EXPECT_EQ(result.tbl->num_rows(), 13);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
   EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
 
-  std::vector<bool> a_validity{true, false, false, false, true};
-  std::vector<bool> c_validity{false, false, false, true, false};
+  std::vector<bool> a_validity{
+    true, false, false, false, true, false, false, false, true, false, false, false, true};
+  std::vector<bool> c_validity{
+    false, false, false, true, false, false, false, false, false, false, false, false, false};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    result.tbl->get_column(0),
+    int64_wrapper{{-2, 0, 0, 0, 4, 0, 0, 0, 8, 0, 0, 0, 12}, a_validity.cbegin()});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    result.tbl->get_column(1),
+    float64_wrapper{{0.0, 0.0, 0.0, 1.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+                    c_validity.cbegin()});
+}
+
+TEST_F(JsonReaderTest, JSONLinesRecoveringIgnoreExcessChars)
+{
+  /**
+   * @brief Spark has the specific need to ignore extra characters that come after the first record
+   * on a JSON line
+   */
+  std::string data =
+    // 0 -> a: -2 (valid)
+    R"({"a":-2}{})"
+    "\n"
+    // 1 -> (invalid)
+    R"({"b":{}should_be_invalid})"
+    "\n"
+    // 2 -> b (valid)
+    R"({"b":{"a":3} })"
+    "\n"
+    // 3 -> c: (valid)
+    R"({"c":1.2 } )"
+    "\n"
+    "\n"
+    // 4 -> (valid)
+    R"({"a":4} 123)"
+    "\n"
+    // 5 -> (valid)
+    R"({"a":5}//Comment after record)"
+    "\n"
+    // 6 -> (valid)
+    R"({"a":6} //Comment after whitespace)"
+    "\n"
+    // 7 -> (invalid)
+    R"({"a":5 //Invalid Comment within record})";
+
+  auto filepath = temp_env->get_temp_dir() + "RecoveringLinesExcessChars.json";
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    outfile << data;
+  }
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{filepath})
+      .lines(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 3);
+  EXPECT_EQ(result.tbl->num_rows(), 8);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::STRUCT);
+  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::FLOAT64);
+
+  std::vector<bool> a_validity{true, false, false, false, true, true, true, false};
+  std::vector<bool> b_validity{false, false, true, false, false, false, false, false};
+  std::vector<bool> c_validity{false, false, false, true, false, false, false, false};
+
+  // Child column b->a
+  auto b_a_col = int64_wrapper({0, 0, 3, 0, 0, 0, 0, 0});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
-                                 int64_wrapper{{-2, 0, 0, 0, 123}, a_validity.cbegin()});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
-                                 float64_wrapper{{0.0, 0.0, 0.0, 1.2, 0.0}, c_validity.cbegin()});
+                                 int64_wrapper{{-2, 0, 0, 0, 4, 5, 6, 0}, a_validity.cbegin()});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    result.tbl->get_column(1), cudf::test::structs_column_wrapper({b_a_col}, b_validity.cbegin()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    result.tbl->get_column(2),
+    float64_wrapper{{0.0, 0.0, 0.0, 1.2, 0.0, 0.0, 0.0, 0.0}, c_validity.cbegin()});
 }
 
 CUDF_TEST_PROGRAM_MAIN()

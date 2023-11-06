@@ -31,6 +31,8 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/atomic>
+
 #include <cuda_runtime.h>
 
 #include <vector>
@@ -52,6 +54,30 @@ template <int rolling_size>
 constexpr int rolling_index(int index)
 {
   return index % rolling_size;
+}
+
+// see setupLocalPageInfo() in page_decode.cuh for supported page encodings
+constexpr bool is_supported_encoding(Encoding enc)
+{
+  switch (enc) {
+    case Encoding::PLAIN:
+    case Encoding::PLAIN_DICTIONARY:
+    case Encoding::RLE:
+    case Encoding::RLE_DICTIONARY:
+    case Encoding::DELTA_BINARY_PACKED: return true;
+    default: return false;
+  }
+}
+
+/**
+ * @brief Atomically OR `error` into `error_code`.
+ */
+constexpr void set_error(int32_t error, int32_t* error_code)
+{
+  if (error != 0) {
+    cuda::atomic_ref<int32_t, cuda::thread_scope_device> ref{*error_code};
+    ref.fetch_or(error, cuda::std::memory_order_relaxed);
+  }
 }
 
 /**
@@ -87,6 +113,37 @@ struct input_column_info {
 
   auto nesting_depth() const { return nesting.size(); }
 };
+
+// The delta encodings use ULEB128 integers, but parquet only uses max 64 bits.
+using uleb128_t   = uint64_t;
+using zigzag128_t = int64_t;
+
+// this is in C++23
+#if !defined(__cpp_lib_is_scoped_enum)
+template <typename Enum, bool = std::is_enum_v<Enum>>
+struct is_scoped_enum {
+  static const bool value = not std::is_convertible_v<Enum, std::underlying_type_t<Enum>>;
+};
+
+template <typename Enum>
+struct is_scoped_enum<Enum, false> {
+  static const bool value = false;
+};
+#else
+using std::is_scoped_enum;
+#endif
+
+// helpers to do bit operations on scoped enums
+template <class T1,
+          class T2,
+          typename std::enable_if_t<(is_scoped_enum<T1>::value and std::is_same_v<T1, T2>) or
+                                    (is_scoped_enum<T1>::value and std::is_same_v<uint32_t, T2>) or
+                                    (is_scoped_enum<T2>::value and std::is_same_v<uint32_t, T1>)>* =
+            nullptr>
+constexpr uint32_t BitAnd(T1 a, T2 b)
+{
+  return static_cast<uint32_t>(a) & static_cast<uint32_t>(b);
+}
 
 /**
  * @brief Enums for the flags in the page header
@@ -274,7 +331,7 @@ struct ColumnChunkDesc {
                            uint8_t rep_level_bits_,
                            int8_t codec_,
                            int8_t converted_type_,
-                           LogicalType logical_type_,
+                           thrust::optional<LogicalType> logical_type_,
                            int8_t decimal_precision_,
                            int32_t ts_clock_rate_,
                            int32_t src_col_index_,
@@ -327,7 +384,7 @@ struct ColumnChunkDesc {
   void** column_string_base{};                  // base pointers of column string data
   int8_t codec{};                               // compressed codec enum
   int8_t converted_type{};                      // converted type enum
-  LogicalType logical_type{};                   // logical type
+  thrust::optional<LogicalType> logical_type{}; // logical type  
   int8_t decimal_precision{};                   // Decimal precision
   int32_t ts_clock_rate{};  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 
@@ -396,6 +453,17 @@ constexpr uint32_t encoding_to_mask(Encoding encoding)
 }
 
 /**
+ * @brief Enum of mask bits for the EncPage kernel_mask
+ *
+ * Used to control which encode kernels to run.
+ */
+enum class encode_kernel_mask {
+  PLAIN        = (1 << 0),  // Run plain encoding kernel
+  DICTIONARY   = (1 << 1),  // Run dictionary encoding kernel
+  DELTA_BINARY = (1 << 2)   // Run DELTA_BINARY_PACKED encoding kernel
+};
+
+/**
  * @brief Struct describing an encoder column chunk
  */
 struct EncColumnChunk {
@@ -453,10 +521,11 @@ struct EncPage {
   uint32_t num_leaf_values;  //!< Values in page. Different from num_rows in case of nested types
   uint32_t num_values;  //!< Number of def/rep level values in page. Includes null/empty elements in
                         //!< non-leaf levels
-  uint32_t def_lvl_bytes;        //!< Number of bytes of encoded definition level data (V2 only)
-  uint32_t rep_lvl_bytes;        //!< Number of bytes of encoded repetition level data (V2 only)
-  compression_result* comp_res;  //!< Ptr to compression result
-  uint32_t num_nulls;            //!< Number of null values (V2 only) (down here for alignment)
+  uint32_t def_lvl_bytes;          //!< Number of bytes of encoded definition level data (V2 only)
+  uint32_t rep_lvl_bytes;          //!< Number of bytes of encoded repetition level data (V2 only)
+  compression_result* comp_res;    //!< Ptr to compression result
+  uint32_t num_nulls;              //!< Number of null values (V2 only) (down here for alignment)
+  encode_kernel_mask kernel_mask;  //!< Mask used to control which encoding kernels to run
 };
 
 /**
@@ -475,11 +544,16 @@ constexpr bool is_string_col(ColumnChunkDesc const& chunk)
  * @brief Launches kernel for parsing the page headers in the column chunks
  *
  * @param[in] chunks List of column chunks
- * @param[in] chunks List of column chunks
+ * @param[in] chunk_pages List of pages associated with the chunks, in chunk-sorted order
  * @param[in] num_chunks Number of column chunks
+ * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
-void DecodePageHeaders(ColumnChunkDesc* chunks, chunk_page_info* chunk_pages, int32_t num_chunks, rmm::cuda_stream_view stream);
+void DecodePageHeaders(ColumnChunkDesc* chunks,
+                       chunk_page_info* chunk_pages,
+                       int32_t num_chunks,
+                       int32_t* error_code,
+                       rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for building the dictionary index for the column

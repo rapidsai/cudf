@@ -154,15 +154,16 @@ std::unique_ptr<column> filter_characters(
  * @copydoc cudf::strings::filter_characters
  */
 std::unique_ptr<column> filter_characters(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> characters_to_filter,
   filter_type keep_characters,
   string_scalar const& replacement,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::filter_characters(
-    strings, characters_to_filter, keep_characters, replacement, cudf::get_default_stream(), mr);
+    input, characters_to_filter, keep_characters, replacement, stream, mr);
 }
 
 }  // namespace strings
