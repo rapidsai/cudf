@@ -42,34 +42,27 @@
  * kinds:
  * 1. hashing: Used by functions `count_aggregate` and `join_count` to hash inputs of any type
  * 2. equality: Used by functions `count_aggregate` and `join_count` in conjunction with hashing
- *              to determine equality for nested types
+ * to determine equality for nested types
  * 3. lexicographic: Used by function `sort_keys` to create a lexicographical order for nested-types
  * so as to enable sorting
  *
  */
 
 /**
- * @brief Create CUDA memory resource
- */
-auto make_cuda_mr() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
-
-/**
- * @brief Create a pool device memory resource
- */
-auto make_pool_mr()
-{
-  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_cuda_mr());
-}
-
-/**
  * @brief Create memory resource for libcudf functions
  */
 std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::string_view name)
 {
-  if (name == "pool") { return make_pool_mr(); }
-  return make_cuda_mr();
+  auto cuda_mr = std::make_shared<rmm::mr::cuda_memory_resource>();
+  if (name == "pool") {
+    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(cuda_mr);
+  }
+  return cuda_mr;
 }
 
+/**
+ * @brief Read JSON input from file
+ */
 cudf::io::table_with_metadata read_json(std::string filepath)
 {
   auto source_info = cudf::io::source_info(filepath);
@@ -78,11 +71,14 @@ cudf::io::table_with_metadata read_json(std::string filepath)
   return cudf::io::read_json(options);
 }
 
-void write_json(cudf::table_view tbl, cudf::io::table_metadata metadata, std::string filepath)
+/**
+ * @brief Write JSON output to file
+ */
+void write_json(cudf::table_view input, cudf::io::table_metadata metadata, std::string filepath)
 {
   // write the data for inspection
   auto sink_info = cudf::io::sink_info(filepath);
-  auto builder   = cudf::io::json_writer_options::builder(sink_info, tbl).lines(true);
+  auto builder   = cudf::io::json_writer_options::builder(sink_info, input).lines(true);
   builder.metadata(metadata);
   auto options = builder.build();
   cudf::io::write_json(options);
@@ -91,10 +87,10 @@ void write_json(cudf::table_view tbl, cudf::io::table_metadata metadata, std::st
 /**
  * @brief Aggregate count of duplicate rows in nested-type column
  */
-std::unique_ptr<cudf::table> count_aggregate(cudf::table_view tbl)
+std::unique_ptr<cudf::table> count_aggregate(cudf::table_view input)
 {
   // Get count for each key
-  auto keys = cudf::table_view{{tbl.column(0)}};
+  auto keys = cudf::table_view{{input.column(0)}};
   auto val  = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, keys.num_rows());
 
   cudf::groupby::groupby grpby_obj(keys);
@@ -120,8 +116,8 @@ std::unique_ptr<cudf::table> join_count(cudf::table_view left, cudf::table_view 
 {
   auto [left_indices, right_indices] =
     cudf::inner_join(cudf::table_view{{left.column(0)}}, cudf::table_view{{right.column(0)}});
-  auto new_left  = cudf::gather(left, cudf::device_span<int const>{*left_indices});
-  auto new_right = cudf::gather(right, cudf::device_span<int const>{*right_indices});
+  auto new_left  = cudf::gather(left, cudf::device_span<cudf::size_type const>{*left_indices});
+  auto new_right = cudf::gather(right, cudf::device_span<cudf::size_type const>{*right_indices});
 
   auto left_cols  = new_left->release();
   auto right_cols = new_right->release();
@@ -132,11 +128,13 @@ std::unique_ptr<cudf::table> join_count(cudf::table_view left, cudf::table_view 
 
 /**
  * @brief Sort nested-type column
+ *
+ * @note if stability is desired, use `cudf::stable_sorted_order`
  */
-std::unique_ptr<cudf::table> sort_keys(cudf::table_view tbl)
+std::unique_ptr<cudf::table> sort_keys(cudf::table_view input)
 {
-  auto sort_order = cudf::sorted_order(cudf::table_view{{tbl.column(0)}});
-  return cudf::gather(tbl, *sort_order);
+  auto sort_order = cudf::sorted_order(cudf::table_view{{input.column(0)}});
+  return cudf::gather(input, *sort_order);
 }
 
 /**
@@ -147,54 +145,42 @@ std::unique_ptr<cudf::table> sort_keys(cudf::table_view tbl)
  * 2. JSON output file name/path (default: "output.json")
  * 3. Memory resource (optional): "pool" or "cuda" (default: "pool")
  *
- * The stdout includes the number of rows in the input and the output size in bytes.
+ * Example invocation from directory `cudf/cpp/examples/nested_types`:
+ * ./build/deduplication example.json output.json pool
+ *
  */
 int main(int argc, char const** argv)
 {
   std::string input_filepath;
   std::string output_filepath;
   std::string mr_name;
-  if (argc < 4) {
+  if (argc != 4 && argc != 1) {
+    std::cout << "Either provide all command-line arguments, or none to use defaults" << std::endl;
+    return 1;
+  }
+  if (argc == 1) {
     input_filepath  = "example.json";
     output_filepath = "output.json";
     mr_name         = "pool";
-  } else if (argc == 4) {
+  } else {
     input_filepath  = argv[1];
     output_filepath = argv[2];
     mr_name         = argv[3];
-  } else {
-    std::cout << "Either provide all command-line arguments, or none to use defaults" << std::endl;
-    return 1;
   }
 
   auto resource = create_memory_resource(mr_name);
   rmm::mr::set_current_device_resource(resource.get());
 
   // read input file
-  auto [tbl, metadata] = read_json(input_filepath);
+  auto [input, metadata] = read_json(input_filepath);
 
-  auto const st = std::chrono::steady_clock::now();
+  auto count = count_aggregate(input->view());
 
-  auto const count_st                            = std::chrono::steady_clock::now();
-  auto count                                     = count_aggregate(tbl->view());
-  std::chrono::duration<double> const count_time = std::chrono::steady_clock::now() - count_st;
-  std::cout << "count_aggregate time: " << count_time.count() << " seconds\n";
+  auto combined = join_count(input->view(), count->view());
 
-  auto const combined_st = std::chrono::steady_clock::now();
-  auto combined          = join_count(tbl->view(), count->view());
-  std::chrono::duration<double> const combined_time =
-    std::chrono::steady_clock::now() - combined_st;
-  std::cout << "join_count time: " << combined_time.count() << " seconds\n";
-
-  auto const sorted_st                            = std::chrono::steady_clock::now();
-  auto sorted                                     = sort_keys(combined->view());
-  std::chrono::duration<double> const sorted_time = std::chrono::steady_clock::now() - sorted_st;
-  std::cout << "sort_keys time: " << sorted_time.count() << " seconds\n";
+  auto sorted = sort_keys(combined->view());
 
   metadata.schema_info.emplace_back("count");
-
-  std::chrono::duration<double> const elapsed = std::chrono::steady_clock::now() - st;
-  std::cout << "Wall time: " << elapsed.count() << " seconds\n";
 
   write_json(sorted->view(), metadata, output_filepath);
 
