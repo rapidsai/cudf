@@ -310,8 +310,8 @@ int decode_page_headers(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks
   }
 
   // compute max bytes needed for level data
-  auto level_bit_size =
-    cudf::detail::make_counting_transform_iterator(0, [chunks = chunks.begin()] __device__(int i) {
+  auto level_bit_size = cudf::detail::make_counting_transform_iterator(
+    0, [chunks = chunks.d_begin()] __device__(int i) {
       auto c = chunks[i];
       return static_cast<int>(
         max(c.level_bits[level_type::REPETITION], c.level_bits[level_type::DEFINITION]));

@@ -216,14 +216,15 @@ TEST_F(LogicalStackTest, GroundTruth)
                                 stream.value()));
 
   // Run algorithm
-  fst::sparse_stack_op_to_top_of_stack<StackLevelT>(d_stack_ops.data(),
-                                                    d_stack_op_idx_span,
-                                                    JSONToStackOp{},
-                                                    top_of_stack_gpu.device_ptr(),
-                                                    empty_stack_symbol,
-                                                    read_symbol,
-                                                    string_size,
-                                                    stream.value());
+  fst::sparse_stack_op_to_top_of_stack<fst::stack_op_support::NO_RESET_SUPPORT, StackLevelT>(
+    d_stack_ops.data(),
+    d_stack_op_idx_span,
+    JSONToStackOp{},
+    top_of_stack_gpu.device_ptr(),
+    empty_stack_symbol,
+    read_symbol,
+    string_size,
+    stream.value());
 
   // Async copy results from device to host
   top_of_stack_gpu.device_to_host_async(stream_view);
