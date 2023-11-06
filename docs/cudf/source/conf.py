@@ -106,7 +106,6 @@ html_theme_options = {
     "twitter_url": "https://twitter.com/rapidsai",
     "show_toc_level": 1,
     "navbar_align": "right",
-    "show_nav_level": 1,
 }
 include_pandas_compat = True
 
