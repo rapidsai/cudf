@@ -523,7 +523,6 @@ ConfigureTest(
   strings/format_lists_tests.cpp
   strings/integers_tests.cpp
   strings/ipv4_tests.cpp
-  strings/json_tests.cpp
   strings/like_tests.cpp
   strings/pad_tests.cpp
   strings/repeat_strings_tests.cpp
@@ -536,6 +535,10 @@ ConfigureTest(
   strings/translate_tests.cpp
   strings/urls_tests.cpp
 )
+
+# ##################################################################################################
+# * json path test --------------------------------------------------------------------------------
+ConfigureTest(JSON_PATH_TEST json/json_tests.cpp)
 
 # ##################################################################################################
 # * structs test ----------------------------------------------------------------------------------
@@ -631,6 +634,7 @@ ConfigureTest(STREAM_FILLING_TEST streams/filling_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_GROUPBY_TEST streams/groupby_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_HASHING_TEST streams/hash_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_INTEROP_TEST streams/interop_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_JSONIO_TEST streams/io/json_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_LISTS_TEST streams/lists_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_NULL_MASK_TEST streams/null_mask_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_REPLACE_TEST streams/replace_test.cpp STREAM_MODE testing)
