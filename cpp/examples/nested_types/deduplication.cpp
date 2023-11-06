@@ -46,9 +46,6 @@
  * 3. lexicographic: Used by function `sort_keys` to create a lexicographical order for nested-types
  * so as to enable sorting
  *
- * @note This example is for demonstration purposes only. It is not intended to show the most
- * performant way to do the example algorithm.
- *
  */
 
 /**
