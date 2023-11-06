@@ -30,8 +30,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
-#include <cudf/detail/nvtx/ranges.hpp>
-
 namespace cudf::structs::detail {
 
 /**
@@ -399,7 +397,6 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls(column_view cons
                                                                 rmm::cuda_stream_view stream,
                                                                 rmm::mr::device_memory_resource* mr)
 {
-  CUDF_FUNC_RANGE();
   auto output = push_down_nulls_no_sanitize(input, stream, mr);
 
   if (auto const output_view = output.first;
@@ -413,6 +410,7 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls(column_view cons
     // must be done after calling it.
     output.second.new_null_masks.clear();
   }
+
   return output;
 }
 

@@ -42,8 +42,6 @@
 #include <optional>
 #include <vector>
 
-#include <cudf/detail/nvtx/ranges.hpp>
-
 namespace cudf {
 namespace detail {
 /**
@@ -158,7 +156,6 @@ size_type inplace_bitmask_binop(Binop op,
                                 size_type mask_size_bits,
                                 rmm::cuda_stream_view stream)
 {
-  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(
     std::all_of(masks_begin_bits.begin(), masks_begin_bits.end(), [](auto b) { return b >= 0; }),
     "Invalid range.");
