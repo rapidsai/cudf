@@ -204,7 +204,7 @@ struct alignas(16) base_normalator {
 
  private:
   struct integer_sizeof_fn {
-    template <typename T, std::enable_if_t<not cudf::is_fixed_width<T>()>* = nullptr>
+    template <typename T, CUDF_ENABLE_IF(not cudf::is_fixed_width<T>())>
     CUDF_HOST_DEVICE constexpr std::size_t operator()() const
     {
 #ifndef __CUDA_ARCH__
@@ -213,7 +213,7 @@ struct alignas(16) base_normalator {
       CUDF_UNREACHABLE("only integral types are supported");
 #endif
     }
-    template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
+    template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_width<T>())>
     CUDF_HOST_DEVICE constexpr std::size_t operator()() const noexcept
     {
       return sizeof(T);
@@ -227,6 +227,14 @@ struct alignas(16) base_normalator {
   explicit CUDF_HOST_DEVICE base_normalator(data_type dtype) : dtype_(dtype)
   {
     width_ = static_cast<int32_t>(type_dispatcher(dtype, integer_sizeof_fn{}));
+  }
+
+  /**
+   * @brief Constructor assigns width and type member variables for base class.
+   */
+  explicit CUDF_HOST_DEVICE base_normalator(data_type dtype, int32_t width)
+    : width_(width), dtype_(dtype)
+  {
   }
 
   int32_t width_;    /// integer type width = 1,2,4, or 8

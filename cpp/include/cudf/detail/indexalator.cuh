@@ -56,7 +56,7 @@ namespace detail {
  *  auto result = thrust::find(thrust::device, begin, end, size_type{12} );
  * @endcode
  */
-struct alignas(16) input_indexalator : base_normalator<input_indexalator, cudf::size_type> {
+struct input_indexalator : base_normalator<input_indexalator, cudf::size_type> {
   friend struct base_normalator<input_indexalator, cudf::size_type>;  // for CRTP
 
   using reference = cudf::size_type const;  // this keeps STL and thrust happy
@@ -76,12 +76,12 @@ struct alignas(16) input_indexalator : base_normalator<input_indexalator, cudf::
    * @brief Dispatch functor for resolving a Integer value from any integer type
    */
   struct normalize_type {
-    template <typename T, std::enable_if_t<cudf::is_index_type<T>()>* = nullptr>
+    template <typename T, CUDF_ENABLE_IF(cudf::is_index_type<T>())>
     __device__ cudf::size_type operator()(void const* tp)
     {
       return static_cast<cudf::size_type>(*static_cast<T const*>(tp));
     }
-    template <typename T, std::enable_if_t<not cudf::is_index_type<T>()>* = nullptr>
+    template <typename T, CUDF_ENABLE_IF(not cudf::is_index_type<T>())>
     __device__ cudf::size_type operator()(void const*)
     {
       CUDF_UNREACHABLE("only integral types are supported");
@@ -112,6 +112,7 @@ struct alignas(16) input_indexalator : base_normalator<input_indexalator, cudf::
     p_ += offset * this->width_;
   }
 
+ protected:
   char const* p_;  /// pointer to the integer data in device memory
 };
 
@@ -139,7 +140,7 @@ struct alignas(16) input_indexalator : base_normalator<input_indexalator, cudf::
  *                      thrust::less<Element>());
  * @endcode
  */
-struct alignas(16) output_indexalator : base_normalator<output_indexalator, cudf::size_type> {
+struct output_indexalator : base_normalator<output_indexalator, cudf::size_type> {
   friend struct base_normalator<output_indexalator, cudf::size_type>;  // for CRTP
 
   using reference = output_indexalator const&;  // required for output iterators
@@ -172,12 +173,12 @@ struct alignas(16) output_indexalator : base_normalator<output_indexalator, cudf
    * @brief Dispatch functor for setting the index value from a size_type value.
    */
   struct normalize_type {
-    template <typename T, std::enable_if_t<cudf::is_index_type<T>()>* = nullptr>
+    template <typename T, CUDF_ENABLE_IF(cudf::is_index_type<T>())>
     __device__ void operator()(void* tp, cudf::size_type const value)
     {
       (*static_cast<T*>(tp)) = static_cast<T>(value);
     }
-    template <typename T, std::enable_if_t<not cudf::is_index_type<T>()>* = nullptr>
+    template <typename T, CUDF_ENABLE_IF(not cudf::is_index_type<T>())>
     __device__ void operator()(void*, cudf::size_type const)
     {
       CUDF_UNREACHABLE("only index types are supported");
@@ -205,6 +206,7 @@ struct alignas(16) output_indexalator : base_normalator<output_indexalator, cudf
   {
   }
 
+ protected:
   char* p_;  /// pointer to the integer data in device memory
 };
 
@@ -216,14 +218,12 @@ struct indexalator_factory {
    * @brief A type_dispatcher functor to create an input iterator from an indices column.
    */
   struct input_indexalator_fn {
-    template <typename IndexType, std::enable_if_t<is_index_type<IndexType>()>* = nullptr>
+    template <typename IndexType, CUDF_ENABLE_IF(is_index_type<IndexType>())>
     input_indexalator operator()(column_view const& indices)
     {
       return input_indexalator(indices.data<IndexType>(), indices.type());
     }
-    template <typename IndexType,
-              typename... Args,
-              std::enable_if_t<not is_index_type<IndexType>()>* = nullptr>
+    template <typename IndexType, typename... Args, CUDF_ENABLE_IF(not is_index_type<IndexType>())>
     input_indexalator operator()(Args&&... args)
     {
       CUDF_FAIL("indices must be an index type");
@@ -234,16 +234,14 @@ struct indexalator_factory {
    * @brief Use this class to create an indexalator to a scalar index.
    */
   struct input_indexalator_scalar_fn {
-    template <typename IndexType, std::enable_if_t<is_index_type<IndexType>()>* = nullptr>
+    template <typename IndexType, CUDF_ENABLE_IF(is_index_type<IndexType>())>
     input_indexalator operator()(scalar const& index)
     {
       // note: using static_cast<scalar_type_t<IndexType> const&>(index) creates a copy
       auto const scalar_impl = static_cast<scalar_type_t<IndexType> const*>(&index);
       return input_indexalator(scalar_impl->data(), index.type());
     }
-    template <typename IndexType,
-              typename... Args,
-              std::enable_if_t<not is_index_type<IndexType>()>* = nullptr>
+    template <typename IndexType, typename... Args, CUDF_ENABLE_IF(not is_index_type<IndexType>())>
     input_indexalator operator()(Args&&... args)
     {
       CUDF_FAIL("scalar must be an index type");
@@ -254,14 +252,12 @@ struct indexalator_factory {
    * @brief A type_dispatcher functor to create an output iterator from an indices column.
    */
   struct output_indexalator_fn {
-    template <typename IndexType, std::enable_if_t<is_index_type<IndexType>()>* = nullptr>
+    template <typename IndexType, CUDF_ENABLE_IF(is_index_type<IndexType>())>
     output_indexalator operator()(mutable_column_view const& indices)
     {
       return output_indexalator(indices.data<IndexType>(), indices.type());
     }
-    template <typename IndexType,
-              typename... Args,
-              std::enable_if_t<not is_index_type<IndexType>()>* = nullptr>
+    template <typename IndexType, typename... Args, CUDF_ENABLE_IF(not is_index_type<IndexType>())>
     output_indexalator operator()(Args&&... args)
     {
       CUDF_FAIL("indices must be an index type");

@@ -66,7 +66,9 @@ struct input_offsetalator : base_normalator<input_offsetalator, int64_t> {
    * @param data_type Type of data in data
    */
   CUDF_HOST_DEVICE input_offsetalator(void const* data, data_type dtype)
-    : base_normalator<input_offsetalator, int64_t>(dtype), p_{static_cast<char const*>(data)}
+    : base_normalator<input_offsetalator, int64_t>(
+        dtype, dtype.id() == type_id::INT32 ? sizeof(int32_t) : sizeof(int64_t)),
+      p_{static_cast<char const*>(data)}
   {
 #ifndef __CUDA_ARCH__
     CUDF_EXPECTS(dtype.id() == type_id::INT32 || dtype.id() == type_id::INT64,
@@ -77,6 +79,7 @@ struct input_offsetalator : base_normalator<input_offsetalator, int64_t> {
 #endif
   }
 
+ protected:
   char const* p_;  /// pointer to the integer data in device memory
 };
 
@@ -151,6 +154,7 @@ struct output_offsetalator : base_normalator<output_offsetalator, int64_t> {
 #endif
   }
 
+ protected:
   char* p_;  /// pointer to the integer data in device memory
 };
 
