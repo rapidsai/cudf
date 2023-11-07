@@ -9,7 +9,7 @@ export SKBUILD_CONFIGURE_OPTIONS="-DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF"
 
 # Force a build using the latest version of the code before this PR
 CUDF_BUILD_BRANCH=${1:-""}
-WHEEL_NAME="cudf_private"
+WHEEL_NAME="cudf"
 if [[ "${CUDF_BUILD_BRANCH}" == "main" ]]; then
     MAIN_COMMIT=$(git merge-base HEAD origin/branch-23.10-xdf)
     git checkout $MAIN_COMMIT

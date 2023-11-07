@@ -17,7 +17,7 @@ rapids-logger "PR number: $RAPIDS_REF_NAME"
 
 
 COMMIT=$(git rev-parse HEAD)
-WHEEL_NAME="cudf_private"
+WHEEL_NAME="cudf"
 if [[ "${PANDAS_TESTS_BRANCH}" == "main" ]]; then
     COMMIT=$(git merge-base HEAD origin/branch-23.10-xdf)
     WHEEL_NAME="${WHEEL_NAME}_${PANDAS_TESTS_BRANCH}"
