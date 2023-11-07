@@ -219,6 +219,8 @@ class NumericalBaseColumn(ColumnBase, Scannable):
     def round(
         self, decimals: int = 0, how: str = "half_even"
     ) -> NumericalBaseColumn:
+        if not cudf.api.types.is_integer(decimals):
+            raise TypeError("Values in decimals must be integers")
         """Round the values in the Column to the given number of decimals."""
         return libcudf.round.round(self, decimal_places=decimals, how=how)
 

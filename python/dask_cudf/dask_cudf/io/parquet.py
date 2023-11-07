@@ -347,9 +347,8 @@ class CudfEngine(ArrowDatasetEngine):
         **kwargs,
     ):
         preserve_index = False
-        if set(index_cols).issubset(set(df.columns)):
-            df.index = df[index_cols].copy(deep=False)
-            df.drop(columns=index_cols, inplace=True)
+        if len(index_cols) and set(index_cols).issubset(set(df.columns)):
+            df.set_index(index_cols, drop=True, inplace=True)
             preserve_index = True
         if partition_on:
             md = write_to_dataset(

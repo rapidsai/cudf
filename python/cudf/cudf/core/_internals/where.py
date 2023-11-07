@@ -9,6 +9,7 @@ import cudf
 from cudf._typing import ScalarLike
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
+    is_bool_dtype,
     is_categorical_dtype,
     is_scalar,
 )
@@ -101,7 +102,9 @@ def _check_and_cast_columns_with_other(
     if other_is_scalar:
         other = cudf.Scalar(other)
 
-    if is_mixed_with_object_dtype(other, source_col):
+    if is_mixed_with_object_dtype(other, source_col) or (
+        is_bool_dtype(source_col) and not is_bool_dtype(common_dtype)
+    ):
         raise TypeError(mixed_err)
 
     other = other.astype(common_dtype)

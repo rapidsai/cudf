@@ -919,3 +919,14 @@ def test_nested_list_extract_host_scalars(data, idx):
     series = cudf.Series(data)
 
     assert series[idx] == data[idx]
+
+
+def test_list_iterate_error():
+    s = cudf.Series([[[[1, 2]], [[2], [3]]], [[[2]]], [[[3]]]])
+    with pytest.raises(TypeError):
+        iter(s.list)
+
+
+def test_list_struct_list_memory_usage():
+    df = cudf.DataFrame({"a": [[{"b": [1]}]]})
+    assert df.memory_usage().sum() == 16

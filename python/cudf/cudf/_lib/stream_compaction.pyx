@@ -59,6 +59,8 @@ def drop_nulls(list columns, how="any", keys=None, thresh=None):
     cdef unique_ptr[table] c_result
     cdef table_view source_table_view = table_view_from_columns(columns)
 
+    if how not in {"any", "all"}:
+        raise ValueError("how must be 'any' or 'all'")
     with nogil:
         c_result = move(
             cpp_drop_nulls(
