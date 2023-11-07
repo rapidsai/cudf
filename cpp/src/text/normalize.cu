@@ -242,22 +242,24 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
 
 // external APIs
 
-std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& input,
+                                               rmm::cuda_stream_view stream,
                                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::normalize_spaces(strings, cudf::get_default_stream(), mr);
+  return detail::normalize_spaces(input, stream, mr);
 }
 
 /**
  * @copydoc nvtext::normalize_characters
  */
-std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view const& input,
                                                    bool do_lower_case,
+                                                   rmm::cuda_stream_view stream,
                                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::normalize_characters(strings, do_lower_case, cudf::get_default_stream(), mr);
+  return detail::normalize_characters(input, do_lower_case, stream, mr);
 }
 
 }  // namespace nvtext
