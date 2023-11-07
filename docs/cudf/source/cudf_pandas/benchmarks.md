@@ -19,7 +19,7 @@ class="title-ref">cudf.pandas</span>.</figcaption>
 indicates we ran into an error when executing one or more queries for
 that solution.
 
-You can see the per-query results [here](https://data.rapids.ai/duckdb-benchmark).
+You can see the per-query results [here](https://data.rapids.ai/duckdb-benchmark/index.html).
 
 ### Steps to reproduce
 
