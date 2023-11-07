@@ -287,6 +287,14 @@ return_metadata : bool, default False
     include the file path metadata (relative to `root_path`).
     To request metadata binary blob when using with ``partition_cols``, Pass
     ``return_metadata=True`` instead of specifying ``metadata_file_path``
+use_dictionary : bool, default True
+    When ``False``, prevents the use of dictionary encoding for Parquet page
+    data. When ``True``, dictionary encoding is preferred when not disabled due
+    to dictionary size constraints.
+header_version : {{'1.0', '2.0'}}, default "1.0"
+    Controls whether to use version 1.0 or version 2.0 page headers when
+    encoding. Version 1.0 is more portable, but version 2.0 enables the
+    use of newer encoding schemes.
 force_nullable_schema : bool, default False.
     If True, writes all columns as `null` in schema.
     If False, columns are written as `null` if they contain null values,
