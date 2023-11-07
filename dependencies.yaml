@@ -480,11 +480,11 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - rapids_dask_dependency==23.12.00.*
+          - rapids-dask-dependency==23.12.00.*
           - cupy>=12.0.0
       - output_types: pyproject
         packages:
-          - rapids_dask_dependency==23.12.*
+          - rapids-dask-dependency==23.12.*
           - &cudf cudf==23.12.*
           - *cupy_pip
   run_cudf_kafka:
