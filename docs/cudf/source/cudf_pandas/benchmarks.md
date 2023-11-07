@@ -1,22 +1,49 @@
 # Benchmarks
 
-We reproduce the duckdb (h2o) join and groupby benchmarks by doing the
-following:
+## Database-like ops benchmarks
 
-1. Pull latest from duckdblabs/db-benchmark
-2. Build environments for pandas and polars: virtualenv pandas/py-pandas virtualenv polars/py-polars
+We reproduced the [Database-like ops benchmark](https://duckdblabs.github.io/db-benchmark/)
+including a solution using `cudf.pandas`. Here are the results:
+
+<figure>
+<img src="../_static/duckdb-benchmark-groupby-join.png"
+class="align-center" width="750"
+alt="_static/duckdb-benchmark-groupby-join.png" />
+<figcaption style="text-align: center;">Results of the <a
+href="https://duckdblabs.github.io/db-benchmark/">Database-like ops
+benchmark</a> including <span
+class="title-ref">cudf.pandas</span>.</figcaption>
+</figure>
+
+**Note:** A missing bar in the results for a particular solution
+indicates we ran into an error when executing one or more queries for
+that solution.
+
+You can see the per-query results [here](https://data.rapids.ai/duckdb-benchmark).
+
+### Steps to reproduce
+
+Below are the steps to reproduce the `cudf.pandas` results.  The steps
+to reproduce the results for other solutions are documented in
+<https://github.com/duckdblabs/db-benchmark#reproduce>.
+
+1. Clone the latest <https://github.com/duckdblabs/db-benchmark>
+2. Build environments for pandas:
+
+```bash
+virtualenv pandas/py-pandas
+```
+
 3. Activate pandas virtualenv:
 
 ```bash
 source pandas/py-pandas/bin/activate
 ```
 
-4. Install cudf-private:
+4. Install cudf:
 
 ```bash
-python -m pip install \
---extra-index-url=https://USERNAME:PASSWORD@pypi.k8s.rapids.ai/simple \
-cudf-private-cu11
+pip install --extra-index-url=https://pypi.nvidia.com cudf-cu12  # or cudf-cu11
 ```
 
 5. Modify pandas join/group code to use `cudf.pandas`:
@@ -43,7 +70,7 @@ index 58eeb26..2ddb209 100755
   print("# join-pandas.py", flush=True)
 ```
 
-  1. Run Modified pandas benchmarks:
+6. Run Modified pandas benchmarks:
 
 ```bash
 ./_launcher/solution.R --solution=pandas --task=groupby --nrow=1e7

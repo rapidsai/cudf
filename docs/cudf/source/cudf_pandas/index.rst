@@ -1,81 +1,49 @@
-cuDF Pandas Accelerator Mode
------------------------------
+cudf.pandas
+-----------
 
-Open Beta: Accelerating pandas with zero code change
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+cuDF pandas accelerator mode (``cudf.pandas``) is built on cuDF and
+**accelerates pandas code** on the GPU.  It supports **100% of the
+Pandas API**, using the GPU for supported operations, and
+automatically **falling back to pandas** for other operations.
 
-.. image:: ../_static/colab.png
+.. code-block:: python
+
+   %load_ext cudf.pandas
+   # pandas API is now GPU accelerated
+
+   import pandas as pd
+
+   df = pd.read_csv("filepath")  # uses the GPU!
+   df.groupby("col").mean()  # uses the GPU!
+   df.rolling(window=3).sum()  # uses the GPU!
+   df.apply(set, axis=1)  # uses the CPU (fallback)
+
+.. figure:: ../_static/colab.png
     :width: 200px
+    :target: https://nvda.ws/rapids-cudf
 
-`Try it now on Colab <http://nvda.ws/rapids-cudf>`_
-
-
-A unified CPU/GPU experience that brings best-in-class performance to your
-pandas workflows, ``cudf.pandas`` is designed for people who want to keep using
-pandas as data sizes grow into the GBs and performance slows.
+    Try it on Google Colab!
 
 +---------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------+
 | **Zero Code Change Acceleration**                                                           | **Third-Party Library Compatible**                                                                                  |
 |                                                                                             |                                                                                                                     |
-| Just load the cuDF IPython/Jupyter Notebook extension or use the cuDF Python module option. | pandas accelerator mode is compatible with most third-party libraries that operate on pandas objects.               |
+| Just ``%load_ext cudf.pandas`` in Jupyter, or pass ``-m cudf.pandas`` on the command line.  | ``cudf.pandas`` is compatible with most third-party libraries that use pandas.                                      |
 +---------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------+
-| **One Codepath**                                                                            | **Designed for When Pandas is Too Slow**                                                                            |
+| **Run the same code on CPU or GPU**                                                         | **100% of the Pandas API**                                                                                          |
 |                                                                                             |                                                                                                                     |
-| Develop, test, and run in production with a single codebase, regardless of hardware.        | Keep using pandas rather than learning new frameworks or paradigms as your data grows. Just accelerate it on a GPU. |
+| Nothing changes, not even your `import` statements, when going from CPU to GPU.             | Combines the full flexibility of Pandas with blazing fast performance of cuDF                                       |
 +---------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------+
 
-
-Speeding up pandas with cuDF
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-``cudf.pandas`` can be used with Jupyter Notebooks or any Python script just by
-loading a notebook extension or adding one command-line flag:
-
-
-+--------------------------------------+------------------------------------+
-| Python Script                        | Notebook                           |
-+======================================+====================================+
-| .. code-block:: python               | .. code-block:: python             |
-|                                      |                                    |
-|    import pandas as pd               |    %load_ext cudf.pandas           |
-|    df = pd.read_csv("filepath")      |                                    |
-|    df.groupby("col").mean()          |    import pandas as pd             |
-|    df.rolling(window=3).sum()        |    df = pd.read_csv("filepath")    |
-|                                      |    df.groupby("col").mean()        |
-|    # python -m cudf.pandas script.py |    df.rolling(window=3).sum()      |
-|                                      |                                    |
-+--------------------------------------+------------------------------------+
-
-
-With cuDF's pandas Accelerator Mode, you can take pandas from worst-to-first on
-the DuckDB dataset benchmarks without changing any code (0.5 GB and 5 GB
-scales).
-
-
-.. image:: ../_static/cudf.pandas-duckdb.png
-    :width: 500px
-    :class: align-center
-
-Learn more about these benchmark results and how to reproduce them in the
-:ref:`benchmarks`.
-
-Getting Started
----------------
-
-.. image:: ../_static/colab.png
-    :width: 200px
-
-`Try it now on Colab <http://nvda.ws/rapids-cudf>`_
-Take cuDF's new pandas Accelerator Mode for a test-drive in a free `GPU-enabled
-notebook <http://nvda.ws/rapids-cudf>`_ environment using your Google account.
-
-Visit the `RAPIDS Quick Start <https://rapids.ai/#quick-start>`_ to get
-up-and-running on every other platform.
+Starting with the version 23.10.01 release ``cudf.pandas`` is
+available in Open Beta, as part of the ``cudf`` package .  See `RAPIDS
+Quick Start <https://rapids.ai/#quick-start>`_ to get up-and-running
+with ``cudf``.
 
 .. toctree::
    :maxdepth: 1
    :caption: Contents:
 
+   usage
+   benchmarks
    how-it-works
    faq
-   benchmarks

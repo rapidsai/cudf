@@ -1,26 +1,49 @@
 # FAQ and Known Issues
 
+## When should I use `cudf.pandas` vs using the cuDF library directly?
+
+`cudf.pandas` is the quickest and easiest way to get pandas code
+running on the GPU. However, there are some situations in which using
+the cuDF library directly should be considered.
+
+- cuDF implements a subset of the pandas API, while `cudf.pandas` will
+  fall back automatically to pandas as needed. If you can write your
+  code to use just the operations supported by cuDF, you will benefit
+  from increased performance by using cuDF directly.
+
+- cuDF does offer some functions and methods that pandas does not. For
+  example, cuDF has a [`.list`
+  accessor](https://docs.rapids.ai/api/cudf/stable/api_docs/list_handling/)
+  for working with list-like data. If you need access to the
+  additional functionality in cuDF, you will need to use the cuDF
+  package directly.
+
 ## How closely does this match pandas?
 
-Every change to cuDF pandas Accelerator Mode is tested against the entire
-pandas unit test suite.  Currently, we're passing **93%** of the 187,000+ unit
-tests, with a goal of passing 100%.
+You can use 100% of the pandas API and most things will work
+identically to pandas.
 
-For most pandas workflows, things will "just work". In a small set of
-scenarios, we may hit edge cases that throw errors or don't perfectly match
-standard pandas. You can learn more about these edge cases in
+`cudf.pandas` is tested against the entire pandas unit test suite.
+Currently, we're passing **93%** of the 187,000+ unit tests, with the
+goal of passing 100%. Test failures are typically for edge cases and
+due to the small number of behavioral differences between cuDF and
+pandas. You can learn more about these edge cases in
 [Known Limitations](#are-there-any-known-limitations)
 
+We also run nightly tests that track interactions between
+`cudf.pandas` and other third party libraries. See
+[Third-Party Library Compatibility](#does-it-work-with-third-party-libraries).
 
-## How can we tell if cudf.pandas is active?
+## How can I tell if `cudf.pandas` is active?
 
-`cudf.pandas` will be active if you've loaded the extension or executed a Python
-script with the module option. You should keep using pandas and things will
-just work.
+You shouldn't have to write any code differently depending on whether
+`cudf.pandas` is in use or not. You should use `pandas` and things
+should just work.
 
-In a few circumstances during workflow testing or library development, you may
-want to explicitly verify that cudf.pandas is active. To do that, print the
-pandas module in your code and review the output:
+In a few circumstances during testing and development however, you may
+want to explicitly verify that `cudf.pandas` is active. To do that,
+print the pandas module in your code and review the output; it should
+look something like this:
 
 ```python
 %load_ext cudf.pandas
@@ -30,16 +53,12 @@ print(pd)
 <module 'pandas' (ModuleAccelerator(fast=cudf, slow=pandas))>
 ```
 
-## Does this work with third-party libraries?
+## Does it work with third-party libraries?
 
-While we do not guarantee `cudf.pandas` will work with every external library, we
-do actively test compatibility with many popular third-party libraries that
-operate on pandas objects. cudf.pandas will not only work but will
-accelerate pandas operations within these libraries.
-
-As part of our CI/CD system, we currently test compatibility with the
-following Python libraries:
-
+`cudf.pandas` is tested with numerous popular third-party libraries.
+`cudf.pandas` will not only work but will accelerate pandas operations
+within these libraries. As part of our CI/CD system, we currently test
+common interactions with the following Python libraries:
 
 | Library          | Status |
 |------------------|--------|
@@ -59,12 +78,15 @@ following Python libraries:
 | Tensorflow       | ✅      |
 | XGBoost          | ✅      |
 
+Please review the section on [Known Limitations](#are-there-any-known-limitations)
+for details about what is expected not to work (and why).
 
-## Can I use this with Dask and PySpark?
+## Can I use this with Dask or PySpark?
 
-cudf.pandas is not designed for distributed or out-of-core computing (OOC)
-workflows today. If you are looking for accelerated OOC and distributed
-solutions for data processing we recommend Dask and Apache Spark.
+`cudf.pandas` is not designed for distributed or out-of-core computing
+(OOC) workflows today. If you are looking for accelerated OOC and
+distributed solutions for data processing we recommend Dask and Apache
+Spark.
 
 Both Dask and Apache Spark support accelerated computing through configuration
 based interfaces. Dask allows you to [configure the dataframe
@@ -73,19 +95,25 @@ cuDF (learn more in [this
 blog](https://medium.com/rapids-ai/easy-cpu-gpu-arrays-and-dataframes-run-your-dask-code-where-youd-like-e349d92351d)) and the [RAPIDS Accelerator for Apache Spark](https://nvidia.github.io/spark-rapids/)
 provides a similar configuration-based plugin for Spark.
 
-
 ## Are there any known limitations?
 
-There are a few known limitations that users should be aware of, depending on
-their workflow:
+There are a few known limitations that you should be aware of:
 
-
-- `cudf.pandas` can't smoothly interact with tools or interfaces that convert data
-formats using the NumPy C API
-  - For example, you can `torch.tensor(df.values)` but not `torch.from_numpy(df.values), as the latter uses the NumPy C API
-- Joins are not currently guaranteed to maintain the same row ordering as standard pandas
-- cudf.pandas isn't compatible with directly using `import cudf` in workflows and is intended for pandas-based workflows.
-- Global variables can - be accessed but can't be modified during CPU-fallback
+- Because fallback involves copying data from GPU to CPU and back,
+  [value mutability](https://pandas.pydata.org/pandas-docs/stable/getting_started/overview.html#mutability-and-copying-of-data)
+  of Pandas objects is not always guaranteed. You should follow the
+  pandas recommendation to favor immutable operations.
+- `cudf.pandas` can't currently interface smoothly with functions that
+  interact with objects using a C API (such as the Python or NumPy C
+  API)
+  - For example, you can write `torch.tensor(df.values)` but not
+    `torch.from_numpy(df.values)`, as the latter uses the NumPy C API
+- For performance reasons, joins and join-based operations are not
+  currently implemented to maintain the same row ordering as standard
+  pandas
+- `cudf.pandas` isn't compatible with directly using `import cudf`
+   and is intended to be used with pandas-based workflows.
+- Global variables can be accessed but can't be modified during CPU-fallback
 
   ```python
    %load_ext cudf.pandas
@@ -105,28 +133,17 @@ formats using the NumPy C API
    print(lst) # lst is unchanged, as this specific UDF could not run on the GPU
    [10]
    ```
-- `cudf.pandas` (and cuDF in general) is currently only compatible with pandas 1.5.x
-
-
+- `cudf.pandas` (and cuDF in general) is currently only compatible with pandas 1.5.x.
 
 ## Can I force running on the CPU?
 
-If needed, GPU acceleration may be disabled when using cudf.pandas for testing
-or benchmarking purposes. To do so, set the `CUDF_PANDAS_FALLBACK_MODE`
-environment variable, e.g.
+To run your code on CPU, just run without activating `cudf.pandas`,
+and "regular pandas" will be used.
+
+If needed, GPU acceleration may be disabled when using `cudf.pandas`
+for testing or benchmarking purposes. To do so, set the
+`CUDF_PANDAS_FALLBACK_MODE` environment variable, e.g.
 
 ```bash
 CUDF_PANDAS_FALLBACK_MODE=1 python -m cudf.pandas some_script.py
 ```
-
-## When should I use cudf.pandas vs using cudf directly?
-
-- Although it largely mimics the pandas API, cuDF does offer some functionality
-that is not directly supported by pandas. If you need access to this
-functionality, you will need to use the `cudf` package directly because you
-cannot use `cudf` and the `cudf.pandas` module in the same script
-
-- If you know that all the functionality you require is supported by cudf and you
-do not need the additional pandas compatibility promised by cuDF's pandas
-compatibility mode (e.g. join ordering) then you will benefit from
-increased performance by using `cudf` directly.

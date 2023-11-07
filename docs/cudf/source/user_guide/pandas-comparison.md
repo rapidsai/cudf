@@ -6,7 +6,10 @@ differences between cuDF and Pandas, both in terms of API and
 behaviour.  This page documents the similarities and differences
 between cuDF and Pandas.
 
-Starting with the v23.10 release, cuDF provides a pandas accelerator mode (`cudf.pandas`), allowing you to bring accelerated computing to your pandas workflows without requiring any code change. To learn more about this new feature, visit the [pandas accelerator mode documentation](../cudf_pandas/index).
+Starting with the v23.10.01 release, cuDF also provides a pandas
+accelerator mode (`cudf.pandas`) that supports 100% of the pandas API
+and accelerates pandas code on the GPU without requiring any code
+change.  See the [`cudf.pandas` documentation](../cudf_pandas/index).
 
 ## Supported operations
 
