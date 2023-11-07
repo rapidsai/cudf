@@ -555,7 +555,7 @@ __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* d
 /**
  * @brief Kernel for computing string page bounds information.
  *
- * This kernel traverses the repetition and definition level data to determ start and end values
+ * This kernel traverses the repetition and definition level data to determine start and end values
  * for pages with string-like data. Also calculates the number of null and valid values in the
  * page. Does nothing if the page mask is neither `STRING` nor `DELTA_BYTE_ARRAY`. On exit the
  * `num_nulls`, `num_valids`, `start_val` and `end_val` fields of the `PageInfo` struct will be
