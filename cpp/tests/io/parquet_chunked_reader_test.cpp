@@ -1014,3 +1014,84 @@ TEST_F(ParquetChunkedReaderTest, InputLimitSimple)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->get_column(0));
   }
 }
+
+struct ParquetChunkedSubRowgroupReaderTest : public cudf::test::BaseFixture {};
+
+void sub_rowgroup_test(std::string const& filepath,
+                       cudf::table_view const& t,
+                       size_t output_limit,
+                       size_t input_limit)
+{
+  // uncompressed, no dictionary
+  {
+    cudf::io::parquet_writer_options out_opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, t)
+        .compression(cudf::io::compression_type::NONE)
+        .dictionary_policy(cudf::io::dictionary_policy::NEVER);
+    cudf::io::write_parquet(out_opts);
+
+    auto result = chunked_read(filepath, output_limit, input_limit);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.first, t);
+  }
+
+  // compressed, no dictionary
+  {
+    cudf::io::parquet_writer_options out_opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, t)
+        .compression(cudf::io::compression_type::SNAPPY)
+        .dictionary_policy(cudf::io::dictionary_policy::NEVER);
+    cudf::io::write_parquet(out_opts);
+
+    auto result = chunked_read(filepath, output_limit, input_limit);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.first, t);
+  }
+
+  // uncompressed, dictionary
+  {
+    cudf::io::parquet_writer_options out_opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, t)
+        .compression(cudf::io::compression_type::NONE)
+        .dictionary_policy(cudf::io::dictionary_policy::ALWAYS);
+    cudf::io::write_parquet(out_opts);
+
+    auto result = chunked_read(filepath, output_limit, input_limit);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.first, t);
+  }
+
+  // compressed, dictionary
+  {
+    cudf::io::parquet_writer_options out_opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, t)
+        .compression(cudf::io::compression_type::SNAPPY)
+        .dictionary_policy(cudf::io::dictionary_policy::ALWAYS);
+    cudf::io::write_parquet(out_opts);
+
+    auto result = chunked_read(filepath, output_limit, input_limit);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.first, t);
+  }
+}
+
+TEST_F(ParquetChunkedSubRowgroupReaderTest, SingleFixedWidthColumnNoSplits)
+{
+  auto filepath           = std::string("table_with_dict.parquet");
+  constexpr auto num_rows = 100;
+  auto iter1 = cudf::detail::make_counting_transform_iterator(0, [](int i) { return 15; });
+  cudf::test::fixed_width_column_wrapper<int> col1(iter1, iter1 + num_rows);
+  auto tbl = cudf::table_view{{col1}};
+  sub_rowgroup_test(filepath, tbl, 0, 100 * 1024 * 1024);
+}
+
+TEST_F(ParquetChunkedSubRowgroupReaderTest, MultipleFixedWidthColumns)
+{
+  auto filepath           = std::string("multiple_col_fixed_width.parquet");
+  constexpr auto num_rows = 200000;
+
+  auto iter1 = thrust::make_counting_iterator<int>(0);
+  cudf::test::fixed_width_column_wrapper<int> col1(iter1, iter1 + num_rows);
+
+  auto iter2 = thrust::make_counting_iterator<double>(0);
+  cudf::test::fixed_width_column_wrapper<double> col2(iter2, iter2 + num_rows);
+
+  auto tbl = cudf::table_view{{col1, col2}};
+  sub_rowgroup_test(filepath, tbl, 0, 1 * 1024 * 1024);
+}

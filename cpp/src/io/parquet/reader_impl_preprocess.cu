@@ -300,32 +300,31 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
 }
 
 /**
- * @brief Decode the page information from the given column chunks.
+ * @brief Decode the page information for a given pass.
  *
- * @param chunks List of column chunk descriptors
- * @param pages List of page information
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @returns The size in bytes of level type data required
+ * @param pass_intermediate_data The struct containing pass information
+ *
  */
-int decode_page_headers(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks,
-                        cudf::detail::hostdevice_vector<PageInfo>& pages,
-                        rmm::cuda_stream_view stream)
+void decode_page_headers(pass_intermediate_data& pass, rmm::cuda_stream_view stream)
 {
-  cudf::detail::hostdevice_vector<chunk_page_info> chunk_page_info(chunks.size(), stream);
+  cudf::detail::hostdevice_vector<chunk_page_info> chunk_page_info(pass.chunks.size(), stream);
 
   // IMPORTANT : if you change how pages are stored within a chunk (dist pages, then data pages),
   // please update preprocess_nested_columns to reflect this.
-  for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
-    chunks[c].max_num_pages  = chunks[c].num_data_pages + chunks[c].num_dict_pages;
-    chunk_page_info[c].pages = pages.device_ptr(page_count);
-    page_count += chunks[c].max_num_pages;
+  for (size_t c = 0, page_count = 0; c < pass.chunks.size(); c++) {
+    pass.chunks[c].max_num_pages = pass.chunks[c].num_data_pages + pass.chunks[c].num_dict_pages;
+    chunk_page_info[c].pages     = pass.pages.device_ptr(page_count);
+    page_count += pass.chunks[c].max_num_pages;
   }
 
   kernel_error error_code(stream);
-  chunks.host_to_device_async(stream);
+  pass.chunks.host_to_device_async(stream);
   chunk_page_info.host_to_device_async(stream);
-  DecodePageHeaders(
-    chunks.device_ptr(), chunk_page_info.device_ptr(), chunks.size(), error_code.data(), stream);
+  DecodePageHeaders(pass.chunks.device_ptr(),
+                    chunk_page_info.device_ptr(),
+                    pass.chunks.size(),
+                    error_code.data(),
+                    stream);
 
   if (error_code.value() != 0) {
     // TODO(ets): if an unsupported encoding was detected, do extra work to figure out which one
@@ -334,7 +333,7 @@ int decode_page_headers(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks
 
   // compute max bytes needed for level data
   auto level_bit_size = cudf::detail::make_counting_transform_iterator(
-    0, [chunks = chunks.d_begin()] __device__(int i) {
+    0, [chunks = pass.chunks.d_begin()] __device__(int i) {
       auto c = chunks[i];
       return static_cast<int>(
         max(c.level_bits[level_type::REPETITION], c.level_bits[level_type::DEFINITION]));
@@ -342,9 +341,10 @@ int decode_page_headers(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks
   // max level data bit size.
   int const max_level_bits = thrust::reduce(rmm::exec_policy(stream),
                                             level_bit_size,
-                                            level_bit_size + chunks.size(),
+                                            level_bit_size + pass.chunks.size(),
                                             0,
                                             thrust::maximum<int>());
+  pass.level_type_size     = std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 
   // sort the pages in schema order.
   //
@@ -366,28 +366,61 @@ int decode_page_headers(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks
   //
   // We also need to preserve key-relative page ordering, so we need to use a stable sort.
   {
-    rmm::device_uvector<int32_t> page_keys{pages.size(), stream};
+    rmm::device_uvector<int32_t> page_keys{pass.pages.size(), stream};
     thrust::transform(rmm::exec_policy(stream),
-                      pages.d_begin(),
-                      pages.d_begin() + pages.size(),
+                      pass.pages.d_begin(),
+                      pass.pages.d_begin() + pass.pages.size(),
                       page_keys.begin(),
                       [] __device__(PageInfo const& page) { return page.src_col_schema; });
     thrust::stable_sort_by_key(rmm::exec_policy(stream),
                                page_keys.begin(),
                                page_keys.end(),
-                               pages.d_begin(),
+                               pass.pages.d_begin(),
                                thrust::less<int>());
   }
 
-  pages.device_to_host_sync(stream);
+  // compute offsets to each group of input pages.
+  // page_keys:   1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
+  //
+  // result:      0,          4,          8
+  rmm::device_uvector<size_type> page_counts(pass.pages.size() + 1, stream);
+  auto page_keys             = make_page_key_iterator(pass.pages);
+  auto const page_counts_end = thrust::reduce_by_key(rmm::exec_policy(stream),
+                                                     page_keys,
+                                                     page_keys + pass.pages.size(),
+                                                     thrust::make_constant_iterator(1),
+                                                     thrust::make_discard_iterator(),
+                                                     page_counts.begin())
+                                 .second;
+  auto const num_page_counts = page_counts_end - page_counts.begin();
+  pass.page_offsets = cudf::detail::hostdevice_vector<size_type>(num_page_counts + 1, stream);
+  thrust::exclusive_scan(rmm::exec_policy(stream),
+                         page_counts.begin(),
+                         page_counts.begin() + num_page_counts + 1,
+                         pass.page_offsets.d_begin());
+
+  // setup dict_page for each chunk if necessary
+  auto iter = thrust::make_counting_iterator(0);
+  thrust::for_each(rmm::exec_policy(stream),
+                   iter,
+                   iter + pass.chunks.size(),
+                   [chunks       = pass.chunks.d_begin(),
+                    pages        = pass.pages.d_begin(),
+                    page_offsets = pass.page_offsets.d_begin()] __device__(size_t i) {
+                     auto& chunk = chunks[i];
+                     if (chunk.num_dict_pages > 0) { chunk.dict_page = &pages[page_offsets[i]]; }
+                   });
+
+  pass.page_offsets.device_to_host_async(stream);
+  pass.pages.device_to_host_async(stream);
+  pass.chunks.device_to_host_async(stream);
+  stream.synchronize();
 
   // validate page encodings
-  CUDF_EXPECTS(std::all_of(pages.begin(),
-                           pages.end(),
+  CUDF_EXPECTS(std::all_of(pass.pages.begin(),
+                           pass.pages.end(),
                            [](auto const& page) { return is_supported_encoding(page.encoding); }),
                "Unsupported page encoding detected");
-
-  return std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 }
 
 }  // namespace
@@ -686,7 +719,7 @@ void reader::impl::load_compressed_data()
   pages = cudf::detail::hostdevice_vector<PageInfo>(total_pages, total_pages, _stream);
 
   // decoding of column/page information
-  pass.level_type_size = decode_page_headers(chunks, pages, _stream);
+  decode_page_headers(pass, _stream);
 }
 
 namespace {

@@ -120,6 +120,8 @@ class reader::impl {
    */
   table_with_metadata read_chunk();
 
+  // top level functions involved with ratcheting through the passes, subpasses
+  // and output chunks of the read process
  private:
   /**
    * @brief Perform the necessary data preprocessing for parsing file later on.
@@ -138,21 +140,6 @@ class reader::impl {
                     std::optional<std::reference_wrapper<ast::expression const>> filter);
 
   /**
-   * @brief Read the set of column chunks to be processed for this pass.
-   *
-   * Does not decompress the chunk data.
-   *
-   * @return pair of boolean indicating if compressed chunks were found and a vector of futures for
-   * read completion
-   */
-  std::pair<bool, std::vector<std::future<void>>> read_column_chunks();
-
-  /**
-   * @brief Load compressed data and page information for the current pass.
-   */
-  void load_compressed_data();
-
-  /**
    * @brief Preprocess step for the entire file.
    *
    * Only ever called once. This function reads in rowgroup and associated chunk
@@ -169,17 +156,62 @@ class reader::impl {
                        std::optional<std::reference_wrapper<ast::expression const>> filter);
 
   /**
-   * @brief Preprocess step for the next input read pass.
+   * @brief Ratchet the pass/subpass/chunk process forward.
+   */
+  void handle_chunking(bool uses_custom_row_bounds);
+
+  /**
+   * @brief Setup step for the next input read pass.
    *
    * A 'pass' is defined as a subset of row groups read out of the globally
    * requested set of all row groups.
    */
-  void preprocess_next_pass();
+  void setup_next_pass();
 
   /**
-   * @brief Ratchet the pass/subpass/chunk process forward.
+   * @brief Setup step for the next decompression subpass.
+   *
+   * A 'subpass' is defined as a subset of pages within a pass that are
+   * decompressed a decoded as a batch. Subpasses may be further subdivided
+   * into output chunks.
    */
-  void handle_chunking(bool uses_custom_row_bounds);
+  void setup_next_subpass(bool uses_custom_row_bounds);
+
+  /**
+   * @brief Read a chunk of data and return an output table.
+   *
+   * This function is called internally and expects all preprocessing steps have already been done.
+   *
+   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
+   *        bounds
+   * @param filter Optional AST expression to filter output rows
+   * @return The output table along with columns' metadata
+   */
+  table_with_metadata read_chunk_internal(
+    bool uses_custom_row_bounds,
+    std::optional<std::reference_wrapper<ast::expression const>> filter);
+
+  // utility functions
+ private:
+  /**
+   * @brief Read the set of column chunks to be processed for this pass.
+   *
+   * Does not decompress the chunk data.
+   *
+   * @return pair of boolean indicating if compressed chunks were found and a vector of futures for
+   * read completion
+   */
+  std::pair<bool, std::vector<std::future<void>>> read_column_chunks();
+
+  /**
+   * @brief Load compressed data and page information for the current pass.
+   */
+  void load_compressed_data();
+
+  /**
+   * @brief Decompress dictionary data pages for a pass
+   */
+  void decompress_dict_data();
 
   /**
    * @brief Build string dictionary indices for a pass.
@@ -232,20 +264,6 @@ class reader::impl {
   void populate_metadata(table_metadata& out_metadata);
 
   /**
-   * @brief Read a chunk of data and return an output table.
-   *
-   * This function is called internally and expects all preprocessing steps have already been done.
-   *
-   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
-   *        bounds
-   * @param filter Optional AST expression to filter output rows
-   * @return The output table along with columns' metadata
-   */
-  table_with_metadata read_chunk_internal(
-    bool uses_custom_row_bounds,
-    std::optional<std::reference_wrapper<ast::expression const>> filter);
-
-  /**
    * @brief Finalize the output table by adding empty columns for the non-selected columns in
    * schema.
    *
@@ -296,11 +314,6 @@ class reader::impl {
    * @brief Computes all of the passes we will perform over the file.
    */
   void compute_input_passes();
-
-  /**
-   * @brief Close out the existing pass (if any) and prepare for the next pass.
-   */
-  void setup_next_pass();
 
   /**
    * @brief Given a set of pages that have had their sizes computed by nesting level and

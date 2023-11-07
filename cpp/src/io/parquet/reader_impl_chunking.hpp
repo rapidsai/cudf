@@ -107,6 +107,7 @@ struct pass_intermediate_data {
   // of how many pages we have processed so far
   std::vector<size_type> page_processed_counts{};
 
+  rmm::device_buffer decomp_dict_data{0, rmm::cuda_stream_default};
   rmm::device_uvector<string_index_pair> str_dict_index{0, rmm::cuda_stream_default};
 
   int level_type_size{0};
