@@ -76,7 +76,7 @@ extensions = [
         ),
         libraries=["cudf", "cudf_kafka"],
         language="c++",
-        extra_compile_args=["-std=c++17", "-DFMT_HEADER_ONLY=1"],
+        extra_compile_args=["-std=c++17", "-DFMT_HEADER_ONLY=1", "-DLIBCUDACXX_ENABLE_EXPERIMENTAL_MEMORY_RESOURCE=1"],
     )
 ]
 
