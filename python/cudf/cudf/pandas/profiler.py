@@ -49,7 +49,7 @@ profiler.print_per_line_stats()
 """
 
 _cpu_issue_text = """\
-This workflow could not be completed entirely on the GPU. \
+Not all pandas operations ran on the GPU. \
 The following functions required CPU fallback:
 
 {cpu_functions_used}

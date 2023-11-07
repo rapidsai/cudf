@@ -1,4 +1,4 @@
-# User Guide
+# cuDF User Guide
 
 ```{toctree}
 :maxdepth: 2

@@ -138,7 +138,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         if len(levels) == 0:
             raise ValueError("Must pass non-zero number of levels/codes")
         if not isinstance(codes, cudf.DataFrame) and not isinstance(
-            codes[0], (abc.Sequence, np.ndarray)
+            codes[0], (abc.Sequence, np.ndarray, cp.ndarray)
         ):
             raise TypeError("Codes is not a Sequence of sequences")
 

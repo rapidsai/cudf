@@ -1,10 +1,15 @@
 # Comparison of cuDF and Pandas
 
 cuDF is a DataFrame library that closely matches the Pandas API, but
-it is *not* a full drop-in replacement for Pandas.  There are some
+when used directly is *not* a full drop-in replacement for Pandas.  There are some
 differences between cuDF and Pandas, both in terms of API and
 behaviour.  This page documents the similarities and differences
 between cuDF and Pandas.
+
+Starting with the v23.10.01 release, cuDF also provides a pandas
+accelerator mode (`cudf.pandas`) that supports 100% of the pandas API
+and accelerates pandas code on the GPU without requiring any code
+change.  See the [`cudf.pandas` documentation](../cudf_pandas/index).
 
 ## Supported operations
 
@@ -15,7 +20,7 @@ filtering, concatenating, joining, groupby and window operations -
 among many others.
 
 The best way to check if we support a particular Pandas API is to search
-our [API docs](/api_docs/index).
+our [API docs](/user_guide/api_docs/index).
 
 ## Data types
 
@@ -145,7 +150,7 @@ For example, `s.sum()` is not guaranteed to produce identical results
 to Pandas nor produce identical results from run to run, when `s` is a
 Series of floats.  If you need to compare floating point results, you
 should typically do so using the functions provided in the
-[`cudf.testing`](/api_docs/general_utilities)
+[`cudf.testing`](/user_guide/api_docs/general_utilities)
 module, which allow you to compare values up to a desired precision.
 
 ## Column names
