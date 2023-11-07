@@ -415,10 +415,11 @@ std::unique_ptr<column> cast(column_view const& input,
 
 std::unique_ptr<column> cast(column_view const& input,
                              data_type type,
+                             rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::cast(input, type, cudf::get_default_stream(), mr);
+  return detail::cast(input, type, stream, mr);
 }
 
 }  // namespace cudf
