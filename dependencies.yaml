@@ -403,6 +403,7 @@ dependencies:
         packages:
           - dask-cuda==23.10.*
           - *doxygen
+          - libarrow=12
           - make
           - myst-nb
           - nbsphinx
