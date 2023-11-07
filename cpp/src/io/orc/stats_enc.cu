@@ -405,7 +405,8 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional sint64 minimumUtc = 3; // min,max values saved as milliseconds since UNIX epoch
         //  optional sint64 maximumUtc = 4;
         //  optional int32 minimumNanos = 5; // lower 6 TS digits for min/max to achieve nanosecond
-        //  precision optional int32 maximumNanos = 6;
+        //  precision
+        // optional int32 maximumNanos = 6;
         // }
         if (s->chunk.has_minmax) {
           cur[0] = 9 * 8 + ProtofType::FIXEDLEN;
@@ -416,12 +417,12 @@ __global__ void __launch_bounds__(encode_threads_per_block)
             split_nanosecond_timestamp(s->chunk.max_value.i_val);
 
           // minimum/maximum are the same as minimumUtc/maximumUtc as we always write files in UTC
-          cur          = pb_put_int(cur, 1, min_ms);            // minimum
-          cur          = pb_put_int(cur, 2, max_ms);            // maximum
-          cur          = pb_put_int(cur, 3, min_ms);            // minimumUtc
-          cur          = pb_put_int(cur, 4, max_ms);            // maximumUtc
-          cur          = pb_put_int(cur, 5, min_ns_remainder);  // minimumNanos
-          cur          = pb_put_int(cur, 6, max_ns_remainder);  // maximumNanos
+          cur          = pb_put_int(cur, 1, min_ms);             // minimum
+          cur          = pb_put_int(cur, 2, max_ms);             // maximum
+          cur          = pb_put_int(cur, 3, min_ms);             // minimumUtc
+          cur          = pb_put_int(cur, 4, max_ms);             // maximumUtc
+          cur          = pb_put_uint(cur, 5, min_ns_remainder);  // minimumNanos
+          cur          = pb_put_uint(cur, 6, max_ns_remainder);  // maximumNanos
           fld_start[1] = cur - (fld_start + 2);
         }
         break;
