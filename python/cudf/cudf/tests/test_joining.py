@@ -2222,6 +2222,13 @@ def test_dataframe_join_on():
         df.join(df, on="a")
 
 
+def test_index_join_return_indexers_notimplemented():
+    index = cudf.RangeIndex(start=0, stop=20, step=2)
+    other = cudf.Index([4, 4, 3, 3])
+    with pytest.raises(NotImplementedError):
+        index.join(other, how="left", return_indexers=True)
+
+
 @pytest.mark.parametrize("how", ["inner", "outer"])
 def test_index_join_names(how):
     idx1 = cudf.Index([10, 1, 2, 4, 2, 1], name="a")

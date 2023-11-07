@@ -845,10 +845,12 @@ class CategoricalColumn(column.ColumnBase):
         ) and cudf._lib.scalar._is_null_host_scalar(value):
             to_add_categories = 0
         else:
+            if cudf.api.types.is_scalar(value):
+                arr = [value]
+            else:
+                arr = value
             to_add_categories = len(
-                cudf.Index(value, nan_as_null=False).difference(
-                    self.categories
-                )
+                cudf.Index(arr, nan_as_null=False).difference(self.categories)
             )
 
         if to_add_categories > 0:
@@ -1287,9 +1289,7 @@ class CategoricalColumn(column.ColumnBase):
     def is_monotonic_decreasing(self) -> bool:
         return bool(self.ordered) and self.as_numerical.is_monotonic_decreasing
 
-    def as_categorical_column(
-        self, dtype: Dtype, **kwargs
-    ) -> CategoricalColumn:
+    def as_categorical_column(self, dtype: Dtype) -> CategoricalColumn:
         if isinstance(dtype, str) and dtype == "category":
             return self
         if (

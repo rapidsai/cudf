@@ -1333,6 +1333,20 @@ def test_csv_reader_index_col():
     assert_eq(cu_df.index, pd_df.index)
 
 
+@pytest.mark.parametrize("index_name", [None, "custom name", 124])
+@pytest.mark.parametrize("index_col", [None, 0, "a"])
+def test_csv_reader_index_names(index_name, index_col):
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3], "b": [10, 11, 12]}, index=["AB", "CD", "EF"]
+    )
+    pdf.index.name = index_name
+
+    buffer = pdf.to_csv()
+    actual = cudf.read_csv(StringIO(buffer), index_col=index_col)
+    expected = pd.read_csv(StringIO(buffer), index_col=index_col)
+    assert_eq(actual, expected)
+
+
 @pytest.mark.parametrize(
     "names", [["a", "b", "c"], [416, 905, 647], range(3), None]
 )

@@ -96,3 +96,25 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: ci/test_wheel_dask_cudf.sh
+  unit-tests-cudf-pandas:
+    needs: wheel-build-cudf
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-23.10
+    with:
+      build_type: nightly
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      script: ci/cudf_pandas_scripts/run_tests.sh
+  pandas-tests:
+    # run the Pandas unit tests
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-23.10
+    with:
+      matrix_filter: map(select(.ARCH == "amd64")) | max_by(.CUDA_VER) | [.]
+      build_type: nightly
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      # pr mode uses the HEAD of the branch, which is also correct for nightlies
+      script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
