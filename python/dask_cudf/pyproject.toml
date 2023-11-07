@@ -9,7 +9,7 @@ requires = [
 
 [project]
 name = "dask_cudf"
-version = "23.10.00"
+version = "23.10.01"
 description = "Utilities for Dask and cuDF interactions"
 readme = { file = "README.md", content-type = "text/markdown" }
 authors = [

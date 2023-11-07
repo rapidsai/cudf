@@ -47,4 +47,4 @@ scl enable devtoolset-11 "java/ci/build-in-docker.sh"
 
 ### The output
 
-You can find the cuDF jar in java/target/ like cudf-23.10.0-SNAPSHOT-cuda11.jar.
+You can find the cuDF jar in java/target/ like cudf-23.10.1-SNAPSHOT-cuda11.jar.
