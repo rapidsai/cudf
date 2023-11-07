@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import builtins
 import pickle
-import warnings
 from collections import abc
 from functools import cached_property
 from itertools import chain
@@ -50,6 +49,7 @@ from cudf._lib.types import size_type_dtype
 from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
+    _is_pandas_nullable_extension_dtype,
     infer_dtype,
     is_bool_dtype,
     is_categorical_dtype,
@@ -548,8 +548,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             idx = len(self) + idx
         if idx > len(self) - 1 or idx < 0:
             raise IndexError("single positional indexer is out-of-bounds")
-
-        return libcudf.copying.get_element(self, idx).value
+        result = libcudf.copying.get_element(self, idx).value
+        if cudf.get_option("mode.pandas_compatible"):
+            if isinstance(result, np.datetime64):
+                return pd.Timestamp(result)
+            elif isinstance(result, np.timedelta64):
+                return pd.Timedelta(result)
+        return result
 
     def slice(
         self, start: int, stop: int, stride: Optional[int] = None
@@ -934,7 +939,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     @property
     def is_unique(self) -> bool:
-        return self.distinct_count() == len(self)
+        return self.distinct_count(dropna=False) == len(self)
 
     @property
     def is_monotonic_increasing(self) -> bool:
@@ -973,17 +978,26 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if self.dtype == dtype:
             return self
         if is_categorical_dtype(dtype):
-            return self.as_categorical_column(dtype, **kwargs)
+            return self.as_categorical_column(dtype)
 
-        dtype = (
-            pandas_dtypes_alias_to_cudf_alias.get(dtype, dtype)
-            if isinstance(dtype, str)
-            else pandas_dtypes_to_np_dtypes.get(dtype, dtype)
-        )
+        if (
+            isinstance(dtype, str)
+            and dtype in pandas_dtypes_alias_to_cudf_alias
+        ):
+            if cudf.get_option("mode.pandas_compatible"):
+                raise NotImplementedError("not supported")
+            else:
+                dtype = pandas_dtypes_alias_to_cudf_alias[dtype]
+        elif _is_pandas_nullable_extension_dtype(dtype) and cudf.get_option(
+            "mode.pandas_compatible"
+        ):
+            raise NotImplementedError("not supported")
+        else:
+            dtype = pandas_dtypes_to_np_dtypes.get(dtype, dtype)
         if _is_non_decimal_numeric_dtype(dtype):
             return self.as_numerical_column(dtype, **kwargs)
         elif is_categorical_dtype(dtype):
-            return self.as_categorical_column(dtype, **kwargs)
+            return self.as_categorical_column(dtype)
         elif cudf.dtype(dtype).type in {
             np.str_,
             np.object_,
@@ -1020,9 +1034,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         else:
             return self.as_numerical_column(dtype, **kwargs)
 
-    def as_categorical_column(self, dtype, **kwargs) -> ColumnBase:
-        if "ordered" in kwargs:
-            ordered = kwargs["ordered"]
+    def as_categorical_column(self, dtype) -> ColumnBase:
+        if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
+            ordered = dtype.ordered
         else:
             ordered = False
 
@@ -1035,11 +1049,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             and dtype.categories is not None
         ):
             labels = self._label_encoding(cats=as_column(dtype.categories))
-            if "ordered" in kwargs:
-                warnings.warn(
-                    "Ignoring the `ordered` parameter passed in `**kwargs`, "
-                    "will be using `ordered` parameter of CategoricalDtype"
-                )
 
             return build_categorical_column(
                 categories=as_column(dtype.categories),
@@ -1540,7 +1549,7 @@ def build_column(
 
     if _is_non_decimal_numeric_dtype(dtype):
         assert data is not None
-        return cudf.core.column.NumericalColumn(
+        col = cudf.core.column.NumericalColumn(
             data=data,
             dtype=dtype,
             mask=mask,
@@ -1548,6 +1557,8 @@ def build_column(
             offset=offset,
             null_count=null_count,
         )
+        return col
+
     if is_categorical_dtype(dtype):
         if not len(children) == 1:
             raise ValueError(
@@ -1938,6 +1949,9 @@ def as_column(
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         desc = arbitrary.__cuda_array_interface__
+        shape = desc["shape"]
+        if len(shape) > 1:
+            raise ValueError("Data must be 1-dimensional")
         current_dtype = np.dtype(desc["typestr"])
 
         arb_dtype = (
@@ -2026,6 +2040,8 @@ def as_column(
             ):
                 return as_column(arbitrary.array)
             elif PANDAS_GE_150 and isinstance(arbitrary.dtype, pd.ArrowDtype):
+                if cudf.get_option("mode.pandas_compatible"):
+                    raise NotImplementedError("not supported")
                 return as_column(pa.array(arbitrary.array, from_pandas=True))
             elif isinstance(arbitrary.dtype, pd.SparseDtype):
                 raise NotImplementedError(
@@ -2059,16 +2075,19 @@ def as_column(
             data = as_column(
                 cupy.asarray(arbitrary), nan_as_null=nan_as_null, dtype=dtype
             )
+        elif isinstance(arbitrary.dtype, pd.PeriodDtype):
+            raise NotImplementedError(
+                "cuDF does not yet support `PeriodDtype`"
+            )
         else:
+            if cudf.get_option(
+                "mode.pandas_compatible"
+            ) and _is_pandas_nullable_extension_dtype(arbitrary.dtype):
+                raise NotImplementedError("not supported")
             pyarrow_array = pa.array(arbitrary, from_pandas=nan_as_null)
-            if (
-                arbitrary.dtype == cudf.dtype("object")
-                and cudf.dtype(pyarrow_array.type.to_pandas_dtype())
-                != cudf.dtype(arbitrary.dtype)
-                and not is_bool_dtype(
-                    cudf.dtype(pyarrow_array.type.to_pandas_dtype())
-                )
-            ):
+            if arbitrary.dtype == cudf.dtype("object") and cudf.dtype(
+                pyarrow_array.type.to_pandas_dtype()
+            ) != cudf.dtype(arbitrary.dtype):
                 raise MixedTypeError("Cannot create column with mixed types")
             if isinstance(pyarrow_array.type, pa.Decimal128Type):
                 pyarrow_type = cudf.Decimal128Dtype.from_arrow(
@@ -2214,6 +2233,10 @@ def as_column(
             data = data.astype(cudf.dtype(dtype))
 
     elif isinstance(arbitrary, pd.arrays.PandasArray):
+        if cudf.get_option(
+            "mode.pandas_compatible"
+        ) and _is_pandas_nullable_extension_dtype(arbitrary.dtype):
+            raise NotImplementedError("not supported")
         if is_categorical_dtype(arbitrary.dtype):
             arb_dtype = arbitrary.dtype
         else:
@@ -2274,6 +2297,8 @@ def as_column(
     elif isinstance(arbitrary, cudf.Scalar):
         data = ColumnBase.from_scalar(arbitrary, length if length else 1)
     elif isinstance(arbitrary, pd.core.arrays.masked.BaseMaskedArray):
+        if cudf.get_option("mode.pandas_compatible"):
+            raise NotImplementedError("not supported")
         data = as_column(pa.Array.from_pandas(arbitrary), dtype=dtype)
     elif (
         (
@@ -2293,6 +2318,12 @@ def as_column(
     ):
         raise NotImplementedError(
             "cuDF does not yet support timezone-aware datetimes"
+        )
+    elif isinstance(
+        arbitrary, (pd.core.arrays.period.PeriodArray, pd.PeriodIndex)
+    ):
+        raise NotImplementedError(
+            f"cuDF does not yet support {type(arbitrary).__name__}"
         )
     elif (
         cudf.get_option("mode.pandas_compatible")
@@ -2408,8 +2439,15 @@ def as_column(
                         # since 'boolean' & 'pd.BooleanDtype' are not
                         # understood by np.dtype below.
                         dtype = "bool"
-                    np_type = np.dtype(dtype).type
-                    pa_type = np_to_pa_dtype(np.dtype(dtype))
+                    np_dtype = np.dtype(dtype)
+                    if np_dtype.kind in {"m", "M"}:
+                        unit = np.datetime_data(np_dtype)[0]
+                        if unit not in {"ns", "us", "ms", "s", "D"}:
+                            raise NotImplementedError(
+                                f"{dtype=} is not supported."
+                            )
+                    np_type = np_dtype.type
+                    pa_type = np_to_pa_dtype(np_dtype)
                 else:
                     # By default cudf constructs a 64-bit column. Setting
                     # the `default_*_bitwidth` to 32 will result in a 32-bit
@@ -2430,6 +2468,15 @@ def as_column(
                         pa_type = np_to_pa_dtype(
                             _maybe_convert_to_default_type("float")
                         )
+
+                if (
+                    cudf.get_option("mode.pandas_compatible")
+                    and isinstance(
+                        arbitrary, (pd.Index, pd.api.extensions.ExtensionArray)
+                    )
+                    and _is_pandas_nullable_extension_dtype(arbitrary.dtype)
+                ):
+                    raise NotImplementedError("not supported")
 
                 pyarrow_array = pa.array(
                     arbitrary,
@@ -2458,14 +2505,21 @@ def as_column(
                     and (
                         cudf.dtype(pyarrow_array.type.to_pandas_dtype())
                         != cudf.dtype(arbitrary.dtype)
-                        and not is_bool_dtype(
-                            cudf.dtype(pyarrow_array.type.to_pandas_dtype())
-                        )
                     )
                 ):
                     raise MixedTypeError(
                         "Cannot create column with mixed types"
                     )
+
+                if (
+                    cudf.get_option("mode.pandas_compatible")
+                    and pa.types.is_integer(pyarrow_array.type)
+                    and pyarrow_array.null_count
+                ):
+                    pyarrow_array = pyarrow_array.cast("float64").fill_null(
+                        np.nan
+                    )
+
                 data = as_column(
                     pyarrow_array,
                     dtype=dtype,
@@ -2542,6 +2596,7 @@ def _construct_array(
                     raise NotImplementedError(
                         "cuDF does not yet support timezone-aware datetimes"
                     )
+                return pd_arbitrary.to_numpy()
             except pd.errors.OutOfBoundsDatetime:
                 # https://github.com/pandas-dev/pandas/issues/55096
                 pass

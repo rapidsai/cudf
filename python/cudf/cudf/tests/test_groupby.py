@@ -1634,7 +1634,7 @@ def test_groupby_count(agg, by):
     expect = pdf.groupby(by).agg(agg)
     got = gdf.groupby(by).agg(agg)
 
-    assert_groupby_results_equal(expect, got, check_dtype=False)
+    assert_groupby_results_equal(expect, got, check_dtype=True)
 
 
 @pytest.mark.parametrize("agg", [lambda x: x.median(), "median"])

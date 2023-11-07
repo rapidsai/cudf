@@ -21,7 +21,7 @@ from cudf._lib.reshape import interleave_columns
 from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
 from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
-from cudf.api.types import is_bool_dtype, is_list_like
+from cudf.api.types import is_bool_dtype, is_float_dtype, is_list_like
 from cudf.core.abc import Serializable
 from cudf.core.column.column import ColumnBase, arange, as_column
 from cudf.core.column_accessor import ColumnAccessor
@@ -424,6 +424,24 @@ class GroupBy(Serializable, Reducible, Scannable):
         if not axis == 0:
             raise NotImplementedError("Only axis=0 is supported.")
 
+        if na_option not in {"keep", "top", "bottom"}:
+            raise ValueError(
+                f"na_option must be one of 'keep', 'top', or 'bottom', "
+                f"but got {na_option}"
+            )
+
+        # TODO: in pandas compatibility mode, we should convert any
+        # NaNs to nulls in any float value columns, as Pandas
+        # treats NaNs the way we treat nulls.
+        if cudf.get_option("mode.pandas_compatible"):
+            if any(
+                is_float_dtype(typ)
+                for typ in self.grouping.values._dtypes.values()
+            ):
+                raise NotImplementedError(
+                    "NaNs are not supported in groupby.rank."
+                )
+
         def rank(x):
             return getattr(x, "rank")(
                 method=method,
@@ -432,7 +450,13 @@ class GroupBy(Serializable, Reducible, Scannable):
                 pct=pct,
             )
 
-        return self.agg(rank)
+        result = self.agg(rank)
+
+        if cudf.get_option("mode.pandas_compatible"):
+            # pandas always returns floats:
+            return result.astype("float64")
+
+        return result
 
     @cached_property
     def _groupby(self):
@@ -553,7 +577,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             result_columns,
             orig_dtypes,
         ):
-            for agg, col in zip(aggs, cols):
+            for agg_tuple, col in zip(aggs, cols):
+                agg, agg_kind = agg_tuple
                 agg_name = agg.__name__ if callable(agg) else agg
                 if multilevel:
                     key = (col_name, agg_name)
@@ -583,6 +608,8 @@ class GroupBy(Serializable, Reducible, Scannable):
                     )
                 ):
                     data[key] = col.astype(orig_dtype)
+                elif agg_kind in {"COUNT", "SIZE"}:
+                    data[key] = col.astype("int64")
                 else:
                     data[key] = col
         data = ColumnAccessor(data, multiindex=multilevel)

@@ -456,8 +456,15 @@ def read_csv(
     # Set index if the index_col parameter is passed
     if index_col is not None and index_col is not False:
         if isinstance(index_col, int):
-            df = df.set_index(df._data.select_by_index(index_col).names[0])
-            if names is None:
+            index_col_name = df._data.select_by_index(index_col).names[0]
+            df = df.set_index(index_col_name)
+            if isinstance(index_col_name, str) and \
+                    names is None and header in ("infer",):
+                if index_col_name.startswith("Unnamed:"):
+                    # TODO: Try to upstream it to libcudf
+                    # csv reader in future
+                    df._index.name = None
+            elif names is None:
                 df._index.name = index_col
         else:
             df = df.set_index(index_col)
