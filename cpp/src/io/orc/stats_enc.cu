@@ -417,12 +417,19 @@ __global__ void __launch_bounds__(encode_threads_per_block)
             split_nanosecond_timestamp(s->chunk.max_value.i_val);
 
           // minimum/maximum are the same as minimumUtc/maximumUtc as we always write files in UTC
-          cur          = pb_put_int(cur, 1, min_ms);             // minimum
-          cur          = pb_put_int(cur, 2, max_ms);             // maximum
-          cur          = pb_put_int(cur, 3, min_ms);             // minimumUtc
-          cur          = pb_put_int(cur, 4, max_ms);             // maximumUtc
-          cur          = pb_put_uint(cur, 5, min_ns_remainder);  // minimumNanos
-          cur          = pb_put_uint(cur, 6, max_ns_remainder);  // maximumNanos
+          cur = pb_put_int(cur, 1, min_ms);  // minimum
+          cur = pb_put_int(cur, 2, max_ms);  // maximum
+          cur = pb_put_int(cur, 3, min_ms);  // minimumUtc
+          cur = pb_put_int(cur, 4, max_ms);  // maximumUtc
+
+          if (min_ns_remainder != DEFAULT_MIN_NANOS) {
+            // using uint because positive values are not zigzag encoded
+            cur = pb_put_uint(cur, 5, min_ns_remainder + 1);  // minimumNanos
+          }
+          if (max_ns_remainder != DEFAULT_MAX_NANOS) {
+            // using uint because positive values are not zigzag encoded
+            cur = pb_put_uint(cur, 6, max_ns_remainder + 1);  // maximumNanos
+          }
           fld_start[1] = cur - (fld_start + 2);
         }
         break;

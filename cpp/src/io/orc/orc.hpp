@@ -41,6 +41,9 @@ static constexpr uint32_t block_header_size = 3;
 // Seconds from January 1st, 1970 to January 1st, 2015
 static constexpr int64_t orc_utc_epoch = 1420070400;
 
+static constexpr int32_t DEFAULT_MIN_NANOS = 0;
+static constexpr int32_t DEFAULT_MAX_NANOS = 999999;
+
 struct PostScript {
   uint64_t footerLength       = 0;     // the length of the footer section in bytes
   CompressionKind compression = NONE;  // the kind of generic compression used
