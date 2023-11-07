@@ -20,6 +20,12 @@ set +u
 conda activate test
 set -u
 
+REPO="rmm"
+PR_NUMBER="1095"
+COMMIT=$(git ls-remote https://github.com/rapidsai/${REPO}.git refs/heads/pull-request/${PR_NUMBER} | cut -c1-7)
+RAPIDS_CUDA_MAJOR="${RAPIDS_CUDA_VERSION%%.*}"
+LIBRMM_CHANNEL=$(rapids-get-artifact ci/${REPO}/pull-request/${PR_NUMBER}/${COMMIT}/rmm_conda_cpp_cuda${RAPIDS_CUDA_MAJOR}_$(arch).tar.gz)
+
 rapids-print-env
 
 rapids-logger "Downloading artifacts from previous jobs"
@@ -27,6 +33,7 @@ CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 
 rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
+  --channel "${LIBRMM_CHANNEL}" \
   libcudf
 
 rapids-logger "Check GPU usage"
