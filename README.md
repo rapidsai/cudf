@@ -23,7 +23,7 @@ tips_df['tip_percentage'] = tips_df['tip'] / tips_df['total_bill'] * 100
 print(tips_df.groupby('size').tip_percentage.mean())
 ```
 
-**Use `cudf.pandas` with existing pandas code:
+**Use `cudf.pandas` with existing pandas code**:
 
 ```python
 %load_ext cudf.pandas  # pandas operations now use the GPU!
