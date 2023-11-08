@@ -59,9 +59,11 @@ size
 Name: tip_percentage, dtype: float64
 ```
 
-- [Try it now](https://nvda.ws/rapids-cudf): Explore `cudf.pandas` on a free GPU enabled instance on Google Colab!
+## Resources
+
+- [Try cudf.pandas now](https://nvda.ws/rapids-cudf): Explore `cudf.pandas` on a free GPU enabled instance on Google Colab!
 - [Install](https://rapids.ai/start.html): Instructions for installing cuDF and other [RAPIDS](https://rapids.ai) libraries.
-- [Python documentation](https://docs.rapids.ai/api/cudf/stable/)
+- [cudf (Python) documentation](https://docs.rapids.ai/api/cudf/stable/)
 - [libcudf (C++/CUDA) documentation](https://docs.rapids.ai/api/libcudf/stable/)
 - [RAPIDS Community](https://rapids.ai/community.html): Get help, contribute, and collaborate.
 
