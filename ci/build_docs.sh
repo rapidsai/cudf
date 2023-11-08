@@ -16,16 +16,14 @@ conda activate docs
 
 rapids-print-env
 
-#rapids-logger "Downloading artifacts from previous jobs"
-#CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
-#PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
-#
-#rapids-mamba-retry install \
-#  --channel "${CPP_CHANNEL}" \
-#  --channel "${PYTHON_CHANNEL}" \
-#  libcudf cudf dask-cudf
+rapids-logger "Downloading artifacts from previous jobs"
+CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
+PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
+
 rapids-mamba-retry install \
-  libcudf=23.10 cudf=23.10 dask-cudf=23.10
+  --channel "${CPP_CHANNEL}" \
+  --channel "${PYTHON_CHANNEL}" \
+  libcudf cudf dask-cudf
 
 export RAPIDS_VERSION_NUMBER="23.10"
 export RAPIDS_DOCS_DIR="$(mktemp -d)"

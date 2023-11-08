@@ -55,7 +55,7 @@ jobs:
       skip_upload_pkgs: libcudf-example
   docs-build:
     if: github.ref_type == 'branch'
-    #needs: python-build
+    needs: python-build
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-23.10
     with:
