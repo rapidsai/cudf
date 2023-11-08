@@ -224,7 +224,7 @@ dependencies:
           - &gmock gmock>=1.13.0
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - libarrow==13.0.0.*
+          - libarrow-all==14.0.0.*
           - librdkafka>=1.9.0,<1.10.0a0
           # Align nvcomp version with rapids-cmake
           - nvcomp==2.6.1
@@ -246,7 +246,7 @@ dependencies:
         packages:
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - pyarrow==13.0.0.*
+          - pyarrow==14.0.0.*
   build_python:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -264,13 +264,13 @@ dependencies:
       - output_types: conda
         packages:
           # Allow runtime version to float up to minor version
-          - libarrow==13.*
+          - libarrow-all==14.*
   pyarrow_run:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           # Allow runtime version to float up to minor version
-          - pyarrow==13.*
+          - pyarrow==14.*
   cudatoolkit:
     specific:
       - output_types: conda
