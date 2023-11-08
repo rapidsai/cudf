@@ -66,6 +66,8 @@ def _write_parquet(
     partitions_info=None,
     storage_options=None,
     force_nullable_schema=False,
+    header_version="1.0",
+    use_dictionary=True,
 ):
     if is_list_like(paths) and len(paths) > 1:
         if partitions_info is None:
@@ -96,6 +98,8 @@ def _write_parquet(
         "max_page_size_rows": max_page_size_rows,
         "partitions_info": partitions_info,
         "force_nullable_schema": force_nullable_schema,
+        "header_version": header_version,
+        "use_dictionary": use_dictionary,
     }
     if all(ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs):
         with ExitStack() as stack:
@@ -204,7 +208,6 @@ def write_to_dataset(
     fs.mkdirs(root_path, exist_ok=True)
 
     if partition_cols is not None and len(partition_cols) > 0:
-
         (
             full_paths,
             metadata_file_paths,
@@ -712,7 +715,6 @@ def _parquet_to_frame(
     dataset_kwargs=None,
     **kwargs,
 ):
-
     # If this is not a partitioned read, only need
     # one call to `_read_parquet`
     if not partition_keys:
@@ -756,7 +758,7 @@ def _parquet_to_frame(
             )
         )
         # Add partition columns to the last DataFrame
-        for (name, value) in part_key:
+        for name, value in part_key:
             _len = len(dfs[-1])
             if partition_categories and name in partition_categories:
                 # Build the categorical column from `codes`
@@ -869,6 +871,8 @@ def to_parquet(
     storage_options=None,
     return_metadata=False,
     force_nullable_schema=False,
+    header_version="1.0",
+    use_dictionary=True,
     *args,
     **kwargs,
 ):
@@ -943,6 +947,8 @@ def to_parquet(
             partitions_info=partition_info,
             storage_options=storage_options,
             force_nullable_schema=force_nullable_schema,
+            header_version=header_version,
+            use_dictionary=use_dictionary,
         )
 
     else:
@@ -1045,7 +1051,6 @@ def _get_groups_and_offsets(
     preserve_index=False,
     **kwargs,
 ):
-
     if not (set(df._data) - set(partition_cols)):
         warnings.warn("No data left to save outside partition columns")
 

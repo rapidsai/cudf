@@ -6492,6 +6492,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         max_page_size_rows=None,
         storage_options=None,
         return_metadata=False,
+        use_dictionary=True,
+        header_version="1.0",
         *args,
         **kwargs,
     ):
@@ -6516,6 +6518,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             max_page_size_rows=max_page_size_rows,
             storage_options=storage_options,
             return_metadata=return_metadata,
+            use_dictionary=use_dictionary,
+            header_version=header_version,
             *args,
             **kwargs,
         )
