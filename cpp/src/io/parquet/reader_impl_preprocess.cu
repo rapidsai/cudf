@@ -506,9 +506,6 @@ void reader::impl::allocate_nesting_info()
     auto const per_page_nesting_info_size = std::max(
       schema.max_definition_level + 1, _metadata->get_output_nesting_depth(src_col_schema));
 
-    // skip my dict pages
-    CUDF_EXPECTS(chunks[idx].num_dict_pages <= 1, "Unexpected dictionary page count for chunk");
-    target_page_index += chunks[idx].num_dict_pages;
     for (size_t p_idx = 0; p_idx < subpass.chunk_page_count[idx]; p_idx++) {
       pages[target_page_index + p_idx].nesting = page_nesting_info.device_ptr() + src_info_index;
       pages[target_page_index + p_idx].nesting_decode =
@@ -949,7 +946,10 @@ struct update_pass_num_rows {
   device_span<PageInfo> subpass_pages;
   device_span<size_t> page_src_index;
 
-  void operator()(size_t i) { pass_pages[page_src_index[i]].num_rows = subpass_pages[i].num_rows; }
+  __device__ void operator()(size_t i)
+  {
+    pass_pages[page_src_index[i]].num_rows = subpass_pages[i].num_rows;
+  }
 };
 
 void reader::impl::preprocess_subpass_pages(bool uses_custom_row_bounds, size_t chunk_read_limit)
