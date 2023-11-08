@@ -209,11 +209,6 @@ class reader::impl {
   void load_compressed_data();
 
   /**
-   * @brief Decompress dictionary data pages for a pass
-   */
-  void decompress_dict_data();
-
-  /**
    * @brief Build string dictionary indices for a pass.
    *
    */

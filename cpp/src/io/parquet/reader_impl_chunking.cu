@@ -586,6 +586,8 @@ std::pair<std::vector<split_info>, rmm::device_uvector<int32_t>> compute_page_sp
  *
  * @param chunks List of column chunk descriptors
  * @param pages List of page information
+ * @param dict_pages If true, decompress dictionary pages only. Otherwise decompress non-dictionary
+ * pages only.
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return Device buffer to decompressed page data
@@ -593,11 +595,16 @@ std::pair<std::vector<split_info>, rmm::device_uvector<int32_t>> compute_page_sp
 [[nodiscard]] rmm::device_buffer decompress_page_data(
   cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
   cudf::detail::hostdevice_vector<PageInfo>& pages,
+  bool dict_pages,
   rmm::cuda_stream_view stream)
 {
   auto for_each_codec_page = [&](Compression codec, std::function<void(size_t)> const& f) {
     for (size_t p = 0; p < pages.size(); p++) {
-      if (chunks[pages[p].chunk_idx].codec == codec) { f(p); }
+      if (chunks[pages[p].chunk_idx].codec == codec &&
+          ((dict_pages && (pages[p].flags & PAGEINFO_FLAGS_DICTIONARY)) ||
+           (!dict_pages && !(pages[p].flags & PAGEINFO_FLAGS_DICTIONARY)))) {
+        f(p);
+      }
     }
   };
 
@@ -757,8 +764,11 @@ std::pair<std::vector<split_info>, rmm::device_uvector<int32_t>> compute_page_sp
       copy_out, stream, rmm::mr::get_current_device_resource());
 
     gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, stream);
-    stream.synchronize();
   }
+
+  pages.host_to_device_async(stream);
+
+  stream.synchronize();
 
   return decomp_pages;
 }
@@ -848,26 +858,6 @@ void detect_malformed_pages(cudf::detail::hostdevice_vector<PageInfo> const& pag
                  "Encountered malformed parquet page data (row count mismatch in page data)");
   }
 }
-
-struct is_dict_page {
-  device_span<const PageInfo> pages;
-  bool __device__ operator()(size_t i) { return pages[i].flags & PAGEINFO_FLAGS_DICTIONARY; }
-};
-
-struct get_page_by_index {
-  device_span<const PageInfo> pages;
-  PageInfo __device__ operator()(size_t i) { return pages[i]; }
-};
-
-struct copy_data_ptr {
-  device_span<PageInfo> pass_pages;
-  device_span<const PageInfo> dict_pages;
-  device_span<const size_t> dict_page_indices;
-  void __device__ operator()(size_t i)
-  {
-    pass_pages[dict_page_indices[i]].page_data = dict_pages[i].page_data;
-  }
-};
 
 }  // anonymous namespace
 
@@ -980,7 +970,9 @@ void reader::impl::setup_next_pass()
     detect_malformed_pages(pass.pages, pass.chunks, pass.num_rows, _stream);
 
     // decompress dictionary data if applicable.
-    if (pass.has_compressed_data) { decompress_dict_data(); }
+    if (pass.has_compressed_data) {
+      pass.decomp_dict_data = decompress_page_data(pass.chunks, pass.pages, true, _stream);
+    }
 
     // since there is only ever 1 dictionary per chunk (the 0th path), do it at the
     // pass level.
@@ -1075,7 +1067,7 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
 
   // decompress the data for the pages in this subpass.
   if (pass.has_compressed_data) {
-    subpass.decomp_page_data = decompress_page_data(pass.chunks, subpass.pages, _stream);
+    subpass.decomp_page_data = decompress_page_data(pass.chunks, subpass.pages, false, _stream);
   }
 
   subpass.pages.host_to_device_async(_stream);
@@ -1214,42 +1206,6 @@ void reader::impl::compute_input_passes()
     _file_itm_data.input_pass_row_group_offsets.push_back(row_groups_info.size());
     _file_itm_data.input_pass_row_count.push_back(cur_row_count);
   }
-}
-
-void reader::impl::decompress_dict_data()
-{
-  auto& pass = *_pass_itm_data;
-
-  // collect all dictionary pages in the pass
-  rmm::device_uvector<size_t> dict_page_indices(pass.pages.size(), _stream);
-  auto iter       = thrust::make_counting_iterator(0);
-  auto last_index = thrust::copy_if(rmm::exec_policy(_stream),
-                                    iter,
-                                    iter + pass.pages.size(),
-                                    dict_page_indices.begin(),
-                                    is_dict_page{pass.pages});
-
-  // print_vector(dict_page_indices);
-
-  cudf::detail::hostdevice_vector<PageInfo> dict_pages(last_index - dict_page_indices.begin(),
-                                                       _stream);
-  auto last_page = thrust::transform(rmm::exec_policy(_stream),
-                                     dict_page_indices.begin(),
-                                     dict_page_indices.begin() + dict_pages.size(),
-                                     dict_pages.d_begin(),
-                                     get_page_by_index{pass.pages});
-
-  // decompress
-  pass.decomp_dict_data = decompress_page_data(pass.chunks, dict_pages, _stream);
-
-  // copy the data pointers back to the pages in the pass. chunk.dict_page always
-  // references these.
-  thrust::for_each(rmm::exec_policy(_stream),
-                   iter,
-                   iter + dict_pages.size(),
-                   copy_data_ptr{pass.pages, dict_pages, dict_page_indices});
-
-  pass.pages.device_to_host_sync(_stream);
 }
 
 void reader::impl::compute_chunks_for_subpass()
