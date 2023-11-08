@@ -1341,7 +1341,9 @@ def test_delta_binary(nrows, add_nulls, tmpdir):
     assert_eq(cdf, pcdf)
 
 
-@pytest.mark.parametrize("nrows", [1, 100000])
+@pytest.mark.parametrize(
+    "nrows", [1, 2, 23, 32, 33, 34, 64, 65, 66, 128, 129, 130, 20000, 100000]
+)
 @pytest.mark.parametrize("add_nulls", [True, False])
 def test_delta_byte_array_roundtrip(nrows, add_nulls, tmpdir):
     null_frequency = 0.25 if add_nulls else 0
