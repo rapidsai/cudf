@@ -48,17 +48,6 @@ tips_df["tip_percentage"] = tips_df["tip"] / tips_df["total_bill"] * 100
 print(tips_df.groupby("size").tip_percentage.mean())
 ```
 
-```
-size
-1    21.729201548727808
-2    16.571919173482897
-3    15.215685473711837
-4    14.594900639351332
-5    14.149548965142023
-6    15.622920072028379
-Name: tip_percentage, dtype: float64
-```
-
 ## Resources
 
 - [Try cudf.pandas now](https://nvda.ws/rapids-cudf): Explore `cudf.pandas` on a free GPU enabled instance on Google Colab!
