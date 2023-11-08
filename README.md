@@ -4,7 +4,7 @@ cuDF is a GPU DataFrame library for loading joining, aggregating,
 filtering, and otherwise manipulating data.
 
 You can use cuDF directly, or easily accelerate existing pandas
-using `cudf.pandas`:
+code with `cudf.pandas`:
 
 <table>
 <thead>
