@@ -29,6 +29,7 @@
 // Add a new group by first specifying in the hierarchy below.
 
 /**
+ * @defgroup default_stream Default Stream
  * @defgroup cudf_classes Classes
  * @{
  *   @defgroup column_classes Column
