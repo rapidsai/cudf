@@ -41,7 +41,7 @@ requirements:
   run:
     - python
     - cudf ={{ version }}
-    - rapids-dask-dependency ={{ version }}
+    - rapids-dask-dependency ={{ minor_version }}
     - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
 
 test:

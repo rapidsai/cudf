@@ -478,13 +478,14 @@ dependencies:
               - ptxcompiler-cu11
   run_dask_cudf:
     common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - rapids-dask-dependency==23.12.*
       - output_types: conda
         packages:
-          - rapids-dask-dependency==23.12.00.*
           - cupy>=12.0.0
       - output_types: pyproject
         packages:
-          - rapids-dask-dependency==23.12.*
           - &cudf cudf==23.12.*
           - *cupy_pip
   run_cudf_kafka:
