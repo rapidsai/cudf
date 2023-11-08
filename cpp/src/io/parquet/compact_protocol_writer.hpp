@@ -91,8 +91,6 @@ class CompactProtocolFieldWriter {
   template <typename Enum>
   inline void field_int_list(int field, std::vector<Enum> const& val);
 
-  inline void field_int_list(int field, const std::vector<int64_t>& val);
-
   template <typename T>
   inline void field_struct(int field, T const& val);
 
@@ -115,5 +113,9 @@ class CompactProtocolFieldWriter {
 
   inline void set_current_field(int const& field);
 };
+
+template <>
+inline void CompactProtocolFieldWriter::field_int_list<int64_t>(int field,
+                                                                std::vector<int64_t> const& val);
 
 }  // namespace cudf::io::parquet::detail

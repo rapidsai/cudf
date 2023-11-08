@@ -305,24 +305,26 @@ inline void CompactProtocolFieldWriter::field_int(int field, int64_t val)
   current_field_value = field;
 }
 
-template <typename Enum>
-inline void CompactProtocolFieldWriter::field_int_list(int field, std::vector<Enum> const& val)
+template <>
+inline void CompactProtocolFieldWriter::field_int_list<int64_t>(int field,
+                                                                std::vector<int64_t> const& val)
 {
   put_field_header(field, current_field_value, ST_FLD_LIST);
-  put_byte((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_I32));
-  if (val.size() >= 0xf) put_uint(val.size());
-  for (auto& v : val) {
+  put_byte(static_cast<uint8_t>((std::min(val.size(), 0xfUL) << 4) | ST_FLD_I64));
+  if (val.size() >= 0xf) { put_uint(val.size()); }
+  for (auto const v : val) {
     put_int(static_cast<int32_t>(v));
   }
   current_field_value = field;
 }
 
-inline void CompactProtocolFieldWriter::field_int_list(int field, const std::vector<int64_t>& val)
+template <typename Enum>
+inline void CompactProtocolFieldWriter::field_int_list(int field, std::vector<Enum> const& val)
 {
   put_field_header(field, current_field_value, ST_FLD_LIST);
-  put_byte((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_I64));
-  if (val.size() >= 0xf) put_uint(val.size());
-  for (auto& v : val) {
+  put_byte(static_cast<uint8_t>((std::min(val.size(), 0xfUL) << 4) | ST_FLD_I32));
+  if (val.size() >= 0xf) { put_uint(val.size()); }
+  for (auto const& v : val) {
     put_int(static_cast<int32_t>(v));
   }
   current_field_value = field;
