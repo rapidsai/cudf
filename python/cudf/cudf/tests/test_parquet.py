@@ -265,11 +265,6 @@ def large_int64_gdf():
 def test_parquet_reader_basic(parquet_file, columns, engine):
     expect = pd.read_parquet(parquet_file, columns=columns)
     got = cudf.read_parquet(parquet_file, engine=engine, columns=columns)
-    if len(expect) == 0:
-        expect = expect.reset_index(drop=True)
-        got = got.reset_index(drop=True)
-        if "col_category" in expect.columns:
-            expect["col_category"] = expect["col_category"].astype("category")
 
     # PANDAS returns category objects whereas cuDF returns hashes
     if engine == "cudf":
@@ -278,7 +273,7 @@ def test_parquet_reader_basic(parquet_file, columns, engine):
         if "col_category" in got.columns:
             got = got.drop(columns=["col_category"])
 
-    assert_eq(expect, got, check_categorical=False)
+    assert_eq(expect, got)
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
@@ -2876,3 +2871,20 @@ def test_parquet_read_filter_and_project():
     # Check result
     expected = df[(df.a == 5) & (df.c > 20)][columns].reset_index(drop=True)
     assert_eq(got, expected)
+
+
+def test_parquet_reader_multiindex():
+    expected = pd.DataFrame(
+        {"A": [1, 2, 3]},
+        index=pd.MultiIndex.from_tuples([("a", 1), ("a", 2), ("b", 1)]),
+    )
+    file_obj = BytesIO()
+    expected.to_parquet(file_obj, engine="pyarrow")
+    with pytest.warns(UserWarning):
+        actual = cudf.read_parquet(file_obj, engine="pyarrow")
+    assert_eq(actual, expected)
+
+
+def test_parquet_reader_engine_error():
+    with pytest.raises(ValueError):
+        cudf.read_parquet(BytesIO(), engine="abc")
