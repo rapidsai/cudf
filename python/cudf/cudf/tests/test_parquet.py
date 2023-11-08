@@ -1341,6 +1341,46 @@ def test_delta_binary(nrows, add_nulls, tmpdir):
     assert_eq(cdf, pcdf)
 
 
+@pytest.mark.parametrize("nrows", [1, 100000])
+@pytest.mark.parametrize("add_nulls", [True, False])
+def test_delta_byte_array_roundtrip(nrows, add_nulls, tmpdir):
+    null_frequency = 0.25 if add_nulls else 0
+
+    # Create a pandas dataframe with random data of mixed lengths
+    test_pdf = dg.rand_dataframe(
+        dtypes_meta=[
+            {
+                "dtype": "str",
+                "null_frequency": null_frequency,
+                "cardinality": nrows,
+                "max_string_length": 10,
+            },
+            {
+                "dtype": "str",
+                "null_frequency": null_frequency,
+                "cardinality": nrows,
+                "max_string_length": 100,
+            },
+        ],
+        rows=nrows,
+        seed=0,
+        use_threads=False,
+    ).to_pandas()
+
+    pdf_fname = tmpdir.join("pdfdeltaba.parquet")
+    test_pdf.to_parquet(
+        pdf_fname,
+        version="2.6",
+        column_encoding="DELTA_BYTE_ARRAY",
+        data_page_version="2.0",
+        engine="pyarrow",
+        use_dictionary=False,
+    )
+    cdf = cudf.read_parquet(pdf_fname)
+    pcdf = cudf.from_pandas(test_pdf)
+    assert_eq(cdf, pcdf)
+
+
 @pytest.mark.parametrize(
     "data",
     [
