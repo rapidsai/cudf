@@ -27,6 +27,8 @@ namespace cudf::io::orc::gpu {
 
 using strings::detail::fixed_point_string_size;
 
+constexpr bool enable_nanosecond_statistics = false;
+
 constexpr unsigned int init_threads_per_group = 32;
 constexpr unsigned int init_groups_per_block  = 4;
 constexpr unsigned int init_threads_per_block = init_threads_per_group * init_groups_per_block;
@@ -422,14 +424,17 @@ __global__ void __launch_bounds__(encode_threads_per_block)
           cur = pb_put_int(cur, 3, min_ms);  // minimumUtc
           cur = pb_put_int(cur, 4, max_ms);  // maximumUtc
 
-          if (min_ns_remainder != DEFAULT_MIN_NANOS) {
-            // using uint because positive values are not zigzag encoded
-            cur = pb_put_uint(cur, 5, min_ns_remainder + 1);  // minimumNanos
+          if constexpr (enable_nanosecond_statistics) {
+            if (min_ns_remainder != DEFAULT_MIN_NANOS) {
+              // using uint because positive values are not zigzag encoded
+              cur = pb_put_uint(cur, 5, min_ns_remainder + 1);  // minimumNanos
+            }
+            if (max_ns_remainder != DEFAULT_MAX_NANOS) {
+              // using uint because positive values are not zigzag encoded
+              cur = pb_put_uint(cur, 6, max_ns_remainder + 1);  // maximumNanos
+            }
           }
-          if (max_ns_remainder != DEFAULT_MAX_NANOS) {
-            // using uint because positive values are not zigzag encoded
-            cur = pb_put_uint(cur, 6, max_ns_remainder + 1);  // maximumNanos
-          }
+
           fld_start[1] = cur - (fld_start + 2);
         }
         break;
