@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/detail/normalizing_iterator.cuh>
+#include <cudf/types.hpp>
 
 namespace cudf {
 namespace detail {
@@ -143,7 +144,9 @@ struct output_offsetalator : base_normalator<output_offsetalator, int64_t> {
    * @param data_type Type of data in data
    */
   CUDF_HOST_DEVICE output_offsetalator(void* data, data_type dtype)
-    : base_normalator<output_offsetalator, int64_t>(dtype), p_{static_cast<char*>(data)}
+    : base_normalator<output_offsetalator, int64_t>(
+        dtype, dtype.id() == type_id::INT32 ? sizeof(int32_t) : sizeof(int64_t)),
+      p_{static_cast<char*>(data)}
   {
 #ifndef __CUDA_ARCH__
     CUDF_EXPECTS(dtype.id() == type_id::INT32 || dtype.id() == type_id::INT64,

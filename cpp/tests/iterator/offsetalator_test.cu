@@ -27,6 +27,7 @@
 #include <thrust/pair.h>
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
+#include <thrust/transform.h>
 
 using TestingTypes = cudf::test::Types<int32_t, int64_t>;
 

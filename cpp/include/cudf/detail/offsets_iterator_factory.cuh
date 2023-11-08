@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/column/column_device_view.cuh>
+#include <cudf/column/column_view.hpp>
 #include <cudf/detail/offsets_iterator.cuh>
 
 namespace cudf {
@@ -27,55 +27,19 @@ namespace detail {
  */
 struct offsetalator_factory {
   /**
-   * @brief A type_dispatcher functor to create an input iterator from an offsets column
-   */
-  struct input_offsetalator_fn {
-    template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, int32_t> or std::is_same_v<T, int64_t>)>
-    input_offsetalator operator()(column_view const& indices)
-    {
-      return input_offsetalator(indices.data<T>(), indices.type());
-    }
-    template <typename T,
-              typename... Args,
-              CUDF_ENABLE_IF(not std::is_same_v<T, int32_t> and not std::is_same_v<T, int64_t>)>
-    input_offsetalator operator()(Args&&... args)
-    {
-      CUDF_FAIL("offsets must be int32 or int64 type");
-    }
-  };
-
-  /**
    * @brief Create an input offsetalator instance from an offsets column
    */
   static input_offsetalator make_input_iterator(column_view const& offsets)
   {
-    return type_dispatcher(offsets.type(), input_offsetalator_fn{}, offsets);
+    return input_offsetalator(offsets.head(), offsets.type());
   }
-
-  /**
-   * @brief A type_dispatcher functor to create an output iterator from an offsets column
-   */
-  struct output_offsetalator_fn {
-    template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, int32_t> or std::is_same_v<T, int64_t>)>
-    output_offsetalator operator()(mutable_column_view const& indices)
-    {
-      return output_offsetalator(indices.data<T>(), indices.type());
-    }
-    template <typename T,
-              typename... Args,
-              CUDF_ENABLE_IF(not std::is_same_v<T, int32_t> and not std::is_same_v<T, int64_t>)>
-    output_offsetalator operator()(Args&&... args)
-    {
-      CUDF_FAIL("offsets must be int32 or int64 type");
-    }
-  };
 
   /**
    * @brief Create an output offsetalator instance from an offsets column
    */
   static output_offsetalator make_output_iterator(mutable_column_view const& offsets)
   {
-    return type_dispatcher(offsets.type(), output_offsetalator_fn{}, offsets);
+    return output_offsetalator(offsets.head(), offsets.type());
   }
 };
 

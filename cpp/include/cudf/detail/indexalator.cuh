@@ -155,7 +155,7 @@ struct output_indexalator : base_normalator<output_indexalator, cudf::size_type>
    * @brief Indirection operator returns this iterator instance in order
    * to capture the `operator=(Integer)` calls.
    */
-  __device__ inline output_indexalator const& operator*() const { return *this; }
+  __device__ inline reference operator*() const { return *this; }
 
   /**
    * @brief Array subscript operator returns an iterator instance at the specified `idx` position.
@@ -188,7 +188,7 @@ struct output_indexalator : base_normalator<output_indexalator, cudf::size_type>
   /**
    * @brief Assign an Integer value to the current iterator position
    */
-  __device__ inline output_indexalator const& operator=(cudf::size_type const value) const
+  __device__ inline reference operator=(cudf::size_type const value) const
   {
     void* tp = p_;
     type_dispatcher(this->dtype_, normalize_type{}, tp, value);
