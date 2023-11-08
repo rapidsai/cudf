@@ -450,7 +450,10 @@ def read_parquet(
     **kwargs,
 ):
     """{docstring}"""
-
+    if engine not in {"cudf", "pyarrow"}:
+        raise ValueError(
+            f"Only supported engines are {{'cudf', 'pyarrow'}}, got {engine=}"
+        )
     # Do not allow the user to set file-opening options
     # when `use_python_file_object=False` is specified
     if use_python_file_object is False:
@@ -828,11 +831,19 @@ def _read_parquet(
             use_pandas_metadata=use_pandas_metadata,
         )
     else:
-        import pyarrow.parquet as pq
+        if (
+            isinstance(filepaths_or_buffers, list)
+            and len(filepaths_or_buffers) == 1
+        ):
+            filepaths_or_buffers = filepaths_or_buffers[0]
 
-        return cudf.DataFrame.from_arrow(
-            pq.ParquetDataset(filepaths_or_buffers).read_pandas(
-                columns=columns, *args, **kwargs
+        return cudf.DataFrame.from_pandas(
+            pd.read_parquet(
+                filepaths_or_buffers,
+                columns=columns,
+                engine=engine,
+                *args,
+                **kwargs,
             )
         )
 
