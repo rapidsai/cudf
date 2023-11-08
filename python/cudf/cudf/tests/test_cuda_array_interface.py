@@ -47,7 +47,7 @@ def test_cuda_array_interface_interop_in(dtype, module):
 def test_cuda_array_interface_interop_out(dtype, module):
     expectation = does_not_raise()
     if dtype == "str":
-        expectation = pytest.raises(NotImplementedError)
+        expectation = pytest.raises(AttributeError)
     if module == "cupy":
         module_constructor = cupy.asarray
 
