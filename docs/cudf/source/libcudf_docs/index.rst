@@ -11,6 +11,7 @@ libcudf documentation
    column_classes
    column_factories
    strings_classes
+   default_stream
    dictionary_classes
    timestamp_classes
    lists_classes
