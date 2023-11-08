@@ -64,7 +64,7 @@ struct input_offsetalator : base_normalator<input_offsetalator, int64_t> {
    * Use the indexalator_factory to create an iterator instance.
    *
    * @param data      Pointer to an integer array in device memory.
-   * @param data_type Type of data in data
+   * @param dtype Type of data in data
    */
   CUDF_HOST_DEVICE input_offsetalator(void const* data, data_type dtype)
     : base_normalator<input_offsetalator, int64_t>(
@@ -141,7 +141,7 @@ struct output_offsetalator : base_normalator<output_offsetalator, int64_t> {
    * @brief Create an output offsets iterator
    *
    * @param data      Pointer to an integer array in device memory.
-   * @param data_type Type of data in data
+   * @param dtype Type of data in data
    */
   CUDF_HOST_DEVICE output_offsetalator(void* data, data_type dtype)
     : base_normalator<output_offsetalator, int64_t>(

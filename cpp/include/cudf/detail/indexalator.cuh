@@ -99,12 +99,13 @@ struct input_indexalator : base_normalator<input_indexalator, cudf::size_type> {
   }
 
   /**
-   * @brief Create an input index normalizing iterator.
+   * @brief Create an input index normalizing iterator
    *
    * Use the indexalator_factory to create an iterator instance.
    *
-   * @param data      Pointer to an integer array in device memory.
-   * @param data_type Type of data in data
+   * @param data   Pointer to an integer array in device memory.
+   * @param dtype  Type of data in data
+   * @param offset Applied to the data pointer per size of the type
    */
   CUDF_HOST_DEVICE input_indexalator(void const* data, data_type dtype, cudf::size_type offset = 0)
     : base_normalator<input_indexalator, cudf::size_type>(dtype), p_{static_cast<char const*>(data)}
@@ -117,7 +118,7 @@ struct input_indexalator : base_normalator<input_indexalator, cudf::size_type> {
 };
 
 /**
- * @brief The index normalizing output iterator.
+ * @brief The index normalizing output iterator
  *
  * This is an iterator that can be used for index types (integers) without
  * requiring a type-specific instance. It can be used for any iterator
@@ -199,7 +200,7 @@ struct output_indexalator : base_normalator<output_indexalator, cudf::size_type>
    * @brief Create an output normalizing iterator
    *
    * @param data      Pointer to an integer array in device memory.
-   * @param data_type Type of data in data
+   * @param dtype Type of data in data
    */
   CUDF_HOST_DEVICE output_indexalator(void* data, data_type dtype)
     : base_normalator<output_indexalator, cudf::size_type>(dtype), p_{static_cast<char*>(data)}
