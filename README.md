@@ -17,7 +17,7 @@ import requests
 from io import StringIO
 
 url = "https://github.com/plotly/datasets/raw/master/tips.csv"
-content = requests.get(url).content.decode('utf-8')
+content = requests.get(url).content.decode("utf-8")
 
 tips_df = cudf.read_csv(StringIO(content))
 tips_df["tip_percentage"] = tips_df["tip"] / tips_df["total_bill"] * 100
@@ -39,7 +39,7 @@ import requests
 from io import StringIO
 
 url = "https://github.com/plotly/datasets/raw/master/tips.csv"
-content = requests.get(url).content.decode('utf-8')
+content = requests.get(url).content.decode("utf-8")
 
 tips_df = pd.read_csv(StringIO(content))
 tips_df["tip_percentage"] = tips_df["tip"] / tips_df["total_bill"] * 100
