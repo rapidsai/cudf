@@ -22,6 +22,24 @@ import sys
 
 from docutils.nodes import Text
 from sphinx.addnodes import pending_xref
+from sphinx.highlighting import lexers
+from pygments.lexer import RegexLexer
+from pygments.token import Text as PText
+
+
+class PseudoLexer(RegexLexer):
+    """Trivial lexer for pseudocode."""
+
+    name = 'pseudocode'
+    aliases = ['pseudo']
+    tokens = {
+        'root': [
+            (r'.*\n', PText),
+        ]
+    }
+
+
+lexers['pseudo'] = PseudoLexer()
 
 # -- Custom Extensions ----------------------------------------------------
 sys.path.append(os.path.abspath("./_ext"))
