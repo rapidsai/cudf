@@ -7,10 +7,7 @@ blazing-fast C++/CUDA dataframe library and the [Apache
 Arrow](https://arrow.apache.org/) columnar format to provide a
 GPU-acclerated pandas API.
 
-You can use cuDF directly, or easily accelerate existing pandas
-code with `cudf.pandas`:
-
-**Use cuDF directly**:
+You can import `cudf` directly and use it like `pandas`:
 
 ```python
 import cudf
@@ -27,7 +24,10 @@ tips_df['tip_percentage'] = tips_df['tip'] / tips_df['total_bill'] * 100
 print(tips_df.groupby('size').tip_percentage.mean())
 ```
 
-**Use `cudf.pandas` with existing pandas code**:
+Or, you can run existing pandas code with
+[`cudf.pandas`](https://docs.rapids.ai/api/cudf/stable/cudf_pandas).
+`cudf.pandas` supports 100% of the pandas API, utilizing cuDF for
+supported operations and falling back to pandas when needed:
 
 ```python
 %load_ext cudf.pandas  # pandas operations now use the GPU!
