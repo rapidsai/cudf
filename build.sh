@@ -234,6 +234,11 @@ if [[ "${EXTRA_CMAKE_ARGS}" != *"DFIND_CUDF_CPP"* ]]; then
     EXTRA_CMAKE_ARGS="${EXTRA_CMAKE_ARGS} -DFIND_CUDF_CPP=ON"
 fi
 
+# Append `-DFIND_CUDF_KAFKA_CPP=ON` to EXTRA_CMAKE_ARGS unless a user specified the option.
+if [[ "${EXTRA_CMAKE_ARGS}" != *"DFIND_CUDF_KAFKA_CPP"* ]]; then
+    EXTRA_CMAKE_ARGS="${EXTRA_CMAKE_ARGS} -DFIND_CUDF_KAFKA_CPP=ON"
+fi
+
 
 # If clean given, run it prior to any other steps
 if hasArg clean; then
@@ -369,9 +374,9 @@ fi
 # build cudf_kafka Python package
 if hasArg cudf_kafka; then
     cd ${REPODIR}/python/cudf_kafka
-    SKBUILD_CONFIGURE_OPTIONS="-DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR}" \
+    SKBUILD_CONFIGURE_OPTIONS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX} -DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR} -DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES} ${EXTRA_CMAKE_ARGS}" \
         SKBUILD_BUILD_OPTIONS="-j${PARALLEL_LEVEL:-1}" \
-        python -m pip install --no-build-isolation --no-deps .
+        python -m pip install --no-build-isolation --no-deps . -vvv
 fi
 
 # build custreamz Python package
