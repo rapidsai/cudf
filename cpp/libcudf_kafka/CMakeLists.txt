@@ -21,7 +21,7 @@ include(rapids-export)
 include(rapids-find)
 
 project(
-  CUDA_KAFKA
+  CUDF_KAFKA
   VERSION 23.12.00
   LANGUAGES CXX
 )
@@ -64,7 +64,7 @@ add_library(cudf_kafka SHARED src/kafka_consumer.cpp src/kafka_callback.cpp)
 # ##################################################################################################
 # * include paths ---------------------------------------------------------------------------------
 target_include_directories(
-  cudf_kafka PUBLIC "$<BUILD_INTERFACE:${CUDA_KAFKA_SOURCE_DIR}/include>"
+  cudf_kafka PUBLIC "$<BUILD_INTERFACE:${CUDF_KAFKA_SOURCE_DIR}/include>"
                     "$<INSTALL_INTERFACE:include>"
 )
 

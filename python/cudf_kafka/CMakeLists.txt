@@ -38,7 +38,6 @@ option(CUDF_KAFKA_BUILD_WHEELS "Whether this build is generating a Python wheel.
 
 # If the user requested it we attempt to find cudf_kafka.
 if(FIND_CUDF_KAFKA_CPP)
-  find_package(cudf ${cudf_version} REQUIRED)
   find_package(cudf_kafka ${cudf_kafka_version} REQUIRED)
 else()
   set(cudf_kafka_FOUND OFF)
