@@ -1,25 +1,16 @@
 # <div align="left"><img src="img/rapids_logo.png" width="90px"/>&nbsp;cuDF - GPU DataFrames</div>
 
-**NOTE:** For the latest stable [README.md](https://github.com/rapidsai/cudf/blob/main/README.md) ensure you are on the `main` branch.
+cuDF is a GPU DataFrame library for loading joining, aggregating,
+filtering, and otherwise manipulating data.
 
-## Resources
+You can use cuDF directly, or easily accelerate existing pandas
+code with `cudf.pandas`:
 
-- [cuDF Reference Documentation](https://docs.rapids.ai/api/cudf/stable/): Python API reference, tutorials, and topic guides.
-- [libcudf Reference Documentation](https://docs.rapids.ai/api/libcudf/stable/): C/C++ CUDA library API reference.
-- [Getting Started](https://rapids.ai/start.html): Instructions for installing cuDF.
-- [RAPIDS Community](https://rapids.ai/community.html): Get help, contribute, and collaborate.
-- [GitHub repository](https://github.com/rapidsai/cudf): Download the cuDF source code.
-- [Issue tracker](https://github.com/rapidsai/cudf/issues): Report issues or request features.
+**Use cuDF directly**:
 
-## Overview
-
-Built based on the [Apache Arrow](http://arrow.apache.org/) columnar memory format, cuDF is a GPU DataFrame library for loading, joining, aggregating, filtering, and otherwise manipulating data.
-
-cuDF provides a pandas-like API that will be familiar to data engineers & data scientists, so they can use it to easily accelerate their workflows without going into the details of CUDA programming.
-
-For example, the following snippet downloads a CSV, then uses the GPU to parse it into rows and columns and run calculations:
 ```python
-import cudf, requests
+import cudf
+import requests
 from io import StringIO
 
 url = "https://github.com/plotly/datasets/raw/master/tips.csv"
@@ -32,7 +23,25 @@ tips_df['tip_percentage'] = tips_df['tip'] / tips_df['total_bill'] * 100
 print(tips_df.groupby('size').tip_percentage.mean())
 ```
 
-Output:
+**Use `cudf.pandas` with existing pandas code**:
+
+```python
+%load_ext cudf.pandas  # pandas operations now use the GPU!
+
+import pandas as pd
+import requests
+from io import StringIO
+
+url = "https://github.com/plotly/datasets/raw/master/tips.csv"
+content = requests.get(url).content.decode('utf-8')
+
+tips_df = cudf.read_csv(StringIO(content))
+tips_df['tip_percentage'] = tips_df['tip'] / tips_df['total_bill'] * 100
+
+# display average tip by dining party size
+print(tips_df.groupby('size').tip_percentage.mean())
+```
+
 ```
 size
 1    21.729201548727808
@@ -44,14 +53,13 @@ size
 Name: tip_percentage, dtype: float64
 ```
 
-For additional examples, browse our complete [API documentation](https://docs.rapids.ai/api/cudf/stable/), or check out our more detailed [notebooks](https://github.com/rapidsai/notebooks-contrib).
-
-## Quick Start
-
-Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapidsai/), choosing a tag based on the NVIDIA CUDA version you're running. This provides a ready to run Docker container with example notebooks and data, showcasing how you can utilize cuDF.
+- [Try it now](https://nvda.ws/rapids-cudf): Explore `cudf.pandas` on a free GPU enabled instance on Google Colab!
+- [Install](https://rapids.ai/start.html): Instructions for installing cuDF and other [RAPIDS](https://rapids.ai) libraries.
+- [Python documentation](https://docs.rapids.ai/api/cudf/stable/)
+- [libcudf (C++/CUDA) documentation](https://docs.rapids.ai/api/libcudf/stable/)
+- [RAPIDS Community](https://rapids.ai/community.html): Get help, contribute, and collaborate.
 
 ## Installation
-
 
 ### CUDA/GPU requirements
 
