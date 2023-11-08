@@ -51,10 +51,10 @@ print(tips_df.groupby("size").tip_percentage.mean())
 ## Resources
 
 - [Try cudf.pandas now](https://nvda.ws/rapids-cudf): Explore `cudf.pandas` on a free GPU enabled instance on Google Colab!
-- [Install](https://rapids.ai/start.html): Instructions for installing cuDF and other [RAPIDS](https://rapids.ai) libraries.
+- [Install](https://docs.rapids.ai/install): Instructions for installing cuDF and other [RAPIDS](https://rapids.ai) libraries.
 - [cudf (Python) documentation](https://docs.rapids.ai/api/cudf/stable/)
 - [libcudf (C++/CUDA) documentation](https://docs.rapids.ai/api/libcudf/stable/)
-- [RAPIDS Community](https://rapids.ai/community.html): Get help, contribute, and collaborate.
+- [RAPIDS Community](https://rapids.ai/learn-more/#get-involved): Get help, contribute, and collaborate.
 
 ## Installation
 
