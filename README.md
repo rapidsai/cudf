@@ -6,45 +6,41 @@ filtering, and otherwise manipulating data.
 You can use cuDF directly, or easily accelerate existing pandas
 code with `cudf.pandas`:
 
-<table>
-<thead>
-<tr class="header">
-<th>Using cuDF directly</th>
-<th>Using cudf.pandas</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td><pre lang="python">
-<code>
+**Use cuDF directly**:
+
+```python
 import cudf
 import requests
 from io import StringIO
-&#10;
-url = &quot;https://github.com/plotly/datasets/raw/master/tips.csv&quot;
-content = requests.get(url).content.decode(&#39;utf-8&#39;)
-&#10;tips_df = cudf.read_csv(StringIO(content))
-tips_df[&#39;tip_percentage&#39;] = tips_df[&#39;tip&#39;] / tips_df[&#39;total_bill&#39;] * 100
-&#10;# display average tip by dining party size
-print(tips_df.groupby(&#39;size&#39;).tip_percentage.mean())
-</code></pre></td>
-<td><pre lang="python">
-<code>
-%load_ext cudf.pandas  # pandas operations use the GPU!
+
+url = "https://github.com/plotly/datasets/raw/master/tips.csv"
+content = requests.get(url).content.decode('utf-8')
+
+tips_df = cudf.read_csv(StringIO(content))
+tips_df['tip_percentage'] = tips_df['tip'] / tips_df['total_bill'] * 100
+
+# display average tip by dining party size
+print(tips_df.groupby('size').tip_percentage.mean())
+```
+
+**Use `cudf.pandas` with existing pandas code:
+
+```python
+%load_ext cudf.pandas  # pandas operations now use the GPU!
 
 import pandas as pd
 import requests
 from io import StringIO
-&#10;
-url = &quot;https://github.com/plotly/datasets/raw/master/tips.csv&quot;
-content = requests.get(url).content.decode(&#39;utf-8&#39;)
-&#10;tips_df = pd.read_csv(StringIO(content))
-tips_df[&#39;tip_percentage&#39;] = tips_df[&#39;tip&#39;] / tips_df[&#39;total_bill&#39;] * 100
-&#10;# display average tip by dining party size
-print(tips_df.groupby(&#39;size&#39;).tip_percentage.mean())
-</tr>
-</tbody>
-</table>
+
+url = "https://github.com/plotly/datasets/raw/master/tips.csv"
+content = requests.get(url).content.decode('utf-8')
+
+tips_df = cudf.read_csv(StringIO(content))
+tips_df['tip_percentage'] = tips_df['tip'] / tips_df['total_bill'] * 100
+
+# display average tip by dining party size
+print(tips_df.groupby('size').tip_percentage.mean())
+```
 
 ```
 size
