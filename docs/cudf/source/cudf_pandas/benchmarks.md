@@ -6,9 +6,9 @@ We reproduced the [Database-like ops benchmark](https://duckdblabs.github.io/db-
 including a solution using `cudf.pandas`. Here are the results:
 
 <figure>
-<img src="../_static/duckdb-benchmark-groupby-join.png"
-class="align-center" width="750"
-alt="_static/duckdb-benchmark-groupby-join.png" />
+
+![duckdb-benchmark-groupby-join](../_static/duckdb-benchmark-groupby-join.png)
+
 <figcaption style="text-align: center;">Results of the <a
 href="https://duckdblabs.github.io/db-benchmark/">Database-like ops
 benchmark</a> including <span
