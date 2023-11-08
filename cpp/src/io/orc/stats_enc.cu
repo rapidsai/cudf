@@ -98,8 +98,10 @@ __global__ void __launch_bounds__(block_size, 1)
           stats_len = pb_fldlen_common + pb_fld_hdrlen + 2 * (pb_fld_hdrlen + pb_fldlen_int64);
           break;
         case dtype_timestamp64:
-          stats_len = pb_fldlen_common + pb_fld_hdrlen + 4 * (pb_fld_hdrlen + pb_fldlen_int64) +
-                      2 * (pb_fld_hdrlen + pb_fldlen_int32);
+          stats_len = pb_fldlen_common + pb_fld_hdrlen + 4 * (pb_fld_hdrlen + pb_fldlen_int64);
+          if constexpr (enable_nanosecond_statistics) {
+            stats_len += 2 * (pb_fld_hdrlen + pb_fldlen_int32);
+          }
           break;
         case dtype_float32:
         case dtype_float64:
