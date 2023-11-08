@@ -55,13 +55,13 @@ requirements:
     - cuda-version ={{ cuda_version }}
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
-    - protobuf ==4.23.*
+    - protobuf ==4.24.*
     - python
     - cython >=3.0.0
     - scikit-build >=0.13.1
     - setuptools
     - dlpack >=0.5,<0.6.0a0
-    - pyarrow ==13.0.0.*
+    - pyarrow ==14.0.0.*
     - libcudf ={{ version }}
     - rmm ={{ minor_version }}
     {% if cuda_major == "11" %}
