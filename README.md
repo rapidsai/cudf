@@ -1,10 +1,5 @@
 # <div align="left"><img src="img/rapids_logo.png" width="90px"/>&nbsp;cuDF - GPU DataFrames</div>
 
-<figure>
-<img src="docs/cudf/source/_static/colab.png" width="200" alt="colab" />
-<figcaption style="text-align: center;">Try it on Google Colab!</figcaption>
-</figure>
-
 cuDF is a GPU DataFrame library for loading joining, aggregating,
 filtering, and otherwise manipulating data.
 
@@ -62,8 +57,9 @@ size
 Name: tip_percentage, dtype: float64
 ```
 
+- [Try it now](https://nvda.ws/rapids-cudf): Explore `cudf.pandas` on a free GPU enabled instance on Google Colab!
 - [Install](https://rapids.ai/start.html): Instructions for installing cuDF and other [RAPIDS](https://rapids.ai) libraries.
-- [Python documentation](https://docs.rapids.ai/api/cudf/stable/)Python API reference, tutorials, and topic guides.
+- [Python documentation](https://docs.rapids.ai/api/cudf/stable/)
 - [libcudf (C++/CUDA) documentation](https://docs.rapids.ai/api/libcudf/stable/)
 - [RAPIDS Community](https://rapids.ai/community.html): Get help, contribute, and collaborate.
 
