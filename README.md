@@ -89,7 +89,7 @@ Please see our [guide for contributing to cuDF](CONTRIBUTING.md).
 
 ## Contact
 
-Find out more details on the [RAPIDS site](https://rapids.ai/community.html)
+Find out more details on the [RAPIDS site](https://rapids.ai/learn-more/#get-involved)
 
 ## <div align="left"><img src="img/rapids_logo.png" width="265px"/></div> Open GPU Data Science
 
