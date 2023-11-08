@@ -1,5 +1,7 @@
 # <div align="left"><img src="img/rapids_logo.png" width="90px"/>&nbsp;cuDF - GPU DataFrames</div>
 
+## 📢 cuDF can now be used as a no-code-change accelerator for pandas! To learn more, see [here](https://rapids.ai/cudf-pandas/)!
+
 cuDF is a GPU DataFrame library for loading joining, aggregating,
 filtering, and otherwise manipulating data. cuDF leverages
 [libcudf](https://github.com/rapidsai/cudf/pull/14374/), a
@@ -24,7 +26,7 @@ tips_df['tip_percentage'] = tips_df['tip'] / tips_df['total_bill'] * 100
 print(tips_df.groupby('size').tip_percentage.mean())
 ```
 
-Or, you can run existing pandas code with
+Or, you can use cuDF as a no code change accelerator for pandas, using
 [`cudf.pandas`](https://docs.rapids.ai/api/cudf/stable/cudf_pandas).
 `cudf.pandas` supports 100% of the pandas API, utilizing cuDF for
 supported operations and falling back to pandas when needed:
