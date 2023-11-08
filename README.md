@@ -1,7 +1,11 @@
 # <div align="left"><img src="img/rapids_logo.png" width="90px"/>&nbsp;cuDF - GPU DataFrames</div>
 
 cuDF is a GPU DataFrame library for loading joining, aggregating,
-filtering, and otherwise manipulating data.
+filtering, and otherwise manipulating data. cuDF leverages
+[libcudf](https://github.com/rapidsai/cudf/pull/14374/), a
+blazing-fast C++/CUDA dataframe library and the [Apache
+Arrow](https://arrow.apache.org/) columnar format to provide a
+GPU-acclerated pandas API.
 
 You can use cuDF directly, or easily accelerate existing pandas
 code with `cudf.pandas`:
@@ -35,7 +39,7 @@ from io import StringIO
 url = "https://github.com/plotly/datasets/raw/master/tips.csv"
 content = requests.get(url).content.decode('utf-8')
 
-tips_df = cudf.read_csv(StringIO(content))
+tips_df = pd.read_csv(StringIO(content))
 tips_df['tip_percentage'] = tips_df['tip'] / tips_df['total_bill'] * 100
 
 # display average tip by dining party size
