@@ -42,7 +42,7 @@ dependencies:
 - hypothesis
 - identify>=2.5.20
 - ipython
-- libarrow==14.0.0.*
+- libarrow-all==14.0.0.*
 - libcufile-dev
 - libcurand-dev
 - libkvikio==23.12.*
