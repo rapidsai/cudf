@@ -195,9 +195,9 @@ class writer_compression_statistics {
  * @brief Control use of dictionary encoding for parquet writer
  */
 enum dictionary_policy {
-  NEVER,     ///< Never use dictionary encoding
-  ADAPTIVE,  ///< Use dictionary when it will not impact compression
-  ALWAYS     ///< Use dictionary reqardless of impact on compression
+  NEVER    = 0,  ///< Never use dictionary encoding
+  ADAPTIVE = 1,  ///< Use dictionary when it will not impact compression
+  ALWAYS   = 2   ///< Use dictionary regardless of impact on compression
 };
 
 /**
