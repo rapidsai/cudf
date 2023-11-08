@@ -311,7 +311,7 @@ inline void CompactProtocolFieldWriter::field_int_list<int64_t>(int field,
 {
   put_field_header(field, current_field_value, ST_FLD_LIST);
   put_byte(static_cast<uint8_t>((std::min(val.size(), 0xfUL) << 4) | ST_FLD_I64));
-  if (val.size() >= 0xf) { put_uint(val.size()); }
+  if (val.size() >= 0xfUL) { put_uint(val.size()); }
   for (auto const v : val) {
     put_int(static_cast<int32_t>(v));
   }
@@ -323,7 +323,7 @@ inline void CompactProtocolFieldWriter::field_int_list(int field, std::vector<En
 {
   put_field_header(field, current_field_value, ST_FLD_LIST);
   put_byte(static_cast<uint8_t>((std::min(val.size(), 0xfUL) << 4) | ST_FLD_I32));
-  if (val.size() >= 0xf) { put_uint(val.size()); }
+  if (val.size() >= 0xfUL) { put_uint(val.size()); }
   for (auto const& v : val) {
     put_int(static_cast<int32_t>(v));
   }
