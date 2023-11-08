@@ -1,5 +1,10 @@
 # <div align="left"><img src="img/rapids_logo.png" width="90px"/>&nbsp;cuDF - GPU DataFrames</div>
 
+<figure>
+<img src="docs/cudf/source/_static/colab.png" width="200" alt="colab" />
+<figcaption style="text-align: center;">Try it on Google Colab!</figcaption>
+</figure>
+
 cuDF is a GPU DataFrame library for loading joining, aggregating,
 filtering, and otherwise manipulating data.
 
@@ -46,7 +51,6 @@ print(tips_df.groupby(&#39;size&#39;).tip_percentage.mean())
 </tbody>
 </table>
 
-Output:
 ```
 size
 1    21.729201548727808
@@ -58,16 +62,10 @@ size
 Name: tip_percentage, dtype: float64
 ```
 
-<figure>
-<img src="docs/cudf/source/_static/colab.png" width="200" alt="colab" />
-<figcaption style="text-align: center;">Try it on Google Colab!</figcaption>
-</figure>
-
-- [Intall](https://rapids.ai/start.html): Instructions for installing cuDF and other [RAPIDS](https://rapids.ai) libraries.
+- [Install](https://rapids.ai/start.html): Instructions for installing cuDF and other [RAPIDS](https://rapids.ai) libraries.
 - [Python documentation](https://docs.rapids.ai/api/cudf/stable/)Python API reference, tutorials, and topic guides.
 - [libcudf (C++/CUDA) documentation](https://docs.rapids.ai/api/libcudf/stable/)
 - [RAPIDS Community](https://rapids.ai/community.html): Get help, contribute, and collaborate.
-
 
 ## Installation
 
