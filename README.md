@@ -26,7 +26,7 @@ tips_df["tip_percentage"] = tips_df["tip"] / tips_df["total_bill"] * 100
 print(tips_df.groupby("size").tip_percentage.mean())
 ```
 
-Or, you can use cuDF as a no code change accelerator for pandas, using
+Or, you can use cuDF as a no-code-change accelerator for pandas, using
 [`cudf.pandas`](https://docs.rapids.ai/api/cudf/stable/cudf_pandas).
 `cudf.pandas` supports 100% of the pandas API, utilizing cuDF for
 supported operations and falling back to pandas when needed:
