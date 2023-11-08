@@ -4,10 +4,10 @@
 
 cuDF is a GPU DataFrame library for loading joining, aggregating,
 filtering, and otherwise manipulating data. cuDF leverages
-[libcudf](https://github.com/rapidsai/cudf/pull/14374/), a
+[libcudf](https://docs.rapids.ai/api/libcudf/stable/), a
 blazing-fast C++/CUDA dataframe library and the [Apache
 Arrow](https://arrow.apache.org/) columnar format to provide a
-GPU-acclerated pandas API.
+GPU-accelerated pandas API.
 
 You can import `cudf` directly and use it like `pandas`:
 
@@ -20,10 +20,10 @@ url = "https://github.com/plotly/datasets/raw/master/tips.csv"
 content = requests.get(url).content.decode('utf-8')
 
 tips_df = cudf.read_csv(StringIO(content))
-tips_df['tip_percentage'] = tips_df['tip'] / tips_df['total_bill'] * 100
+tips_df["tip_percentage"] = tips_df["tip"] / tips_df["total_bill"] * 100
 
 # display average tip by dining party size
-print(tips_df.groupby('size').tip_percentage.mean())
+print(tips_df.groupby("size").tip_percentage.mean())
 ```
 
 Or, you can use cuDF as a no code change accelerator for pandas, using
@@ -42,10 +42,10 @@ url = "https://github.com/plotly/datasets/raw/master/tips.csv"
 content = requests.get(url).content.decode('utf-8')
 
 tips_df = pd.read_csv(StringIO(content))
-tips_df['tip_percentage'] = tips_df['tip'] / tips_df['total_bill'] * 100
+tips_df["tip_percentage"] = tips_df["tip"] / tips_df["total_bill"] * 100
 
 # display average tip by dining party size
-print(tips_df.groupby('size').tip_percentage.mean())
+print(tips_df.groupby("size").tip_percentage.mean())
 ```
 
 ```
