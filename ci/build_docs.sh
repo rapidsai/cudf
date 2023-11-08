@@ -25,8 +25,6 @@ rapids-print-env
 #  --channel "${PYTHON_CHANNEL}" \
 #  libcudf cudf dask-cudf
 rapids-mamba-retry install \
-  --channel "${CPP_CHANNEL}" \
-  --channel "${PYTHON_CHANNEL}" \
   libcudf=23.10 cudf=23.10 dask-cudf=23.10
 
 export RAPIDS_VERSION_NUMBER="23.10"
