@@ -16,7 +16,7 @@ from cudf.api.types import is_scalar, is_timedelta64_dtype
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column import ColumnBase, column, string
 from cudf.utils.dtypes import np_to_pa_dtype
-from cudf.utils.utils import _all_bools_with_nulls, _fillna_natwise
+from cudf.utils.utils import _all_bools_with_nulls
 
 _dtype_to_format_conversion = {
     "timedelta64[ns]": "%D days %H:%M:%S",
@@ -146,19 +146,18 @@ class TimeDeltaColumn(ColumnBase):
     def to_pandas(
         self, index=None, nullable: bool = False, **kwargs
     ) -> pd.Series:
-        # Workaround until following issue is fixed:
+        # `copy=True` workaround until following issue is fixed:
         # https://issues.apache.org/jira/browse/ARROW-9772
 
-        # Pandas supports only `timedelta64[ns]`, hence the cast.
-        pd_series = pd.Series(
-            self.astype("timedelta64[ns]").fillna("NaT").values_host,
-            copy=False,
+        # Pandas only supports `timedelta64[ns]` dtype
+        # and conversion to this type is necessary to make
+        # arrow to pandas conversion happen for large values.
+        return pd.Series(
+            self.astype("timedelta64[ns]").to_arrow(),
+            copy=True,
+            dtype=self.dtype,
+            index=index,
         )
-
-        if index is not None:
-            pd_series.index = index
-
-        return pd_series
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
@@ -283,7 +282,7 @@ class TimeDeltaColumn(ColumnBase):
     ) -> TimeDeltaColumn:
         if fill_value is not None:
             if cudf.utils.utils._isnat(fill_value):
-                return _fillna_natwise(self)
+                return self.copy(deep=True)
             col: ColumnBase = self
             if is_scalar(fill_value):
                 if isinstance(fill_value, np.timedelta64):
