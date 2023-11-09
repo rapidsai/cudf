@@ -284,6 +284,7 @@ def on_missing_reference(app, env, node, contnode):
         # External names
         "thrust",
         "cuda",
+        "arrow",
         # # Unknown types
         "int8_t",
         "int16_t",
@@ -297,6 +298,7 @@ def on_missing_reference(app, env, node, contnode):
         "uint64_t",
         # Internal objects
         "CUDF_ENABLE_IF",
+        "CUDF_HOST_DEVICE",
         "id_to_type_impl",
         "type_to_scalar_type_impl",
         "type_to_scalar_type_impl",
