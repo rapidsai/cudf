@@ -18,7 +18,7 @@
 
 #include "page_decode.cuh"
 
-namespace cudf::io::parquet::gpu {
+namespace cudf::io::parquet::detail {
 
 // DELTA_XXX encoding support
 //
@@ -45,12 +45,6 @@ namespace cudf::io::parquet::gpu {
 // and a suffix is stored. The prefix lengths are DELTA_BINARY_PACKED encoded. The suffixes are
 // encoded with DELTA_LENGTH_BYTE_ARRAY encoding, which is a DELTA_BINARY_PACKED list of suffix
 // lengths, followed by the concatenated suffix data.
-
-// TODO: The delta encodings use ULEB128 integers, but for now we're only
-// using max 64 bits. Need to see what the performance impact is of using
-// __int128_t rather than int64_t.
-using uleb128_t   = uint64_t;
-using zigzag128_t = int64_t;
 
 // we decode one mini-block at a time. max mini-block size seen is 64.
 constexpr int delta_rolling_buf_size = 128;
@@ -291,4 +285,4 @@ struct delta_binary_decoder {
   }
 };
 
-}  // namespace cudf::io::parquet::gpu
+}  // namespace cudf::io::parquet::detail

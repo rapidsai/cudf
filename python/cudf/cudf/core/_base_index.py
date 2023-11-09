@@ -26,10 +26,13 @@ from cudf.api.types import (
     is_integer_dtype,
     is_list_like,
     is_scalar,
+    is_signed_integer_dtype,
+    is_unsigned_integer_dtype,
 )
 from cudf.core.abc import Serializable
 from cudf.core.column import ColumnBase, column
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.errors import MixedTypeError
 from cudf.utils import ioutils
 from cudf.utils.dtypes import can_convert_to_column, is_mixed_with_object_dtype
 from cudf.utils.utils import _is_same_name
@@ -602,10 +605,36 @@ class BaseIndex(Serializable):
                 f"[None, False, True]; {sort} was passed."
             )
 
+        if cudf.get_option("mode.pandas_compatible"):
+            if (
+                is_bool_dtype(self.dtype) and not is_bool_dtype(other.dtype)
+            ) or (
+                not is_bool_dtype(self.dtype) and is_bool_dtype(other.dtype)
+            ):
+                # Bools + other types will result in mixed type.
+                # This is not yet consistent in pandas and specific to APIs.
+                raise MixedTypeError("Cannot perform union with mixed types")
+            if (
+                is_signed_integer_dtype(self.dtype)
+                and is_unsigned_integer_dtype(other.dtype)
+            ) or (
+                is_unsigned_integer_dtype(self.dtype)
+                and is_signed_integer_dtype(other.dtype)
+            ):
+                # signed + unsigned types will result in
+                # mixed type for union in pandas.
+                raise MixedTypeError("Cannot perform union with mixed types")
+
         if not len(other) or self.equals(other):
-            return self._get_reconciled_name_object(other)
+            common_dtype = cudf.utils.dtypes.find_common_type(
+                [self.dtype, other.dtype]
+            )
+            return self._get_reconciled_name_object(other).astype(common_dtype)
         elif not len(self):
-            return other._get_reconciled_name_object(self)
+            common_dtype = cudf.utils.dtypes.find_common_type(
+                [self.dtype, other.dtype]
+            )
+            return other._get_reconciled_name_object(self).astype(common_dtype)
 
         result = self._union(other, sort=sort)
         result.name = _get_result_name(self.name, other.name)
@@ -1609,6 +1638,8 @@ class BaseIndex(Serializable):
                     (1, 2)],
                    names=['a', 'b'])
         """
+        if return_indexers is not False:
+            raise NotImplementedError("return_indexers is not implemented")
         self_is_multi = isinstance(self, cudf.MultiIndex)
         other_is_multi = isinstance(other, cudf.MultiIndex)
         if level is not None:
@@ -1866,7 +1897,7 @@ class BaseIndex(Serializable):
             return NotImplemented
 
     @classmethod
-    def from_pandas(cls, index, nan_as_null=None):
+    def from_pandas(cls, index, nan_as_null=no_default):
         """
         Convert from a Pandas Index.
 
@@ -1896,6 +1927,11 @@ class BaseIndex(Serializable):
         >>> cudf.Index.from_pandas(pdi, nan_as_null=False)
         Index([10.0, 20.0, 30.0, nan], dtype='float64')
         """
+        if nan_as_null is no_default:
+            nan_as_null = (
+                False if cudf.get_option("mode.pandas_compatible") else None
+            )
+
         if not isinstance(index, pd.Index):
             raise TypeError("not a pandas.Index")
 

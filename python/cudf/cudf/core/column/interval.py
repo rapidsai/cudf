@@ -136,3 +136,12 @@ class IntervalColumn(StructColumn):
         return pd.Series(
             self.dtype.to_pandas().__from_arrow__(self.to_arrow()), index=index
         )
+
+    def element_indexing(self, index: int):
+        result = super().element_indexing(index)
+        if cudf.get_option("mode.pandas_compatible"):
+            return pd.Interval(**result, closed=self._closed)
+        return {
+            field: value
+            for field, value in zip(self.dtype.fields, result.values())
+        }

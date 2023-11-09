@@ -2,15 +2,13 @@
 
 import decimal
 import functools
-import hashlib
 import os
 import traceback
 import warnings
-from functools import partial
 from typing import FrozenSet, Set, Union
 
 import numpy as np
-from nvtx import annotate
+import pandas as pd
 
 import rmm
 
@@ -118,8 +116,6 @@ _EQUALITY_OPS = {
     "__le__",
     "__ge__",
 }
-
-_NVTX_COLORS = ["green", "blue", "purple", "rapids"]
 
 # The test root is set by pytest to support situations where tests are run from
 # a source tree on a built version of cudf.
@@ -264,26 +260,15 @@ def pa_mask_buffer_to_mask(mask_buf, size):
 
 def _isnat(val):
     """Wraps np.isnat to return False instead of error on invalid inputs."""
-    if not isinstance(val, (np.datetime64, np.timedelta64, str)):
+    if val is pd.NaT:
+        return True
+    elif not isinstance(val, (np.datetime64, np.timedelta64, str)):
         return False
     else:
-        return val in {"NaT", "NAT"} or np.isnat(val)
-
-
-def _fillna_natwise(col):
-    # If the value we are filling is np.datetime64("NAT")
-    # we set the same mask as current column.
-    # However where there are "<NA>" in the
-    # columns, their corresponding locations
-    nat = cudf._lib.scalar._create_proxy_nat_scalar(col.dtype)
-    result = cudf._lib.replace.replace_nulls(col, nat)
-    return column.build_column(
-        data=result.base_data,
-        dtype=result.dtype,
-        size=result.size,
-        offset=result.offset,
-        children=result.base_children,
-    )
+        try:
+            return val in {"NaT", "NAT"} or np.isnat(val)
+        except TypeError:
+            return False
 
 
 def search_range(x: int, ri: range, *, side: str) -> int:
@@ -351,28 +336,6 @@ def is_na_like(obj):
     i.e., None, cudf.NA or cudf.NaT
     """
     return obj is None or obj is cudf.NA or obj is cudf.NaT
-
-
-def _get_color_for_nvtx(name):
-    m = hashlib.sha256()
-    m.update(name.encode())
-    hash_value = int(m.hexdigest(), 16)
-    idx = hash_value % len(_NVTX_COLORS)
-    return _NVTX_COLORS[idx]
-
-
-def _cudf_nvtx_annotate(func, domain="cudf_python"):
-    """Decorator for applying nvtx annotations to methods in cudf."""
-    return annotate(
-        message=func.__qualname__,
-        color=_get_color_for_nvtx(func.__qualname__),
-        domain=domain,
-    )(func)
-
-
-_dask_cudf_nvtx_annotate = partial(
-    _cudf_nvtx_annotate, domain="dask_cudf_python"
-)
 
 
 def _warn_no_dask_cudf(fn):

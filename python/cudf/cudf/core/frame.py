@@ -24,7 +24,6 @@ from typing import (
 import cupy
 import numpy
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 from typing_extensions import Self
 
@@ -46,12 +45,9 @@ from cudf.core.mixins import BinaryOperand, Scannable
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import find_common_type
-from cudf.utils.utils import (
-    _array_ufunc,
-    _cudf_nvtx_annotate,
-    _warn_no_dask_cudf,
-)
+from cudf.utils.dtypes import can_convert_to_column, find_common_type
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.utils import _array_ufunc, _warn_no_dask_cudf
 
 
 # TODO: It looks like Frame is missing a declaration of `copy`, need to add
@@ -1822,15 +1818,42 @@ class Frame(BinaryOperand, Scannable):
         10
         """
         # TODO: This function does not currently support nulls.
-        # TODO: This function does not properly support misaligned indexes.
         lhs = self.values
-        if isinstance(other, Frame):
-            rhs = other.values
-        elif isinstance(other, cupy.ndarray):
-            rhs = other
-        elif isinstance(
-            other, (abc.Sequence, np.ndarray, pd.DataFrame, pd.Series)
+        result_index = None
+        result_cols = None
+        if isinstance(self, cudf.Series) and isinstance(
+            other, (cudf.Series, cudf.DataFrame)
         ):
+            common = self.index.union(other.index)
+            if len(common) > len(self.index) or len(common) > len(other.index):
+                raise ValueError("matrices are not aligned")
+
+            lhs = self.reindex(index=common, copy=False).values
+            rhs = other.reindex(index=common, copy=False).values
+            if isinstance(other, cudf.DataFrame):
+                result_index = other._data.to_pandas_index()
+        elif isinstance(self, cudf.DataFrame) and isinstance(
+            other, (cudf.Series, cudf.DataFrame)
+        ):
+            common = self._data.to_pandas_index().union(
+                other.index.to_pandas()
+            )
+            if len(common) > len(self._data.names) or len(common) > len(
+                other.index
+            ):
+                raise ValueError("matrices are not aligned")
+
+            lhs = self.reindex(columns=common, copy=False)
+            result_index = lhs.index
+
+            rhs = other.reindex(index=common, copy=False).values
+            lhs = lhs.values
+            if isinstance(other, cudf.DataFrame):
+                result_cols = other._data.to_pandas_index()
+
+        elif isinstance(
+            other, (cupy.ndarray, np.ndarray)
+        ) or can_convert_to_column(other):
             rhs = cupy.asarray(other)
         else:
             # TODO: This should raise an exception, not return NotImplemented,
@@ -1849,9 +1872,16 @@ class Frame(BinaryOperand, Scannable):
 
         result = lhs.dot(rhs)
         if len(result.shape) == 1:
-            return cudf.Series(result)
+            return cudf.Series(
+                result,
+                index=self.index if result_index is None else result_index,
+            )
         if len(result.shape) == 2:
-            return cudf.DataFrame(result)
+            return cudf.DataFrame(
+                result,
+                index=self.index if result_index is None else result_index,
+                columns=result_cols,
+            )
         return result.item()
 
     @_cudf_nvtx_annotate

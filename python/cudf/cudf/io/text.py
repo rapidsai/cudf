@@ -1,11 +1,11 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from io import BytesIO, StringIO
 
 import cudf
 from cudf._lib import text as libtext
 from cudf.utils import ioutils
-from cudf.utils.utils import _cudf_nvtx_annotate
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 
 
 @_cudf_nvtx_annotate

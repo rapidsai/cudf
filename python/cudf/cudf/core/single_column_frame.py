@@ -15,12 +15,14 @@ from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
+    is_integer,
     is_integer_dtype,
     is_numeric_dtype,
 )
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.frame import Frame
-from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.utils import NotIterable
 
 
 class SingleColumnFrame(Frame, NotIterable):
@@ -234,7 +236,14 @@ class SingleColumnFrame(Frame, NotIterable):
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def __cuda_array_interface__(self):
-        return self._column.__cuda_array_interface__
+        # While the parent column class has a `__cuda_array_interface__` method
+        # defined, it is not implemented for all column types. When it is not
+        # implemented, though, at the Frame level we really want to throw an
+        # AttributeError.
+        try:
+            return self._column.__cuda_array_interface__
+        except NotImplementedError:
+            raise AttributeError
 
     @_cudf_nvtx_annotate
     def factorize(self, sort=False, use_na_sentinel=True):
@@ -355,6 +364,11 @@ class SingleColumnFrame(Frame, NotIterable):
         # _absolutely_ necessary, since in almost all cases a more specific
         # method can be used e.g. element_indexing or slice.
         if _is_scalar_or_zero_d_array(arg):
+            if not is_integer(arg):
+                raise ValueError(
+                    "Can only select elements with an integer, "
+                    f"not a {type(arg).__name__}"
+                )
             return self._column.element_indexing(int(arg))
         elif isinstance(arg, slice):
             start, stop, stride = arg.indices(len(self))

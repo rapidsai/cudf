@@ -202,6 +202,7 @@ class Merge:
             if left_rows is not None
             else cudf.DataFrame._from_data({})
         )
+        del left_rows
         right_result = (
             self.rhs._gather(
                 GatherMap.from_column_unchecked(
@@ -212,7 +213,7 @@ class Merge:
             if right_rows is not None
             else cudf.DataFrame._from_data({})
         )
-
+        del right_rows
         result = cudf.DataFrame._from_data(
             *self._merge_results(left_result, right_result)
         )

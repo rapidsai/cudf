@@ -186,7 +186,7 @@ template <typename T>
   auto constexpr BIT_WIDTH_RATIO = sizeof(__int128_t) / sizeof(T);
 
   std::shared_ptr<arrow::Array> arr;
-  arrow::Decimal128Builder decimal_builder(arrow::decimal(18, -scale),
+  arrow::Decimal128Builder decimal_builder(arrow::decimal(cudf::detail::max_precision<T>(), -scale),
                                            arrow::default_memory_pool());
 
   for (T i = 0; i < static_cast<T>(data.size() / BIT_WIDTH_RATIO); ++i) {

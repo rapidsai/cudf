@@ -291,8 +291,12 @@ std::unique_ptr<column> unary_op_with(column_view const& input,
        std::is_same_v<FixedPointUnaryOpFunctor, fixed_point_floor<Type>>))
     return std::make_unique<cudf::column>(input, stream, mr);
 
-  auto result = cudf::make_fixed_width_column(
-    input.type(), input.size(), copy_bitmask(input, stream, mr), input.null_count(), stream, mr);
+  auto result = cudf::make_fixed_width_column(input.type(),
+                                              input.size(),
+                                              detail::copy_bitmask(input, stream, mr),
+                                              input.null_count(),
+                                              stream,
+                                              mr);
 
   auto out_view = result->mutable_view();
 
@@ -642,10 +646,11 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
 
 std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
                                               cudf::unary_operator op,
+                                              rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::unary_operation(input, op, cudf::get_default_stream(), mr);
+  return detail::unary_operation(input, op, stream, mr);
 }
 
 }  // namespace cudf

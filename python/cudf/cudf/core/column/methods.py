@@ -7,11 +7,12 @@ from typing import Optional, Union, overload
 from typing_extensions import Literal
 
 import cudf
+from cudf.utils.utils import NotIterable
 
 ParentType = Union["cudf.Series", "cudf.core.index.Index"]
 
 
-class ColumnMethods:
+class ColumnMethods(NotIterable):
     _parent: ParentType
 
     def __init__(self, parent: ParentType):

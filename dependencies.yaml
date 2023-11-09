@@ -62,6 +62,7 @@ files:
     includes:
       - cudatoolkit
       - docs
+      - libarrow_run
       - py_version
   py_build_cudf:
     output: pyproject
@@ -91,6 +92,22 @@ files:
     includes:
       - test_python_common
       - test_python_cudf
+  py_test_pandas_cudf:
+    output: pyproject
+    pyproject_dir: python/cudf
+    extras:
+      table: project.optional-dependencies
+      key: pandas_tests
+    includes:
+      - test_python_pandas_cudf
+  py_test_cudf_pandas:
+    output: pyproject
+    pyproject_dir: python/cudf
+    extras:
+      table: project.optional-dependencies
+      key: cudf_pandas_tests
+    includes:
+      - test_python_cudf_pandas
   py_build_dask_cudf:
     output: pyproject
     pyproject_dir: python/dask_cudf
@@ -214,38 +231,21 @@ dependencies:
     common:
       - output_types: [conda, requirements]
         packages:
-          - librmm==23.10.*
-          - libkvikio==23.10.*
+          - librmm==23.12.*
+          - libkvikio==23.12.*
       - output_types: conda
         packages:
-          - aws-sdk-cpp<1.11
           - fmt>=9.1.0,<10
           - &gbench benchmark==1.8.0
           - &gtest gtest>=1.13.0
           - &gmock gmock>=1.13.0
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - libarrow==12.0.1.*
+          - libarrow-all==14.0.1.*
           - librdkafka>=1.9.0,<1.10.0a0
+          # Align nvcomp version with rapids-cmake
+          - nvcomp==2.6.1
           - spdlog>=1.11.0,<1.12
-    specific:
-      - output_types: conda
-        matrices:
-          - matrix:
-              arch: x86_64
-            packages:
-              # Align nvcomp version with rapids-cmake
-              # TODO: not yet available for aarch64 CUDA 12
-              - &nvcomp nvcomp==2.6.1
-          - matrix:
-              arch: aarch64
-              cuda: "11.8"
-            packages:
-              - *nvcomp
-          # TODO: Fallback matrix for aarch64 CUDA 12. After migrating to nvcomp 3,
-          # all CUDA/arch combinations should be supported by existing packages.
-          - matrix:
-            packages:
   build_wheels:
     common:
       - output_types: pyproject
@@ -257,17 +257,19 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cython>=3.0.0
-          # Hard pin the patch version used during the build. This must be kept
-          # in sync with the version pinned in get_arrow.cmake.
-          - pyarrow==12.0.1.*
           # TODO: Pin to numpy<1.25 until cudf requires pandas 2
           - &numpy numpy>=1.21,<1.25
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          # Hard pin the patch version used during the build. This must be kept
+          # in sync with the version pinned in get_arrow.cmake.
+          - pyarrow==14.0.1.*
   build_python:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           - scikit-build>=0.13.1
-          - rmm==23.10.*
+          - rmm==23.12.*
       - output_types: conda
         packages:
           - &protobuf protobuf>=4.21,<5
@@ -276,16 +278,18 @@ dependencies:
           - protoc-wheel
   libarrow_run:
     common:
-      - output_types: [conda, requirements]
+      - output_types: conda
         packages:
           # Allow runtime version to float up to minor version
-          - libarrow==12.*
+          # Disallow libarrow 14.0.0 due to a CVE
+          - libarrow-all>=14.0.1,<15.0.0a0
   pyarrow_run:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           # Allow runtime version to float up to minor version
-          - pyarrow==12.*
+          # Disallow pyarrow 14.0.0 due to a CVE
+          - pyarrow>=14.0.1,<15.0.0a0
   cudatoolkit:
     specific:
       - output_types: conda
@@ -298,6 +302,9 @@ dependencies:
               - cuda-nvrtc-dev
               - cuda-nvtx-dev
               - libcurand-dev
+              # TODO: Remove after https://github.com/rapidsai/cudf/pull/14292 updates
+              # cudf_kafka to use scikit-build
+              - cuda-gdb
           - matrix:
               cuda: "11.8"
             packages:
@@ -386,14 +393,15 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-          - dask-cuda==23.10.*
+          - dask-cuda==23.12.*
           - *doxygen
           - make
           - myst-nb
           - nbsphinx
           - numpydoc
           - pandoc
-          - pydata-sphinx-theme
+          # https://github.com/pydata/pydata-sphinx-theme/issues/1539
+          - pydata-sphinx-theme!=0.14.2
           - scipy
           - sphinx
           - sphinx-autobuild
@@ -438,7 +446,8 @@ dependencies:
           - &numba numba>=0.57,<0.58
           - nvtx>=0.2.1
           - packaging
-          - rmm==23.10.*
+          - rich
+          - rmm==23.12.*
           - typing_extensions>=4.0.0
           - *protobuf
       - output_types: conda
@@ -491,15 +500,15 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - dask==2023.9.2
-          - distributed==2023.9.2
+          - dask>=2023.9.2
+          - distributed>=2023.9.2
       - output_types: conda
         packages:
           - cupy>=12.0.0
-          - dask-core==2023.9.2  # dask-core in conda is the actual package & dask is the meta package
+          - dask-core>=2023.9.2  # dask-core in conda is the actual package & dask is the meta package
       - output_types: pyproject
         packages:
-          - &cudf cudf==23.10.*
+          - &cudf cudf==23.12.*
           - *cupy_pip
   run_cudf_kafka:
     common:
@@ -518,7 +527,7 @@ dependencies:
         packages:
           - confluent-kafka>=1.9.0,<1.10.0a0
           - *cudf
-          - cudf_kafka==23.10.*
+          - cudf_kafka==23.12.*
   test_cpp:
     common:
       - output_types: conda
@@ -559,10 +568,10 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
+          - cramjam
           - fastavro>=0.22.9
           - hypothesis
           - mimesis>=4.1.0
-          - pyorc
           - pytest-benchmark
           - pytest-cases
           - python-snappy>=0.6.0
@@ -600,5 +609,59 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - dask-cuda==23.10.*
+          - dask-cuda==23.12.*
           - *numba
+  test_python_pandas_cudf:
+    common:
+      - output_types: pyproject
+        packages:
+          # dependencies to run pandas tests
+          # https://github.com/pandas-dev/pandas/blob/main/environment.yml
+          # TODO: When pandas 2.0 is the minimum version, can just specify pandas[all]
+          - beautifulsoup4
+          - blosc
+          - brotlipy
+          - boto3
+          - botocore>=1.24.21
+          - bottleneck
+          - fastparquet
+          - flask
+          - fsspec
+          - html5lib
+          - hypothesis
+          - gcsfs
+          - ipython
+          - jinja2
+          - lxml
+          - matplotlib
+          - moto
+          - numba
+          - numexpr
+          - openpyxl
+          - odfpy
+          - py
+          - psycopg2-binary
+          - pyarrow
+          - pymysql
+          - pyreadstat
+          - pytest-asyncio
+          - pytest-reportlog
+          - python-snappy
+          - pyxlsb
+          - s3fs
+          - scipy
+          - sqlalchemy
+          - tables
+          - pandas-gbq
+          - tabulate
+          - xarray
+          - xlrd
+          - xlsxwriter
+          - xlwt
+          - zstandard
+  test_python_cudf_pandas:
+    common:
+      - output_types: pyproject
+        packages:
+          - ipython
+          - openpyxl

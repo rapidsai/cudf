@@ -148,10 +148,11 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& input,
 std::unique_ptr<column> replace_with_backrefs(strings_column_view const& strings,
                                               regex_program const& prog,
                                               std::string_view replacement,
+                                              rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_with_backrefs(strings, prog, replacement, cudf::get_default_stream(), mr);
+  return detail::replace_with_backrefs(strings, prog, replacement, stream, mr);
 }
 
 }  // namespace strings

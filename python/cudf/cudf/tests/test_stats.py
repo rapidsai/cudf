@@ -269,6 +269,20 @@ def test_kurtosis_series(data, null_flag, numeric_only):
     assert_eq(got, expected)
 
 
+@pytest.mark.parametrize("op", ["skew", "kurt"])
+def test_kurt_skew_error(op):
+    gs = cudf.Series(["ab", "cd"])
+    ps = gs.to_pandas()
+
+    with pytest.warns(FutureWarning):
+        assert_exceptions_equal(
+            getattr(gs, op),
+            getattr(ps, op),
+            lfunc_args_and_kwargs=([], {"numeric_only": True}),
+            rfunc_args_and_kwargs=([], {"numeric_only": True}),
+        )
+
+
 @pytest.mark.parametrize(
     "data",
     [
