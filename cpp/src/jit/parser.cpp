@@ -114,6 +114,7 @@ std::string ptx_parser::parse_instruction(std::string const& src)
   size_t start                      = 0;
   size_t stop                       = 0;
   bool is_instruction               = true;
+  bool is_pragma_instruction        = false;
   bool is_param_loading_instruction = false;
   std::string constraint;
   std::string register_type;
@@ -181,6 +182,9 @@ std::string ptx_parser::parse_instruction(std::string const& src)
                "value through the first function parameter. Thus the `st.param.***` instructions "
                "are not processed. *** */" +
                "\");" + original_code;  // Our port does not support return value;
+      } else if (piece.find(".pragma") != std::string::npos) {
+        is_pragma_instruction = true;
+        output += " " + piece;
       } else if (piece[0] == '@') {
         output += " @" + remove_nonalphanumeric(piece.substr(1, piece.size() - 1));
       } else {
@@ -200,6 +204,17 @@ std::string ptx_parser::parse_instruction(std::string const& src)
         }
         // Here we get to see the actual type of the input arguments.
         input_arg_list[remove_nonalphanumeric(piece)] = register_type_to_cpp_type(register_type);
+      } else if (is_pragma_instruction) {
+        // quote any string
+        std::string transformed_piece;
+        for (const auto& c : piece) {
+          if (c == '"') {
+            transformed_piece += "\\\"";
+          } else {
+            transformed_piece += c;
+          }
+        }
+        output += transformed_piece;
       } else {
         output += escape_percent(std::string(src, start, stop - start));
       }
