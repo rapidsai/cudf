@@ -62,6 +62,7 @@ files:
     includes:
       - cudatoolkit
       - docs
+      - libarrow_run
       - py_version
   py_build_cudf:
     output: pyproject
@@ -91,6 +92,22 @@ files:
     includes:
       - test_python_common
       - test_python_cudf
+  py_test_pandas_cudf:
+    output: pyproject
+    pyproject_dir: python/cudf
+    extras:
+      table: project.optional-dependencies
+      key: pandas_tests
+    includes:
+      - test_python_pandas_cudf
+  py_test_cudf_pandas:
+    output: pyproject
+    pyproject_dir: python/cudf
+    extras:
+      table: project.optional-dependencies
+      key: cudf_pandas_tests
+    includes:
+      - test_python_cudf_pandas
   py_build_dask_cudf:
     output: pyproject
     pyproject_dir: python/dask_cudf
@@ -427,6 +444,7 @@ dependencies:
           - &numba numba>=0.57,<0.58
           - nvtx>=0.2.1
           - packaging
+          - rich
           - rmm==23.12.*
           - typing_extensions>=4.0.0
           - *protobuf
@@ -591,3 +609,57 @@ dependencies:
         packages:
           - dask-cuda==23.12.*
           - *numba
+  test_python_pandas_cudf:
+    common:
+      - output_types: pyproject
+        packages:
+          # dependencies to run pandas tests
+          # https://github.com/pandas-dev/pandas/blob/main/environment.yml
+          # TODO: When pandas 2.0 is the minimum version, can just specify pandas[all]
+          - beautifulsoup4
+          - blosc
+          - brotlipy
+          - boto3
+          - botocore>=1.24.21
+          - bottleneck
+          - fastparquet
+          - flask
+          - fsspec
+          - html5lib
+          - hypothesis
+          - gcsfs
+          - ipython
+          - jinja2
+          - lxml
+          - matplotlib
+          - moto
+          - numba
+          - numexpr
+          - openpyxl
+          - odfpy
+          - py
+          - psycopg2-binary
+          - pyarrow
+          - pymysql
+          - pyreadstat
+          - pytest-asyncio
+          - pytest-reportlog
+          - python-snappy
+          - pyxlsb
+          - s3fs
+          - scipy
+          - sqlalchemy
+          - tables
+          - pandas-gbq
+          - tabulate
+          - xarray
+          - xlrd
+          - xlsxwriter
+          - xlwt
+          - zstandard
+  test_python_cudf_pandas:
+    common:
+      - output_types: pyproject
+        packages:
+          - ipython
+          - openpyxl
