@@ -1284,7 +1284,9 @@ def test_parquet_reader_v2(tmpdir, simple_pdf):
     assert_eq(cudf.read_parquet(pdf_fname), simple_pdf)
 
 
-@pytest.mark.parametrize("nrows", [1, 100000])
+@pytest.mark.parametrize(
+    "nrows", [1, 2, 23, 32, 33, 34, 64, 65, 66, 128, 129, 130, 20000, 100000]
+)
 @pytest.mark.parametrize("add_nulls", [True, False])
 @pytest.mark.parametrize(
     "dtype",
