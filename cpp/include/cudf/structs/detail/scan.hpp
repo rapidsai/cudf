@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,31 +13,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
 
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/json.hpp>
-#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/column/column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
-namespace strings {
+namespace structs {
 namespace detail {
-
 /**
- * @copydoc cudf::strings::get_json_object
+ * @brief Scan function for struct column type
  *
+ * Called by cudf::scan() with only min and max aggregates.
+ *
+ * @tparam Op Either DeviceMin or DeviceMax operations
+ *
+ * @param input Input column
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New struct column
  */
-std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& col,
-                                              cudf::string_scalar const& json_path,
-                                              cudf::strings::get_json_object_options options,
-                                              rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr);
+template <typename Op>
+std::unique_ptr<column> scan_inclusive(column_view const& input,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
-}  // namespace strings
+}  // namespace structs
 }  // namespace cudf

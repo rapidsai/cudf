@@ -445,6 +445,7 @@ add_library(
   src/join/mixed_join_size_kernel_nulls.cu
   src/join/mixed_join_size_kernels_semi.cu
   src/join/semi_join.cu
+  src/json/json_path.cu
   src/lists/contains.cu
   src/lists/combine/concatenate_list_elements.cu
   src/lists/combine/concatenate_rows.cu
@@ -576,7 +577,6 @@ add_library(
   src/strings/filter_chars.cu
   src/strings/like.cu
   src/strings/padding.cu
-  src/strings/json/json_path.cu
   src/strings/regex/regcomp.cpp
   src/strings/regex/regexec.cpp
   src/strings/regex/regex_program.cpp
@@ -587,6 +587,7 @@ add_library(
   src/strings/replace/replace.cu
   src/strings/replace/replace_re.cu
   src/strings/reverse.cu
+  src/strings/scan/scan_inclusive.cu
   src/strings/search/findall.cu
   src/strings/search/find.cu
   src/strings/search/find_multiple.cu
@@ -603,6 +604,7 @@ add_library(
   src/strings/utilities.cu
   src/strings/wrap.cu
   src/structs/copying/concatenate.cu
+  src/structs/scan/scan_inclusive.cu
   src/structs/structs_column_factories.cu
   src/structs/structs_column_view.cpp
   src/structs/utilities.cpp

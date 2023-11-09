@@ -278,7 +278,7 @@ ConfigureBench(TEXT_BENCH text/ngrams.cpp text/subword.cpp)
 
 ConfigureNVBench(
   TEXT_NVBENCH text/edit_distance.cpp text/hash_ngrams.cpp text/jaccard.cpp text/minhash.cpp
-  text/normalize.cpp text/replace.cpp text/tokenize.cpp
+  text/normalize.cpp text/replace.cpp text/tokenize.cpp text/vocab.cpp
 )
 
 # ##################################################################################################
@@ -320,7 +320,7 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
-ConfigureBench(JSON_BENCH string/json.cu)
+ConfigureBench(JSON_BENCH json/json.cu)
 ConfigureNVBench(FST_NVBENCH io/fst.cu)
 ConfigureNVBench(JSON_READER_NVBENCH io/json/nested_json.cpp io/json/json_reader_input.cpp)
 ConfigureNVBench(JSON_WRITER_NVBENCH io/json/json_writer.cpp)

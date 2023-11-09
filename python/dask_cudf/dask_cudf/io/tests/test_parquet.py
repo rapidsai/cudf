@@ -148,7 +148,6 @@ def test_roundtrip_from_pandas(tmpdir):
 
 
 def test_strings(tmpdir):
-
     fn = str(tmpdir)
     dfp = pd.DataFrame(
         {"a": ["aa", "bbb", "cccc"], "b": ["hello", "dog", "man"]}
@@ -161,7 +160,6 @@ def test_strings(tmpdir):
 
 
 def test_dask_timeseries_from_pandas(tmpdir):
-
     fn = str(tmpdir.join("test.parquet"))
     ddf2 = dask.datasets.timeseries(freq="D")
     pdf = ddf2.compute()
@@ -173,7 +171,6 @@ def test_dask_timeseries_from_pandas(tmpdir):
 @pytest.mark.parametrize("index", [False, None])
 @pytest.mark.parametrize("divisions", [False, True])
 def test_dask_timeseries_from_dask(tmpdir, index, divisions):
-
     fn = str(tmpdir)
     ddf2 = dask.datasets.timeseries(freq="D")
     ddf2.to_parquet(fn, engine="pyarrow", write_index=index)
@@ -188,7 +185,6 @@ def test_dask_timeseries_from_dask(tmpdir, index, divisions):
 @pytest.mark.parametrize("index", [False, None])
 @pytest.mark.parametrize("divisions", [False, True])
 def test_dask_timeseries_from_daskcudf(tmpdir, index, divisions):
-
     fn = str(tmpdir)
     ddf2 = dask_cudf.from_cudf(
         cudf.datasets.timeseries(freq="D"), npartitions=4
@@ -205,7 +201,6 @@ def test_dask_timeseries_from_daskcudf(tmpdir, index, divisions):
 
 @pytest.mark.parametrize("index", [False, True])
 def test_empty(tmpdir, index):
-
     fn = str(tmpdir)
     dfp = pd.DataFrame({"a": [11.0, 12.0, 12.0], "b": [4, 5, 6]})[:0]
     if index:
@@ -218,7 +213,6 @@ def test_empty(tmpdir, index):
 
 
 def test_filters(tmpdir):
-
     tmp_path = str(tmpdir)
     df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
     ddf = dd.from_pandas(df, npartitions=5)
@@ -251,7 +245,6 @@ def test_filters(tmpdir):
 @pytest.mark.parametrize("numeric", [True, False])
 @pytest.mark.parametrize("null", [np.nan, None])
 def test_isna_filters(tmpdir, null, numeric):
-
     tmp_path = str(tmpdir)
     df = pd.DataFrame(
         {
@@ -284,7 +277,6 @@ def test_isna_filters(tmpdir, null, numeric):
 
 
 def test_filters_at_row_group_level(tmpdir):
-
     tmp_path = str(tmpdir)
     df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
     ddf = dd.from_pandas(df, npartitions=5)
@@ -405,7 +397,6 @@ def test_split_row_groups(tmpdir, row_groups, index):
 @need_create_meta
 @pytest.mark.parametrize("partition_on", [None, "a"])
 def test_create_metadata_file(tmpdir, partition_on):
-
     tmpdir = str(tmpdir)
 
     # Write ddf without a _metadata file
@@ -445,7 +436,6 @@ def test_create_metadata_file(tmpdir, partition_on):
 
 @need_create_meta
 def test_create_metadata_file_inconsistent_schema(tmpdir):
-
     # NOTE: This test demonstrates that the CudfEngine
     # can be used to generate a global `_metadata` file
     # even if there are inconsistent schemas in the dataset.
@@ -481,9 +471,7 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
     # call `compute` on `ddf1`, because the dtype of
     # the inconsistent column ("a") may be "object"
     # before computing, and "int" after
-    # TODO: Uncomment after cudf#14326 is closed
-    # (See: https://github.com/rapidsai/cudf/issues/14326)
-    # dd.assert_eq(ddf1.compute(), ddf2)
+    dd.assert_eq(ddf1.compute(), ddf2)
     dd.assert_eq(ddf1.compute(), ddf2.compute())
 
 

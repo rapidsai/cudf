@@ -1,6 +1,6 @@
 # Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
-{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
+{% set version = environ['RAPIDS_PACKAGE_VERSION'].lstrip('v') %}
 {% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set cuda_version = '.'.join(environ['RAPIDS_CUDA_VERSION'].split('.')[:2]) %}
 {% set cuda_major = cuda_version.split('.')[0] %}
@@ -11,7 +11,7 @@ package:
   name: libcudf-split
 
 source:
-  git_url: ../../..
+  path: ../../..
 
 build:
   script_env:

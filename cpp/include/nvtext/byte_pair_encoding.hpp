@@ -36,7 +36,7 @@ namespace nvtext {
  */
 struct bpe_merge_pairs {
   struct bpe_merge_pairs_impl;
-  std::unique_ptr<bpe_merge_pairs_impl> impl{};  ///< Implementation of the BPE merge pairs table.
+  bpe_merge_pairs_impl* impl{};  ///< Implementation of the BPE merge pairs table.
 
   /**
    * @brief Construct a new bpe merge pairs object
@@ -61,6 +61,7 @@ struct bpe_merge_pairs {
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   ~bpe_merge_pairs();
+  bpe_merge_pairs();
 };
 
 /**

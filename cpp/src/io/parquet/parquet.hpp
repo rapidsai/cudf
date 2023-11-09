@@ -58,13 +58,17 @@ struct TimeUnit {
 };
 
 struct TimeType {
-  bool isAdjustedToUTC = false;
-  TimeUnit unit;
+  // Default to true because the timestamps are implicitly in UTC
+  // Writer option overrides this default
+  bool isAdjustedToUTC = true;
+  TimeUnit unit        = {TimeUnit::MILLIS};
 };
 
 struct TimestampType {
-  bool isAdjustedToUTC = false;
-  TimeUnit unit;
+  // Default to true because the timestamps are implicitly in UTC
+  // Writer option overrides this default
+  bool isAdjustedToUTC = true;
+  TimeUnit unit        = {TimeUnit::MILLIS};
 };
 
 struct IntType {
