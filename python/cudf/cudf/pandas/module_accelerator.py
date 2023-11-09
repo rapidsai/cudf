@@ -555,7 +555,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
             frame = sys._getframe()
             # We cannot possibly be at the top level.
             assert frame.f_back
-            calling_module = pathlib.Purepath(
+            calling_module = pathlib.PurePath(
                 frame.f_back.f_code.co_filename
             )
             use_real = any(
