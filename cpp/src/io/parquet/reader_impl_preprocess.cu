@@ -473,7 +473,8 @@ void reader::impl::allocate_nesting_info()
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
-  auto const& chunks             = pass.chunks;
+  // auto const& chunks             = pass.chunks;
+  auto const num_columns         = _input_columns.size();
   auto& pages                    = subpass.pages;
   auto& page_nesting_info        = subpass.page_nesting_info;
   auto& page_nesting_decode_info = subpass.page_nesting_decode_info;
@@ -482,14 +483,13 @@ void reader::impl::allocate_nesting_info()
   // buffer to keep it to a single gpu allocation
   auto counting_iter = thrust::make_counting_iterator(size_t{0});
   size_t const total_page_nesting_infos =
-    std::accumulate(counting_iter, counting_iter + chunks.size(), 0, [&](int total, size_t index) {
-      auto const& chunk = chunks[index];
-
+    std::accumulate(counting_iter, counting_iter + num_columns, 0, [&](int total, size_t index) {
       // the schema of the input column
-      auto const& schema                    = _metadata->get_schema(chunk.src_col_schema);
-      auto const per_page_nesting_info_size = max(
-        schema.max_definition_level + 1, _metadata->get_output_nesting_depth(chunk.src_col_schema));
-      return total + (per_page_nesting_info_size * subpass.chunk_page_count[index]);
+      auto const schema_idx = _input_columns[index].schema_idx;
+      auto const& schema    = _metadata->get_schema(schema_idx);
+      auto const per_page_nesting_info_size =
+        max(schema.max_definition_level + 1, _metadata->get_output_nesting_depth(schema_idx));
+      return total + (per_page_nesting_info_size * subpass.column_page_count[index]);
     });
 
   page_nesting_info =
@@ -500,13 +500,13 @@ void reader::impl::allocate_nesting_info()
   // update pointers in the PageInfos
   int target_page_index = 0;
   int src_info_index    = 0;
-  for (size_t idx = 0; idx < chunks.size(); idx++) {
-    int src_col_schema                    = chunks[idx].src_col_schema;
+  for (size_t idx = 0; idx < _input_columns.size(); idx++) {
+    auto const src_col_schema             = _input_columns[idx].schema_idx;
     auto& schema                          = _metadata->get_schema(src_col_schema);
     auto const per_page_nesting_info_size = std::max(
       schema.max_definition_level + 1, _metadata->get_output_nesting_depth(src_col_schema));
 
-    for (size_t p_idx = 0; p_idx < subpass.chunk_page_count[idx]; p_idx++) {
+    for (size_t p_idx = 0; p_idx < subpass.column_page_count[idx]; p_idx++) {
       pages[target_page_index + p_idx].nesting = page_nesting_info.device_ptr() + src_info_index;
       pages[target_page_index + p_idx].nesting_decode =
         page_nesting_decode_info.device_ptr() + src_info_index;
@@ -517,14 +517,14 @@ void reader::impl::allocate_nesting_info()
 
       src_info_index += per_page_nesting_info_size;
     }
-    target_page_index += subpass.chunk_page_count[idx];
+    target_page_index += subpass.column_page_count[idx];
   }
 
   // fill in
   int nesting_info_index = 0;
   std::map<int, std::pair<std::vector<int>, std::vector<int>>> depth_remapping;
-  for (size_t idx = 0; idx < chunks.size(); idx++) {
-    int src_col_schema = chunks[idx].src_col_schema;
+  for (size_t idx = 0; idx < _input_columns.size(); idx++) {
+    auto const src_col_schema = _input_columns[idx].schema_idx;
 
     // schema of the input column
     auto& schema = _metadata->get_schema(src_col_schema);
@@ -549,7 +549,7 @@ void reader::impl::allocate_nesting_info()
       // we can ignore them for the purposes of output nesting info
       if (!cur_schema.is_stub()) {
         // initialize each page within the chunk
-        for (size_t p_idx = 0; p_idx < subpass.chunk_page_count[idx]; p_idx++) {
+        for (size_t p_idx = 0; p_idx < subpass.column_page_count[idx]; p_idx++) {
           PageNestingInfo* pni =
             &page_nesting_info[nesting_info_index + (p_idx * per_page_nesting_info_size)];
 
@@ -589,7 +589,7 @@ void reader::impl::allocate_nesting_info()
       cur_schema = _metadata->get_schema(schema_idx);
     }
 
-    nesting_info_index += (per_page_nesting_info_size * subpass.chunk_page_count[idx]);
+    nesting_info_index += (per_page_nesting_info_size * subpass.column_page_count[idx]);
   }
 
   // copy nesting info to the device
@@ -717,6 +717,8 @@ void reader::impl::load_compressed_data()
 
   // decoding of column/page information
   decode_page_headers(pass, _stream);
+  CUDF_EXPECTS(pass.page_offsets.size() - 1 == static_cast<size_t>(_input_columns.size()),
+               "Encountered page_offsets / num_columns mismatch");
 }
 
 namespace {
@@ -1037,14 +1039,16 @@ void reader::impl::preprocess_subpass_pages(bool uses_custom_row_bounds, size_t 
 
   // at this point we have an accurate row count so we can compute how many rows we will actually be
   // able to decode for this pass. we will have selected a set of pages for each column in the
-  // chunk, but not every page will have the same number of rows. so, we can only read as many rows
-  // as the smallest batch (by column) we have decompressed.
+  // row group, but not every page will have the same number of rows. so, we can only read as many
+  // rows as the smallest batch (by column) we have decompressed.
   size_t page_index = 0;
   size_t max_row    = std::numeric_limits<size_t>::max();
-  for (size_t idx = 0; idx < subpass.chunk_page_count.size(); idx++) {
-    auto const& last_page = subpass.pages[page_index + (subpass.chunk_page_count[idx] - 1)];
-    max_row = min(max_row, static_cast<size_t>(last_page.chunk_row + last_page.num_rows));
-    page_index += subpass.chunk_page_count[idx];
+  for (size_t idx = 0; idx < subpass.column_page_count.size(); idx++) {
+    auto const& last_page = subpass.pages[page_index + (subpass.column_page_count[idx] - 1)];
+    auto const& chunk     = pass.chunks[last_page.chunk_idx];
+    max_row =
+      min(max_row, static_cast<size_t>(chunk.start_row + last_page.chunk_row + last_page.num_rows));
+    page_index += subpass.column_page_count[idx];
   }
   CUDF_EXPECTS(max_row > pass.processed_rows, "Encountered invalid row read count");
   subpass.skip_rows = pass.skip_rows + pass.processed_rows;

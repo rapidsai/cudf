@@ -40,8 +40,8 @@ struct file_intermediate_data {
   // row counts per input-pass
   std::vector<std::size_t> input_pass_row_count{};
 
-  std::size_t _current_input_pass{0};  // current input pass index
-  std::size_t _output_chunk_count{0};  // how many output chunks we have produced
+  size_t _current_input_pass{0};  // current input pass index
+  size_t _output_chunk_count{0};  // how many output chunks we have produced
 
   // skip_rows/num_rows values for the entire file. these need to be adjusted per-pass because we
   // may not be visiting every row group that contains these bounds
@@ -67,9 +67,9 @@ struct subpass_intermediate_data {
   cudf::detail::hostdevice_vector<PageInfo> pages{};
   // for each page in the subpass, the index of our source page in the pass
   cudf::detail::hostdevice_vector<size_t> page_src_index{};
-  // for each chunk in the subpass, the number of associated pages for this
-  // subpass
-  std::vector<size_t> chunk_page_count;
+  // for each column in the file (indexed by _input_columns.size())
+  // the number of associated pages for this subpass
+  std::vector<size_t> column_page_count;
   cudf::detail::hostdevice_vector<PageNestingInfo> page_nesting_info{};
   cudf::detail::hostdevice_vector<PageNestingDecodeInfo> page_nesting_decode_info{};
 
@@ -96,16 +96,13 @@ struct pass_intermediate_data {
   cudf::detail::hostdevice_vector<ColumnChunkDesc> chunks{};
   cudf::detail::hostdevice_vector<PageInfo> pages{};
 
-  // offsets to each group of input pages (by column/schema)
+  // offsets to each group of input pages (by column/schema, indexed by _input_columns.size())
   // so if we had 2 columns/schemas, with page keys
   //
   // 1 1 1 1 1 2 2 2
   //
   // page_offsets would be 0, 5, 8
   cudf::detail::hostdevice_vector<size_type> page_offsets{};
-  // for each group of input pages (by column, schema), the count
-  // of how many pages we have processed so far
-  std::vector<size_type> page_processed_counts{};
 
   rmm::device_buffer decomp_dict_data{0, rmm::cuda_stream_default};
   rmm::device_uvector<string_index_pair> str_dict_index{0, rmm::cuda_stream_default};

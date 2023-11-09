@@ -978,9 +978,6 @@ void reader::impl::setup_next_pass()
     // pass level.
     build_string_dict_indices();
 
-    pass.page_processed_counts = std::vector<size_type>(pass.page_offsets.size() - 1);
-    std::fill(pass.page_processed_counts.begin(), pass.page_processed_counts.end(), 0);
-
     // compute subpasses for this pass using the page information we now have.
     // compute_subpasses();
     /*
@@ -1000,7 +997,7 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
   pass.subpass  = std::make_unique<subpass_intermediate_data>();
   auto& subpass = *pass.subpass;
 
-  auto const num_columns = pass.page_offsets.size() - 1;
+  auto const num_columns = _input_columns.size();
 
   auto [page_indices, total_pages] = [&]() -> std::pair<std::vector<page_span>, size_t> {
     // special case:  if we contain no compressed data, or if we have no input limit, we can always
@@ -1051,7 +1048,7 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
   size_t page_count = 0;
   for (size_t c_idx = 0; c_idx < num_columns; c_idx++) {
     auto const num_column_pages = page_indices[c_idx].end - page_indices[c_idx].start;
-    subpass.chunk_page_count.push_back(num_column_pages);
+    subpass.column_page_count.push_back(num_column_pages);
     std::copy(pass.pages.begin() + page_indices[c_idx].start,
               pass.pages.begin() + page_indices[c_idx].end,
               std::back_inserter(subpass.pages));

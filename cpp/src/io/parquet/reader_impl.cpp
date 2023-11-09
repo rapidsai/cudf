@@ -80,7 +80,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
     cudf::detail::hostdevice_vector<void*>(has_strings ? sum_max_depths : 0, _stream);
 
   // Update chunks with pointers to column data.
-  for (size_t c = 0, page_count = 0, chunk_off = 0; c < pass.chunks.size(); c++) {
+  for (size_t c = 0, chunk_off = 0; c < pass.chunks.size(); c++) {
     input_column_info const& input_col = _input_columns[pass.chunks[c].src_col_index];
     CUDF_EXPECTS(input_col.schema_idx == pass.chunks[c].src_col_schema,
                  "Column/page schema index mismatch");
@@ -156,9 +156,6 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
         data[idx]   = nullptr;
       }
     }
-
-    // column_data_base will always point to leaf data, even for nested types.
-    page_count += subpass.chunk_page_count[c];
   }
 
   pass.chunks.host_to_device_async(_stream);
