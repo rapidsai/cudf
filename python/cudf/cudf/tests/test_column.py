@@ -211,6 +211,7 @@ def test_as_column_scalar_with_nan(nan_as_null, scalar, size):
         .dropna()
         .to_numpy()
     )
+
     np.testing.assert_equal(expected, got)
 
 
