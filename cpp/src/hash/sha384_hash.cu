@@ -50,7 +50,8 @@ namespace detail {
 
 namespace {
 
-struct sha384_hash_state {
+// Need alignas(16) to avoid compiler bug.
+struct alignas(16) sha384_hash_state {
   uint64_t message_length = 0;
   uint32_t buffer_length  = 0;
   uint64_t hash_value[8]  = {0xcbbb9d5dc1059ed8,
