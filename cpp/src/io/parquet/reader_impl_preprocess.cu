@@ -400,15 +400,13 @@ void decode_page_headers(pass_intermediate_data& pass, rmm::cuda_stream_view str
                          pass.page_offsets.d_begin());
 
   // setup dict_page for each chunk if necessary
-  auto iter = thrust::make_counting_iterator(0);
   thrust::for_each(rmm::exec_policy(stream),
-                   iter,
-                   iter + pass.chunks.size(),
-                   [chunks       = pass.chunks.d_begin(),
-                    pages        = pass.pages.d_begin(),
-                    page_offsets = pass.page_offsets.d_begin()] __device__(size_t i) {
-                     auto& chunk = chunks[i];
-                     if (chunk.num_dict_pages > 0) { chunk.dict_page = &pages[page_offsets[i]]; }
+                   pass.pages.d_begin(),
+                   pass.pages.d_end(),
+                   [chunks = pass.chunks.d_begin()] __device__(PageInfo const& p) {
+                     if (p.flags & PAGEINFO_FLAGS_DICTIONARY) {
+                       chunks[p.chunk_idx].dict_page = &p;
+                     }
                    });
 
   pass.page_offsets.device_to_host_async(stream);

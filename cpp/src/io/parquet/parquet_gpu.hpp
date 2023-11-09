@@ -374,7 +374,7 @@ struct ColumnChunkDesc {
   int32_t num_data_pages{};                     // number of data pages
   int32_t num_dict_pages{};                     // number of dictionary pages
   int32_t max_num_pages{};                      // size of page_info array
-  PageInfo* dict_page{};
+  PageInfo const* dict_page{};
   string_index_pair* str_dict_index{};           // index for string dictionary
   bitmask_type** valid_map_base{};               // base pointers of valid bit map for this column
   void** column_data_base{};                     // base pointers of column data
