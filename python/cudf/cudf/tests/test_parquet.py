@@ -1289,6 +1289,10 @@ def test_parquet_delta_byte_array(datadir):
     assert_eq(cudf.read_parquet(fname), pd.read_parquet(fname))
 
 
+def delta_num_rows():
+    return [1, 2, 23, 32, 33, 34, 64, 65, 66, 128, 129, 130, 20000, 50000]
+
+
 @pytest.mark.parametrize("nrows", [1, 100000])
 @pytest.mark.parametrize("add_nulls", [True, False])
 @pytest.mark.parametrize(
@@ -1325,6 +1329,7 @@ def test_delta_binary(nrows, add_nulls, dtype, tmpdir):
         version="2.6",
         column_encoding="DELTA_BINARY_PACKED",
         data_page_version="2.0",
+        data_page_size=64 * 1024,
         engine="pyarrow",
         use_dictionary=False,
     )
@@ -1355,11 +1360,10 @@ def test_delta_binary(nrows, add_nulls, dtype, tmpdir):
         assert_eq(cdf2, cdf)
 
 
-@pytest.mark.parametrize(
-    "nrows", [1, 2, 23, 32, 33, 34, 64, 65, 66, 128, 129, 130, 20000, 100000]
-)
+@pytest.mark.parametrize("nrows", delta_num_rows())
 @pytest.mark.parametrize("add_nulls", [True, False])
-def test_delta_byte_array_roundtrip(nrows, add_nulls, tmpdir):
+@pytest.mark.parametrize("str_encoding", ["DELTA_BYTE_ARRAY"])
+def test_delta_byte_array_roundtrip(nrows, add_nulls, str_encoding, tmpdir):
     null_frequency = 0.25 if add_nulls else 0
 
     # Create a pandas dataframe with random data of mixed lengths
@@ -1387,8 +1391,9 @@ def test_delta_byte_array_roundtrip(nrows, add_nulls, tmpdir):
     test_pdf.to_parquet(
         pdf_fname,
         version="2.6",
-        column_encoding="DELTA_BYTE_ARRAY",
+        column_encoding=str_encoding,
         data_page_version="2.0",
+        data_page_size=64 * 1024,
         engine="pyarrow",
         use_dictionary=False,
     )
@@ -1397,11 +1402,10 @@ def test_delta_byte_array_roundtrip(nrows, add_nulls, tmpdir):
     assert_eq(cdf, pcdf)
 
 
-@pytest.mark.parametrize(
-    "nrows", [1, 2, 23, 32, 33, 34, 64, 65, 66, 128, 129, 130, 20000, 100000]
-)
+@pytest.mark.parametrize("nrows", delta_num_rows())
 @pytest.mark.parametrize("add_nulls", [True, False])
-def test_delta_struct_list(tmpdir, nrows, add_nulls):
+@pytest.mark.parametrize("str_encoding", ["DELTA_BYTE_ARRAY"])
+def test_delta_struct_list(tmpdir, nrows, add_nulls, str_encoding):
     # Struct<List<List>>
     lists_per_row = 3
     list_size = 4
@@ -1429,17 +1433,18 @@ def test_delta_struct_list(tmpdir, nrows, add_nulls):
         include_validity,
     )
     test_pdf = pa.Table.from_pydict({"sol": data}).to_pandas()
-    pdf_fname = tmpdir.join("test_delta_binary.parquet")
+    pdf_fname = tmpdir.join("pdfdeltaba.parquet")
     test_pdf.to_parquet(
         pdf_fname,
         version="2.6",
         column_encoding={
             "sol.col0": "DELTA_BINARY_PACKED",
-            "sol.col1": "DELTA_BYTE_ARRAY",
+            "sol.col1": str_encoding,
             "sol.col2.list.element.list.element": "DELTA_BINARY_PACKED",
-            "sol.col3.list.element.list.element": "DELTA_BYTE_ARRAY",
+            "sol.col3.list.element.list.element": str_encoding,
         },
         data_page_version="2.0",
+        data_page_size=64 * 1024,
         engine="pyarrow",
         use_dictionary=False,
     )
