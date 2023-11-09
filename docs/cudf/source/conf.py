@@ -319,13 +319,20 @@ def on_missing_reference(app, env, node, contnode):
         # Try to find the target prefixed with e.g. namespaces in case that's
         # all that's missing. Include the empty prefix in case we're searching
         # for a stripped template.
-        # extra_prefixes = ["rmm::", "rmm::mr::", "mr::", ""]
-        extra_prefixes = ["cudf::", ""]
+        base_namespace = "cudf"
+        other_namespaces = {"io", "strings", "ast", "ast::expression"}
+
+        def generate_namespaces(base_namespace, other_namespaces):
+            yield base_namespace + "::"
+            for other_namespace in other_namespaces:
+                yield f"{other_namespace}::"
+                yield f"{base_namespace}::{other_namespace}::"
+
         for (name, _, _, docname, _, _) in env.domains[
             "cpp"
         ].get_objects():
 
-            for prefix in extra_prefixes:
+            for prefix in generate_namespaces(base_namespace, other_namespaces):
                 if (
                     name == f"{prefix}{reftarget}"
                     or f"{prefix}{name}" == reftarget
