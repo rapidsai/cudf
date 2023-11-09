@@ -288,13 +288,19 @@ def on_missing_reference(app, env, node, contnode):
         "int16_t",
         "int32_t",
         "int64_t",
+        "__int128_t",
         "size_t",
         "uint8_t",
         "uint16_t",
         "uint32_t",
         "uint64_t",
-        # # Internal objects
+        # Internal objects
         "CUDF_ENABLE_IF",
+        "id_to_type_impl",
+        "type_to_scalar_type_impl",
+        "type_to_scalar_type_impl",
+        # Template types
+        "Radix"
     ]
     if (
         node["refdomain"] == "cpp"
