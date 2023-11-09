@@ -376,7 +376,7 @@ if hasArg cudf_kafka; then
     cd ${REPODIR}/python/cudf_kafka
     SKBUILD_CONFIGURE_OPTIONS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX} -DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR} -DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES} ${EXTRA_CMAKE_ARGS}" \
         SKBUILD_BUILD_OPTIONS="-j${PARALLEL_LEVEL:-1}" \
-        python -m pip install --no-build-isolation --no-deps . -vvv
+        python -m pip install --no-build-isolation --no-deps .
 fi
 
 # build custreamz Python package
