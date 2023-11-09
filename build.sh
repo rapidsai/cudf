@@ -235,7 +235,7 @@ if [[ "${EXTRA_CMAKE_ARGS}" != *"DFIND_CUDF_CPP"* ]]; then
 fi
 
 # Append `-DFIND_CUDF_KAFKA_CPP=ON` to EXTRA_CMAKE_ARGS unless a user specified the option.
-if [[ "${EXTRA_CMAKE_ARGS}" != *"DFIND_CUDF_KAFKA_CPP"* ]]; then
+if buildAll || hasArg cudf_kafka && [[ "${EXTRA_CMAKE_ARGS}" != *"DFIND_CUDF_KAFKA_CPP"* ]]; then
     EXTRA_CMAKE_ARGS="${EXTRA_CMAKE_ARGS} -DFIND_CUDF_KAFKA_CPP=ON"
 fi
 
