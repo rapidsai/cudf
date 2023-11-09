@@ -621,6 +621,11 @@ ConfigureTest(
 ConfigureTest(LABEL_BINS_TEST labeling/label_bins_tests.cpp)
 
 # ##################################################################################################
+# * jit tests ----------------------------------------------------------------------------------
+ConfigureTest(JIT_PARSER_TEST jit/parse_ptx_function.cpp)
+target_include_directories(JIT_PARSER_TEST PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
+
+# ##################################################################################################
 # * stream testing ---------------------------------------------------------------------------------
 ConfigureTest(
   STREAM_IDENTIFICATION_TEST identify_stream_usage/test_default_stream_identification.cu
