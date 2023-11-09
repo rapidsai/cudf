@@ -23,6 +23,7 @@ import sys
 from docutils.nodes import Text
 from sphinx.addnodes import pending_xref
 from sphinx.highlighting import lexers
+from sphinx.ext import intersphinx
 from pygments.lexer import RegexLexer
 from pygments.token import Text as PText
 
@@ -317,8 +318,8 @@ def on_missing_reference(app, env, node, contnode):
         # all that's missing. Include the empty prefix in case we're searching
         # for a stripped template.
         # extra_prefixes = ["rmm::", "rmm::mr::", "mr::", ""]
-        extra_prefixes = ["cudf::", "rmm::", "rmm::mr::", "mr::", ""]
-        for (name, dispname, type, docname, anchor, priority) in env.domains[
+        extra_prefixes = ["cudf::", ""]
+        for (name, _, _, docname, _, _) in env.domains[
             "cpp"
         ].get_objects():
 
@@ -336,6 +337,20 @@ def on_missing_reference(app, env, node, contnode):
                         node,
                         contnode,
                     )
+
+        intersphinx_extra_prefixes = ["rmm::", "rmm::mr::", "mr::", ""]
+        original_reftarget = node["reftarget"]
+
+        for prefix in intersphinx_extra_prefixes:
+            # First try adding the prefix.
+            node["reftarget"] = f"{prefix}{original_reftarget}"
+            if (ref := intersphinx.resolve_reference_detect_inventory(env, node, contnode)) is not None:
+                return ref
+
+            # Then try removing the prefix.
+            node["reftarget"] = original_reftarget.replace(prefix, "")
+            if (ref := intersphinx.resolve_reference_detect_inventory(env, node, contnode)) is not None:
+                return ref
 
     return None
 
