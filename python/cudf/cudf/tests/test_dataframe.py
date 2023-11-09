@@ -1388,7 +1388,10 @@ def test_assign_callable(mapping):
 
 
 @pytest.mark.parametrize("nrows", [1, 8, 100, 1000])
-@pytest.mark.parametrize("method", ["murmur3", "md5"])
+@pytest.mark.parametrize(
+    "method",
+    ["murmur3", "md5", "sha1", "sha224", "sha256", "sha384", "sha512"],
+)
 @pytest.mark.parametrize("seed", [None, 42])
 def test_dataframe_hash_values(nrows, method, seed):
     gdf = cudf.DataFrame()

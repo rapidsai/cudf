@@ -26,6 +26,11 @@ public enum HashType {
   MURMUR3(1),
   HASH_SPARK_MURMUR3(2),
   HASH_MD5(3);
+  HASH_SHA1(4),
+  HASH_SHA224(5),
+  HASH_SHA256(6),
+  HASH_SHA384(7),
+  HASH_SHA512(8);
 
   private static final HashType[] HASH_TYPES = HashType.values();
   final int nativeId;

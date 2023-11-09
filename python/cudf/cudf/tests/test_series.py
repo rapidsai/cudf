@@ -1390,7 +1390,9 @@ def test_series_sort_index(
         assert_eq(expected, got, check_index_type=True)
 
 
-@pytest.mark.parametrize("method", ["md5"])
+@pytest.mark.parametrize(
+    "method", ["md5", "sha1", "sha224", "sha256", "sha384", "sha512"]
+)
 def test_series_hash_values(method):
     inputs = cudf.Series(
         [

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint32_t
 from libcpp.memory cimport unique_ptr
@@ -16,6 +16,11 @@ cdef extern from "cudf/hashing.hpp" namespace "cudf" nogil:
         HASH_MURMUR3 "cudf::hash_id::HASH_MURMUR3"
         HASH_SPARK_MURMUR3 "cudf::hash_id::HASH_SPARK_MURMUR3"
         HASH_MD5 "cudf::hash_id::HASH_MD5"
+        HASH_SHA1 "cudf::hash_id::HASH_SHA1"
+        HASH_SHA224 "cudf::hash_id::HASH_SHA224"
+        HASH_SHA256 "cudf::hash_id::HASH_SHA256"
+        HASH_SHA384 "cudf::hash_id::HASH_SHA384"
+        HASH_SHA512 "cudf::hash_id::HASH_SHA512"
 
     cdef unique_ptr[column] hash "cudf::hash" (
         const table_view& input,

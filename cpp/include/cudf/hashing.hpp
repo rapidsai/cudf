@@ -42,7 +42,12 @@ enum class hash_id {
   HASH_IDENTITY = 0,   ///< Identity hash function that simply returns the key to be hashed
   HASH_MURMUR3,        ///< Murmur3 hash function
   HASH_SPARK_MURMUR3,  ///< Spark Murmur3 hash function
-  HASH_MD5             ///< MD5 hash function
+  HASH_MD5,            ///< MD5 hash function
+  HASH_SHA1,           ///< SHA-1 hash function
+  HASH_SHA224,         ///< SHA-224 hash function
+  HASH_SHA256,         ///< SHA-256 hash function
+  HASH_SHA384,         ///< SHA-384 hash function
+  HASH_SHA512          ///< SHA-512 hash function
 };
 
 /**
@@ -141,6 +146,76 @@ std::unique_ptr<column> spark_murmurhash3_x86_32(
  * @returns A column where each row is the hash of a row from the input
  */
 std::unique_ptr<column> md5(
+  table_view const& input,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Computes the SHA-1 hash value of each row in the given table
+ *
+ * @param input The table of columns to hash
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ *
+ * @returns A column where each row is the hash of a row from the input
+ */
+std::unique_ptr<column> sha1(
+  table_view const& input,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Computes the SHA-224 hash value of each row in the given table
+ *
+ * @param input The table of columns to hash
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ *
+ * @returns A column where each row is the hash of a row from the input
+ */
+std::unique_ptr<column> sha224(
+  table_view const& input,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Computes the SHA-256 hash value of each row in the given table
+ *
+ * @param input The table of columns to hash
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ *
+ * @returns A column where each row is the hash of a row from the input
+ */
+std::unique_ptr<column> sha256(
+  table_view const& input,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Computes the SHA-384 hash value of each row in the given table
+ *
+ * @param input The table of columns to hash
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ *
+ * @returns A column where each row is the hash of a row from the input
+ */
+std::unique_ptr<column> sha384(
+  table_view const& input,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Computes the SHA-512 hash value of each row in the given table
+ *
+ * @param input The table of columns to hash
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ *
+ * @returns A column where each row is the hash of a row from the input
+ */
+std::unique_ptr<column> sha512(
   table_view const& input,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

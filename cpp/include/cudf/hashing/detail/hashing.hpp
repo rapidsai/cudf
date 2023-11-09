@@ -46,6 +46,26 @@ std::unique_ptr<column> md5(table_view const& input,
                             rmm::cuda_stream_view stream,
                             rmm::mr::device_memory_resource* mr);
 
+std::unique_ptr<column> sha1(table_view const& input,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr);
+
+std::unique_ptr<column> sha224(table_view const& input,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr);
+
+std::unique_ptr<column> sha256(table_view const& input,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr);
+
+std::unique_ptr<column> sha384(table_view const& input,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr);
+
+std::unique_ptr<column> sha512(table_view const& input,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr);
+
 std::unique_ptr<column> xxhash_64(table_view const& input,
                                   uint64_t seed,
                                   rmm::cuda_stream_view,
