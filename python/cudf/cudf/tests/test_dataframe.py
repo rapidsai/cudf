@@ -4566,6 +4566,14 @@ def test_dataframe_columns_returns_rangeindex_single_col():
     assert_eq(result, expected)
 
 
+@pytest.mark.parametrize("dtype", ["int64", "datetime64[ns]"])
+@pytest.mark.parametrize("data", [None, [], {}])
+def test_dataframe_columns_empty_preserves_dtype(dtype, data):
+    result = cudf.DataFrame(data, columns=cudf.Index([], dtype=dtype)).columns
+    expected = pd.Index([], dtype=dtype)
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize(
     "data",
     [
