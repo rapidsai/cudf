@@ -24,7 +24,7 @@ dependencies:
 - cudatoolkit
 - cupy>=12.0.0
 - cxx-compiler
-- cython>=3.0.0
+- cython>=3.0.3
 - dask-core>=2023.9.2
 - dask-cuda==23.12.*
 - dask>=2023.9.2
