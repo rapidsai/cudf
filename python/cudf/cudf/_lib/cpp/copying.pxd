@@ -36,15 +36,15 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
     ) except +
 
     cdef unique_ptr[table] scatter (
-        table_view source_table,
-        column_view scatter_map,
-        table_view target_table,
+        const table_view source_table,
+        const column_view scatter_map,
+        const table_view target_table,
     ) except +
 
     cdef unique_ptr[table] scatter (
         vector[reference_wrapper[constscalar]] source_scalars,
-        column_view indices,
-        table_view target,
+        const column_view indices,
+        const table_view target,
     ) except +
 
     cpdef enum class mask_allocation_policy(int32_t):
@@ -53,26 +53,26 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         ALWAYS
 
     cdef unique_ptr[column] empty_like (
-        column_view input_column
+        const column_view input_column
     ) except +
 
     cdef unique_ptr[column] allocate_like (
-        column_view input_column,
+        const column_view input_column,
         mask_allocation_policy policy
     ) except +
 
     cdef unique_ptr[column] allocate_like (
-        column_view input_column,
+        const column_view input_column,
         size_type size,
         mask_allocation_policy policy
     ) except +
 
     cdef unique_ptr[table] empty_like (
-        table_view input_table
+        const table_view input_table
     ) except +
 
     cdef void copy_range_in_place (
-        column_view input_column,
+        const column_view input_column,
         mutable_column_view target_column,
         size_type input_begin,
         size_type input_end,
@@ -80,71 +80,71 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
     ) except +
 
     cdef unique_ptr[column] copy_range (
-        column_view input_column,
-        column_view target_column,
+        const column_view input_column,
+        const column_view target_column,
         size_type input_begin,
         size_type input_end,
         size_type target_begin
     ) except +
 
     cdef vector[column_view] slice (
-        column_view input_column,
+        const column_view input_column,
         vector[size_type] indices
     ) except +
 
     cdef vector[table_view] slice (
-        table_view input_table,
+        const table_view input_table,
         vector[size_type] indices
     ) except +
 
     cdef vector[column_view] split (
-        column_view input_column,
+        const column_view input_column,
         vector[size_type] splits
     ) except +
 
     cdef vector[table_view] split (
-        table_view input_table,
+        const table_view input_table,
         vector[size_type] splits
     ) except +
 
     cdef unique_ptr[column] copy_if_else (
-        column_view lhs,
-        column_view rhs,
-        column_view boolean_mask
+        const column_view lhs,
+        const column_view rhs,
+        const column_view boolean_mask
     ) except +
 
     cdef unique_ptr[column] copy_if_else (
-        scalar lhs,
-        column_view rhs,
-        column_view boolean_mask
+        const scalar& lhs,
+        const column_view rhs,
+        const column_view boolean_mask
     ) except +
 
     cdef unique_ptr[column] copy_if_else (
-        column_view lhs,
-        scalar rhs,
-        column_view boolean_mask
+        const column_view lhs,
+        const scalar& rhs,
+        const column_view boolean_mask
     ) except +
 
     cdef unique_ptr[column] copy_if_else (
-        scalar lhs,
-        scalar rhs,
-        column_view boolean_mask
+        const scalar& lhs,
+        const scalar& rhs,
+        const column_view boolean_mask
     ) except +
 
     cdef unique_ptr[table] boolean_mask_scatter (
-        table_view input,
-        table_view target,
-        column_view boolean_mask
+        const table_view input,
+        const table_view target,
+        const column_view boolean_mask
     ) except +
 
     cdef unique_ptr[table] boolean_mask_scatter (
         vector[reference_wrapper[constscalar]] input,
-        table_view target,
-        column_view boolean_mask
+        const table_view target,
+        const column_view boolean_mask
     ) except +
 
     cdef unique_ptr[scalar] get_element (
-        column_view input,
+        const column_view input,
         size_type index
     ) except +
 
