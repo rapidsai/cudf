@@ -185,4 +185,5 @@
  * @{
  *   @defgroup label_bins Bin Labeling
  * @}
+ * @defgroup expressions Expression Evaluation
  */
