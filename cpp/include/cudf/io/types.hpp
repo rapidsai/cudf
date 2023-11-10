@@ -37,13 +37,13 @@ namespace cudf {
 namespace io {
 class data_sink;
 class datasource;
-}  // namespace io
-}  // namespace cudf
 
-//! cuDF interfaces
-namespace cudf {
-//! IO interfaces
-namespace io {
+/**
+ * @addtogroup io_types
+ * @{
+ * @file
+ */
+
 /**
  * @brief Compression algorithms
  */
@@ -938,5 +938,6 @@ class reader_column_schema {
   [[nodiscard]] size_t get_num_children() const { return children.size(); }
 };
 
+/** @} */  // end of group
 }  // namespace io
 }  // namespace cudf

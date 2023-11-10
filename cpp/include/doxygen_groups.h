@@ -141,6 +141,7 @@
  * @}
  * @defgroup io_apis IO
  * @{
+ *   @defgroup io_types Readers
  *   @defgroup io_readers Readers
  *   @defgroup io_writers Writers
  *   @defgroup io_datasources Data Sources
