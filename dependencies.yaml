@@ -62,6 +62,7 @@ files:
     includes:
       - cudatoolkit
       - docs
+      - libarrow_run
       - py_version
   py_build_cudf:
     output: pyproject
@@ -91,6 +92,22 @@ files:
     includes:
       - test_python_common
       - test_python_cudf
+  py_test_pandas_cudf:
+    output: pyproject
+    pyproject_dir: python/cudf
+    extras:
+      table: project.optional-dependencies
+      key: pandas_tests
+    includes:
+      - test_python_pandas_cudf
+  py_test_cudf_pandas:
+    output: pyproject
+    pyproject_dir: python/cudf
+    extras:
+      table: project.optional-dependencies
+      key: cudf_pandas_tests
+    includes:
+      - test_python_cudf_pandas
   py_build_dask_cudf:
     output: pyproject
     pyproject_dir: python/dask_cudf
@@ -224,10 +241,10 @@ dependencies:
           - &gmock gmock>=1.13.0
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - libarrow==13.0.0.*
+          - libarrow-all==14.0.1.*
           - librdkafka>=1.9.0,<1.10.0a0
           # Align nvcomp version with rapids-cmake
-          - nvcomp==2.6.1
+          - nvcomp==3.0.4
           - spdlog>=1.11.0,<1.12
   build_wheels:
     common:
@@ -239,14 +256,14 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - cython>=3.0.0
+          - cython>=3.0.3
           # TODO: Pin to numpy<1.25 until cudf requires pandas 2
           - &numpy numpy>=1.21,<1.25
       - output_types: [conda, requirements, pyproject]
         packages:
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - pyarrow==13.0.0.*
+          - pyarrow==14.0.1.*
   build_python:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -264,13 +281,15 @@ dependencies:
       - output_types: conda
         packages:
           # Allow runtime version to float up to minor version
-          - libarrow==13.*
+          # Disallow libarrow 14.0.0 due to a CVE
+          - libarrow-all>=14.0.1,<15.0.0a0
   pyarrow_run:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           # Allow runtime version to float up to minor version
-          - pyarrow==13.*
+          # Disallow pyarrow 14.0.0 due to a CVE
+          - pyarrow>=14.0.1,<15.0.0a0
   cudatoolkit:
     specific:
       - output_types: conda
@@ -427,6 +446,7 @@ dependencies:
           - &numba numba>=0.57,<0.58
           - nvtx>=0.2.1
           - packaging
+          - rich
           - rmm==23.12.*
           - typing_extensions>=4.0.0
           - *protobuf
@@ -591,3 +611,57 @@ dependencies:
         packages:
           - dask-cuda==23.12.*
           - *numba
+  test_python_pandas_cudf:
+    common:
+      - output_types: pyproject
+        packages:
+          # dependencies to run pandas tests
+          # https://github.com/pandas-dev/pandas/blob/main/environment.yml
+          # TODO: When pandas 2.0 is the minimum version, can just specify pandas[all]
+          - beautifulsoup4
+          - blosc
+          - brotlipy
+          - boto3
+          - botocore>=1.24.21
+          - bottleneck
+          - fastparquet
+          - flask
+          - fsspec
+          - html5lib
+          - hypothesis
+          - gcsfs
+          - ipython
+          - jinja2
+          - lxml
+          - matplotlib
+          - moto
+          - numba
+          - numexpr
+          - openpyxl
+          - odfpy
+          - py
+          - psycopg2-binary
+          - pyarrow
+          - pymysql
+          - pyreadstat
+          - pytest-asyncio
+          - pytest-reportlog
+          - python-snappy
+          - pyxlsb
+          - s3fs
+          - scipy
+          - sqlalchemy
+          - tables
+          - pandas-gbq
+          - tabulate
+          - xarray
+          - xlrd
+          - xlsxwriter
+          - xlwt
+          - zstandard
+  test_python_cudf_pandas:
+    common:
+      - output_types: pyproject
+        packages:
+          - ipython
+          - openpyxl

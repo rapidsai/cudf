@@ -21,8 +21,10 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/strings/detail/combine.hpp>
+#include <cudf/detail/sizes_to_offsets_iterator.cuh>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -30,467 +32,293 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/binary_search.h>
 #include <thrust/copy.h>
-#include <thrust/count.h>
 #include <thrust/distance.h>
 #include <thrust/execution_policy.h>
-#include <thrust/find.h>
-#include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
+#include <thrust/iterator/discard_iterator.h>
 #include <thrust/merge.h>
-#include <thrust/pair.h>
-#include <thrust/scan.h>
-#include <thrust/transform.h>
+#include <thrust/remove.h>
+#include <thrust/unique.h>
 
 namespace nvtext {
 namespace detail {
-
 namespace {
 
-template <typename CharType>
-constexpr bool is_whitespace(CharType ch)
-{
-  return ch <= ' ';
-}
+constexpr int block_size = 512;
 
 /**
- * @brief Resolve a substring up to the first whitespace character.
+ * @brief Produces offsets to unpairable locations in the given chars array
  *
- * This will return a substring of the input starting with the first byte
- * up to the first whitespace character found or the end of the string.
- * Any whitespace is expected only at the end of the string.
+ * Launched as a thread per byte of the chars array.
+ * The output is non-zero offsets to locations of unpairable substrings.
+ * An unpairable substring does not exist in the given map and so will
+ * never be paired. Fortunately, this can be used as an artificial
+ * boundary providing increased parallelism in the BPE kernel.
  *
- * @param d_str Input string to resolve.
- * @return Substring of the input excluding any trailing whitespace.
- */
-__device__ cudf::string_view get_first_token(cudf::string_view const& d_str)
-{
-  auto const begin = d_str.data();
-  auto const end   = thrust::find_if(
-    thrust::seq, begin, begin + d_str.size_bytes(), [](auto ch) { return is_whitespace(ch); });
-  auto const size = static_cast<cudf::size_type>(thrust::distance(begin, end));
-  return cudf::string_view(begin, size);
-}
-
-/**
- * @brief Main byte pair encoding algorithm function for each string.
- *
- * @see The byte_pair_encoding_fn::operator() function below for details.
+ * @tparam MapRefType The type of the map finder object
  */
 template <typename MapRefType>
-struct byte_pair_encoding_fn {
-  cudf::column_device_view const d_merges;
-  cudf::column_device_view const d_strings;
+struct bpe_unpairable_offsets_fn {
+  cudf::device_span<char const> d_chars;
+  cudf::size_type offset;
   MapRefType const d_map;
-  cudf::size_type* d_sizes;  // output size of encoded string
-  string_hasher_type const hasher;
-  cudf::size_type* d_byte_indices;
-
-  /**
-   * @brief Parse the merge pair into components.
-   *
-   * The two substrings are separated by a single space.
-   *
-   * @param idx Index of merge pair to dissect.
-   * @return The left and right halves of the merge pair.
-   */
-  __device__ thrust::pair<cudf::string_view, cudf::string_view> dissect_merge_pair(
-    cudf::size_type idx)
-  {
-    auto const d_pair  = d_merges.element<cudf::string_view>(idx);
-    auto const lhs     = d_pair.data();
-    auto const end_str = d_pair.data() + d_pair.size_bytes();
-    auto const rhs     = thrust::find(thrust::seq, lhs, end_str, ' ');  // space always expected
-    // check for malformed pair entry to prevent segfault
-    if (rhs == end_str) { return thrust::make_pair(cudf::string_view{}, cudf::string_view{}); }
-    auto const lhs_size = static_cast<cudf::size_type>(thrust::distance(lhs, rhs));
-    auto const rhs_size = static_cast<cudf::size_type>(thrust::distance(rhs + 1, end_str));
-    return thrust::make_pair(cudf::string_view(lhs, lhs_size),
-                             cudf::string_view(rhs + 1, rhs_size));
-  }
-
-  /**
-   * @brief Get the next substring of the given string.
-   *
-   * This will find the next sequence of characters identified by the
-   * given byte indices iterator values. The beginning of the sequence
-   * starts at `begin` and the end of the sequence is the first non-zero
-   * index found between (begin,end) exclusive.
-   *
-   * @tparam Iterator The byte indices iterator type
-   * @param begin Start of indices to check
-   * @param end End of indices to check
-   * @param d_str String to substring
-   * @return The substring found.
-   */
-  template <typename Iterator>
-  __device__ cudf::string_view next_substr(Iterator begin,
-                                           Iterator end,
-                                           cudf::string_view const& d_str)
-  {
-    auto const next = thrust::find_if(thrust::seq, begin + 1, end, [](auto v) { return v != 0; });
-    auto const size = static_cast<cudf::size_type>(thrust::distance(begin, next));
-    return cudf::string_view(d_str.data() + *begin, size);
-  }
-
-  /**
-   * @brief Look up the pair of strings in the d_map/d_merges
-   *
-   * @param lhs Left half of the string
-   * @param rhs Right half of the string
-   * @return Position of merge pair within d_map
-   */
-  __device__ auto get_merge_pair(cudf::string_view const& lhs, cudf::string_view const& rhs)
-  {
-    __shared__ char shmem[48 * 1024];  // max for Pascal
-    auto const total_size         = lhs.size_bytes() + rhs.size_bytes() + 1;
-    auto const thread_memory_size = static_cast<cudf::size_type>(sizeof(shmem) / blockDim.x);
-
-    // Edge case check.
-    // Empirically found only two merge pair strings that were greater than 70 bytes
-    // and they both looked like ignorable errors.
-    if (thread_memory_size < total_size) { return d_map.end(); }
-
-    // build the target string in shared memory
-    char* ptr = &shmem[threadIdx.x * thread_memory_size];
-
-    // build a temp string like:  temp = lhs + ' ' + rhs
-    memcpy(ptr, lhs.data(), lhs.size_bytes());
-    memcpy(ptr + lhs.size_bytes(), " ", 1);
-    memcpy(ptr + lhs.size_bytes() + 1, rhs.data(), rhs.size_bytes());
-
-    auto const d_str = cudf::string_view(ptr, total_size);
-    return d_map.find(d_str);
-  }
-
-  /**
-   * @brief Byte encode each string.
-   *
-   * Each string is iteratively scanned for the minimum rank of adjacent substring pairs
-   * as found within the `d_map` table. Once the minimum pair is located, that pair
-   * is removed -- virtually by zero-ing the index value between any matching adjacent pairs.
-   *
-   * The iteration ends once there are no more adjacent pairs or there are no more
-   * matches found in `d_map`. At the end, the indices for each string reflect the
-   * encoding pattern and can be used to build the output.
-   *
-   * This function also computes the size of the encoded output of each string
-   * by simply counting the number of non-zero indices values remaining. This saves
-   * an extra kernel launch normally required to compute the offsets of the output column.
-   *
-   * @param idx The index of the string in `d_strings` to encode
-   */
-  __device__ void operator()(cudf::size_type idx)
-  {
-    if (d_strings.is_null(idx)) {
-      d_sizes[idx] = 0;
-      return;
-    }
-    auto const d_str = get_first_token(d_strings.element<cudf::string_view>(idx));
-    if (d_str.empty()) {
-      d_sizes[idx] = 0;
-      return;
-    }
-
-    auto const offset = d_strings.child(cudf::strings_column_view::offsets_column_index)
-                          .element<cudf::size_type>(idx);
-    auto const d_indices = d_byte_indices + offset;
-
-    // initialize the byte indices for this string;
-    // set the index value to 0 for any intermediate UTF-8 bytes
-    thrust::transform(thrust::seq,
-                      thrust::make_counting_iterator<cudf::size_type>(0),
-                      thrust::make_counting_iterator<cudf::size_type>(d_str.size_bytes()),
-                      d_indices,
-                      [data = d_str.data()](auto idx) {
-                        auto const byte = static_cast<uint8_t>(data[idx]);
-                        return cudf::strings::detail::is_begin_utf8_char(byte) ? idx : 0;
-                      });
-
-    auto const begin = d_indices;
-    auto const end   = d_indices + d_str.size_bytes();
-
-    // keep processing the string until there are no more adjacent pairs found in d_map
-    cudf::size_type min_rank = 0;
-    while (min_rank < cuda::std::numeric_limits<cudf::size_type>::max()) {
-      // initialize working variables
-      min_rank = cuda::std::numeric_limits<cudf::size_type>::max();
-
-      auto lhs = next_substr(begin, end, d_str);
-      auto itr = begin + lhs.size_bytes();
-
-      auto min_itr  = itr;               // these are set along with
-      auto min_size = lhs.size_bytes();  // the min_rank variable
-
-      // check each adjacent pair against the d_map
-      while (itr < end) {
-        auto const rhs = next_substr(itr, end, d_str);
-        if (rhs.empty()) break;  // no more adjacent pairs
-
-        auto const map_itr = get_merge_pair(lhs, rhs);
-        if (map_itr != d_map.end()) {
-          // found a match; record the rank (and other min_ vars)
-          auto const rank = map_itr->second;
-          if (rank < min_rank) {
-            min_rank = rank;
-            min_itr  = itr;
-            min_size = rhs.size_bytes();
-          }
-        }
-        // next substring
-        lhs = rhs;
-        itr += rhs.size_bytes();
-      }
-
-      // if any pair matched, remove every occurrence from the string
-      if (min_rank < cuda::std::numeric_limits<cudf::size_type>::max()) {
-        // remove the first pair we found
-        itr  = min_itr;
-        *itr = 0;
-
-        // continue scanning for other occurrences in the remainder of the string
-        itr += min_size;
-        if (itr < end) {
-          auto const d_pair = dissect_merge_pair(min_rank);
-
-          lhs = next_substr(itr, end, d_str);
-          itr += lhs.size_bytes();
-          while (itr < end) {
-            auto rhs = next_substr(itr, end, d_str);
-            if (d_pair.first == lhs && d_pair.second == rhs) {
-              *itr = 0;  // removes the pair from this string
-              itr += rhs.size_bytes();
-              if (itr >= end) { break; }  // done checking for pairs
-              // skip to the next adjacent pair
-              rhs = next_substr(itr, end, d_str);
-            }
-            // next substring
-            lhs = rhs;
-            itr += rhs.size_bytes();
-          }
-        }
-      }
-    }
-
-    // compute and store the output size for this string's encoding
-    auto const encoded_size = d_str.size_bytes() +  // number of original bytes +
-                              thrust::count_if(     // number of non-zero byte indices
-                                thrust::seq,
-                                d_indices,
-                                d_indices + d_str.size_bytes(),
-                                [](auto v) { return v != 0; });
-    d_sizes[idx] = static_cast<cudf::size_type>(encoded_size);
-  }
-};
-
-/**
- * @brief Build the output string encoding.
- *
- * This copies each string to the output inserting a space at each non-zero byte index.
- *
- * @code{.txt}
- * d_strings =      ["helloworld", "testthis"]
- * d_byte_indices = [ 0000050000    00004000]
- * result is ["hello world", "test this"]
- * @endcode
- */
-struct build_encoding_fn {
-  cudf::column_device_view const d_strings;
-  cudf::size_type const* d_byte_indices;
-  cudf::size_type const* d_offsets;
-  char* d_chars{};
-
-  __device__ void operator()(cudf::size_type idx)
-  {
-    if (d_strings.is_null(idx)) { return; }
-    auto const d_str = get_first_token(d_strings.element<cudf::string_view>(idx));
-    if (d_str.empty()) { return; }
-
-    auto const offset = d_strings.child(cudf::strings_column_view::offsets_column_index)
-                          .element<cudf::size_type>(idx);
-    auto const d_indices = d_byte_indices + offset;
-    auto d_output        = d_chars ? d_chars + d_offsets[idx] : nullptr;
-
-    // copy chars while indices[i]==0,
-    // insert space each time indices[i]!=0
-    auto const begin = d_indices;
-    auto const end   = d_indices + d_str.size_bytes();
-    auto d_input     = d_str.data();
-    *d_output++      = *d_input++;
-    auto itr         = begin + 1;
-    while (itr < end) {
-      if (*itr++) *d_output++ = ' ';
-      *d_output++ = *d_input++;
-    }
-    // https://github.com/rapidsai/cudf/pull/10270/files#r826319405
-  }
-};
-
-/**
- * @brief Perform byte pair encoding on each string in the input column.
- *
- * The result is a strings column of the same size where each string has been encoded.
- *
- * The encoding is performed iteratively. Each pass determines the string's lowest
- * ranked merge pair as determined by the strings in `merges_table`. This pair
- * is removed (virtually) from each string before starting the next iteration.
- *
- * Once all pairs have exhausted for all strings, the output is constructed from
- * the results by adding spaces between each remaining pair in each string.
- *
- * @param input Strings to encode.
- * @param merge_pairs Merge pairs data and map used for encoding.
- * @param stream CUDA stream used for device memory operations and kernel launches
- */
-std::unique_ptr<cudf::column> byte_pair_encoding(
-  cudf::strings_column_view const& input,
-  bpe_merge_pairs::bpe_merge_pairs_impl const& merge_pairs,
-  rmm::cuda_stream_view stream)
-{
-  auto const d_merges = merge_pairs.get_merge_pairs();
-  CUDF_EXPECTS(d_merges.size() > 0, "Merge pairs table must not be empty");
-
-  // build working vector to hold index values per byte
-  rmm::device_uvector<cudf::size_type> d_byte_indices(input.chars().size(), stream);
-
-  auto const d_strings = cudf::column_device_view::create(input.parent(), stream);
-
-  auto offsets   = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
-                                           static_cast<cudf::size_type>(input.size() + 1),
-                                           cudf::mask_state::UNALLOCATED,
-                                           stream,
-                                           rmm::mr::get_current_device_resource());
-  auto d_offsets = offsets->mutable_view().data<cudf::size_type>();
-
-  auto map_ref = merge_pairs.get_merge_pairs_ref();
-  byte_pair_encoding_fn<decltype(map_ref)> fn{
-    d_merges, *d_strings, map_ref, d_offsets, string_hasher_type{}, d_byte_indices.data()};
-  thrust::for_each_n(
-    rmm::exec_policy(stream), thrust::make_counting_iterator<cudf::size_type>(0), input.size(), fn);
-
-  // build the output: add spaces between the remaining pairs in each string
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_offsets, d_offsets + input.size() + 1, d_offsets);
-
-  auto const bytes =
-    cudf::detail::get_value<cudf::size_type>(offsets->view(), input.size(), stream);
-  auto chars = cudf::strings::detail::create_chars_child_column(
-    bytes, stream, rmm::mr::get_current_device_resource());
-  auto d_chars = chars->mutable_view().data<char>();
-
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<cudf::size_type>(0),
-                     input.size(),
-                     build_encoding_fn{*d_strings, d_byte_indices.data(), d_offsets, d_chars});
-
-  return make_strings_column(
-    input.size(), std::move(offsets), std::move(chars), 0, rmm::device_buffer{});
-}
-
-/**
- * @brief Detect space to not-space transitions inside each string.
- *
- * This handles sliced input and null strings as well.
- * It is parallelized over bytes and returns true only for valid left edges
- * -- non-space preceded by a space.
- */
-struct edge_of_space_fn {
-  cudf::column_device_view const d_strings;
-  __device__ bool operator()(cudf::size_type offset)
-  {
-    auto const d_chars =
-      d_strings.child(cudf::strings_column_view::chars_column_index).data<char>();
-    if (is_whitespace(d_chars[offset]) || !is_whitespace(d_chars[offset - 1])) { return false; }
-
-    auto const offsets   = d_strings.child(cudf::strings_column_view::offsets_column_index);
-    auto const d_offsets = offsets.data<cudf::size_type>() + d_strings.offset();
-    // ignore offsets outside sliced range
-    if (offset < d_offsets[0] || offset >= d_offsets[d_strings.size()]) { return false; }
-
-    auto itr =
-      thrust::lower_bound(thrust::seq, d_offsets, d_offsets + d_strings.size() + 1, offset);
-    // ignore offsets at existing string boundaries
-    if (*itr == offset) { return false; }
-
-    // count only edges for valid strings
-    auto const index = static_cast<cudf::size_type>(thrust::distance(d_offsets, itr)) - 1;
-    return d_strings.is_valid(index);
-  }
-};
-
-/**
- * @brief Create new offsets by identifying substrings by whitespace.
- *
- * This is similar to cudf::strings::split_record but does not fully split
- * and only returns new offsets. The behavior is more like a view-only slice
- * of the chars child with the result still including trailing delimiters.
- *
- * The encoding algorithm ignores the trailing whitespace of each string.
- *
- * @param input Strings to tokenize.
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @return New offsets including those at the edge of each space.
- */
-std::unique_ptr<cudf::column> space_offsets(cudf::strings_column_view const& input,
-                                            cudf::column_device_view const& d_strings,
-                                            rmm::cuda_stream_view stream)
-{
-  // count space offsets
-  auto const begin = thrust::make_counting_iterator<cudf::size_type>(1);
-  auto const end   = thrust::make_counting_iterator<cudf::size_type>(input.chars().size());
-  edge_of_space_fn edge_of_space{d_strings};
-  auto const space_count = thrust::count_if(rmm::exec_policy(stream), begin, end, edge_of_space);
-
-  // copy space offsets
-  rmm::device_uvector<cudf::size_type> space_offsets(space_count, stream);
-  thrust::copy_if(rmm::exec_policy(stream), begin, end, space_offsets.data(), edge_of_space);
-
-  // create output offsets
-  auto result =
-    cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
-                              static_cast<cudf::size_type>(space_count + input.size() + 1),
-                              cudf::mask_state::UNALLOCATED,
-                              stream,
-                              rmm::mr::get_current_device_resource());
-
-  // combine current offsets with space offsets
-  thrust::merge(rmm::exec_policy(stream),
-                input.offsets_begin(),
-                input.offsets_end(),
-                space_offsets.begin(),
-                space_offsets.end(),
-                result->mutable_view().begin<cudf::size_type>());
-
-  return result;
-}
-
-/**
- * @brief Build new offsets that can be used to build a list column for calling join.
- *
- * This essentially returns the number of tokens for each string.
- */
-struct list_offsets_fn {
-  cudf::column_device_view const d_strings;
   __device__ cudf::size_type operator()(cudf::size_type idx)
   {
-    if (d_strings.is_null(idx)) return 0;
-    auto const d_str = d_strings.element<cudf::string_view>(idx);
-    if (d_str.empty()) return 1;  // empty is a single valid result
+    if (!cudf::strings::detail::is_begin_utf8_char(d_chars[idx])) { return 0; }
 
-    auto const begin = thrust::make_counting_iterator<cudf::size_type>(1);
-    auto const end   = thrust::make_counting_iterator<cudf::size_type>(d_str.size_bytes());
-
-    // this counts the number of non-adjacent delimiters
-    auto const result =
-      thrust::count_if(thrust::seq, begin, end, [data = d_str.data()](auto chidx) {
-        return !is_whitespace(data[chidx]) && is_whitespace(data[chidx - 1]);
-      });
-    return static_cast<cudf::size_type>(result) + 1;
+    auto const itr  = d_chars.data() + idx;
+    auto const end  = d_chars.end();
+    auto const lhs  = cudf::string_view(itr, cudf::strings::detail::bytes_in_utf8_byte(*itr));
+    auto const next = itr + lhs.size_bytes();
+    auto output     = 0;
+    if (next < end) {
+      auto const rhs = cudf::string_view(next, cudf::strings::detail::bytes_in_utf8_byte(*next));
+      // see if both halves exist anywhere in the table, if not these are unpairable
+      if (d_map.find(lhs) == d_map.end() && d_map.find(rhs) == d_map.end()) {
+        output = idx + lhs.size_bytes() + offset;  // offset for artificial boundary
+      }
+    }
+    return output;
   }
 };
+
+/**
+ * @brief Performs byte-pair-encoding
+ *
+ * Computes the locations where the separator will be inserted in `d_spaces_data`.
+ * This is launched as a string per block.
+ *
+ * The process first initializes all characters to 1 per position in `d_spaces_data`.
+ * All pairs are realized and their ranks stored in `d_ranks_data`.
+ *
+ * Iteratively, the minimum rank is located, the corresponding `d_spaces_data` location
+ * is set to 0 resulting in new potential pairs. The process repeats accounting for
+ * the rank of the newly formed pairs.
+ *
+ * Once there are no more rankable pairs, the process finishes and the `d_spaces_data`
+ * values identify the location to insert the separator.
+ *
+ * @tparam MapRefType The type of the map finder object
+ * @param d_strings Input data
+ * @param d_map For looking up individual string candidates
+ * @param d_spaces_data Output the location where separator will be inserted
+ * @param d_ranks_data Working memory to hold pair ranks
+ * @param d_rerank_data Working memory to hold locations where reranking is required
+ */
+template <typename MapRefType>
+__global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
+                                MapRefType const d_map,
+                                int8_t* d_spaces_data,          // working memory
+                                cudf::size_type* d_ranks_data,  // more working memory
+                                int8_t* d_rerank_data           // and one more working memory
+)
+{
+  // string per block
+  auto const str_idx =
+    static_cast<cudf::size_type>(cudf::detail::grid_1d::global_thread_id() / block_size);
+  auto const lane_idx = static_cast<cudf::size_type>(threadIdx.x);
+
+  auto const d_str = d_strings.element<cudf::string_view>(str_idx);
+  auto const offsets =
+    d_strings.child(cudf::strings_column_view::offsets_column_index).data<cudf::size_type>();
+  auto const offset = offsets[str_idx + d_strings.offset()] - offsets[d_strings.offset()];
+
+  auto const d_spaces   = d_spaces_data + offset;
+  auto const end_spaces = d_spaces + d_str.size_bytes();
+  auto const d_ranks    = d_ranks_data + offset;
+  auto const end_ranks  = d_ranks + d_str.size_bytes();
+  auto const d_rerank   = d_rerank_data + offset;
+  auto const end_rerank = d_rerank + d_str.size_bytes();
+
+  auto constexpr max_rank = cuda::std::numeric_limits<cudf::size_type>::max();
+
+  __shared__ cudf::size_type block_min_rank;
+  using block_reduce = cub::BlockReduce<cudf::size_type, block_size>;
+  __shared__ typename block_reduce::TempStorage temp_storage;
+  auto const num_valid = block_size < d_str.size_bytes() ? block_size : d_str.size_bytes();
+
+  // init all the re-rank identifiers to zero
+  for (auto itr = d_rerank + lane_idx; itr < end_rerank; itr += block_size) {
+    *itr = 0;
+  }
+  // init all ranks to max
+  for (auto itr = d_ranks + lane_idx; itr < end_ranks; itr += block_size) {
+    *itr = max_rank;
+  }
+  // init all spaces to 1 as appropriate
+  for (auto itr = d_spaces + lane_idx; itr < end_spaces; itr += block_size) {
+    auto const index = thrust::distance(d_spaces, itr);
+    *itr = static_cast<int8_t>(cudf::strings::detail::is_begin_utf8_char(d_str.data()[index]));
+  }
+  __syncthreads();
+
+  // for finding the next half of a pair
+  auto next_substr = [d_str, d_spaces, end = end_spaces](int8_t* begin) {
+    auto const next = thrust::find(thrust::seq, begin + 1, end, 1);
+    auto const size = static_cast<cudf::size_type>(thrust::distance(begin, next));
+    return cudf::string_view(d_str.data() + thrust::distance(d_spaces, begin), size);
+  };
+  // for locating adjacent pairs after merging a pair
+  auto find_prev = [begin = d_spaces](int8_t* ptr) {
+    while (ptr > begin && *ptr == 0) {
+      --ptr;
+    }
+    return ptr;
+  };
+
+  auto min_rank = max_rank;
+
+  // store all the initial ranks for each pair
+  // every character but the first one will have a initial rank
+  //
+  // Example:
+  // string:   abcdefghij
+  // spaces:   1111111111
+  // ranks:    *948516327
+  for (auto itr = d_spaces + lane_idx; itr < end_spaces; itr += block_size) {
+    if (*itr == 0) { continue; }  // skips any UTF-8 continuation bytes
+    // resolve pair and lookup its rank
+    auto const lhs      = next_substr(itr);  // retrieve lhs of the pair
+    auto const next_itr = itr + lhs.size_bytes();
+    if (next_itr < end_spaces) {
+      auto const rhs = next_substr(next_itr);  // retrieve rhs of the pair
+      if (!rhs.empty()) {
+        auto rank          = max_rank;
+        auto const mp      = merge_pair_type{lhs, rhs};
+        auto const map_itr = d_map.find(mp);                     // lookup pair in merges table;
+        if (map_itr != d_map.end()) { rank = map_itr->second; }  // found a match;
+        d_ranks[thrust::distance(d_spaces, next_itr)] = rank;    // store the rank
+        if (rank < min_rank) { min_rank = rank; }
+      }
+    }
+  }
+  // compute the min rank across the block
+  auto const reduce_rank = block_reduce(temp_storage).Reduce(min_rank, cub::Min(), num_valid);
+  if (lane_idx == 0) { block_min_rank = reduce_rank; }
+  __syncthreads();
+
+  // loop through the ranks processing the current minimum until there are no more
+  while (block_min_rank < max_rank) {
+    // search the d_ranks for matches to block_min_rank
+    for (auto itr = d_ranks + lane_idx; itr < end_ranks; itr += block_size) {
+      if (*itr == block_min_rank) {
+        auto ptr = itr - 1;  // check for adjacent min-rank (edge-case)
+        while (ptr > d_ranks && *ptr == max_rank) {
+          --ptr;
+        }
+        // set the output value to 0 at this position (erases separator, merges pair)
+        // using example string above, the min-rank is 1 at position 5
+        // string: abcdefghij
+        // spaces: 1111101111  (set position 5 to 0)
+        if (*ptr != block_min_rank) { d_spaces[thrust::distance(d_ranks, itr)] = 0; }
+      }
+    }
+    __syncthreads();
+
+    // identify all the re-rank locations (logic above invalidated adjacent pairs)
+    // using example string above, the adjacent pairs have to be re-ranked
+    // string: abcdefghij
+    // spaces: 1111101111 (pair 'e,f' is now merged)
+    // rerank: 0000101000 ('ef' and 'fg' need re-ranking as 'd,ef' and 'ef,g'
+    for (auto itr = d_ranks + lane_idx; itr < end_ranks; itr += block_size) {
+      auto const index = thrust::distance(d_ranks, itr);
+      if (*itr == block_min_rank && d_spaces[index] == 0) {
+        // find previous pair mid-point
+        auto ptr = find_prev(d_spaces + index - 1);
+        if (ptr > d_spaces) { d_rerank[thrust::distance(d_spaces, ptr)] = 1; }
+        // find next pair mid-point
+        ptr = thrust::find(thrust::seq, d_spaces + index + 1, end_spaces, 1);
+        if (ptr < end_spaces) { d_rerank[thrust::distance(d_spaces, ptr)] = 1; }
+        *itr = max_rank;  // reset this rank
+      }
+    }
+    __syncthreads();
+
+    // compute the ranks for the newly created pairs
+    min_rank = max_rank;  // and record the new minimum along the way
+    for (auto itr = d_rerank + lane_idx; itr < end_rerank; itr += block_size) {
+      auto const index = thrust::distance(d_rerank, itr);
+      auto rank        = d_ranks[index];
+      if (*itr) {
+        *itr = 0;  // reset re-rank
+        // build lhs of pair
+        auto const ptr  = find_prev(d_spaces + index - 1);
+        auto const size = static_cast<cudf::size_type>(thrust::distance(ptr, d_spaces + index));
+        auto const lhs  = cudf::string_view(d_str.data() + thrust::distance(d_spaces, ptr), size);
+        auto const rhs  = next_substr(d_spaces + index);  // retrieve rhs of pair
+        rank            = max_rank;
+        if (!rhs.empty()) {
+          auto const mp      = merge_pair_type{lhs, rhs};
+          auto const map_itr = d_map.find(mp);                     // lookup rank for this pair;
+          if (map_itr != d_map.end()) { rank = map_itr->second; }  // found a match
+        }
+        d_ranks[index] = rank;  // store new rank
+      }
+      if (rank < min_rank) { min_rank = rank; }
+    }
+
+    // re-compute the minimum rank across the block (since new pairs are created above)
+    auto const reduce_rank = block_reduce(temp_storage).Reduce(min_rank, cub::Min(), num_valid);
+    if (lane_idx == 0) { block_min_rank = reduce_rank; }
+    __syncthreads();
+  }  // if no min ranks are found we are done, otherwise start again
+}
+
+/**
+ * @brief Computes the output size of each strings row
+ *
+ * This launches as a string per block.
+ * The non-zero values in `d_spaces_data` for each string is added to
+ * the current string size to produce the total output bytes.
+ *
+ * @param d_strings Input data
+ * @param d_spaces_data Output the location where separator will be inserted
+ * @param d_sizes Output sizes of each row
+ */
+__global__ void bpe_finalize(cudf::column_device_view const d_strings,
+                             int8_t* d_spaces_data,    // where separators are inserted
+                             cudf::size_type* d_sizes  // output sizes of encoded strings
+)
+{
+  // string per block
+  auto const str_idx =
+    static_cast<cudf::size_type>(cudf::detail::grid_1d::global_thread_id() / block_size);
+  auto const lane_idx = static_cast<cudf::size_type>(threadIdx.x);
+
+  if (d_strings.is_null(str_idx)) {
+    d_sizes[str_idx] = 0;
+    return;
+  }
+  auto const d_str = d_strings.element<cudf::string_view>(str_idx);
+  if (d_str.empty()) {
+    d_sizes[str_idx] = 0;
+    return;
+  }
+
+  auto const offsets =
+    d_strings.child(cudf::strings_column_view::offsets_column_index).data<cudf::size_type>();
+  auto const offset = offsets[str_idx + d_strings.offset()] - offsets[d_strings.offset()];
+
+  auto const d_spaces   = d_spaces_data + offset;
+  auto const end_spaces = d_spaces + d_str.size_bytes();
+  auto const num_valid  = block_size < d_str.size_bytes() ? block_size : d_str.size_bytes();
+
+  using block_reduce = cub::BlockReduce<cudf::size_type, block_size>;
+  __shared__ typename block_reduce::TempStorage temp_storage;
+
+  // reset the first position -- no separator to be added here
+  if (lane_idx == 0) { *d_spaces = 0; }
+
+  // compute the output size for this string by counting the resulting separator positions
+  auto bytes = 0;
+  for (auto itr = d_spaces + lane_idx; itr < end_spaces; itr += block_size) {
+    bytes += (*itr > 0);
+  }
+  auto const total_bytes = block_reduce(temp_storage).Sum(bytes, num_valid);
+  if (lane_idx == 0) { d_sizes[str_idx] = total_bytes + d_str.size_bytes(); }
+}
 
 }  // namespace
 
@@ -500,54 +328,120 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
                                                  rmm::cuda_stream_view stream,
                                                  rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty() || input.chars_size() == 0)
+  if (input.is_empty() || input.chars_size() == 0) {
     return cudf::make_empty_column(cudf::type_id::STRING);
+  }
+
+  CUDF_EXPECTS(separator.is_valid(stream), "separator parameter must be valid");
+  auto const d_separator = separator.value(stream);
+  CUDF_EXPECTS(d_separator.size_bytes() == 1, "for now, separator must be a single-byte character");
 
   auto const d_strings = cudf::column_device_view::create(input.parent(), stream);
-  auto const offsets   = space_offsets(input, *d_strings, stream);
 
-  // build a view using the new offsets and the current input chars column
-  auto const input_view = cudf::column_view(cudf::data_type{cudf::type_id::STRING},
-                                            offsets->size() - 1,
-                                            nullptr,  // no parent data
-                                            nullptr,  // null-mask
-                                            0,        // null-count
-                                            0,        // offset
-                                            {offsets->view(), input.chars()});
+  auto const first_offset  = (input.offset() == 0) ? 0
+                                                   : cudf::detail::get_value<cudf::size_type>(
+                                                      input.offsets(), input.offset(), stream);
+  auto const last_offset   = (input.offset() == 0 && input.size() == input.offsets().size() - 1)
+                               ? input.chars().size()
+                               : cudf::detail::get_value<cudf::size_type>(
+                                 input.offsets(), input.size() + input.offset(), stream);
+  auto const chars_size    = last_offset - first_offset;
+  auto const d_input_chars = input.chars().data<char>() + first_offset;
 
-  // run BPE on this view
-  auto const bpe_column =
-    byte_pair_encoding(cudf::strings_column_view(input_view), *(merge_pairs.impl), stream);
+  auto const offset_data_type = cudf::data_type{cudf::type_to_id<cudf::size_type>()};
+  auto offsets                = cudf::make_numeric_column(
+    offset_data_type, input.size() + 1, cudf::mask_state::UNALLOCATED, stream, mr);
+  auto d_offsets = offsets->mutable_view().data<cudf::size_type>();
 
-  // recombine the result:
-  // compute the offsets needed to build a list view
-  auto const list_offsets = [d_strings = *d_strings, stream] {
-    auto offsets_itr = thrust::make_transform_iterator(
-      thrust::make_counting_iterator<cudf::size_type>(0), list_offsets_fn{d_strings});
-    auto offsets_column = std::get<0>(cudf::detail::make_offsets_child_column(
-      offsets_itr, offsets_itr + d_strings.size(), stream, rmm::mr::get_current_device_resource()));
-    return offsets_column;
-  }();
+  rmm::device_uvector<int8_t> d_spaces(chars_size, stream);  // identifies non-merged pairs
+  // used for various purposes below: unpairable-offsets, pair ranks, separator insert positions
+  rmm::device_uvector<cudf::size_type> d_working(chars_size, stream);
 
-  // build a list column_view using the BPE output and the list_offsets
-  auto const list_join = cudf::column_view(cudf::data_type{cudf::type_id::LIST},
-                                           input.size(),
-                                           nullptr,  // no parent data in list column
-                                           input.null_mask(),
-                                           input.null_count(),
-                                           0,
-                                           {list_offsets->view(), bpe_column->view()});
+  auto const chars_begin = thrust::counting_iterator<cudf::size_type>(0);
+  auto const chars_end   = thrust::counting_iterator<cudf::size_type>(chars_size);
 
-  // build the output strings column
-  auto result =
-    cudf::strings::detail::join_list_elements(cudf::lists_column_view(list_join),
-                                              separator,
-                                              cudf::string_scalar(""),
-                                              cudf::strings::separator_on_nulls::NO,
-                                              cudf::strings::output_if_empty_list::EMPTY_STRING,
-                                              stream,
-                                              mr);
-  return result;
+  {
+    // this kernel locates unpairable sections of strings to create artificial string row
+    // boundaries; the boundary values are recorded as offsets in d_up_offsets
+    auto const d_up_offsets = d_working.data();  // store unpairable offsets here
+    auto const mp_map       = merge_pairs.impl->get_mp_table_ref();  // lookup table
+    auto const d_chars_span = cudf::device_span<char const>(d_input_chars, chars_size);
+    auto up_fn = bpe_unpairable_offsets_fn<decltype(mp_map)>{d_chars_span, first_offset, mp_map};
+    thrust::transform(rmm::exec_policy_nosync(stream), chars_begin, chars_end, d_up_offsets, up_fn);
+    auto const up_end =  // remove all but the unpairable offsets
+      thrust::remove(rmm::exec_policy_nosync(stream), d_up_offsets, d_up_offsets + chars_size, 0);
+    auto const unpairables = thrust::distance(d_up_offsets, up_end);  // number of unpairables
+
+    // new string boundaries created by combining unpairable offsets with the existing offsets
+    auto tmp_offsets = rmm::device_uvector<cudf::size_type>(unpairables + input.size() + 1, stream);
+    thrust::merge(rmm::exec_policy_nosync(stream),
+                  input.offsets_begin(),
+                  input.offsets_end(),
+                  d_up_offsets,
+                  up_end,
+                  tmp_offsets.begin());
+    // remove any adjacent duplicate offsets (i.e. empty or null rows)
+    auto const offsets_end =
+      thrust::unique(rmm::exec_policy_nosync(stream), tmp_offsets.begin(), tmp_offsets.end());
+    auto const offsets_total =
+      static_cast<cudf::size_type>(thrust::distance(tmp_offsets.begin(), offsets_end));
+    tmp_offsets.resize(offsets_total, stream);
+
+    // temp column created with the merged offsets and the original chars data
+    auto const col_offsets =
+      cudf::column_view(cudf::device_span<cudf::size_type const>(tmp_offsets));
+    auto const tmp_size  = offsets_total - 1;
+    auto const tmp_input = cudf::column_view(
+      input.parent().type(), tmp_size, nullptr, nullptr, 0, 0, {col_offsets, input.chars()});
+    auto const d_tmp_strings = cudf::column_device_view::create(tmp_input, stream);
+
+    // launch the byte-pair-encoding kernel on the temp column
+    rmm::device_uvector<int8_t> d_rerank(chars_size, stream);  // more working memory;
+    auto const d_ranks  = d_working.data();                    // store pair ranks here
+    auto const pair_map = merge_pairs.impl->get_merge_pairs_ref();
+    bpe_parallel_fn<decltype(pair_map)><<<tmp_size, block_size, 0, stream.value()>>>(
+      *d_tmp_strings, pair_map, d_spaces.data(), d_ranks, d_rerank.data());
+  }
+
+  // compute the output sizes and store them in the d_offsets vector
+  bpe_finalize<<<input.size(), block_size, 0, stream.value()>>>(
+    *d_strings, d_spaces.data(), d_offsets);
+
+  // convert sizes to offsets in-place
+  auto const bytes =
+    cudf::detail::sizes_to_offsets(d_offsets, d_offsets + input.size() + 1, d_offsets, stream);
+  CUDF_EXPECTS(bytes <= static_cast<int64_t>(std::numeric_limits<cudf::size_type>::max()),
+               "Size of output exceeds the column size limit",
+               std::overflow_error);
+
+  // build the output: inserting separators to the input character data
+  auto chars   = cudf::strings::detail::create_chars_child_column(bytes, stream, mr);
+  auto d_chars = chars->mutable_view().data<char>();
+
+  auto const d_inserts     = d_working.data();  // stores the insert positions
+  auto offsets_at_non_zero = [d_spaces = d_spaces.data()] __device__(auto idx) {
+    return d_spaces[idx] > 0;  // separator to be inserted here
+  };
+  auto const copy_end = thrust::copy_if(
+    rmm::exec_policy_nosync(stream), chars_begin + 1, chars_end, d_inserts, offsets_at_non_zero);
+
+  // this will insert the single-byte separator into positions specified in d_inserts
+  auto const sep_char = thrust::constant_iterator<char>(separator.to_string(stream)[0]);
+  thrust::merge_by_key(rmm::exec_policy_nosync(stream),
+                       d_inserts,      // where to insert separator byte
+                       copy_end,       //
+                       chars_begin,    // all indices
+                       chars_end,      //
+                       sep_char,       // byte to insert
+                       d_input_chars,  // original data
+                       thrust::make_discard_iterator(),
+                       d_chars);  // result
+
+  return cudf::make_strings_column(input.size(),
+                                   std::move(offsets),
+                                   std::move(chars),
+                                   input.null_count(),
+                                   cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 }  // namespace detail
