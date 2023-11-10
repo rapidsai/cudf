@@ -2,7 +2,7 @@
 
 import pickle
 
-from libc.stdint cimport int32_t, uint8_t, uintptr_t
+from libc.stdint cimport uint8_t, uintptr_t
 from libcpp cimport bool
 from libcpp.memory cimport make_shared, shared_ptr, unique_ptr
 from libcpp.utility cimport move
@@ -614,7 +614,6 @@ def boolean_mask_scatter(list input_, list target_columns,
 
 @acquire_spill_lock()
 def shift(Column input, int offset, object fill_value=None):
-
     cdef DeviceScalar fill
 
     if isinstance(fill_value, DeviceScalar):
@@ -622,21 +621,12 @@ def shift(Column input, int offset, object fill_value=None):
     else:
         fill = as_device_scalar(fill_value, input.dtype)
 
-    cdef column_view c_input = input.view()
-    cdef int32_t c_offset = offset
-    cdef const scalar* c_fill_value = fill.get_raw_ptr()
-    cdef unique_ptr[column] c_output
-
-    with nogil:
-        c_output = move(
-            cpp_copying.shift(
-                c_input,
-                c_offset,
-                c_fill_value[0]
-            )
-        )
-
-    return Column.from_unique_ptr(move(c_output))
+    col = pylibcudf.copying.shift(
+        input.to_pylibcudf(mode="read"),
+        offset,
+        fill.c_value,
+    )
+    return Column.from_pylibcudf(col)
 
 
 @acquire_spill_lock()

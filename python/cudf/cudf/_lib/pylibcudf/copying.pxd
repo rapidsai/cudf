@@ -3,8 +3,10 @@
 from libcpp cimport bool as cbool
 
 from cudf._lib.cpp.copying cimport out_of_bounds_policy
+from cudf._lib.cpp.types cimport size_type
 
 from .column cimport Column
+from .scalar cimport Scalar
 from .table cimport Table
 
 
@@ -13,3 +15,5 @@ cpdef Table gather(
     Column gather_map,
     out_of_bounds_policy bounds_policy
 )
+
+cpdef Column shift(Column input, size_type offset, Scalar fill_values)

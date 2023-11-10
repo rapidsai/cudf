@@ -1,5 +1,7 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.
 
+from cython.operator import dereference
+
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
@@ -8,12 +10,13 @@ from libcpp.utility cimport move
 # we really want here would be
 # cimport libcudf... libcudf.copying.algo(...)
 from cudf._lib.cpp cimport copying as cpp_copying
+from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.copying cimport out_of_bounds_policy
+from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.types cimport size_type
 
 from cudf._lib.cpp.copying import \
     out_of_bounds_policy as OutOfBoundsPolicy  # no-cython-lint
-
-from cudf._lib.cpp.table.table cimport table
 
 from .column cimport Column
 from .table cimport Table
@@ -55,3 +58,16 @@ cpdef Table gather(
             )
         )
     return Table.from_libcudf(move(c_result))
+
+
+cpdef Column shift(Column input, size_type offset, Scalar fill_values):
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(
+            cpp_copying.shift(
+                input.view(),
+                offset,
+                dereference(fill_values.c_obj)
+            )
+        )
+    return Column.from_libcudf(move(c_result))
