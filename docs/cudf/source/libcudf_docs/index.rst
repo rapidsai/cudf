@@ -77,6 +77,7 @@ libcudf documentation
    dictionary_search
    dictionary_update
    io_apis
+   io_types
    io_readers
    io_writers
    io_datasources
