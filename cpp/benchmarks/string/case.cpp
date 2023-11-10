@@ -50,11 +50,11 @@ void bench_case(nvbench::state& state)
 
     col_view = cudf::column_view(col_view.type(),
                                  col_view.size(),
-                                 nullptr,
+                                 ascii_data.data<char>(),
                                  col_view.null_mask(),
                                  col_view.null_count(),
                                  0,
-                                 {input.offsets(), ascii_data});
+                                 {input.offsets()});
 
     ascii_contents = ascii_column->release();
   }
