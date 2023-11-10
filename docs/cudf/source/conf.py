@@ -302,6 +302,7 @@ def on_missing_reference(app, env, node, contnode):
         "id_to_type_impl",
         "type_to_scalar_type_impl",
         "type_to_scalar_type_impl",
+        "detail", # TODO: Look into why so many public APIs link to things in detail
         # Template types
         "Radix"
     ]
