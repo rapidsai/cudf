@@ -108,6 +108,7 @@ libcudf documentation
    utility_error
    labeling_apis
    label_bins
+   expressions
 
 
 Indices and tables
