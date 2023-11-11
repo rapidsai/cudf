@@ -80,7 +80,7 @@ class parquet_reader_options {
    *
    * @param src source information used to read parquet file
    */
-  explicit parquet_reader_options(source_info const& src) : _source(src) {}
+  explicit parquet_reader_options(source_info src) : _source{std::move(src)} {}
 
   friend parquet_reader_options_builder;
 
@@ -98,7 +98,7 @@ class parquet_reader_options {
    * @param src Source information to read parquet file
    * @return Builder to build reader options
    */
-  static parquet_reader_options_builder builder(source_info const& src);
+  static parquet_reader_options_builder builder(source_info src);
 
   /**
    * @brief Returns source info.
@@ -265,7 +265,7 @@ class parquet_reader_options_builder {
    *
    * @param src The source information used to read parquet file
    */
-  explicit parquet_reader_options_builder(source_info const& src) : options(src) {}
+  explicit parquet_reader_options_builder(source_info src) : options{std::move(src)} {}
 
   /**
    * @brief Sets names of the columns to be read.
@@ -446,6 +446,30 @@ class chunked_parquet_reader {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
+   * @brief Constructor for chunked reader.
+   *
+   * This constructor requires the same `parquet_reader_option` parameter as in
+   * `cudf::read_parquet()`, with additional parameters to specify the size byte limit of the
+   * output table for each reading, and a byte limit on the amount of temporary memory to use
+   * when reading. pass_read_limit affects how many row groups we can read at a time by limiting
+   * the amount of memory dedicated to decompression space. pass_read_limit is a hint, not an
+   * absolute limit - if a single row group cannot fit within the limit given, it will still be
+   * loaded.
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
+   * or `0` if there is no limit
+   * @param pass_read_limit Limit on the amount of memory used for reading and decompressing data or
+   * `0` if there is no limit
+   * @param options The options used to read Parquet file
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  chunked_parquet_reader(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    parquet_reader_options const& options,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+  /**
    * @brief Destructor, destroying the internal reader instance.
    *
    * Since the declaration of the internal `reader` object does not exist in this header, this
@@ -475,7 +499,7 @@ class chunked_parquet_reader {
   [[nodiscard]] table_with_metadata read_chunk() const;
 
  private:
-  std::unique_ptr<cudf::io::detail::parquet::chunked_reader> reader;
+  std::unique_ptr<cudf::io::parquet::detail::chunked_reader> reader;
 };
 
 /** @} */  // end of group
@@ -508,6 +532,9 @@ class parquet_writer_options {
   // Parquet writer can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
   // If true then overrides any per-column setting in _metadata.
   bool _write_timestamps_as_int96 = false;
+  // Parquet writer can write timestamps as UTC
+  // Defaults to true because libcudf timestamps are implicitly UTC
+  bool _write_timestamps_as_UTC = true;
   // Column chunks file paths to be set in the raw output metadata. One per output file
   std::vector<std::string> _column_chunks_file_paths;
   // Maximum size of each row group (unless smaller than a single page)
@@ -627,6 +654,13 @@ class parquet_writer_options {
    * @return `true` if timestamps will be written as INT96
    */
   bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
+
+  /**
+   * @brief Returns `true` if timestamps will be written as UTC
+   *
+   * @return `true` if timestamps will be written as UTC
+   */
+  [[nodiscard]] auto is_enabled_utc_timestamps() const { return _write_timestamps_as_UTC; }
 
   /**
    * @brief Returns Column chunks file paths to be set in the raw output metadata.
@@ -764,6 +798,13 @@ class parquet_writer_options {
    * @param req Boolean value to enable/disable writing of INT96 timestamps
    */
   void enable_int96_timestamps(bool req) { _write_timestamps_as_int96 = req; }
+
+  /**
+   * @brief Sets preference for writing timestamps as UTC. Write timestamps as UTC if set to `true`.
+   *
+   * @param val Boolean value to enable/disable writing of timestamps as UTC.
+   */
+  void enable_utc_timestamps(bool val) { _write_timestamps_as_UTC = val; }
 
   /**
    * @brief Sets column chunks file path to be set in the raw output metadata.
@@ -1077,6 +1118,18 @@ class parquet_writer_options_builder {
   }
 
   /**
+   * @brief Set to true if timestamps are to be written as UTC.
+   *
+   * @param enabled Boolean value to enable/disable writing of timestamps as UTC.
+   * @return this for chaining
+   */
+  parquet_writer_options_builder& utc_timestamps(bool enabled)
+  {
+    options._write_timestamps_as_UTC = enabled;
+    return *this;
+  }
+
+  /**
    * @brief Set to true if V2 page headers are to be written.
    *
    * @param enabled Boolean value to enable/disable writing of V2 page headers.
@@ -1147,6 +1200,8 @@ class chunked_parquet_writer_options {
   // Parquet writer can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
   // If true then overrides any per-column setting in _metadata.
   bool _write_timestamps_as_int96 = false;
+  // Parquet writer can write timestamps as UTC. Defaults to true.
+  bool _write_timestamps_as_UTC = true;
   // Maximum size of each row group (unless smaller than a single page)
   size_t _row_group_size_bytes = default_row_group_size_bytes;
   // Maximum number of rows in row group (unless smaller than a single page)
@@ -1229,6 +1284,13 @@ class chunked_parquet_writer_options {
    * @return `true` if timestamps will be written as INT96
    */
   bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
+
+  /**
+   * @brief Returns `true` if timestamps will be written as UTC
+   *
+   * @return `true` if timestamps will be written as UTC
+   */
+  [[nodiscard]] auto is_enabled_utc_timestamps() const { return _write_timestamps_as_UTC; }
 
   /**
    * @brief Returns maximum row group size, in bytes.
@@ -1350,6 +1412,13 @@ class chunked_parquet_writer_options {
    * @param req Boolean value to enable/disable writing of INT96 timestamps
    */
   void enable_int96_timestamps(bool req) { _write_timestamps_as_int96 = req; }
+
+  /**
+   * @brief Sets preference for writing timestamps as UTC. Write timestamps as UTC if set to `true`.
+   *
+   * @param val Boolean value to enable/disable writing of timestamps as UTC.
+   */
+  void enable_utc_timestamps(bool val) { _write_timestamps_as_UTC = val; }
 
   /**
    * @brief Sets the maximum row group size, in bytes.
@@ -1512,6 +1581,18 @@ class chunked_parquet_writer_options_builder {
   chunked_parquet_writer_options_builder& int96_timestamps(bool enabled)
   {
     options._write_timestamps_as_int96 = enabled;
+    return *this;
+  }
+
+  /**
+   * @brief Set to true if timestamps are to be written as UTC.
+   *
+   * @param enabled Boolean value to enable/disable writing of timestamps as UTC.
+   * @return this for chaining
+   */
+  chunked_parquet_writer_options_builder& utc_timestamps(bool enabled)
+  {
+    options._write_timestamps_as_UTC = enabled;
     return *this;
   }
 
@@ -1726,7 +1807,7 @@ class parquet_chunked_writer {
     std::vector<std::string> const& column_chunks_file_paths = {});
 
   /// Unique pointer to impl writer class
-  std::unique_ptr<cudf::io::detail::parquet::writer> writer;
+  std::unique_ptr<parquet::detail::writer> writer;
 };
 
 /** @} */  // end of group

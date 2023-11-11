@@ -178,3 +178,15 @@ def test_convert_edge_cases(data, original_timezone, target_timezone):
     expect = ps.dt.tz_convert(target_timezone)
     got = gs.dt.tz_convert(target_timezone)
     assert_eq(expect, got)
+
+
+def test_tz_aware_attributes_local():
+    data = [
+        "2008-05-12 13:50:00",
+        "2008-12-12 14:50:35",
+        "2009-05-12 13:50:32",
+    ]
+    dti = cudf.DatetimeIndex(data).tz_localize("UTC").tz_convert("US/Eastern")
+    result = dti.hour
+    expected = cudf.Index([9, 9, 9], dtype="int16")
+    assert_eq(result, expected)

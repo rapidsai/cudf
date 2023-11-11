@@ -20,7 +20,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 
-namespace cudf::io::parquet::gpu {
+namespace cudf::io::parquet::detail {
 
 template <int num_threads>
 constexpr int rle_stream_required_run_buffer_size()
@@ -362,4 +362,4 @@ struct rle_stream {
   }
 };
 
-}  // namespace cudf::io::parquet::gpu
+}  // namespace cudf::io::parquet::detail

@@ -98,27 +98,27 @@ union statistics_val {
 };
 
 struct statistics_chunk {
-  uint32_t non_nulls;        //!< number of non-null values in chunk
-  uint32_t null_count;       //!< number of null values in chunk
-  statistics_val min_value;  //!< minimum value in chunk
-  statistics_val max_value;  //!< maximum value in chunk
-  statistics_val sum;        //!< sum of chunk
-  uint8_t has_minmax;        //!< Nonzero if min_value and max_values are valid
-  uint8_t has_sum;           //!< Nonzero if sum is valid
+  uint32_t non_nulls{};        //!< number of non-null values in chunk
+  uint32_t null_count{};       //!< number of null values in chunk
+  statistics_val min_value{};  //!< minimum value in chunk
+  statistics_val max_value{};  //!< maximum value in chunk
+  statistics_val sum{};        //!< sum of chunk
+  uint8_t has_minmax{};        //!< Nonzero if min_value and max_values are valid
+  uint8_t has_sum{};           //!< Nonzero if sum is valid
 };
 
 struct statistics_group {
-  stats_column_desc const* col;  //!< Column information
-  uint32_t start_row;            //!< Start row of this group
-  uint32_t num_rows;             //!< Number of rows in group
-  uint32_t non_leaf_nulls;       //!< Number of null non-leaf values in the group
+  stats_column_desc const* col{};  //!< Column information
+  uint32_t start_row{};            //!< Start row of this group
+  uint32_t num_rows{};             //!< Number of rows in group
+  uint32_t non_leaf_nulls{};       //!< Number of null non-leaf values in the group
 };
 
 struct statistics_merge_group {
-  data_type col_dtype;           //!< Column data type
-  statistics_dtype stats_dtype;  //!< Statistics data type for this column
-  uint32_t start_chunk;          //!< Start chunk of this group
-  uint32_t num_chunks;           //!< Number of chunks in group
+  data_type col_dtype;                       //!< Column data type
+  statistics_dtype stats_dtype{dtype_none};  //!< Statistics data type for this column
+  uint32_t start_chunk{};                    //!< Start chunk of this group
+  uint32_t num_chunks{};                     //!< Number of chunks in group
 };
 
 template <typename T, std::enable_if_t<!std::is_same_v<T, statistics::byte_array_view>>* = nullptr>

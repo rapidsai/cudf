@@ -40,6 +40,14 @@ static void bench_distinct_count(nvbench::state& state, nvbench::type_list<Type>
   auto const& data_column = data_table->get_column(0);
   auto const input_table  = cudf::table_view{{data_column, data_column, data_column}};
 
+  // Collect memory statistics for input and output.
+  state.add_global_memory_reads<Type>(input_table.num_rows() * input_table.num_columns());
+  state.add_global_memory_writes<cudf::size_type>(1);
+  if (null_probability > 0) {
+    state.add_global_memory_reads<nvbench::int8_t>(
+      input_table.num_columns() * cudf::bitmask_allocation_size_bytes(input_table.num_rows()));
+  }
+
   auto mem_stats_logger = cudf::memory_stats_logger();  // init stats logger
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {

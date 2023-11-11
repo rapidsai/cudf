@@ -23,10 +23,7 @@
 #include <rmm/exec_policy.hpp>
 #include <thrust/reduce.h>
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace gpu {
+namespace cudf::io::parquet::detail {
 
 namespace {
 
@@ -411,7 +408,4 @@ void ComputePageSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
   }
 }
 
-}  // namespace gpu
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

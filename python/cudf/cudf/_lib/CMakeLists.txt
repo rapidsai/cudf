@@ -107,8 +107,12 @@ if(${PYARROW_RESULT})
   message(FATAL_ERROR "Error while trying to obtain pyarrow include directory:\n${PYARROW_ERROR}")
 endif()
 
-set(targets_using_arrow_headers interop avro csv orc json parquet)
-foreach(target IN LISTS targets_using_arrow_headers)
+# TODO: Due to cudf's scalar.pyx needing to cimport pylibcudf's scalar.pyx (because there are parts
+# of cudf Cython that need to directly access the c_obj underlying the pylibcudf Scalar) the
+# requirement for arrow headers infects all of cudf. That in turn requires including numpy headers.
+# These requirements will go away once all scalar-related Cython code is removed from cudf.
+foreach(target IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)
+  target_include_directories(${target} PRIVATE "${NumPy_INCLUDE_DIRS}")
   target_include_directories(${target} PRIVATE "${PYARROW_INCLUDE_DIR}")
 endforeach()
 

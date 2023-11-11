@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ public class ParquetChunkedReader implements AutoCloseable {
     handle = create(chunkSizeByteLimit, opts.getIncludeColumnNames(), opts.getReadBinaryAsString(),
         filePath.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId());
 
-    if(handle == 0) {
+    if (handle == 0) {
       throw new IllegalStateException("Cannot create native chunked Parquet reader object.");
     }
   }
@@ -71,8 +71,35 @@ public class ParquetChunkedReader implements AutoCloseable {
     handle = create(chunkSizeByteLimit, opts.getIncludeColumnNames(), opts.getReadBinaryAsString(), null,
         buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId());
 
-    if(handle == 0) {
+    if (handle == 0) {
       throw new IllegalStateException("Cannot create native chunked Parquet reader object.");
+    }
+  }
+
+  /**
+   * Construct a reader instance from a DataSource
+   * @param chunkSizeByteLimit Limit on total number of bytes to be returned per read,
+   *                           or 0 if there is no limit.
+   * @param opts The options for Parquet reading.
+   * @param ds the data source to read from
+   */
+  public ParquetChunkedReader(long chunkSizeByteLimit, ParquetOptions opts, DataSource ds) {
+    dataSourceHandle = DataSourceHelper.createWrapperDataSource(ds);
+    if (dataSourceHandle == 0) {
+      throw new IllegalStateException("Cannot create native datasource object");
+    }
+
+    boolean passed = false;
+    try {
+      handle = createWithDataSource(chunkSizeByteLimit, opts.getIncludeColumnNames(),
+              opts.getReadBinaryAsString(), opts.timeUnit().typeId.getNativeId(),
+              dataSourceHandle);
+      passed = true;
+    } finally {
+      if (!passed) {
+        DataSourceHelper.destroyWrapperDataSource(dataSourceHandle);
+        dataSourceHandle = 0;
+      }
     }
   }
 
@@ -82,7 +109,7 @@ public class ParquetChunkedReader implements AutoCloseable {
    * @return A boolean value indicating if there is more data to read from file.
    */
   public boolean hasNext() {
-    if(handle == 0) {
+    if (handle == 0) {
       throw new IllegalStateException("Native chunked Parquet reader object may have been closed.");
     }
 
@@ -104,7 +131,7 @@ public class ParquetChunkedReader implements AutoCloseable {
    * @return A table of new rows reading from the given file.
    */
   public Table readChunk() {
-    if(handle == 0) {
+    if (handle == 0) {
       throw new IllegalStateException("Native chunked Parquet reader object may have been closed.");
     }
 
@@ -117,6 +144,10 @@ public class ParquetChunkedReader implements AutoCloseable {
     if (handle != 0) {
       close(handle);
       handle = 0;
+    }
+    if (dataSourceHandle != 0) {
+      DataSourceHelper.destroyWrapperDataSource(dataSourceHandle);
+      dataSourceHandle = 0;
     }
   }
 
@@ -131,6 +162,7 @@ public class ParquetChunkedReader implements AutoCloseable {
    */
   private long handle;
 
+  private long dataSourceHandle = 0;
 
   /**
    * Create a native chunked Parquet reader object on heap and return its memory address.
@@ -146,6 +178,9 @@ public class ParquetChunkedReader implements AutoCloseable {
    */
   private static native long create(long chunkSizeByteLimit, String[] filterColumnNames,
       boolean[] binaryToString, String filePath, long bufferAddrs, long length, int timeUnit);
+
+  private static native long createWithDataSource(long chunkedSizeByteLimit,
+      String[] filterColumnNames, boolean[] binaryToString, int timeUnit, long dataSourceHandle);
 
   private static native boolean hasNext(long handle);
 

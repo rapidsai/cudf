@@ -73,10 +73,11 @@ std::unique_ptr<column> count_elements(lists_column_view const& input,
 // external APIS
 
 std::unique_ptr<column> count_elements(lists_column_view const& input,
+                                       rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_elements(input, cudf::get_default_stream(), mr);
+  return detail::count_elements(input, stream, mr);
 }
 
 }  // namespace lists

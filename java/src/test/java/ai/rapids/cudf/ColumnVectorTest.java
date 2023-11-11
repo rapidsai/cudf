@@ -6876,4 +6876,14 @@ public class ColumnVectorTest extends CudfTestBase {
     vector.close();
     assertThrows(NullPointerException.class, vector::getDeviceMemorySize);
   }
+
+  @Test
+  public void testConvertIntegerToHex() {
+    try (
+      ColumnVector input = ColumnVector.fromInts(14, 2621, 50);
+      ColumnVector expected = ColumnVector.fromStrings("0E", "0A3D", "32");
+      ColumnVector actual = input.toHex()) {
+        assertColumnsAreEqual(expected, actual);
+    }
+  }
 }

@@ -28,6 +28,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/reduction/detail/histogram.hpp>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -109,6 +110,15 @@ struct empty_column_constructor {
       return make_lists_column(
         0, make_empty_column(type_to_id<size_type>()), empty_like(values), 0, {});
     }
+
+    if constexpr (k == aggregation::Kind::HISTOGRAM) {
+      return make_lists_column(0,
+                               make_empty_column(type_to_id<size_type>()),
+                               cudf::reduction::detail::make_empty_histogram_like(values),
+                               0,
+                               {});
+    }
+    if constexpr (k == aggregation::Kind::MERGE_HISTOGRAM) { return empty_like(values); }
 
     if constexpr (k == aggregation::Kind::RANK) {
       auto const& rank_agg = dynamic_cast<cudf::detail::rank_aggregation const&>(agg);

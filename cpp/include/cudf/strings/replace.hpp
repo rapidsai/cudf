@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,19 +54,21 @@ namespace strings {
  *
  * @throw cudf::logic_error if target is an empty string.
  *
- * @param strings Strings column for this operation.
- * @param target String to search for within each string.
- * @param repl Replacement string if target is found.
+ * @param input Strings column for this operation
+ * @param target String to search for within each string
+ * @param repl Replacement string if target is found
  * @param maxrepl Maximum times to replace if target appears multiple times in the input string.
  *        Default of -1 specifies replace all occurrences of target in each string.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings column.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings column
  */
 std::unique_ptr<column> replace(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   string_scalar const& target,
   string_scalar const& repl,
-  int32_t maxrepl                     = -1,
+  cudf::size_type maxrepl             = -1,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -92,21 +94,23 @@ std::unique_ptr<column> replace(
  *
  * @throw cudf::logic_error if start is greater than stop.
  *
- * @param strings Strings column for this operation.
+ * @param input Strings column for this operation.
  * @param repl Replacement string for specified positions found.
  *        Default is empty string.
  * @param start Start position where repl will be added.
  *        Default is 0, first character position.
  * @param stop End position (exclusive) to use for replacement.
  *        Default of -1 specifies the end of each string.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings column.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings column
  */
 std::unique_ptr<column> replace_slice(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   string_scalar const& repl           = string_scalar(""),
   size_type start                     = 0,
   size_type stop                      = -1,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -141,16 +145,18 @@ std::unique_ptr<column> replace_slice(
  * if repls is a single string.
  * @throw cudf::logic_error if targets or repls contain null entries.
  *
- * @param strings Strings column for this operation.
- * @param targets Strings to search for in each string.
- * @param repls Corresponding replacement strings for target strings.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings column.
+ * @param input Strings column for this operation
+ * @param targets Strings to search for in each string
+ * @param repls Corresponding replacement strings for target strings
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings column
  */
 std::unique_ptr<column> replace(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   strings_column_view const& targets,
   strings_column_view const& repls,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group

@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 import cudf
+from cudf.core.tokenize_vocabulary import TokenizeVocabulary
 from cudf.testing._utils import assert_eq
 
 
@@ -20,25 +21,23 @@ def test_tokenize():
         ]
     )
 
-    expected_values = cudf.Series(
-        [
-            "the",
-            "quick",
-            "fox",
-            "jumped",
-            "over",
-            "the",
-            "lazy",
-            "dog",
-            "the",
-            "siamésé",
-            "cat",
-            "jumped",
-            "under",
-            "the",
-            "sofa",
-        ]
-    )
+    expected_values = [
+        "the",
+        "quick",
+        "fox",
+        "jumped",
+        "over",
+        "the",
+        "lazy",
+        "dog",
+        "the",
+        "siamésé",
+        "cat",
+        "jumped",
+        "under",
+        "the",
+        "sofa",
+    ]
     expected_index = strings.index.repeat(strings.str.token_count())
     expected = cudf.Series(expected_values, index=expected_index)
 
@@ -58,16 +57,14 @@ def test_tokenize_delimiter():
         ]
     )
 
-    expected_values = cudf.Series(
-        [
-            "the quick f",
-            "x jumped ",
-            "ver the lazy d",
-            "g",
-            "the siamésé cat jumped under the s",
-            "fa",
-        ]
-    )
+    expected_values = [
+        "the quick f",
+        "x jumped ",
+        "ver the lazy d",
+        "g",
+        "the siamésé cat jumped under the s",
+        "fa",
+    ]
     expected_index = strings.index.repeat(strings.str.token_count("o"))
     expected = cudf.Series(expected_values, index=expected_index)
 
@@ -154,6 +151,64 @@ def test_token_count(delimiter, expected_token_counts):
 
     assert type(expected) == type(actual)
     assert_eq(expected, actual, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "delimiter, input, default_id, results",
+    [
+        (
+            "",
+            "the quick brown fox jumps over the lazy brown dog",
+            99,
+            [0, 1, 2, 3, 4, 5, 0, 99, 2, 6],
+        ),
+        (
+            " ",
+            " the sable siamésé cat jumps under the brown sofa ",
+            -1,
+            [0, 7, 8, 9, 4, 10, 0, 2, 11],
+        ),
+        (
+            "_",
+            "the_quick_brown_fox_jumped__over_the_lazy_brown_dog",
+            -99,
+            [0, 1, 2, 3, -99, 5, 0, -99, 2, 6],
+        ),
+    ],
+)
+def test_tokenize_with_vocabulary(delimiter, input, default_id, results):
+    vocabulary = cudf.Series(
+        [
+            "the",
+            "quick",
+            "brown",
+            "fox",
+            "jumps",
+            "over",
+            "dog",
+            "sable",
+            "siamésé",
+            "cat",
+            "under",
+            "sofa",
+        ]
+    )
+    tokenizer = TokenizeVocabulary(vocabulary)
+
+    strings = cudf.Series([input, None, "", input])
+
+    expected = cudf.Series(
+        [
+            cudf.Series(results, dtype=np.int32),
+            None,
+            cudf.Series([], dtype=np.int32),
+            cudf.Series(results, dtype=np.int32),
+        ]
+    )
+
+    actual = tokenizer.tokenize(strings, delimiter, default_id)
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
 
 
 def test_normalize_spaces():
@@ -381,94 +436,92 @@ def test_character_tokenize_series():
             ),
         ]
     )
-    expected_values = cudf.Series(
-        [
-            "h",
-            "e",
-            "l",
-            "l",
-            "o",
-            " ",
-            "w",
-            "o",
-            "r",
-            "l",
-            "d",
-            "s",
-            "d",
-            "f",
-            "g",
-            "o",
-            "o",
-            "d",
-            "b",
-            "y",
-            "e",
-            ",",
-            " ",
-            "o",
-            "n",
-            "e",
-            "-",
-            "t",
-            "w",
-            "o",
-            ":",
-            "t",
-            "h",
-            "r",
-            "e",
-            "e",
-            "~",
-            "f",
-            "o",
-            "u",
-            "r",
-            "+",
-            "f",
-            "i",
-            "v",
-            "e",
-            "_",
-            "s",
-            "i",
-            "x",
-            "@",
-            "s",
-            "e",
-            "v",
-            "e",
-            "n",
-            "#",
-            "e",
-            "i",
-            "g",
-            "h",
-            "t",
-            "^",
-            "n",
-            "i",
-            "n",
-            "e",
-            " ",
-            "h",
-            "e",
-            "Œ",
-            "Ž",
-            "‘",
-            "•",
-            "™",
-            "œ",
-            "$",
-            "µ",
-            "¾",
-            "Ť",
-            "Ơ",
-            "é",
-            " ",
-            "Ǆ",
-        ]
-    )
+    expected_values = [
+        "h",
+        "e",
+        "l",
+        "l",
+        "o",
+        " ",
+        "w",
+        "o",
+        "r",
+        "l",
+        "d",
+        "s",
+        "d",
+        "f",
+        "g",
+        "o",
+        "o",
+        "d",
+        "b",
+        "y",
+        "e",
+        ",",
+        " ",
+        "o",
+        "n",
+        "e",
+        "-",
+        "t",
+        "w",
+        "o",
+        ":",
+        "t",
+        "h",
+        "r",
+        "e",
+        "e",
+        "~",
+        "f",
+        "o",
+        "u",
+        "r",
+        "+",
+        "f",
+        "i",
+        "v",
+        "e",
+        "_",
+        "s",
+        "i",
+        "x",
+        "@",
+        "s",
+        "e",
+        "v",
+        "e",
+        "n",
+        "#",
+        "e",
+        "i",
+        "g",
+        "h",
+        "t",
+        "^",
+        "n",
+        "i",
+        "n",
+        "e",
+        " ",
+        "h",
+        "e",
+        "Œ",
+        "Ž",
+        "‘",
+        "•",
+        "™",
+        "œ",
+        "$",
+        "µ",
+        "¾",
+        "Ť",
+        "Ơ",
+        "é",
+        " ",
+        "Ǆ",
+    ]
     expected_index = sr.index.repeat(sr.str.len().fillna(0))
     expected = cudf.Series(expected_values, index=expected_index)
 

@@ -18,9 +18,8 @@
 
 #include <cstdint>
 
-namespace cudf {
-namespace io {
-namespace parquet {
+namespace cudf::io::parquet::detail {
+
 // Max decimal precisions according to the parquet spec:
 // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#decimal
 auto constexpr MAX_DECIMAL32_PRECISION  = 9;
@@ -156,6 +155,4 @@ enum FieldType {
   ST_FLD_STRUCT = 12,
 };
 
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

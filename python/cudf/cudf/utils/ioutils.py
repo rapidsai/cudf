@@ -13,7 +13,6 @@ import numpy as np
 import pandas as pd
 from fsspec.core import get_fs_token_paths
 from pyarrow import PythonFile as ArrowPythonFile
-from pyarrow.fs import FSSpecHandler, PyFileSystem
 from pyarrow.lib import NativeFile
 
 from cudf.utils.docutils import docfmt_partial
@@ -288,6 +287,14 @@ return_metadata : bool, default False
     include the file path metadata (relative to `root_path`).
     To request metadata binary blob when using with ``partition_cols``, Pass
     ``return_metadata=True`` instead of specifying ``metadata_file_path``
+use_dictionary : bool, default True
+    When ``False``, prevents the use of dictionary encoding for Parquet page
+    data. When ``True``, dictionary encoding is preferred when not disabled due
+    to dictionary size constraints.
+header_version : {{'1.0', '2.0'}}, default "1.0"
+    Controls whether to use version 1.0 or version 2.0 page headers when
+    encoding. Version 1.0 is more portable, but version 2.0 enables the
+    use of newer encoding schemes.
 force_nullable_schema : bool, default False.
     If True, writes all columns as `null` in schema.
     If False, columns are written as `null` if they contain null values,
@@ -1629,6 +1636,15 @@ def _open_remote_files(
             )
             for path, rgs in zip(paths, row_groups)
         ]
+
+    # Avoid top-level pyarrow.fs import.
+    # Importing pyarrow.fs initializes a S3 SDK with a finalizer
+    # that runs atexit. In some circumstances it appears this
+    # runs a call into a logging system that is already shutdown.
+    # To avoid this, we only import this subsystem if it is
+    # really needed.
+    # See https://github.com/aws/aws-sdk-cpp/issues/2681
+    from pyarrow.fs import FSSpecHandler, PyFileSystem
 
     # Default open - Use pyarrow filesystem API
     pa_fs = PyFileSystem(FSSpecHandler(fs))

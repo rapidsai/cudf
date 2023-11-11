@@ -168,18 +168,20 @@ std::unique_ptr<column> pad(strings_column_view const& input,
                             size_type width,
                             side_type side,
                             std::string_view fill_char,
+                            rmm::cuda_stream_view stream,
                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::pad(input, width, side, fill_char, cudf::get_default_stream(), mr);
+  return detail::pad(input, width, side, fill_char, stream, mr);
 }
 
 std::unique_ptr<column> zfill(strings_column_view const& input,
                               size_type width,
+                              rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::zfill(input, width, cudf::get_default_stream(), mr);
+  return detail::zfill(input, width, stream, mr);
 }
 
 }  // namespace strings

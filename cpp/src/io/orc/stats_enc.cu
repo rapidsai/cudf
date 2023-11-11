@@ -76,8 +76,8 @@ __global__ void __launch_bounds__(block_size, 1)
 {
   using block_scan = cub::BlockScan<uint32_t, block_size, cub::BLOCK_SCAN_WARP_SCANS>;
   __shared__ typename block_scan::TempStorage temp_storage;
-  volatile uint32_t stats_size = 0;
-  auto t                       = threadIdx.x;
+  uint32_t stats_size = 0;
+  auto t              = threadIdx.x;
   __syncthreads();
   for (thread_index_type start = 0; start < statistics_count; start += block_size) {
     uint32_t stats_len = 0, stats_pos;
@@ -134,11 +134,11 @@ __global__ void __launch_bounds__(block_size, 1)
 }
 
 struct stats_state_s {
-  uint8_t* base;  ///< Output buffer start
-  uint8_t* end;   ///< Output buffer end
-  statistics_chunk chunk;
-  statistics_merge_group group;
-  statistics_dtype stats_dtype;  //!< Statistics data type for this column
+  uint8_t* base{};  ///< Output buffer start
+  uint8_t* end{};   ///< Output buffer end
+  statistics_chunk chunk{};
+  statistics_merge_group group{};
+  statistics_dtype stats_dtype{};  //!< Statistics data type for this column
 };
 
 /*

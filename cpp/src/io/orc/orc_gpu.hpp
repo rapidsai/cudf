@@ -59,31 +59,24 @@ struct CompressedStreamInfo {
   explicit constexpr CompressedStreamInfo(uint8_t const* compressed_data_, size_t compressed_size_)
     : compressed_data(compressed_data_),
       uncompressed_data(nullptr),
-      compressed_data_size(compressed_size_),
-      dec_in_ctl(nullptr),
-      dec_out_ctl(nullptr),
-      copy_in_ctl(nullptr),
-      copy_out_ctl(nullptr),
-      num_compressed_blocks(0),
-      num_uncompressed_blocks(0),
-      max_uncompressed_size(0),
-      max_uncompressed_block_size(0)
+      compressed_data_size(compressed_size_)
   {
   }
-  uint8_t const* compressed_data;  // [in] base ptr to compressed stream data
-  uint8_t* uncompressed_data;  // [in] base ptr to uncompressed stream data or NULL if not known yet
-  size_t compressed_data_size;              // [in] compressed data size for this stream
-  device_span<uint8_t const>* dec_in_ctl;   // [in] input buffer to decompress
-  device_span<uint8_t>* dec_out_ctl;        // [in] output buffer to decompress into
-  device_span<compression_result> dec_res;  // [in] results of decompression
-  device_span<uint8_t const>* copy_in_ctl;  // [out] input buffer to copy
-  device_span<uint8_t>* copy_out_ctl;       // [out] output buffer to copy to
-  uint32_t num_compressed_blocks;  // [in,out] number of entries in decctl(in), number of compressed
-                                   // blocks(out)
-  uint32_t num_uncompressed_blocks;      // [in,out] number of entries in dec_in_ctl(in), number of
-                                         // uncompressed blocks(out)
-  uint64_t max_uncompressed_size;        // [out] maximum uncompressed data size of stream
-  uint32_t max_uncompressed_block_size;  // [out] maximum uncompressed size of any block in stream
+  uint8_t const* compressed_data{};  // [in] base ptr to compressed stream data
+  uint8_t*
+    uncompressed_data{};  // [in] base ptr to uncompressed stream data or NULL if not known yet
+  size_t compressed_data_size{};              // [in] compressed data size for this stream
+  device_span<uint8_t const>* dec_in_ctl{};   // [in] input buffer to decompress
+  device_span<uint8_t>* dec_out_ctl{};        // [in] output buffer to decompress into
+  device_span<compression_result> dec_res{};  // [in] results of decompression
+  device_span<uint8_t const>* copy_in_ctl{};  // [out] input buffer to copy
+  device_span<uint8_t>* copy_out_ctl{};       // [out] output buffer to copy to
+  uint32_t num_compressed_blocks{};           // [in,out] number of entries in decctl(in), number of
+                                              // compressed blocks(out)
+  uint32_t num_uncompressed_blocks{};  // [in,out] number of entries in dec_in_ctl(in), number of
+                                       // uncompressed blocks(out)
+  uint64_t max_uncompressed_size{};    // [out] maximum uncompressed data size of stream
+  uint32_t max_uncompressed_block_size{};  // [out] maximum uncompressed size of any block in stream
 };
 
 enum StreamIndexType {
@@ -157,7 +150,8 @@ struct EncChunk {
   uint8_t dtype_len;                 // data type length
   int32_t scale;                     // scale for decimals or timestamps
 
-  uint32_t* dict_index;  // dictionary index from row index
+  uint32_t* dict_index;       // dictionary index from row index
+  uint32_t* dict_data_order;  // map from data to sorted data indices
   uint32_t* decimal_offsets;
   orc_column_device_view const* column;
 };
@@ -198,11 +192,12 @@ struct stripe_dictionary {
   size_type num_rows       = 0;      // number of rows in the stripe
 
   // output
-  device_span<uint32_t> data;     // index of elements in the column to include in the dictionary
-  device_span<uint32_t> index;    // index into the dictionary for each row in the column
-  size_type entry_count = 0;      // number of entries in the dictionary
-  size_type char_count  = 0;      // number of characters in the dictionary
-  bool is_enabled       = false;  // true if dictionary encoding is enabled for this stripe
+  device_span<uint32_t> data;        // index of elements in the column to include in the dictionary
+  device_span<uint32_t> index;       // index into the dictionary for each row in the column
+  device_span<uint32_t> data_order;  // map from data to sorted data indices
+  size_type entry_count = 0;         // number of entries in the dictionary
+  size_type char_count  = 0;         // number of characters in the dictionary
+  bool is_enabled       = false;     // true if dictionary encoding is enabled for this stripe
 };
 
 /**
@@ -430,6 +425,20 @@ void rowgroup_char_counts(device_2dspan<size_type> counts,
                           device_2dspan<rowgroup_rows const> rowgroup_bounds,
                           device_span<uint32_t const> str_col_indexes,
                           rmm::cuda_stream_view stream);
+
+/**
+ * @brief Converts sizes of decimal elements to offsets within the rowgroup.
+ *
+ * @note The conversion is done in-place. After the conversion, the device vectors in \p elem_sizes
+ * hold the offsets.
+ *
+ * @param rg_bounds Ranges of rows in each rowgroup [rowgroup][column]
+ * @param elem_sizes Map between column indexes and decimal element sizes
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
+void decimal_sizes_to_offsets(device_2dspan<rowgroup_rows const> rg_bounds,
+                              std::map<uint32_t, rmm::device_uvector<uint32_t>>& elem_sizes,
+                              rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernels to initialize statistics collection

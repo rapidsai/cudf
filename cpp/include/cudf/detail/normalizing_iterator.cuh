@@ -34,7 +34,7 @@ namespace detail {
  */
 template <class Derived, typename Integer>
 struct base_normalator {
-  static_assert(std::is_integral_v<Integer>);
+  static_assert(cudf::is_index_type<Integer>());
   using difference_type   = std::ptrdiff_t;
   using value_type        = Integer;
   using pointer           = Integer*;
@@ -202,13 +202,34 @@ struct base_normalator {
     return static_cast<Derived const&>(*this).p_ >= rhs.p_;
   }
 
+ private:
+  struct integer_sizeof_fn {
+    template <typename T, std::enable_if_t<not cudf::is_index_type<T>()>* = nullptr>
+    CUDF_HOST_DEVICE constexpr std::size_t operator()() const
+    {
+#ifndef __CUDA_ARCH__
+      CUDF_FAIL("only integral types are supported");
+#else
+      CUDF_UNREACHABLE("only integral types are supported");
+#endif
+    }
+    template <typename T, std::enable_if_t<cudf::is_index_type<T>()>* = nullptr>
+    CUDF_HOST_DEVICE constexpr std::size_t operator()() const noexcept
+    {
+      return sizeof(T);
+    }
+  };
+
  protected:
   /**
    * @brief Constructor assigns width and type member variables for base class.
    */
-  explicit base_normalator(data_type dtype) : width_(size_of(dtype)), dtype_(dtype) {}
+  explicit CUDF_HOST_DEVICE base_normalator(data_type dtype) : dtype_(dtype)
+  {
+    width_ = static_cast<int32_t>(type_dispatcher(dtype, integer_sizeof_fn{}));
+  }
 
-  int width_;        /// integer type width = 1,2,4, or 8
+  int32_t width_;    /// integer type width = 1,2,4, or 8
   data_type dtype_;  /// for type-dispatcher calls
 };
 
@@ -244,12 +265,12 @@ struct input_normalator : base_normalator<input_normalator<Integer>, Integer> {
    * @brief Dispatch functor for resolving a Integer value from any integer type
    */
   struct normalize_type {
-    template <typename T, std::enable_if_t<cuda::std::is_integral_v<T>>* = nullptr>
+    template <typename T, std::enable_if_t<cudf::is_index_type<T>()>* = nullptr>
     __device__ Integer operator()(void const* tp)
     {
       return static_cast<Integer>(*static_cast<T const*>(tp));
     }
-    template <typename T, std::enable_if_t<not cuda::std::is_integral_v<T>>* = nullptr>
+    template <typename T, std::enable_if_t<not cudf::is_index_type<T>()>* = nullptr>
     __device__ Integer operator()(void const*)
     {
       CUDF_UNREACHABLE("only integral types are supported");
@@ -274,9 +295,10 @@ struct input_normalator : base_normalator<input_normalator<Integer>, Integer> {
    * @param data      Pointer to an integer array in device memory.
    * @param data_type Type of data in data
    */
-  input_normalator(void const* data, data_type dtype)
+  CUDF_HOST_DEVICE input_normalator(void const* data, data_type dtype, cudf::size_type offset = 0)
     : base_normalator<input_normalator<Integer>, Integer>(dtype), p_{static_cast<char const*>(data)}
   {
+    p_ += offset * this->width_;
   }
 
   char const* p_;  /// pointer to the integer data in device memory
@@ -327,12 +349,12 @@ struct output_normalator : base_normalator<output_normalator<Integer>, Integer> 
    * @brief Dispatch functor for setting the index value from a size_type value.
    */
   struct normalize_type {
-    template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+    template <typename T, std::enable_if_t<cudf::is_index_type<T>()>* = nullptr>
     __device__ void operator()(void* tp, Integer const value)
     {
       (*static_cast<T*>(tp)) = static_cast<T>(value);
     }
-    template <typename T, std::enable_if_t<not std::is_integral_v<T>>* = nullptr>
+    template <typename T, std::enable_if_t<not cudf::is_index_type<T>()>* = nullptr>
     __device__ void operator()(void*, Integer const)
     {
       CUDF_UNREACHABLE("only index types are supported");
@@ -355,7 +377,7 @@ struct output_normalator : base_normalator<output_normalator<Integer>, Integer> 
    * @param data      Pointer to an integer array in device memory.
    * @param data_type Type of data in data
    */
-  output_normalator(void* data, data_type dtype)
+  CUDF_HOST_DEVICE output_normalator(void* data, data_type dtype)
     : base_normalator<output_normalator<Integer>, Integer>(dtype), p_{static_cast<char*>(data)}
   {
   }
