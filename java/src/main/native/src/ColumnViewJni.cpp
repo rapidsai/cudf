@@ -111,6 +111,9 @@ std::size_t calc_device_memory_size(cudf::column_view const &view, bool const pa
   auto dtype = view.type();
   if (cudf::is_fixed_width(dtype)) {
     total += pad_size(cudf::size_of(dtype) * view.size(), pad_for_cpu);
+  } else if (dtype.id() == cudf::type_id::STRING) {
+    auto scv = cudf::strings_column_view(view);
+    total += pad_size(scv.chars_size(cudf::get_default_stream()), pad_for_cpu);
   }
 
   return std::accumulate(view.child_begin(), view.child_end(), total,
@@ -1963,18 +1966,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeCudfColumnView(
             new cudf::column_view(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0));
       } else {
         JNI_NULL_CHECK(env, j_offset, "offset is null", 0);
-        // This must be kept in sync with how string columns are created
-        // offsets are always the first child
-        // data is the second child
-
         cudf::size_type *offsets = reinterpret_cast<cudf::size_type *>(j_offset);
         cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, size + 1, offsets,
                                          nullptr, 0);
-        cudf::column_view data_column(cudf::data_type{cudf::type_id::INT8}, j_data_size, data,
-                                      nullptr, 0);
         return ptr_as_jlong(new cudf::column_view(cudf::data_type{cudf::type_id::STRING}, size,
-                                                  nullptr, valid, j_null_count, 0,
-                                                  {offsets_column, data_column}));
+                                                  data, valid, j_null_count, 0, {offsets_column}));
       }
     } else if (n_type == cudf::type_id::LIST) {
       JNI_NULL_CHECK(env, j_children, "children of a list are null", 0);
