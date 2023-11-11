@@ -544,6 +544,7 @@ def test_no_s3fs_on_cudf_import():
             sys.executable,
             "-c",
             "import cudf; import sys; print('pyarrow._s3fs' in sys.modules)",
-        ]
+        ],
+        cwd="/",
     )
     assert output.strip() == b"False"
