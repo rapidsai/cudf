@@ -244,7 +244,7 @@ dependencies:
           - libarrow-all==14.0.1.*
           - librdkafka>=1.9.0,<1.10.0a0
           # Align nvcomp version with rapids-cmake
-          - nvcomp==2.6.1
+          - nvcomp==3.0.4
           - spdlog>=1.11.0,<1.12
   build_wheels:
     common:
@@ -256,7 +256,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - cython>=3.0.0
+          - cython>=3.0.3
           # TODO: Pin to numpy<1.25 until cudf requires pandas 2
           - &numpy numpy>=1.21,<1.25
       - output_types: [conda, requirements, pyproject]
