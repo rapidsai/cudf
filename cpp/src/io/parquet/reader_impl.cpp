@@ -253,6 +253,8 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
     }
   }
 
+  _stream.synchronize();
+
   // update null counts in the final column buffers
   for (size_t idx = 0; idx < subpass.pages.size(); idx++) {
     PageInfo* pi = &subpass.pages[idx];
@@ -348,7 +350,7 @@ void reader::impl::prepare_data(int64_t skip_rows,
 
   // handle any chunking work (ratcheting through the subpasses and chunks within
   // our current pass)
-  handle_chunking(uses_custom_row_bounds);
+  if (_file_itm_data.num_passes() > 0) { handle_chunking(uses_custom_row_bounds); }
 }
 
 void reader::impl::populate_metadata(table_metadata& out_metadata)
@@ -378,11 +380,8 @@ table_with_metadata reader::impl::read_chunk_internal(
   auto out_columns = std::vector<std::unique_ptr<column>>{};
   out_columns.reserve(_output_buffers.size());
 
-#if 0
-  if (!has_next()/* || _pass_itm_data->output_chunk_read_info.empty()*/) {
-    return finalize_output(out_metadata, out_columns, filter);
-  }
-#endif
+  // no work to do (this can happen on the first pass if we have no rows to read)
+  if (!has_more_work()) { return finalize_output(out_metadata, out_columns, filter); }
 
   auto& pass            = *_pass_itm_data;
   auto& subpass         = *pass.subpass;
@@ -440,11 +439,13 @@ table_with_metadata reader::impl::finalize_output(
   }
 
   // advance output chunk/subpass/pass info
-  auto& pass    = *_pass_itm_data;
-  auto& subpass = *pass.subpass;
-  subpass.current_output_chunk++;
-  pass.processed_rows += subpass.num_rows;
-  _file_itm_data._output_chunk_count++;
+  if (_file_itm_data.num_passes() > 0) {
+    auto& pass    = *_pass_itm_data;
+    auto& subpass = *pass.subpass;
+    subpass.current_output_chunk++;
+    pass.processed_rows += subpass.num_rows;
+    _file_itm_data._output_chunk_count++;
+  }
 
   if (filter.has_value()) {
     auto read_table = std::make_unique<table>(std::move(out_columns));
@@ -505,9 +506,7 @@ bool reader::impl::has_next()
 
   // current_input_pass will only be incremented to be == num_passes after
   // the last chunk in the last subpass in the last pass has been returned
-  auto const num_passes = _file_itm_data.input_pass_row_group_offsets.size() - 1;
-  bool const more_work  = _file_itm_data._current_input_pass < num_passes;
-  return more_work;
+  return has_more_work();
 }
 
 namespace {

@@ -866,7 +866,7 @@ void reader::impl::handle_chunking(bool uses_custom_row_bounds)
   // if this is our first time in here, setup the first pass.
   if (!_pass_itm_data) {
     // setup the next pass
-    setup_next_pass();
+    setup_next_pass(uses_custom_row_bounds);
   }
 
   auto& pass = *_pass_itm_data;
@@ -887,12 +887,11 @@ void reader::impl::handle_chunking(bool uses_custom_row_bounds)
       _pass_itm_data.reset();
 
       _file_itm_data._current_input_pass++;
-      auto const num_passes = _file_itm_data.input_pass_row_group_offsets.size() - 1;
       // no more passes. we are absolutely done with this file.
-      if (_file_itm_data._current_input_pass == num_passes) { return; }
+      if (_file_itm_data._current_input_pass == _file_itm_data.num_passes()) { return; }
 
       // setup the next pass
-      setup_next_pass();
+      setup_next_pass(uses_custom_row_bounds);
     }
   }
 
@@ -900,9 +899,9 @@ void reader::impl::handle_chunking(bool uses_custom_row_bounds)
   setup_next_subpass(uses_custom_row_bounds);
 }
 
-void reader::impl::setup_next_pass()
+void reader::impl::setup_next_pass(bool uses_custom_row_bounds)
 {
-  auto const num_passes = _file_itm_data.input_pass_row_group_offsets.size() - 1;
+  auto const num_passes = _file_itm_data.num_passes();
 
   // always create the pass struct, even if we end up with no work.
   // this will also cause the previous pass information to be deleted
@@ -923,7 +922,7 @@ void reader::impl::setup_next_pass()
               _file_itm_data.row_groups.begin() + row_group_end,
               pass.row_groups.begin());
 
-    auto const num_passes = _file_itm_data.input_pass_row_group_offsets.size() - 1;
+    auto const num_passes = _file_itm_data.num_passes();
     CUDF_EXPECTS(_file_itm_data._current_input_pass < num_passes,
                  "Encountered an invalid read pass index");
 
@@ -967,7 +966,11 @@ void reader::impl::setup_next_pass()
     //   is possible to load this by just capping the number of rows read, we cannot tell
     //   which rows are invalid so we may be returning bad data. in addition, this mismatch
     //   confuses the chunked reader
-    detect_malformed_pages(pass.pages, pass.chunks, pass.num_rows, _stream);
+    detect_malformed_pages(
+      pass.pages,
+      pass.chunks,
+      uses_custom_row_bounds ? std::nullopt : std::make_optional(pass.num_rows),
+      _stream);
 
     // decompress dictionary data if applicable.
     if (pass.has_compressed_data) {

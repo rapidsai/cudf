@@ -47,6 +47,11 @@ struct file_intermediate_data {
   // may not be visiting every row group that contains these bounds
   size_t global_skip_rows;
   size_t global_num_rows;
+
+  size_t num_passes()
+  {
+    return input_pass_row_group_offsets.size() == 0 ? 0 : input_pass_row_group_offsets.size() - 1;
+  }
 };
 
 /**

@@ -157,6 +157,9 @@ class reader::impl {
 
   /**
    * @brief Ratchet the pass/subpass/chunk process forward.
+   *
+   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
+   *        bounds
    */
   void handle_chunking(bool uses_custom_row_bounds);
 
@@ -165,11 +168,17 @@ class reader::impl {
    *
    * A 'pass' is defined as a subset of row groups read out of the globally
    * requested set of all row groups.
+   *
+   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
+   *        bounds
    */
-  void setup_next_pass();
+  void setup_next_pass(bool uses_custom_row_bounds);
 
   /**
    * @brief Setup step for the next decompression subpass.
+   *
+   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
+   *        bounds
    *
    * A 'subpass' is defined as a subset of pages within a pass that are
    * decompressed a decoded as a batch. Subpasses may be further subdivided
@@ -316,6 +325,14 @@ class reader::impl {
    * a set of reads that will generate output columns of total size <= `chunk_read_limit` bytes.
    */
   void compute_chunks_for_subpass();
+
+  bool has_more_work()
+  {
+    // no work to do (this can happen on the first pass if we have no rows to read)
+    auto const num_passes = _file_itm_data.num_passes();
+    bool const more_work  = num_passes > 0 && _file_itm_data._current_input_pass < num_passes;
+    return more_work;
+  }
 
  private:
   rmm::cuda_stream_view _stream;

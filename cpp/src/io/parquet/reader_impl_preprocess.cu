@@ -543,7 +543,7 @@ void reader::impl::allocate_nesting_info()
     auto cur_schema = _metadata->get_schema(schema_idx);
     int cur_depth   = max_depth - 1;
     while (schema_idx > 0) {
-      // stub columns (basically the inner field of a list scheme element) are not real columns.
+      // stub columns (basically the inner field of a list schema element) are not real columns.
       // we can ignore them for the purposes of output nesting info
       if (!cur_schema.is_stub()) {
         // initialize each page within the chunk
@@ -934,7 +934,7 @@ struct update_subpass_chunk_row {
   device_span<PageInfo> subpass_pages;
   device_span<size_t> page_src_index;
 
-  void operator()(size_t i)
+  __device__ void operator()(size_t i)
   {
     subpass_pages[i].chunk_row = pass_pages[page_src_index[i]].chunk_row;
   }
@@ -1049,8 +1049,10 @@ void reader::impl::preprocess_subpass_pages(bool uses_custom_row_bounds, size_t 
     page_index += subpass.column_page_count[idx];
   }
   CUDF_EXPECTS(max_row > pass.processed_rows, "Encountered invalid row read count");
-  subpass.skip_rows = pass.skip_rows + pass.processed_rows;
-  subpass.num_rows  = max_row - pass.processed_rows;
+  subpass.skip_rows   = pass.skip_rows + pass.processed_rows;
+  auto const pass_end = pass.skip_rows + pass.num_rows;
+  max_row             = min(max_row, pass_end);
+  subpass.num_rows    = max_row - subpass.skip_rows;
 
   // now split up the output into chunks as necessary
   compute_chunks_for_subpass();
