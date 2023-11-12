@@ -346,7 +346,9 @@ void decode_page_headers(pass_intermediate_data& pass, rmm::cuda_stream_view str
                                             thrust::maximum<int>());
   pass.level_type_size     = std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 
-  // sort the pages in schema order.
+  // sort the pages in chunk/schema order. we use chunk.src_col_index instead of
+  // chunk.src_col_schema because the user may have reordered them (reading columns, "a" and "b" but
+  // returning them as "b" and "a")
   //
   // ordering of pages is by input column schema, repeated across row groups.  so
   // if we had 3 columns, each with 2 pages, and 1 row group, our schema values might look like
@@ -371,7 +373,9 @@ void decode_page_headers(pass_intermediate_data& pass, rmm::cuda_stream_view str
                       pass.pages.d_begin(),
                       pass.pages.d_begin() + pass.pages.size(),
                       page_keys.begin(),
-                      [] __device__(PageInfo const& page) { return page.src_col_schema; });
+                      [chunks = pass.chunks.d_begin()] __device__(PageInfo const& page) {
+                        return chunks[page.chunk_idx].src_col_index;
+                      });
     thrust::stable_sort_by_key(rmm::exec_policy(stream),
                                page_keys.begin(),
                                page_keys.end(),
