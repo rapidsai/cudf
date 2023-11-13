@@ -18,7 +18,7 @@ from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.scalar cimport DeviceScalar
 
 
-cdef class BPE_Merge_Pairs:
+cdef class BPEMergePairs:
     cdef unique_ptr[cpp_bpe_merge_pairs] c_obj
 
     def __cinit__(self, Column merge_pairs):
@@ -30,7 +30,7 @@ cdef class BPE_Merge_Pairs:
 @acquire_spill_lock()
 def byte_pair_encoding(
     Column strings,
-    BPE_Merge_Pairs merge_pairs,
+    BPEMergePairs merge_pairs,
     object separator
 ):
     cdef column_view c_strings = strings.view()
