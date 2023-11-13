@@ -443,7 +443,6 @@ table_with_metadata reader::impl::finalize_output(
     auto& pass    = *_pass_itm_data;
     auto& subpass = *pass.subpass;
     subpass.current_output_chunk++;
-    pass.processed_rows += subpass.num_rows;
     _file_itm_data._output_chunk_count++;
   }
 

@@ -1052,7 +1052,6 @@ void reader::impl::preprocess_subpass_pages(bool uses_custom_row_bounds, size_t 
       min(max_row, static_cast<size_t>(chunk.start_row + last_page.chunk_row + last_page.num_rows));
     page_index += subpass.column_page_count[idx];
   }
-  CUDF_EXPECTS(max_row > pass.processed_rows, "Encountered invalid row read count");
   subpass.skip_rows   = pass.skip_rows + pass.processed_rows;
   auto const pass_end = pass.skip_rows + pass.num_rows;
   max_row             = min(max_row, pass_end);

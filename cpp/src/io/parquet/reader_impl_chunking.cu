@@ -269,11 +269,10 @@ struct page_total_size {
 
 int64_t find_next_split(int64_t cur_pos,
                         size_t cur_row_count,
+                        size_t cur_cumulative_size,
                         std::vector<cumulative_page_info> const& sizes,
                         size_t chunk_read_limit)
 {
-  size_t cur_cumulative_size = cur_pos == 0 ? 0 : sizes[cur_pos - 1].size_bytes;
-
   auto start = thrust::make_transform_iterator(sizes.begin(), [&](cumulative_page_info const& i) {
     return i.size_bytes - cur_cumulative_size;
   });
@@ -318,20 +317,22 @@ std::vector<split_info> find_splits(std::vector<cumulative_page_info> const& siz
   // sizes are reasonably large, this shouldn't iterate too many times
   std::vector<split_info> splits;
   {
-    size_t cur_pos       = 0;
-    size_t cur_row_count = 0;
-    auto const num_rows  = sizes.back().row_count;
+    size_t cur_pos             = 0;
+    size_t cur_row_count       = 0;
+    size_t cur_cumulative_size = 0;
+    auto const num_rows        = sizes.back().row_count;
     while (cur_row_count < num_rows) {
-      auto const split_pos = find_next_split(cur_pos, cur_row_count, sizes, chunk_read_limit);
+      auto const split_pos =
+        find_next_split(cur_pos, cur_row_count, cur_cumulative_size, sizes, chunk_read_limit);
 
       auto const start_row = cur_row_count;
       cur_row_count        = sizes[split_pos].row_count;
-      splits.push_back(split_info{row_range{start_row, cur_row_count - start_row},
-                                  static_cast<int64_t>(cur_pos == 0 ? 0 : cur_pos + 1)});
-      cur_pos = split_pos;
+      splits.push_back(split_info{row_range{start_row, cur_row_count - start_row}, split_pos});
+      cur_pos             = split_pos;
+      cur_cumulative_size = sizes[split_pos].size_bytes;
     }
   }
-  // print_cumulative_row_info(sizes, "adjusted", splits);
+  // print_cumulative_row_info(sizes, "adjusted w/splits", splits);
 
   return splits;
 }
@@ -488,6 +489,7 @@ std::pair<std::vector<page_span>, size_t> compute_next_subpass(
   // find the next split
   auto const end_index = find_next_split(start_index,
                                          min_row,
+                                         0,
                                          h_aggregated_info,
                                          size_limit) +
                          1;  // the split index returned is inclusive
@@ -877,6 +879,9 @@ void reader::impl::handle_chunking(bool uses_custom_row_bounds)
     if (pass.subpass->current_output_chunk < pass.subpass->output_chunk_read_info.size()) {
       return;
     }
+
+    // increment rows processed
+    pass.processed_rows += pass.subpass->num_rows;
 
     // release the old subpass (will free memory)
     pass.subpass.reset();

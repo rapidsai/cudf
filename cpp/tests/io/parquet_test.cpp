@@ -5656,8 +5656,9 @@ TEST_F(ParquetReaderTest, ChunkedSingleLevelLists)
     cudf::io::parquet_reader_options::builder(
       cudf::io::source_info{reinterpret_cast<char const*>(list_bytes), sizeof(list_bytes)}));
   int iterations = 0;
-  while (reader.has_next() && iterations < 10) {
+  while (reader.has_next()) {
     auto chunk = reader.read_chunk();
+    iterations++;
   }
   EXPECT_TRUE(iterations < 10);
 }

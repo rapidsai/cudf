@@ -118,7 +118,9 @@ struct pass_intermediate_data {
   // NOTE: skip_rows is the absolute row index in the file.
   size_t skip_rows;
   size_t num_rows;
-  // number of rows we have processed so far (out of num_rows)
+  // number of rows we have processed so far (out of num_rows). note that this
+  // only includes the number of rows we have processed before starting the current
+  // subpass. it does not get updated as a subpass iterates through output chunks.
   size_t processed_rows{0};
 
   // currently active subpass
