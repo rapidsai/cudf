@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import cudf
 from cudf._lib.nvtext.byte_pair_encode import (
-    BPE_Merge_Pairs as cpp_merge_pairs,
+    BPEMergePairs as cpp_merge_pairs,
     byte_pair_encoding as cpp_byte_pair_encoding,
 )
 
 
 class BytePairEncoder:
     """
+    Given a merge pairs strings series, performs byte pair encoding on
+    a strings series using the provided separator.
 
     Parameters
     ----------
