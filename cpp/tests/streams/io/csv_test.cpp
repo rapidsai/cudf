@@ -35,80 +35,70 @@ auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
 
 class CSVTest : public cudf::test::BaseFixture {};
 
-template <typename T>
-inline auto random_values(size_t size)
+TEST_F(CSVTest, CSVWriter)
 {
-  std::vector<T> values(size);
+  constexpr auto num_rows = 10;
 
-  using T1 = T;
-  using uniform_distribution =
-    typename std::conditional_t<std::is_same_v<T1, bool>,
-                                std::bernoulli_distribution,
-                                std::conditional_t<std::is_floating_point_v<T1>,
-                                                   std::uniform_real_distribution<T1>,
-                                                   std::uniform_int_distribution<T1>>>;
+  std::vector<size_t> zeros(num_rows, 0);
+  std::vector<size_t> ones(num_rows, 1);
+  auto col6_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    return numeric::decimal128{ones[i], numeric::scale_type{12}};
+  });
+  auto col7_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    return numeric::decimal128{ones[i], numeric::scale_type{-12}};
+  });
 
-  static constexpr auto seed = 0xf00d;
-  static std::mt19937 engine{seed};
-  static uniform_distribution dist{};
-  std::generate_n(values.begin(), size, [&]() { return T{dist(engine)}; });
+  cudf::test::fixed_width_column_wrapper<bool> col0(zeros.begin(), zeros.end());
+  cudf::test::fixed_width_column_wrapper<int8_t> col1(zeros.begin(), zeros.end());
+  cudf::test::fixed_width_column_wrapper<int16_t> col2(zeros.begin(), zeros.end());
+  cudf::test::fixed_width_column_wrapper<int32_t> col3(zeros.begin(), zeros.end());
+  cudf::test::fixed_width_column_wrapper<float> col4(zeros.begin(), zeros.end());
+  cudf::test::fixed_width_column_wrapper<double> col5(zeros.begin(), zeros.end());
+  cudf::test::fixed_width_column_wrapper<numeric::decimal128> col6(col6_data, col6_data + num_rows);
+  cudf::test::fixed_width_column_wrapper<numeric::decimal128> col7(col7_data, col7_data + num_rows);
 
-  return values;
+  std::vector<std::string> col8_data(num_rows, "rapids");
+  cudf::test::strings_column_wrapper col8(col8_data.begin(), col8_data.end());
+
+  cudf::table_view tab({col0, col1, col2, col3, col4, col5, col6, col7, col8});
+
+  auto const filepath = temp_env->get_temp_dir() + "multicolumn.csv";
+  auto w_options      = cudf::io::csv_writer_options::builder(cudf::io::sink_info{filepath}, tab)
+                     .include_header(false)
+                     .inter_column_delimiter(',');
+  cudf::io::write_csv(w_options.build(), cudf::test::get_default_stream());
 }
 
 TEST_F(CSVTest, CSVReader)
 {
   constexpr auto num_rows = 10;
-  auto int8_values        = random_values<int8_t>(num_rows);
-  auto int16_values       = random_values<int16_t>(num_rows);
-  auto int32_values       = random_values<int32_t>(num_rows);
-  auto int64_values       = random_values<int64_t>(num_rows);
-  auto uint8_values       = random_values<uint8_t>(num_rows);
-  auto uint16_values      = random_values<uint16_t>(num_rows);
-  auto uint32_values      = random_values<uint32_t>(num_rows);
-  auto uint64_values      = random_values<uint64_t>(num_rows);
-  auto float32_values     = random_values<float>(num_rows);
-  auto float64_values     = random_values<double>(num_rows);
 
-  auto filepath = temp_env->get_temp_dir() + "MultiColumn.csv";
-  {
-    std::ostringstream line;
-    for (int i = 0; i < num_rows; ++i) {
-      line << std::to_string(int8_values[i]) << "," << int16_values[i] << "," << int32_values[i]
-           << "," << int64_values[i] << "," << std::to_string(uint8_values[i]) << ","
-           << uint16_values[i] << "," << uint32_values[i] << "," << uint64_values[i] << ","
-           << float32_values[i] << "," << float64_values[i] << "\n";
-    }
-    std::ofstream outfile(filepath, std::ofstream::out);
-    outfile << line.str();
-  }
+  std::vector<size_t> zeros(num_rows, 0);
+  std::vector<size_t> ones(num_rows, 1);
+  auto col6_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    return numeric::decimal128{ones[i], numeric::scale_type{12}};
+  });
+  auto col7_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    return numeric::decimal128{ones[i], numeric::scale_type{-12}};
+  });
 
-  cudf::io::csv_reader_options in_opts =
-    cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
-      .header(-1)
-      .dtypes({cudf::data_type{cudf::type_id::INT8},
-               cudf::data_type{cudf::type_id::INT16},
-               cudf::data_type{cudf::type_id::INT32},
-               cudf::data_type{cudf::type_id::INT64},
-               cudf::data_type{cudf::type_id::UINT8},
-               cudf::data_type{cudf::type_id::UINT16},
-               cudf::data_type{cudf::type_id::UINT32},
-               cudf::data_type{cudf::type_id::UINT64},
-               cudf::data_type{cudf::type_id::FLOAT32},
-               cudf::data_type{cudf::type_id::FLOAT64}});
-  auto result = cudf::io::read_csv(in_opts, cudf::test::get_default_stream());
-}
+  cudf::test::fixed_width_column_wrapper<bool> col0(zeros.begin(), zeros.end());
+  cudf::test::fixed_width_column_wrapper<int8_t> col1(zeros.begin(), zeros.end());
+  cudf::test::fixed_width_column_wrapper<int16_t> col2(zeros.begin(), zeros.end());
+  cudf::test::fixed_width_column_wrapper<int32_t> col3(zeros.begin(), zeros.end());
+  cudf::test::fixed_width_column_wrapper<float> col4(zeros.begin(), zeros.end());
+  cudf::test::fixed_width_column_wrapper<double> col5(zeros.begin(), zeros.end());
+  cudf::test::fixed_width_column_wrapper<numeric::decimal128> col6(col6_data, col6_data + num_rows);
+  cudf::test::fixed_width_column_wrapper<numeric::decimal128> col7(col7_data, col7_data + num_rows);
 
-TEST_F(CSVTest, CSVWriter)
-{
-  auto const input_strings = cudf::test::strings_column_wrapper{
-    std::string{"All"} + "," + "the" + "," + "leaves", "are\"brown", "and\nthe\nsky\nis\ngrey"};
-  auto const input_table = cudf::table_view{{input_strings}};
+  std::vector<std::string> col8_data(num_rows, "rapids");
+  cudf::test::strings_column_wrapper col8(col8_data.begin(), col8_data.end());
 
-  auto const filepath = temp_env->get_temp_dir() + "unquoted.csv";
-  auto w_options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{filepath}, input_table)
+  cudf::table_view tab({col0, col1, col2, col3, col4, col5, col6, col7, col8});
+
+  auto const filepath = temp_env->get_temp_dir() + "multicolumn.csv";
+  auto w_options      = cudf::io::csv_writer_options::builder(cudf::io::sink_info{filepath}, tab)
                      .include_header(false)
-                     .inter_column_delimiter(',')
-                     .quoting(cudf::io::quote_style::NONE);
+                     .inter_column_delimiter(',');
   cudf::io::write_csv(w_options.build(), cudf::test::get_default_stream());
 }
