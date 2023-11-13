@@ -81,6 +81,7 @@ DEPENDENCIES=(
   kvikio
   libkvikio
   librmm
+  rapids-dask-dependency
   rmm
 )
 for DEP in "${DEPENDENCIES[@]}"; do
