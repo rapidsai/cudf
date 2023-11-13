@@ -11,7 +11,6 @@ files:
       - build_wheels
       - build_python_common
       - build_python_cudf
-      - build_python_cudf_kafka
       - cudatoolkit
       - develop
       - docs
@@ -140,7 +139,6 @@ files:
       table: build-system
     includes:
       - build_python_common
-      - build_python_cudf_kafka
       - build_wheels
   py_run_cudf_kafka:
     output: pyproject
@@ -261,6 +259,7 @@ dependencies:
           - cython>=3.0.0
           # TODO: Pin to numpy<1.25 until cudf requires pandas 2
           - &numpy numpy>=1.21,<1.25
+          - scikit-build>=0.13.1
       - output_types: [conda, requirements, pyproject]
         packages:
           # Hard pin the patch version used during the build. This must be kept
@@ -270,7 +269,6 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - scikit-build>=0.13.1
           - rmm==23.12.*
       - output_types: conda
         packages:
@@ -278,11 +276,6 @@ dependencies:
       - output_types: pyproject
         packages:
           - protoc-wheel
-  build_python_cudf_kafka:
-    common:
-      - output_types: [conda, requirements, pyproject]
-        packages:
-          - scikit-build>=0.13.1
   libarrow_run:
     common:
       - output_types: conda
