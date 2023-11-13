@@ -24,7 +24,7 @@ from cudf.utils.dtypes import _get_base_dtype
 
 from cpython.buffer cimport PyObject_CheckBuffer
 from libc.stdint cimport uintptr_t
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
@@ -47,7 +47,6 @@ from cudf._lib.cpp.column.column_factories cimport (
     make_numeric_column,
 )
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.libcpp.memory cimport make_unique
 from cudf._lib.cpp.null_mask cimport null_count as cpp_null_count
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.scalar cimport DeviceScalar
@@ -131,7 +130,7 @@ cdef class Column:
         return self.base_mask is not None
 
     def has_nulls(self, include_nan=False):
-        return self.null_count != 0
+        return int(self.null_count) != 0
 
     @property
     def base_mask(self):
