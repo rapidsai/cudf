@@ -2,16 +2,16 @@
 
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
+from libcpp.functional cimport reference_wrapper
 from libcpp.map cimport map
 from libcpp.memory cimport shared_ptr, unique_ptr
+from libcpp.optional cimport optional
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
 cimport cudf._lib.cpp.io.types as cudf_io_types
 cimport cudf._lib.cpp.table.table_view as cudf_table_view
 from cudf._lib.cpp.expressions cimport expression
-from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
-from cudf._lib.cpp.libcpp.optional cimport optional
 from cudf._lib.cpp.types cimport data_type, size_type
 
 

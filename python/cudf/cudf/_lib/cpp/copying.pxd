@@ -2,6 +2,7 @@
 
 from libc.stdint cimport int32_t, int64_t, uint8_t
 from libcpp cimport bool
+from libcpp.functional cimport reference_wrapper
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
@@ -9,7 +10,6 @@ from rmm._lib.device_buffer cimport device_buffer
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
-from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
