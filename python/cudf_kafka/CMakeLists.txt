@@ -33,7 +33,10 @@ if(FIND_CUDF_KAFKA_CPP)
 endif()
 
 if(NOT cudf_kafka_FOUND)
-  message(FATAL_ERROR "cudf_kafka package not found. cudf_kafka C++ is required to build this Python package.")
+  message(
+    FATAL_ERROR
+      "cudf_kafka package not found. cudf_kafka C++ is required to build this Python package."
+  )
 endif()
 
 include(rapids-cython)
