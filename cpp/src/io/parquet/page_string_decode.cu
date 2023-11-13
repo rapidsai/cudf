@@ -559,7 +559,7 @@ __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* d
  * for pages with string-like data. Also calculates the number of null and valid values in the
  * page. Does nothing if the page mask is neither `STRING` nor `DELTA_BYTE_ARRAY`. On exit the
  * `num_nulls`, `num_valids`, `start_val` and `end_val` fields of the `PageInfo` struct will be
- * populated. Also fills in the `temp_string_size` field if rows are to be skipped.
+ * populated.
  *
  * @param pages All pages to be decoded
  * @param chunks All chunks to be decoded
@@ -622,7 +622,8 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBou
  * @brief Kernel for computing string page output size information for delta_byte_array encoding.
  *
  * This call ignores columns that are not DELTA_BYTE_ARRAY encoded. On exit the `str_bytes` field
- * of the `PageInfo` struct will be populated.
+ * of the `PageInfo` struct will be populated. Also fills in the `temp_string_size` field if rows
+ * are to be skipped.
  *
  * @param pages All pages to be decoded
  * @param chunks All chunks to be decoded
@@ -658,7 +659,7 @@ __global__ void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageS
         // just need to parse the header of the first delta binary block to get values_per_mb
         delta_binary_decoder db;
         db.init_binary_block(s->data_start, s->data_end);
-        // save enough for one mimi-block plus some extra to save the last_string
+        // save enough for one mini-block plus some extra to save the last_string
         pp->temp_string_size = s->dtype_len_in * (db.values_per_mb + 1);
       }
     }
