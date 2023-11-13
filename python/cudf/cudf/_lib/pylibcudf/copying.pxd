@@ -17,3 +17,5 @@ cpdef Table gather(
 )
 
 cpdef Column shift(Column input, size_type offset, Scalar fill_values)
+
+cpdef Table scatter(object source, Column scatter_map, Table target_table)

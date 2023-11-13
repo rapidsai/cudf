@@ -2,8 +2,10 @@
 
 from cython.operator import dereference
 
+from libcpp.functional cimport reference_wrapper
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
+from libcpp.vector cimport vector
 
 # TODO: We want to make cpp a more full-featured package so that we can access
 # directly from that. It will make namespacing much cleaner in pylibcudf. What
@@ -12,6 +14,7 @@ from libcpp.utility cimport move
 from cudf._lib.cpp cimport copying as cpp_copying
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.copying cimport out_of_bounds_policy
+from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.types cimport size_type
 
@@ -20,6 +23,9 @@ from cudf._lib.cpp.copying import \
 
 from .column cimport Column
 from .table cimport Table
+
+# workaround for https://github.com/cython/cython/issues/3885
+ctypedef const scalar constscalar
 
 
 # TODO: Is it OK to reference the corresponding libcudf algorithm in the
@@ -71,3 +77,37 @@ cpdef Column shift(Column input, size_type offset, Scalar fill_values):
             )
         )
     return Column.from_libcudf(move(c_result))
+
+
+cpdef Table scatter(object source, Column scatter_map, Table target_table):
+    cdef unique_ptr[table] c_result
+    cdef vector[reference_wrapper[constscalar]] source_scalars
+    cdef Scalar slr
+
+    if isinstance(source, Table):
+        with nogil:
+            c_result = move(
+                cpp_copying.scatter(
+                    (<Table> source).view(),
+                    scatter_map.view(),
+                    target_table.view(),
+                )
+            )
+    elif isinstance(source, list):  # TODO: is list too restrictive?
+        for slr in source:
+            source_scalars.push_back(
+                reference_wrapper[constscalar](dereference(slr.c_obj))
+            )
+
+        with nogil:
+            c_result = move(
+                cpp_copying.scatter(
+                    source_scalars,
+                    scatter_map.view(),
+                    target_table.view(),
+                )
+            )
+    else:
+        raise ValueError("source must be a Table or list[Scalar]")
+
+    return Table.from_libcudf(move(c_result))

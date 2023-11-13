@@ -184,48 +184,6 @@ def gather(
     return columns_from_pylibcudf_table(tbl)
 
 
-cdef scatter_scalar(list source_device_slrs,
-                    column_view scatter_map,
-                    table_view target_table):
-    cdef vector[reference_wrapper[constscalar]] c_source
-    cdef DeviceScalar d_slr
-    cdef unique_ptr[table] c_result
-
-    c_source.reserve(len(source_device_slrs))
-    for d_slr in source_device_slrs:
-        c_source.push_back(
-            reference_wrapper[constscalar](d_slr.get_raw_ptr()[0])
-        )
-
-    with nogil:
-        c_result = move(
-            cpp_copying.scatter(
-                c_source,
-                scatter_map,
-                target_table,
-            )
-        )
-
-    return columns_from_unique_ptr(move(c_result))
-
-
-cdef scatter_column(list source_columns,
-                    column_view scatter_map,
-                    table_view target_table):
-    cdef table_view c_source = table_view_from_columns(source_columns)
-    cdef unique_ptr[table] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_copying.scatter(
-                c_source,
-                scatter_map,
-                target_table,
-            )
-        )
-    return columns_from_unique_ptr(move(c_result))
-
-
 @acquire_spill_lock()
 def scatter(list sources, Column scatter_map, list target_columns,
             bool bounds_check=True):
@@ -243,9 +201,6 @@ def scatter(list sources, Column scatter_map, list target_columns,
     if len(sources) == 0:
         return []
 
-    cdef column_view scatter_map_view = scatter_map.view()
-    cdef table_view target_table_view = table_view_from_columns(target_columns)
-
     if bounds_check:
         n_rows = len(target_columns[0])
         if not (
@@ -257,14 +212,16 @@ def scatter(list sources, Column scatter_map, list target_columns,
             )
 
     if isinstance(sources[0], Column):
-        return scatter_column(
-            sources, scatter_map_view, target_table_view
-        )
+        plc_source = pylibcudf.Table([col.to_pylibcudf(mode="read") for col in sources])
     else:
-        source_scalars = [as_device_scalar(slr) for slr in sources]
-        return scatter_scalar(
-            source_scalars, scatter_map_view, target_table_view
-        )
+        plc_source = [(<DeviceScalar> as_device_scalar(slr)).c_value for slr in sources]
+
+    tbl = pylibcudf.copying.scatter(
+        plc_source,
+        scatter_map.to_pylibcudf(mode="read"),
+        pylibcudf.Table([col.to_pylibcudf(mode="read") for col in target_columns]),
+    )
+    return columns_from_pylibcudf_table(tbl)
 
 
 @acquire_spill_lock()
