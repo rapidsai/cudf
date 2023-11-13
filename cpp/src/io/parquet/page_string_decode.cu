@@ -1018,12 +1018,12 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
   if (need_sizes) {
     // sum up all of the temp_string_sizes
     auto const page_sizes = [] __device__(PageInfo const& page) { return page.temp_string_size; };
-    int64_t total_size    = thrust::transform_reduce(rmm::exec_policy(stream),
-                                                  pages.d_begin(),
-                                                  pages.d_end(),
-                                                  page_sizes,
-                                                  0L,
-                                                  thrust::plus<int64_t>{});
+    auto const total_size = thrust::transform_reduce(rmm::exec_policy(stream),
+                                                     pages.d_begin(),
+                                                     pages.d_end(),
+                                                     page_sizes,
+                                                     0L,
+                                                     thrust::plus<int64_t>{});
 
     // now do an exclusive scan over the temp_string_sizes to get offsets for each
     // page's chunk of the temp buffer
