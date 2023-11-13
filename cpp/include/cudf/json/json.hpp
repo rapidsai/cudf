@@ -16,16 +16,16 @@
 #pragma once
 
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/optional.h>
 
 namespace cudf {
-namespace strings {
 
 /**
- * @addtogroup strings_json
+ * @addtogroup json_object
  * @{
  * @file
  */
@@ -155,20 +155,21 @@ class get_json_object_options {
  * https://tools.ietf.org/id/draft-goessner-dispatch-jsonpath-00.html
  * Implements only the operators: $ . [] *
  *
+ * @throw std::invalid_argument if provided an invalid operator or an empty name
+ *
  * @param col The input strings column. Each row must contain a valid json string
  * @param json_path The JSONPath string to be applied to each row
  * @param options Options for controlling the behavior of the function
- * @param mr Resource for allocating device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Resource for allocating device memory
  * @return New strings column containing the retrieved json object strings
- *
- * @throw std::invalid_argument if provided an invalid operator or an empty name
  */
 std::unique_ptr<cudf::column> get_json_object(
   cudf::strings_column_view const& col,
   cudf::string_scalar const& json_path,
   get_json_object_options options     = get_json_object_options{},
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
-}  // namespace strings
 }  // namespace cudf

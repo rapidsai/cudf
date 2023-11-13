@@ -21,9 +21,9 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/json/json.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/json.hpp>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
@@ -196,7 +196,7 @@ void BM_case(benchmark::State& state, std::string query_arg)
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);
-    auto result = cudf::strings::get_json_object(scv, json_path);
+    auto result = cudf::get_json_object(scv, json_path);
     CUDF_CUDA_TRY(cudaStreamSynchronize(0));
   }
 

@@ -440,6 +440,7 @@ add_library(
   src/join/mixed_join_size_kernel_nulls.cu
   src/join/mixed_join_size_kernels_semi.cu
   src/join/semi_join.cu
+  src/json/json_path.cu
   src/lists/contains.cu
   src/lists/combine/concatenate_list_elements.cu
   src/lists/combine/concatenate_rows.cu
@@ -571,7 +572,6 @@ add_library(
   src/strings/filter_chars.cu
   src/strings/like.cu
   src/strings/padding.cu
-  src/strings/json/json_path.cu
   src/strings/regex/regcomp.cpp
   src/strings/regex/regexec.cpp
   src/strings/regex/regex_program.cpp
