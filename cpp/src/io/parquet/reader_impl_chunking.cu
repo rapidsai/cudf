@@ -487,20 +487,13 @@ std::pair<std::vector<page_span>, size_t> compute_next_subpass(
     thrust::upper_bound(thrust::host, start, start + h_aggregated_info.size(), min_row) - start;
 
   // find the next split
-  auto const end_index = find_next_split(start_index,
+  auto const cumulative_size = start_index == 0 ? 0 : h_aggregated_info[start_index - 1].size_bytes;
+  auto const end_index       = find_next_split(start_index,
                                          min_row,
-                                         0,
+                                         cumulative_size,
                                          h_aggregated_info,
                                          size_limit) +
                          1;  // the split index returned is inclusive
-
-  /*
-  printf("Split: row(%lu -> %lu), size(%lu -> %lu)\n",
-          h_aggregated_info[start_index].row_count,
-          h_aggregated_info[end_index].row_count,
-          h_aggregated_info[start_index].size_bytes,
-          h_aggregated_info[end_index].size_bytes);
-          */
 
   // get the number of pages for each column/schema
   auto get_page_counts = [num_columns, stream](
