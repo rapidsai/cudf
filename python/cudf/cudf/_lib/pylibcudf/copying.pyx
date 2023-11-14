@@ -13,11 +13,13 @@ from libcpp.vector cimport vector
 # cimport libcudf... libcudf.copying.algo(...)
 from cudf._lib.cpp cimport copying as cpp_copying
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.copying cimport out_of_bounds_policy
+from cudf._lib.cpp.copying cimport mask_allocation_policy, out_of_bounds_policy
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.types cimport size_type
 
+from cudf._lib.cpp.copying import \
+    mask_allocation_policy as MaskAllocationPolicy  # no-cython-lint
 from cudf._lib.cpp.copying import \
     out_of_bounds_policy as OutOfBoundsPolicy  # no-cython-lint
 
@@ -134,3 +136,21 @@ cpdef object empty_like(object input):
         return Table.from_libcudf(move(c_table_result))
     else:
         raise ValueError("input must be a Table or a Column")
+
+
+cpdef Column allocate_like(
+    Column input_column, mask_allocation_policy policy, size=None
+):
+    cdef unique_ptr[column] c_result
+    cdef size_type c_size = size if size is not None else input_column.size()
+
+    with nogil:
+        c_result = move(
+            cpp_copying.allocate_like(
+                input_column.view(),
+                c_size,
+                policy,
+            )
+        )
+
+    return Column.from_libcudf(move(c_result))

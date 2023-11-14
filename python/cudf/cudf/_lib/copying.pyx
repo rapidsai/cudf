@@ -235,27 +235,12 @@ def column_empty_like(Column input_column):
 
 @acquire_spill_lock()
 def column_allocate_like(Column input_column, size=None):
-
-    cdef size_type c_size = 0
-    cdef column_view input_column_view = input_column.view()
-    cdef unique_ptr[column] c_result
-
-    if size is None:
-        with nogil:
-            c_result = move(cpp_copying.allocate_like(
-                input_column_view,
-                cpp_copying.mask_allocation_policy.RETAIN)
-            )
-    else:
-        c_size = size
-        with nogil:
-            c_result = move(cpp_copying.allocate_like(
-                input_column_view,
-                c_size,
-                cpp_copying.mask_allocation_policy.RETAIN)
-            )
-
-    return Column.from_unique_ptr(move(c_result))
+    return Column.from_pylibcudf(
+        pylibcudf.copying.allocate_like(
+            input_column.to_pylibcudf(mode="read"),
+            size,
+        )
+    )
 
 
 @acquire_spill_lock()
