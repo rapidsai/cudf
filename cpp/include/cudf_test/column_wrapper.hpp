@@ -803,7 +803,8 @@ class strings_column_wrapper : public detail::column_wrapper {
       offsets, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
     auto d_bitmask = cudf::detail::make_device_uvector_sync(
       null_mask, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
-    wrapped = cudf::make_strings_column(d_chars, d_offsets, d_bitmask, null_count);
+    wrapped = cudf::make_strings_column(
+      d_chars, d_offsets, d_bitmask, null_count, cudf::test::get_default_stream());
   }
 
   /**
@@ -1846,7 +1847,8 @@ class structs_column_wrapper : public detail::column_wrapper {
                    child_column_wrappers.end(),
                    std::back_inserter(child_columns),
                    [&](auto const& column_wrapper) {
-                     return std::make_unique<cudf::column>(column_wrapper.get());
+                     return std::make_unique<cudf::column>(column_wrapper.get(),
+                                                           cudf::test::get_default_stream());
                    });
     init(std::move(child_columns), validity);
   }
@@ -1882,7 +1884,8 @@ class structs_column_wrapper : public detail::column_wrapper {
                    child_column_wrappers.end(),
                    std::back_inserter(child_columns),
                    [&](auto const& column_wrapper) {
-                     return std::make_unique<cudf::column>(column_wrapper.get());
+                     return std::make_unique<cudf::column>(column_wrapper.get(),
+                                                           cudf::test::get_default_stream());
                    });
     init(std::move(child_columns), validity_iter);
   }
@@ -1906,8 +1909,11 @@ class structs_column_wrapper : public detail::column_wrapper {
       return cudf::test::detail::make_null_mask(validity.begin(), validity.end());
     }();
 
-    wrapped = cudf::make_structs_column(
-      num_rows, std::move(child_columns), null_count, std::move(null_mask));
+    wrapped = cudf::make_structs_column(num_rows,
+                                        std::move(child_columns),
+                                        null_count,
+                                        std::move(null_mask),
+                                        cudf::test::get_default_stream());
   }
 
   template <typename V>
