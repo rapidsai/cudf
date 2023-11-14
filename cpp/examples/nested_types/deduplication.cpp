@@ -170,6 +170,7 @@ int main(int argc, char const** argv)
   auto resource = create_memory_resource(pool);
   rmm::mr::set_current_device_resource(resource.get());
 
+  std::cout << "Reading " << input_filepath << "..." << std::endl;
   // read input file
   auto [input, metadata] = read_json(input_filepath);
 
@@ -181,6 +182,7 @@ int main(int argc, char const** argv)
 
   metadata.schema_info.emplace_back("count");
 
+  std::cout << "Writing " << output_filepath << "..." << std::endl;
   write_json(sorted->view(), metadata, output_filepath);
 
   return 0;
