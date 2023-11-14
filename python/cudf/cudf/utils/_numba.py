@@ -5,7 +5,7 @@ import os
 import sys
 
 from numba import config as numba_config
-from nvjitlink.patch import patch_numba_linker as patch_numba_linker_cuda_12
+from pynvjitlink.patch import patch_numba_linker as patch_numba_linker_cuda_12
 
 CC_60_PTX_FILE = os.path.join(
     os.path.dirname(__file__), "../core/udf/shim_60.ptx"
