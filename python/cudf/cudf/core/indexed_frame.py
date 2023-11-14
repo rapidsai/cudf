@@ -2610,6 +2610,10 @@ class IndexedFrame(Frame):
             index = cudf.core.index.as_index(
                 index, name=getattr(index, "name", self._index.name)
             )
+            if not df._index.is_unique and len(index):
+                raise ValueError(
+                    "cannot reindex on an axis with duplicate labels"
+                )
 
             idx_dtype_match = (df.index.nlevels == index.nlevels) and all(
                 _is_same_dtype(left_dtype, right_dtype)
