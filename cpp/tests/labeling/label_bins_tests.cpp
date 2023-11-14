@@ -61,7 +61,7 @@ TEST(BinColumnErrorTests, TestInvalidLeft)
   fwc_wrapper<float> input{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 
   EXPECT_THROW(
-    cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges,  cudf::inclusive::NO),
+    cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
     cudf::logic_error);
 };
 
