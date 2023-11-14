@@ -666,7 +666,7 @@ ConfigureTest(
   streams/text/tokenize_test.cpp STREAM_MODE testing
 )
 ConfigureTest(STREAM_UNARY_TEST streams/unary_test.cpp STREAM_MODE testing)
-
+ConfigureTest(STREAM_LABELING_BINS_TEST streams/labeling_bins_test.cpp STREAM_MODE testing)
 # ##################################################################################################
 # Install tests ####################################################################################
 # ##################################################################################################

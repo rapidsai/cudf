@@ -236,6 +236,7 @@ std::unique_ptr<column> label_bins(column_view const& input,
                                    inclusive left_inclusive,
                                    column_view const& right_edges,
                                    inclusive right_inclusive,
+                                   rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -244,7 +245,7 @@ std::unique_ptr<column> label_bins(column_view const& input,
                             left_inclusive,
                             right_edges,
                             right_inclusive,
-                            cudf::get_default_stream(),
+                            stream,
                             mr);
 }
 }  // namespace cudf
