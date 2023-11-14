@@ -289,7 +289,7 @@ class parquet_field_union_struct : public parquet_field {
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     T v;
-    bool const res = parquet_field_struct<T>(field(), v).operator()(cpr, field_type);
+    bool const res = parquet_field_struct<T>{field(), v}(cpr, field_type);
     if (!res) {
       val      = v;
       enum_val = static_cast<E>(field());
@@ -424,7 +424,7 @@ class parquet_field_optional : public parquet_field {
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     T v;
-    bool const res = FieldFunctor(field(), v).operator()(cpr, field_type);
+    bool const res = FieldFunctor{field(), v}(cpr, field_type);
     if (!res) { val = v; }
     return res;
   }
