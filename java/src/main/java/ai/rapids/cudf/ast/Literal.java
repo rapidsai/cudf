@@ -205,7 +205,14 @@ public final class Literal extends AstExpression {
     if (value == null) {
       return ofNull(DType.STRING);
     }
-    byte[] stringBytes = value.getBytes();
+    return ofString(value.getBytes());
+  }
+
+  /** Construct a string literal directly with byte array to skip transcosing. */
+  public static Literal ofString(byte[] stringBytes) {
+    if (stringBytes == null) {
+      return ofNull(DType.STRING);
+    }
     byte[] serializedValue = new byte[stringBytes.length + Integer.BYTES];
     ByteBuffer.wrap(serializedValue).order(ByteOrder.nativeOrder()).putInt(stringBytes.length);
     System.arraycopy(stringBytes, 0, serializedValue, Integer.BYTES, stringBytes.length);
