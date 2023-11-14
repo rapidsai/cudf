@@ -60,6 +60,9 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool poo
 
 /**
  * @brief Read JSON input from file
+ *
+ * @param filepath path to input JSON file
+ * @return cudf::io::table_with_metadata
  */
 cudf::io::table_with_metadata read_json(std::string filepath)
 {
@@ -71,6 +74,10 @@ cudf::io::table_with_metadata read_json(std::string filepath)
 
 /**
  * @brief Write JSON output to file
+ *
+ * @param input table to write
+ * @param metadata metadata of input table read by JSON reader
+ * @param filepath path to output JSON file
  */
 void write_json(cudf::table_view input, cudf::io::table_metadata metadata, std::string filepath)
 {
@@ -84,6 +91,9 @@ void write_json(cudf::table_view input, cudf::io::table_metadata metadata, std::
 
 /**
  * @brief Aggregate count of duplicate rows in nested-type column
+ *
+ * @param input table to aggregate
+ * @return std::unique_ptr<cudf::table>
  */
 std::unique_ptr<cudf::table> count_aggregate(cudf::table_view input)
 {
@@ -109,6 +119,10 @@ std::unique_ptr<cudf::table> count_aggregate(cudf::table_view input)
 
 /**
  * @brief Join each row with its duplicate counts
+ *
+ * @param left left table
+ * @param right right table
+ * @return std::unique_ptr<cudf::table>
  */
 std::unique_ptr<cudf::table> join_count(cudf::table_view left, cudf::table_view right)
 {
@@ -126,6 +140,9 @@ std::unique_ptr<cudf::table> join_count(cudf::table_view left, cudf::table_view 
 
 /**
  * @brief Sort nested-type column
+ *
+ * @param input table to sort
+ * @return std::unique_ptr<cudf::table>
  *
  * @note if stability is desired, use `cudf::stable_sorted_order`
  */
