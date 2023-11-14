@@ -111,3 +111,26 @@ cpdef Table scatter(object source, Column scatter_map, Table target_table):
         raise ValueError("source must be a Table or list[Scalar]")
 
     return Table.from_libcudf(move(c_result))
+
+
+cpdef object empty_like(object input):
+    cdef unique_ptr[column] c_column_result
+    cdef unique_ptr[table] c_table_result
+    if isinstance(input, Column):
+        with nogil:
+            c_column_result = move(
+                cpp_copying.empty_like(
+                    (<Column> input).view(),
+                )
+            )
+        return Column.from_libcudf(move(c_column_result))
+    elif isinstance(input, Table):
+        with nogil:
+            c_table_result = move(
+                cpp_copying.empty_like(
+                    (<Table> input).view(),
+                )
+            )
+        return Table.from_libcudf(move(c_table_result))
+    else:
+        raise ValueError("input must be a Table or a Column")

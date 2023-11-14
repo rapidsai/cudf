@@ -226,14 +226,11 @@ def scatter(list sources, Column scatter_map, list target_columns,
 
 @acquire_spill_lock()
 def column_empty_like(Column input_column):
-
-    cdef column_view input_column_view = input_column.view()
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(cpp_copying.empty_like(input_column_view))
-
-    return Column.from_unique_ptr(move(c_result))
+    return Column.from_pylibcudf(
+        pylibcudf.copying.empty_like(
+            input_column.to_pylibcudf(mode="read")
+        )
+    )
 
 
 @acquire_spill_lock()
@@ -263,13 +260,11 @@ def column_allocate_like(Column input_column, size=None):
 
 @acquire_spill_lock()
 def columns_empty_like(list input_columns):
-    cdef table_view input_table_view = table_view_from_columns(input_columns)
-    cdef unique_ptr[table] c_result
-
-    with nogil:
-        c_result = move(cpp_copying.empty_like(input_table_view))
-
-    return columns_from_unique_ptr(move(c_result))
+    return columns_from_pylibcudf_table(
+        pylibcudf.copying.empty_like(
+            pylibcudf.Table([col.to_pylibcudf(mode="read") for col in input_columns])
+        )
+    )
 
 
 @acquire_spill_lock()
