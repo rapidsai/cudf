@@ -1,6 +1,6 @@
 # Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
-{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
+{% set version = environ['RAPIDS_PACKAGE_VERSION'].lstrip('v') %}
 {% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set cuda_version = '.'.join(environ['RAPIDS_CUDA_VERSION'].split('.')[:2]) %}
 {% set cuda_major = cuda_version.split('.')[0] %}
@@ -11,7 +11,7 @@ package:
   name: libcudf-split
 
 source:
-  git_url: ../../..
+  path: ../../..
 
 build:
   script_env:
@@ -74,7 +74,6 @@ requirements:
     - gtest {{ gtest_version }}
     - gmock {{ gtest_version }}
     - zlib {{ zlib_version }}
-    - aws-sdk-cpp {{ aws_sdk_cpp_version }}
 
 outputs:
   - name: libcudf
@@ -92,6 +91,8 @@ outputs:
     requirements:
       build:
         - cmake {{ cmake_version }}
+      host:
+        - libarrow {{ libarrow_version }}
       run:
         {% if cuda_major == "11" %}
         - cudatoolkit
@@ -104,11 +105,9 @@ outputs:
         - nvcomp {{ nvcomp_version }}
         - librmm ={{ minor_version }}
         - libkvikio ={{ minor_version }}
-        - libarrow {{ libarrow_version }}
         - dlpack {{ dlpack_version }}
         - gtest {{ gtest_version }}
         - gmock {{ gtest_version }}
-        - aws-sdk-cpp {{ aws_sdk_cpp_version }}
     test:
       commands:
         - test -f $PREFIX/lib/libcudf.so

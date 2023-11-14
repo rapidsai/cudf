@@ -16,6 +16,9 @@
 
 #include "parquet_gpu.hpp"
 #include <io/utilities/block_utils.cuh>
+
+#include <cudf/detail/utilities/cuda.cuh>
+
 #include <thrust/tuple.h>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -24,23 +27,6 @@ namespace cudf::io::parquet::detail {
 
 // Minimal thrift implementation for parsing page headers
 // https://github.com/apache/thrift/blob/master/doc/specs/thrift-compact-protocol.md
-
-static const __device__ __constant__ uint8_t g_list2struct[16] = {0,
-                                                                  1,
-                                                                  2,
-                                                                  ST_FLD_BYTE,
-                                                                  ST_FLD_DOUBLE,
-                                                                  5,
-                                                                  ST_FLD_I16,
-                                                                  7,
-                                                                  ST_FLD_I32,
-                                                                  9,
-                                                                  ST_FLD_I64,
-                                                                  ST_FLD_BINARY,
-                                                                  ST_FLD_STRUCT,
-                                                                  ST_FLD_MAP,
-                                                                  ST_FLD_SET,
-                                                                  ST_FLD_LIST};
 
 struct byte_stream_s {
   uint8_t const* cur{};
@@ -140,12 +126,13 @@ __device__ void skip_struct_field(byte_stream_s* bs, int field_type)
       case ST_FLD_SET: {  // NOTE: skipping a list of lists is not handled
         auto const c = getb(bs);
         int n        = c >> 4;
-        if (n == 0xf) n = get_u32(bs);
-        field_type = g_list2struct[c & 0xf];
-        if (field_type == ST_FLD_STRUCT)
+        if (n == 0xf) { n = get_u32(bs); }
+        field_type = c & 0xf;
+        if (field_type == ST_FLD_STRUCT) {
           struct_depth += n;
-        else
+        } else {
           rep_cnt = n;
+        }
       } break;
       case ST_FLD_STRUCT: struct_depth++; break;
     }
@@ -356,16 +343,20 @@ struct gpuParsePageHeader {
  */
 // blockDim {128,1,1}
 __global__ void __launch_bounds__(128)
-  gpuDecodePageHeaders(ColumnChunkDesc* chunks, int32_t num_chunks)
+  gpuDecodePageHeaders(ColumnChunkDesc* chunks, int32_t num_chunks, int32_t* error_code)
 {
+  using cudf::detail::warp_size;
   gpuParsePageHeader parse_page_header;
   __shared__ byte_stream_s bs_g[4];
 
-  int lane_id             = threadIdx.x % 32;
-  int chunk               = (blockIdx.x * 4) + (threadIdx.x / 32);
-  byte_stream_s* const bs = &bs_g[threadIdx.x / 32];
+  int32_t error[4]   = {0};
+  auto const lane_id = threadIdx.x % warp_size;
+  auto const warp_id = threadIdx.x / warp_size;
+  auto const chunk   = (blockIdx.x * 4) + warp_id;
+  auto const bs      = &bs_g[warp_id];
 
-  if (chunk < num_chunks and lane_id == 0) bs->ck = chunks[chunk];
+  if (chunk < num_chunks and lane_id == 0) { bs->ck = chunks[chunk]; }
+  if (lane_id == 0) { error[warp_id] = 0; }
   __syncthreads();
 
   if (chunk < num_chunks) {
@@ -376,7 +367,7 @@ __global__ void __launch_bounds__(128)
     int32_t num_dict_pages = bs->ck.num_dict_pages;
     PageInfo* page_info;
 
-    if (!lane_id) {
+    if (lane_id == 0) {
       bs->base = bs->cur      = bs->ck.compressed_data;
       bs->end                 = bs->base + bs->ck.compressed_size;
       bs->page.chunk_idx      = chunk;
@@ -412,6 +403,9 @@ __global__ void __launch_bounds__(128)
         bs->page.lvl_bytes[level_type::DEFINITION] = 0;
         bs->page.lvl_bytes[level_type::REPETITION] = 0;
         if (parse_page_header(bs) && bs->page.compressed_page_size >= 0) {
+          if (not is_supported_encoding(bs->page.encoding)) {
+            error[warp_id] |= static_cast<int32_t>(decode_error::UNSUPPORTED_ENCODING);
+          }
           switch (bs->page_type) {
             case PageType::DATA_PAGE:
               index_out = num_dict_pages + data_page_count;
@@ -440,20 +434,25 @@ __global__ void __launch_bounds__(128)
           }
           bs->page.page_data = const_cast<uint8_t*>(bs->cur);
           bs->cur += bs->page.compressed_page_size;
+          if (bs->cur > bs->end) {
+            error[warp_id] |= static_cast<int32_t>(decode_error::DATA_STREAM_OVERRUN);
+          }
           bs->page.kernel_mask = kernel_mask_for_page(bs->page, bs->ck);
         } else {
           bs->cur = bs->end;
         }
       }
       index_out = shuffle(index_out);
-      if (index_out >= 0 && index_out < max_num_pages && lane_id == 0)
+      if (index_out >= 0 && index_out < max_num_pages && lane_id == 0) {
         page_info[index_out] = bs->page;
+      }
       num_values = shuffle(num_values);
       __syncwarp();
     }
     if (lane_id == 0) {
       chunks[chunk].num_data_pages = data_page_count;
       chunks[chunk].num_dict_pages = dictionary_page_count;
+      if (error[warp_id] != 0) { set_error(error[warp_id], error_code); }
     }
   }
 }
@@ -509,11 +508,12 @@ __global__ void __launch_bounds__(128)
 
 void __host__ DecodePageHeaders(ColumnChunkDesc* chunks,
                                 int32_t num_chunks,
+                                int32_t* error_code,
                                 rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
-  gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_chunks);
+  gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_chunks, error_code);
 }
 
 void __host__ BuildStringDictionaryIndex(ColumnChunkDesc* chunks,

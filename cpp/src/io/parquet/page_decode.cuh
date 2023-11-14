@@ -1143,7 +1143,8 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
               units = cudf::timestamp_ms::period::den;
             } else if (s->col.converted_type == TIMESTAMP_MICROS) {
               units = cudf::timestamp_us::period::den;
-            } else if (s->col.logical_type.TIMESTAMP.unit.isset.NANOS) {
+            } else if (s->col.logical_type.has_value() and
+                       s->col.logical_type->is_timestamp_nanos()) {
               units = cudf::timestamp_ns::period::den;
             }
             if (units and units != s->col.ts_clock_rate) {

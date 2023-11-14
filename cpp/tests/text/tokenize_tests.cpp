@@ -208,14 +208,16 @@ TEST_F(TextTokenizeTest, Vocabulary)
     {"ate", "chased", "cheese", "dog", "fox", "jumped", "mouse", "mousé", "over", "the"});
   auto vocab = nvtext::load_vocabulary(cudf::strings_column_view(vocabulary));
 
-  auto validity = cudf::test::iterators::null_at(1);
-  cudf::test::strings_column_wrapper input({"the fox jumped over the dog",
-                                            "the dog chased the cat",
-                                            "the cat chased the mouse",
-                                            "the mousé  ate  cheese",
-                                            "",
-                                            ""},
-                                           validity);
+  auto validity = cudf::test::iterators::null_at(5);
+  auto input    = cudf::test::strings_column_wrapper({" the fox jumped over the dog ",
+                                                      " the dog chased the cat",
+                                                      "",
+                                                      "the cat chased the mouse ",
+                                                      "the mousé  ate  cheese",
+                                                      "",
+                                                      "dog"},
+                                                  validity);
+
   auto input_view = cudf::strings_column_view(input);
   auto delimiter  = cudf::string_scalar(" ");
   auto default_id = -7;  // should be the token for the missing 'cat'
@@ -225,12 +227,55 @@ TEST_F(TextTokenizeTest, Vocabulary)
   // clang-format off
   LCW expected({LCW{ 9, 4, 5, 8, 9, 3},
                 LCW{ 9, 3, 1, 9,-7},
+                LCW{},
                 LCW{ 9,-7, 1, 9, 6},
                 LCW{ 9, 7, 0, 2},
-                LCW{}, LCW{}},
+                LCW{}, LCW{3}},
                 validity);
   // clang-format on
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  auto sliced          = cudf::slice(input, {1, 4}).front();
+  auto sliced_expected = cudf::slice(expected, {1, 4}).front();
+
+  input_view = cudf::strings_column_view(sliced);
+
+  results = nvtext::tokenize_with_vocabulary(input_view, *vocab, delimiter, default_id);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), sliced_expected);
+}
+
+TEST_F(TextTokenizeTest, VocabularyLongStrings)
+{
+  cudf::test::strings_column_wrapper vocabulary(  // leaving out 'cat' on purpose
+    {"ate", "chased", "cheese", "dog", "fox", "jumped", "mouse", "mousé", "over", "the"});
+  auto vocab = nvtext::load_vocabulary(cudf::strings_column_view(vocabulary));
+
+  std::vector<std::string> h_strings(
+    4,
+    "the fox jumped chased the dog cheese mouse at the over there dog mouse cat plus the horse "
+    "jumped over the mouse house with the dog");
+  cudf::test::strings_column_wrapper input(h_strings.begin(), h_strings.end());
+  auto input_view = cudf::strings_column_view(input);
+  auto delimiter  = cudf::string_scalar(" ");
+  auto default_id = -1;
+  auto results    = nvtext::tokenize_with_vocabulary(input_view, *vocab, delimiter, default_id);
+
+  using LCW = cudf::test::lists_column_wrapper<cudf::size_type>;
+  // clang-format off
+  LCW expected({LCW{ 9, 4, 5, 1, 9, 3, 2, 6, -1, 9, 8, -1, 3, 6, -1, -1, 9, -1, 5, 8, 9, 6, -1, -1, 9, 3},
+                LCW{ 9, 4, 5, 1, 9, 3, 2, 6, -1, 9, 8, -1, 3, 6, -1, -1, 9, -1, 5, 8, 9, 6, -1, -1, 9, 3},
+                LCW{ 9, 4, 5, 1, 9, 3, 2, 6, -1, 9, 8, -1, 3, 6, -1, -1, 9, -1, 5, 8, 9, 6, -1, -1, 9, 3},
+                LCW{ 9, 4, 5, 1, 9, 3, 2, 6, -1, 9, 8, -1, 3, 6, -1, -1, 9, -1, 5, 8, 9, 6, -1, -1, 9, 3}});
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  auto sliced          = cudf::slice(input, {1, 3}).front();
+  auto sliced_expected = cudf::slice(expected, {1, 3}).front();
+
+  input_view = cudf::strings_column_view(sliced);
+
+  results = nvtext::tokenize_with_vocabulary(input_view, *vocab, delimiter, default_id);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), sliced_expected);
 }
 
 TEST_F(TextTokenizeTest, TokenizeErrors)

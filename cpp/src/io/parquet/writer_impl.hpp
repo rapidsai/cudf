@@ -157,6 +157,7 @@ class writer::impl {
   size_t const _max_dictionary_size;
   std::optional<size_type> const _max_page_fragment_size;
   bool const _int96_timestamps;
+  bool const _utc_timestamps;
   bool const _write_v2_headers;
   int32_t const _column_index_truncate_length;
   std::vector<std::map<std::string, std::string>> const _kv_meta;  // Optional user metadata.

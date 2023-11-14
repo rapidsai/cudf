@@ -272,7 +272,7 @@ def test_kurt_skew_error(op):
     gs = cudf.Series(["ab", "cd"])
     ps = gs.to_pandas()
 
-    with pytest.raises(FutureWarning):
+    with pytest.warns(FutureWarning):
         assert_exceptions_equal(
             getattr(gs, op),
             getattr(ps, op),

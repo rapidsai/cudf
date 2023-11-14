@@ -129,6 +129,12 @@ struct column_metadata {
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param ar_mr arrow memory pool to allocate memory for arrow Table
  * @return arrow Table generated from `input`
+ *
+ * @note For decimals, since the precision is not stored for them in libcudf,
+ * it will be converted to an Arrow decimal128 that has the widest-precision the cudf decimal type
+ * supports. For example, numeric::decimal32 will be converted to Arrow decimal128 of the precision
+ * 9 which is the maximum precision for 32-bit types. Similarly, numeric::decimal128 will be
+ * converted to Arrow decimal128 of the precision 38.
  */
 std::shared_ptr<arrow::Table> to_arrow(table_view input,
                                        std::vector<column_metadata> const& metadata = {},
@@ -145,6 +151,12 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param ar_mr arrow memory pool to allocate memory for arrow Scalar
  * @return arrow Scalar generated from `input`
+ *
+ * @note For decimals, since the precision is not stored for them in libcudf,
+ * it will be converted to an Arrow decimal128 that has the widest-precision the cudf decimal type
+ * supports. For example, numeric::decimal32 will be converted to Arrow decimal128 of the precision
+ * 9 which is the maximum precision for 32-bit types. Similarly, numeric::decimal128 will be
+ * converted to Arrow decimal128 of the precision 38.
  */
 std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
                                         column_metadata const& metadata = {},

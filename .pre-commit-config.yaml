@@ -52,6 +52,11 @@ repos:
                 # https://github.com/PyCQA/pydocstyle/issues/603
                 additional_dependencies: [toml]
                 args: ["--config=pyproject.toml"]
+                exclude: |
+                  (?x)^(
+                    ^python/cudf/cudf/pandas/scripts/.*|
+                    ^python/cudf/cudf_pandas_tests/.*
+                  )
       - repo: https://github.com/nbQA-dev/nbQA
         rev: 1.6.3
         hooks:
