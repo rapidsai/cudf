@@ -246,14 +246,14 @@ TEST_F(TextTokenizeTest, Vocabulary)
 
 TEST_F(TextTokenizeTest, VocabularyLongStrings)
 {
-  cudf::test::strings_column_wrapper vocabulary(  // leaving out 'cat' on purpose
+  cudf::test::strings_column_wrapper vocabulary(
     {"ate", "chased", "cheese", "dog", "fox", "jumped", "mouse", "mousé", "over", "the"});
   auto vocab = nvtext::load_vocabulary(cudf::strings_column_view(vocabulary));
 
   std::vector<std::string> h_strings(
     4,
     "the fox jumped chased the dog cheese mouse at the over there dog mouse cat plus the horse "
-    "jumped over the mouse house with the dog");
+    "jumped  over  the mousé  house with the dog  ");
   cudf::test::strings_column_wrapper input(h_strings.begin(), h_strings.end());
   auto input_view = cudf::strings_column_view(input);
   auto delimiter  = cudf::string_scalar(" ");
@@ -262,10 +262,10 @@ TEST_F(TextTokenizeTest, VocabularyLongStrings)
 
   using LCW = cudf::test::lists_column_wrapper<cudf::size_type>;
   // clang-format off
-  LCW expected({LCW{ 9, 4, 5, 1, 9, 3, 2, 6, -1, 9, 8, -1, 3, 6, -1, -1, 9, -1, 5, 8, 9, 6, -1, -1, 9, 3},
-                LCW{ 9, 4, 5, 1, 9, 3, 2, 6, -1, 9, 8, -1, 3, 6, -1, -1, 9, -1, 5, 8, 9, 6, -1, -1, 9, 3},
-                LCW{ 9, 4, 5, 1, 9, 3, 2, 6, -1, 9, 8, -1, 3, 6, -1, -1, 9, -1, 5, 8, 9, 6, -1, -1, 9, 3},
-                LCW{ 9, 4, 5, 1, 9, 3, 2, 6, -1, 9, 8, -1, 3, 6, -1, -1, 9, -1, 5, 8, 9, 6, -1, -1, 9, 3}});
+  LCW expected({LCW{ 9, 4, 5, 1, 9, 3, 2, 6, -1, 9, 8, -1, 3, 6, -1, -1, 9, -1, 5, 8, 9, 7, -1, -1, 9, 3},
+                LCW{ 9, 4, 5, 1, 9, 3, 2, 6, -1, 9, 8, -1, 3, 6, -1, -1, 9, -1, 5, 8, 9, 7, -1, -1, 9, 3},
+                LCW{ 9, 4, 5, 1, 9, 3, 2, 6, -1, 9, 8, -1, 3, 6, -1, -1, 9, -1, 5, 8, 9, 7, -1, -1, 9, 3},
+                LCW{ 9, 4, 5, 1, 9, 3, 2, 6, -1, 9, 8, -1, 3, 6, -1, -1, 9, -1, 5, 8, 9, 7, -1, -1, 9, 3}});
   // clang-format on
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
