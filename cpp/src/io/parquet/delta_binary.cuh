@@ -40,7 +40,10 @@ namespace cudf::io::parquet::detail {
 // block to ensure that all encoded values are positive. The deltas for each mini-block are bit
 // packed using the same encoding as the RLE/Bit-Packing Hybrid encoder.
 
-// we decode one mini-block at a time. max mini-block size seen is 64.
+// The first pass decodes `values_per_mb` values, and then the second pass does another
+// batch of size `values_per_mb`. The largest value for values_per_miniblock among the
+// major writers seems to be 64, so 2 * 64 should be good. We save the first value separately
+// since it is not encoded in the first mini-block.
 constexpr int delta_rolling_buf_size = 128;
 
 /**
@@ -84,7 +87,8 @@ struct delta_binary_decoder {
   uleb128_t mini_block_count;  // usually 4, chosen such that block_size/mini_block_count is a
                                // multiple of 32
   uleb128_t value_count;       // total values encoded in the block
-  zigzag128_t last_value;      // last value decoded, initialized to first_value from header
+  zigzag128_t first_value;     // initial value, stored in the header
+  zigzag128_t last_value;      // last value decoded
 
   uint32_t values_per_mb;      // block_size / mini_block_count, must be multiple of 32
   uint32_t current_value_idx;  // current value index, initialized to 0 at start of block
@@ -95,6 +99,13 @@ struct delta_binary_decoder {
   uint8_t const* cur_bitwidths;  // pointer to the bitwidth array in the block
 
   uleb128_t value[delta_rolling_buf_size];  // circular buffer of delta values
+
+  // returns the value stored in the `value` array at index
+  // `rolling_index<delta_rolling_buf_size>(idx)`. If `idx` is `0`, then return `first_value`.
+  constexpr zigzag128_t value_at(size_type idx)
+  {
+    return idx == 0 ? first_value : value[rolling_index<delta_rolling_buf_size>(idx)];
+  }
 
   // returns the number of values encoded in the block data. when all_values is true,
   // account for the first value in the header. otherwise just count the values encoded
@@ -139,7 +150,8 @@ struct delta_binary_decoder {
     block_size       = get_uleb128(d_start, d_end);
     mini_block_count = get_uleb128(d_start, d_end);
     value_count      = get_uleb128(d_start, d_end);
-    last_value       = get_zz128(d_start, d_end);
+    first_value      = get_zz128(d_start, d_end);
+    last_value       = first_value;
 
     current_value_idx = 0;
     values_per_mb     = block_size / mini_block_count;
@@ -202,12 +214,9 @@ struct delta_binary_decoder {
     using cudf::detail::warp_size;
     if (current_value_idx >= value_count) { return; }
 
-    // need to save first value from header on first pass
+    // need to account for the first value from header on first pass
     if (current_value_idx == 0) {
-      if (lane_id == 0) {
-        current_value_idx++;
-        value[0] = last_value;
-      }
+      if (lane_id == 0) { current_value_idx++; }
       __syncwarp();
       if (current_value_idx >= value_count) { return; }
     }

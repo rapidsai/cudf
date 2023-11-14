@@ -82,8 +82,7 @@ struct delta_byte_array_decoder {
     __shared__ __align__(8) uint8_t const* offsets[warp_size];
 
     uint32_t const ln_idx   = start_idx + lane_id;
-    uint32_t const src_idx  = rolling_index<delta_rolling_buf_size>(ln_idx);
-    uint64_t prefix_len     = ln_idx < end_idx ? prefixes.value[src_idx] : 0;
+    uint64_t prefix_len     = ln_idx < end_idx ? prefixes.value_at(ln_idx) : 0;
     uint8_t* const lane_out = ln_idx < end_idx ? strings_out + offset : nullptr;
 
     prefix_lens[lane_id] = prefix_len;
@@ -143,13 +142,12 @@ struct delta_byte_array_decoder {
       uint32_t const ln_idx = idx + lane_id;
 
       // calculate offsets into suffix data
-      uint32_t const src_idx    = rolling_index<delta_rolling_buf_size>(ln_idx);
-      uint64_t const suffix_len = ln_idx < end ? suffixes.value[src_idx] : 0;
+      uint64_t const suffix_len = ln_idx < end ? suffixes.value_at(ln_idx) : 0;
       uint64_t suffix_off       = 0;
       WarpScan(scan_temp).ExclusiveSum(suffix_len, suffix_off);
 
       // calculate offsets into string data
-      uint64_t const prefix_len = ln_idx < end ? prefixes.value[src_idx] : 0;
+      uint64_t const prefix_len = ln_idx < end ? prefixes.value_at(ln_idx) : 0;
       uint64_t const string_len = prefix_len + suffix_len;
 
       // get offset into output for each lane
@@ -224,9 +222,8 @@ struct delta_byte_array_decoder {
 
     uint64_t string_total = 0;
     for (int idx = start_idx; idx < end_idx; idx++) {
-      uint32_t const src_idx    = rolling_index<delta_rolling_buf_size>(idx);
-      uint64_t const suffix_len = suffixes.value[src_idx];
-      uint64_t const prefix_len = prefixes.value[src_idx];
+      uint64_t const suffix_len = suffixes.value_at(idx);
+      uint64_t const prefix_len = prefixes.value_at(idx);
       uint64_t const string_len = prefix_len + suffix_len;
 
       // copy prefix and suffix data into current strings_out position
@@ -395,23 +392,12 @@ __global__ void __launch_bounds__(96)
         // place value for this thread
         if (dst_pos >= 0 && sp < target_pos) {
           void* const dst = nesting_info_base[leaf_level_index].data_out + dst_pos * s->dtype_len;
+          auto const val  = db->value_at(sp + skipped_leaf_values);
           switch (s->dtype_len) {
-            case 1:
-              *static_cast<int8_t*>(dst) =
-                db->value[rolling_index<delta_rolling_buf_size>(sp + skipped_leaf_values)];
-              break;
-            case 2:
-              *static_cast<int16_t*>(dst) =
-                db->value[rolling_index<delta_rolling_buf_size>(sp + skipped_leaf_values)];
-              break;
-            case 4:
-              *static_cast<int32_t*>(dst) =
-                db->value[rolling_index<delta_rolling_buf_size>(sp + skipped_leaf_values)];
-              break;
-            case 8:
-              *static_cast<int64_t*>(dst) =
-                db->value[rolling_index<delta_rolling_buf_size>(sp + skipped_leaf_values)];
-              break;
+            case 1: *static_cast<int8_t*>(dst) = val; break;
+            case 2: *static_cast<int16_t*>(dst) = val; break;
+            case 4: *static_cast<int32_t*>(dst) = val; break;
+            case 8: *static_cast<int64_t*>(dst) = val; break;
           }
         }
       }
@@ -505,7 +491,7 @@ __global__ void __launch_bounds__(decode_block_size)
     uint32_t const src_pos = s->src_pos;
 
     if (t < 3 * warp_size) {  // warp 0..2
-      target_pos = min(src_pos + 2 * (batch_size), s->nz_count + s->first_row + batch_size);
+      target_pos = min(src_pos + 2 * batch_size, s->nz_count + s->first_row + batch_size);
     } else {  // warp 3
       target_pos = min(s->nz_count, src_pos + batch_size);
     }
@@ -549,8 +535,8 @@ __global__ void __launch_bounds__(decode_block_size)
         if (dst_pos >= 0 && sp < target_pos) {
           auto const offptr =
             reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out) + dst_pos;
-          auto const src_idx = rolling_index<delta_rolling_buf_size>(sp + skipped_leaf_values);
-          *offptr            = prefix_db->value[src_idx] + suffix_db->value[src_idx];
+          auto const src_idx = sp + skipped_leaf_values;
+          *offptr            = prefix_db->value_at(src_idx) + suffix_db->value_at(src_idx);
         }
         __syncwarp();
       }
