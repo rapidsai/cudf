@@ -2,7 +2,7 @@
 
 from cudf.core.buffer import acquire_spill_lock
 
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
 
@@ -11,7 +11,6 @@ from rmm._lib.device_buffer cimport device_buffer
 cimport cudf._lib.cpp.join as cpp_join
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.libcpp.memory cimport make_unique
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type, size_type, type_id
 from cudf._lib.utils cimport table_view_from_columns
