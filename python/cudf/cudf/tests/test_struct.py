@@ -440,3 +440,11 @@ def test_struct_empty_children_slice(indices, values):
     actual = s.iloc[indices]
     expect = cudf.Series(values[indices], index=range(len(values))[indices])
     assert_eq(actual, expect)
+
+
+def test_struct_iterate_error():
+    s = cudf.Series(
+        [{"f2": {"a": "sf21"}, "f1": "a"}, {"f1": "sf12", "f2": None}]
+    )
+    with pytest.raises(TypeError):
+        iter(s.struct)

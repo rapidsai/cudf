@@ -56,10 +56,69 @@ namespace detail {
  *  auto result = thrust::find(thrust::device, begin, end, size_type{12} );
  * @endcode
  */
-using input_indexalator = input_normalator<cudf::size_type>;
+struct input_indexalator : base_normalator<input_indexalator, cudf::size_type> {
+  friend struct base_normalator<input_indexalator, cudf::size_type>;  // for CRTP
+
+  using reference = cudf::size_type const;  // this keeps STL and thrust happy
+
+  input_indexalator()                                    = default;
+  input_indexalator(input_indexalator const&)            = default;
+  input_indexalator(input_indexalator&&)                 = default;
+  input_indexalator& operator=(input_indexalator const&) = default;
+  input_indexalator& operator=(input_indexalator&&)      = default;
+
+  /**
+   * @brief Indirection operator returns the value at the current iterator position
+   */
+  __device__ inline cudf::size_type operator*() const { return operator[](0); }
+
+  /**
+   * @brief Dispatch functor for resolving a Integer value from any integer type
+   */
+  struct normalize_type {
+    template <typename T, CUDF_ENABLE_IF(cudf::is_index_type<T>())>
+    __device__ cudf::size_type operator()(void const* tp)
+    {
+      return static_cast<cudf::size_type>(*static_cast<T const*>(tp));
+    }
+    template <typename T, CUDF_ENABLE_IF(not cudf::is_index_type<T>())>
+    __device__ cudf::size_type operator()(void const*)
+    {
+      CUDF_UNREACHABLE("only integral types are supported");
+    }
+  };
+
+  /**
+   * @brief Array subscript operator returns a value at the input
+   * `idx` position as a `Integer` value.
+   */
+  __device__ inline cudf::size_type operator[](size_type idx) const
+  {
+    void const* tp = p_ + (idx * this->width_);
+    return type_dispatcher(this->dtype_, normalize_type{}, tp);
+  }
+
+  /**
+   * @brief Create an input index normalizing iterator
+   *
+   * Use the indexalator_factory to create an iterator instance.
+   *
+   * @param data   Pointer to an integer array in device memory.
+   * @param dtype  Type of data in data
+   * @param offset Applied to the data pointer per size of the type
+   */
+  CUDF_HOST_DEVICE input_indexalator(void const* data, data_type dtype, cudf::size_type offset = 0)
+    : base_normalator<input_indexalator, cudf::size_type>(dtype), p_{static_cast<char const*>(data)}
+  {
+    p_ += offset * this->width_;
+  }
+
+ protected:
+  char const* p_;  /// pointer to the integer data in device memory
+};
 
 /**
- * @brief The index normalizing output iterator.
+ * @brief The index normalizing output iterator
  *
  * This is an iterator that can be used for index types (integers) without
  * requiring a type-specific instance. It can be used for any iterator
@@ -82,7 +141,75 @@ using input_indexalator = input_normalator<cudf::size_type>;
  *                      thrust::less<Element>());
  * @endcode
  */
-using output_indexalator = output_normalator<cudf::size_type>;
+struct output_indexalator : base_normalator<output_indexalator, cudf::size_type> {
+  friend struct base_normalator<output_indexalator, cudf::size_type>;  // for CRTP
+
+  using reference = output_indexalator const&;  // required for output iterators
+
+  output_indexalator()                                     = default;
+  output_indexalator(output_indexalator const&)            = default;
+  output_indexalator(output_indexalator&&)                 = default;
+  output_indexalator& operator=(output_indexalator const&) = default;
+  output_indexalator& operator=(output_indexalator&&)      = default;
+
+  /**
+   * @brief Indirection operator returns this iterator instance in order
+   * to capture the `operator=(Integer)` calls.
+   */
+  __device__ inline reference operator*() const { return *this; }
+
+  /**
+   * @brief Array subscript operator returns an iterator instance at the specified `idx` position.
+   *
+   * This allows capturing the subsequent `operator=(Integer)` call in this class.
+   */
+  __device__ inline output_indexalator const operator[](size_type idx) const
+  {
+    output_indexalator tmp{*this};
+    tmp.p_ += (idx * this->width_);
+    return tmp;
+  }
+
+  /**
+   * @brief Dispatch functor for setting the index value from a size_type value.
+   */
+  struct normalize_type {
+    template <typename T, CUDF_ENABLE_IF(cudf::is_index_type<T>())>
+    __device__ void operator()(void* tp, cudf::size_type const value)
+    {
+      (*static_cast<T*>(tp)) = static_cast<T>(value);
+    }
+    template <typename T, CUDF_ENABLE_IF(not cudf::is_index_type<T>())>
+    __device__ void operator()(void*, cudf::size_type const)
+    {
+      CUDF_UNREACHABLE("only index types are supported");
+    }
+  };
+
+  /**
+   * @brief Assign an Integer value to the current iterator position
+   */
+  __device__ inline reference operator=(cudf::size_type const value) const
+  {
+    void* tp = p_;
+    type_dispatcher(this->dtype_, normalize_type{}, tp, value);
+    return *this;
+  }
+
+  /**
+   * @brief Create an output normalizing iterator
+   *
+   * @param data      Pointer to an integer array in device memory.
+   * @param dtype Type of data in data
+   */
+  CUDF_HOST_DEVICE output_indexalator(void* data, data_type dtype)
+    : base_normalator<output_indexalator, cudf::size_type>(dtype), p_{static_cast<char*>(data)}
+  {
+  }
+
+ protected:
+  char* p_;  /// pointer to the integer data in device memory
+};
 
 /**
  * @brief Use this class to create an indexalator instance.
@@ -92,14 +219,12 @@ struct indexalator_factory {
    * @brief A type_dispatcher functor to create an input iterator from an indices column.
    */
   struct input_indexalator_fn {
-    template <typename IndexType, std::enable_if_t<is_index_type<IndexType>()>* = nullptr>
+    template <typename IndexType, CUDF_ENABLE_IF(is_index_type<IndexType>())>
     input_indexalator operator()(column_view const& indices)
     {
       return input_indexalator(indices.data<IndexType>(), indices.type());
     }
-    template <typename IndexType,
-              typename... Args,
-              std::enable_if_t<not is_index_type<IndexType>()>* = nullptr>
+    template <typename IndexType, typename... Args, CUDF_ENABLE_IF(not is_index_type<IndexType>())>
     input_indexalator operator()(Args&&... args)
     {
       CUDF_FAIL("indices must be an index type");
@@ -110,16 +235,14 @@ struct indexalator_factory {
    * @brief Use this class to create an indexalator to a scalar index.
    */
   struct input_indexalator_scalar_fn {
-    template <typename IndexType, std::enable_if_t<is_index_type<IndexType>()>* = nullptr>
+    template <typename IndexType, CUDF_ENABLE_IF(is_index_type<IndexType>())>
     input_indexalator operator()(scalar const& index)
     {
       // note: using static_cast<scalar_type_t<IndexType> const&>(index) creates a copy
       auto const scalar_impl = static_cast<scalar_type_t<IndexType> const*>(&index);
       return input_indexalator(scalar_impl->data(), index.type());
     }
-    template <typename IndexType,
-              typename... Args,
-              std::enable_if_t<not is_index_type<IndexType>()>* = nullptr>
+    template <typename IndexType, typename... Args, CUDF_ENABLE_IF(not is_index_type<IndexType>())>
     input_indexalator operator()(Args&&... args)
     {
       CUDF_FAIL("scalar must be an index type");
@@ -130,14 +253,12 @@ struct indexalator_factory {
    * @brief A type_dispatcher functor to create an output iterator from an indices column.
    */
   struct output_indexalator_fn {
-    template <typename IndexType, std::enable_if_t<is_index_type<IndexType>()>* = nullptr>
+    template <typename IndexType, CUDF_ENABLE_IF(is_index_type<IndexType>())>
     output_indexalator operator()(mutable_column_view const& indices)
     {
       return output_indexalator(indices.data<IndexType>(), indices.type());
     }
-    template <typename IndexType,
-              typename... Args,
-              std::enable_if_t<not is_index_type<IndexType>()>* = nullptr>
+    template <typename IndexType, typename... Args, CUDF_ENABLE_IF(not is_index_type<IndexType>())>
     output_indexalator operator()(Args&&... args)
     {
       CUDF_FAIL("indices must be an index type");
