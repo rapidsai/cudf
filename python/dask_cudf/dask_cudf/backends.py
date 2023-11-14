@@ -481,6 +481,31 @@ def sizeof_cudf_series_index(obj):
     return obj.memory_usage()
 
 
+# TODO: Remove try/except when cudf is pinned to dask>=2023.10.0
+try:
+    from dask.dataframe.dispatch import partd_encode_dispatch
+
+    @partd_encode_dispatch.register(cudf.DataFrame)
+    def _simple_cudf_encode(_):
+        # Basic pickle-based encoding for a partd k-v store
+        import pickle
+        from functools import partial
+
+        import partd
+
+        def join(dfs):
+            if not dfs:
+                return cudf.DataFrame()
+            else:
+                return cudf.concat(dfs)
+
+        dumps = partial(pickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
+        return partial(partd.Encode, dumps, pickle.loads, join)
+
+except ImportError:
+    pass
+
+
 def _default_backend(func, *args, **kwargs):
     # Utility to call a dask.dataframe function with
     # the default ("pandas") backend
