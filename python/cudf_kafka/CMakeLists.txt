@@ -28,9 +28,7 @@ project(
             C CXX
 )
 
-if(FIND_CUDF_KAFKA_CPP)
-  find_package(cudf_kafka ${cudf_kafka_version} REQUIRED)
-endif()
+find_package(cudf_kafka ${cudf_kafka_version} REQUIRED)
 
 if(NOT cudf_kafka_FOUND)
   message(
