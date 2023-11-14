@@ -166,8 +166,8 @@ struct column_to_strings_fn {
   std::enable_if_t<std::is_same_v<column_type, bool>, std::unique_ptr<column>> operator()(
     column_view const& column) const
   {
-    string_scalar true_string{options_.get_true_value(), true, stream_, mr_};
-    string_scalar false_string{options_.get_false_value(), true, stream_, mr_};
+    string_scalar true_string{options_.get_true_value(), true, stream_};
+    string_scalar false_string{options_.get_false_value(), true, stream_};
     return cudf::strings::detail::from_booleans(column, true_string, false_string, stream_, mr_);
   }
 
@@ -182,7 +182,7 @@ struct column_to_strings_fn {
     }
 
     // handle special characters: {delimiter, '\n', "} in row:
-    string_scalar delimiter{std::string{options_.get_inter_column_delimiter()}, true, stream_, mr_};
+    string_scalar delimiter{std::string{options_.get_inter_column_delimiter()}, true, stream_};
 
     auto d_column = column_device_view::create(column_v, stream_);
     escape_strings_fn fn{*d_column, delimiter.value(stream_)};
