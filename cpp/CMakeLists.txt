@@ -582,6 +582,7 @@ add_library(
   src/strings/replace/replace.cu
   src/strings/replace/replace_re.cu
   src/strings/reverse.cu
+  src/strings/scan/scan_inclusive.cu
   src/strings/search/findall.cu
   src/strings/search/find.cu
   src/strings/search/find_multiple.cu
@@ -598,6 +599,7 @@ add_library(
   src/strings/utilities.cu
   src/strings/wrap.cu
   src/structs/copying/concatenate.cu
+  src/structs/scan/scan_inclusive.cu
   src/structs/structs_column_factories.cu
   src/structs/structs_column_view.cpp
   src/structs/utilities.cpp

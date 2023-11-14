@@ -393,6 +393,7 @@ set_tests_properties(
 ConfigureTest(
   ITERATOR_TEST
   iterator/indexalator_test.cu
+  iterator/offsetalator_test.cu
   iterator/optional_iterator_test_chrono.cu
   iterator/optional_iterator_test_numeric.cu
   iterator/pair_iterator_test_chrono.cu
@@ -619,6 +620,11 @@ ConfigureTest(
 # ##################################################################################################
 # * bin tests ----------------------------------------------------------------------------------
 ConfigureTest(LABEL_BINS_TEST labeling/label_bins_tests.cpp)
+
+# ##################################################################################################
+# * jit tests ----------------------------------------------------------------------------------
+ConfigureTest(JIT_PARSER_TEST jit/parse_ptx_function.cpp)
+target_include_directories(JIT_PARSER_TEST PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
 
 # ##################################################################################################
 # * stream testing ---------------------------------------------------------------------------------
