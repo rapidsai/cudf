@@ -17,7 +17,6 @@ dependencies:
 - cmake>=3.26.4
 - cramjam
 - cuda-cudart-dev
-- cuda-gdb
 - cuda-nvcc
 - cuda-nvrtc-dev
 - cuda-nvtx-dev
