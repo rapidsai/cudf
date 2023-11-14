@@ -2126,9 +2126,10 @@ def as_column(
                 raise TypeError(
                     f"Cannot convert a object type of {inferred_dtype}"
                 )
+            # TODO: nan_as_na interaction here with from_pandas
             pyarrow_array = pa.array(
                 arbitrary,
-                from_pandas=True if nan_as_null is None else nan_as_null,
+                from_pandas=True,
             )
             if isinstance(pyarrow_array.type, pa.Decimal128Type):
                 pyarrow_type = cudf.Decimal128Dtype.from_arrow(
