@@ -345,6 +345,10 @@ __global__ void __launch_bounds__(96)
   __syncthreads();
 
   auto const batch_size = db->values_per_mb;
+  if (batch_size > max_delta_mini_block_size) {
+    set_error(static_cast<int32_t>(decode_error::DELTA_PARAMS_UNSUPPORTED), error_code);
+    return;
+  }
 
   // if skipped_leaf_values is non-zero, then we need to decode up to the first mini-block
   // that has a value we need.
@@ -479,6 +483,10 @@ __global__ void __launch_bounds__(decode_block_size)
   auto strings_data          = nesting_info_base[leaf_level_index].string_out;
 
   auto const batch_size = prefix_db->values_per_mb;
+  if (batch_size > max_delta_mini_block_size) {
+    set_error(static_cast<int32_t>(decode_error::DELTA_PARAMS_UNSUPPORTED), error_code);
+    return;
+  }
 
   // if this is a bounds page and nested, then we need to skip up front. non-nested will work
   // its way through the page.

@@ -40,11 +40,14 @@ namespace cudf::io::parquet::detail {
 // block to ensure that all encoded values are positive. The deltas for each mini-block are bit
 // packed using the same encoding as the RLE/Bit-Packing Hybrid encoder.
 
+// The largest mini-block size we can currently support.
+constexpr int max_delta_mini_block_size = 64;
+
 // The first pass decodes `values_per_mb` values, and then the second pass does another
 // batch of size `values_per_mb`. The largest value for values_per_miniblock among the
 // major writers seems to be 64, so 2 * 64 should be good. We save the first value separately
 // since it is not encoded in the first mini-block.
-constexpr int delta_rolling_buf_size = 128;
+constexpr int delta_rolling_buf_size = 2 * max_delta_mini_block_size;
 
 /**
  * @brief Read a ULEB128 varint integer

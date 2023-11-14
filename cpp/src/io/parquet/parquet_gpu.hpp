@@ -88,14 +88,15 @@ constexpr void set_error(int32_t error, int32_t* error_code)
  * These values are used as bitmasks, so they must be powers of 2.
  */
 enum class decode_error : int32_t {
-  DATA_STREAM_OVERRUN  = 0x1,
-  LEVEL_STREAM_OVERRUN = 0x2,
-  UNSUPPORTED_ENCODING = 0x4,
-  INVALID_LEVEL_RUN    = 0x8,
-  INVALID_DATA_TYPE    = 0x10,
-  EMPTY_PAGE           = 0x20,
-  INVALID_DICT_WIDTH   = 0x40,
-  DELTA_PARAM_MISMATCH = 0x80,
+  DATA_STREAM_OVERRUN      = 0x1,
+  LEVEL_STREAM_OVERRUN     = 0x2,
+  UNSUPPORTED_ENCODING     = 0x4,
+  INVALID_LEVEL_RUN        = 0x8,
+  INVALID_DATA_TYPE        = 0x10,
+  EMPTY_PAGE               = 0x20,
+  INVALID_DICT_WIDTH       = 0x40,
+  DELTA_PARAM_MISMATCH     = 0x80,
+  DELTA_PARAMS_UNSUPPORTED = 0x100,
 };
 
 /**
