@@ -215,7 +215,7 @@ cudf::io::io_type retrieve_io_type_enum(std::string const& io_string)
   } else if (io_string == "USER_IMPLEMENTED") {
     return cudf::io::io_type::USER_IMPLEMENTED;
   } else {
-    return cudf::io::io_type::VOID;
+    CUDF_FAIL("Unsupported io_type.");
   }
 }
 
@@ -246,6 +246,6 @@ cudf::io::compression_type retrieve_compression_type_enum(std::string const& com
   } else if (compression_string == "ZSTD") {
     return cudf::io::compression_type::ZSTD;
   } else {
-    return cudf::io::compression_type::NONE;
+    CUDF_FAIL("Unsupported compression_type.");
   }
 }
