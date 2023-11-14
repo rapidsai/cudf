@@ -429,9 +429,7 @@ def union_categoricals_cudf(
 
 @_dask_cudf_nvtx_annotate
 def safe_hash(frame):
-    return cudf.Series._from_data(
-        frame.hash_values()._data, index=frame._index
-    )
+    return frame.hash_values()
 
 
 @hash_object_dispatch.register((cudf.DataFrame, cudf.Series))
