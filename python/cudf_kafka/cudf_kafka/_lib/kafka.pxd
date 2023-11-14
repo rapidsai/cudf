@@ -11,12 +11,12 @@ from cudf._lib.cpp.io.datasource cimport datasource
 from cudf._lib.io.datasource cimport Datasource
 
 
-cdef extern from "kafka_callback.hpp" \
+cdef extern from "cudf_kafka/kafka_callback.hpp" \
         namespace "cudf::io::external::kafka" nogil:
     ctypedef object (*python_callable_type)()
 
 
-cdef extern from "kafka_consumer.hpp" \
+cdef extern from "cudf_kafka/kafka_consumer.hpp" \
         namespace "cudf::io::external::kafka" nogil:
 
     cpdef cppclass kafka_consumer:
