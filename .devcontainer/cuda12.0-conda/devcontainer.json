@@ -10,7 +10,7 @@
   },
   "hostRequirements": {"gpu": "optional"},
   "features": {
-    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:24.02": {}
+    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:24.2": {}
   },
   "overrideFeatureInstallOrder": [
     "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils"
