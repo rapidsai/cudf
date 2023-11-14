@@ -1448,6 +1448,8 @@ def test_delta_struct_list(tmpdir, nrows, add_nulls, str_encoding):
         engine="pyarrow",
         use_dictionary=False,
     )
+    # sanity check to verify file is written properly
+    assert_eq(test_pdf, pd.read_parquet(pdf_fname))
     cdf = cudf.read_parquet(pdf_fname)
     assert_eq(cdf, cudf.from_pandas(test_pdf))
 
