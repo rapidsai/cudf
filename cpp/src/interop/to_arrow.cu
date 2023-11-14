@@ -382,10 +382,10 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::dictionary32>(
 {
   // Arrow dictionary requires indices to be signed integer
   std::unique_ptr<column> dict_indices =
-    cast(cudf::dictionary_column_view(input).get_indices_annotated(),
-         cudf::data_type{type_id::INT32},
-         stream,
-         rmm::mr::get_current_device_resource());
+    detail::cast(cudf::dictionary_column_view(input).get_indices_annotated(),
+                 cudf::data_type{type_id::INT32},
+                 stream,
+                 rmm::mr::get_current_device_resource());
   auto indices = dispatch_to_arrow{}.operator()<int32_t>(
     dict_indices->view(), dict_indices->type().id(), {}, ar_mr, stream);
   auto dict_keys = cudf::dictionary_column_view(input).keys();
