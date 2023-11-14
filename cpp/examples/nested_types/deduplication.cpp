@@ -51,12 +51,10 @@
 /**
  * @brief Create memory resource for libcudf functions
  */
-std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::string_view name)
+std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool pool)
 {
   auto cuda_mr = std::make_shared<rmm::mr::cuda_memory_resource>();
-  if (name == "pool") {
-    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(cuda_mr);
-  }
+  if (pool) { return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(cuda_mr); }
   return cuda_mr;
 }
 
@@ -168,7 +166,8 @@ int main(int argc, char const** argv)
     mr_name         = argv[3];
   }
 
-  auto resource = create_memory_resource(mr_name);
+  auto pool     = mr_name == "pool";
+  auto resource = create_memory_resource(pool);
   rmm::mr::set_current_device_resource(resource.get());
 
   // read input file
