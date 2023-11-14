@@ -25,10 +25,7 @@ dependencies:
 - cupy>=12.0.0
 - cxx-compiler
 - cython>=3.0.3
-- dask-core>=2023.9.2
 - dask-cuda==23.12.*
-- dask>=2023.9.2
-- distributed>=2023.9.2
 - dlpack>=0.5,<0.6.0a0
 - doxygen=1.9.1
 - fastavro>=0.22.9
@@ -80,6 +77,7 @@ dependencies:
 - python-snappy>=0.6.0
 - python>=3.9,<3.11
 - pytorch<1.12.0
+- rapids-dask-dependency==23.12.*
 - rich
 - rmm==23.12.*
 - s3fs>=2022.3.0
