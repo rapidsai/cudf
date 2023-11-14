@@ -63,7 +63,7 @@ enum class inclusive { YES, NO };
  * @param left_edges Values of the left edge of each bin.
  * @param left_inclusive Whether or not the left edge is inclusive.
  * @param right_edges Value of the right edge of each bin.
- * @param right_inclusive Whether or not the right edge is inclusive.
+ * @param right_inclusive Whether or not the right edge is inclusive. * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device.
  * @return The integer labels of the elements in `input` according to the specified bins.
  */
