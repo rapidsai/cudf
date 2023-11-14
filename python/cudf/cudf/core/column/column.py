@@ -2115,6 +2115,7 @@ def as_column(
                 "bytes",
                 "floating",
                 "integer",
+                "boolean",
                 "datetime",
                 "timedelta",
                 "datetime64",
@@ -2125,7 +2126,10 @@ def as_column(
                 raise TypeError(
                     f"Cannot convert a object type of {inferred_dtype}"
                 )
-            pyarrow_array = pa.array(arbitrary, from_pandas=True)
+            pyarrow_array = pa.array(
+                arbitrary,
+                from_pandas=True if nan_as_null is None else nan_as_null,
+            )
             if isinstance(pyarrow_array.type, pa.Decimal128Type):
                 pyarrow_type = cudf.Decimal128Dtype.from_arrow(
                     pyarrow_array.type
@@ -2218,11 +2222,13 @@ def as_column(
                 arbitrary = arbitrary.astype(cudf.dtype("datetime64[s]"))
 
             buffer = as_buffer(arbitrary.view("|u1"))
-            mask = None
             if nan_as_null is None or nan_as_null is True:
                 data = build_column(buffer, dtype=arbitrary.dtype)
                 data = _make_copy_replacing_NaT_with_null(data)
                 mask = data.mask
+            else:
+                bool_mask = as_column(~np.isnat(arbitrary))
+                mask = as_buffer(bools_to_mask(bool_mask))
 
             data = build_column(data=buffer, mask=mask, dtype=arbitrary.dtype)
         elif arb_dtype.kind == "m":
@@ -2233,11 +2239,13 @@ def as_column(
                 arbitrary = arbitrary.astype(cudf.dtype("timedelta64[s]"))
 
             buffer = as_buffer(arbitrary.view("|u1"))
-            mask = None
             if nan_as_null is None or nan_as_null is True:
                 data = build_column(buffer, dtype=arbitrary.dtype)
                 data = _make_copy_replacing_NaT_with_null(data)
                 mask = data.mask
+            else:
+                bool_mask = as_column(np.isnat(arbitrary))
+                mask = as_buffer(bools_to_mask(bool_mask))
 
             data = cudf.core.column.timedelta.TimeDeltaColumn(
                 data=buffer,
