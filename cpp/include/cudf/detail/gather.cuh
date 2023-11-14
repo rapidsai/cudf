@@ -680,9 +680,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
                         });
   if (nullable) {
     auto const has_nulls =
-      bounds_policy == out_of_bounds_policy::NULLIFY ||
-      std::any_of(
-        source_table.begin(), source_table.end(), [](auto const& col) { return col.has_nulls(); });
+      bounds_policy == out_of_bounds_policy::NULLIFY || cudf::has_nested_nulls(source_table);
     if (has_nulls) {
       auto const op = bounds_policy == out_of_bounds_policy::NULLIFY
                         ? gather_bitmask_op::NULLIFY
@@ -690,7 +688,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
       gather_bitmask(source_table, gather_map_begin, destination_columns, op, stream, mr);
     } else {
       for (size_type i = 0; i < source_table.num_columns(); ++i) {
-        if (source_table.column(i).nullable() and not source_table.column(i).has_nulls()) {
+        if (source_table.column(i).nullable()) {
           auto mask = detail::create_null_mask(
             destination_columns[i]->size(), mask_state::ALL_VALID, stream, mr);
           destination_columns[i]->set_null_mask(std::move(mask), 0);
