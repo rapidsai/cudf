@@ -364,7 +364,6 @@ __global__ void __launch_bounds__(96)
     } else {  // warp2
       target_pos = min(s->nz_count, src_pos + batch_size);
     }
-    __syncthreads();
 
     // warp0 will decode the rep/def levels, warp1 will unpack a mini-batch of deltas.
     // warp2 waits one cycle for warps 0/1 to produce a batch, and then stuffs values
@@ -503,7 +502,6 @@ __global__ void __launch_bounds__(decode_block_size)
     } else {  // warp 3
       target_pos = min(s->nz_count, src_pos + batch_size);
     }
-    __syncthreads();
 
     // warp0 will decode the rep/def levels, warp1 will unpack a mini-batch of prefixes, warp 2 will
     // unpack a mini-batch of suffixes. warp3 waits one cycle for warps 0-2 to produce a batch, and
