@@ -2250,7 +2250,7 @@ def as_column(
                 data = _make_copy_replacing_NaT_with_null(data)
                 mask = data.mask
             else:
-                bool_mask = as_column(np.isnat(arbitrary))
+                bool_mask = as_column(~np.isnat(arbitrary))
                 mask = as_buffer(bools_to_mask(bool_mask))
 
             data = cudf.core.column.timedelta.TimeDeltaColumn(
