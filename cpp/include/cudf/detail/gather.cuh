@@ -622,6 +622,25 @@ void gather_bitmask(table_view const& source,
 }
 
 /**
+ * @brief Recursively set valid null masks for all children. This function is called when
+ *        input table `has_nested_nullables == true` and `has_nested_nulls == 0`
+ */
+inline void set_all_valid_null_masks(column_view const& input,
+                                     column& output,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+{
+  if (input.nullable()) {
+    auto mask = detail::create_null_mask(output.size(), mask_state::ALL_VALID, stream, mr);
+    output.set_null_mask(std::move(mask), 0);
+
+    for (size_type i = 0; i < input.num_children(); ++i) {
+      set_all_valid_null_masks(input.child(i), output.child(i), stream, mr);
+    }
+  }
+}
+
+/**
  * @brief Gathers the specified rows of a set of columns according to a gather map.
  *
  * Gathers the rows of the source columns according to `gather_map` such that row "i"
@@ -674,10 +693,8 @@ std::unique_ptr<table> gather(table_view const& source_table,
                                                    mr));
   }
 
-  auto const nullable = bounds_policy == out_of_bounds_policy::NULLIFY ||
-                        std::any_of(source_table.begin(), source_table.end(), [](auto const& col) {
-                          return col.nullable();
-                        });
+  auto const nullable =
+    bounds_policy == out_of_bounds_policy::NULLIFY || cudf::has_nested_nullables(source_table);
   if (nullable) {
     auto const has_nulls =
       bounds_policy == out_of_bounds_policy::NULLIFY || cudf::has_nested_nulls(source_table);
@@ -688,11 +705,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
       gather_bitmask(source_table, gather_map_begin, destination_columns, op, stream, mr);
     } else {
       for (size_type i = 0; i < source_table.num_columns(); ++i) {
-        if (source_table.column(i).nullable()) {
-          auto mask = detail::create_null_mask(
-            destination_columns[i]->size(), mask_state::ALL_VALID, stream, mr);
-          destination_columns[i]->set_null_mask(std::move(mask), 0);
-        }
+        set_all_valid_null_masks(source_table.column(i), *destination_columns[i], stream, mr);
       }
     }
   }

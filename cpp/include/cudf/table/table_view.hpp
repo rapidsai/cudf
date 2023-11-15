@@ -337,6 +337,22 @@ inline bool has_nested_nulls(table_view const& input)
 }
 
 /**
+ * @brief Returns True if the table is nullable in any of its columns hierarchy
+ *
+ * @param input The table to check for nullables
+ * @return True if the table has nullables in any of its columns hierarchy, false otherwise
+ */
+inline bool has_nested_nullables(table_view const& input)
+{
+  return std::any_of(input.begin(), input.end(), [](auto const& col) {
+    return col.nullable() ||
+           std::any_of(col.child_begin(), col.child_end(), [](auto const& child_col) {
+             return has_nested_nullables(table_view{{child_col}});
+           });
+  });
+}
+
+/**
  * @brief The function to collect all nullable columns at all nested levels in a given table.
  *
  * @param table The input table
