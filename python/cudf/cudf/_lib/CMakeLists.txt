@@ -81,12 +81,6 @@ target_link_libraries(strings_udf cudf_strings_udf)
 # necessary. The relevant command is tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C
 # /opt/_internal"
 find_package(NumPy REQUIRED)
-set(targets_using_numpy interop avro csv orc json parquet)
-foreach(target IN LISTS targets_using_numpy)
-  target_include_directories(${target} PRIVATE "${NumPy_INCLUDE_DIRS}")
-  # Switch to the line below when we switch back to FindPython.cmake in CMake 3.24.
-  # target_include_directories(${target} PRIVATE "${Python_NumPy_INCLUDE_DIRS}")
-endforeach()
 
 set(targets_using_dlpack interop)
 foreach(target IN LISTS targets_using_dlpack)

@@ -1280,32 +1280,29 @@ def test_parquet_reader_v2(tmpdir, simple_pdf):
     simple_pdf.to_parquet(pdf_fname, data_page_version="2.0")
     assert_eq(cudf.read_parquet(pdf_fname), simple_pdf)
 
+    cudf.from_pandas(simple_pdf).to_parquet(pdf_fname, header_version="2.0")
+    assert_eq(cudf.read_parquet(pdf_fname), simple_pdf)
+
 
 @pytest.mark.parametrize("nrows", [1, 100000])
 @pytest.mark.parametrize("add_nulls", [True, False])
-def test_delta_binary(nrows, add_nulls, tmpdir):
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+    ],
+)
+def test_delta_binary(nrows, add_nulls, dtype, tmpdir):
     null_frequency = 0.25 if add_nulls else 0
 
     # Create a pandas dataframe with random data of mixed types
     arrow_table = dg.rand_dataframe(
         dtypes_meta=[
             {
-                "dtype": "int8",
-                "null_frequency": null_frequency,
-                "cardinality": nrows,
-            },
-            {
-                "dtype": "int16",
-                "null_frequency": null_frequency,
-                "cardinality": nrows,
-            },
-            {
-                "dtype": "int32",
-                "null_frequency": null_frequency,
-                "cardinality": nrows,
-            },
-            {
-                "dtype": "int64",
+                "dtype": dtype,
                 "null_frequency": null_frequency,
                 "cardinality": nrows,
             },
@@ -1329,6 +1326,28 @@ def test_delta_binary(nrows, add_nulls, tmpdir):
     cdf = cudf.read_parquet(pdf_fname)
     pcdf = cudf.from_pandas(test_pdf)
     assert_eq(cdf, pcdf)
+
+    # Write back out with cudf and make sure pyarrow can read it
+    cudf_fname = tmpdir.join("cudfv2.parquet")
+    pcdf.to_parquet(
+        cudf_fname,
+        compression=None,
+        header_version="2.0",
+        use_dictionary=False,
+    )
+
+    # FIXME(ets): should probably not use more bits than the data type
+    try:
+        cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
+    except OSError as e:
+        if dtype == "int32" and nrows == 100000:
+            pytest.mark.xfail(
+                reason="arrow does not support 33-bit delta encoding"
+            )
+        else:
+            raise e
+    else:
+        assert_eq(cdf2, cdf)
 
 
 @pytest.mark.parametrize(
@@ -1464,7 +1483,6 @@ def test_parquet_writer_int96_timestamps(tmpdir, pdf, gdf):
 
 
 def test_multifile_parquet_folder(tmpdir):
-
     test_pdf1 = make_pdf(nrows=10, nvalids=10 // 2)
     test_pdf2 = make_pdf(nrows=20)
     expect = pd.concat([test_pdf1, test_pdf2])
