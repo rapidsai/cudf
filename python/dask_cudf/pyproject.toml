@@ -9,7 +9,7 @@ requires = [
 
 [project]
 name = "dask_cudf"
-version = "23.12.00"
+dynamic = ["version", "entry-points"]
 description = "Utilities for Dask and cuDF interactions"
 readme = { file = "README.md", content-type = "text/markdown" }
 authors = [
@@ -18,7 +18,7 @@ authors = [
 license = { text = "Apache 2.0" }
 requires-python = ">=3.9"
 dependencies = [
-    "cudf==23.12.*",
+    "cudf==24.2.*",
     "cupy-cuda11x>=12.0.0",
     "dask>=2023.9.2",
     "distributed>=2023.9.2",
@@ -35,11 +35,10 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
 ]
-dynamic = ["entry-points"]
 
 [project.optional-dependencies]
 test = [
-    "dask-cuda==23.12.*",
+    "dask-cuda==24.2.*",
     "numba>=0.57,<0.58",
     "pytest",
     "pytest-cov",
@@ -51,6 +50,9 @@ Homepage = "https://github.com/rapidsai/cudf"
 
 [tool.setuptools]
 license-files = ["LICENSE"]
+
+[tool.setuptools.dynamic]
+version = {file = "dask_cudf/VERSION"}
 
 [tool.isort]
 line_length = 79

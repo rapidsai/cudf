@@ -18,6 +18,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/default_stream.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
@@ -1422,7 +1423,9 @@ TEST_F(JsonReaderTest, JsonLongString)
                            .lines(true)
                            .na_rep("null");
 
-  cudf::io::write_json(options_builder.build(), rmm::mr::get_current_device_resource());
+  cudf::io::write_json(options_builder.build(),
+                       cudf::test::get_default_stream(),
+                       rmm::mr::get_current_device_resource());
 
   cudf::table_view const expected = tbl_view;
   std::map<std::string, data_type> types;

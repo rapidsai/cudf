@@ -91,6 +91,6 @@ setup(
         ),
     ),
     packages=packages,
-    package_data={key: ["*.pxd"] for key in packages},
+    package_data={key: ["VERSION", "*.pxd"] for key in packages},
     zip_safe=False,
 )

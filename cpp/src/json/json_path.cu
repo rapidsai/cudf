@@ -20,9 +20,9 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/json/json.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/utilities.hpp>
-#include <cudf/strings/json.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
@@ -41,7 +41,6 @@
 #include <thrust/tuple.h>
 
 namespace cudf {
-namespace strings {
 namespace detail {
 
 namespace {
@@ -224,7 +223,9 @@ enum json_element_type { NONE, OBJECT, ARRAY, VALUE };
 class json_state : private parser {
  public:
   __device__ json_state() : parser() {}
-  __device__ json_state(char const* _input, int64_t _input_len, get_json_object_options _options)
+  __device__ json_state(char const* _input,
+                        int64_t _input_len,
+                        cudf::get_json_object_options _options)
     : parser(_input, _input_len),
 
       options(_options)
@@ -956,9 +957,6 @@ __launch_bounds__(block_size) __global__
   }
 }
 
-/**
- * @copydoc cudf::strings::detail::get_json_object
- */
 std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& col,
                                               cudf::string_scalar const& json_path,
                                               get_json_object_options options,
@@ -1011,7 +1009,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
     cudf::detail::get_value<size_type>(offsets_view, col.size(), stream);
 
   // allocate output string column
-  auto chars = create_chars_child_column(output_size, stream, mr);
+  auto chars = cudf::strings::detail::create_chars_child_column(output_size, stream, mr);
 
   // potential optimization : if we know that all outputs are valid, we could skip creating
   // the validity mask altogether
@@ -1041,17 +1039,14 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
 }  // namespace
 }  // namespace detail
 
-/**
- * @copydoc cudf::strings::get_json_object
- */
 std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& col,
                                               cudf::string_scalar const& json_path,
                                               get_json_object_options options,
+                                              rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::get_json_object(col, json_path, options, cudf::get_default_stream(), mr);
+  return detail::get_json_object(col, json_path, options, stream, mr);
 }
 
-}  // namespace strings
 }  // namespace cudf
