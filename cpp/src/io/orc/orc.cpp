@@ -182,9 +182,19 @@ void ProtobufReader::read(timestamp_statistics& s, size_t maxlen)
                        field_reader(5, s.minimum_nanos),
                        field_reader(6, s.maximum_nanos));
   function_builder(s, maxlen, op);
-  // adjust nanoseconds because someone had a bright idea to store nanoseconds + 1 in the protobuf
-  if (s.minimum_nanos.has_value()) { --s.minimum_nanos.value(); }
-  if (s.maximum_nanos.has_value()) { --s.maximum_nanos.value(); }
+
+  // Adjust nanoseconds because they are encoded as (value + 1)
+  // Range [1, 1000'000] is translated here to [0, 999'999]
+  if (s.minimum_nanos.has_value()) {
+    auto& min_nanos = s.minimum_nanos.value();
+    CUDF_EXPECTS(min_nanos >= 1 and min_nanos <= 1000'000, "Invalid minimum nanoseconds");
+    --min_nanos;
+  }
+  if (s.maximum_nanos.has_value()) {
+    auto& max_nanos = s.maximum_nanos.value();
+    CUDF_EXPECTS(max_nanos >= 1 and max_nanos <= 1000'000, "Invalid maximum nanoseconds");
+    --max_nanos;
+  }
 }
 
 void ProtobufReader::read(column_statistics& s, size_t maxlen)
