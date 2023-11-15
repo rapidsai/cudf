@@ -2638,3 +2638,15 @@ def test_series_setitem_mixed_bool_dtype():
     s = cudf.Series([True, False, True])
     with pytest.raises(TypeError):
         s[0] = 10
+
+
+def test_series_duplicate_index_reindex():
+    gs = cudf.Series([0, 1, 2, 3], index=[0, 0, 1, 1])
+    ps = gs.to_pandas()
+
+    assert_exceptions_equal(
+        gs.reindex,
+        ps.reindex,
+        lfunc_args_and_kwargs=([10, 11, 12, 13], {}),
+        rfunc_args_and_kwargs=([10, 11, 12, 13], {}),
+    )
