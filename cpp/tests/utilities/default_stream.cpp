@@ -18,6 +18,12 @@
 
 #include <cudf_test/default_stream.hpp>
 
+extern "C" {
+  rmm::cuda_stream_view const cudf_test_get_default_stream() {
+    return cudf::get_default_stream();
+  }
+}
+
 namespace cudf {
 namespace test {
 

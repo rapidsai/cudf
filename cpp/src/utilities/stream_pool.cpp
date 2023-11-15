@@ -26,6 +26,7 @@
 #include <memory>
 #include <mutex>
 #include <vector>
+#include <dlfcn.h>
 
 namespace cudf::detail {
 
@@ -158,12 +159,51 @@ class debug_cuda_stream_pool : public cuda_stream_pool {
 };
 
 /**
+ * @brief Implementation of `cuda_stream_pool` that always returns the `cudf::test::get_default_stream()`
+ */
+class test_cuda_stream_pool : public cuda_stream_pool {
+  rmm::cuda_stream_view load_test_default_stream() {
+    std::cout << "Inside load_test_default_stream()\n";
+    void *handle;
+    handle = dlopen("libcudftest_default_stream.so", RTLD_LAZY);
+    if(!handle) {
+      std::cerr << "cannot load libcudftest_default_stream " << dlerror() << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    rmm::cuda_stream_view (*tds)();
+    void *utds = dlsym(handle, "cudf_test_get_default_stream");
+    if (utds == NULL) {
+        std::cerr << "Error accessing the symbol cudf_test_get_default_stream " << dlerror() << "\n";
+        exit(EXIT_FAILURE);
+    }
+    tds = reinterpret_cast<decltype(tds)>(utds);
+    return (*tds)();
+  }
+  public:
+  rmm::cuda_stream_view get_stream() override { return load_test_default_stream(); }
+  rmm::cuda_stream_view get_stream(stream_id_type stream_id) override
+  {
+    return load_test_default_stream();
+  }
+
+  std::vector<rmm::cuda_stream_view> get_streams(std::size_t count) override
+  {
+    std::cout << "getting cudf test streams\n";
+    return std::vector<rmm::cuda_stream_view>(count, load_test_default_stream());
+  }
+
+  std::size_t get_stream_pool_size() const override { return 1UL; }
+};
+
+/**
  * @brief Initialize global stream pool.
  */
 cuda_stream_pool* create_global_cuda_stream_pool()
 {
   if (getenv("LIBCUDF_USE_DEBUG_STREAM_POOL")) return new debug_cuda_stream_pool();
-
+  if (getenv("LIBCUDF_USE_TEST_STREAM_POOL")) {
+    return new test_cuda_stream_pool();
+  }
   return new rmm_cuda_stream_pool();
 }
 
@@ -236,6 +276,8 @@ cuda_stream_pool& global_cuda_stream_pool()
 std::vector<rmm::cuda_stream_view> fork_streams(rmm::cuda_stream_view stream, std::size_t count)
 {
   auto const streams = global_cuda_stream_pool().get_streams(count);
+  for(size_t i = 0; i < streams.size(); i++)
+    std::cout << streams[i] << std::endl;
   auto const event   = event_for_thread();
   CUDF_CUDA_TRY(cudaEventRecord(event, stream));
   std::for_each(streams.begin(), streams.end(), [&](auto& strm) {
