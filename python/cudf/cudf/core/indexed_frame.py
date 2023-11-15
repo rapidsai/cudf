@@ -2606,6 +2606,10 @@ class IndexedFrame(Frame):
 
         df = self
         if index is not None:
+            if not df._index.is_unique:
+                raise ValueError(
+                    "cannot reindex on an axis with duplicate labels"
+                )
             index = cudf.core.index.as_index(
                 index, name=getattr(index, "name", self._index.name)
             )
