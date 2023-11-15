@@ -2066,6 +2066,8 @@ def as_column(
             if cudf.get_option("mode.pandas_compatible"):
                 raise NotImplementedError("not supported")
             if isinstance(arbitrary, (pd.Series, pd.Index)):
+                # pandas arrays define __arrow_array__ for better
+                # pyarrow.array conversion
                 arbitrary = arbitrary.array
             data = as_column(
                 pa.array(arbitrary, from_pandas=True),
