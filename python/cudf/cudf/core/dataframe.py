@@ -734,10 +734,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 rangeindex = isinstance(
                     columns, (range, pd.RangeIndex, cudf.RangeIndex)
                 )
-                if len(columns) == 0:
-                    empty_dtype = getattr(columns, "dtype", None)
-                else:
-                    empty_dtype = None
+                label_dtype = getattr(columns, "dtype", None)
                 self._data = ColumnAccessor(
                     {
                         k: column.column_empty(
@@ -749,7 +746,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     if isinstance(columns, pd.Index)
                     else None,
                     rangeindex=rangeindex,
-                    empty_label_dtype=empty_dtype,
+                    label_dtype=label_dtype,
                 )
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
@@ -1000,15 +997,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             self._data.rangeindex = isinstance(
                 columns, (range, pd.RangeIndex, cudf.RangeIndex)
             )
-            self._data.empty_label_dtype = getattr(columns, "dtype", None)
+            self._data.label_dtype = getattr(columns, "dtype", None)
 
     @_cudf_nvtx_annotate
     def _init_from_dict_like(
         self, data, index=None, columns=None, nan_as_null=None
     ):
-        empty_label_dtype = None
+        label_dtype = None
         if columns is not None:
-            empty_label_dtype = getattr(columns, "dtype", None)
+            label_dtype = getattr(columns, "dtype", None)
             # remove all entries in data that are not in columns,
             # inserting new empty columns for entries in columns that
             # are not in data
@@ -1077,7 +1074,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if isinstance(columns, pd.Index)
             else self._data._level_names
         )
-        self._data.empty_label_dtype = empty_label_dtype
+        self._data.label_dtype = label_dtype
 
     @classmethod
     def _from_data(
