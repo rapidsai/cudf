@@ -266,10 +266,10 @@ cudf::size_type inplace_bitmask_and(device_span<bitmask_type> dest_mask,
  * This function applies all valid null masks to the output column if input column satisfies
  * `nullable() == true` condition
  *
- * @param input input column
- * @param output output column
- * @param stream
- * @param mr
+ * @param input input column to check for nullability
+ * @param output output column to mirror nullability of input
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 void set_all_valid_null_masks(column_view const& input,
                               column& output,
