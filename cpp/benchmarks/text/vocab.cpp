@@ -53,7 +53,7 @@ static void bench_vocab_tokenize(nvbench::state& state)
 
   auto const vocab_col = [] {
     data_profile const profile = data_profile_builder().no_validity().distribution(
-      cudf::type_id::STRING, distribution_id::NORMAL, 0, 5);
+      cudf::type_id::STRING, distribution_id::NORMAL, 0, 15);
     auto const col = create_random_column(cudf::type_id::STRING, row_count{100}, profile);
     return cudf::strings::filter_characters_of_type(
       cudf::strings_column_view(col->view()),

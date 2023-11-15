@@ -33,28 +33,31 @@ build:
     - SCCACHE_S3_KEY_PREFIX=cudf-kafka-linux64 # [linux64]
     - SCCACHE_S3_USE_SSL
     - SCCACHE_S3_NO_CREDENTIALS
-    # TODO: Remove after https://github.com/rapidsai/cudf/pull/14292 updates
-    # cudf_kafka to use scikit-build
-    - RAPIDS_CUDA_VERSION
+  ignore_run_exports_from:
+    {% if cuda_major == "11" %}
+    - {{ compiler('cuda11') }}
+    {% endif %}
 
 requirements:
   build:
     - cmake {{ cmake_version }}
+    - ninja
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
-    - ninja
-    - sysroot_{{ target_platform }} {{ sysroot_version }}
-    # TODO: Remove after https://github.com/rapidsai/cudf/pull/14292 updates
-    # cudf_kafka to use scikit-build
-    {% if cuda_major == "12" %}
-    - cuda-gdb
+    {% if cuda_major == "11" %}
+    - {{ compiler('cuda11') }} ={{ cuda_version }}
+    {% else %}
+    - {{ compiler('cuda') }}
     {% endif %}
+    - cuda-version ={{ cuda_version }}
+    - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
     - python
     - cython >=3.0.3
     - cuda-version ={{ cuda_version }}
     - cudf ={{ version }}
     - libcudf_kafka ={{ version }}
+    - scikit-build >=0.13.1
     - setuptools
     {% if cuda_major == "12" %}
     - cuda-cudart-dev
