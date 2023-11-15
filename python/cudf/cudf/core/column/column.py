@@ -2111,22 +2111,24 @@ def as_column(
             inferred_dtype = infer_dtype(arbitrary)
             if inferred_dtype in ("mixed-integer", "mixed-integer-float"):
                 raise MixedTypeError("Cannot create column with mixed types")
-            elif inferred_dtype in (
-                "bytes",
-                "floating",
-                "integer",
+            elif inferred_dtype not in (
+                "mixed",
+                "decimal",
+                "string",
+                "empty",
                 "boolean",
-                "datetime",
-                "timedelta",
-                "datetime64",
-                "timedelta64",
             ):
-                # Types that would be coerced but should be kept as "object"
-                # e.g. pandas.Series([1], dtype=object)
                 raise TypeError(
-                    f"Cannot convert a object type of {inferred_dtype}"
+                    f"Cannot convert a {inferred_dtype} of object type"
                 )
-            # TODO: nan_as_na interaction here with from_pandas
+            elif nan_as_null is False and (
+                pd.isna(arbitrary).any()
+                and inferred_dtype not in ("decimal", "empty")
+            ):
+                # Decimal can hold float("nan")
+                # All np.nan is not restricted by type
+                raise MixedTypeError(f"Cannot have NaN with {inferred_dtype}")
+
             pyarrow_array = pa.array(
                 arbitrary,
                 from_pandas=True,

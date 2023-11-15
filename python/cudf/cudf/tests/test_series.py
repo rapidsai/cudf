@@ -15,6 +15,7 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_LT_140
+from cudf.errors import MixedTypeError
 from cudf.testing._utils import (
     NUMERIC_TYPES,
     SERIES_OR_INDEX_NAMES,
@@ -813,17 +814,29 @@ def test_round_nan_as_null_false(series, decimal):
 @pytest.mark.parametrize("nan_as_null", [True, False, None])
 def test_series_isnull_isna(ps, nan_as_null):
 
-    gs = cudf.Series.from_pandas(ps, nan_as_null=nan_as_null)
+    if nan_as_null is False and (
+        ps.isna().any() and not ps.isna().all() and ps.dtype == object
+    ):
+        with pytest.raises(MixedTypeError):
+            cudf.Series.from_pandas(ps, nan_as_null=nan_as_null)
+    else:
+        gs = cudf.Series.from_pandas(ps, nan_as_null=nan_as_null)
 
-    assert_eq(ps.isnull(), gs.isnull())
-    assert_eq(ps.isna(), gs.isna())
+        assert_eq(ps.isnull(), gs.isnull())
+        assert_eq(ps.isna(), gs.isna())
 
 
 @pytest.mark.parametrize("ps", _series_na_data())
 @pytest.mark.parametrize("nan_as_null", [True, False, None])
 def test_series_notnull_notna(ps, nan_as_null):
 
-    gs = cudf.Series.from_pandas(ps, nan_as_null=nan_as_null)
+    if nan_as_null is False and (
+        ps.isna().any() and not ps.isna().all() and ps.dtype == object
+    ):
+        with pytest.raises(MixedTypeError):
+            cudf.Series.from_pandas(ps, nan_as_null=nan_as_null)
+    else:
+        gs = cudf.Series.from_pandas(ps, nan_as_null=nan_as_null)
 
     assert_eq(ps.notnull(), gs.notnull())
     assert_eq(ps.notna(), gs.notna())
@@ -2395,9 +2408,9 @@ def test_bool_series_mixed_dtype_error():
     # ps now has `object` dtype, which
     # isn't supported by `cudf`.
     with pytest.raises(TypeError):
-        cudf.Series(ps)
+        cudf.Series(ps, nan_as_null=False)
     with pytest.raises(TypeError):
-        cudf.from_pandas(ps)
+        cudf.from_pandas(ps, nan_as_null=False)
 
 
 @pytest.mark.parametrize(
@@ -2580,7 +2593,7 @@ def test_series_categorical_missing_value_count():
 def test_series_error_nan_mixed_types():
     ps = pd.Series([np.nan, "ab", "cd"])
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(pa.ArrowInvalid):
+        with pytest.raises(MixedTypeError):
             cudf.from_pandas(ps)
 
 
