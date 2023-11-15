@@ -42,7 +42,7 @@ struct contains_column_dispatch {
                                      stream,
                                      mr);
     return std::make_unique<column>(
-      std::move(result_v), copy_bitmask(needles, stream, mr), needles.null_count());
+      std::move(result_v), detail::copy_bitmask(needles, stream, mr), needles.null_count());
   }
 };
 

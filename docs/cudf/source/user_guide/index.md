@@ -1,8 +1,9 @@
-# User Guide
+# cuDF User Guide
 
 ```{toctree}
 :maxdepth: 2
 
+api_docs/index
 10min
 pandas-comparison
 data-types

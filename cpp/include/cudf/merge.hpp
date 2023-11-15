@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,10 @@ namespace cudf {
  * @brief Merge a set of sorted tables.
  *
  * Merges sorted tables into one sorted table
- * containing data from all tables.
+ * containing data from all tables. The key columns
+ * of each table must be sorted according to the
+ * parameters (cudf::column_order and cudf::null_order)
+ * specified for that column.
  *
  * ```
  * Example 1:

@@ -278,12 +278,14 @@ struct leaf_schema_fn {
   cudf::detail::LinkedColPtr const& col;
   column_in_metadata const& col_meta;
   bool timestamp_is_int96;
+  bool timestamp_is_utc;
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, bool>, void> operator()()
   {
     col_schema.type        = Type::BOOLEAN;
     col_schema.stats_dtype = statistics_dtype::dtype_bool;
+    // BOOLEAN needs no converted or logical type
   }
 
   template <typename T>
@@ -292,6 +294,7 @@ struct leaf_schema_fn {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::INT_8;
     col_schema.stats_dtype    = statistics_dtype::dtype_int8;
+    col_schema.logical_type   = LogicalType{IntType{8, true}};
   }
 
   template <typename T>
@@ -300,6 +303,7 @@ struct leaf_schema_fn {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::INT_16;
     col_schema.stats_dtype    = statistics_dtype::dtype_int16;
+    col_schema.logical_type   = LogicalType{IntType{16, true}};
   }
 
   template <typename T>
@@ -307,6 +311,7 @@ struct leaf_schema_fn {
   {
     col_schema.type        = Type::INT32;
     col_schema.stats_dtype = statistics_dtype::dtype_int32;
+    // INT32 needs no converted or logical type
   }
 
   template <typename T>
@@ -314,6 +319,7 @@ struct leaf_schema_fn {
   {
     col_schema.type        = Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_int64;
+    // INT64 needs no converted or logical type
   }
 
   template <typename T>
@@ -322,6 +328,7 @@ struct leaf_schema_fn {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::UINT_8;
     col_schema.stats_dtype    = statistics_dtype::dtype_int8;
+    col_schema.logical_type   = LogicalType{IntType{8, false}};
   }
 
   template <typename T>
@@ -330,6 +337,7 @@ struct leaf_schema_fn {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::UINT_16;
     col_schema.stats_dtype    = statistics_dtype::dtype_int16;
+    col_schema.logical_type   = LogicalType{IntType{16, false}};
   }
 
   template <typename T>
@@ -338,6 +346,7 @@ struct leaf_schema_fn {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::UINT_32;
     col_schema.stats_dtype    = statistics_dtype::dtype_int32;
+    col_schema.logical_type   = LogicalType{IntType{32, false}};
   }
 
   template <typename T>
@@ -346,6 +355,7 @@ struct leaf_schema_fn {
     col_schema.type           = Type::INT64;
     col_schema.converted_type = ConvertedType::UINT_64;
     col_schema.stats_dtype    = statistics_dtype::dtype_int64;
+    col_schema.logical_type   = LogicalType{IntType{64, false}};
   }
 
   template <typename T>
@@ -353,6 +363,7 @@ struct leaf_schema_fn {
   {
     col_schema.type        = Type::FLOAT;
     col_schema.stats_dtype = statistics_dtype::dtype_float32;
+    // FLOAT needs no converted or logical type
   }
 
   template <typename T>
@@ -360,6 +371,7 @@ struct leaf_schema_fn {
   {
     col_schema.type        = Type::DOUBLE;
     col_schema.stats_dtype = statistics_dtype::dtype_float64;
+    // DOUBLE needs no converted or logical type
   }
 
   template <typename T>
@@ -367,11 +379,12 @@ struct leaf_schema_fn {
   {
     col_schema.type = Type::BYTE_ARRAY;
     if (col_meta.is_enabled_output_as_binary()) {
-      col_schema.converted_type = ConvertedType::UNKNOWN;
-      col_schema.stats_dtype    = statistics_dtype::dtype_byte_array;
+      col_schema.stats_dtype = statistics_dtype::dtype_byte_array;
+      // BYTE_ARRAY needs no converted or logical type
     } else {
       col_schema.converted_type = ConvertedType::UTF8;
       col_schema.stats_dtype    = statistics_dtype::dtype_string;
+      col_schema.logical_type   = LogicalType{LogicalType::STRING};
     }
   }
 
@@ -381,49 +394,55 @@ struct leaf_schema_fn {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::DATE;
     col_schema.stats_dtype    = statistics_dtype::dtype_int32;
+    col_schema.logical_type   = LogicalType{LogicalType::DATE};
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_s>, void> operator()()
   {
-    col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
-    col_schema.converted_type =
-      (timestamp_is_int96) ? ConvertedType::UNKNOWN : ConvertedType::TIMESTAMP_MILLIS;
+    col_schema.type        = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
     col_schema.ts_scale    = 1000;
+    if (not timestamp_is_int96) {
+      col_schema.converted_type = ConvertedType::TIMESTAMP_MILLIS;
+      col_schema.logical_type   = LogicalType{TimestampType{timestamp_is_utc, TimeUnit::MILLIS}};
+    }
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_ms>, void> operator()()
   {
-    col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
-    col_schema.converted_type =
-      (timestamp_is_int96) ? ConvertedType::UNKNOWN : ConvertedType::TIMESTAMP_MILLIS;
+    col_schema.type        = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
+    if (not timestamp_is_int96) {
+      col_schema.converted_type = ConvertedType::TIMESTAMP_MILLIS;
+      col_schema.logical_type   = LogicalType{TimestampType{timestamp_is_utc, TimeUnit::MILLIS}};
+    }
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_us>, void> operator()()
   {
-    col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
-    col_schema.converted_type =
-      (timestamp_is_int96) ? ConvertedType::UNKNOWN : ConvertedType::TIMESTAMP_MICROS;
+    col_schema.type        = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
+    if (not timestamp_is_int96) {
+      col_schema.converted_type = ConvertedType::TIMESTAMP_MICROS;
+      col_schema.logical_type   = LogicalType{TimestampType{timestamp_is_utc, TimeUnit::MICROS}};
+    }
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_ns>, void> operator()()
   {
     col_schema.type           = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
-    col_schema.converted_type = ConvertedType::UNKNOWN;
+    col_schema.converted_type = thrust::nullopt;
     col_schema.stats_dtype    = statistics_dtype::dtype_timestamp64;
     if (timestamp_is_int96) {
       col_schema.ts_scale = -1000;  // negative value indicates division by absolute value
     }
     // set logical type if it's not int96
     else {
-      col_schema.logical_type.isset.TIMESTAMP            = true;
-      col_schema.logical_type.TIMESTAMP.unit.isset.NANOS = true;
+      col_schema.logical_type = LogicalType{TimestampType{timestamp_is_utc, TimeUnit::NANOS}};
     }
   }
 
@@ -431,53 +450,48 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_D>, void> operator()()
   {
-    col_schema.type                                = Type::INT32;
-    col_schema.converted_type                      = ConvertedType::TIME_MILLIS;
-    col_schema.stats_dtype                         = statistics_dtype::dtype_int32;
-    col_schema.ts_scale                            = 24 * 60 * 60 * 1000;
-    col_schema.logical_type.isset.TIME             = true;
-    col_schema.logical_type.TIME.unit.isset.MILLIS = true;
+    col_schema.type           = Type::INT32;
+    col_schema.converted_type = ConvertedType::TIME_MILLIS;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int32;
+    col_schema.ts_scale       = 24 * 60 * 60 * 1000;
+    col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MILLIS}};
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_s>, void> operator()()
   {
-    col_schema.type                                = Type::INT32;
-    col_schema.converted_type                      = ConvertedType::TIME_MILLIS;
-    col_schema.stats_dtype                         = statistics_dtype::dtype_int32;
-    col_schema.ts_scale                            = 1000;
-    col_schema.logical_type.isset.TIME             = true;
-    col_schema.logical_type.TIME.unit.isset.MILLIS = true;
+    col_schema.type           = Type::INT32;
+    col_schema.converted_type = ConvertedType::TIME_MILLIS;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int32;
+    col_schema.ts_scale       = 1000;
+    col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MILLIS}};
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_ms>, void> operator()()
   {
-    col_schema.type                                = Type::INT32;
-    col_schema.converted_type                      = ConvertedType::TIME_MILLIS;
-    col_schema.stats_dtype                         = statistics_dtype::dtype_int32;
-    col_schema.logical_type.isset.TIME             = true;
-    col_schema.logical_type.TIME.unit.isset.MILLIS = true;
+    col_schema.type           = Type::INT32;
+    col_schema.converted_type = ConvertedType::TIME_MILLIS;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int32;
+    col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MILLIS}};
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_us>, void> operator()()
   {
-    col_schema.type                                = Type::INT64;
-    col_schema.converted_type                      = ConvertedType::TIME_MICROS;
-    col_schema.stats_dtype                         = statistics_dtype::dtype_int64;
-    col_schema.logical_type.isset.TIME             = true;
-    col_schema.logical_type.TIME.unit.isset.MICROS = true;
+    col_schema.type           = Type::INT64;
+    col_schema.converted_type = ConvertedType::TIME_MICROS;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int64;
+    col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MICROS}};
   }
 
   //  unsupported outside cudf for parquet 1.0.
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_ns>, void> operator()()
   {
-    col_schema.type                               = Type::INT64;
-    col_schema.stats_dtype                        = statistics_dtype::dtype_int64;
-    col_schema.logical_type.isset.TIME            = true;
-    col_schema.logical_type.TIME.unit.isset.NANOS = true;
+    col_schema.type         = Type::INT64;
+    col_schema.stats_dtype  = statistics_dtype::dtype_int64;
+    col_schema.logical_type = LogicalType{TimeType{timestamp_is_utc, TimeUnit::NANOS}};
   }
 
   template <typename T>
@@ -487,27 +501,32 @@ struct leaf_schema_fn {
       col_schema.type              = Type::INT32;
       col_schema.stats_dtype       = statistics_dtype::dtype_int32;
       col_schema.decimal_precision = MAX_DECIMAL32_PRECISION;
+      col_schema.logical_type      = LogicalType{DecimalType{0, MAX_DECIMAL32_PRECISION}};
     } else if (std::is_same_v<T, numeric::decimal64>) {
       col_schema.type              = Type::INT64;
       col_schema.stats_dtype       = statistics_dtype::dtype_decimal64;
       col_schema.decimal_precision = MAX_DECIMAL64_PRECISION;
+      col_schema.logical_type      = LogicalType{DecimalType{0, MAX_DECIMAL64_PRECISION}};
     } else if (std::is_same_v<T, numeric::decimal128>) {
       col_schema.type              = Type::FIXED_LEN_BYTE_ARRAY;
       col_schema.type_length       = sizeof(__int128_t);
       col_schema.stats_dtype       = statistics_dtype::dtype_decimal128;
       col_schema.decimal_precision = MAX_DECIMAL128_PRECISION;
+      col_schema.logical_type      = LogicalType{DecimalType{0, MAX_DECIMAL128_PRECISION}};
     } else {
       CUDF_FAIL("Unsupported fixed point type for parquet writer");
     }
     col_schema.converted_type = ConvertedType::DECIMAL;
     col_schema.decimal_scale = -col->type().scale();  // parquet and cudf disagree about scale signs
+    col_schema.logical_type->decimal_type->scale = -col->type().scale();
     if (col_meta.is_decimal_precision_set()) {
       CUDF_EXPECTS(col_meta.get_decimal_precision() >= col_schema.decimal_scale,
                    "Precision must be equal to or greater than scale!");
       if (col_schema.type == Type::INT64 and col_meta.get_decimal_precision() < 10) {
         CUDF_LOG_WARN("Parquet writer: writing a decimal column with precision < 10 as int64");
       }
-      col_schema.decimal_precision = col_meta.get_decimal_precision();
+      col_schema.decimal_precision                     = col_meta.get_decimal_precision();
+      col_schema.logical_type->decimal_type->precision = col_meta.get_decimal_precision();
     }
   }
 
@@ -549,7 +568,8 @@ std::vector<schema_tree_node> construct_schema_tree(
   cudf::detail::LinkedColVector const& linked_columns,
   table_input_metadata& metadata,
   single_write_mode write_mode,
-  bool int96_timestamps)
+  bool int96_timestamps,
+  bool utc_timestamps)
 {
   std::vector<schema_tree_node> schema;
   schema_tree_node root{};
@@ -593,7 +613,7 @@ std::vector<schema_tree_node> construct_schema_tree(
 
         schema_tree_node col_schema{};
         col_schema.type            = Type::BYTE_ARRAY;
-        col_schema.converted_type  = ConvertedType::UNKNOWN;
+        col_schema.converted_type  = thrust::nullopt;
         col_schema.stats_dtype     = statistics_dtype::dtype_byte_array;
         col_schema.repetition_type = col_nullable ? OPTIONAL : REQUIRED;
         col_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
@@ -721,8 +741,9 @@ std::vector<schema_tree_node> construct_schema_tree(
 
         bool timestamp_is_int96 = int96_timestamps or col_meta.is_enabled_int96_timestamps();
 
-        cudf::type_dispatcher(col->type(),
-                              leaf_schema_fn{col_schema, col, col_meta, timestamp_is_int96});
+        cudf::type_dispatcher(
+          col->type(),
+          leaf_schema_fn{col_schema, col, col_meta, timestamp_is_int96, utc_timestamps});
 
         col_schema.repetition_type = col_nullable ? OPTIONAL : REQUIRED;
         col_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
@@ -762,7 +783,10 @@ struct parquet_column_view {
 
   [[nodiscard]] column_view cudf_column_view() const { return cudf_col; }
   [[nodiscard]] Type physical_type() const { return schema_node.type; }
-  [[nodiscard]] ConvertedType converted_type() const { return schema_node.converted_type; }
+  [[nodiscard]] ConvertedType converted_type() const
+  {
+    return schema_node.converted_type.value_or(UNKNOWN);
+  }
 
   std::vector<std::string> const& get_path_in_schema() { return path_in_schema; }
 
@@ -1446,6 +1470,7 @@ void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta)
  * @param max_dictionary_size Maximum dictionary size, in bytes
  * @param single_write_mode Flag to indicate that we are guaranteeing a single table write
  * @param int96_timestamps Flag to indicate if timestamps will be written as INT96
+ * @param utc_timestamps Flag to indicate if timestamps are UTC
  * @param write_v2_headers True if V2 page headers are to be written
  * @param out_sink Sink for checking if device write is supported, should not be used to write any
  *        data in this function
@@ -1470,12 +1495,14 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                                    size_t max_dictionary_size,
                                    single_write_mode write_mode,
                                    bool int96_timestamps,
+                                   bool utc_timestamps,
                                    bool write_v2_headers,
                                    host_span<std::unique_ptr<data_sink> const> out_sink,
                                    rmm::cuda_stream_view stream)
 {
-  auto vec         = table_to_linked_columns(input);
-  auto schema_tree = construct_schema_tree(vec, table_meta, write_mode, int96_timestamps);
+  auto vec = table_to_linked_columns(input);
+  auto schema_tree =
+    construct_schema_tree(vec, table_meta, write_mode, int96_timestamps, utc_timestamps);
   // Construct parquet_column_views from the schema tree leaf nodes.
   std::vector<parquet_column_view> parquet_columns;
 
@@ -2005,6 +2032,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _max_dictionary_size(options.get_max_dictionary_size()),
     _max_page_fragment_size(options.get_max_page_fragment_size()),
     _int96_timestamps(options.is_enabled_int96_timestamps()),
+    _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
@@ -2033,6 +2061,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _max_dictionary_size(options.get_max_dictionary_size()),
     _max_page_fragment_size(options.get_max_page_fragment_size()),
     _int96_timestamps(options.is_enabled_int96_timestamps()),
+    _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
@@ -2110,6 +2139,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                                            _max_dictionary_size,
                                            _single_write_mode,
                                            _int96_timestamps,
+                                           _utc_timestamps,
                                            _write_v2_headers,
                                            _out_sink,
                                            _stream);
@@ -2370,6 +2400,15 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_row_group_metadata(
                            std::make_move_iterator(tmp.row_groups.begin()),
                            std::make_move_iterator(tmp.row_groups.end()));
       md.num_rows += tmp.num_rows;
+    }
+  }
+
+  // Remove any LogicalType::UNKNOWN annotations that were passed in as they can confuse
+  // column type inferencing.
+  // See https://github.com/rapidsai/cudf/pull/14264#issuecomment-1778311615
+  for (auto& se : md.schema) {
+    if (se.logical_type.has_value() && se.logical_type.value().type == LogicalType::UNKNOWN) {
+      se.logical_type = thrust::nullopt;
     }
   }
 

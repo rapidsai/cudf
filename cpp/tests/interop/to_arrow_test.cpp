@@ -604,7 +604,9 @@ struct ToArrowDecimalScalarTest : public cudf::test::BaseFixture {};
 TEST_F(ToArrowDecimalScalarTest, Basic)
 {
   auto const value{42};
-  auto const precision{18};  // cudf will convert to the widest-precision Arrow scalar of the type
+  auto const precision =
+    cudf::detail::max_precision<__int128_t>();  // cudf will convert to the widest-precision Arrow
+                                                // scalar of the type
   int32_t const scale{4};
 
   auto const cudf_scalar =

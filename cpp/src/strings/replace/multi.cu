@@ -383,7 +383,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
                              std::move(offsets),
                              std::move(chars->release().children.back()),
                              input.null_count(),
-                             copy_bitmask(input.parent(), stream, mr));
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 /**

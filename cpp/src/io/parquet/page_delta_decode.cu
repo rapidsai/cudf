@@ -151,10 +151,7 @@ __global__ void __launch_bounds__(96)
     __syncthreads();
   }
 
-  if (t == 0 and s->error != 0) {
-    cuda::atomic_ref<int32_t, cuda::thread_scope_device> ref{*error_code};
-    ref.fetch_or(s->error, cuda::std::memory_order_relaxed);
-  }
+  if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
 }
 
 }  // anonymous namespace

@@ -304,11 +304,12 @@ std::vector<chunk_read_info> find_splits(std::vector<cumulative_row_info> const&
  *
  * @return A tuple of Parquet type width, Parquet clock rate and Parquet decimal type.
  */
-[[nodiscard]] std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
-                                                                   type_id timestamp_type_id,
-                                                                   Type physical,
-                                                                   int8_t converted,
-                                                                   int32_t length)
+[[nodiscard]] std::tuple<int32_t, int32_t, int8_t> conversion_info(
+  type_id column_type_id,
+  type_id timestamp_type_id,
+  Type physical,
+  thrust::optional<ConvertedType> converted,
+  int32_t length)
 {
   int32_t type_width = (physical == FIXED_LEN_BYTE_ARRAY) ? length : 0;
   int32_t clock_rate = 0;
@@ -322,7 +323,7 @@ std::vector<chunk_read_info> find_splits(std::vector<cumulative_row_info> const&
     clock_rate = to_clockrate(timestamp_type_id);
   }
 
-  int8_t converted_type = converted;
+  int8_t converted_type = converted.value_or(UNKNOWN);
   if (converted_type == DECIMAL && column_type_id != type_id::FLOAT64 &&
       not cudf::is_fixed_point(data_type{column_type_id})) {
     converted_type = UNKNOWN;  // Not converting to float64 or decimal

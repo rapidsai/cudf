@@ -2,4 +2,6 @@
 
 from setuptools import setup
 
-setup()
+setup(
+    package_data={"custreamz": ["VERSION"]},
+)
