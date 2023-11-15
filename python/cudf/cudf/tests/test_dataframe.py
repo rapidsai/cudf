@@ -30,6 +30,7 @@ from cudf.core._compat import (
 )
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
+from cudf.errors import MixedTypeError
 from cudf.testing import _utils as utils
 from cudf.testing._utils import (
     ALL_TYPES,
@@ -3891,29 +3892,44 @@ def test_diff(dtype, period, data_empty):
 @pytest.mark.parametrize("df", _dataframe_na_data())
 @pytest.mark.parametrize("nan_as_null", [True, False, None])
 def test_dataframe_isnull_isna(df, nan_as_null):
-    gdf = cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
 
-    assert_eq(df.isnull(), gdf.isnull())
-    assert_eq(df.isna(), gdf.isna())
+    if nan_as_null is False and (
+        df.select_dtypes(object).isna().any().any()
+        and not df.select_dtypes(object).isna().all().all()
+    ):
+        with pytest.raises(MixedTypeError):
+            cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
+    else:
+        gdf = cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
 
-    # Test individual columns
-    for col in df:
-        assert_eq(df[col].isnull(), gdf[col].isnull())
-        assert_eq(df[col].isna(), gdf[col].isna())
+        assert_eq(df.isnull(), gdf.isnull())
+        assert_eq(df.isna(), gdf.isna())
+
+        # Test individual columns
+        for col in df:
+            assert_eq(df[col].isnull(), gdf[col].isnull())
+            assert_eq(df[col].isna(), gdf[col].isna())
 
 
 @pytest.mark.parametrize("df", _dataframe_na_data())
 @pytest.mark.parametrize("nan_as_null", [True, False, None])
 def test_dataframe_notna_notnull(df, nan_as_null):
-    gdf = cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
+    if nan_as_null is False and (
+        df.select_dtypes(object).isna().any().any()
+        and not df.select_dtypes(object).isna().all().all()
+    ):
+        with pytest.raises(MixedTypeError):
+            cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
+    else:
+        gdf = cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
 
-    assert_eq(df.notnull(), gdf.notnull())
-    assert_eq(df.notna(), gdf.notna())
+        assert_eq(df.notnull(), gdf.notnull())
+        assert_eq(df.notna(), gdf.notna())
 
-    # Test individual columns
-    for col in df:
-        assert_eq(df[col].notnull(), gdf[col].notnull())
-        assert_eq(df[col].notna(), gdf[col].notna())
+        # Test individual columns
+        for col in df:
+            assert_eq(df[col].notnull(), gdf[col].notnull())
+            assert_eq(df[col].notna(), gdf[col].notna())
 
 
 def test_ndim():

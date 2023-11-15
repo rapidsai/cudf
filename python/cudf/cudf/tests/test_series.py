@@ -838,8 +838,8 @@ def test_series_notnull_notna(ps, nan_as_null):
     else:
         gs = cudf.Series.from_pandas(ps, nan_as_null=nan_as_null)
 
-    assert_eq(ps.notnull(), gs.notnull())
-    assert_eq(ps.notna(), gs.notna())
+        assert_eq(ps.notnull(), gs.notnull())
+        assert_eq(ps.notna(), gs.notna())
 
 
 @pytest.mark.parametrize(
