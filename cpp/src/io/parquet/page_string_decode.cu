@@ -528,7 +528,6 @@ __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* d
 
     // get sum for warp.
     // note: warp_sum will only be valid on lane 0.
-    using cudf::detail::warp_size;
     auto const warp_sum = WarpReduce(temp_storage[warp_id]).Sum(lane_sum);
     auto const warp_max = WarpReduce(temp_storage[warp_id]).Reduce(lane_max, cub::Max());
 
@@ -545,7 +544,7 @@ __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* d
 
   // Sum up prefix and suffix max lengths to get a max possible string length. Multiply that
   // by the number of strings in a mini-block, plus one to save the last string.
-  auto temp_bytes =
+  auto const temp_bytes =
     cudf::detail::single_lane_block_sum_reduce<delta_preproc_block_size, 0>(max_len) *
     (db->values_per_mb + 1);
 
