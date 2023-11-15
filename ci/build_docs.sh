@@ -20,9 +20,14 @@ rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
 
+LIBRMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1095 cpp)
+RMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1095 python)
+
 rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
   --channel "${PYTHON_CHANNEL}" \
+  --channel "${RMM_CHANNEL}" \
+  --channel "${LIBRMM_CHANNEL}" \
   libcudf cudf dask-cudf
 
 export RAPIDS_VERSION_NUMBER="23.12"

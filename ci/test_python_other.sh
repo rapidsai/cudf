@@ -4,9 +4,14 @@
 # Common setup steps shared by Python test jobs
 source "$(dirname "$0")/test_python_common.sh"
 
+LIBRMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1095 cpp)
+RMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1095 python)
+
 rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
   --channel "${PYTHON_CHANNEL}" \
+  --channel "${RMM_CHANNEL}" \
+  --channel "${LIBRMM_CHANNEL}" \
   dask-cudf cudf_kafka custreamz
 
 rapids-logger "Check GPU usage"
