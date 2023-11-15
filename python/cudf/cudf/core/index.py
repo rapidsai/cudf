@@ -334,13 +334,16 @@ class RangeIndex(BaseIndex, BinaryOperand):
             item, tuple(np.sctypes["int"] + np.sctypes["float"] + [int, float])
         ):
             return False
+        elif isinstance(item, bool):
+            return False
         try:
-            item = pd.core.dtypes.common.ensure_python_int(item)
-        except TypeError:
+            int_item = int(item)
+            assert int_item == item
+        except (TypeError, AssertionError):
             return False
-        if not item % 1 == 0:
+        if not int_item % 1 == 0:
             return False
-        return item in range(self._start, self._stop, self._step)
+        return int_item in range(self._start, self._stop, self._step)
 
     @_cudf_nvtx_annotate
     def copy(self, name=None, deep=False, dtype=None, names=None):
