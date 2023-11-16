@@ -437,17 +437,12 @@ def union_categoricals_cudf(
     )
 
 
-@_dask_cudf_nvtx_annotate
-def safe_hash(frame):
-    return cudf.Series(frame.hash_values(), index=frame.index)
-
-
 @hash_object_dispatch.register((cudf.DataFrame, cudf.Series))
 @_dask_cudf_nvtx_annotate
 def hash_object_cudf(frame, index=True):
     if index:
-        return safe_hash(frame.reset_index())
-    return safe_hash(frame)
+        frame = frame.reset_index()
+    return frame.hash_values()
 
 
 @hash_object_dispatch.register(cudf.BaseIndex)
@@ -455,10 +450,10 @@ def hash_object_cudf(frame, index=True):
 def hash_object_cudf_index(ind, index=None):
 
     if isinstance(ind, cudf.MultiIndex):
-        return safe_hash(ind.to_frame(index=False))
+        return ind.to_frame(index=False).hash_values()
 
     col = cudf.core.column.as_column(ind)
-    return safe_hash(cudf.Series(col))
+    return cudf.Series(col).hash_values()
 
 
 @group_split_dispatch.register((cudf.Series, cudf.DataFrame))
