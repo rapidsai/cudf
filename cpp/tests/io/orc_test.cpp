@@ -1054,8 +1054,12 @@ TEST_F(OrcStatisticsTest, Basic)
     EXPECT_EQ(*ts4.maximum, 3);
     EXPECT_EQ(*ts4.minimum_utc, -4);
     EXPECT_EQ(*ts4.maximum_utc, 3);
-    EXPECT_EQ(*ts4.minimum_nanos, 999994);
-    EXPECT_EQ(*ts4.maximum_nanos, 6);
+    // nanosecond precision can't be included until we write a writer version that includes ORC-135
+    // see https://github.com/rapidsai/cudf/issues/14325
+    // EXPECT_EQ(*ts4.minimum_nanos, 999994);
+    EXPECT_FALSE(ts4.minimum_nanos.has_value());
+    // EXPECT_EQ(*ts4.maximum_nanos, 6);
+    EXPECT_FALSE(ts4.maximum_nanos.has_value());
 
     auto& s5 = stats[5];
     EXPECT_EQ(*s5.number_of_values, 4ul);
@@ -1065,8 +1069,12 @@ TEST_F(OrcStatisticsTest, Basic)
     EXPECT_EQ(*ts5.maximum, 3000);
     EXPECT_EQ(*ts5.minimum_utc, -3001);
     EXPECT_EQ(*ts5.maximum_utc, 3000);
-    EXPECT_EQ(*ts5.minimum_nanos, 994000);
-    EXPECT_EQ(*ts5.maximum_nanos, 6000);
+    // nanosecond precision can't be included until we write a writer version that includes ORC-135
+    // see https://github.com/rapidsai/cudf/issues/14325
+    // EXPECT_EQ(*ts5.minimum_nanos, 994000);
+    EXPECT_FALSE(ts5.minimum_nanos.has_value());
+    // EXPECT_EQ(*ts5.maximum_nanos, 6000);
+    EXPECT_FALSE(ts5.maximum_nanos.has_value());
 
     auto& s6 = stats[6];
     EXPECT_EQ(*s6.number_of_values, 4ul);
