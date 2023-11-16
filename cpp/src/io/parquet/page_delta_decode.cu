@@ -364,6 +364,7 @@ __global__ void __launch_bounds__(96)
     } else {  // warp2
       target_pos = min(s->nz_count, src_pos + batch_size);
     }
+    // TODO(ets): see if this sync can be removed
     __syncthreads();
 
     // warp0 will decode the rep/def levels, warp1 will unpack a mini-batch of deltas.
@@ -503,6 +504,7 @@ __global__ void __launch_bounds__(decode_block_size)
     } else {  // warp 3
       target_pos = min(s->nz_count, src_pos + batch_size);
     }
+    // TODO(ets): see if this sync can be removed
     __syncthreads();
 
     // warp0 will decode the rep/def levels, warp1 will unpack a mini-batch of prefixes, warp 2 will

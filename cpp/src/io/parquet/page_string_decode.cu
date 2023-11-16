@@ -833,6 +833,7 @@ __global__ void __launch_bounds__(decode_block_size)
       target_pos = min(s->nz_count, src_pos + decode_block_size - out_thread0);
       if (out_thread0 > 32) { target_pos = min(target_pos, s->dict_pos); }
     }
+    // TODO(ets): see if this sync can be removed
     __syncthreads();
     if (t < 32) {
       // decode repetition and definition levels.
