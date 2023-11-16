@@ -393,6 +393,7 @@ set_tests_properties(
 ConfigureTest(
   ITERATOR_TEST
   iterator/indexalator_test.cu
+  iterator/offsetalator_test.cu
   iterator/optional_iterator_test_chrono.cu
   iterator/optional_iterator_test_numeric.cu
   iterator/pair_iterator_test_chrono.cu
@@ -634,6 +635,7 @@ ConfigureTest(
 ConfigureTest(STREAM_BINARYOP_TEST streams/binaryop_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_CONCATENATE_TEST streams/concatenate_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_COPYING_TEST streams/copying_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_CSVIO_TEST streams/io/csv_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_DICTIONARY_TEST streams/dictionary_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_FILLING_TEST streams/filling_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_GROUPBY_TEST streams/groupby_test.cpp STREAM_MODE testing)
