@@ -13,7 +13,6 @@ from cudf._lib.unary import is_nan
 from cudf.api.types import (
     is_categorical_dtype,
     is_decimal_dtype,
-    is_interval_dtype,
     is_list_dtype,
     is_numeric_dtype,
     is_string_dtype,
@@ -30,7 +29,7 @@ def dtype_can_compare_equal_to_other(dtype):
         or is_list_dtype(dtype)
         or is_struct_dtype(dtype)
         or is_decimal_dtype(dtype)
-        or is_interval_dtype(dtype)
+        or isinstance(dtype, cudf.IntervalDtype)
     )
 
 
@@ -235,7 +234,7 @@ def assert_column_equal(
         )
         or (
             is_numeric_dtype(left)
-            and not dtype_can_compare_equal_to_other(right)
+            and not dtype_can_compare_equal_to_other(right.dtype)
         )
     ):
         try:
