@@ -33,11 +33,6 @@ std::unique_ptr<column> hash(table_view const& input,
     case (hash_id::HASH_MURMUR3): return murmurhash3_x86_32(input, seed, stream, mr);
     case (hash_id::HASH_SPARK_MURMUR3): return spark_murmurhash3_x86_32(input, seed, stream, mr);
     case (hash_id::HASH_MD5): return md5(input, stream, mr);
-    case (hash_id::HASH_SHA1): return sha1(input, stream, mr);
-    case (hash_id::HASH_SHA224): return sha224(input, stream, mr);
-    case (hash_id::HASH_SHA256): return sha256(input, stream, mr);
-    case (hash_id::HASH_SHA384): return sha384(input, stream, mr);
-    case (hash_id::HASH_SHA512): return sha512(input, stream, mr);
     default: CUDF_FAIL("Unsupported hash function.");
   }
 }

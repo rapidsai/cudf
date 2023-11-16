@@ -1736,8 +1736,9 @@ class IndexedFrame(Frame):
         ----------
         method : {'murmur3', 'md5'}, default 'murmur3'
             Hash function to use:
-            * murmur3: MurmurHash3 hash function.
-            * md5: MD5 hash function.
+
+            * murmur3: MurmurHash3 hash function
+            * md5: MD5 hash function
 
         seed : int, optional
             Seed value to use for the hash function.
