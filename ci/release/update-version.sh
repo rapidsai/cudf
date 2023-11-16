@@ -43,6 +43,7 @@ sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g'
 
 # Python CMakeLists updates
 sed_runner 's/'"cudf_version .*)"'/'"cudf_version ${NEXT_FULL_TAG})"'/g' python/cudf/CMakeLists.txt
+sed_runner 's/'"cudf_kafka_version .*)"'/'"cudf_kafka_version ${NEXT_FULL_TAG})"'/g' python/cudf_kafka/CMakeLists.txt
 
 # cpp libcudf_kafka update
 sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g' cpp/libcudf_kafka/CMakeLists.txt
@@ -80,6 +81,7 @@ DEPENDENCIES=(
   kvikio
   libkvikio
   librmm
+  rapids-dask-dependency
   rmm
 )
 for DEP in "${DEPENDENCIES[@]}"; do
@@ -99,8 +101,7 @@ sed_runner "s/version == ${CURRENT_SHORT_TAG}/version == ${NEXT_SHORT_TAG}/g" RE
 sed_runner "s/cudf=${CURRENT_SHORT_TAG}/cudf=${NEXT_SHORT_TAG}/g" README.md
 
 # Libcudf examples update
-sed_runner "s/CUDF_TAG branch-${CURRENT_SHORT_TAG}/CUDF_TAG branch-${NEXT_SHORT_TAG}/" cpp/examples/basic/CMakeLists.txt
-sed_runner "s/CUDF_TAG branch-${CURRENT_SHORT_TAG}/CUDF_TAG branch-${NEXT_SHORT_TAG}/" cpp/examples/strings/CMakeLists.txt
+sed_runner "s/CUDF_TAG branch-${CURRENT_SHORT_TAG}/CUDF_TAG branch-${NEXT_SHORT_TAG}/" cpp/examples/fetch_dependencies.cmake
 
 # CI files
 for FILE in .github/workflows/*.yaml; do
