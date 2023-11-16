@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -11,9 +11,20 @@
 # or implied. See the License for the specific language governing permissions and limitations under
 # the License.
 # =============================================================================
-if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake)
-  file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-24.02/RAPIDS.cmake
-       ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake
-  )
-endif()
-include(${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake)
+set(CPM_DOWNLOAD_VERSION v0.35.3)
+file(
+  DOWNLOAD
+  https://github.com/cpm-cmake/CPM.cmake/releases/download/${CPM_DOWNLOAD_VERSION}/get_cpm.cmake
+  ${CMAKE_BINARY_DIR}/cmake/get_cpm.cmake
+)
+include(${CMAKE_BINARY_DIR}/cmake/get_cpm.cmake)
+
+set(CUDF_TAG branch-24.02)
+CPMFindPackage(
+  NAME cudf GIT_REPOSITORY https://github.com/rapidsai/cudf
+  GIT_TAG ${CUDF_TAG}
+  GIT_SHALLOW
+    TRUE
+    SOURCE_SUBDIR
+    cpp
+)
