@@ -2316,7 +2316,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if not inspect.isclass(into):
                 cons = type(into)  # type: ignore[assignment]
                 if isinstance(into, defaultdict):
-                    return functools.partial(cons, into.default_factory)
+                    cons = functools.partial(cons, into.default_factory)
             elif issubclass(into, abc.Mapping):
                 cons = into  # type: ignore[assignment]
                 if issubclass(into, defaultdict):
