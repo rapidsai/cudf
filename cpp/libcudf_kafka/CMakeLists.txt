@@ -22,7 +22,7 @@ include(rapids-find)
 
 project(
   CUDA_KAFKA
-  VERSION 23.10.01
+  VERSION 23.10.02
   LANGUAGES CXX
 )
 

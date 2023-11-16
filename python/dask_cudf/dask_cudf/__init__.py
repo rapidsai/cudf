@@ -14,7 +14,7 @@ try:
 except ImportError:
     pass
 
-__version__ = "23.10.01"
+__version__ = "23.10.02"
 
 __all__ = [
     "DataFrame",
