@@ -12,58 +12,14 @@
 # the License.
 # =============================================================================
 
-set(cython_sources
-    aggregation.pyx
-    avro.pyx
-    binaryop.pyx
-    column.pyx
-    concat.pyx
-    copying.pyx
-    csv.pyx
-    datetime.pyx
-    expressions.pyx
-    filling.pyx
-    groupby.pyx
-    hash.pyx
-    interop.pyx
-    join.pyx
-    json.pyx
-    labeling.pyx
-    lists.pyx
-    merge.pyx
-    null_mask.pyx
-    orc.pyx
-    parquet.pyx
-    partitioning.pyx
-    quantiles.pyx
-    reduce.pyx
-    replace.pyx
-    reshape.pyx
-    rolling.pyx
-    round.pyx
-    scalar.pyx
-    search.pyx
-    sort.pyx
-    stream_compaction.pyx
-    string_casting.pyx
-    strings_udf.pyx
-    text.pyx
-    timezone.pyx
-    transform.pyx
-    transpose.pyx
-    types.pyx
-    unary.pyx
-    utils.pyx
-)
-set(linked_libraries cudf::cudf)
+set(cython_sources kafka.pyx)
+set(linked_libraries cudf_kafka::cudf_kafka)
 
 rapids_cython_create_modules(
-  CXX
+  CXX ASSOCIATED_TARGETS cudf_kafka
   SOURCE_FILES "${cython_sources}"
-  LINKED_LIBRARIES "${linked_libraries}" ASSOCIATED_TARGETS cudf
+  LINKED_LIBRARIES "${linked_libraries}"
 )
-
-target_link_libraries(strings_udf cudf_strings_udf)
 
 # TODO: Finding NumPy currently requires finding Development due to a bug in CMake. This bug was
 # fixed in https://gitlab.kitware.com/cmake/cmake/-/merge_requests/7410 and will be available in
@@ -81,11 +37,6 @@ target_link_libraries(strings_udf cudf_strings_udf)
 # necessary. The relevant command is tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C
 # /opt/_internal"
 find_package(NumPy REQUIRED)
-
-set(targets_using_dlpack interop)
-foreach(target IN LISTS targets_using_dlpack)
-  target_include_directories(${target} PRIVATE "${DLPACK_INCLUDE_DIR}")
-endforeach()
 
 find_package(Python 3.9 REQUIRED COMPONENTS Interpreter)
 
@@ -109,9 +60,3 @@ foreach(target IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)
   target_include_directories(${target} PRIVATE "${NumPy_INCLUDE_DIRS}")
   target_include_directories(${target} PRIVATE "${PYARROW_INCLUDE_DIR}")
 endforeach()
-
-add_subdirectory(cpp)
-add_subdirectory(io)
-add_subdirectory(nvtext)
-add_subdirectory(pylibcudf)
-add_subdirectory(strings)

@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 import cudf
+from cudf.core.byte_pair_encoding import BytePairEncoder
 from cudf.core.tokenize_vocabulary import TokenizeVocabulary
 from cudf.testing._utils import assert_eq
 
@@ -1023,4 +1024,44 @@ def test_jaccard_index_random_strings():
     expected = cudf.Series(res)
 
     actual = str1.str.jaccard_index(str2, jaccard_width)
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "separator, input, results",
+    [
+        (" ", "thetestsentence", "the test sent ence"),
+        ("_", "sentenceistest", "sent_ence_is_test"),
+        ("$", "istestsentencehere", "is$test$sent$ence$he$r$e"),
+    ],
+)
+def test_byte_pair_encoding(separator, input, results):
+    pairs_table = cudf.Series(
+        [
+            "t he",
+            "h e",
+            "e n",
+            "i t",
+            "i s",
+            "e s",
+            "en t",
+            "c e",
+            "es t",
+            "en ce",
+            "t h",
+            "h i",
+            "th is",
+            "t est",
+            "s i",
+            "s ent",
+        ]
+    )
+    encoder = BytePairEncoder(pairs_table)
+
+    strings = cudf.Series([input, None, "", input])
+
+    expected = cudf.Series([results, None, "", results])
+
+    actual = encoder(strings, separator)
+    assert type(expected) == type(actual)
     assert_eq(expected, actual)
