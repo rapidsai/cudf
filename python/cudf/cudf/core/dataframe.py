@@ -6442,7 +6442,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         for dtype in self.dtypes:
             for i_dtype in include:
                 # category handling
-                if i_dtype == "category":
+                if i_dtype == cudf.CategoricalDtype:
                     # Matches cudf & pandas dtype objects
                     include_subtypes.add(i_dtype)
                 elif inspect.isclass(dtype.type):
@@ -6454,7 +6454,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         for dtype in self.dtypes:
             for e_dtype in exclude:
                 # category handling
-                if i_dtype == "category":
+                if e_dtype == cudf.CategoricalDtype:
                     # Matches cudf & pandas dtype objects
                     exclude_subtypes.add(e_dtype)
                 elif inspect.isclass(dtype.type):
