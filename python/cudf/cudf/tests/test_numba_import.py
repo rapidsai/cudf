@@ -19,10 +19,10 @@ except ModuleNotFoundError:
 TEST_NUMBA_MVC_ENABLED = """
 import numba.cuda
 import cudf
-from cudf.utils._numba import _CUDFNumbaConfig, _patch_numba_mvc
+from cudf.utils._numba import _CUDFNumbaConfig, patch_numba_linker_cuda_11
 
 
-_patch_numba_mvc()
+patch_numba_linker_cuda_11()
 
 @numba.cuda.jit
 def test_kernel(x):
@@ -45,4 +45,5 @@ def test_numba_mvc_enabled_cuda_11():
         capture_output=True,
         cwd="/",
     )
+
     assert cp.returncode == 0
