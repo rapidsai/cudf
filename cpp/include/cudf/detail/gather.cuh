@@ -673,8 +673,8 @@ std::unique_ptr<table> gather(table_view const& source_table,
                                                    mr));
   }
 
-  auto const needs_new_bitmask = bounds_policy == out_of_bounds_policy::NULLIFY ||
-                                 cudf::has_nested_nullable_columns(source_table);
+  auto needs_new_bitmask = bounds_policy == out_of_bounds_policy::NULLIFY ||
+                           cudf::has_nested_nullable_columns(source_table);
   if (needs_new_bitmask) {
     needs_new_bitmask = needs_new_bitmask || cudf::has_nested_nulls(source_table);
     if (needs_new_bitmask) {
