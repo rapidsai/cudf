@@ -20,6 +20,7 @@ import ai.rapids.cudf.DType;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 
 /** A literal value in an AST expression. */
 public final class Literal extends AstExpression {
@@ -205,7 +206,14 @@ public final class Literal extends AstExpression {
     if (value == null) {
       return ofNull(DType.STRING);
     }
-    byte[] stringBytes = value.getBytes();
+    return ofUTF8String(value.getBytes(StandardCharsets.UTF_8));
+  }
+
+  /** Construct a string literal directly with byte array to skip transcoding. */
+  public static Literal ofUTF8String(byte[] stringBytes) {
+    if (stringBytes == null) {
+      return ofNull(DType.STRING);
+    }
     byte[] serializedValue = new byte[stringBytes.length + Integer.BYTES];
     ByteBuffer.wrap(serializedValue).order(ByteOrder.nativeOrder()).putInt(stringBytes.length);
     System.arraycopy(stringBytes, 0, serializedValue, Integer.BYTES, stringBytes.length);

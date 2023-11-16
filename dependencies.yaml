@@ -9,8 +9,8 @@ files:
       - build_all
       - build_cpp
       - build_wheels
-      - build_python
       - build_python_common
+      - build_python_cudf
       - cudatoolkit
       - develop
       - docs
@@ -71,8 +71,8 @@ files:
       table: build-system
     includes:
       - build_all
-      - build_python
       - build_python_common
+      - build_python_cudf
       - build_wheels
   py_run_cudf:
     output: pyproject
@@ -138,8 +138,8 @@ files:
     extras:
       table: build-system
     includes:
-      - build_wheels
       - build_python_common
+      - build_wheels
   py_run_cudf_kafka:
     output: pyproject
     pyproject_dir: python/cudf_kafka
@@ -231,8 +231,8 @@ dependencies:
     common:
       - output_types: [conda, requirements]
         packages:
-          - librmm==23.12.*
-          - libkvikio==23.12.*
+          - librmm==24.2.*
+          - libkvikio==24.2.*
       - output_types: conda
         packages:
           - fmt>=10.1.1,<11
@@ -259,17 +259,17 @@ dependencies:
           - cython>=3.0.3
           # TODO: Pin to numpy<1.25 until cudf requires pandas 2
           - &numpy numpy>=1.21,<1.25
+          - scikit-build>=0.13.1
       - output_types: [conda, requirements, pyproject]
         packages:
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
           - pyarrow==14.0.1.*
-  build_python:
+  build_python_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - scikit-build>=0.13.1
-          - rmm==23.12.*
+          - rmm==24.2.*
       - output_types: conda
         packages:
           - &protobuf protobuf>=4.21,<5
@@ -302,9 +302,6 @@ dependencies:
               - cuda-nvrtc-dev
               - cuda-nvtx-dev
               - libcurand-dev
-              # TODO: Remove after https://github.com/rapidsai/cudf/pull/14292 updates
-              # cudf_kafka to use scikit-build
-              - cuda-gdb
           - matrix:
               cuda: "11.8"
             packages:
@@ -393,7 +390,7 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-          - dask-cuda==23.12.*
+          - dask-cuda==24.2.*
           - *doxygen
           - make
           - myst-nb
@@ -447,7 +444,7 @@ dependencies:
           - nvtx>=0.2.1
           - packaging
           - rich
-          - rmm==23.12.*
+          - rmm==24.2.*
           - typing_extensions>=4.0.0
           - *protobuf
       - output_types: conda
@@ -500,15 +497,13 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - dask>=2023.9.2
-          - distributed>=2023.9.2
+          - rapids-dask-dependency==24.2.*
       - output_types: conda
         packages:
           - cupy>=12.0.0
-          - dask-core>=2023.9.2  # dask-core in conda is the actual package & dask is the meta package
       - output_types: pyproject
         packages:
-          - &cudf cudf==23.12.*
+          - &cudf cudf==24.2.*
           - *cupy_pip
   run_cudf_kafka:
     common:
@@ -527,7 +522,7 @@ dependencies:
         packages:
           - confluent-kafka>=1.9.0,<1.10.0a0
           - *cudf
-          - cudf_kafka==23.12.*
+          - cudf_kafka==24.2.*
   test_cpp:
     common:
       - output_types: conda
@@ -609,7 +604,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - dask-cuda==23.12.*
+          - dask-cuda==24.2.*
           - *numba
   test_python_pandas_cudf:
     common:
