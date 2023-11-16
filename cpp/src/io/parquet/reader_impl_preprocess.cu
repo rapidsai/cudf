@@ -425,49 +425,76 @@ void decode_page_headers(pass_intermediate_data& pass, rmm::cuda_stream_view str
                "Unsupported page encoding detected");
 }
 
+struct set_str_dict_index_count {
+  device_span<size_t> str_dict_index_count;
+  device_span<const ColumnChunkDesc> chunks;
+
+  __device__ void operator()(PageInfo const& page)
+  {
+    auto const& chunk = chunks[page.chunk_idx];
+    if ((page.flags & PAGEINFO_FLAGS_DICTIONARY) && (chunk.data_type & 0x7) == BYTE_ARRAY &&
+        (chunk.num_dict_pages > 0)) {
+      // there is only ever one dictionary page per chunk, so this is safe to do in parallel.
+      str_dict_index_count[page.chunk_idx] = page.num_input_values;
+    }
+  }
+};
+
+struct set_str_dict_index_ptr {
+  string_index_pair* const base;
+  device_span<const size_t> str_dict_index_offsets;
+  device_span<ColumnChunkDesc> chunks;
+
+  __device__ void operator()(size_t i)
+  {
+    auto& chunk = chunks[i];
+    if ((chunk.data_type & 0x7) == BYTE_ARRAY && (chunk.num_dict_pages > 0)) {
+      chunk.str_dict_index = base + str_dict_index_offsets[i];
+    }
+  }
+};
+
 }  // namespace
 
 void reader::impl::build_string_dict_indices()
 {
   auto& pass = *_pass_itm_data;
 
-  auto is_dict_chunk = [](ColumnChunkDesc const& chunk) {
-    return (chunk.data_type & 0x7) == BYTE_ARRAY && chunk.num_dict_pages > 0;
-  };
+  // compute number of indices per chunk and a summed total
+  rmm::device_uvector<size_t> str_dict_index_count(pass.chunks.size() + 1, _stream);
+  thrust::fill(
+    rmm::exec_policy(_stream), str_dict_index_count.begin(), str_dict_index_count.end(), 0);
+  thrust::for_each(rmm::exec_policy(_stream),
+                   pass.pages.begin(),
+                   pass.pages.end(),
+                   set_str_dict_index_count{str_dict_index_count, pass.chunks});
 
-  // Count the number of string dictionary entries
-  // NOTE: Assumes first page in the chunk is always the dictionary page
-  size_t total_str_dict_indexes = 0;
-  for (size_t c = 0, page_count = 0; c < pass.chunks.size(); c++) {
-    if (is_dict_chunk(pass.chunks[c])) {
-      total_str_dict_indexes += pass.pages[page_count].num_input_values;
-    }
-    page_count += pass.chunks[c].max_num_pages;
-  }
+  size_t const total_str_dict_indexes = thrust::reduce(
+    rmm::exec_policy(_stream), str_dict_index_count.begin(), str_dict_index_count.end());
+  if (total_str_dict_indexes == 0) { return; }
 
-  // Build index for string dictionaries since they can't be indexed
-  // directly due to variable-sized elements
+  // convert to offsets
+  rmm::device_uvector<size_t>& str_dict_index_offsets = str_dict_index_count;
+  thrust::exclusive_scan(rmm::exec_policy(_stream),
+                         str_dict_index_offsets.begin(),
+                         str_dict_index_offsets.end(),
+                         str_dict_index_offsets.begin(),
+                         0);
+
+  // allocate and distribute pointers
   pass.str_dict_index = cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(
     total_str_dict_indexes, _stream, rmm::mr::get_current_device_resource());
 
-  // Update chunks with pointers to string dict indices
-  for (size_t c = 0, page_count = 0, str_ofs = 0; c < pass.chunks.size(); c++) {
-    input_column_info const& input_col = _input_columns[pass.chunks[c].src_col_index];
-    CUDF_EXPECTS(input_col.schema_idx == pass.chunks[c].src_col_schema,
-                 "Column/page schema index mismatch");
-    if (is_dict_chunk(pass.chunks[c])) {
-      pass.chunks[c].str_dict_index = pass.str_dict_index.data() + str_ofs;
-      str_ofs += pass.pages[page_count].num_input_values;
-    }
+  auto iter = thrust::make_counting_iterator(0);
+  thrust::for_each(
+    rmm::exec_policy(_stream),
+    iter,
+    iter + pass.chunks.size(),
+    set_str_dict_index_ptr{pass.str_dict_index.data(), str_dict_index_offsets, pass.chunks});
 
-    // column_data_base will always point to leaf data, even for nested types.
-    page_count += pass.chunks[c].max_num_pages;
-  }
-
-  if (total_str_dict_indexes > 0) {
-    pass.chunks.host_to_device_async(_stream);
-    BuildStringDictionaryIndex(pass.chunks.device_ptr(), pass.chunks.size(), _stream);
-  }
+  // compute the indices
+  BuildStringDictionaryIndex(pass.chunks.device_ptr(), pass.chunks.size(), _stream);
+  pass.chunks.device_to_host_sync(_stream);
 }
 
 void reader::impl::allocate_nesting_info()
