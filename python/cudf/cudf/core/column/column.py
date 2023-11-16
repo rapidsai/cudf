@@ -2102,7 +2102,10 @@ def as_column(
     elif isinstance(arbitrary, (pd.Timestamp, pd.Timedelta)):
         # This will always treat NaTs as nulls since it's not technically a
         # discrete value like NaN
-        data = as_column(pa.array(pd.Series([arbitrary]), from_pandas=True))
+        length = length or 1
+        data = as_column(
+            pa.array(pd.Series([arbitrary] * length), from_pandas=True)
+        )
         if dtype is not None:
             data = data.astype(dtype)
 
