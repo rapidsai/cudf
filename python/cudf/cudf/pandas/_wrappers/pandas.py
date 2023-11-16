@@ -763,7 +763,7 @@ def _get_eval_locals_and_globals(level, local_dict=None, global_dict=None):
     return local_dict, global_dict
 
 
-@register_proxy_func(pd.eval)
+@register_proxy_func(pd.core.computation.eval.eval)
 @nvtx.annotate(
     "CUDF_PANDAS_EVAL",
     color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
@@ -791,6 +791,21 @@ def _eval(
         global_dict=global_dict,
         **kwargs,
     )
+
+
+@register_proxy_func(pd.core.accessor.register_dataframe_accessor)
+def _register_dataframe_accessor(name):
+    return pd.core.accessor._register_accessor(name, DataFrame)
+
+
+@register_proxy_func(pd.core.accessor.register_series_accessor)
+def _register_series_accessor(name):
+    return pd.core.accessor._register_accessor(name, Series)
+
+
+@register_proxy_func(pd.core.accessor.register_index_accessor)
+def _register_index_accessor(name):
+    return pd.core.accessor._register_accessor(name, Index)
 
 
 @nvtx.annotate(
