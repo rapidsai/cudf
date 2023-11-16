@@ -146,6 +146,12 @@ struct column_to_strings_fn {
   {
   }
 
+  ~column_to_strings_fn()                                      = default;
+  column_to_strings_fn(column_to_strings_fn const&)            = delete;
+  column_to_strings_fn& operator=(column_to_strings_fn const&) = delete;
+  column_to_strings_fn(column_to_strings_fn&&)                 = delete;
+  column_to_strings_fn& operator=(column_to_strings_fn&&)      = delete;
+
   // Note: `null` replacement with `na_rep` deferred to `concatenate()`
   // instead of column-wise; might be faster
   //
@@ -160,8 +166,9 @@ struct column_to_strings_fn {
   std::enable_if_t<std::is_same_v<column_type, bool>, std::unique_ptr<column>> operator()(
     column_view const& column) const
   {
-    return cudf::strings::detail::from_booleans(
-      column, options_.get_true_value(), options_.get_false_value(), stream_, mr_);
+    string_scalar true_string{options_.get_true_value(), true, stream_};
+    string_scalar false_string{options_.get_false_value(), true, stream_};
+    return cudf::strings::detail::from_booleans(column, true_string, false_string, stream_, mr_);
   }
 
   // strings:
@@ -367,10 +374,10 @@ void write_chunked(data_sink* out_sink,
 
   CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
 
-  cudf::string_scalar newline{options.get_line_terminator()};
+  cudf::string_scalar newline{options.get_line_terminator(), true, stream};
   auto p_str_col_w_nl = cudf::strings::detail::join_strings(str_column_view,
                                                             newline,
-                                                            string_scalar("", false),
+                                                            string_scalar{"", false, stream},
                                                             stream,
                                                             rmm::mr::get_current_device_resource());
   strings_column_view strings_column{p_str_col_w_nl->view()};
@@ -455,12 +462,14 @@ void write_csv(data_sink* out_sink,
 
       // populate vector of string-converted columns:
       //
-      std::transform(sub_view.begin(),
-                     sub_view.end(),
-                     std::back_inserter(str_column_vec),
-                     [converter](auto const& current_col) {
-                       return cudf::type_dispatcher(current_col.type(), converter, current_col);
-                     });
+      std::transform(
+        sub_view.begin(),
+        sub_view.end(),
+        std::back_inserter(str_column_vec),
+        [&converter = std::as_const(converter)](auto const& current_col) {
+          return cudf::type_dispatcher<cudf::id_to_type_impl, column_to_strings_fn const&>(
+            current_col.type(), converter, current_col);
+        });
 
       // create string table view from str_column_vec:
       //
@@ -470,18 +479,19 @@ void write_csv(data_sink* out_sink,
       // concatenate columns in each row into one big string column
       // (using null representation and delimiter):
       //
-      std::string delimiter_str{options.get_inter_column_delimiter()};
       auto str_concat_col = [&] {
+        cudf::string_scalar delimiter_str{
+          std::string{options.get_inter_column_delimiter()}, true, stream};
+        cudf::string_scalar options_narep{options.get_na_rep(), true, stream};
         if (str_table_view.num_columns() > 1)
           return cudf::strings::detail::concatenate(str_table_view,
                                                     delimiter_str,
-                                                    options.get_na_rep(),
+                                                    options_narep,
                                                     strings::separator_on_nulls::YES,
                                                     stream,
                                                     rmm::mr::get_current_device_resource());
-        cudf::string_scalar narep{options.get_na_rep()};
         return cudf::strings::detail::replace_nulls(
-          str_table_view.column(0), narep, stream, rmm::mr::get_current_device_resource());
+          str_table_view.column(0), options_narep, stream, rmm::mr::get_current_device_resource());
       }();
 
       write_chunked(out_sink, str_concat_col->view(), options, stream, mr);

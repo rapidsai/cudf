@@ -27,6 +27,10 @@ namespace cudf::io::orc::gpu {
 
 using strings::detail::fixed_point_string_size;
 
+// Nanosecond statistics should not be enabled until the spec version is set correctly in the output
+// files. See https://github.com/rapidsai/cudf/issues/14325 for more details
+constexpr bool enable_nanosecond_statistics = false;
+
 constexpr unsigned int init_threads_per_group = 32;
 constexpr unsigned int init_groups_per_block  = 4;
 constexpr unsigned int init_threads_per_block = init_threads_per_group * init_groups_per_block;
@@ -96,8 +100,10 @@ __global__ void __launch_bounds__(block_size, 1)
           stats_len = pb_fldlen_common + pb_fld_hdrlen + 2 * (pb_fld_hdrlen + pb_fldlen_int64);
           break;
         case dtype_timestamp64:
-          stats_len = pb_fldlen_common + pb_fld_hdrlen + 4 * (pb_fld_hdrlen + pb_fldlen_int64) +
-                      2 * (pb_fld_hdrlen + pb_fldlen_int32);
+          stats_len = pb_fldlen_common + pb_fld_hdrlen + 4 * (pb_fld_hdrlen + pb_fldlen_int64);
+          if constexpr (enable_nanosecond_statistics) {
+            stats_len += 2 * (pb_fld_hdrlen + pb_fldlen_int32);
+          }
           break;
         case dtype_float32:
         case dtype_float64:
@@ -405,7 +411,8 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional sint64 minimumUtc = 3; // min,max values saved as milliseconds since UNIX epoch
         //  optional sint64 maximumUtc = 4;
         //  optional int32 minimumNanos = 5; // lower 6 TS digits for min/max to achieve nanosecond
-        //  precision optional int32 maximumNanos = 6;
+        //  precision
+        // optional int32 maximumNanos = 6;
         // }
         if (s->chunk.has_minmax) {
           cur[0] = 9 * 8 + ProtofType::FIXEDLEN;
@@ -416,12 +423,22 @@ __global__ void __launch_bounds__(encode_threads_per_block)
             split_nanosecond_timestamp(s->chunk.max_value.i_val);
 
           // minimum/maximum are the same as minimumUtc/maximumUtc as we always write files in UTC
-          cur          = pb_put_int(cur, 1, min_ms);            // minimum
-          cur          = pb_put_int(cur, 2, max_ms);            // maximum
-          cur          = pb_put_int(cur, 3, min_ms);            // minimumUtc
-          cur          = pb_put_int(cur, 4, max_ms);            // maximumUtc
-          cur          = pb_put_int(cur, 5, min_ns_remainder);  // minimumNanos
-          cur          = pb_put_int(cur, 6, max_ns_remainder);  // maximumNanos
+          cur = pb_put_int(cur, 1, min_ms);  // minimum
+          cur = pb_put_int(cur, 2, max_ms);  // maximum
+          cur = pb_put_int(cur, 3, min_ms);  // minimumUtc
+          cur = pb_put_int(cur, 4, max_ms);  // maximumUtc
+
+          if constexpr (enable_nanosecond_statistics) {
+            if (min_ns_remainder != DEFAULT_MIN_NANOS) {
+              // using uint because positive values are not zigzag encoded
+              cur = pb_put_uint(cur, 5, min_ns_remainder + 1);  // minimumNanos
+            }
+            if (max_ns_remainder != DEFAULT_MAX_NANOS) {
+              // using uint because positive values are not zigzag encoded
+              cur = pb_put_uint(cur, 6, max_ns_remainder + 1);  // maximumNanos
+            }
+          }
+
           fld_start[1] = cur - (fld_start + 2);
         }
         break;
