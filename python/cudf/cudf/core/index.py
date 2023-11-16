@@ -330,20 +330,15 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @_cudf_nvtx_annotate
     def __contains__(self, item):
-        if not isinstance(
+        if isinstance(item, bool) or not isinstance(
             item, tuple(np.sctypes["int"] + np.sctypes["float"] + [int, float])
         ):
             return False
-        elif isinstance(item, bool):
-            return False
         try:
             int_item = int(item)
-            assert int_item == item
-        except (TypeError, AssertionError):
+            return int_item == item and int_item in self._range
+        except (ValueError, OverflowError):
             return False
-        if not int_item % 1 == 0:
-            return False
-        return int_item in range(self._start, self._stop, self._step)
 
     @_cudf_nvtx_annotate
     def copy(self, name=None, deep=False, dtype=None, names=None):

@@ -2310,14 +2310,24 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """  # noqa: E501
         orient = orient.lower()
 
-        result = self.to_pandas().to_dict(orient=orient, into=into)
         if orient == "series":
-            # Ensure values are cudf.Series
-            converted = ((k, Series(v)) for k, v in result.items())
-            if isinstance(into, defaultdict):
-                return type(result)(into.default_factory, converted)
-            return type(result)(converted)
-        return result
+            # Special case needed to avoid converting
+            # cudf.Series objects into pd.Series
+            if not inspect.isclass(into):
+                cons = type(into)  # type: ignore[assignment]
+                if isinstance(into, defaultdict):
+                    return functools.partial(cons, into.default_factory)
+            elif issubclass(into, abc.Mapping):
+                cons = into  # type: ignore[assignment]
+                if issubclass(into, defaultdict):
+                    raise TypeError(
+                        "to_dict() only accepts initialized defaultdicts"
+                    )
+            else:
+                raise TypeError(f"unsupported type: {into}")
+            return cons(self.items())  # type: ignore[misc]
+
+        return self.to_pandas().to_dict(orient=orient, into=into)
 
     @_cudf_nvtx_annotate
     def scatter_by_map(
