@@ -14,14 +14,19 @@
  * limitations under the License.
  */
 
-#include <cudf/utilities/default_stream.hpp>
+#include <cudf/detail/utilities/stream_pool.hpp>
+#include <rmm/cuda_stream_view.hpp>
 
+#include <cudf_test/base_fixture.hpp>
 #include <cudf_test/default_stream.hpp>
 
-namespace cudf {
-namespace test {
+class PoolTest : public cudf::test::BaseFixture {};
 
-rmm::cuda_stream_view const get_default_stream() { return cudf::get_default_stream(); }
+__global__ void do_nothing_kernel() {}
 
-}  // namespace test
-}  // namespace cudf
+TEST_F(PoolTest, ForkStreams)
+{
+  auto streams = cudf::detail::fork_streams(cudf::test::get_default_stream(), 4);
+  do_nothing_kernel<<<1, 1, 0, streams[0].value()>>>();
+  do_nothing_kernel<<<1, 1, 0, streams[1].value()>>>();
+}

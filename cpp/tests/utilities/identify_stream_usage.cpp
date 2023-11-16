@@ -15,6 +15,7 @@
  */
 
 #include <cudf/detail/utilities/stacktrace.hpp>
+#include <cudf/detail/utilities/stream_pool.hpp>
 
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
@@ -66,21 +67,40 @@ rmm::cuda_stream_view const get_default_stream()
 }  // namespace test
 #endif
 
+#ifdef STREAM_MODE_TESTING
+namespace detail {
+
+/**
+ * @brief Implementation of `cuda_stream_pool` that always returns the
+ * `cudf::test::get_default_stream()`
+ */
+class test_cuda_stream_pool : public cuda_stream_pool {
+ public:
+  rmm::cuda_stream_view get_stream() override { return cudf::test::get_default_stream(); }
+  rmm::cuda_stream_view get_stream(stream_id_type stream_id) override
+  {
+    return cudf::test::get_default_stream();
+  }
+
+  std::vector<rmm::cuda_stream_view> get_streams(std::size_t count) override
+  {
+    return std::vector<rmm::cuda_stream_view>(count, cudf::test::get_default_stream());
+  }
+
+  std::size_t get_stream_pool_size() const override { return 1UL; }
+};
+
+cuda_stream_pool* create_global_cuda_stream_pool() { return new test_cuda_stream_pool(); }
+
+}  // namespace detail
+#endif
+
 }  // namespace cudf
 
 bool stream_is_invalid(cudaStream_t stream)
 {
 #ifdef STREAM_MODE_TESTING
   // In this mode the _only_ valid stream is the one returned by cudf::test::get_default_stream.
-  /*
-#if defined(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
-  rmm::cuda_stream_view default_stream_value{rmm::cuda_stream_per_thread};
-#else
-  rmm::cuda_stream_view default_stream_value{};
-#endif
-  return (stream == default_stream_value.value() || stream == cudaStreamDefault ||
-          stream == cudaStreamLegacy || stream == cudaStreamPerThread);
-  */
   return (stream != cudf::test::get_default_stream().value());
 #else
   // We explicitly list the possibilities rather than using

@@ -26,11 +26,8 @@
 #include <memory>
 #include <mutex>
 #include <vector>
-#include <dlfcn.h>
 
 namespace cudf::detail {
-
-namespace {
 
 // TODO: what is a good number here. what's the penalty for making it larger?
 // Dave Baranec rule of thumb was max_streams_needed * num_concurrent_threads,
@@ -58,57 +55,6 @@ std::size_t constexpr STREAM_POOL_SIZE = 32;
     assert(status__ == cudaSuccess);                                            \
   } while (0)
 #endif
-
-class cuda_stream_pool {
- public:
-  // matching type used in rmm::cuda_stream_pool::get_stream(stream_id)
-  using stream_id_type = std::size_t;
-
-  virtual ~cuda_stream_pool() = default;
-
-  /**
-   * @brief Get a `cuda_stream_view` of a stream in the pool.
-   *
-   * This function is thread safe with respect to other calls to the same function.
-   *
-   * @return Stream view.
-   */
-  virtual rmm::cuda_stream_view get_stream() = 0;
-
-  /**
-   * @brief Get a `cuda_stream_view` of the stream associated with `stream_id`.
-   *
-   * Equivalent values of `stream_id` return a `cuda_stream_view` to the same underlying stream.
-   * This function is thread safe with respect to other calls to the same function.
-   *
-   * @param stream_id Unique identifier for the desired stream
-   * @return Requested stream view.
-   */
-  virtual rmm::cuda_stream_view get_stream(stream_id_type stream_id) = 0;
-
-  /**
-   * @brief Get a set of `cuda_stream_view` objects from the pool.
-   *
-   * An attempt is made to ensure that the returned vector does not contain duplicate
-   * streams, but this cannot be guaranteed if `count` is greater than the value returned by
-   * `get_stream_pool_size()`.
-   *
-   * This function is thread safe with respect to other calls to the same function.
-   *
-   * @param count The number of stream views to return.
-   * @return Vector containing `count` stream views.
-   */
-  virtual std::vector<rmm::cuda_stream_view> get_streams(std::size_t count) = 0;
-
-  /**
-   * @brief Get the number of stream objects in the pool.
-   *
-   * This function is thread safe with respect to other calls to the same function.
-   *
-   * @return the number of stream objects in the pool
-   */
-  virtual std::size_t get_stream_pool_size() const = 0;
-};
 
 /**
  * @brief Implementation of `cuda_stream_pool` that wraps an `rmm::cuda_stram_pool`.
@@ -158,52 +104,9 @@ class debug_cuda_stream_pool : public cuda_stream_pool {
   std::size_t get_stream_pool_size() const override { return 1UL; }
 };
 
-/**
- * @brief Implementation of `cuda_stream_pool` that always returns the `cudf::test::get_default_stream()`
- */
-class test_cuda_stream_pool : public cuda_stream_pool {
-  rmm::cuda_stream_view load_test_default_stream() {
-    std::cout << "Inside load_test_default_stream()\n";
-    void *handle;
-    handle = dlopen("libcudftest_default_stream.so", RTLD_LAZY);
-    if(!handle) {
-      std::cerr << "cannot load libcudftest_default_stream " << dlerror() << std::endl;
-      exit(EXIT_FAILURE);
-    }
-    rmm::cuda_stream_view (*tds)();
-    void *utds = dlsym(handle, "cudf_test_get_default_stream");
-    if (utds == NULL) {
-        std::cerr << "Error accessing the symbol cudf_test_get_default_stream " << dlerror() << "\n";
-        exit(EXIT_FAILURE);
-    }
-    tds = reinterpret_cast<decltype(tds)>(utds);
-    return (*tds)();
-  }
-  public:
-  rmm::cuda_stream_view get_stream() override { return load_test_default_stream(); }
-  rmm::cuda_stream_view get_stream(stream_id_type stream_id) override
-  {
-    return load_test_default_stream();
-  }
-
-  std::vector<rmm::cuda_stream_view> get_streams(std::size_t count) override
-  {
-    std::cout << "getting cudf test streams\n";
-    return std::vector<rmm::cuda_stream_view>(count, load_test_default_stream());
-  }
-
-  std::size_t get_stream_pool_size() const override { return 1UL; }
-};
-
-/**
- * @brief Initialize global stream pool.
- */
 cuda_stream_pool* create_global_cuda_stream_pool()
 {
   if (getenv("LIBCUDF_USE_DEBUG_STREAM_POOL")) return new debug_cuda_stream_pool();
-  if (getenv("LIBCUDF_USE_TEST_STREAM_POOL")) {
-    return new test_cuda_stream_pool();
-  }
   return new rmm_cuda_stream_pool();
 }
 
@@ -271,13 +174,9 @@ cuda_stream_pool& global_cuda_stream_pool()
   return *pools[device_id.value()];
 }
 
-}  // anonymous namespace
-
 std::vector<rmm::cuda_stream_view> fork_streams(rmm::cuda_stream_view stream, std::size_t count)
 {
   auto const streams = global_cuda_stream_pool().get_streams(count);
-  for(size_t i = 0; i < streams.size(); i++)
-    std::cout << streams[i] << std::endl;
   auto const event   = event_for_thread();
   CUDF_CUDA_TRY(cudaEventRecord(event, stream));
   std::for_each(streams.begin(), streams.end(), [&](auto& strm) {
