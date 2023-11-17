@@ -974,7 +974,7 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def to_pandas(
-        self, index: Optional[pd.Index] = None, nullable: bool = False
+        self, *, index: Optional[pd.Index] = None, nullable: bool = False
     ) -> pd.Series:
         if nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")

@@ -5756,6 +5756,7 @@ class StringColumn(column.ColumnBase):
 
     def to_pandas(
         self,
+        *,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
     ) -> pd.Series:

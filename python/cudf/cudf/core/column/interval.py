@@ -126,7 +126,7 @@ class IntervalColumn(StructColumn):
             raise ValueError("dtype must be IntervalDtype")
 
     def to_pandas(
-        self, index: Optional[pd.Index] = None, nullable: bool = False
+        self, *, index: Optional[pd.Index] = None, nullable: bool = False
     ) -> pd.Series:
         # Note: This does not handle null values in the interval column.
         # However, this exact sequence (calling __from_arrow__ on the output of
