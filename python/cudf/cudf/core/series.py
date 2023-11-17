@@ -720,7 +720,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @classmethod
     @_cudf_nvtx_annotate
-    def from_pandas(cls, s, nan_as_null=no_default):
+    def from_pandas(cls, s: pd.Series, nan_as_null=no_default):
         """
         Convert from a Pandas Series.
 

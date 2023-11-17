@@ -5189,7 +5189,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @classmethod
     @_cudf_nvtx_annotate
-    def from_pandas(cls, dataframe, nan_as_null=no_default):
+    def from_pandas(cls, dataframe: pd.DataFrame, nan_as_null=no_default):
         """
         Convert from a Pandas DataFrame.
 
@@ -5231,25 +5231,28 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # Set columns
             data = {}
             for col_name, col_value in dataframe.items():
-                # necessary because multi-index can return multiple
-                # columns for a single key
-                if len(col_value.shape) == 1:
-                    data[col_name] = column.as_column(
-                        col_value.array, nan_as_null=nan_as_null
-                    )
-                else:
-                    vals = col_value.values.T
-                    if vals.shape[0] == 1:
-                        data[col_name] = column.as_column(
-                            vals.flatten(), nan_as_null=nan_as_null
-                        )
-                    else:
-                        if isinstance(col_name, tuple):
-                            col_name = str(col_name)
-                        for idx in range(len(vals.shape)):
-                            data[col_name] = column.as_column(
-                                vals[idx], nan_as_null=nan_as_null
-                            )
+                data[col_name] = column.as_column(
+                    col_value.array, nan_as_null=nan_as_null
+                )
+                # # necessary because multi-index can return multiple
+                # # columns for a single key
+                # if len(col_value.shape) == 1:
+                #     data[col_name] = column.as_column(
+                #         col_value.array, nan_as_null=nan_as_null
+                #     )
+                # else:
+                #     vals = col_value.values.T
+                #     if vals.shape[0] == 1:
+                #         data[col_name] = column.as_column(
+                #             vals.flatten(), nan_as_null=nan_as_null
+                #         )
+                #     else:
+                #         if isinstance(col_name, tuple):
+                #             col_name = str(col_name)
+                #         for idx in range(len(vals.shape)):
+                #             data[col_name] = column.as_column(
+                #                 vals[idx], nan_as_null=nan_as_null
+                #             )
 
             index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
             df = cls._from_data(data, index)
