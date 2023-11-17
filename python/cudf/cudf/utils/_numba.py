@@ -11,7 +11,7 @@ try:
     from pynvjitlink.patch import (
         patch_numba_linker as patch_numba_linker_cuda_12,
     )
-except ModuleNotFoundError:
+except ImportError:
 
     def patch_numba_linker_cuda_12():
         warnings.warn(
