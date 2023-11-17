@@ -11,6 +11,16 @@ try:
 except ModuleNotFoundError:
     from cudf.utils._ptxcompiler import safe_get_versions
 
+# do not test cuda 12 if pynvjitlink isn't present
+HAVE_PYNVJITLINK = False
+try:
+    import pynvjitlink  # noqa: F401
+
+    HAVE_PYNVJITLINK
+except ModuleNotFoundError:
+    pass
+
+
 versions = safe_get_versions()
 driver_version, runtime_version = versions
 
@@ -71,7 +81,7 @@ patch_numba_linker_cuda_12()
         pytest.param(
             CUDA_12_TEST,
             marks=pytest.mark.skipif(
-                not IS_CUDA_12,
+                not IS_CUDA_12 or not HAVE_PYNVJITLINK,
                 reason="Minor Version Compatibility test for CUDA 12",
             ),
         ),
