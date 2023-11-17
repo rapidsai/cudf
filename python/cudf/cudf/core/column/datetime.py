@@ -306,8 +306,9 @@ class DatetimeColumn(column.ColumnBase):
         self,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
-        **kwargs,
-    ) -> "cudf.Series":
+    ) -> pd.Series:
+        if nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
         # `copy=True` workaround until following issue is fixed:
         # https://issues.apache.org/jira/browse/ARROW-9772
 
@@ -684,8 +685,11 @@ class DatetimeTZColumn(DatetimeColumn):
         self,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
-        **kwargs,
-    ) -> "cudf.Series":
+    ) -> pd.Series:
+        if index is not None:
+            raise NotImplementedError(f"{index=} is not implemented.")
+        if nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
         return self._local_time.to_pandas().dt.tz_localize(
             self.dtype.tz, ambiguous="NaT", nonexistent="NaT"
         )

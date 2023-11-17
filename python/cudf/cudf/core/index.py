@@ -503,7 +503,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return _maybe_convert_to_default_type(dtype)
 
     @_cudf_nvtx_annotate
-    def to_pandas(self, nullable=False):
+    def to_pandas(self, nullable: bool = False) -> pd.RangeIndex:
+        if nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
         return pd.RangeIndex(
             start=self._start,
             stop=self._stop,
@@ -1569,7 +1571,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     def any(self):
         return self._values.any()
 
-    def to_pandas(self, nullable=False):
+    def to_pandas(self, nullable: bool = False) -> pd.Index:
         return pd.Index(
             self._values.to_pandas(nullable=nullable), name=self.name
         )
@@ -2510,7 +2512,9 @@ class DatetimeIndex(GenericIndex):
         return cudf.core.tools.datetimes._to_iso_calendar(self)
 
     @_cudf_nvtx_annotate
-    def to_pandas(self, nullable=False):
+    def to_pandas(self, nullable: bool = False) -> pd.DatetimeIndex:
+        if nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
         # TODO: no need to convert to nanos with Pandas 2.x
         if isinstance(self.dtype, pd.DatetimeTZDtype):
             nanos = self._values.astype(
@@ -2834,11 +2838,12 @@ class TimedeltaIndex(GenericIndex):
         return value
 
     @_cudf_nvtx_annotate
-    def to_pandas(self, nullable=False):
+    def to_pandas(self, nullable: bool = False) -> pd.TimedeltaIndex:
+        if nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
         return pd.TimedeltaIndex(
             self._values.to_pandas(),
             name=self.name,
-            unit=self._values.time_unit,
         )
 
     @property  # type: ignore
@@ -3302,7 +3307,7 @@ class StringIndex(GenericIndex):
         super().__init__(values, **kwargs)
 
     @_cudf_nvtx_annotate
-    def to_pandas(self, nullable=False):
+    def to_pandas(self, nullable: bool = False) -> pd.Index:
         return pd.Index(
             self.to_numpy(na_value=None),
             name=self.name,
