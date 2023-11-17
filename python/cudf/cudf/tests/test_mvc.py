@@ -16,7 +16,7 @@ HAVE_PYNVJITLINK = False
 try:
     import pynvjitlink  # noqa: F401
 
-    HAVE_PYNVJITLINK
+    HAVE_PYNVJITLINK = True
 except ModuleNotFoundError:
     pass
 
