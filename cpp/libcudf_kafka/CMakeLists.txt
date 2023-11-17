@@ -21,8 +21,8 @@ include(rapids-export)
 include(rapids-find)
 
 project(
-  CUDA_KAFKA
-  VERSION 23.12.00
+  CUDF_KAFKA
+  VERSION 24.02.00
   LANGUAGES CXX
 )
 
@@ -64,7 +64,7 @@ add_library(cudf_kafka SHARED src/kafka_consumer.cpp src/kafka_callback.cpp)
 # ##################################################################################################
 # * include paths ---------------------------------------------------------------------------------
 target_include_directories(
-  cudf_kafka PUBLIC "$<BUILD_INTERFACE:${CUDA_KAFKA_SOURCE_DIR}/include>"
+  cudf_kafka PUBLIC "$<BUILD_INTERFACE:${CUDF_KAFKA_SOURCE_DIR}/include>"
                     "$<INSTALL_INTERFACE:include>"
 )
 
@@ -85,6 +85,8 @@ set_target_properties(
              CXX_STANDARD_REQUIRED ON
 )
 
+add_library(cudf_kafka::cudf_kafka ALIAS cudf_kafka)
+
 # ##################################################################################################
 # * cudf_kafka Install ----------------------------------------------------------------------------
 rapids_cmake_install_lib_dir(lib_dir)
@@ -94,7 +96,7 @@ install(
   EXPORT cudf_kafka-exports
 )
 
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include DESTINATION include)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 rapids_export(
   INSTALL cudf_kafka
