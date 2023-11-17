@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -35,21 +35,21 @@ function(find_and_configure_cudf VERSION)
   endif()
 endfunction()
 
-set(CUDA_KAFKA_MIN_VERSION_cudf
-    "${CUDA_KAFKA_VERSION_MAJOR}.${CUDA_KAFKA_VERSION_MINOR}.${CUDA_KAFKA_VERSION_PATCH}"
+set(CUDF_KAFKA_MIN_VERSION
+    "${CUDF_KAFKA_VERSION_MAJOR}.${CUDF_KAFKA_VERSION_MINOR}.${CUDF_KAFKA_VERSION_PATCH}"
 )
-find_and_configure_cudf(${CUDA_KAFKA_MIN_VERSION_cudf})
+find_and_configure_cudf(${CUDF_KAFKA_MIN_VERSION})
 
 if(cudf_REQUIRES_CUDA)
-  rapids_cuda_init_architectures(CUDA_KAFKA)
+  rapids_cuda_init_architectures(CUDF_KAFKA)
 
   # Since we are building cudf as part of ourselves we need to enable the CUDA language in the
   # top-most scope
   enable_language(CUDA)
 
-  # Since CUDA_KAFKA only enables CUDA optionally we need to manually include the file that
+  # Since CUDF_KAFKA only enables CUDA optionally we need to manually include the file that
   # rapids_cuda_init_architectures relies on `project` calling
-  if(DEFINED CMAKE_PROJECT_CUDA_KAFKA_INCLUDE)
-    include("${CMAKE_PROJECT_CUDA_KAFKA_INCLUDE}")
+  if(DEFINED CMAKE_PROJECT_CUDF_KAFKA_INCLUDE)
+    include("${CMAKE_PROJECT_CUDF_KAFKA_INCLUDE}")
   endif()
 endif()
