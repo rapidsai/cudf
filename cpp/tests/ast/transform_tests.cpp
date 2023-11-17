@@ -323,6 +323,10 @@ TEST_F(TransformTest, ImbalancedTreeArithmeticDeep)
 
   auto col_ref_0 = cudf::ast::column_reference(0);
 
+  // expression: (c0 < c0) == (c0 < (c0 + c0))
+  //              {false, false, false} == (c0 < {8, 10, 12})
+  //              {false, false, false} == {true, true, true}
+  //              {false, false, false}
   auto expression_left_subtree =
     cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, col_ref_0);
   auto expression_right_inner_subtree =
@@ -333,9 +337,8 @@ TEST_F(TransformTest, ImbalancedTreeArithmeticDeep)
   auto expression_tree = cudf::ast::operation(
     cudf::ast::ast_operator::EQUAL, expression_left_subtree, expression_right_subtree);
 
-  auto result = cudf::compute_column(table, expression_tree);
-  auto expected =
-    column_wrapper<double>{0.6, std::numeric_limits<double>::infinity(), -3.201, -2099.18};
+  auto result   = cudf::compute_column(table, expression_tree);
+  auto expected = column_wrapper<bool>{false, false, false};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
