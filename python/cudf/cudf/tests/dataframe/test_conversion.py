@@ -1,5 +1,6 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.
 import pandas as pd
+import pytest
 
 import cudf
 from cudf.testing._utils import assert_eq
@@ -26,6 +27,7 @@ def test_convert_dtypes():
         "category",
         "datetime64[ns]",
     ]
+    nullable_columns = list("abcdef")
     df = pd.DataFrame(
         {
             k: pd.Series(v, dtype=d)
@@ -33,6 +35,10 @@ def test_convert_dtypes():
         }
     )
     gdf = cudf.DataFrame.from_pandas(df)
-    expect = df.convert_dtypes()
-    got = gdf.convert_dtypes().to_pandas(nullable=True)
+    expect = df[nullable_columns].convert_dtypes()
+    got = gdf[nullable_columns].convert_dtypes().to_pandas(nullable=True)
     assert_eq(expect, got)
+
+    with pytest.raises(NotImplementedError):
+        # category and datetime64[ns] are not nullable
+        gdf[nullable_columns].convert_dtypes().to_pandas(nullable=True)

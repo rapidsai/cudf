@@ -143,7 +143,7 @@ class TimeDeltaColumn(ColumnBase):
             null_count=self.null_count,
         )
 
-    def to_pandas(self, index=None, nullable: bool = False) -> pd.Series:
+    def to_pandas(self, *, nullable: bool = False) -> pd.Series:
         # `copy=True` workaround until following issue is fixed:
         # https://issues.apache.org/jira/browse/ARROW-9772
 
@@ -157,7 +157,6 @@ class TimeDeltaColumn(ColumnBase):
             self.astype("timedelta64[ns]").to_arrow(),
             copy=True,
             dtype=self.dtype,
-            index=index,
         )
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:

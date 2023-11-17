@@ -5111,7 +5111,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
     @_cudf_nvtx_annotate
-    def to_pandas(self, nullable: bool = False) -> pd.DataFrame:
+    def to_pandas(self, *, nullable: bool = False) -> pd.DataFrame:
         """
         Convert to a Pandas DataFrame.
 
