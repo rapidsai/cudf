@@ -149,7 +149,7 @@ void try_drop_l3_cache();
  *
  * @return The io_type enum value
  */
-cudf::io::io_type retrieve_io_type_enum(std::string const& io_string);
+cudf::io::io_type retrieve_io_type_enum(std::string_view io_string);
 
 /**
  * @brief Convert a string to the corresponding compression_type enum value.
@@ -161,4 +161,4 @@ cudf::io::io_type retrieve_io_type_enum(std::string const& io_string);
  *
  * @return The compression_type enum value
  */
-cudf::io::compression_type retrieve_compression_type_enum(std::string const& compression_string);
+cudf::io::compression_type retrieve_compression_type_enum(std::string_view compression_string);

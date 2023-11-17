@@ -202,7 +202,7 @@ void try_drop_l3_cache()
                "Failed to execute the drop cache command");
 }
 
-cudf::io::io_type retrieve_io_type_enum(std::string const& io_string)
+cudf::io::io_type retrieve_io_type_enum(std::string_view io_string)
 {
   if (io_string == "FILEPATH") {
     return cudf::io::io_type::FILEPATH;
@@ -219,7 +219,7 @@ cudf::io::io_type retrieve_io_type_enum(std::string const& io_string)
   }
 }
 
-cudf::io::compression_type retrieve_compression_type_enum(std::string const& compression_string)
+cudf::io::compression_type retrieve_compression_type_enum(std::string_view compression_string)
 {
   if (compression_string == "NONE") {
     return cudf::io::compression_type::NONE;
