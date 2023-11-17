@@ -690,9 +690,12 @@ class DatetimeTZColumn(DatetimeColumn):
     ) -> pd.Series:
         if nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
-        return self._local_time.to_pandas().dt.tz_localize(
+        series = self._local_time.to_pandas().dt.tz_localize(
             self.dtype.tz, ambiguous="NaT", nonexistent="NaT"
         )
+        if index is not None:
+            series.index = index
+        return series
 
     def to_arrow(self):
         return pa.compute.assume_timezone(
