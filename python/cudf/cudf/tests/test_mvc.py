@@ -60,9 +60,11 @@ CUDA_12_TEST = (
 import numba.cuda
 import cudf
 from cudf.utils._numba import _CUDFNumbaConfig
-from pynvjitlink.patch import patch_numba_linker_cuda_12
+from pynvjitlink.patch import (
+    patch_numba_linker as patch_numba_linker_pynvjitlink,
+)
 
-patch_numba_linker_cuda_12()
+patch_numba_linker_pynvjitlink()
 """
     + TEST_BODY
 )

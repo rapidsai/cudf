@@ -9,7 +9,7 @@ from numba import config as numba_config
 
 try:
     from pynvjitlink.patch import (
-        patch_numba_linker as patch_numba_linker_cuda_12,
+        patch_numba_linker as patch_numba_linker_pynvjitlink,
     )
 except ImportError:
 
@@ -131,7 +131,7 @@ def _setup_numba():
             if driver_version < (12, 0):
                 patch_numba_linker_cuda_11()
             else:
-                patch_numba_linker_cuda_12()
+                patch_numba_linker_pynvjitlink()
 
 
 def _get_cuda_version_from_ptx_file(path):
