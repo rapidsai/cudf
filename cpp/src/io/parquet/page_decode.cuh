@@ -991,8 +991,15 @@ struct all_types_filter {
  * @brief Functor for setupLocalPageInfo that takes a mask of allowed types.
  */
 struct mask_filter {
-  int mask;
-  __device__ inline bool operator()(PageInfo const& page) { return (page.kernel_mask & mask) != 0; }
+  uint32_t mask;
+
+  __device__ mask_filter(uint32_t m) : mask(m) {}
+  __device__ mask_filter(decode_kernel_mask m) : mask(static_cast<uint32_t>(m)) {}
+
+  __device__ inline bool operator()(PageInfo const& page)
+  {
+    return BitAnd(mask, page.kernel_mask) != 0;
+  }
 };
 
 /**
@@ -1306,6 +1313,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           s->dict_run = 0;
         } break;
         case Encoding::DELTA_BINARY_PACKED:
+        case Encoding::DELTA_BYTE_ARRAY:
           // nothing to do, just don't error
           break;
         default: {
