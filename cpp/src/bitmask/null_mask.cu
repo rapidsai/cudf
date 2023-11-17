@@ -510,6 +510,21 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(table_view const& view,
   return std::pair(std::move(null_mask), 0);
 }
 
+void set_all_valid_null_masks(column_view const& input,
+                              column& output,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
+{
+  if (input.nullable()) {
+    auto mask = detail::create_null_mask(output.size(), mask_state::ALL_VALID, stream, mr);
+    output.set_null_mask(std::move(mask), 0);
+
+    for (size_type i = 0; i < input.num_children(); ++i) {
+      set_all_valid_null_masks(input.child(i), output.child(i), stream, mr);
+    }
+  }
+}
+
 }  // namespace detail
 
 // Create a bitmask from a specific range
