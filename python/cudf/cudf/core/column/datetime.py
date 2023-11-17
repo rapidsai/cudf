@@ -686,8 +686,6 @@ class DatetimeTZColumn(DatetimeColumn):
         index: Optional[pd.Index] = None,
         nullable: bool = False,
     ) -> pd.Series:
-        if index is not None:
-            raise NotImplementedError(f"{index=} is not implemented.")
         if nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
         return self._local_time.to_pandas().dt.tz_localize(
