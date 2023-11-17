@@ -204,6 +204,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def to_pandas(
         self,
+        *,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
     ) -> pd.Series:

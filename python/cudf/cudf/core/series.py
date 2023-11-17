@@ -2126,10 +2126,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3    30.0
         dtype: float64
         """
-        s = self._column.to_pandas(nullable=nullable)
-        s.name = self.name
         if index is True:
-            s.index = self.index.to_pandas()
+            index = self.index.to_pandas()
+        else:
+            index = None  # type: ignore[assignment]
+        s = self._column.to_pandas(index=index, nullable=nullable)
+        s.name = self.name
         return s
 
     @property  # type: ignore
