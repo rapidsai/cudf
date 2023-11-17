@@ -719,10 +719,6 @@ target_compile_definitions(
               "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_DEFINITIONS}>>"
 )
 
-#if(CUDF_BUILD_STREAMS_TEST_UTIL)
-#  target_compile_definitions(cudf PRIVATE STREAM_MODE_TESTING)
-#endif()
-
 # Disable Jitify log printing. See https://github.com/NVIDIA/jitify/issues/79
 target_compile_definitions(cudf PRIVATE "JITIFY_PRINT_LOG=0")
 
