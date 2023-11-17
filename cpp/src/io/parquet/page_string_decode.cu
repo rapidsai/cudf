@@ -545,7 +545,9 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
         }
 
         // FIXME: need to return an error condition...this won't actually do anything
-        if (s->dict_bits > 32 || !dict_base) { CUDF_UNREACHABLE("invalid dictionary bit size"); }
+        if (s->dict_bits > 32 || (!dict_base && col.dict_page->num_input_values > 0)) {
+          CUDF_UNREACHABLE("invalid dictionary bit size");
+        }
 
         str_bytes = totalDictEntriesSize(
           data, dict_base, s->dict_bits, dict_size, (end - data), start_value, end_value);

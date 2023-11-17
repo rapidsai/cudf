@@ -1289,7 +1289,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           s->dict_run  = 0;
           s->dict_val  = 0;
           s->dict_bits = (cur < end) ? *cur++ : 0;
-          if (s->dict_bits > 32 || !s->dict_base) {
+          if (s->dict_bits > 32 || (!s->dict_base && s->col.dict_page->num_input_values > 0)) {
             s->set_error_code(decode_error::INVALID_DICT_WIDTH);
           }
           break;
