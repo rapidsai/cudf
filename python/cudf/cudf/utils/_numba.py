@@ -13,7 +13,7 @@ try:
     )
 except ImportError:
 
-    def patch_numba_linker_cuda_12():
+    def patch_numba_linker_pynvjitlink():
         warnings.warn(
             "Minor version compatibility requires pynvjitlink. "
             "Please pip install pynvjitlink to proceed using cuDF."
