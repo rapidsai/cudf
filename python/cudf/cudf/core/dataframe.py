@@ -5228,31 +5228,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if not dataframe.columns.is_unique:
                 raise ValueError("Duplicate column names are not allowed")
 
-            # Set columns
-            data = {}
-            for col_name, col_value in dataframe.items():
-                data[col_name] = column.as_column(
-                    col_value.array, nan_as_null=nan_as_null
+            data = {
+                col_name: column.as_column(
+                    series.array, nan_as_null=nan_as_null
                 )
-                # # necessary because multi-index can return multiple
-                # # columns for a single key
-                # if len(col_value.shape) == 1:
-                #     data[col_name] = column.as_column(
-                #         col_value.array, nan_as_null=nan_as_null
-                #     )
-                # else:
-                #     vals = col_value.values.T
-                #     if vals.shape[0] == 1:
-                #         data[col_name] = column.as_column(
-                #             vals.flatten(), nan_as_null=nan_as_null
-                #         )
-                #     else:
-                #         if isinstance(col_name, tuple):
-                #             col_name = str(col_name)
-                #         for idx in range(len(vals.shape)):
-                #             data[col_name] = column.as_column(
-                #                 vals[idx], nan_as_null=nan_as_null
-                #             )
+                for col_name, series in dataframe.items()
+            }
 
             index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
             df = cls._from_data(data, index)
@@ -5265,13 +5246,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 df.columns = dataframe.columns
 
             return df
+        elif hasattr(dataframe, " __dataframe__"):
+            # TODO: Should probably be in the __init__ instead
+            return from_dataframe(dataframe, allow_copy=True)
         else:
-            try:
-                return from_dataframe(dataframe, allow_copy=True)
-            except Exception:
-                raise TypeError(
-                    f"Could not construct DataFrame from {type(dataframe)}"
-                )
+            raise TypeError(
+                f"Could not construct DataFrame from {type(dataframe)}"
+            )
 
     @classmethod
     @_cudf_nvtx_annotate

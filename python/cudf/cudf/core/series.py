@@ -60,7 +60,6 @@ from cudf.core.column import (
     TimeDeltaColumn,
     arange,
     as_column,
-    column,
     full,
 )
 from cudf.core.column.categorical import (
@@ -205,7 +204,6 @@ class _SeriesIlocIndexer(_FrameIndexer):
 
     @_cudf_nvtx_annotate
     def __setitem__(self, key, value):
-        from cudf.core.column import column
 
         if isinstance(key, tuple):
             key = list(key)
@@ -267,7 +265,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
                 self._frame._column.dtype, (cudf.ListDtype, cudf.StructDtype)
             )
         ):
-            value = column.as_column(value)
+            value = as_column(value)
 
         if (
             (
@@ -571,7 +569,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         4      14
         dtype: int64
         """
-        col = column.as_column(data).set_mask(mask)
+        col = as_column(data).set_mask(mask)
         return cls(data=col)
 
     @_cudf_nvtx_annotate
@@ -596,73 +594,38 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 "to silence this warning.",
                 FutureWarning,
             )
-        if isinstance(data, pd.Series):
-            if name is None:
-                name = data.name
-            if isinstance(data.index, pd.MultiIndex):
-                index = cudf.from_pandas(data.index)
-            else:
-                index = as_index(data.index)
-        elif isinstance(data, pd.Index):
-            if name is None:
-                name = data.name
-            data = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
+        index_from_data = None
+        name_from_data = None
+        if isinstance(data, (pd.Series, pd.Index)):
+            name_from_data = data.name
+            column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
+            if isinstance(data, pd.Series):
+                index_from_data = as_index(data.index)
         elif isinstance(data, BaseIndex):
-            if name is None:
-                name = data.name
-            data = data._values
-            if dtype is not None:
-                data = data.astype(dtype)
+            name_from_data = data.name
+            column = data._values
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
                 "Use cudf.Series._from_data for constructing a Series from "
                 "ColumnAccessor"
             )
-
-        if isinstance(data, Series):
-            if index is not None:
-                data = data.reindex(index)
-            else:
-                index = data._index
-            if name is None:
-                name = data.name
-            data = data._column
+        elif isinstance(data, Series):
+            name_from_data = data.name
+            index_from_data = data.index
+            column = data._column
             if copy:
                 data = data.copy(deep=True)
-            if dtype is not None:
-                data = data.astype(dtype)
-
-        if isinstance(data, dict):
+        elif isinstance(data, dict) or data is None:
             if not data:
-                current_index = RangeIndex(0)
+                data = {}
+                column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
+                index_from_data = RangeIndex(0)
             else:
-                current_index = data.keys()
-            if index is not None:
-                series = Series(
-                    list(data.values()),
-                    nan_as_null=nan_as_null,
-                    dtype=dtype,
-                    index=current_index,
-                )
-                new_index = as_index(index)
-                if not series.index.equals(new_index):
-                    series = series.reindex(new_index)
-                data = series._column
-                index = series._index
-            else:
-                data = column.as_column(
+                column = as_column(
                     list(data.values()), nan_as_null=nan_as_null, dtype=dtype
                 )
-                index = current_index
-        if data is None:
-            if index is not None:
-                data = column.column_empty(
-                    row_count=len(index), dtype=None, masked=True
-                )
-            else:
-                data = {}
-
-        if not isinstance(data, ColumnBase):
+                index, index_from_data = as_index(list(data.keys())), index
+        else:
             # Using `getattr_static` to check if
             # `data` is on device memory and perform
             # a deep copy later. This is different
@@ -680,26 +643,33 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 )
                 is property
             )
-            data = column.as_column(
+            column = as_column(
                 data,
                 nan_as_null=nan_as_null,
                 dtype=dtype,
                 length=len(index) if index is not None else None,
             )
             if copy and has_cai:
-                data = data.copy(deep=True)
-        else:
-            if dtype is not None:
-                data = data.astype(dtype)
+                column = column.copy(deep=True)
 
-        if index is not None and not isinstance(index, BaseIndex):
+        assert isinstance(column, ColumnBase)
+
+        if dtype is not None:
+            column = column.astype(dtype)
+
+        if index is not None:
             index = as_index(index)
+        else:
+            index = RangeIndex(len(data))
 
-        assert isinstance(data, ColumnBase)
+        if name_from_data is not None:
+            name = name_from_data
 
-        super().__init__({name: data})
-        self._index = RangeIndex(len(data)) if index is None else index
+        super().__init__({name: column}, index=index)
         self._check_data_index_length_match()
+        if index_from_data is not None:
+            # TODO: Guess this doesn't work for all dtypes
+            self._reindex(column_names=[name], index=index, inplace=True)
 
     @classmethod
     @_cudf_nvtx_annotate
@@ -763,7 +733,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 False if cudf.get_option("mode.pandas_compatible") else None
             )
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
+            warnings.simplefilter("ignore", FutureWarning)
             result = cls(s, nan_as_null=nan_as_null)
         return result
 
@@ -5248,16 +5218,16 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
         b = b.reindex(a.index)
         index = as_index(a.index)
 
-    a_col = column.as_column(a)
+    a_col = as_column(a)
     a_array = cupy.asarray(a_col.data_array_view(mode="read"))
 
-    b_col = column.as_column(b)
+    b_col = as_column(b)
     b_array = cupy.asarray(b_col.data_array_view(mode="read"))
 
     result = cupy.isclose(
         a=a_array, b=b_array, rtol=rtol, atol=atol, equal_nan=equal_nan
     )
-    result_col = column.as_column(result)
+    result_col = as_column(result)
 
     if a_col.null_count and b_col.null_count:
         a_nulls = a_col.isnull()
