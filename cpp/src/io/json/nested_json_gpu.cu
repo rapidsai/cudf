@@ -2138,9 +2138,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       // This is to match the existing JSON reader's behaviour:
       // - Non-string columns will always be returned as nullable
       // - String columns will be returned as nullable, iff there's at least one null entry
-      if (target_type.id() == type_id::STRING and col->null_count() == 0) {
-        col->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
-      }
+      if (col->null_count() == 0) { col->set_null_mask(rmm::device_buffer{0, stream, mr}, 0); }
 
       // For string columns return ["offsets", "char"] schema
       if (target_type.id() == type_id::STRING) {
@@ -2169,6 +2167,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
         column_names.back().children = names;
       }
       auto [result_bitmask, null_count] = make_validity(json_col);
+      if (null_count == 0) { result_bitmask = {}; }
       return {
         make_structs_column(
           num_rows, std::move(child_columns), null_count, std::move(result_bitmask), stream, mr),
@@ -2200,6 +2199,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
                                        mr);
       column_names.back().children      = names;
       auto [result_bitmask, null_count] = make_validity(json_col);
+      if (null_count == 0) { result_bitmask = {}; }
       return {make_lists_column(num_rows - 1,
                                 std::move(offsets_column),
                                 std::move(child_column),
