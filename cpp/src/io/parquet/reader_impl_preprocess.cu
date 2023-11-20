@@ -286,25 +286,26 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
  * @param bitmask Bitmask of found unsupported encodings
  * @returns Human readable string with unsupported encodings
  */
-std::string encoding_bitmask_to_str(int8_t encoding_bitmask) {
-    std::string result;
-    if (encoding_bitmask & static_cast<int8_t>(unsupported_encoding_error::GROUP_VAR_INT)) { 
-        result.append("GROUP_VAR_INT ");
-    }
-    if (encoding_bitmask & static_cast<int8_t>(unsupported_encoding_error::BIT_PACKED)) { 
-        result.append("BIT_PACKED ");
-    }
-    if (encoding_bitmask & static_cast<int8_t>(unsupported_encoding_error::DELTA_LENGTH_BYTE_ARRAY)) { 
-        result.append("DELTA_LENGTH_BYTE_ARRAY ");
-    }
-    if (encoding_bitmask & static_cast<int8_t>(unsupported_encoding_error::BYTE_STREAM_SPLIT)) {  
-        result.append("BYTE_STREAM_SPLIT ");
-    }
-    if (!result.empty()) {
-        result.pop_back(); // Remove the last space.
-    }
+std::string encoding_bitmask_to_str(int8_t encoding_bitmask)
+{
+  std::string result;
+  if (encoding_bitmask & static_cast<int8_t>(unsupported_encoding_error::GROUP_VAR_INT)) {
+    result.append("GROUP_VAR_INT ");
+  }
+  if (encoding_bitmask & static_cast<int8_t>(unsupported_encoding_error::BIT_PACKED)) {
+    result.append("BIT_PACKED ");
+  }
+  if (encoding_bitmask & static_cast<int8_t>(unsupported_encoding_error::DELTA_LENGTH_BYTE_ARRAY)) {
+    result.append("DELTA_LENGTH_BYTE_ARRAY ");
+  }
+  if (encoding_bitmask & static_cast<int8_t>(unsupported_encoding_error::BYTE_STREAM_SPLIT)) {
+    result.append("BYTE_STREAM_SPLIT ");
+  }
+  if (!result.empty()) {
+    result.pop_back();  // Remove the last space.
+  }
 
-    return result;
+  return result;
 }
 
 /**
@@ -315,27 +316,29 @@ std::string encoding_bitmask_to_str(int8_t encoding_bitmask) {
  * @returns Human readable string with unsupported encodings
  */
 std::string list_unsupported_encodings(const cudf::detail::hostdevice_vector<PageInfo>& pages,
-                                       rmm::cuda_stream_view stream) { 
-    auto to_mask = [] __device__ (const PageInfo& page) -> int8_t {
-        int8_t encoding_value = 
-            page.encoding == Encoding::GROUP_VAR_INT           ? static_cast<int8_t>(unsupported_encoding_error::GROUP_VAR_INT) :
-            page.encoding == Encoding::BIT_PACKED              ? static_cast<int8_t>(unsupported_encoding_error::BIT_PACKED) :
-            page.encoding == Encoding::DELTA_LENGTH_BYTE_ARRAY ? static_cast<int8_t>(unsupported_encoding_error::DELTA_LENGTH_BYTE_ARRAY) :
-            page.encoding == Encoding::BYTE_STREAM_SPLIT       ? static_cast<int8_t>(unsupported_encoding_error::BYTE_STREAM_SPLIT) :
-            0x0;
-        return encoding_value;
-    };  
-    int8_t unsupported = thrust::transform_reduce(
-        rmm::exec_policy(stream),
-        pages.begin(),
-        pages.end(),
-        to_mask,
-        static_cast<int8_t>(0),
-        thrust::bit_or<int8_t>()
-    );
-    return encoding_bitmask_to_str(unsupported);
+                                       rmm::cuda_stream_view stream)
+{
+  auto to_mask = [] __device__(const PageInfo& page) -> int8_t {
+    int8_t encoding_value =
+      page.encoding == Encoding::GROUP_VAR_INT
+        ? static_cast<int8_t>(unsupported_encoding_error::GROUP_VAR_INT)
+      : page.encoding == Encoding::BIT_PACKED
+        ? static_cast<int8_t>(unsupported_encoding_error::BIT_PACKED)
+      : page.encoding == Encoding::DELTA_LENGTH_BYTE_ARRAY
+        ? static_cast<int8_t>(unsupported_encoding_error::DELTA_LENGTH_BYTE_ARRAY)
+      : page.encoding == Encoding::BYTE_STREAM_SPLIT
+        ? static_cast<int8_t>(unsupported_encoding_error::BYTE_STREAM_SPLIT)
+        : 0x0;
+    return encoding_value;
+  };
+  int8_t unsupported = thrust::transform_reduce(rmm::exec_policy(stream),
+                                                pages.begin(),
+                                                pages.end(),
+                                                to_mask,
+                                                static_cast<int8_t>(0),
+                                                thrust::bit_or<int8_t>());
+  return encoding_bitmask_to_str(unsupported);
 }
-
 
 /**
  * @brief Decode the page information from the given column chunks.
@@ -352,7 +355,7 @@ int decode_page_headers(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks
   // IMPORTANT : if you change how pages are stored within a chunk (dist pages, then data pages),
   // please update preprocess_nested_columns to reflect this.
   for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
-    chunks[c].max_num_pages = chunks[c].num_data_pages + chunks[c].num_dict_pages;  
+    chunks[c].max_num_pages = chunks[c].num_data_pages + chunks[c].num_dict_pages;
     chunks[c].page_info     = pages.device_ptr(page_count);
     page_count += chunks[c].max_num_pages;
   }
@@ -362,13 +365,14 @@ int decode_page_headers(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks
   DecodePageHeaders(chunks.device_ptr(), chunks.size(), error_code.data(), stream);
 
   if (error_code.value() != 0) {
-    int32_t mask = static_cast<int32_t>(decode_error::UNSUPPORTED_ENCODING);
-    bool unsupported_encoding = error_code.value() & mask; 
-    if(unsupported_encoding) { 
-      auto unsupported = ". With unsupported encodings found: " + list_unsupported_encodings(pages, stream);
-      CUDF_FAIL("Parquet header parsing failed with code(s) " +  error_code.str() + unsupported);      
+    int32_t mask              = static_cast<int32_t>(decode_error::UNSUPPORTED_ENCODING);
+    bool unsupported_encoding = error_code.value() & mask;
+    if (unsupported_encoding) {
+      auto unsupported =
+        ". With unsupported encodings found: " + list_unsupported_encodings(pages, stream);
+      CUDF_FAIL("Parquet header parsing failed with code(s) " + error_code.str() + unsupported);
     } else {
-      CUDF_FAIL("Parquet header parsing failed with code(s) " +  error_code.str());
+      CUDF_FAIL("Parquet header parsing failed with code(s) " + error_code.str());
     }
   }
 
