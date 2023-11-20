@@ -339,8 +339,8 @@ std::string list_unsupported_encodings(const cudf::detail::hostdevice_vector<Pag
                                                  pages.begin(),
                                                  pages.end(),
                                                  to_mask,
-                                                 static_cast<int32_t>(0),
-                                                 thrust::bit_or<int32_t>());
+                                                 0U),
+                                                 thrust::bit_or<uint32_t>());
   return encoding_bitmask_to_str(unsupported);
 }
 
