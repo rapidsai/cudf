@@ -4,7 +4,7 @@
 
 # Utility custom overrides for special methods/properties
 from ..fast_slow_proxy import (
-    _FastSlowAttribute,
+    _FastSlowMethod,
     _FastSlowProxy,
     _maybe_wrap_result,
     _slow_arg,
@@ -17,7 +17,7 @@ def array_method(self: _FastSlowProxy, *args, **kwargs):
 
 def array_function_method(self, func, types, args, kwargs):
     try:
-        return _FastSlowAttribute("__array_function__").__get__(self)(
+        return _FastSlowMethod("__array_function__").__get__(self)(
             func, types, args, kwargs
         )
     except Exception:

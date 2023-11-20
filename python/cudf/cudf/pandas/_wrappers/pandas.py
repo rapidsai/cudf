@@ -14,6 +14,7 @@ from ..fast_slow_proxy import (
     _DELETE,
     _fast_slow_function_call,
     _FastSlowAttribute,
+    _FastSlowMethod,
     _FunctionProxy,
     _Unusable,
     get_final_type_map,
@@ -153,7 +154,7 @@ Series = make_final_proxy_type(
     additional_attributes={
         "__array__": array_method,
         "__array_function__": array_function_method,
-        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "__array_ufunc__": _FastSlowMethod("__array_ufunc__"),
         "__arrow_array__": arrow_array_method,
         "__cuda_array_interface__": cuda_array_interface,
         "__iter__": custom_iter,
@@ -198,7 +199,7 @@ Index = make_final_proxy_type(
         "__init__": _DELETE,
         "__new__": Index__new__,
         "_constructor": _FastSlowAttribute("_constructor"),
-        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "__array_ufunc__": _FastSlowMethod("__array_ufunc__"),
     },
 )
 
@@ -231,7 +232,7 @@ SparseDtype = make_final_proxy_type(
     pd.SparseDtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 SparseArray = make_final_proxy_type(
@@ -266,7 +267,7 @@ CategoricalDtype = make_final_proxy_type(
     pd.CategoricalDtype,
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 DatetimeIndex = make_final_proxy_type(
@@ -293,7 +294,7 @@ DatetimeTZDtype = make_final_proxy_type(
     pd.DatetimeTZDtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 TimedeltaIndex = make_final_proxy_type(
@@ -346,7 +347,7 @@ Period = make_final_proxy_type(
     pd.Period,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 MultiIndex = make_final_proxy_type(
@@ -399,7 +400,7 @@ StringDtype = make_final_proxy_type(
     pd.StringDtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 BooleanArray = make_final_proxy_type(
@@ -409,7 +410,7 @@ BooleanArray = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
-        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__")
+        "__array_ufunc__": _FastSlowMethod("__array_ufunc__")
     },
 )
 
@@ -419,7 +420,7 @@ BooleanDtype = make_final_proxy_type(
     pd.BooleanDtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 IntegerArray = make_final_proxy_type(
@@ -429,7 +430,7 @@ IntegerArray = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
-        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__")
+        "__array_ufunc__": _FastSlowMethod("__array_ufunc__")
     },
 )
 
@@ -439,7 +440,7 @@ Int8Dtype = make_final_proxy_type(
     pd.Int8Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 
@@ -449,7 +450,7 @@ Int16Dtype = make_final_proxy_type(
     pd.Int16Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 Int32Dtype = make_final_proxy_type(
@@ -458,7 +459,7 @@ Int32Dtype = make_final_proxy_type(
     pd.Int32Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 Int64Dtype = make_final_proxy_type(
@@ -467,7 +468,7 @@ Int64Dtype = make_final_proxy_type(
     pd.Int64Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 
@@ -487,7 +488,7 @@ UInt8Dtype = make_final_proxy_type(
     pd.UInt8Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 UInt16Dtype = make_final_proxy_type(
@@ -496,7 +497,7 @@ UInt16Dtype = make_final_proxy_type(
     pd.UInt16Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 UInt32Dtype = make_final_proxy_type(
@@ -505,7 +506,7 @@ UInt32Dtype = make_final_proxy_type(
     pd.UInt32Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 UInt64Dtype = make_final_proxy_type(
@@ -514,7 +515,7 @@ UInt64Dtype = make_final_proxy_type(
     pd.UInt64Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 UInt64Index = make_final_proxy_type(
@@ -551,7 +552,7 @@ IntervalDtype = make_final_proxy_type(
     pd.IntervalDtype,
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 Interval = make_final_proxy_type(
@@ -560,7 +561,7 @@ Interval = make_final_proxy_type(
     pd.Interval,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 FloatingArray = make_final_proxy_type(
@@ -570,7 +571,7 @@ FloatingArray = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
-        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__")
+        "__array_ufunc__": _FastSlowMethod("__array_ufunc__")
     },
 )
 
@@ -580,7 +581,7 @@ Float32Dtype = make_final_proxy_type(
     pd.Float32Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 Float64Dtype = make_final_proxy_type(
@@ -589,7 +590,7 @@ Float64Dtype = make_final_proxy_type(
     pd.Float64Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 Float64Index = make_final_proxy_type(
@@ -718,7 +719,7 @@ HDFStore = make_final_proxy_type(
     pd.HDFStore,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 ExcelFile = make_final_proxy_type(
@@ -727,7 +728,7 @@ ExcelFile = make_final_proxy_type(
     pd.ExcelFile,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 ExcelWriter = make_final_proxy_type(
@@ -736,7 +737,7 @@ ExcelWriter = make_final_proxy_type(
     pd.ExcelWriter,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 try:
@@ -793,6 +794,9 @@ def _eval(
     )
 
 
+_orig_df_eval_method = DataFrame.eval
+
+
 @register_proxy_func(pd.core.accessor.register_dataframe_accessor)
 def _register_dataframe_accessor(name):
     return pd.core.accessor._register_accessor(name, DataFrame)
@@ -818,9 +822,12 @@ def _df_eval_method(self, *args, local_dict=None, global_dict=None, **kwargs):
     local_dict, global_dict = _get_eval_locals_and_globals(
         level, local_dict, global_dict
     )
-    return super(type(self), self).__getattr__("eval")(
-        *args, local_dict=local_dict, global_dict=global_dict, **kwargs
+    return _orig_df_eval_method(
+        self, *args, local_dict=local_dict, global_dict=global_dict, **kwargs
     )
+
+
+_orig_query_eval_method = DataFrame.query
 
 
 @nvtx.annotate(
@@ -835,8 +842,8 @@ def _df_query_method(self, *args, local_dict=None, global_dict=None, **kwargs):
     local_dict, global_dict = _get_eval_locals_and_globals(
         level, local_dict, global_dict
     )
-    return super(type(self), self).__getattr__("query")(
-        *args, local_dict=local_dict, global_dict=global_dict, **kwargs
+    return _orig_query_eval_method(
+        self, *args, local_dict=local_dict, global_dict=global_dict, **kwargs
     )
 
 
@@ -868,7 +875,7 @@ FY5253 = make_final_proxy_type(
     pd.offsets.FY5253,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 BDay = make_final_proxy_type(
@@ -877,7 +884,7 @@ BDay = make_final_proxy_type(
     pd.offsets.BDay,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 BMonthBegin = make_final_proxy_type(
@@ -886,7 +893,7 @@ BMonthBegin = make_final_proxy_type(
     pd.offsets.BMonthBegin,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 BMonthEnd = make_final_proxy_type(
@@ -895,7 +902,7 @@ BMonthEnd = make_final_proxy_type(
     pd.offsets.BMonthEnd,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 BQuarterBegin = make_final_proxy_type(
@@ -904,7 +911,7 @@ BQuarterBegin = make_final_proxy_type(
     pd.offsets.BQuarterBegin,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 BQuarterEnd = make_final_proxy_type(
@@ -913,7 +920,7 @@ BQuarterEnd = make_final_proxy_type(
     pd.offsets.BQuarterEnd,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 BusinessDay = make_final_proxy_type(
@@ -922,7 +929,7 @@ BusinessDay = make_final_proxy_type(
     pd.offsets.BusinessDay,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 BusinessHour = make_final_proxy_type(
@@ -931,7 +938,7 @@ BusinessHour = make_final_proxy_type(
     pd.offsets.BusinessHour,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 BusinessMonthBegin = make_final_proxy_type(
@@ -940,7 +947,7 @@ BusinessMonthBegin = make_final_proxy_type(
     pd.offsets.BusinessMonthBegin,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 BusinessMonthEnd = make_final_proxy_type(
@@ -949,7 +956,7 @@ BusinessMonthEnd = make_final_proxy_type(
     pd.offsets.BusinessMonthEnd,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 BYearBegin = make_final_proxy_type(
@@ -958,7 +965,7 @@ BYearBegin = make_final_proxy_type(
     pd.offsets.BYearBegin,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 BYearEnd = make_final_proxy_type(
@@ -967,7 +974,7 @@ BYearEnd = make_final_proxy_type(
     pd.offsets.BYearEnd,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 CBMonthBegin = make_final_proxy_type(
@@ -976,7 +983,7 @@ CBMonthBegin = make_final_proxy_type(
     pd.offsets.CBMonthBegin,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 CBMonthEnd = make_final_proxy_type(
@@ -985,7 +992,7 @@ CBMonthEnd = make_final_proxy_type(
     pd.offsets.CBMonthEnd,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 CDay = make_final_proxy_type(
@@ -994,7 +1001,7 @@ CDay = make_final_proxy_type(
     pd.offsets.CDay,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 CustomBusinessDay = make_final_proxy_type(
@@ -1003,7 +1010,7 @@ CustomBusinessDay = make_final_proxy_type(
     pd.offsets.CustomBusinessDay,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 CustomBusinessHour = make_final_proxy_type(
@@ -1012,7 +1019,7 @@ CustomBusinessHour = make_final_proxy_type(
     pd.offsets.CustomBusinessHour,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 CustomBusinessMonthBegin = make_final_proxy_type(
@@ -1021,7 +1028,7 @@ CustomBusinessMonthBegin = make_final_proxy_type(
     pd.offsets.CustomBusinessMonthBegin,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 CustomBusinessMonthEnd = make_final_proxy_type(
@@ -1030,7 +1037,7 @@ CustomBusinessMonthEnd = make_final_proxy_type(
     pd.offsets.CustomBusinessMonthEnd,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 DateOffset = make_final_proxy_type(
@@ -1039,7 +1046,7 @@ DateOffset = make_final_proxy_type(
     pd.offsets.DateOffset,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 Day = make_final_proxy_type(
@@ -1048,7 +1055,7 @@ Day = make_final_proxy_type(
     pd.offsets.Day,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 Easter = make_final_proxy_type(
@@ -1057,7 +1064,7 @@ Easter = make_final_proxy_type(
     pd.offsets.Easter,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 FY5253Quarter = make_final_proxy_type(
@@ -1066,7 +1073,7 @@ FY5253Quarter = make_final_proxy_type(
     pd.offsets.FY5253Quarter,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 Hour = make_final_proxy_type(
@@ -1075,7 +1082,7 @@ Hour = make_final_proxy_type(
     pd.offsets.Hour,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 LastWeekOfMonth = make_final_proxy_type(
@@ -1084,7 +1091,7 @@ LastWeekOfMonth = make_final_proxy_type(
     pd.offsets.LastWeekOfMonth,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 Micro = make_final_proxy_type(
@@ -1093,7 +1100,7 @@ Micro = make_final_proxy_type(
     pd.offsets.Micro,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 Milli = make_final_proxy_type(
@@ -1102,7 +1109,7 @@ Milli = make_final_proxy_type(
     pd.offsets.Milli,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 Minute = make_final_proxy_type(
@@ -1111,7 +1118,7 @@ Minute = make_final_proxy_type(
     pd.offsets.Minute,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 MonthBegin = make_final_proxy_type(
@@ -1120,7 +1127,7 @@ MonthBegin = make_final_proxy_type(
     pd.offsets.MonthBegin,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 MonthEnd = make_final_proxy_type(
@@ -1129,7 +1136,7 @@ MonthEnd = make_final_proxy_type(
     pd.offsets.MonthEnd,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 Nano = make_final_proxy_type(
@@ -1138,7 +1145,7 @@ Nano = make_final_proxy_type(
     pd.offsets.Nano,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 QuarterBegin = make_final_proxy_type(
@@ -1147,7 +1154,7 @@ QuarterBegin = make_final_proxy_type(
     pd.offsets.QuarterBegin,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 QuarterEnd = make_final_proxy_type(
@@ -1156,7 +1163,7 @@ QuarterEnd = make_final_proxy_type(
     pd.offsets.QuarterEnd,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 Second = make_final_proxy_type(
@@ -1165,7 +1172,7 @@ Second = make_final_proxy_type(
     pd.offsets.Second,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 SemiMonthBegin = make_final_proxy_type(
@@ -1174,7 +1181,7 @@ SemiMonthBegin = make_final_proxy_type(
     pd.offsets.SemiMonthBegin,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 SemiMonthEnd = make_final_proxy_type(
@@ -1183,7 +1190,7 @@ SemiMonthEnd = make_final_proxy_type(
     pd.offsets.SemiMonthEnd,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 Tick = make_final_proxy_type(
@@ -1192,7 +1199,7 @@ Tick = make_final_proxy_type(
     pd.offsets.Tick,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 Week = make_final_proxy_type(
@@ -1201,7 +1208,7 @@ Week = make_final_proxy_type(
     pd.offsets.Week,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 WeekOfMonth = make_final_proxy_type(
@@ -1210,7 +1217,7 @@ WeekOfMonth = make_final_proxy_type(
     pd.offsets.WeekOfMonth,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 YearBegin = make_final_proxy_type(
@@ -1219,7 +1226,7 @@ YearBegin = make_final_proxy_type(
     pd.offsets.YearBegin,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 YearEnd = make_final_proxy_type(
@@ -1228,7 +1235,7 @@ YearEnd = make_final_proxy_type(
     pd.offsets.YearEnd,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 Flags = make_final_proxy_type(
@@ -1237,7 +1244,7 @@ Flags = make_final_proxy_type(
     pd.Flags,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 NamedAgg = make_final_proxy_type(
@@ -1246,7 +1253,7 @@ NamedAgg = make_final_proxy_type(
     pd.NamedAgg,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={"__hash__": _FastSlowMethod("__hash__")},
 )
 
 ArrowExtensionArray = make_final_proxy_type(
@@ -1303,8 +1310,8 @@ for typ in _PANDAS_OBJ_FINAL_TYPES:
         additional_attributes={
             "__array__": array_method,
             "__array_function__": array_function_method,
-            "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
-            "__hash__": _FastSlowAttribute("__hash__"),
+            "__array_ufunc__": _FastSlowMethod("__array_ufunc__"),
+            "__hash__": _FastSlowMethod("__hash__"),
         },
     )
 

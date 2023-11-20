@@ -222,12 +222,19 @@ def make_final_proxy_type(
         additional_attributes = {}
     for method in _SPECIAL_METHODS:
         if getattr(slow_type, method, False):
-            cls_dict[method] = _FastSlowAttribute(method)
+            cls_dict[method] = _FastSlowMethod(method)
     for k, v in additional_attributes.items():
         if v is _DELETE and k in cls_dict:
             del cls_dict[k]
         elif v is not _DELETE:
             cls_dict[k] = v
+
+    for slow_name in dir(slow_type):
+        if slow_name in cls_dict or slow_name.startswith("_"):
+            continue
+        slow_attr = getattr(slow_type, slow_name)
+        if _is_function_or_method(slow_attr):
+            cls_dict[slow_name] = _FastSlowMethod(slow_name)
 
     cls = types.new_class(
         name,
@@ -325,7 +332,14 @@ def make_intermediate_proxy_type(
 
     for method in _SPECIAL_METHODS:
         if getattr(slow_type, method, False):
-            cls_dict[method] = _FastSlowAttribute(method)
+            cls_dict[method] = _FastSlowMethod(method)
+
+    for slow_name in dir(slow_type):
+        if slow_name in cls_dict or slow_name.startswith("_"):
+            continue
+        slow_attr = getattr(slow_type, slow_name)
+        if _is_function_or_method(slow_attr):
+            cls_dict[slow_name] = _FastSlowMethod(slow_name)
 
     cls = types.new_class(
         name,
@@ -433,26 +447,6 @@ class _FastSlowAttribute:
             # to correctly inspect cached_property objects.
             # GH: 264
             result = property(result.func)
-
-        if isinstance(result, (_MethodProxy, property)):
-            from .module_accelerator import disable_module_accelerator
-
-            type_ = owner if owner else type(obj)
-            slow_result_type = getattr(type_._fsproxy_slow, self._name)
-            with disable_module_accelerator():
-                result.__doc__ = inspect.getdoc(  # type: ignore
-                    slow_result_type
-                )
-
-            if isinstance(result, _MethodProxy):
-                # Note that this will produce the wrong result for bound
-                # methods because dir for the method won't be the same as for
-                # the pure unbound function, but the alternative is
-                # materializing the slow object when we don't really want to.
-                result._fsproxy_slow_dir = dir(
-                    slow_result_type
-                )  # type: ignore
-
         return result
 
 
@@ -592,7 +586,9 @@ class _FastSlowProxy:
         if name.startswith("_"):
             object.__setattr__(self, name, value)
             return
-        return _FastSlowAttribute("__setattr__").__get__(self)(name, value)
+        return _FastSlowMethod("__setattr__").__get__(self, type(self))(
+            name, value
+        )
 
     def __add__(self, other):
         return _fast_slow_function_call(operator.add, self, other)[0]
@@ -803,16 +799,74 @@ class _FunctionProxy(_CallableProxyMixin):
 
     __name__: str
 
-    def __init__(self, fast: Callable | _Unusable, slow: Callable):
+    def __init__(
+        self,
+        fast: Callable | _Unusable,
+        slow: Callable,
+        *,
+        assigned=None,
+        updated=None,
+    ):
         self._fsproxy_fast = fast
         self._fsproxy_slow = slow
-        functools.update_wrapper(self, slow)
+        assigned = (
+            functools.WRAPPER_ASSIGNMENTS if assigned is None else assigned
+        )
+        updated = functools.WRAPPER_UPDATES if updated is None else updated
+        functools.update_wrapper(
+            self,
+            slow,
+            assigned=assigned,
+            updated=updated,
+        )
 
 
-class _MethodProxy(_CallableProxyMixin, _IntermediateProxy):
-    """
-    Methods of fast-slow proxies are of type _MethodProxy.
-    """
+class _FastSlowMethod:
+    def __init__(self, name):
+        self._name = name
+        self._method = None
+
+    def __get__(self, instance, owner):
+        if self._method is None:
+            self._method = _MethodProxy(
+                getattr(owner._fsproxy_fast, self._name, _Unusable()),
+                getattr(owner._fsproxy_slow, self._name),
+            )
+        if instance is None:
+            return self._method
+        else:
+            return types.MethodType(self._method, instance)
+
+
+class _MethodProxy(_FunctionProxy):
+    def __init__(self, fast, slow):
+        super().__init__(
+            fast,
+            slow,
+            updated=functools.WRAPPER_UPDATES,
+            assigned=(
+                tuple(filter(lambda x: x != "__name__", _WRAPPER_ASSIGNMENTS))
+            ),
+        )
+
+    @property
+    def __name__(self):
+        return self._fsproxy_slow.__name__
+
+    @__name__.setter
+    def __name__(self, value):
+        try:
+            setattr(self._fsproxy_fast, "__name__", value)
+        except AttributeError:
+            pass
+        setattr(self._fsproxy_slow, "__name__", value)
+
+    @property
+    def __doc__(self):
+        from .module_accelerator import disable_module_accelerator
+
+        with disable_module_accelerator():
+            return inspect.getdoc(self._fsproxy_slow)  # type: ignore
 
 
 def _fast_slow_function_call(func: Callable, /, *args, **kwargs) -> Any:
@@ -994,10 +1048,6 @@ def _maybe_wrap_result(result: Any, func: Callable, /, *args, **kwargs) -> Any:
             return type(result)(wrapped)
     elif isinstance(result, Iterator):
         return (_maybe_wrap_result(r, lambda x: x, r) for r in result)
-    elif _is_function_or_method(result):
-        return _MethodProxy._fsproxy_wrap(
-            result, method_chain=(func, args, kwargs)
-        )
     else:
         return result
 
