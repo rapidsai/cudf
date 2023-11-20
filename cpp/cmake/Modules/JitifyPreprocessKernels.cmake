@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -53,6 +53,10 @@ function(jit_preprocess_files)
       PARENT_SCOPE
   )
 endfunction()
+
+if(NOT (EXISTS "${CUDF_GENERATED_INCLUDE_DIR}/include"))
+  make_directory("${CUDF_GENERATED_INCLUDE_DIR}/include")
+endif()
 
 jit_preprocess_files(
   SOURCE_DIRECTORY ${CUDF_SOURCE_DIR}/src FILES binaryop/jit/kernel.cu transform/jit/kernel.cu

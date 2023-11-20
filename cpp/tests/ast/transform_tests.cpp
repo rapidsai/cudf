@@ -316,6 +316,33 @@ TEST_F(TransformTest, ImbalancedTreeArithmetic)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
+TEST_F(TransformTest, ImbalancedTreeArithmeticDeep)
+{
+  auto c_0   = column_wrapper<int64_t>{4, 5, 6};
+  auto table = cudf::table_view{{c_0}};
+
+  auto col_ref_0 = cudf::ast::column_reference(0);
+
+  // expression: (c0 < c0) == (c0 < (c0 + c0))
+  //              {false, false, false} == (c0 < {8, 10, 12})
+  //              {false, false, false} == {true, true, true}
+  //              {false, false, false}
+  auto expression_left_subtree =
+    cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, col_ref_0);
+  auto expression_right_inner_subtree =
+    cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_0, col_ref_0);
+  auto expression_right_subtree =
+    cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, expression_right_inner_subtree);
+
+  auto expression_tree = cudf::ast::operation(
+    cudf::ast::ast_operator::EQUAL, expression_left_subtree, expression_right_subtree);
+
+  auto result   = cudf::compute_column(table, expression_tree);
+  auto expected = column_wrapper<bool>{false, false, false};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
 TEST_F(TransformTest, MultiLevelTreeComparator)
 {
   auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};

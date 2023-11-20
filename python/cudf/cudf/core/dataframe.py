@@ -2313,8 +2313,19 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if orient == "series":
             # Special case needed to avoid converting
             # cudf.Series objects into pd.Series
-            into_c = pd.core.common.standardize_mapping(into)
-            return into_c((k, v) for k, v in self.items())
+            if not inspect.isclass(into):
+                cons = type(into)  # type: ignore[assignment]
+                if isinstance(into, defaultdict):
+                    cons = functools.partial(cons, into.default_factory)
+            elif issubclass(into, abc.Mapping):
+                cons = into  # type: ignore[assignment]
+                if issubclass(into, defaultdict):
+                    raise TypeError(
+                        "to_dict() only accepts initialized defaultdicts"
+                    )
+            else:
+                raise TypeError(f"unsupported type: {into}")
+            return cons(self.items())  # type: ignore[misc]
 
         return self.to_pandas().to_dict(orient=orient, into=into)
 
