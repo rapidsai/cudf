@@ -286,23 +286,22 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
  * @param bitmask Bitmask of found unsupported encodings
  * @returns Human readable string with unsupported encodings
  */
-std::string encoding_bitmask_to_str(int8_t bitmask) {
-    std::printf("The bitmask is:%d \n", bitmask);
+std::string encoding_bitmask_to_str(int8_t encoding_bitmask) {
     std::string result;
-    if (bitmask & 0x1) { 
-        result += "GROUP_VAR_INT ";
+    if (encoding_bitmask & static_cast<int8_t>(unsupported_encoding_error::GROUP_VAR_INT)) { 
+        result.append("GROUP_VAR_INT ");
     }
-    if (bitmask & 0x2) { 
-        result += "BIT_PACKED ";
+    if (encoding_bitmask & static_cast<int8_t>(unsupported_encoding_error::BIT_PACKED)) { 
+        result.append("BIT_PACKED ");
     }
-    if (bitmask & 0x4) { 
-        result += "DELTA_LENGTH_BYTE_ARRAY ";
+    if (encoding_bitmask & static_cast<int8_t>(unsupported_encoding_error::DELTA_LENGTH_BYTE_ARRAY)) { 
+        result.append("DELTA_LENGTH_BYTE_ARRAY ");
     }
-    if (bitmask & 0x8) {  
-        result += "BYTE_STREAM_SPLIT ";
+    if (encoding_bitmask & static_cast<int8_t>(unsupported_encoding_error::BYTE_STREAM_SPLIT)) {  
+        result.append("BYTE_STREAM_SPLIT ");
     }
-    if (!result.empty() && result.back() == ' ') {
-        result.pop_back();
+    if (!result.empty()) {
+        result.pop_back(); // Remove the last space.
     }
 
     return result;
@@ -315,27 +314,28 @@ std::string encoding_bitmask_to_str(int8_t bitmask) {
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @returns Human readable string with unsupported encodings
  */
-std::string list_unsupported_encodings(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                        rmm::cuda_stream_view stream) { 
-  auto to_mask = [] __device__ (const PageInfo& page) -> int8_t {
-    int8_t encoding_value = 
-      page.encoding == Encoding::GROUP_VAR_INT           ? 0x1 :
-      page.encoding == Encoding::BIT_PACKED              ? 0x2 :
-      page.encoding == Encoding::DELTA_LENGTH_BYTE_ARRAY ? 0x4 :
-      page.encoding == Encoding::BYTE_STREAM_SPLIT       ? 0x8 :
-      0x0;
-    return encoding_value;
-  };  
-  int8_t unsupported = thrust::transform_reduce(
-    rmm::exec_policy(stream),
-    pages.begin(),
-    pages.end(),
-    to_mask,
-    static_cast<int8_t>(0),
-    thrust::bit_or<int8_t>()
-  );
-  return encoding_bitmask_to_str(unsupported);
+std::string list_unsupported_encodings(const cudf::detail::hostdevice_vector<PageInfo>& pages,
+                                       rmm::cuda_stream_view stream) { 
+    auto to_mask = [] __device__ (const PageInfo& page) -> int8_t {
+        int8_t encoding_value = 
+            page.encoding == Encoding::GROUP_VAR_INT           ? static_cast<int8_t>(unsupported_encoding_error::GROUP_VAR_INT) :
+            page.encoding == Encoding::BIT_PACKED              ? static_cast<int8_t>(unsupported_encoding_error::BIT_PACKED) :
+            page.encoding == Encoding::DELTA_LENGTH_BYTE_ARRAY ? static_cast<int8_t>(unsupported_encoding_error::DELTA_LENGTH_BYTE_ARRAY) :
+            page.encoding == Encoding::BYTE_STREAM_SPLIT       ? static_cast<int8_t>(unsupported_encoding_error::BYTE_STREAM_SPLIT) :
+            0x0;
+        return encoding_value;
+    };  
+    int8_t unsupported = thrust::transform_reduce(
+        rmm::exec_policy(stream),
+        pages.begin(),
+        pages.end(),
+        to_mask,
+        static_cast<int8_t>(0),
+        thrust::bit_or<int8_t>()
+    );
+    return encoding_bitmask_to_str(unsupported);
 }
+
 
 /**
  * @brief Decode the page information from the given column chunks.
@@ -356,6 +356,7 @@ int decode_page_headers(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks
     chunks[c].page_info     = pages.device_ptr(page_count);
     page_count += chunks[c].max_num_pages;
   }
+
   kernel_error error_code(stream);
   chunks.host_to_device_async(stream);
   DecodePageHeaders(chunks.device_ptr(), chunks.size(), error_code.data(), stream);
