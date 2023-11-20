@@ -97,7 +97,6 @@ jobs:
       sha: ${{ inputs.sha }}
       script: ci/test_wheel_dask_cudf.sh
   unit-tests-cudf-pandas:
-    needs: wheel-build-cudf
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.02
     with:

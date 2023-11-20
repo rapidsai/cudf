@@ -14,6 +14,8 @@ dependencies:
 - botocore>=1.24.21
 - c-compiler
 - cachetools
+- clang-tools=16.0.6
+- clang==16.0.6
 - cmake>=3.26.4
 - cramjam
 - cuda-cudart-dev
