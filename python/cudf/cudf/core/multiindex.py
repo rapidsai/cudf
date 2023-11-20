@@ -1593,7 +1593,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @_cudf_nvtx_annotate
     def to_pandas(self, *, nullable: bool = False) -> pd.MultiIndex:
-        result = self.to_frame(index=False).to_pandas(nullable=nullable)
+        result = self.to_frame(
+            index=False, name=list(range(self.nlevels))
+        ).to_pandas(nullable=nullable)
         return pd.MultiIndex.from_frame(result, names=self.names)
 
     @classmethod

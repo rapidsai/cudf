@@ -28,6 +28,8 @@ def test_convert_dtypes():
         "datetime64[ns]",
     ]
     nullable_columns = list("abcdef")
+    non_nullable_columns = list(set(data.keys()).difference(nullable_columns))
+
     df = pd.DataFrame(
         {
             k: pd.Series(v, dtype=d)
@@ -41,4 +43,4 @@ def test_convert_dtypes():
 
     with pytest.raises(NotImplementedError):
         # category and datetime64[ns] are not nullable
-        gdf[nullable_columns].convert_dtypes().to_pandas(nullable=True)
+        gdf[non_nullable_columns].convert_dtypes().to_pandas(nullable=True)

@@ -2677,7 +2677,7 @@ def test_parquet_reader_one_level_list(datadir):
     fname = datadir / "one_level_list.parquet"
 
     expect = pd.read_parquet(fname)
-    got = cudf.read_parquet(fname).to_pandas(nullable=True)
+    got = cudf.read_parquet(fname)
 
     assert_eq(expect, got)
 
