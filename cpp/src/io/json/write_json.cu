@@ -500,7 +500,9 @@ struct column_to_strings_fn {
       struct_row_end_wrap("}", true, stream),
       list_value_separator(",", true, stream),
       list_row_begin_wrap("[", true, stream),
-      list_row_end_wrap("]", true, stream)
+      list_row_end_wrap("]", true, stream),
+      true_value(options_.get_true_value(), true, stream),
+      false_value(options_.get_false_value(), true, stream)
   {
   }
 
@@ -526,8 +528,7 @@ struct column_to_strings_fn {
   std::enable_if_t<std::is_same_v<column_type, bool>, std::unique_ptr<column>> operator()(
     column_view const& column) const
   {
-    return cudf::strings::detail::from_booleans(
-      column, options_.get_true_value(), options_.get_false_value(), stream_, mr_);
+    return cudf::strings::detail::from_booleans(column, true_value, false_value, stream_, mr_);
   }
 
   // strings:
@@ -742,6 +743,9 @@ struct column_to_strings_fn {
   string_scalar const list_value_separator;  // ","
   string_scalar const list_row_begin_wrap;   // "["
   string_scalar const list_row_end_wrap;     // "]"
+  // bool converter constants
+  string_scalar const true_value;
+  string_scalar const false_value;
 };
 
 }  // namespace
