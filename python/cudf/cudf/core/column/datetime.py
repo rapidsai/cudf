@@ -27,13 +27,17 @@ from cudf.api.types import (
     is_scalar,
     is_timedelta64_dtype,
 )
+from cudf.core._compat import PANDAS_GE_220
 from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.dtypes import _get_base_dtype
 from cudf.utils.utils import _all_bools_with_nulls
 
-_guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
+if PANDAS_GE_220:
+    _guess_datetime_format = pd.tseries.api.guess_datetime_format
+else:
+    _guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
 
 # nanoseconds per time_unit
 _dtype_to_format_conversion = {
