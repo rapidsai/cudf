@@ -83,23 +83,12 @@ constexpr void set_error(int32_t error, int32_t* error_code)
 }
 
 /**
- * @brief Enum for the unsupported encodings
- *
- * These values are used as bitmasks, so they must be powers of 2.
- */
-enum class unsupported_encoding_error : int8_t {
-  GROUP_VAR_INT           = 0x1,
-  BIT_PACKED              = 0x2,
-  DELTA_LENGTH_BYTE_ARRAY = 0x4,
-  BYTE_STREAM_SPLIT       = 0x8,
-};
-
-/**
  * @brief Enum for the different types of errors that can occur during decoding.
  *
  * These values are used as bitmasks, so they must be powers of 2.
  */
 enum class decode_error : int32_t {
+  NONE                     = 0,  // Add a success or no-error value.
   DATA_STREAM_OVERRUN      = 0x1,
   LEVEL_STREAM_OVERRUN     = 0x2,
   UNSUPPORTED_ENCODING     = 0x4,

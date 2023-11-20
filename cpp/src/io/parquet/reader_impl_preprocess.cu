@@ -281,30 +281,44 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
 }
 
 /**
+ * @brief Returns a string representation of known encodings
+ *
+ * @param encoding Given encoding
+ * @return STring representation of encoding
+ */
+std::string encoding_to_string(Encoding encoding)
+{
+  switch (encoding) {
+    case Encoding::PLAIN: return "PLAIN";
+    case Encoding::GROUP_VAR_INT: return "GROUP_VAR_INT";
+    case Encoding::PLAIN_DICTIONARY: return "PLAIN_DICTIONARY";
+    case Encoding::RLE: return "RLE";
+    case Encoding::BIT_PACKED: return "BIT_PACKED";
+    case Encoding::DELTA_BINARY_PACKED: return "DELTA_BINARY_PACKED";
+    case Encoding::DELTA_LENGTH_BYTE_ARRAY: return "DELTA_LENGTH_BYTE_ARRAY";
+    case Encoding::DELTA_BYTE_ARRAY: return "DELTA_BYTE_ARRAY";
+    case Encoding::RLE_DICTIONARY: return "RLE_DICTIONARY";
+    case Encoding::BYTE_STREAM_SPLIT: return "BYTE_STREAM_SPLIT";
+    case Encoding::NUM_ENCODINGS: return "NUM_ENCODINGS";
+    default: return "UNKNOWN";
+  }
+}
+
+/**
  * @brief Helper function to convert an encoding bitmask to a readable string
  *
  * @param bitmask Bitmask of found unsupported encodings
  * @returns Human readable string with unsupported encodings
  */
-std::string encoding_bitmask_to_str(int8_t encoding_bitmask)
+std::string encoding_bitmask_to_str(int32_t encoding_bitmask)
 {
   std::string result;
-  if (encoding_bitmask & static_cast<int8_t>(unsupported_encoding_error::GROUP_VAR_INT)) {
-    result.append("GROUP_VAR_INT ");
+  for (int32_t i = 0; i < 32; ++i) {
+    if (encoding_bitmask & (1 << i)) {
+      Encoding current = static_cast<Encoding>(i);
+      if (!is_supported_encoding(current)) { result.append(encoding_to_string(current) + " "); }
+    }
   }
-  if (encoding_bitmask & static_cast<int8_t>(unsupported_encoding_error::BIT_PACKED)) {
-    result.append("BIT_PACKED ");
-  }
-  if (encoding_bitmask & static_cast<int8_t>(unsupported_encoding_error::DELTA_LENGTH_BYTE_ARRAY)) {
-    result.append("DELTA_LENGTH_BYTE_ARRAY ");
-  }
-  if (encoding_bitmask & static_cast<int8_t>(unsupported_encoding_error::BYTE_STREAM_SPLIT)) {
-    result.append("BYTE_STREAM_SPLIT ");
-  }
-  if (!result.empty()) {
-    result.pop_back();  // Remove the last space.
-  }
-
   return result;
 }
 
@@ -319,24 +333,14 @@ std::string list_unsupported_encodings(const cudf::detail::hostdevice_vector<Pag
                                        rmm::cuda_stream_view stream)
 {
   auto to_mask = [] __device__(const PageInfo& page) -> int8_t {
-    int8_t encoding_value =
-      page.encoding == Encoding::GROUP_VAR_INT
-        ? static_cast<int8_t>(unsupported_encoding_error::GROUP_VAR_INT)
-      : page.encoding == Encoding::BIT_PACKED
-        ? static_cast<int8_t>(unsupported_encoding_error::BIT_PACKED)
-      : page.encoding == Encoding::DELTA_LENGTH_BYTE_ARRAY
-        ? static_cast<int8_t>(unsupported_encoding_error::DELTA_LENGTH_BYTE_ARRAY)
-      : page.encoding == Encoding::BYTE_STREAM_SPLIT
-        ? static_cast<int8_t>(unsupported_encoding_error::BYTE_STREAM_SPLIT)
-        : 0x0;
-    return encoding_value;
+    return is_supported_encoding(page.encoding) ? 0U : encoding_to_mask(page.encoding);
   };
-  int8_t unsupported = thrust::transform_reduce(rmm::exec_policy(stream),
-                                                pages.begin(),
-                                                pages.end(),
-                                                to_mask,
-                                                static_cast<int8_t>(0),
-                                                thrust::bit_or<int8_t>());
+  int32_t unsupported = thrust::transform_reduce(rmm::exec_policy(stream),
+                                                 pages.begin(),
+                                                 pages.end(),
+                                                 to_mask,
+                                                 static_cast<int32_t>(0),
+                                                 thrust::bit_or<int32_t>());
   return encoding_bitmask_to_str(unsupported);
 }
 
@@ -365,9 +369,8 @@ int decode_page_headers(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks
   DecodePageHeaders(chunks.device_ptr(), chunks.size(), error_code.data(), stream);
 
   if (error_code.value() != 0) {
-    int32_t mask              = static_cast<int32_t>(decode_error::UNSUPPORTED_ENCODING);
-    bool unsupported_encoding = error_code.value() & mask;
-    if (unsupported_encoding) {
+    uint32_t error = static_cast<uint32_t>(error_code.value());
+    if (BitAnd(error, decode_error::UNSUPPORTED_ENCODING) != 0) {
       auto unsupported =
         ". With unsupported encodings found: " + list_unsupported_encodings(pages, stream);
       CUDF_FAIL("Parquet header parsing failed with code(s) " + error_code.str() + unsupported);
