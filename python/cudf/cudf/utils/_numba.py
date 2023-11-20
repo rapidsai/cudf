@@ -15,8 +15,8 @@ except ImportError:
 
     def patch_numba_linker_pynvjitlink():
         warnings.warn(
-            "Minor version compatibility requires pynvjitlink. "
-            "Please pip install pynvjitlink to proceed using cuDF."
+            "CUDA Toolkit is newer than CUDA driver. "
+            "Numba features will not work in this configuration. "
         )
 
 
