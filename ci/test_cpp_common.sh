@@ -18,7 +18,7 @@ set +u
 conda activate test
 set -u
 
-LIBRMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1957 cpp)
+LIBRMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1374 cpp)
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"

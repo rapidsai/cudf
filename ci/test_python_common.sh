@@ -23,8 +23,8 @@ set -u
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
-LIBRMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1957 cpp)
-RMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1957 python)
+LIBRMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1374 cpp)
+RMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1374 python)
 
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}
 RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}

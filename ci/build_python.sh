@@ -9,8 +9,8 @@ export CMAKE_GENERATOR=Ninja
 
 rapids-print-env
 
-LIBRMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1957 cpp)
-RMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1957 python)
+LIBRMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1374 cpp)
+RMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1374 python)
 
 package_dir="python"
 version=$(rapids-generate-version)
