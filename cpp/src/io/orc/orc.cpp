@@ -76,7 +76,8 @@ void ProtobufReader::read(FileFooter& s, size_t maxlen)
                        field_reader(5, s.metadata),
                        field_reader(6, s.numberOfRows),
                        raw_field_reader(7, s.statistics),
-                       field_reader(8, s.rowIndexStride));
+                       field_reader(8, s.rowIndexStride),
+                       field_reader(9, s.writer));
   function_builder(s, maxlen, op);
 }
 
@@ -314,6 +315,7 @@ size_t ProtobufWriter::write(FileFooter const& s)
   w.field_uint(6, s.numberOfRows);
   w.field_repeated_struct_blob(7, s.statistics);
   w.field_uint(8, s.rowIndexStride);
+  w.field_uint(9, cudf_writer_code);
   return w.value();
 }
 

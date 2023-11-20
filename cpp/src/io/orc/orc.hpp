@@ -40,6 +40,9 @@ namespace orc {
 static constexpr uint32_t block_header_size = 3;
 // Seconds from January 1st, 1970 to January 1st, 2015
 static constexpr int64_t orc_utc_epoch = 1420070400;
+// Each ORC writer implementation should write its code to the file footer
+// the codes are specified in the ORC specification
+static constexpr int32_t cudf_writer_code = 5;
 
 // Used for the nanosecond remainder in timestamp statistics when the actual nanoseconds of min/max
 // are not included. As the timestamp statistics are stored as milliseconds + nanosecond remainder,
@@ -90,6 +93,7 @@ struct FileFooter {
   uint64_t numberOfRows = 0;               // the total number of rows in the file
   std::vector<ColStatsBlob> statistics;    // Column statistics blobs
   uint32_t rowIndexStride = 0;             // the maximum number of rows in each index entry
+  std::optional<uint32_t> writer;          // Writer code
 };
 
 struct Stream {
