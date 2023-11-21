@@ -304,7 +304,9 @@ def on_missing_reference(app, env, node, contnode):
         "type_to_scalar_type_impl",
         "detail", # TODO: Look into why so many public APIs link to things in detail
         # Template types
-        "Radix"
+        "Radix",
+        # Extra pages that don't exist in Sphinx (yet)
+        "md_regex",
     ]
     if (
         node["refdomain"] == "cpp"
