@@ -1413,7 +1413,7 @@ __device__ void finish_page_encode(state_buf* s,
     __syncthreads();
 
     if (s->page.def_histogram != nullptr) {
-      // For definition, we know h`ist[max_rep_level] = valid_count`. If the leaf level is
+      // For definition, we know `hist[max_rep_level] = valid_count`. If the leaf level is
       // nullable, then `hist[max_rep_level - 1] = num_leaf_values - valid_count`. Finally,
       // hist[0] can be derived as `num_values - sum(hist[1]..hist[max_rep_level])`.
       bool const is_leaf_nullable = s->col.leaf_column->nullable();
