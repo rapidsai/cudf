@@ -339,17 +339,14 @@ struct BitwiseOr {
 
 // I is the column type from the input table
 template <typename I>
-__device__ uint8_t const* delta_encode(page_enc_state_s<0>* s,
-                                       uint32_t valid_count,
-                                       uint64_t* buffer,
-                                       void* temp_space)
+__device__ uint8_t const* delta_encode(page_enc_state_s<0>* s, uint64_t* buffer, void* temp_space)
 {
   using output_type = std::conditional_t<std::is_signed_v<I>, zigzag128_t, uleb128_t>;
   __shared__ delta_binary_packer<output_type> packer;
 
   auto const t = threadIdx.x;
   if (t == 0) {
-    packer.init(s->cur, valid_count, reinterpret_cast<output_type*>(buffer), temp_space);
+    packer.init(s->cur, s->page.num_valid, reinterpret_cast<output_type*>(buffer), temp_space);
   }
   __syncthreads();
 
@@ -1914,30 +1911,30 @@ __global__ void __launch_bounds__(block_size, 8)
     switch (dtype_len_in) {
       case 8: {
         // only DURATIONS map to 8 bytes, so safe to just use signed here?
-        delta_ptr = delta_encode<int64_t>(s, s->page.num_valid, delta_shared, &temp_storage);
+        delta_ptr = delta_encode<int64_t>(s, delta_shared, &temp_storage);
         break;
       }
       case 4: {
         if (type_id == type_id::UINT32) {
-          delta_ptr = delta_encode<uint32_t>(s, s->page.num_valid, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<uint32_t>(s, delta_shared, &temp_storage);
         } else {
-          delta_ptr = delta_encode<int32_t>(s, s->page.num_valid, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<int32_t>(s, delta_shared, &temp_storage);
         }
         break;
       }
       case 2: {
         if (type_id == type_id::UINT16) {
-          delta_ptr = delta_encode<uint16_t>(s, s->page.num_valid, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<uint16_t>(s, delta_shared, &temp_storage);
         } else {
-          delta_ptr = delta_encode<int16_t>(s, s->page.num_valid, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<int16_t>(s, delta_shared, &temp_storage);
         }
         break;
       }
       case 1: {
         if (type_id == type_id::UINT8) {
-          delta_ptr = delta_encode<uint8_t>(s, s->page.num_valid, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<uint8_t>(s, delta_shared, &temp_storage);
         } else {
-          delta_ptr = delta_encode<int8_t>(s, s->page.num_valid, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<int8_t>(s, delta_shared, &temp_storage);
         }
         break;
       }
@@ -1945,9 +1942,9 @@ __global__ void __launch_bounds__(block_size, 8)
     }
   } else {
     if (type_id == type_id::UINT64) {
-      delta_ptr = delta_encode<uint64_t>(s, s->page.num_valid, delta_shared, &temp_storage);
+      delta_ptr = delta_encode<uint64_t>(s, delta_shared, &temp_storage);
     } else {
-      delta_ptr = delta_encode<int64_t>(s, s->page.num_valid, delta_shared, &temp_storage);
+      delta_ptr = delta_encode<int64_t>(s, delta_shared, &temp_storage);
     }
   }
 
