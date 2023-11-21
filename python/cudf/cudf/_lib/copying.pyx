@@ -24,7 +24,6 @@ from cudf._lib.utils cimport table_view_from_columns, table_view_from_table
 from cudf._lib.reduce import minmax
 from cudf.core.abc import Serializable
 
-from libcpp.functional cimport reference_wrapper
 from libcpp.memory cimport make_unique
 
 cimport cudf._lib.cpp.contiguous_split as cpp_contiguous_split
@@ -36,13 +35,11 @@ from cudf._lib.cpp.lists.gather cimport (
 )
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.utils cimport (
     columns_from_pylibcudf_table,
     columns_from_table_view,
-    columns_from_unique_ptr,
     data_from_table_view,
     table_view_from_columns,
 )
@@ -461,53 +458,6 @@ def copy_if_else(object lhs, object rhs, Column boolean_mask):
     )
 
 
-def _boolean_mask_scatter_columns(list input_columns, list target_columns,
-                                  Column boolean_mask):
-
-    cdef table_view input_table_view = table_view_from_columns(input_columns)
-    cdef table_view target_table_view = table_view_from_columns(target_columns)
-    cdef column_view boolean_mask_view = boolean_mask.view()
-
-    cdef unique_ptr[table] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_copying.boolean_mask_scatter(
-                input_table_view,
-                target_table_view,
-                boolean_mask_view
-            )
-        )
-
-    return columns_from_unique_ptr(move(c_result))
-
-
-def _boolean_mask_scatter_scalar(list input_scalars, list target_columns,
-                                 Column boolean_mask):
-
-    cdef vector[reference_wrapper[constscalar]] input_scalar_vector
-    input_scalar_vector.reserve(len(input_scalars))
-    cdef DeviceScalar scl
-    for scl in input_scalars:
-        input_scalar_vector.push_back(reference_wrapper[constscalar](
-            scl.get_raw_ptr()[0]))
-    cdef table_view target_table_view = table_view_from_columns(target_columns)
-    cdef column_view boolean_mask_view = boolean_mask.view()
-
-    cdef unique_ptr[table] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_copying.boolean_mask_scatter(
-                input_scalar_vector,
-                target_table_view,
-                boolean_mask_view
-            )
-        )
-
-    return columns_from_unique_ptr(move(c_result))
-
-
 @acquire_spill_lock()
 def boolean_mask_scatter(list input_, list target_columns,
                          Column boolean_mask):
@@ -527,18 +477,16 @@ def boolean_mask_scatter(list input_, list target_columns,
         return []
 
     if isinstance(input_[0], Column):
-        return _boolean_mask_scatter_columns(
-            input_,
-            target_columns,
-            boolean_mask
-        )
+        plc_input = pylibcudf.Table([col.to_pylibcudf(mode="read") for col in input_])
     else:
-        scalar_list = [as_device_scalar(i) for i in input_]
-        return _boolean_mask_scatter_scalar(
-            scalar_list,
-            target_columns,
-            boolean_mask
-        )
+        plc_input = [(<DeviceScalar> as_device_scalar(i)).c_value for i in input_]
+
+    tbl = pylibcudf.copying.boolean_mask_scatter(
+        plc_input,
+        pylibcudf.Table([col.to_pylibcudf(mode="read") for col in target_columns]),
+        boolean_mask.to_pylibcudf(mode="read"),
+    )
+    return columns_from_pylibcudf_table(tbl)
 
 
 @acquire_spill_lock()

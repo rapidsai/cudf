@@ -199,3 +199,44 @@ cpdef Column copy_if_else(object lhs, object rhs, Column boolean_mask):
         raise ValueError(f"Invalid arguments {lhs} and {rhs}")
 
     return Column.from_libcudf(move(result))
+
+
+cpdef Table boolean_mask_scatter(object input, Table target, Column boolean_mask):
+    cdef unique_ptr[table] result
+    cdef vector[reference_wrapper[const scalar]] c_scalars
+    cdef Scalar slr
+
+    # TODO: Could generalize to sequence
+    if isinstance(input, list):
+        if not isinstance(input[0], Scalar):
+            raise TypeError("input must be a list of scalars")
+
+        c_scalars.reserve(len(input))
+        for slr in input:
+            c_scalars.push_back(
+                # TODO: This requires the constscalar ctypedef
+                # https://github.com/cython/cython/issues/4180
+                reference_wrapper[constscalar](dereference(slr.c_obj))
+            )
+
+        with nogil:
+            result = move(
+                cpp_copying.boolean_mask_scatter(
+                    c_scalars,
+                    target.view(),
+                    boolean_mask.view(),
+                )
+            )
+    elif isinstance(input, Table):
+        with nogil:
+            result = move(
+                cpp_copying.boolean_mask_scatter(
+                    (<Table> input).view(),
+                    target.view(),
+                    boolean_mask.view()
+                )
+            )
+    else:
+        raise ValueError(f"Invalid argument {input}")
+
+    return Table.from_libcudf(move(result))
