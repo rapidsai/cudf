@@ -734,6 +734,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 rangeindex = isinstance(
                     columns, (range, pd.RangeIndex, cudf.RangeIndex)
                 )
+                label_dtype = getattr(columns, "dtype", None)
                 self._data = ColumnAccessor(
                     {
                         k: column.column_empty(
@@ -745,6 +746,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     if isinstance(columns, pd.Index)
                     else None,
                     rangeindex=rangeindex,
+                    label_dtype=label_dtype,
                 )
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
@@ -995,12 +997,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             self._data.rangeindex = isinstance(
                 columns, (range, pd.RangeIndex, cudf.RangeIndex)
             )
+            self._data.label_dtype = getattr(columns, "dtype", None)
 
     @_cudf_nvtx_annotate
     def _init_from_dict_like(
         self, data, index=None, columns=None, nan_as_null=None
     ):
+        label_dtype = None
         if columns is not None:
+            label_dtype = getattr(columns, "dtype", None)
             # remove all entries in data that are not in columns,
             # inserting new empty columns for entries in columns that
             # are not in data
@@ -1069,6 +1074,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if isinstance(columns, pd.Index)
             else self._data._level_names
         )
+        self._data.label_dtype = label_dtype
 
     @classmethod
     def _from_data(
