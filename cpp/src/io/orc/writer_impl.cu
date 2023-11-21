@@ -2589,6 +2589,7 @@ void writer::impl::add_table_to_footer_data(orc_table_view const& orc_table,
   if (_ffooter.headerLength == 0) {
     // First call
     _ffooter.headerLength   = std::strlen(MAGIC);
+    _ffooter.writer         = cudf_writer_code;
     _ffooter.rowIndexStride = _row_index_stride;
     _ffooter.types.resize(1 + orc_table.num_columns());
     _ffooter.types[0].kind = STRUCT;

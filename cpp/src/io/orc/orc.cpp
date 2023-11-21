@@ -317,7 +317,7 @@ size_t ProtobufWriter::write(FileFooter const& s)
   w.field_uint(6, s.numberOfRows);
   w.field_repeated_struct_blob(7, s.statistics);
   w.field_uint(8, s.rowIndexStride);
-  w.field_uint(9, cudf_writer_code);
+  if (s.writer) w.field_uint(9, *s.writer);
   return w.value();
 }
 
