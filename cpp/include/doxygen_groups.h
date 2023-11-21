@@ -181,6 +181,7 @@
  *   @defgroup utility_dispatcher Type Dispatcher
  *   @defgroup utility_bitmask Bitmask
  *   @defgroup utility_error Exception
+ *   @defgroup utility_span Exception
  * @}
  * @defgroup labeling_apis Labeling
  * @{
