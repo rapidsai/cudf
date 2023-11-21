@@ -235,6 +235,8 @@ def make_final_proxy_type(
         slow_attr = getattr(slow_type, slow_name)
         if _is_function_or_method(slow_attr):
             cls_dict[slow_name] = _FastSlowMethod(slow_name)
+        elif isinstance(slow_attr, (property, functools.cached_property)):
+            cls_dict[slow_name] = _FastSlowAttribute(slow_name)
 
     cls = types.new_class(
         name,
