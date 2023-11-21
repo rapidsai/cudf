@@ -154,3 +154,48 @@ cpdef Column allocate_like(
         )
 
     return Column.from_libcudf(move(c_result))
+
+
+cpdef Column copy_if_else(object lhs, object rhs, Column boolean_mask):
+    cdef unique_ptr[column] result
+
+    if isinstance(lhs, Column) and isinstance(rhs, Column):
+        with nogil:
+            result = move(
+                cpp_copying.copy_if_else(
+                    (<Column> lhs).view(),
+                    (<Column> rhs).view(),
+                    boolean_mask.view()
+                )
+            )
+    elif isinstance(lhs, Column) and isinstance(rhs, Scalar):
+        with nogil:
+            result = move(
+                cpp_copying.copy_if_else(
+                    (<Column> lhs).view(),
+                    dereference((<Scalar> rhs).c_obj),
+                    boolean_mask.view()
+                )
+            )
+    elif isinstance(lhs, Scalar) and isinstance(rhs, Column):
+        with nogil:
+            result = move(
+                cpp_copying.copy_if_else(
+                    dereference((<Scalar> lhs).c_obj),
+                    (<Column> rhs).view(),
+                    boolean_mask.view()
+                )
+            )
+    elif isinstance(lhs, Scalar) and isinstance(rhs, Scalar):
+        with nogil:
+            result = move(
+                cpp_copying.copy_if_else(
+                    dereference((<Scalar> lhs).c_obj),
+                    dereference((<Scalar> rhs).c_obj),
+                    boolean_mask.view()
+                )
+            )
+    else:
+        raise ValueError(f"Invalid arguments {lhs} and {rhs}")
+
+    return Column.from_libcudf(move(result))

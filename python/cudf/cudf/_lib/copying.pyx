@@ -450,23 +450,15 @@ def _copy_if_else_scalar_scalar(DeviceScalar lhs,
 
 @acquire_spill_lock()
 def copy_if_else(object lhs, object rhs, Column boolean_mask):
-
-    if isinstance(lhs, Column):
-        if isinstance(rhs, Column):
-            return _copy_if_else_column_column(lhs, rhs, boolean_mask)
-        else:
-            return _copy_if_else_column_scalar(
-                lhs, as_device_scalar(rhs), boolean_mask)
-    else:
-        if isinstance(rhs, Column):
-            return _copy_if_else_scalar_column(
-                as_device_scalar(lhs), rhs, boolean_mask)
-        else:
-            if lhs is None and rhs is None:
-                return lhs
-
-            return _copy_if_else_scalar_scalar(
-                as_device_scalar(lhs), as_device_scalar(rhs), boolean_mask)
+    return Column.from_pylibcudf(
+        pylibcudf.copying.copy_if_else(
+            lhs.to_pylibcudf(mode="read") if isinstance(lhs, Column)
+            else (<DeviceScalar> as_device_scalar(lhs)).c_value,
+            rhs.to_pylibcudf(mode="read") if isinstance(rhs, Column)
+            else (<DeviceScalar> as_device_scalar(rhs)).c_value,
+            boolean_mask.to_pylibcudf(mode="read"),
+        )
+    )
 
 
 def _boolean_mask_scatter_columns(list input_columns, list target_columns,
