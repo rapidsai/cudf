@@ -17,7 +17,7 @@ def array_method(self: _FastSlowProxy, *args, **kwargs):
 
 def array_function_method(self, func, types, args, kwargs):
     try:
-        return _FastSlowMethod("__array_function__").__get__(self)(
+        return _FastSlowMethod("__array_function__").__get__(self, type(self))(
             func, types, args, kwargs
         )
     except Exception:

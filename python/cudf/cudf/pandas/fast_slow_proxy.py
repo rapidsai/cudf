@@ -78,6 +78,9 @@ class _Unusable:
             return super().__getattribute__(name)
         raise TypeError("Unusable type. Falling back to the slow object")
 
+    def __repr__(self) -> str:
+        raise AttributeError("Unusable type. Falling back to the slow object")
+
 
 class _PickleConstructor:
     """A pickleable object to support construction in __reduce__.
@@ -236,7 +239,7 @@ def make_final_proxy_type(
         if _is_function_or_method(slow_attr):
             cls_dict[slow_name] = _FastSlowMethod(slow_name)
         elif isinstance(slow_attr, (property, functools.cached_property)):
-            cls_dict[slow_name] = _FastSlowAttribute(slow_name)
+            cls_dict[slow_name] = type(slow_attr)(_FastSlowMethod(slow_name))
 
     cls = types.new_class(
         name,
@@ -342,6 +345,8 @@ def make_intermediate_proxy_type(
         slow_attr = getattr(slow_type, slow_name)
         if _is_function_or_method(slow_attr):
             cls_dict[slow_name] = _FastSlowMethod(slow_name)
+        else:
+            cls_dict[slow_name] = _FastSlowAttribute(slow_name)
 
     cls = types.new_class(
         name,
@@ -474,15 +479,6 @@ class _FastSlowProxyMeta(type):
         except AttributeError:
             return type.__dir__(self)
 
-    def __getattr__(self, name: str) -> Any:
-        if name.startswith("_fsproxy") or name.startswith("__"):
-            # an AttributeError was raised when trying to evaluate
-            # an internal attribute, we just need to propagate this
-            _raise_attribute_error(self.__class__.__name__, name)
-
-        attr = _FastSlowAttribute(name)
-        return attr.__get__(None, owner=self)
-
     def __subclasscheck__(self, __subclass: type) -> bool:
         if super().__subclasscheck__(__subclass):
             return True
@@ -555,34 +551,6 @@ class _FastSlowProxy:
             return self._fsproxy_slow_dir
         except AttributeError:
             return object.__dir__(self)
-
-    def __getattr__(self, name: str) -> Any:
-        if name.startswith("_fsproxy"):
-            # an AttributeError was raised when trying to evaluate
-            # an internal attribute, we just need to propagate this
-            _raise_attribute_error(self.__class__.__name__, name)
-        if name in {
-            "_ipython_canary_method_should_not_exist_",
-            "_ipython_display_",
-            "_repr_mimebundle_",
-            # Workaround for https://github.com/numpy/numpy/issues/5350
-            # see GH:216 for details
-            "__array_struct__",
-        }:
-            # IPython always looks for these names in its display
-            # logic. See #GH:70 and #GH:172 for more details but the
-            # gist is that not raising an AttributeError immediately
-            # results in slow display in IPython (since the fast
-            # object will be copied to the slow one to look for
-            # attributes there which then also won't exist).
-            # This is somewhat delicate to the order in which IPython
-            # implements special display fallbacks.
-            _raise_attribute_error(self.__class__.__name__, name)
-        if name.startswith("_"):
-            # private attributes always come from `._fsproxy_slow`:
-            return getattr(self._fsproxy_slow, name)
-        attr = _FastSlowAttribute(name)
-        return attr.__get__(self)
 
     def __setattr__(self, name, value):
         if name.startswith("_"):
@@ -1167,6 +1135,7 @@ _SPECIAL_METHODS: Set[str] = {
     "__deepcopy__",
     "__dataframe__",
     "__call__",
+    "__getattr__",
     # Added on a per-proxy basis
     # https://github.com/rapidsai/xdf/pull/306#pullrequestreview-1636155428
     # "__hash__",

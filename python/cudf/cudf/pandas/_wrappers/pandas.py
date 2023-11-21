@@ -77,14 +77,16 @@ class _AccessorAttr:
     """
 
     def __init__(self, typ):
-        self.__typ = typ
+        self._typ = typ
+
+    def __set_name__(self, owner, name):
+        self._name = name
 
     def __get__(self, obj, cls=None):
         if obj is None:
-            return self.__typ
+            return self._typ
         else:
-            # allow __getattr__ to handle this
-            raise AttributeError()
+            return _FastSlowAttribute(self._name).__get__(obj, self._typ)
 
 
 DatetimeProperties = make_intermediate_proxy_type(
@@ -141,6 +143,7 @@ DataFrame = make_final_proxy_type(
         "__dir__": _DataFrame__dir__,
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_sliced": _FastSlowAttribute("_constructor_sliced"),
+        "_accessors": set(),
     },
 )
 
@@ -163,6 +166,7 @@ Series = make_final_proxy_type(
         "cat": _AccessorAttr(_CategoricalAccessor),
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
+        "_accessors": set(),
     },
 )
 
@@ -200,6 +204,7 @@ Index = make_final_proxy_type(
         "__new__": Index__new__,
         "_constructor": _FastSlowAttribute("_constructor"),
         "__array_ufunc__": _FastSlowMethod("__array_ufunc__"),
+        "_accessors": set(),
     },
 )
 
