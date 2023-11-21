@@ -21,7 +21,6 @@
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <rmm/cuda_stream_pool.hpp>
 
 #include <bitset>
 #include <numeric>
@@ -30,10 +29,15 @@ namespace cudf::io::parquet::detail {
 
 void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 {
-  auto& chunks              = _pass_itm_data->chunks;
-  auto& pages               = _pass_itm_data->pages_info;
-  auto& page_nesting        = _pass_itm_data->page_nesting_info;
-  auto& page_nesting_decode = _pass_itm_data->page_nesting_decode_info;
+  auto& chunks               = _pass_itm_data->chunks;
+  auto& pages                = _pass_itm_data->pages_info;
+  auto& page_nesting         = _pass_itm_data->page_nesting_info;
+  auto& page_nesting_decode  = _pass_itm_data->page_nesting_decode_info;
+  auto const level_type_size = _pass_itm_data->level_type_size;
+
+  // temporary space for DELTA_BYTE_ARRAY decoding. this only needs to live until
+  // gpu::DecodeDeltaByteArray returns.
+  rmm::device_uvector<uint8_t> delta_temp_buf(0, _stream);
 
   // Should not reach here if there is no page data.
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
@@ -52,11 +56,12 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   // doing a gather operation later on.
   // TODO: This step is somewhat redundant if size info has already been calculated (nested schema,
   // chunked reader).
-  auto const has_strings = (kernel_mask & KERNEL_MASK_STRING) != 0;
+  auto const has_strings =
+    (kernel_mask & BitOr(decode_kernel_mask::STRING, decode_kernel_mask::DELTA_BYTE_ARRAY)) != 0;
   std::vector<size_t> col_sizes(_input_columns.size(), 0L);
   if (has_strings) {
     ComputePageStringSizes(
-      pages, chunks, skip_rows, num_rows, _pass_itm_data->level_type_size, _stream);
+      pages, chunks, delta_temp_buf, skip_rows, num_rows, level_type_size, kernel_mask, _stream);
 
     col_sizes = calculate_page_string_offsets();
 
@@ -163,6 +168,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   chunks.host_to_device_async(_stream);
   chunk_nested_valids.host_to_device_async(_stream);
   chunk_nested_data.host_to_device_async(_stream);
+  if (has_strings) { chunk_nested_str_data.host_to_device_async(_stream); }
 
   // create this before we fork streams
   kernel_error error_code(_stream);
@@ -171,25 +177,27 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   int const nkernels = std::bitset<32>(kernel_mask).count();
   auto streams       = cudf::detail::fork_streams(_stream, nkernels);
 
-  auto const level_type_size = _pass_itm_data->level_type_size;
-
   // launch string decoder
   int s_idx = 0;
-  if (has_strings) {
-    auto& stream = streams[s_idx++];
-    chunk_nested_str_data.host_to_device_async(stream);
+  if (BitAnd(kernel_mask, decode_kernel_mask::STRING) != 0) {
     DecodeStringPageData(
-      pages, chunks, num_rows, skip_rows, level_type_size, error_code.data(), stream);
+      pages, chunks, num_rows, skip_rows, level_type_size, error_code.data(), streams[s_idx++]);
+  }
+
+  // launch delta byte array decoder
+  if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_BYTE_ARRAY) != 0) {
+    DecodeDeltaByteArray(
+      pages, chunks, num_rows, skip_rows, level_type_size, error_code.data(), streams[s_idx++]);
   }
 
   // launch delta binary decoder
-  if ((kernel_mask & KERNEL_MASK_DELTA_BINARY) != 0) {
+  if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_BINARY) != 0) {
     DecodeDeltaBinary(
       pages, chunks, num_rows, skip_rows, level_type_size, error_code.data(), streams[s_idx++]);
   }
 
   // launch the catch-all page decoder
-  if ((kernel_mask & KERNEL_MASK_GENERAL) != 0) {
+  if (BitAnd(kernel_mask, decode_kernel_mask::GENERAL) != 0) {
     DecodePageData(
       pages, chunks, num_rows, skip_rows, level_type_size, error_code.data(), streams[s_idx++]);
   }

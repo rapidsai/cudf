@@ -146,18 +146,21 @@ __device__ void skip_struct_field(byte_stream_s* bs, int field_type)
  * @param chunk Column chunk the page belongs to
  * @return `kernel_mask_bits` value for the given page
  */
-__device__ uint32_t kernel_mask_for_page(PageInfo const& page, ColumnChunkDesc const& chunk)
+__device__ decode_kernel_mask kernel_mask_for_page(PageInfo const& page,
+                                                   ColumnChunkDesc const& chunk)
 {
-  if (page.flags & PAGEINFO_FLAGS_DICTIONARY) { return 0; }
+  if (page.flags & PAGEINFO_FLAGS_DICTIONARY) { return decode_kernel_mask::NONE; }
 
   if (page.encoding == Encoding::DELTA_BINARY_PACKED) {
-    return KERNEL_MASK_DELTA_BINARY;
+    return decode_kernel_mask::DELTA_BINARY;
+  } else if (page.encoding == Encoding::DELTA_BYTE_ARRAY) {
+    return decode_kernel_mask::DELTA_BYTE_ARRAY;
   } else if (is_string_col(chunk)) {
-    return KERNEL_MASK_STRING;
+    return decode_kernel_mask::STRING;
   }
 
   // non-string, non-delta
-  return KERNEL_MASK_GENERAL;
+  return decode_kernel_mask::GENERAL;
 }
 
 /**
@@ -380,7 +383,9 @@ __global__ void __launch_bounds__(128)
       bs->page.skipped_values      = -1;
       bs->page.skipped_leaf_values = 0;
       bs->page.str_bytes           = 0;
-      bs->page.kernel_mask         = 0;
+      bs->page.temp_string_size    = 0;
+      bs->page.temp_string_buf     = nullptr;
+      bs->page.kernel_mask         = decode_kernel_mask::NONE;
     }
     num_values     = bs->ck.num_values;
     page_info      = bs->ck.page_info;

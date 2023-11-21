@@ -4,12 +4,12 @@
 build-backend = "setuptools.build_meta"
 requires = [
     "cmake>=3.26.4",
-    "cython>=3.0.0",
+    "cython>=3.0.3",
     "ninja",
     "numpy>=1.21,<1.25",
     "protoc-wheel",
     "pyarrow==14.0.1.*",
-    "rmm==24.2.*",
+    "rmm==23.12.*",
     "scikit-build>=0.13.1",
     "setuptools",
     "wheel",
