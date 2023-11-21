@@ -32,8 +32,12 @@ namespace cudf::io::parquet {
  * the object's lifetime.
  */
 class kernel_error {
+ public:
+  using error_type   = int32_t;
+  using pointer_type = error_type*;
+
  private:
-  rmm::device_scalar<int32_t> _error_code;
+  rmm::device_scalar<error_type> _error_code;
 
  public:
   /**
