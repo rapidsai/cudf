@@ -354,7 +354,10 @@ TEST_F(TransformTest, DeeplyNestedArithmeticLogicalExpression)
                               cudf::ast::ast_operator root_operator,
                               cudf::ast::ast_operator arithmetic_operator,
                               bool nested_left_tree) {
-    std::vector<cudf::ast::operation> expressions;
+    // Note that a std::list is required here because of its guarantees against reference
+    // invalidation when items are added or removed. References to items in a std::vector are not
+    // safe if the vector must re-allocate.
+    auto expressions = std::list<cudf::ast::operation>();
 
     auto op = arithmetic_operator;
     expressions.push_back(cudf::ast::operation(op, col_ref, col_ref));
@@ -381,10 +384,16 @@ TEST_F(TransformTest, DeeplyNestedArithmeticLogicalExpression)
   auto col_ref_0 = cudf::ast::column_reference(0);
   auto col_ref_1 = cudf::ast::column_reference(1);
 
-  auto left_expression =
-    generate_ast_expr(left_depth_level, col_ref_0, cudf::ast::ast_operator::LESS, cudf::ast::ast_operator::ADD, false);
-  auto right_expression =
-    generate_ast_expr(right_depth_level, col_ref_1, cudf::ast::ast_operator::EQUAL, cudf::ast::ast_operator::SUB, true);
+  auto left_expression  = generate_ast_expr(left_depth_level,
+                                           col_ref_0,
+                                           cudf::ast::ast_operator::LESS,
+                                           cudf::ast::ast_operator::ADD,
+                                           false);
+  auto right_expression = generate_ast_expr(right_depth_level,
+                                            col_ref_1,
+                                            cudf::ast::ast_operator::EQUAL,
+                                            cudf::ast::ast_operator::SUB,
+                                            true);
 
   auto expression_tree = cudf::ast::operation(
     cudf::ast::ast_operator::LOGICAL_OR, left_expression.back(), right_expression.back());
