@@ -664,7 +664,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         else:
             index = RangeIndex(len(column))
 
-        if name_from_data is not None:
+        if name_from_data is not None and name is None:
             name = name_from_data
         super().__init__({name: column}, index=index)
         if index_from_data is not None:

@@ -2653,7 +2653,7 @@ def test_series_duplicate_index_reindex():
 
 
 @pytest.mark.parametrize(
-    "klass", [[cudf.Series, cudf.Index, pd.Series, pd.Index]]
+    "klass", [cudf.Series, cudf.Index, pd.Series, pd.Index]
 )
 def test_series_from_named_object_name_priority(klass):
     result = cudf.Series(klass([1], name="a"), name="b")
