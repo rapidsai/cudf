@@ -2702,7 +2702,7 @@ void writer::impl::close()
   ps.footerLength         = pbw.size();
   ps.compression          = _compression_kind;
   ps.compressionBlockSize = _compression_blocksize;
-  ps.version              = {0, 7};  // ORC_517
+  ps.version              = {0, 6};  // ORC-135
   ps.magic                = MAGIC;
 
   auto const ps_length = static_cast<uint8_t>(pbw.write(ps));
