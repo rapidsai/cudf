@@ -51,12 +51,13 @@ static constexpr int32_t DEFAULT_MIN_NANOS = 0;
 static constexpr int32_t DEFAULT_MAX_NANOS = 999'999;
 
 struct PostScript {
-  uint64_t footerLength       = 0;     // the length of the footer section in bytes
-  CompressionKind compression = NONE;  // the kind of generic compression used
-  uint32_t compressionBlockSize{};     // the maximum size of each compression chunk
-  std::vector<uint32_t> version;       // the lowest version that should to be able to read the file
-  uint64_t metadataLength = 0;         // the length of the metadata section in bytes
-  std::string magic       = "";        // the fixed string "ORC"
+  uint64_t footerLength       = 0;        // the length of the footer section in bytes
+  CompressionKind compression = NONE;     // the kind of generic compression used
+  uint32_t compressionBlockSize{};        // the maximum size of each compression chunk
+  std::vector<uint32_t> version;          // the version of the file format
+  uint64_t metadataLength = 0;            // the length of the metadata section in bytes
+  std::optional<uint32_t> writerVersion;  // The version of the writer that wrote the file
+  std::string magic = "";                 // the fixed string "ORC"
 };
 
 struct StripeInformation {

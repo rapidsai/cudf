@@ -63,8 +63,14 @@ void ProtobufReader::read(PostScript& s, size_t maxlen)
                        field_reader(3, s.compressionBlockSize),
                        packed_field_reader(4, s.version),
                        field_reader(5, s.metadataLength),
+                       field_reader(6, s.writerVersion),
                        field_reader(8000, s.magic));
   function_builder(s, maxlen, op);
+  if (s.writerVersion)
+    std::cout << "writerVersion: " << s.writerVersion.value() << std::endl;
+  else
+    std::cout << "writerVersion: none" << std::endl;
+  CUDF_FAIL("stop");
 }
 
 void ProtobufReader::read(FileFooter& s, size_t maxlen)
@@ -300,6 +306,7 @@ size_t ProtobufWriter::write(PostScript const& s)
   if (s.compression != NONE) { w.field_uint(3, s.compressionBlockSize); }
   w.field_packed_uint(4, s.version);
   w.field_uint(5, s.metadataLength);
+  if (s.writerVersion) w.field_uint(6, *s.writerVersion);
   w.field_blob(8000, s.magic);
   return w.value();
 }

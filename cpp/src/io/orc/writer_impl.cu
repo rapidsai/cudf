@@ -2702,7 +2702,8 @@ void writer::impl::close()
   ps.footerLength         = pbw.size();
   ps.compression          = _compression_kind;
   ps.compressionBlockSize = _compression_blocksize;
-  ps.version              = {0, 6};  // ORC-135
+  ps.version              = {0, 12};  // Hive 0.12
+  ps.writerVersion        = 7;        // ORC-517 fixed
   ps.magic                = MAGIC;
 
   auto const ps_length = static_cast<uint8_t>(pbw.write(ps));
