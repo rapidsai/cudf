@@ -995,10 +995,12 @@ def test_multicolumn_item():
     assert_eq(gdgT[(0, 0)], pdgT[(0, 0)])
 
 
-def test_multiindex_to_frame(pdfIndex, pdfIndexNulls):
+def test_multiindex_to_frame(pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex.to_frame(), gdfIndex.to_frame())
 
+
+def test_multiindex_to_frame_nulls(pdfIndexNulls):
     gdfIndex = cudf.from_pandas(pdfIndexNulls)
     assert_eq(
         pdfIndexNulls.to_frame().fillna("nan"),
