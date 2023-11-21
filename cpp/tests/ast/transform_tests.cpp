@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cstdint>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
@@ -751,5 +752,87 @@ TEST_F(TransformTest, NullLogicalOr)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
+
+TEST_F(TransformTest, ImbalancedTreeArithmeticDeep)
+{
+  auto c_0   = column_wrapper<int64_t>{4, 5, 6};
+  auto table = cudf::table_view{{c_0}};
+
+  auto col_ref_0 = cudf::ast::column_reference(0);
+
+  // expression: (c0 < c0) == (c0 < (c0 + c0))
+  //              {false, false, false} == (c0 < {8, 10, 12})
+  //              {false, false, false} == {true, true, true}
+  //              {false, false, false}
+  auto expression_left_subtree =
+    cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, col_ref_0);
+  auto expression_right_inner_subtree =
+    cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_0, col_ref_0);
+  auto expression_right_subtree =
+    cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, expression_right_inner_subtree);
+
+  auto expression_tree = cudf::ast::operation(
+    cudf::ast::ast_operator::EQUAL, expression_left_subtree, expression_right_subtree);
+
+  auto result   = cudf::compute_column(table, expression_tree);
+  auto expected = column_wrapper<bool>{false, false, false};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TEST_F(TransformTest, DeeplyNestedArithmeticLogicalExpression)
+{
+  // Test logic for deeply nested arithmetic and logical expressions.
+  constexpr int64_t kLeftDepthLevel = 100;
+  constexpr int64_t kRightDepthLevel = 75;
+    
+  auto generate_ast_expr = [](int64_t depth_level, cudf::ast::column_reference col_ref, cudf::ast::ast_operator root_operator, bool nested_left_tree){
+    auto expressions = std::list<cudf::ast::operation>();
+    std::vector<cudf::ast::ast_operator> arithmetic_operators = {cudf::ast::ast_operator::ADD, cudf::ast::ast_operator::SUB};
+
+    auto op = arithmetic_operators[rand() % arithmetic_operators.size()];
+    expressions.push_back(cudf::ast::operation(op, col_ref, col_ref));
+
+    for (int64_t i = 0; i < depth_level - 1; i++) {
+      if (i == depth_level - 2) {
+        op = root_operator;
+      } else {
+        op = arithmetic_operators[rand() % arithmetic_operators.size()];  
+      }
+      if (nested_left_tree) {
+        expressions.push_back(cudf::ast::operation(op, expressions.back(), col_ref));
+      } else {
+        expressions.push_back(cudf::ast::operation(op, col_ref, expressions.back()));
+      }
+    }
+    return expressions;
+  };
+
+  auto c_0   = column_wrapper<int64_t>{0, 0, 0};
+  auto c_1   = column_wrapper<int32_t>{0, 0, 0};
+  auto table = cudf::table_view{{c_0, c_1}};
+
+  auto expressions = std::list<cudf::ast::operation>();
+
+  auto col_ref_0 = cudf::ast::column_reference(0);
+  auto col_ref_1 = cudf::ast::column_reference(1);
+
+
+  auto left_expression = generate_ast_expr(kLeftDepthLevel, col_ref_0, cudf::ast::ast_operator::LESS, false);
+  auto right_expression = generate_ast_expr(kRightDepthLevel, col_ref_1, cudf::ast::ast_operator::EQUAL, true);
+
+  auto expression_tree = cudf::ast::operation(
+    cudf::ast::ast_operator::LOGICAL_OR, left_expression.back(), right_expression.back());
+  // expression: OR(<=(-(-(+(-($0, $0), $0), $0), $0), $0), ==($0, -($0, +($0, +($0, -($0, $0))))))
+  // ...
+  // OR(<=(0, 0), ==(0, 0))
+  // true
+
+  auto result   = cudf::compute_column(table, expression_tree);
+  auto expected = column_wrapper<bool>{true, true, true};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
 
 CUDF_TEST_PROGRAM_MAIN()
