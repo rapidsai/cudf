@@ -51,6 +51,10 @@ html_static_path = ["_static"]
 
 pygments_style = "sphinx"
 
+html_context = {
+    "default_mode": "light",
+}
+
 html_theme_options = {
     "external_links": [],
     "github_url": "https://github.com/rapidsai/cudf",
@@ -58,6 +62,8 @@ html_theme_options = {
     "show_toc_level": 1,
     "navbar_align": "right",
     "navigation_with_keys": True,
+    # Note we have omitted `theme-switcher` below to disable dark mode
+    "navbar_end": ["navbar-icon-links"],
 }
 include_pandas_compat = True
 

@@ -98,6 +98,10 @@ exclude_patterns = ['venv', "**/includes/**",]
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = "sphinx"
 
+html_context = {
+    "default_mode": "light",
+}
+
 html_theme_options = {
     "external_links": [],
     # https://github.com/pydata/pydata-sphinx-theme/issues/1220
@@ -107,6 +111,8 @@ html_theme_options = {
     "show_toc_level": 1,
     "navbar_align": "right",
     "navigation_with_keys": True,
+    # Note we have omitted `theme-switcher` below to disable dark mode
+    "navbar_end": ["navbar-icon-links"],
 }
 include_pandas_compat = True
 
