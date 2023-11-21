@@ -402,8 +402,8 @@ TEST_F(TransformTest, DeeplyNestedArithmeticLogicalExpression)
   // - Left Operand ($L): (-(-(+(-($0, $0), $0), $0), $0), $0)
   // - Right Operand ($R): -($1, +($1, +($1, -($1, $1))))
   // Explanation:
-  // If all $1 values and $R values are zeros, then the result is true because of the equality
-  // check, combined with the OR operator at OR(<($L, $0), ==($1, $R))
+  // If all $1 values and $R values are zeros, the result is true because of the equality check
+  // combined with the OR operator in OR(<($L, $0), ==($1, $R)).
 
   auto result   = cudf::compute_column(table, expression_tree);
   auto expected = column_wrapper<bool>{true, true, true};
