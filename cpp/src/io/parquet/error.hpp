@@ -33,7 +33,7 @@ namespace cudf::io::parquet {
  */
 class kernel_error {
  public:
-  using error_type   = int32_t;
+  using error_type   = uint32_t;
   using pointer_type = error_type*;
 
  private:
