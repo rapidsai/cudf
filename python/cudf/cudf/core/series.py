@@ -597,10 +597,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         index_from_data = None
         name_from_data = None
         if isinstance(data, (pd.Series, pd.Index)):
+            if copy:
+                data = data.copy(deep=True)
             name_from_data = data.name
             column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
             if isinstance(data, pd.Series):
-                index_from_data = as_index(data.index)
+                index, index_from_data = as_index(data.index), index
         elif isinstance(data, BaseIndex):
             name_from_data = data.name
             column = data._values
@@ -610,16 +612,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 "ColumnAccessor"
             )
         elif isinstance(data, Series):
-            name_from_data = data.name
-            index_from_data = data.index
-            column = data._column
             if copy:
                 data = data.copy(deep=True)
+            name_from_data = data.name
+            index, index_from_data = as_index(data.index), index
+            column = data._column
         elif isinstance(data, dict) or data is None:
             if not data:
                 data = {}
                 column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
-                index_from_data = RangeIndex(0)
+                index, index_from_data = RangeIndex(0), index
             else:
                 column = as_column(
                     list(data.values()), nan_as_null=nan_as_null, dtype=dtype
@@ -660,16 +662,18 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if index is not None:
             index = as_index(index)
         else:
-            index = RangeIndex(len(data))
+            index = RangeIndex(len(column))
 
         if name_from_data is not None:
             name = name_from_data
-
         super().__init__({name: column}, index=index)
-        self._check_data_index_length_match()
         if index_from_data is not None:
-            # TODO: Guess this doesn't work for all dtypes
-            self._reindex(column_names=[name], index=index, inplace=True)
+            # TODO: This there a better way to do this?
+            index_from_data = as_index(index_from_data)
+            reindexed = self.reindex(index=index_from_data, copy=False)
+            self._data = reindexed._data
+            self._index = index_from_data
+        self._check_data_index_length_match()
 
     @classmethod
     @_cudf_nvtx_annotate
