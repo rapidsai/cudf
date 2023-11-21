@@ -307,6 +307,9 @@ def on_missing_reference(app, env, node, contnode):
         "Radix",
         # Extra pages that don't exist in Sphinx (yet)
         "md_regex",
+        # Unsupported by Breathe
+        # https://github.com/breathe-doc/breathe/issues/355
+        "deprecated",
     ]
     if (
         node["refdomain"] == "cpp"
