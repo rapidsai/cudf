@@ -81,7 +81,11 @@ std::unique_ptr<cudf::column> load_file_to_column(std::string const& filename_me
 
   auto d_chars   = cudf::detail::make_device_uvector_async(chars, stream, mr);
   auto d_offsets = cudf::detail::make_device_uvector_async(offsets, stream, mr);
-  return cudf::make_strings_column(d_chars, d_offsets, {}, 0);
+  return cudf::make_strings_column(static_cast<cudf::size_type>(offsets.size() - 1),
+                                   std::move(d_offsets),
+                                   std::move(d_chars),
+                                   {},
+                                   0);
 }
 
 std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(

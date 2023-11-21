@@ -146,6 +146,8 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
 {
   CUDF_FUNC_RANGE();
 
+  if (num_strings == 0) { return make_empty_column(type_id::STRING); }
+
   auto const offsets_size = static_cast<size_type>(offsets.size());
   auto const chars_size   = static_cast<size_type>(chars.size());
 

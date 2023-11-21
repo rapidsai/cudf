@@ -415,6 +415,8 @@ std::unique_ptr<column> make_strings_column(
  * span of byte offsets identifying individual strings within the char vector, and an optional
  * null bitmask.
  *
+ * @deprecated Since 24.02
+ *
  * `offsets.front()` must always be zero.
  *
  * The total number of char bytes must not exceed the maximum size of size_type. Use the
@@ -435,7 +437,7 @@ std::unique_ptr<column> make_strings_column(
  * columns' device memory
  * @return Constructed strings column
  */
-std::unique_ptr<column> make_strings_column(
+[[deprecated]] std::unique_ptr<column> make_strings_column(
   cudf::device_span<char const> strings,
   cudf::device_span<size_type const> offsets,
   cudf::device_span<bitmask_type const> null_mask,

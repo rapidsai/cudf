@@ -752,6 +752,7 @@ class strings_column_wrapper : public detail::column_wrapper {
   template <typename StringsIterator>
   strings_column_wrapper(StringsIterator begin, StringsIterator end) : column_wrapper{}
   {
+    size_type num_strings = std::distance(begin, end);
     auto all_valid        = thrust::make_constant_iterator(true);
     auto [chars, offsets] = detail::make_chars_and_offsets(begin, end, all_valid);
     auto d_chars          = cudf::detail::make_device_uvector_sync(
@@ -759,7 +760,7 @@ class strings_column_wrapper : public detail::column_wrapper {
     auto d_offsets = cudf::detail::make_device_uvector_sync(
       offsets, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
     wrapped =
-      cudf::make_strings_column(d_chars, d_offsets, {}, 0, cudf::test::get_default_stream());
+      cudf::make_strings_column(num_strings, std::move(d_offsets), std::move(d_chars), {}, 0);
   }
 
   /**
@@ -804,7 +805,7 @@ class strings_column_wrapper : public detail::column_wrapper {
     auto d_bitmask = cudf::detail::make_device_uvector_sync(
       null_mask, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
     wrapped = cudf::make_strings_column(
-      d_chars, d_offsets, d_bitmask, null_count, cudf::test::get_default_stream());
+      num_strings, std::move(d_offsets), std::move(d_chars), d_bitmask.release(), null_count);
   }
 
   /**

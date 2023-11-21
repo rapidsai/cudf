@@ -531,20 +531,20 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
   auto repl_offsets = std::vector<size_type>{0, 1, 2, 3, 4, 5};
 
   auto target =
-    make_strings_column(cudf::detail::make_device_uvector_async(
-                          target_chars, stream, rmm::mr::get_current_device_resource()),
+    make_strings_column(static_cast<size_type>(target_offsets.size() - 1),
                         cudf::detail::make_device_uvector_async(
                           target_offsets, stream, rmm::mr::get_current_device_resource()),
+                        cudf::detail::make_device_uvector_async(
+                          target_chars, stream, rmm::mr::get_current_device_resource()),
                         {},
-                        0,
-                        stream);
-  auto repl = make_strings_column(cudf::detail::make_device_uvector_async(
-                                    repl_chars, stream, rmm::mr::get_current_device_resource()),
+                        0);
+  auto repl = make_strings_column(static_cast<size_type>(repl_offsets.size() - 1),
                                   cudf::detail::make_device_uvector_async(
                                     repl_offsets, stream, rmm::mr::get_current_device_resource()),
+                                  cudf::detail::make_device_uvector_async(
+                                    repl_chars, stream, rmm::mr::get_current_device_resource()),
                                   {},
-                                  0,
-                                  stream);
+                                  0);
 
   auto const h_valid_counts = cudf::detail::make_std_vector_sync(d_valid_counts, stream);
   std::vector<std::unique_ptr<column>> out_columns;
