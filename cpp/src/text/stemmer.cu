@@ -250,36 +250,36 @@ std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& strings
 
 // external APIs
 
-std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& input,
                                         letter_type ltype,
                                         cudf::size_type character_index,
+                                        rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_letter(strings,
-                           ltype,
-                           thrust::make_constant_iterator<cudf::size_type>(character_index),
-                           cudf::get_default_stream(),
-                           mr);
+  return detail::is_letter(
+    input, ltype, thrust::make_constant_iterator<cudf::size_type>(character_index), stream, mr);
 }
 
-std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& input,
                                         letter_type ltype,
                                         cudf::column_view const& indices,
+                                        rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_letter(strings, ltype, indices, cudf::get_default_stream(), mr);
+  return detail::is_letter(input, ltype, indices, stream, mr);
 }
 
 /**
  * @copydoc nvtext::porter_stemmer_measure
  */
-std::unique_ptr<cudf::column> porter_stemmer_measure(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> porter_stemmer_measure(cudf::strings_column_view const& input,
+                                                     rmm::cuda_stream_view stream,
                                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::porter_stemmer_measure(strings, cudf::get_default_stream(), mr);
+  return detail::porter_stemmer_measure(input, stream, mr);
 }
 
 }  // namespace nvtext
