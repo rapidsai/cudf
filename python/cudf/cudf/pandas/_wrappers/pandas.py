@@ -1,7 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-
+import copyreg
+import pickle
 import sys
 
 import pandas as pd
@@ -1304,3 +1305,35 @@ for typ in _PANDAS_OBJ_INTERMEDIATE_TYPES:
         _Unusable,
         typ,
     )
+
+# timestamps are not proxied and unproxied types are currently not
+# picklable when the module accelerator is enabled. Workaround:
+
+
+def _unpickle_timestamp(args):
+    # vendored from pd._libs.tslibs.timestamps._unpickle_timestamp
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        value, freq, tz, reso = pickle.loads(args)
+    ts = pd.Timestamp._from_value_and_reso(value, reso, tz)
+    ts._set_freq(freq)
+    return ts
+
+
+def _reduce_timestamp(ts):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    _, args = ts.__reduce__()
+    with disable_module_accelerator():
+        # args can contain objects that are unpicklable
+        # when the module accelerator is disabled
+        # (freq is of a proxy type):
+        args = pickle.dumps(args)
+    return _unpickle_timestamp, (args,)
+
+
+# register the custom reducer with copyreg:
+copyreg.dispatch_table[
+    pd._libs.tslibs.timestamps.Timestamp
+] = _reduce_timestamp
