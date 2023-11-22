@@ -1306,34 +1306,49 @@ for typ in _PANDAS_OBJ_INTERMEDIATE_TYPES:
         typ,
     )
 
-# timestamps are not proxied and unproxied types are currently not
-# picklable when the module accelerator is enabled. Workaround:
-
-
-def _unpickle_timestamp(args):
-    # vendored from pd._libs.tslibs.timestamps._unpickle_timestamp
+# timestamps and timedeltas are not proxied and "real" pandas types
+# are currently not picklable when the module accelerator is enabled.
+def _unpickle_timestamp(pickled_args):
     from cudf.pandas.module_accelerator import disable_module_accelerator
 
     with disable_module_accelerator():
-        value, freq, tz, reso = pickle.loads(args)
-    ts = pd.Timestamp._from_value_and_reso(value, reso, tz)
-    ts._set_freq(freq)
+        unpickler, args = pickle.loads(pickled_args)
+    ts = unpickler(*args)
     return ts
 
 
 def _reduce_timestamp(ts):
     from cudf.pandas.module_accelerator import disable_module_accelerator
 
-    _, args = ts.__reduce__()
     with disable_module_accelerator():
         # args can contain objects that are unpicklable
         # when the module accelerator is disabled
         # (freq is of a proxy type):
-        args = pickle.dumps(args)
-    return _unpickle_timestamp, (args,)
+        pickled_args = pickle.dumps(ts.__reduce__())
+
+    return _unpickle_timestamp, (pickled_args,)
 
 
-# register the custom reducer with copyreg:
-copyreg.dispatch_table[
-    pd._libs.tslibs.timestamps.Timestamp
-] = _reduce_timestamp
+def _unpickle_timedelta(pickled_args):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        unpickler, args = pickle.loads(pickled_args)
+    ts = unpickler(*args)
+    return ts
+
+
+def _reduce_timedelta(ts):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        # args can contain objects that are unpicklable
+        # when the module accelerator is disabled
+        # (freq is of a proxy type):
+        pickled_args = pickle.dumps(ts.__reduce__())
+
+    return _unpickle_timedelta, (pickled_args,)
+
+
+copyreg.dispatch_table[pd.Timestamp] = _reduce_timestamp
+copyreg.dispatch_table[pd.Timedelta] = _reduce_timedelta
