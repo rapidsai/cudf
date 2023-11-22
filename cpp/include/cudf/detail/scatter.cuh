@@ -21,6 +21,7 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
@@ -405,22 +406,32 @@ std::unique_ptr<table> scatter(table_view const& source,
     thrust::make_transform_iterator(scatter_map_begin, index_converter<MapType>{target.num_rows()});
   auto updated_scatter_map_end =
     thrust::make_transform_iterator(scatter_map_end, index_converter<MapType>{target.num_rows()});
-  auto result = std::vector<std::unique_ptr<column>>(target.num_columns());
 
-  std::transform(source.begin(),
-                 source.end(),
-                 target.begin(),
-                 result.begin(),
-                 [=](auto const& source_col, auto const& target_col) {
-                   return type_dispatcher<dispatch_storage_type>(source_col.type(),
-                                                                 column_scatterer{},
-                                                                 source_col,
-                                                                 updated_scatter_map_begin,
-                                                                 updated_scatter_map_end,
-                                                                 target_col,
-                                                                 stream,
-                                                                 mr);
-                 });
+  auto const num_columns = target.num_columns();
+  auto result            = std::vector<std::unique_ptr<column>>(num_columns);
+
+  // The data scatter for n columns will be executed over n streams. If there is
+  // only a single column, the fork/join overhead should be avoided.
+  auto streams = std::vector<rmm::cuda_stream_view>{};
+  if (num_columns > 1) {
+    streams = cudf::detail::fork_streams(stream, num_columns);
+  } else {
+    streams.push_back(stream);
+  }
+
+  auto it = thrust::make_counting_iterator<size_type>(0);
+
+  std::transform(it, it + num_columns, result.begin(), [&](size_type i) {
+    auto const& source_col = source.column(i);
+    return type_dispatcher<dispatch_storage_type>(source_col.type(),
+                                                  column_scatterer{},
+                                                  source_col,
+                                                  updated_scatter_map_begin,
+                                                  updated_scatter_map_end,
+                                                  target.column(i),
+                                                  streams[i],
+                                                  mr);
+  });
 
   // We still need to call `gather_bitmask` even when the source columns are not nullable,
   // as if the target has null_mask, that null_mask needs to be updated after scattering.
@@ -451,6 +462,12 @@ std::unique_ptr<table> scatter(table_view const& source,
       }
     });
   }
+
+  // Join streams as late as possible so that null mask computations can run on
+  // the passed in stream while other streams are scattering. Skip joining if
+  // only one column, since it used the passed in stream rather than forking.
+  if (num_columns > 1) { cudf::detail::join_streams(streams, stream); }
+
   return std::make_unique<table>(std::move(result));
 }
 }  // namespace detail
