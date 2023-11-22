@@ -178,12 +178,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                     "than maximum level size at this position"
                 )
 
-        # TODO: if nullify=True should interpret -1 as NA, use this
-        # source_data = {
-        #     column_name: level._column.take(col, nullify=True)
-        #     for (column_name, col), level in
-        #     zip(enumerate(codes._data.items()), levels)
-        # }
         source_data = {}
         for (column_name, col), level in zip(codes._data.items(), levels):
             result_col = level._column.take(col)
@@ -191,20 +185,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             if mask.any():
                 result_col[mask] = cudf.NA
             source_data[column_name] = result_col
-            # if -1 in col:
-            #     level = levels[i]
-            #     new_index = cudf.RangeIndex(-1, len(level))
-            #     new_level.index = new_index
-            #     level = cudf.DataFrame(
-            #         {column_name: new_level},
-            #         index=range(-1, len(levels[i])),
-            #     )
-            # else:
-            #     level = cudf.DataFrame({column_name: levels[i]})
-
-            # source_data[column_name] = libcudf.copying.gather(
-            #     [level._data[column_name]], col
-            # )[0]
 
         super().__init__(source_data)
         self._levels = levels
