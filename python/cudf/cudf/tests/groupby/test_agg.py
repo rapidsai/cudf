@@ -7,15 +7,7 @@ import cudf
 
 @pytest.mark.parametrize(
     "empty",
-    [
-        pytest.param(
-            True,
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/14200"
-            ),
-        ),
-        False,
-    ],
+    [True, False],
     ids=["empty", "nonempty"],
 )
 def test_agg_count_dtype(empty):
