@@ -79,13 +79,15 @@ std::unique_ptr<cudf::column> load_file_to_column(std::string const& filename_me
 
   CUDF_EXPECTS(!chars.empty(), "No data found in " + filename_merges);
 
-  auto d_chars   = cudf::detail::make_device_uvector_async(chars, stream, mr);
-  auto d_offsets = cudf::detail::make_device_uvector_async(offsets, stream, mr);
+  auto d_chars = std::make_unique<cudf::column>(
+    cudf::detail::make_device_uvector_async(chars, stream, mr), rmm::device_buffer{}, 0);
+  auto d_offsets = std::make_unique<cudf::column>(
+    cudf::detail::make_device_uvector_async(offsets, stream, mr), rmm::device_buffer{}, 0);
   return cudf::make_strings_column(static_cast<cudf::size_type>(offsets.size() - 1),
                                    std::move(d_offsets),
                                    std::move(d_chars),
-                                   {},
-                                   0);
+                                   0,
+                                   {});
 }
 
 std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(

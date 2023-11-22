@@ -472,6 +472,8 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
  * @brief Construct a STRING type column given offsets, columns, and optional null count and null
  * mask.
  *
+ * @deprecated Since 24.02
+ *
  * @param[in] num_strings The number of strings the column represents.
  * @param[in] offsets The offset values for this column. The number of elements is one more than the
  * total number of strings so the `offset[last] - offset[0]` is the total number of bytes in the
@@ -483,11 +485,11 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
  * @param[in] null_count The number of null string entries.
  * @return Constructed strings column
  */
-std::unique_ptr<column> make_strings_column(size_type num_strings,
-                                            rmm::device_uvector<size_type>&& offsets,
-                                            rmm::device_uvector<char>&& chars,
-                                            rmm::device_buffer&& null_mask,
-                                            size_type null_count);
+[[deprecated]] std::unique_ptr<column> make_strings_column(size_type num_strings,
+                                                           rmm::device_uvector<size_type>&& offsets,
+                                                           rmm::device_uvector<char>&& chars,
+                                                           rmm::device_buffer&& null_mask,
+                                                           size_type null_count);
 
 /**
  * @brief Construct a LIST type column given offsets column, child column, null mask and null
