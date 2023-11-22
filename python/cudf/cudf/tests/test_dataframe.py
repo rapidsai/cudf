@@ -4566,6 +4566,17 @@ def test_dataframe_columns_returns_rangeindex_single_col():
     assert_eq(result, expected)
 
 
+@pytest.mark.parametrize("dtype", ["int64", "datetime64[ns]", "int8"])
+@pytest.mark.parametrize("idx_data", [[], [1, 2]])
+@pytest.mark.parametrize("data", [None, [], {}])
+def test_dataframe_columns_empty_data_preserves_dtype(dtype, idx_data, data):
+    result = cudf.DataFrame(
+        data, columns=cudf.Index(idx_data, dtype=dtype)
+    ).columns
+    expected = pd.Index(idx_data, dtype=dtype)
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -10723,3 +10734,15 @@ def test_dataframe_series_dot():
     expected = gser @ [12, 13]
 
     assert_eq(expected, actual)
+
+
+def test_dataframe_duplicate_index_reindex():
+    gdf = cudf.DataFrame({"a": [0, 1, 2, 3]}, index=[0, 0, 1, 1])
+    pdf = gdf.to_pandas()
+
+    assert_exceptions_equal(
+        gdf.reindex,
+        pdf.reindex,
+        lfunc_args_and_kwargs=([10, 11, 12, 13], {}),
+        rfunc_args_and_kwargs=([10, 11, 12, 13], {}),
+    )
