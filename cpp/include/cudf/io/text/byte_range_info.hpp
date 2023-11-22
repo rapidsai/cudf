@@ -98,9 +98,9 @@ std::vector<byte_range_info> create_byte_range_infos_consecutive(int64_t total_b
 
 /**
  * @brief Create a byte_range_info which represents as much of a file as possible. Specifically,
- * `[0, numeric_limit<int64_t>::max())`.
+ * ``[0, numeric_limits<int64_t>:\:max())``.
  *
- * @return `[0, numeric_limit<int64_t>::max())`
+ * @return Byte range info of size ``[0, numeric_limits<int64_t>:\:max())``
  */
 byte_range_info create_byte_range_info_max();
 
