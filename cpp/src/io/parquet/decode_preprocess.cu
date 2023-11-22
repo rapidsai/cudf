@@ -61,7 +61,7 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
   } else if ((s->col.data_type & 7) == BYTE_ARRAY) {
     str_len = gpuInitStringDescriptors<true, unused_state_buf>(s, nullptr, target_pos, t);
   }
-  if (!t) { *(int32_t volatile*)&s->dict_pos = target_pos; }
+  if (!t) { s->dict_pos = target_pos; }
   return str_len;
 }
 
