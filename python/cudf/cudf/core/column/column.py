@@ -916,13 +916,11 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         Helper function for `isin` which merges `self` & `rhs`
         to determine what values of `rhs` exist in `self`.
         """
-        ldf = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
-        rdf = cudf.DataFrame(
-            {"x": rhs, "bool": full(len(rhs), True, dtype="bool")}
-        )
-        res = ldf.merge(rdf, on="x", how="left").sort_values(by="orig_order")
-        res = res.drop_duplicates(subset="orig_order", ignore_index=True)
-        return res._data["bool"].fillna(False)
+        # We've already matched dtypes by now
+        result = libcudf.search.contains(rhs, self)
+        if result.null_count:
+            return result.fillna(False)
+        return result
 
     def as_mask(self) -> Buffer:
         """Convert booleans to bitmask
