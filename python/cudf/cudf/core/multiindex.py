@@ -140,7 +140,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         if copy:
             if isinstance(codes, cudf.DataFrame):
                 codes = codes.copy(deep=True)
-            if len(levels) > 0 and isinstance(levels[0], cudf.Series):
+            if len(levels) > 0 and isinstance(
+                levels[0], (cudf.Index, cudf.Series)
+            ):
                 levels = [level.copy(deep=True) for level in levels]
 
         if not isinstance(codes, cudf.DataFrame):
@@ -157,7 +159,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                     "codes and is inconsistent!"
                 )
 
-        levels = [cudf.Series(level) for level in levels]
+        levels = [cudf.Index(level) for level in levels]
 
         if len(levels) != len(codes._data):
             raise ValueError(
@@ -494,7 +496,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         mi = MultiIndex._from_data(self._data.copy(deep=deep))
         if self._levels is not None:
-            mi._levels = [s.copy(deep) for s in self._levels]
+            # TODO: why is deep=True not being respected here
+            mi._levels = [idx.copy(deep) for idx in self._levels]
         if self._codes is not None:
             mi._codes = self._codes.copy(deep)
         if names is not None:

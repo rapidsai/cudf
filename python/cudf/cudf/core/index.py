@@ -1224,7 +1224,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         dtype = self.dtype if dtype is None else dtype
         name = self.name if name is None else name
-
         col = self._values.astype(dtype)
         return _index_from_data({name: col.copy(True) if deep else col})
 

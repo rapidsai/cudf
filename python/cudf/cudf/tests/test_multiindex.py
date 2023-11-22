@@ -846,14 +846,14 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
 
         # Assert ._levels identity
         lptrs = [
-            lv._data._data[None].base_data.get_ptr(mode="read")
+            next(iter(lv._data._data.values())).base_data.get_ptr(mode="read")
             for lv in mi1._levels
         ]
+        # TODO: lv._data._data had {True: column}. Why was the key True?
         rptrs = [
-            lv._data._data[None].base_data.get_ptr(mode="read")
+            next(iter(lv._data._data.values())).base_data.get_ptr(mode="read")
             for lv in mi2._levels
         ]
-
         assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
 
         # Assert ._codes identity
@@ -995,12 +995,10 @@ def test_multicolumn_item():
     assert_eq(gdgT[(0, 0)], pdgT[(0, 0)])
 
 
-def test_multiindex_to_frame(pdfIndex):
+def test_multiindex_to_frame(pdfIndex, pdfIndexNulls):
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex.to_frame(), gdfIndex.to_frame())
 
-
-def test_multiindex_to_frame_nulls(pdfIndexNulls):
     gdfIndex = cudf.from_pandas(pdfIndexNulls)
     assert_eq(
         pdfIndexNulls.to_frame().fillna("nan"),
@@ -2081,3 +2079,20 @@ def test_multiindex_eq_other_multiindex():
     result = idx == idx
     expected = np.array([True, True])
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "midx",
+    [
+        cudf.MultiIndex.from_product([[0, 1], [1, 0]]),
+        cudf.MultiIndex.from_tuples([(0, 1), (0, 0), (1, 1), (1, 0)]),
+        # TODO: Implement from_arrays like pandas
+        # cudf.MultiIndex.from_arrays([0, 0, 1, 1], [1, 0, 1, 0]),
+        cudf.MultiIndex(
+            levels=[[0, 1], [0, 1]], codes=[[0, 0, 1, 1], [1, 0, 1, 0]]
+        ),
+    ],
+)
+def test_multindex_constructor_levels_always_indexes(midx):
+    assert_eq(midx.levels[0], cudf.Index([0, 1]))
+    assert_eq(midx.levels[1], cudf.Index([0, 1]))
