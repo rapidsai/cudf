@@ -15,6 +15,7 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_statistics.hpp>
 
 #include <cudf/groupby.hpp>
 
@@ -58,10 +59,21 @@ void bench_groupby_nunique(nvbench::state& state, nvbench::type_list<Type>)
     return create_random_column(cudf::type_to_id<Type>(), row_count{size}, profile);
   }();
 
-  auto gb_obj =
-    cudf::groupby::groupby(cudf::table_view({keys->view(), keys->view(), keys->view()}));
-  auto const requests = make_aggregation_request_vector(
+  auto const keys_table = cudf::table_view({keys->view(), keys->view(), keys->view()});
+  auto gb_obj           = cudf::groupby::groupby(keys_table);
+  auto const requests   = make_aggregation_request_vector(
     *vals, cudf::make_nunique_aggregation<cudf::groupby_aggregation>());
+
+  // Add memory statistics
+  state.add_global_memory_reads<nvbench::uint8_t>(required_bytes(vals->view()));
+  state.add_global_memory_reads<nvbench::uint8_t>(required_bytes(keys_table));
+
+  // The number of written bytes depends on random distribution of keys.
+  // For larger sizes it converges against the number of unique elements
+  // in the input distribution (101 elements)
+  auto [res_table, res_agg] = gb_obj.aggregate(requests);
+  state.add_global_memory_writes<uint8_t>(required_bytes(res_table->view()));
+  state.add_global_memory_writes<uint8_t>(required_bytes(res_agg));
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync,

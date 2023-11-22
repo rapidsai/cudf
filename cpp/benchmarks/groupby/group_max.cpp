@@ -15,10 +15,13 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_statistics.hpp>
 
 #include <cudf/groupby.hpp>
 
 #include <nvbench/nvbench.cuh>
+
+#include <optional>
 
 template <typename Type>
 void bench_groupby_max(nvbench::state& state, nvbench::type_list<Type>)
@@ -32,23 +35,35 @@ void bench_groupby_max(nvbench::state& state, nvbench::type_list<Type>)
   }();
 
   auto const vals = [&] {
-    auto builder = data_profile_builder().cardinality(0).distribution(
+    data_profile profile = data_profile_builder().cardinality(0).distribution(
       cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 1000);
     if (const auto null_freq = state.get_float64("null_probability"); null_freq > 0) {
-      builder.null_probability(null_freq);
+      profile.set_null_probability(null_freq);
     } else {
-      builder.no_validity();
+      profile.set_null_probability(std::nullopt);
     }
-    return create_random_column(cudf::type_to_id<Type>(), row_count{size}, data_profile{builder});
+    return create_random_column(cudf::type_to_id<Type>(), row_count{size}, profile);
   }();
 
-  auto keys_view = keys->view();
-  auto gb_obj    = cudf::groupby::groupby(cudf::table_view({keys_view, keys_view, keys_view}));
+  auto const keys_view  = keys->view();
+  auto const keys_table = cudf::table_view({keys_view, keys_view, keys_view});
+  auto gb_obj           = cudf::groupby::groupby(keys_table);
 
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
   requests[0].values = vals->view();
   requests[0].aggregations.push_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
+
+  // Add memory statistics
+  state.add_global_memory_reads<nvbench::uint8_t>(required_bytes(vals->view()));
+  state.add_global_memory_reads<nvbench::uint8_t>(required_bytes(keys_table));
+
+  // The number of written bytes depends on random distribution of keys.
+  // For larger sizes it converges against the number of unique elements
+  // in the input distribution (101 elements)
+  auto [res_table, res_agg] = gb_obj.aggregate(requests);
+  state.add_global_memory_writes<uint8_t>(required_bytes(res_table->view()));
+  state.add_global_memory_writes<uint8_t>(required_bytes(res_agg));
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync,

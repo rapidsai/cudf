@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_statistics.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/groupby.hpp>
@@ -52,6 +53,17 @@ static void nvbench_groupby_rank(nvbench::state& state,
 
   cudf::groupby::groupby gb_obj(
     keys, cudf::null_policy::EXCLUDE, is_sorted ? cudf::sorted::YES : cudf::sorted::NO);
+
+  // Add memory statistics
+  state.add_global_memory_reads<nvbench::uint8_t>(required_bytes(order_by));
+  state.add_global_memory_reads<nvbench::uint8_t>(required_bytes(keys));
+
+  // The number of written bytes depends on random distribution of keys.
+  // For larger sizes it converges against the number of unique elements
+  // in the input distribution (101 elements)
+  auto [res_table, res_agg] = gb_obj.scan(requests);
+  state.add_global_memory_writes<uint8_t>(required_bytes(res_table->view()));
+  state.add_global_memory_writes<uint8_t>(required_bytes(res_agg));
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     rmm::cuda_stream_view stream_view{launch.get_stream()};

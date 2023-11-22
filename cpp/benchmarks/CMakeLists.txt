@@ -40,8 +40,9 @@ target_include_directories(
 
 # Use an OBJECT library so we only compile these helper source files only once
 add_library(
-  cudf_benchmark_common OBJECT "${CUDF_SOURCE_DIR}/tests/utilities/base_fixture.cpp"
-                               synchronization/synchronization.cpp io/cuio_common.cpp
+  cudf_benchmark_common OBJECT
+  "${CUDF_SOURCE_DIR}/tests/utilities/base_fixture.cpp" synchronization/synchronization.cpp
+  io/cuio_common.cpp common/memory_statistics.cpp
 )
 target_link_libraries(cudf_benchmark_common PRIVATE cudf_datagen $<TARGET_NAME_IF_EXISTS:conda_env>)
 add_custom_command(

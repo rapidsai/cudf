@@ -15,6 +15,7 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_statistics.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
@@ -82,6 +83,17 @@ void bench_groupby_struct_keys(nvbench::state& state)
   // Set up nvbench default stream
   auto stream = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+
+  // Add memory statistics
+  state.add_global_memory_reads<nvbench::uint8_t>(required_bytes(keys_table.view()));
+  state.add_global_memory_reads<nvbench::uint8_t>(required_bytes(vals->view()));
+
+  // The number of written bytes depends on random distribution of keys.
+  // For larger sizes it converges against the number of unique elements
+  // in the input distribution (101 elements)
+  auto [res_table, res_agg] = gb_obj.aggregate(requests);
+  state.add_global_memory_writes<uint8_t>(required_bytes(res_table->view()));
+  state.add_global_memory_writes<uint8_t>(required_bytes(res_agg));
 
   state.exec(nvbench::exec_tag::sync,
              [&](nvbench::launch& launch) { auto const result = gb_obj.aggregate(requests); });
