@@ -37,7 +37,13 @@ namespace cudf {
 namespace io {
 class data_sink;
 class datasource;
+}  // namespace io
+}  // namespace cudf
 
+//! cuDF interfaces
+namespace cudf {
+//! IO interfaces
+namespace io {
 /**
  * @addtogroup io_types
  * @{
