@@ -477,7 +477,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         mi = MultiIndex._from_data(self._data.copy(deep=deep))
         if self._levels is not None:
             # TODO: why is deep=True not being respected here
-            mi._levels = [idx.copy(deep) for idx in self._levels]
+            mi._levels = [idx.copy(deep=deep) for idx in self._levels]
         if self._codes is not None:
             mi._codes = self._codes.copy(deep)
         if names is not None:
