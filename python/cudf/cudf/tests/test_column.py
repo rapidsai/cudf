@@ -193,12 +193,15 @@ def test_column_mixed_dtype(data, error):
 
 
 @pytest.mark.parametrize("nan_as_null", [True, False])
-def test_as_column_scalar_with_nan(nan_as_null):
-    size = 10
-    scalar = np.nan
-
+@pytest.mark.parametrize(
+    "scalar",
+    [np.nan, pd.Timedelta(days=1), pd.Timestamp(2020, 1, 1)],
+    ids=repr,
+)
+@pytest.mark.parametrize("size", [1, 10])
+def test_as_column_scalar_with_nan(nan_as_null, scalar, size):
     expected = (
-        cudf.Series([np.nan] * size, nan_as_null=nan_as_null)
+        cudf.Series([scalar] * size, nan_as_null=nan_as_null)
         .dropna()
         .to_numpy()
     )

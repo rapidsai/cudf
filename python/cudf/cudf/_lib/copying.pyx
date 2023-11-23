@@ -24,12 +24,13 @@ from cudf._lib.utils cimport table_view_from_columns, table_view_from_table
 from cudf._lib.reduce import minmax
 from cudf.core.abc import Serializable
 
+from libcpp.functional cimport reference_wrapper
+from libcpp.memory cimport make_unique
+
 cimport cudf._lib.cpp.contiguous_split as cpp_contiguous_split
 cimport cudf._lib.cpp.copying as cpp_copying
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
-from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
-from cudf._lib.cpp.libcpp.memory cimport make_unique
 from cudf._lib.cpp.lists.gather cimport (
     segmented_gather as cpp_segmented_gather,
 )
