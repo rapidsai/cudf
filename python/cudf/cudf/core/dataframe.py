@@ -7906,10 +7906,6 @@ def from_pandas(obj, nan_as_null=no_default):
         return ret
     elif isinstance(obj, pd.MultiIndex):
         return MultiIndex.from_pandas(obj, nan_as_null=nan_as_null)
-    elif isinstance(obj, pd.RangeIndex):
-        return cudf.core.index.RangeIndex(
-            start=obj.start, stop=obj.stop, step=obj.step, name=obj.name
-        )
     elif isinstance(obj, pd.Index):
         return cudf.Index.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.CategoricalDtype):
