@@ -327,11 +327,11 @@ below.
 
 The core copy-on-write implementation relies on the two classes `ExposureTrackedBufferOwner` and `ExposureTrackedBuffer`.
 
-An `ExposureTrackedBufferOwner` is a subclass of the  `BufferOwner` that tracks internal and external references to its underlying memory. Internal references are tracked by maintaining [weak references](https://docs.python.org/3/library/weakref.html) to every `ExposureTrackedBuffer` of the underlying memory. External references are tracked through "exposure" status of the underlying memory. A buffer is considered exposed if the device pointer (integer or void*) has been handed out to a library outside of cudf. In this case, we have no way of knowing if the data are being modified by a third party.
+An `ExposureTrackedBufferOwner` is a subclass of the `BufferOwner` that tracks internal and external references to its underlying memory. Internal references are tracked by maintaining [weak references](https://docs.python.org/3/library/weakref.html) to every `ExposureTrackedBuffer` of the underlying memory. External references are tracked through "exposure" status of the underlying memory. A buffer is considered exposed if the device pointer (integer or void*) has been handed out to a library outside of cudf. In this case, we have no way of knowing if the data are being modified by a third party.
 
 `ExposureTrackedBuffer` is a subclass of `Buffer` that represents a _slice_ of the memory underlying an exposure tracked buffer.
 
-When the cudf option `"copy_on_write"` is `True`, `as_buffer` returns a `ExposureTrackedBuffer`. It is this class that determine whether or not to make a copy when a write operation is performed on a `Column` (see below). If multiple slices point to the same underlying memory, then a copy must be made whenever a modification is attempted.
+When the cudf option `"copy_on_write"` is `True`, `as_buffer` returns a `ExposureTrackedBuffer`. It is this class that determines whether or not to make a copy when a write operation is performed on a `Column` (see below). If multiple slices point to the same underlying memory, then a copy must be made whenever a modification is attempted.
 
 
 ### Eager copies when exposing to third-party libraries
@@ -344,7 +344,7 @@ someone accesses data through the `__cuda_array_interface__`, we eagerly trigger
 
 A read-only object can be quite useful for operations that will not
 mutate the data. This can be achieved by calling `.get_ptr(mode="read")`, and using `cuda_array_interface_wrapper` to wrap a `__cuda_array_interface__` object around it.
-This will not trigger a deep copy even if multiple `ExposureTrackedBuffer` points to the same `ExposureTrackedBufferOwner`. This API should only be used when the lifetime of the proxy object is restricted to cudf's internal code execution. Handing this out to external libraries or user-facing APIs will lead to untracked references and undefined copy-on-write behavior. We currently use this API for device to host
+This will not trigger a deep copy even if multiple `ExposureTrackedBuffer`s point to the same `ExposureTrackedBufferOwner`. This API should only be used when the lifetime of the proxy object is restricted to cudf's internal code execution. Handing this out to external libraries or user-facing APIs will lead to untracked references and undefined copy-on-write behavior. We currently use this API for device to host
 copies like in `ColumnBase.data_array_view(mode="read")` which is used for `Column.values_host`.
 
 

@@ -18,7 +18,7 @@ from cudf.utils.string import format_bytes
 
 
 def get_buffer_owner(data) -> Optional[BufferOwner]:
-    """Get the owner of `data`, if any exist
+    """Get the owner of `data`, if one exists
 
     Search through the stack of data owners in order to find an
     owner BufferOwner (incl. subclasses).
@@ -115,7 +115,7 @@ def cuda_array_interface_wrapper(
 
 
 class BufferOwner(Serializable):
-    """A owning buffer that represents device memory.
+    """An owning buffer that represents device memory.
 
     This class isn't meant to be used throughout cuDF. Instead, it
     standardizes data owning by wrapping any data object that
@@ -133,7 +133,7 @@ class BufferOwner(Serializable):
 
     @classmethod
     def _from_device_memory(cls, data: Any, exposed: bool) -> Self:
-        """Create from an object exposing `__cuda_array_interface__`.
+        """Create from an object providing a `__cuda_array_interface__`.
 
         No data is being copied.
 
@@ -262,7 +262,7 @@ class BufferOwner(Serializable):
     def __repr__(self) -> str:
         return (
             f"<{self.__class__.__name__} size={format_bytes(self._size)} "
-            f"ptr={hex(self._ptr)} owner={repr(self._owner)}>"
+            f"ptr=0x{self._ptr:019X_} owner={self._owner!r}>"
         )
 
 
@@ -270,6 +270,10 @@ class Buffer(Serializable):
     """A buffer that represents a slice or view of a `BufferOwner`.
 
     Use the factory function `as_buffer` to create a Buffer instance.
+
+    Note
+    ----
+    This buffer is untyped, so all indexing and sizes are in bytes.
 
     Parameters
     ----------

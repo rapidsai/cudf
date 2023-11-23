@@ -50,7 +50,7 @@ def as_buffer(
 
     If spilling is enabled, a SpillableBuffer that refers ot a
     SpillableBufferOwner is returned. If `data` is owned by a spillable buffer,
-    it must either be "exposed" or spilled locked (called within an
+    it must either be "exposed" or spill locked (called within an
     acquire_spill_lock context). This is to guarantee that the memory of `data`
     isn't spilled before this function gets to calculate the offset of the new
     SpillableBuffer.
@@ -132,8 +132,8 @@ def as_buffer(
         and get_spill_lock() is None
     ):
         raise ValueError(
-            "A owning spillable buffer must "
-            "either be exposed or spilled locked."
+            "An owning spillable buffer must "
+            "either be exposed or spill locked."
         )
     ptr, size = get_ptr_and_size(data.__cuda_array_interface__)
     base_ptr = owner.get_ptr(mode="read")
