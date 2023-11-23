@@ -18,6 +18,8 @@ import pandas as pd
 from pandas._config import get_option
 
 import cudf
+import cudf._lib as libcudf
+from cudf._lib.types import size_type_dtype
 from cudf._typing import DataFrameOrSeries
 from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_list_like, is_object_dtype
@@ -171,20 +173,22 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 "MultiIndex length of codes does not match "
                 "and is inconsistent!"
             )
-        for level, code in zip(levels, codes._data.columns):
-            if code.max() > len(level) - 1:
-                raise ValueError(
-                    "MultiIndex code %d contains value %d larger "
-                    "than maximum level size at this position"
-                )
 
         source_data = {}
-        for (column_name, col), level in zip(codes._data.items(), levels):
-            result_col = level._column.take(col)
-            mask = col == -1
-            if mask.any():
-                result_col[mask] = cudf.NA
-            source_data[column_name] = result_col
+        for (column_name, code), level in zip(codes._data.items(), levels):
+            if len(code):
+                lo, hi = libcudf.reduce.minmax(code)
+                if lo.value < -1 or hi.value > len(level) - 1:
+                    raise ValueError(
+                        f"Codes must be -1 <= codes <= {len(level) - 1}"
+                    )
+                if lo.value == -1:
+                    # Now we can gather and insert null automatically
+                    code[code == -1] = np.iinfo(size_type_dtype).min
+            result_col = libcudf.copying.gather(
+                [level._column], code, nullify=True
+            )
+            source_data[column_name] = result_col[0]
 
         super().__init__(source_data)
         self._levels = levels
@@ -476,7 +480,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         mi = MultiIndex._from_data(self._data.copy(deep=deep))
         if self._levels is not None:
-            # TODO: why is deep=True not being respected here
             mi._levels = [idx.copy(deep=deep) for idx in self._levels]
         if self._codes is not None:
             mi._codes = self._codes.copy(deep)
@@ -1622,7 +1625,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 False if cudf.get_option("mode.pandas_compatible") else None
             )
         levels = [
-            cudf.Series(level, nan_as_null=nan_as_null)
+            cudf.Index(level, nan_as_null=nan_as_null)
             for level in multiindex.levels
         ]
         return cls(

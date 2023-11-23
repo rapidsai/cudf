@@ -846,14 +846,14 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
 
         # Assert ._levels identity
         lptrs = [
-            next(iter(lv._data._data.values())).base_data.get_ptr(mode="read")
+            lv._data._data[None].base_data.get_ptr(mode="read")
             for lv in mi1._levels
         ]
-        # TODO: lv._data._data had {True: column}. Why was the key True?
         rptrs = [
-            next(iter(lv._data._data.values())).base_data.get_ptr(mode="read")
+            lv._data._data[None].base_data.get_ptr(mode="read")
             for lv in mi2._levels
         ]
+
         assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
 
         # Assert ._codes identity
