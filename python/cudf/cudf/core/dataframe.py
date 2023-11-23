@@ -5245,7 +5245,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if not dataframe.columns.is_unique:
                 raise ValueError("Duplicate column names are not allowed")
 
-            # Set columns
             data = {
                 col_name: column.as_column(
                     col_value.array, nan_as_null=nan_as_null
@@ -5271,6 +5270,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             return df
         elif hasattr(df, "__dataframe__"):
+            # TODO: Probably should be handled in the constructor as
+            # this isn't pandas specific
             return from_dataframe(dataframe, allow_copy=True)
         else:
             raise TypeError(
