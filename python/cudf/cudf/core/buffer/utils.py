@@ -48,7 +48,7 @@ def as_buffer(
     If copy-on-write is enabled, a ExposureTrackedBuffer that refers to a
     ExposureTrackedBufferOwner is returned.
 
-    If spilling is enabled, a SpillableBuffer that refers ot a
+    If spilling is enabled, a SpillableBuffer that refers to a
     SpillableBufferOwner is returned. If `data` is owned by a spillable buffer,
     it must either be "exposed" or spill locked (called within an
     acquire_spill_lock context). This is to guarantee that the memory of `data`
