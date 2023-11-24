@@ -19,31 +19,14 @@ class ExposureTrackedBufferOwner(BufferOwner):
     the buffer has been exposed if the device pointer (integer or void*) has
     been accessed outside of ExposureTrackedBufferOwner. In this case, we have
     no control over knowing if the data is being modified by a third-party.
-
-    Attributes
-    ----------
-    _exposed
-        The current exposure status of the buffer. Notice, once the exposure
-        status becomes True, it should never change back.
-    _slices
-        The set of ExposureTrackedBuffer instances that point to this buffer.
     """
 
-    _exposed: bool
+    # The set of ExposureTrackedBuffer instances that point to this buffer.
     _slices: weakref.WeakSet[ExposureTrackedBuffer]
-
-    @property
-    def exposed(self) -> bool:
-        return self._exposed
-
-    def mark_exposed(self) -> None:
-        """Mark the buffer as "exposed" permanently"""
-        self._exposed = True
 
     @classmethod
     def _from_device_memory(cls, data: Any, exposed: bool) -> Self:
         ret = super()._from_device_memory(data, exposed=exposed)
-        ret._exposed = exposed
         ret._slices = weakref.WeakSet()
         return ret
 

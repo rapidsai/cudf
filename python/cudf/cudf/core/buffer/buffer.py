@@ -130,6 +130,7 @@ class BufferOwner(Serializable):
     _ptr: int
     _size: int
     _owner: object
+    _exposed: bool
 
     @classmethod
     def _from_device_memory(cls, data: Any, exposed: bool) -> Self:
@@ -162,6 +163,7 @@ class BufferOwner(Serializable):
         # Bypass `__init__` and initialize attributes manually
         ret = cls.__new__(cls)
         ret._owner = data
+        ret._exposed = exposed
         if isinstance(data, rmm.DeviceBuffer):  # Common case shortcut
             ret._ptr = data.ptr
             ret._size = data.size
@@ -229,6 +231,26 @@ class BufferOwner(Serializable):
             "typestr": "|u1",
             "version": 0,
         }
+
+    @property
+    def exposed(self) -> bool:
+        """The current exposure status of the buffer
+
+        This is used by ExposureTrackedBuffer to determine when a deep copy
+        is required and by SpillableBuffer to mark the buffer unspillable.
+        """
+        return self._exposed
+
+    def mark_exposed(self) -> None:
+        """Mark the buffer as "exposed" permanently
+
+        This is used by ExposureTrackedBuffer to determine when a deep copy
+        is required and by SpillableBuffer to mark the buffer unspillable.
+
+        Notice, once the exposure status becomes True, it will never change
+        back.
+        """
+        self._exposed = True
 
     def get_ptr(self, *, mode: Literal["read", "write"]) -> int:
         """Device pointer to the start of the buffer.

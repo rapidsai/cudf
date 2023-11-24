@@ -88,10 +88,9 @@ class SpillableBufferOwner(BufferOwner):
     _spill_locks: weakref.WeakSet
     _last_accessed: float
     _ptr_desc: Dict[str, Any]
-    _exposed: bool
     _manager: SpillManager
 
-    def _finalize_init(self, ptr_desc: Dict[str, Any], exposed: bool) -> None:
+    def _finalize_init(self, ptr_desc: Dict[str, Any]) -> None:
         """Finish initialization of the spillable buffer
 
         This implements the common initialization that `_from_device_memory`
@@ -101,8 +100,6 @@ class SpillableBufferOwner(BufferOwner):
         ----------
         ptr_desc : dict
             Description of the memory.
-        exposed : bool, optional
-            Mark the buffer as permanently exposed (unspillable).
         """
 
         from cudf.core.buffer.spill_manager import get_global_manager
@@ -111,7 +108,6 @@ class SpillableBufferOwner(BufferOwner):
         self._spill_locks = weakref.WeakSet()
         self._last_accessed = time.monotonic()
         self._ptr_desc = ptr_desc
-        self._exposed = exposed
         manager = get_global_manager()
         if manager is None:
             raise ValueError(
@@ -141,7 +137,7 @@ class SpillableBufferOwner(BufferOwner):
             Buffer representing the same device memory as `data`
         """
         ret = super()._from_device_memory(data, exposed=exposed)
-        ret._finalize_init(ptr_desc={"type": "gpu"}, exposed=exposed)
+        ret._finalize_init(ptr_desc={"type": "gpu"})
         return ret
 
     @classmethod
@@ -178,9 +174,8 @@ class SpillableBufferOwner(BufferOwner):
         ret._owner = None
         ret._ptr = 0
         ret._size = data.nbytes
-        ret._finalize_init(
-            ptr_desc={"type": "cpu", "memoryview": data}, exposed=False
-        )
+        ret._exposed = False
+        ret._finalize_init(ptr_desc={"type": "cpu", "memoryview": data})
         return ret
 
     @property
@@ -259,10 +254,10 @@ class SpillableBufferOwner(BufferOwner):
 
         self._manager.spill_to_device_limit()
         with self.lock:
-            if not self._exposed:
+            if not self.exposed:
                 self._manager.statistics.log_expose(self)
             self.spill(target="gpu")
-            self._exposed = True
+            super().mark_exposed()
             self._last_accessed = time.monotonic()
 
     def spill_lock(self, spill_lock: SpillLock) -> None:
@@ -332,12 +327,8 @@ class SpillableBufferOwner(BufferOwner):
         return (ptr, self.nbytes, self._ptr_desc["type"])
 
     @property
-    def exposed(self) -> bool:
-        return self._exposed
-
-    @property
     def spillable(self) -> bool:
-        return not self._exposed and len(self._spill_locks) == 0
+        return not self.exposed and len(self._spill_locks) == 0
 
     @property
     def last_accessed(self) -> float:
