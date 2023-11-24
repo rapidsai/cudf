@@ -182,15 +182,12 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         self, q: np.ndarray, interpolation: str, exact: bool
     ) -> NumericalBaseColumn:
         # get sorted indices and exclude nulls
-        sorted_indices = self.as_frame()._get_sorted_inds(
-            ascending=True, na_position="first"
-        )
-        sorted_indices = sorted_indices.slice(
-            self.null_count, len(sorted_indices)
-        )
+        indices = libcudf.sort.order_by(
+            [self], [True], "first", stable=True
+        ).slice(self.null_count, len(self))
 
         return libcudf.quantiles.quantile(
-            self, q, interpolation, sorted_indices, exact
+            self, q, interpolation, indices, exact
         )
 
     def cov(self, other: NumericalBaseColumn) -> float:

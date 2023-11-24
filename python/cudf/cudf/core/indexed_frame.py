@@ -3260,8 +3260,11 @@ class IndexedFrame(Frame):
             # is on the end of the offset. See pandas gh29623 for detail.
             to_search = to_search - pd_offset.base
             return self.loc[:to_search]
+        needle = as_column(to_search, dtype=self._index.dtype)
         end_point = int(
-            self._index._column.searchsorted(to_search, side=side)[0]
+            self._index._column.searchsorted(
+                needle, side=side
+            ).element_indexing(0)
         )
         return slice_func(end_point)
 
