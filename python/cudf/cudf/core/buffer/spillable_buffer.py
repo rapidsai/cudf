@@ -381,13 +381,13 @@ class SpillableBufferOwner(BufferOwner):
                 )
                 return ret
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         if self._ptr_desc["type"] != "gpu":
             ptr_info = str(self._ptr_desc)
         else:
             ptr_info = str(hex(self._ptr))
         return (
-            f"<SpillableBufferOwner size={format_bytes(self._size)} "
+            f"<{self.__class__.__name__} size={format_bytes(self._size)} "
             f"spillable={self.spillable} exposed={self.exposed} "
             f"num-spill-locks={len(self._spill_locks)} "
             f"ptr={ptr_info} owner={repr(self._owner)}>"

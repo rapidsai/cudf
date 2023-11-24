@@ -259,7 +259,7 @@ class BufferOwner(Serializable):
         )
         return memoryview(host_buf).toreadonly()
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         return (
             f"<{self.__class__.__name__} size={format_bytes(self._size)} "
             f"ptr={hex(self._ptr)} owner={self._owner!r}>"
@@ -442,6 +442,12 @@ class Buffer(Serializable):
         )
 
     def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}(owner={self._owner!r}, "
+            f"offset={self._offset!r}, size={self._size!r})"
+        )
+
+    def __str__(self) -> str:
         return (
             f"<{self.__class__.__name__} size={format_bytes(self._size)} "
             f"offset={format_bytes(self._offset)} of {self._owner}>"
