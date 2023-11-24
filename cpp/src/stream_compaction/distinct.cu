@@ -176,4 +176,16 @@ std::unique_ptr<table> distinct(table_view const& input,
     input, keys, keep, nulls_equal, nans_equal, cudf::get_default_stream(), mr);
 }
 
+std::unique_ptr<column> distinct_indices(table_view const& input,
+                                         duplicate_keep_option keep,
+                                         null_equality nulls_equal,
+                                         nan_equality nans_equal,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  auto indices = detail::get_distinct_indices(input, keep, nulls_equal, nans_equal, stream, mr);
+  return std::make_unique<column>(std::move(indices), rmm::device_buffer{}, 0);
+}
+
 }  // namespace cudf
