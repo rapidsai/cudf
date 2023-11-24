@@ -150,6 +150,13 @@ class BufferOwner(Serializable):
         -------
         BufferOwner
             BufferOwner wrapping `data`
+
+        Raises
+        ------
+        AttributeError
+            If data does not support the cuda array interface
+        ValueError
+            If the resulting buffer has negative size
         """
 
         # Bypass `__init__` and initialize attributes manually
