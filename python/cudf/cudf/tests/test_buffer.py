@@ -67,13 +67,20 @@ def test_buffer_creation_from_any():
     assert b.owner.owner.owner is ary
 
 
+@pytest.mark.parametrize("size", [10, 2**10 + 500, 2**20])
+def test_buffer_str(size):
+    ary = cp.arange(size, dtype="uint8")
+    buf = as_buffer(ary)
+    assert f"size={size}" in repr(buf)
+
+
 @pytest.mark.parametrize(
     "size,expect", [(10, "10B"), (2**10 + 500, "1.49KiB"), (2**20, "1MiB")]
 )
 def test_buffer_repr(size, expect):
     ary = cp.arange(size, dtype="uint8")
     buf = as_buffer(ary)
-    assert f"size={expect}" in repr(buf)
+    assert f"size={expect}" in str(buf)
 
 
 @pytest.mark.parametrize(
