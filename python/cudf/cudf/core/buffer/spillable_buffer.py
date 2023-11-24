@@ -332,24 +332,12 @@ class SpillableBufferOwner(BufferOwner):
         return (ptr, self.nbytes, self._ptr_desc["type"])
 
     @property
-    def owner(self) -> Any:
-        return self._owner
-
-    @property
     def exposed(self) -> bool:
         return self._exposed
 
     @property
     def spillable(self) -> bool:
         return not self._exposed and len(self._spill_locks) == 0
-
-    @property
-    def size(self) -> int:
-        return self._size
-
-    @property
-    def nbytes(self) -> int:
-        return self._size
 
     @property
     def last_accessed(self) -> float:

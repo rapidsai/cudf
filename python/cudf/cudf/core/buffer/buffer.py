@@ -215,7 +215,7 @@ class BufferOwner(Serializable):
         return self._size
 
     @property
-    def owner(self) -> Any:
+    def owner(self) -> object:
         """Object owning the memory of the buffer."""
         return self._owner
 
@@ -323,7 +323,7 @@ class Buffer(Serializable):
         return self._size
 
     @property
-    def owner(self) -> Any:
+    def owner(self) -> BufferOwner:
         """Object owning the memory of the buffer."""
         return self._owner
 
