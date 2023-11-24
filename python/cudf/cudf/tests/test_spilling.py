@@ -550,7 +550,7 @@ def test_as_buffer_of_spillable_buffer(manager: SpillManager):
 
     with pytest.raises(
         ValueError,
-        match="buffer must either be exposed or spilled locked",
+        match="owning spillable buffer must either be exposed or spill locked",
     ):
         # Use `memory_info` to access device point _without_ making
         # the buffer unspillable.

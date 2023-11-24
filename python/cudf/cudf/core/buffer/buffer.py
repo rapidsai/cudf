@@ -262,7 +262,7 @@ class BufferOwner(Serializable):
     def __repr__(self) -> str:
         return (
             f"<{self.__class__.__name__} size={format_bytes(self._size)} "
-            f"ptr=0x{self._ptr:019X_} owner={self._owner!r}>"
+            f"ptr={hex(self._ptr)} owner={self._owner!r}>"
         )
 
 
