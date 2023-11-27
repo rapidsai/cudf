@@ -5269,7 +5269,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 df.columns = dataframe.columns
 
             return df
-        elif hasattr(df, "__dataframe__"):
+        elif hasattr(dataframe, "__dataframe__"):
             # TODO: Probably should be handled in the constructor as
             # this isn't pandas specific
             return from_dataframe(dataframe, allow_copy=True)
