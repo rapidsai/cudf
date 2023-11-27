@@ -27,3 +27,11 @@ cpdef Column allocate_like(Column input_column, mask_allocation_policy policy, s
 cpdef Column copy_if_else(object lhs, object rhs, Column boolean_mask)
 
 cpdef Table boolean_mask_scatter(object input, Table target, Column boolean_mask)
+
+cpdef Column copy_range(
+    Column input_column,
+    Column target_column,
+    size_type input_begin,
+    size_type input_end,
+    size_type target_begin,
+)

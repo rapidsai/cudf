@@ -240,3 +240,24 @@ cpdef Table boolean_mask_scatter(object input, Table target, Column boolean_mask
         raise ValueError(f"Invalid argument {input}")
 
     return Table.from_libcudf(move(result))
+
+
+cpdef Column copy_range(
+    Column input_column,
+    Column target_column,
+    size_type input_begin,
+    size_type input_end,
+    size_type target_begin,
+):
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(cpp_copying.copy_range(
+            input_column.view(),
+            target_column.view(),
+            input_begin,
+            input_end,
+            target_begin)
+        )
+
+    return Column.from_libcudf(move(c_result))

@@ -113,25 +113,15 @@ def _copy_range(Column input_column,
                 size_type input_begin,
                 size_type input_end,
                 size_type target_begin):
-
-    cdef column_view input_column_view = input_column.view()
-    cdef column_view target_column_view = target_column.view()
-    cdef size_type c_input_begin = input_begin
-    cdef size_type c_input_end = input_end
-    cdef size_type c_target_begin = target_begin
-
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(cpp_copying.copy_range(
-            input_column_view,
-            target_column_view,
-            c_input_begin,
-            c_input_end,
-            c_target_begin)
+    return Column.from_pylibcudf(
+        pylibcudf.copying.copy_range(
+            input_column.to_pylibcudf(mode="read"),
+            target_column.to_pylibcudf(mode="read"),
+            input_begin,
+            input_end,
+            target_begin
         )
-
-    return Column.from_unique_ptr(move(c_result))
+    )
 
 
 @acquire_spill_lock()
