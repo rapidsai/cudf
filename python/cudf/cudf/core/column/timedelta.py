@@ -144,7 +144,7 @@ class TimeDeltaColumn(ColumnBase):
         )
 
     def to_pandas(
-        self, index=None, nullable: bool = False, **kwargs
+        self, *, index: Optional[pd.Index] = None, nullable: bool = False
     ) -> pd.Series:
         # `copy=True` workaround until following issue is fixed:
         # https://issues.apache.org/jira/browse/ARROW-9772
@@ -152,6 +152,9 @@ class TimeDeltaColumn(ColumnBase):
         # Pandas only supports `timedelta64[ns]` dtype
         # and conversion to this type is necessary to make
         # arrow to pandas conversion happen for large values.
+        if nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
+
         return pd.Series(
             self.astype("timedelta64[ns]").to_arrow(),
             copy=True,
