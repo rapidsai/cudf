@@ -1306,49 +1306,30 @@ for typ in _PANDAS_OBJ_INTERMEDIATE_TYPES:
         typ,
     )
 
-# timestamps and timedeltas are not proxied and "real" pandas types
-# are currently not picklable when the module accelerator is enabled.
-def _unpickle_timestamp(pickled_args):
-    from cudf.pandas.module_accelerator import disable_module_accelerator
-
-    with disable_module_accelerator():
-        unpickler, args = pickle.loads(pickled_args)
-    ts = unpickler(*args)
-    return ts
-
-
-def _reduce_timestamp(ts):
+# timestamps and timedeltas are not proxied, but non-proxied
+# pandas types are currently not picklable. Thus, we define
+# custom reducer/unpicker functions for these types:
+def _reduce_obj(obj):
     from cudf.pandas.module_accelerator import disable_module_accelerator
 
     with disable_module_accelerator():
         # args can contain objects that are unpicklable
         # when the module accelerator is disabled
         # (freq is of a proxy type):
-        pickled_args = pickle.dumps(ts.__reduce__())
+        pickled_args = pickle.dumps(obj.__reduce__())
 
-    return _unpickle_timestamp, (pickled_args,)
+    return _unpickle_obj, (pickled_args,)
 
 
-def _unpickle_timedelta(pickled_args):
+def _unpickle_obj(pickled_args):
     from cudf.pandas.module_accelerator import disable_module_accelerator
 
     with disable_module_accelerator():
         unpickler, args = pickle.loads(pickled_args)
-    ts = unpickler(*args)
-    return ts
+    obj = unpickler(*args)
+    return obj
 
 
-def _reduce_timedelta(ts):
-    from cudf.pandas.module_accelerator import disable_module_accelerator
-
-    with disable_module_accelerator():
-        # args can contain objects that are unpicklable
-        # when the module accelerator is disabled
-        # (freq is of a proxy type):
-        pickled_args = pickle.dumps(ts.__reduce__())
-
-    return _unpickle_timedelta, (pickled_args,)
-
-
-copyreg.dispatch_table[pd.Timestamp] = _reduce_timestamp
-copyreg.dispatch_table[pd.Timedelta] = _reduce_timedelta
+copyreg.dispatch_table[pd.Timestamp] = _reduce_obj
+# same reducer/unpickler can be used for Timedelta:
+copyreg.dispatch_table[pd.Timedelta] = _reduce_obj
