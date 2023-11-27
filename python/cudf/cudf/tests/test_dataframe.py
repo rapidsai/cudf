@@ -2163,9 +2163,9 @@ def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
     got_property = gdf.T
 
     expect = pdf.transpose()
-
-    assert_eq(expect, got_function.to_pandas(nullable=True))
-    assert_eq(expect, got_property.to_pandas(nullable=True))
+    nullable = dtype not in DATETIME_TYPES
+    assert_eq(expect, got_function.to_pandas(nullable=nullable))
+    assert_eq(expect, got_property.to_pandas(nullable=nullable))
 
 
 @pytest.mark.parametrize("num_cols", [1, 2, 10])

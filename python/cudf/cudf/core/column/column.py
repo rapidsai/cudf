@@ -203,17 +203,20 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         )
 
     def to_pandas(
-        self, index: Optional[pd.Index] = None, **kwargs
+        self,
+        *,
+        index: Optional[pd.Index] = None,
+        nullable: bool = False,
     ) -> pd.Series:
         """Convert object to pandas type.
 
         The default implementation falls back to PyArrow for the conversion.
         """
         # This default implementation does not handle nulls in any meaningful
-        # way, but must consume the parameter to avoid passing it to PyArrow
-        # (which does not recognize it).
-        kwargs.pop("nullable", None)
-        pd_series = self.to_arrow().to_pandas(**kwargs)
+        # way
+        if nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
+        pd_series = self.to_arrow().to_pandas()
 
         if index is not None:
             pd_series.index = index
