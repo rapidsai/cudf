@@ -2088,7 +2088,6 @@ def as_column(
         elif isinstance(
             arbitrary.dtype, (pd.CategoricalDtype, pd.IntervalDtype)
         ):
-            # TODO: Validate subtype?
             data = as_column(
                 pa.array(arbitrary, from_pandas=True),
                 nan_as_null=nan_as_null,
@@ -2102,6 +2101,7 @@ def as_column(
                 "Custom pandas ExtensionDtypes are not supported"
             )
         elif arbitrary.dtype.kind in "fiubmM":
+            # numpy dtype like
             if isinstance(arbitrary, pd.arrays.PandasArray):
                 arbitrary = np.array(arbitrary)
             arb_dtype = np.dtype(arbitrary.dtype)
