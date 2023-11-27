@@ -2081,18 +2081,34 @@ def test_multiindex_eq_other_multiindex():
     assert_eq(result, expected)
 
 
-@pytest.mark.parametrize(
-    "midx",
-    [
-        cudf.MultiIndex.from_product([[0, 1], [1, 0]]),
-        cudf.MultiIndex.from_tuples([(0, 1), (0, 0), (1, 1), (1, 0)]),
-        # TODO: Implement from_arrays like pandas
-        # cudf.MultiIndex.from_arrays([0, 0, 1, 1], [1, 0, 1, 0]),
-        cudf.MultiIndex(
-            levels=[[0, 1], [0, 1]], codes=[[0, 0, 1, 1], [1, 0, 1, 0]]
+@pytest.fixture(
+    params=[
+        "from_product",
+        "from_tuples",
+        pytest.param(
+            "from_arrays",
+            marks=pytest.mark.xfail(
+                reason="TODO: from_arrays is not implemented"
+            ),
         ),
-    ],
+        "init",
+    ]
 )
+def midx(request):
+    if request.param == "from_product":
+        return cudf.MultiIndex.from_product([[0, 1], [1, 0]])
+    elif request.param == "from_tuples":
+        return cudf.MultiIndex.from_tuples([(0, 1), (0, 0), (1, 1), (1, 0)])
+    elif request.param == "from_arrays":
+        return cudf.MultiIndex.from_arrays([0, 0, 1, 1], [1, 0, 1, 0])
+    elif request.param == "init":
+        return cudf.MultiIndex(
+            levels=[[0, 1], [0, 1]], codes=[[0, 0, 1, 1], [1, 0, 1, 0]]
+        )
+    else:
+        raise NotImplementedError(f"{request.param} not implemented")
+
+
 def test_multindex_constructor_levels_always_indexes(midx):
     assert_eq(midx.levels[0], cudf.Index([0, 1]))
     assert_eq(midx.levels[1], cudf.Index([0, 1]))
