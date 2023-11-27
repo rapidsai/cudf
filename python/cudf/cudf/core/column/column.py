@@ -943,14 +943,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     @property
     def is_monotonic_increasing(self) -> bool:
-        return not self.has_nulls() and self.as_frame()._is_sorted(
-            ascending=None, null_position=None
+        return not self.has_nulls() and libcudf.sort.is_sorted(
+            [self], [True], None
         )
 
     @property
     def is_monotonic_decreasing(self) -> bool:
-        return not self.has_nulls() and self.as_frame()._is_sorted(
-            ascending=[False], null_position=None
+        return not self.has_nulls() and libcudf.sort.is_sorted(
+            [self], [False], None
         )
 
     def sort_values(
@@ -1134,8 +1134,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def argsort(
         self, ascending: bool = True, na_position: str = "last"
     ) -> "cudf.core.column.NumericalColumn":
-        return self.as_frame()._get_sorted_inds(
-            ascending=ascending, na_position=na_position
+        return libcudf.sort.order_by(
+            [self], [ascending], na_position, stable=True
         )
 
     def __arrow_array__(self, type=None):
@@ -1161,10 +1161,17 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         side: str = "left",
         ascending: bool = True,
         na_position: str = "last",
-    ):
-        values = as_column(value).as_frame()
-        return self.as_frame().searchsorted(
-            values, side, ascending=ascending, na_position=na_position
+    ) -> Self:
+        if not isinstance(value, ColumnBase) or value.dtype != self.dtype:
+            raise ValueError(
+                "Column searchsorted expects values to be column of same dtype"
+            )
+        return libcudf.search.search_sorted(
+            [self],
+            [value],
+            side=side,
+            ascending=ascending,
+            na_position=na_position,
         )
 
     def unique(self) -> ColumnBase:
