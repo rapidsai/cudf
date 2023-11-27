@@ -23,3 +23,7 @@ cpdef Table scatter(object source, Column scatter_map, Table target_table)
 cpdef object empty_like(object input)
 
 cpdef Column allocate_like(Column input_column, mask_allocation_policy policy, size=*)
+
+cpdef Column copy_if_else(object lhs, object rhs, Column boolean_mask)
+
+cpdef Table boolean_mask_scatter(object input, Table target, Column boolean_mask)
