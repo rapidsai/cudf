@@ -2164,9 +2164,9 @@ def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
     got_property = gdf.T
 
     expect = pdf.transpose()
-
-    assert_eq(expect, got_function.to_pandas(nullable=True))
-    assert_eq(expect, got_property.to_pandas(nullable=True))
+    nullable = dtype not in DATETIME_TYPES
+    assert_eq(expect, got_function.to_pandas(nullable=nullable))
+    assert_eq(expect, got_property.to_pandas(nullable=nullable))
 
 
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
@@ -4579,6 +4579,17 @@ def test_dataframe_columns_returns_rangeindex(data, columns):
 def test_dataframe_columns_returns_rangeindex_single_col():
     result = cudf.DataFrame([1, 2, 3]).columns
     expected = pd.RangeIndex(range(1))
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("dtype", ["int64", "datetime64[ns]", "int8"])
+@pytest.mark.parametrize("idx_data", [[], [1, 2]])
+@pytest.mark.parametrize("data", [None, [], {}])
+def test_dataframe_columns_empty_data_preserves_dtype(dtype, idx_data, data):
+    result = cudf.DataFrame(
+        data, columns=cudf.Index(idx_data, dtype=dtype)
+    ).columns
+    expected = pd.Index(idx_data, dtype=dtype)
     assert_eq(result, expected)
 
 
