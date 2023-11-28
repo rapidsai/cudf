@@ -1439,6 +1439,7 @@ size_t column_index_buffer_size(EncColumnChunk* ck,
 
   // only need variable length size info for BYTE_ARRAY
   // 1 byte for marker, 1 byte vec type, 4 bytes length, 5 bytes per page for values
+  // (5 bytes is needed because the varint encoder only encodes 7 bits per byte)
   auto const var_bytes_size = col.physical_type == BYTE_ARRAY ? 6 + 5 * num_pages : 0;
 
   // for the histograms, need 1 byte for marker, 1 byte vec type, 4 bytes length,
