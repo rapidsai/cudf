@@ -239,7 +239,9 @@ def make_final_proxy_type(
         if _is_function_or_method(slow_attr):
             cls_dict[slow_name] = _FastSlowMethod(slow_name)
         elif isinstance(slow_attr, (property, functools.cached_property)):
-            cls_dict[slow_name] = type(slow_attr)(_FastSlowMethod(slow_name))
+            cls_dict[slow_name] = type(slow_attr)(
+                _FastSlowMethod(slow_name)  # type: ignore
+            )
 
     cls = types.new_class(
         name,
@@ -328,8 +330,8 @@ def make_intermediate_proxy_type(
         "__init__": __init__,
         "__doc__": inspect.getdoc(slow_type),
         "_fsproxy_slow_dir": slow_dir,
-        "_fsproxy_fast_type": fast_type,
-        "_fsproxy_slow_type": slow_type,
+        "_fsproxy_fast": fast_type,
+        "_fsproxy_slow": slow_type,
         "_fsproxy_slow_to_fast": _fsproxy_slow_to_fast,
         "_fsproxy_fast_to_slow": _fsproxy_fast_to_slow,
         "_fsproxy_state": _fsproxy_state,
@@ -463,13 +465,9 @@ class _FastSlowProxyMeta(type):
     classmethods of fast-slow proxy types.
     """
 
-    @property
-    def _fsproxy_slow(self) -> type:
-        return self._fsproxy_slow_type
-
-    @property
-    def _fsproxy_fast(self) -> type:
-        return self._fsproxy_fast_type
+    _fsproxy_slow_dir: list
+    _fsproxy_slow: type
+    _fsproxy_fast: type
 
     def __dir__(self):
         # Try to return the cached dir of the slow object, but if it

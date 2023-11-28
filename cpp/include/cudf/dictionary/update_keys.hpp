@@ -46,9 +46,9 @@ namespace dictionary {
  * Null entries from the input column are copied to the output column.
  * No new null entries are created by this operation.
  *
- * @throw cudf_logic_error if the new_keys type does not match the keys type in
+ * @throw cudf::logic_error if the new_keys type does not match the keys type in
  *        the dictionary_column.
- * @throw cudf_logic_error if the new_keys contain nulls.
+ * @throw cudf::logic_error if the new_keys contain nulls.
  *
  * @param dictionary_column Existing dictionary column.
  * @param new_keys New keys to incorporate into the dictionary_column.
@@ -78,9 +78,9 @@ std::unique_ptr<column> add_keys(
  * @endcode
  * Note that "a" has been removed so output row[2] becomes null.
  *
- * @throw cudf_logic_error if the keys_to_remove type does not match the keys type in
+ * @throw cudf::logic_error if the keys_to_remove type does not match the keys type in
  *        the dictionary_column.
- * @throw cudf_logic_error if the keys_to_remove contain nulls.
+ * @throw cudf::logic_error if the keys_to_remove contain nulls.
  *
  * @param dictionary_column Existing dictionary column.
  * @param keys_to_remove The keys to remove from the dictionary_column.
@@ -134,9 +134,9 @@ std::unique_ptr<column> remove_unused_keys(
  * d2 is now {keys=["b", "c", "d"], indices=[1, x, 0, 1, 0], valids=[1, 0, 1, 1, 1]}
  * @endcode
  *
- * @throw cudf_logic_error if the keys type does not match the keys type in
+ * @throw cudf::logic_error if the keys type does not match the keys type in
  *        the dictionary_column.
- * @throw cudf_logic_error if the keys contain nulls.
+ * @throw cudf::logic_error if the keys contain nulls.
  *
  * @param dictionary_column Existing dictionary column.
  * @param keys New keys to use for the output column. Must not contain nulls.

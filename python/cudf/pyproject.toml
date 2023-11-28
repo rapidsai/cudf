@@ -9,7 +9,7 @@ requires = [
     "numpy>=1.21,<1.25",
     "protoc-wheel",
     "pyarrow==14.0.1.*",
-    "rmm==23.12.*",
+    "rmm==24.2.*",
     "scikit-build>=0.13.1",
     "setuptools",
     "wheel",
