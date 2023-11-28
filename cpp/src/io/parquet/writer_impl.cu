@@ -1435,7 +1435,7 @@ size_t column_index_buffer_size(EncColumnChunk* ck,
 
   // additional storage needed for SizeStatistics
   // don't need stats for dictionary pages
-  auto const num_pages = ck->num_pages - (ck->use_dictionary ? 1 : 0);
+  auto const num_pages = num_data_pages(ck);
 
   // only need variable length size info for BYTE_ARRAY
   // 1 byte for marker, 1 byte vec type, 4 bytes length, 5 bytes per page for values
