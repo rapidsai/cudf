@@ -294,34 +294,13 @@ def columns_slice(list input_columns, list indices):
 
 @acquire_spill_lock()
 def column_split(Column input_column, object splits):
-
-    cdef column_view input_column_view = input_column.view()
-    cdef vector[size_type] c_splits
-    c_splits.reserve(len(splits))
-
-    cdef vector[column_view] c_result
-
-    cdef int split
-
-    for split in splits:
-        c_splits.push_back(split)
-
-    with nogil:
-        c_result = move(
-            cpp_copying.split(
-                input_column_view,
-                c_splits)
+    return [
+        Column.from_pylibcudf(c)
+        for c in pylibcudf.copying.column_split(
+            input_column.to_pylibcudf(mode="read"),
+            splits,
         )
-
-    num_of_result_cols = c_result.size()
-    result = [
-        Column.from_column_view(
-            c_result[i],
-            input_column
-        ) for i in range(num_of_result_cols)
     ]
-
-    return result
 
 
 @acquire_spill_lock()

@@ -44,6 +44,8 @@ cpdef Column copy_range(
 
 cpdef Column shift(Column input, size_type offset, Scalar fill_values)
 
+cpdef list column_split(Column input_column, list splits)
+
 cpdef Column copy_if_else(object lhs, object rhs, Column boolean_mask)
 
 cpdef Table boolean_mask_table_scatter(Table input, Table target, Column boolean_mask)

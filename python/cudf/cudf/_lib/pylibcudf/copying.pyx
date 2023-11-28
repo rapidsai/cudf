@@ -13,7 +13,7 @@ from libcpp.vector cimport vector
 # cimport libcudf... libcudf.copying.algo(...)
 from cudf._lib.cpp cimport copying as cpp_copying
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport mutable_column_view
+from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
 from cudf._lib.cpp.copying cimport mask_allocation_policy, out_of_bounds_policy
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
@@ -208,6 +208,28 @@ cpdef Column shift(Column input, size_type offset, Scalar fill_values):
             )
         )
     return Column.from_libcudf(move(c_result))
+
+
+cpdef list column_split(Column input_column, list splits):
+    cdef vector[size_type] c_splits
+    cdef int split
+    for split in splits:
+        c_splits.push_back(split)
+
+    cdef vector[column_view] c_result
+    with nogil:
+        c_result = move(
+            cpp_copying.split(
+                input_column.view(),
+                c_splits
+            )
+        )
+
+    cdef int i
+    return [
+        Column.from_column_view(c_result[i], input_column)
+        for i in range(c_result.size())
+    ]
 
 
 cpdef Column copy_if_else(object lhs, object rhs, Column boolean_mask):
