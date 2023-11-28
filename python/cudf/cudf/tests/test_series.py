@@ -2659,7 +2659,8 @@ def test_series_setitem_mixed_bool_dtype():
         [np.timedelta64("nat"), np.timedelta64(1)],
     ],
 )
-def test_series_np_array_nat_nan_as_null_false(nat, value, request):
+@pytest.mark.parametrize("nan_as_null", [True, False])
+def test_series_np_array_nat_nan_as_nulls(nat, value, request, nan_as_null):
     expected = np.array([nat, value])
     if expected.dtype.kind == "m":
         request.applymarker(
@@ -2667,7 +2668,7 @@ def test_series_np_array_nat_nan_as_null_false(nat, value, request):
                 raises=TypeError, reason="timedelta64 not supported by cupy"
             )
         )
-    ser = cudf.Series(expected, nan_as_null=False)
+    ser = cudf.Series(expected, nan_as_null=nan_as_null)
     assert ser[0] is pd.NaT
     assert ser[1] == value
 
