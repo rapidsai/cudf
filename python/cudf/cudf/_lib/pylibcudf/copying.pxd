@@ -57,3 +57,5 @@ cpdef Column copy_if_else(object lhs, object rhs, Column boolean_mask)
 cpdef Table boolean_mask_table_scatter(Table input, Table target, Column boolean_mask)
 
 cpdef Table boolean_mask_scalars_scatter(list input, Table target, Column boolean_mask)
+
+cpdef Scalar get_element(Column input_column, size_type index)

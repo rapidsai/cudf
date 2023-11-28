@@ -425,16 +425,12 @@ def shift(Column input, int offset, object fill_value=None):
 
 @acquire_spill_lock()
 def get_element(Column input_column, size_type index):
-    cdef column_view col_view = input_column.view()
-
-    cdef unique_ptr[scalar] c_output
-    with nogil:
-        c_output = move(
-            cpp_copying.get_element(col_view, index)
-        )
-
-    return DeviceScalar.from_unique_ptr(
-        move(c_output), dtype=input_column.dtype
+    return DeviceScalar.from_pylibcudf(
+        pylibcudf.copying.get_element(
+            input_column.to_pylibcudf(mode="read"),
+            index,
+        ),
+        dtype=input_column.dtype,
     )
 
 

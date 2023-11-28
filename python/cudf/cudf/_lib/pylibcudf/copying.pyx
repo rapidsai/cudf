@@ -362,3 +362,12 @@ cpdef Table boolean_mask_scalars_scatter(list input, Table target, Column boolea
         )
 
     return Table.from_libcudf(move(result))
+
+cpdef Scalar get_element(Column input_column, size_type index):
+    cdef unique_ptr[scalar] c_output
+    with nogil:
+        c_output = move(
+            cpp_copying.get_element(input_column.view(), index)
+        )
+
+    return Scalar.from_libcudf(move(c_output))
