@@ -267,7 +267,8 @@ def test_dropna_multiindex(data, how, request):
         request.applymarker(
             pytest.mark.xfail(
                 reason="pandas NA value np.nan results in float type. "
-                "cuDF correctly retains int type"
+                "cuDF correctly retains int type "
+                "(https://github.com/pandas-dev/pandas/issues/44792)"
             )
         )
     assert_eq(expect, got)
