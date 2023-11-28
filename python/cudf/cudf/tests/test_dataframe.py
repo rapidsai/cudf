@@ -10653,6 +10653,11 @@ def test_dataframe_from_ndarray_dup_columns():
         cudf.DataFrame(np.eye(2), columns=["A", "A"])
 
 
+def test_dataframe_from_dict_only_scalar_values_raises():
+    with pytest.raises(ValueError):
+        cudf.DataFrame({0: 3, 1: 2})
+
+
 @pytest.mark.parametrize("name", ["a", 0, None, np.nan, cudf.NA])
 @pytest.mark.parametrize("contains", ["a", 0, None, np.nan, cudf.NA])
 @pytest.mark.parametrize("other_names", [[], ["b", "c"], [1, 2]])
