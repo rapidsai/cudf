@@ -10658,6 +10658,26 @@ def test_dataframe_from_dict_only_scalar_values_raises():
         cudf.DataFrame({0: 3, 1: 2})
 
 
+@pytest.mark.parametrize("klass", [cudf.DataFrame, pd.DataFrame])
+@pytest.mark.parametrize(
+    "axis_kwargs, exp_data",
+    [
+        [
+            {"index": [1, 2], "columns": [1, 2]},
+            np.array([[1.0, np.nan], [np.nan, np.nan]]),
+        ],
+        [{"index": [1, 2]}, np.array([[0.0, 1.0], [np.nan, np.nan]])],
+        [{"columns": [1, 2]}, np.array([[0.0, np.nan], [1.0, np.nan]])],
+    ],
+)
+def test_dataframe_from_frame_with_index_or_columns_reindexes(
+    klass, axis_kwargs, exp_data
+):
+    result = cudf.DataFrame(klass(np.eye(2)), **axis_kwargs)
+    expected = cudf.DataFrame(exp_data, **axis_kwargs)
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize("name", ["a", 0, None, np.nan, cudf.NA])
 @pytest.mark.parametrize("contains", ["a", 0, None, np.nan, cudf.NA])
 @pytest.mark.parametrize("other_names", [[], ["b", "c"], [1, 2]])

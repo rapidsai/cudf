@@ -684,8 +684,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if isinstance(data, pd.DataFrame):
                 data = self.from_pandas(data, nan_as_null=nan_as_null)
             col_dict = data._data
-            index_from_data = data.index
-            columns_from_data = data.columns
+            index, index_from_data = data.index, index
+            columns, columns_from_data = data.columns, columns
         elif isinstance(data, (cudf.Series, pd.Series)):
             if isinstance(data, pd.Series):
                 data = cudf.Series.from_pandas(data, nan_as_null=nan_as_null)
@@ -698,17 +698,21 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             #   -> return 1 column DataFrame
             # Series.name is None and columns
             #   -> return 1 column DataFrame if len(columns) in {0, 1}
-            if data.name is None and columns is not None:
-                if len(columns) > 1:
-                    raise ValueError(
-                        "Length of columns must be less than 2 if "
-                        f"{type(data).__name__}.name is None."
-                    )
-                name = columns[0]
+            if data.name is None:
+                if columns is not None:
+                    if len(columns) > 1:
+                        raise ValueError(
+                            "Length of columns must be less than 2 if "
+                            f"{type(data).__name__}.name is None."
+                        )
+                    name = columns[0]
+                else:
+                    name = 0
             else:
-                name = data.name or 0
+                name = data.name
+                columns, columns_from_data = pd.Index([data.name]), columns
             col_dict = {name: data._column}
-            index_from_data = data.index
+            index, index_from_data = data.index, index
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
                 "Use cudf.Series._from_data for constructing a Series from "
@@ -752,7 +756,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
                 for col_label in columns
             }
+        elif is_dict_like(data):
+            result = self._init_from_dict_like(data, nan_as_null=nan_as_null)
+            col_dict = result[0]
+            index, index_from_data = result[1], index
         elif is_list_like(data):
+            super().__init__()
             if len(data) > 0 and is_scalar(data[0]):
                 if columns is not None:
                     data = dict(zip(columns, [data]))
@@ -779,16 +788,27 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             else:
                 self._init_from_list_like(data, index=index, columns=columns)
             self._check_data_index_length_match()
-        elif is_dict_like(data):
-            col_dict, index_from_data = self._init_from_dict_like(
-                data, nan_as_null=nan_as_null
-            )
+            return
         else:
             raise TypeError(
                 f"data must be list or dict-like, not {type(data).__name__}"
             )
 
         super().__init__(col_dict, index=index)
+        if columns_from_data is not None:
+            # TODO: This there a better way to do this?
+            columns_from_data = as_index(columns_from_data)
+            reindexed = self.reindex(
+                columns=columns_from_data.to_pandas(), copy=False
+            )
+            self._data = reindexed._data
+            self._index = index
+        if index_from_data is not None:
+            # TODO: This there a better way to do this?
+            index_from_data = as_index(index_from_data)
+            reindexed = self.reindex(index=index_from_data, copy=False)
+            self._data = reindexed._data
+            self._index = index_from_data
         self._check_data_index_length_match()
 
         if dtype:
