@@ -1945,8 +1945,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   // This contains stats for both the pages and the rowgroups. TODO: make them separate.
   rmm::device_uvector<statistics_chunk> page_stats(num_stats_bfr, stream);
   auto bfr_i = static_cast<uint8_t*>(col_idx_bfr.data());
-  auto bfr_r = static_cast<uint32_t*>(rep_level_histogram.data());
-  auto bfr_d = static_cast<uint32_t*>(def_level_histogram.data());
+  auto bfr_r = rep_level_histogram.data();
+  auto bfr_d = def_level_histogram.data();
   for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
     auto bfr   = static_cast<uint8_t*>(uncomp_bfr.data());
     auto bfr_c = static_cast<uint8_t*>(comp_bfr.data());
