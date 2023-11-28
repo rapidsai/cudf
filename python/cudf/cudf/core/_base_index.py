@@ -1873,10 +1873,18 @@ class BaseIndex(Serializable):
 
         if not isinstance(index, pd.Index):
             raise TypeError("not a pandas.Index")
-
-        ind = cudf.Index(column.as_column(index, nan_as_null=nan_as_null))
-        ind.name = index.name
-        return ind
+        if isinstance(index, pd.RangeIndex):
+            return cudf.RangeIndex(
+                start=index.start,
+                stop=index.stop,
+                step=index.step,
+                name=index.name,
+            )
+        else:
+            return cudf.Index(
+                column.as_column(index, nan_as_null=nan_as_null),
+                name=index.name,
+            )
 
     @property
     def _constructor_expanddim(self):
