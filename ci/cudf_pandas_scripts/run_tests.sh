@@ -5,6 +5,11 @@
 
 set -eoxu pipefail
 
+RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}
+RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}
+mkdir -p "${RAPIDS_TESTS_DIR}" "${RAPIDS_COVERAGE_DIR}"
+
+
 # Function to display script usage
 function display_usage {
     echo "Usage: $0 [--no-cudf]"
@@ -49,4 +54,9 @@ else
     python -m pip install $(ls ./local-cudf-dep/cudf*.whl)[test,cudf_pandas_tests]
 fi
 
-python -m pytest -p cudf.pandas ./python/cudf/cudf_pandas_tests/
+python -m pytest -p cudf.pandas \
+    --cov-config=./python/cudf/.coveragerc \
+    --cov=cudf \
+    --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
+    --cov-report=term \
+    ./python/cudf/cudf_pandas_tests/
