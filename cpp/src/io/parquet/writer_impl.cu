@@ -2104,7 +2104,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
             chunk_stats.unencoded_byte_array_data_bytes = ck.var_bytes_size;
           }
 
-          auto const num_data_pages = ck.num_pages - (ck.use_dictionary ? 1 : 0);
+          auto const num_data_pages = detail::num_data_pages(&ck);
           if (col.max_def_level > DEF_LVL_HIST_CUTOFF) {
             size_t const hist_size        = col.max_def_level + 1;
             uint32_t const* const ck_hist = h_def_ptr + hist_size * num_data_pages;
