@@ -2954,6 +2954,13 @@ def test_index_getitem_from_nonint_raises(idx):
         cudf.Index([1, 2])[idx]
 
 
+def test_from_pandas_rangeindex_return_rangeindex():
+    pidx = pd.RangeIndex(start=3, stop=9, step=3, name="a")
+    result = cudf.Index.from_pandas(pidx)
+    expected = cudf.RangeIndex(start=3, stop=9, step=3, name="a")
+    assert_eq(result, expected, exact=True)
+
+
 @pytest.mark.parametrize(
     "idx",
     [
