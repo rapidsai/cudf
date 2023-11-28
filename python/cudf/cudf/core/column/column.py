@@ -1964,11 +1964,10 @@ def as_column(
             raise ValueError("Data must be 1-dimensional")
         current_dtype = np.dtype(desc["typestr"])
 
-        arb_dtype = (
-            np.dtype("float32")
-            if current_dtype == "float16"
-            else cudf.dtype(current_dtype)
-        )
+        if current_dtype == "float16":
+            raise TypeError("Unsupported type float16")
+
+        arb_dtype = cudf.dtype(current_dtype)
 
         if desc.get("mask", None) is not None:
             # Extract and remove the mask from arbitrary before
@@ -2106,8 +2105,7 @@ def as_column(
                 arbitrary = np.array(arbitrary)
             arb_dtype = np.dtype(arbitrary.dtype)
             if arb_dtype.kind == "f" and arb_dtype.itemsize == 2:
-                # float16
-                arbitrary = arbitrary.astype(np.dtype(np.float32))
+                raise TypeError("Unsupported type float16")
             elif arb_dtype.kind in "mM":
                 # not supported by cupy
                 arbitrary = np.asarray(arbitrary)
@@ -2293,7 +2291,7 @@ def as_column(
                 data = data.astype(dtype)
         elif arb_dtype.kind in ("f"):
             if arb_dtype == np.dtype("float16"):
-                arb_dtype = np.dtype("float32")
+                raise TypeError("Unsupported type float16")
             arb_dtype = cudf.dtype(arb_dtype if dtype is None else dtype)
             data = as_column(
                 cupy.asarray(arbitrary, dtype=arb_dtype),

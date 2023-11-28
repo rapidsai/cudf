@@ -6333,8 +6333,8 @@ def test_df_string_cat_types_mask_where(data, condition, other, has_cat):
         ),
         (
             pd.Series([random.random() for _ in range(10)], dtype="float16"),
-            np.dtype("float32"),
             None,
+            TypeError,
         ),
         (
             pd.Series([random.random() for _ in range(10)], dtype="float64"),
@@ -6351,10 +6351,10 @@ def test_df_string_cat_types_mask_where(data, condition, other, has_cat):
 def test_from_pandas_unsupported_types(data, expected_upcast_type, error):
     pdf = pd.DataFrame({"one_col": data})
     if error is not None:
-        with pytest.raises(ValueError):
+        with pytest.raises(error):
             cudf.from_pandas(data)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(error):
             cudf.Series(data)
 
         with pytest.raises(error):

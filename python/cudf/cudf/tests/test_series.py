@@ -1348,10 +1348,9 @@ def test_nested_series_from_sequence_data(data, expected):
         ),
     ],
 )
-def test_series_upcast_float16(data):
-    actual_series = cudf.Series(data)
-    expected_series = cudf.Series(data, dtype="float32")
-    assert_eq(actual_series, expected_series)
+def test_series_raises_float16(data):
+    with pytest.raises(TypeError):
+        cudf.Series(data)
 
 
 @pytest.mark.parametrize(
