@@ -1888,7 +1888,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
           // SizeStatistics are on the ColumnIndex, so only need to allocate the histograms data
           // if we're doing page-level indexes. add 1 to num_pages for per-chunk histograms.
-          auto const num_histograms = ck->num_pages - (ck->use_dictionary ? 1 : 0) + 1;
+          auto const num_histograms = num_data_pages(ck) + 1;
 
           if (col.max_def_level > DEF_LVL_HIST_CUTOFF) {
             def_histogram_bfr_size += (col.max_def_level + 1) * num_histograms;

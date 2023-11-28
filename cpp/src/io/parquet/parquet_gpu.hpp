@@ -519,6 +519,16 @@ struct EncColumnChunk {
   size_t var_bytes_size;         //!< Sum of var_bytes_size from the pages (byte arrays only)
 };
 
+constexpr uint32_t num_dict_pages(EncColumnChunk const* const ck)
+{
+  return ck->use_dictionary ? 1 : 0;
+}
+
+constexpr uint32_t num_data_pages(EncColumnChunk const* const ck)
+{
+  return ck->num_pages - num_dict_pages(ck);
+}
+
 /**
  * @brief Struct describing an encoder data page
  */
