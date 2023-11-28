@@ -19,7 +19,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_device_scalar
 
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.utils cimport table_view_from_columns, table_view_from_table
+from cudf._lib.utils cimport table_view_from_table
 
 from cudf._lib.reduce import minmax
 from cudf.core.abc import Serializable
@@ -35,14 +35,8 @@ from cudf._lib.cpp.lists.gather cimport (
 )
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
-from cudf._lib.utils cimport (
-    columns_from_pylibcudf_table,
-    columns_from_table_view,
-    data_from_table_view,
-    table_view_from_columns,
-)
+from cudf._lib.utils cimport columns_from_pylibcudf_table, data_from_table_view
 
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef const scalar constscalar
@@ -237,58 +231,23 @@ def columns_empty_like(list input_columns):
 
 @acquire_spill_lock()
 def column_slice(Column input_column, object indices):
-
-    cdef column_view input_column_view = input_column.view()
-    cdef vector[size_type] c_indices
-    c_indices.reserve(len(indices))
-
-    cdef vector[column_view] c_result
-
-    cdef int index
-
-    for index in indices:
-        c_indices.push_back(index)
-
-    with nogil:
-        c_result = move(
-            cpp_copying.slice(
-                input_column_view,
-                c_indices)
+    return [
+        Column.from_pylibcudf(c)
+        for c in pylibcudf.copying.column_slice(
+            input_column.to_pylibcudf(mode="read"),
+            list(indices),
         )
-
-    num_of_result_cols = c_result.size()
-    result = [
-        Column.from_column_view(
-            c_result[i],
-            input_column) for i in range(num_of_result_cols)]
-
-    return result
+    ]
 
 
 @acquire_spill_lock()
-def columns_slice(list input_columns, list indices):
-    """
-    Given a list of input columns, return columns sliced by ``indices``.
-
-    Returns a list of list of columns. The length of return is
-    `len(indices) / 2`. The `i`th item in return is a list of columns sliced
-    from ``input_columns`` with `slice(indices[i*2], indices[i*2 + 1])`.
-    """
-    cdef table_view input_table_view = table_view_from_columns(input_columns)
-    cdef vector[size_type] c_indices = indices
-    cdef vector[table_view] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_copying.slice(
-                input_table_view,
-                c_indices)
-        )
-
+def columns_slice(list input_columns, object indices):
     return [
-        columns_from_table_view(
-            c_result[i], input_columns
-        ) for i in range(c_result.size())
+        columns_from_pylibcudf_table(tbl)
+        for tbl in pylibcudf.copying.table_slice(
+            pylibcudf.Table([col.to_pylibcudf(mode="read") for col in input_columns]),
+            list(indices),
+        )
     ]
 
 

@@ -251,6 +251,42 @@ cpdef list table_split(Table input_table, list splits):
     ]
 
 
+cpdef list column_slice(Column input_column, list indices):
+    cdef vector[size_type] c_indices = indices
+    cdef vector[column_view] c_result
+    with nogil:
+        c_result = move(
+            cpp_copying.slice(
+                input_column.view(),
+                c_indices
+            )
+        )
+
+    cdef int i
+    return [
+        Column.from_column_view(c_result[i], input_column)
+        for i in range(c_result.size())
+    ]
+
+
+cpdef list table_slice(Table input_table, list indices):
+    cdef vector[size_type] c_indices = indices
+    cdef vector[table_view] c_result
+    with nogil:
+        c_result = move(
+            cpp_copying.slice(
+                input_table.view(),
+                c_indices
+            )
+        )
+
+    cdef int i
+    return [
+        Table.from_table_view(c_result[i], input_table)
+        for i in range(c_result.size())
+    ]
+
+
 cpdef Column copy_if_else(object lhs, object rhs, Column boolean_mask):
     cdef unique_ptr[column] result
 

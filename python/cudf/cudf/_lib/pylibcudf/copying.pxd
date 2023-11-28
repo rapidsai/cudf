@@ -48,6 +48,10 @@ cpdef list column_split(Column input_column, list splits)
 
 cpdef list table_split(Table input_table, list splits)
 
+cpdef list column_slice(Column input_column, list indices)
+
+cpdef list table_slice(Table input_table, list indices)
+
 cpdef Column copy_if_else(object lhs, object rhs, Column boolean_mask)
 
 cpdef Table boolean_mask_table_scatter(Table input, Table target, Column boolean_mask)
