@@ -33,7 +33,7 @@ def profile(function_profile, line_profile, fn):
     elif function_profile:
         with Profiler() as profiler:
             yield fn
-        profiler.print_per_func_stats()
+        profiler.print_per_function_stats()
     else:
         yield fn
 
