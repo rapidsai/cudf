@@ -313,7 +313,7 @@ inline void CompactProtocolFieldWriter::field_int_list<int64_t>(int field,
   put_byte(static_cast<uint8_t>((std::min(val.size(), 0xfUL) << 4) | ST_FLD_I64));
   if (val.size() >= 0xfUL) { put_uint(val.size()); }
   for (auto const v : val) {
-    put_int(static_cast<int32_t>(v));
+    put_int(v);
   }
   current_field_value = field;
 }
