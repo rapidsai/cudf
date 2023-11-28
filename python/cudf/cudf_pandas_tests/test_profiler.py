@@ -2,6 +2,9 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import os
+import subprocess
+
 from cudf.pandas import LOADED, Profiler
 
 if not LOADED:
@@ -68,3 +71,41 @@ def test_profiler_fast_slow_name_mismatch():
     with Profiler():
         df = pd.DataFrame({"a": [1, 2, 3], "b": [3, 4, 5]})
         df.iloc[0, 1] = "foo"
+
+
+def test_profiler_commandline():
+    data_directory = os.path.dirname(os.path.abspath(__file__))
+    # Create a copy of the current environment variables
+    env = os.environ.copy()
+    # Setting the 'COLUMNS' environment variable to a large number
+    # because the terminal output shouldn't be compressed for
+    # text validations below.
+    env["COLUMNS"] = "10000"
+
+    sp_completed = subprocess.run(
+        [
+            "python",
+            "-m",
+            "cudf.pandas",
+            "--profile",
+            data_directory + "/data/profile_basic.py",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert sp_completed.returncode == 0
+    output = sp_completed.stdout
+
+    for string in [
+        "Total time",
+        "Stats",
+        "Function",
+        "GPU ncalls",
+        "GPU cumtime",
+        "GPU percall",
+        "CPU ncalls",
+        "CPU cumtime",
+        "CPU percall",
+    ]:
+        assert string in output

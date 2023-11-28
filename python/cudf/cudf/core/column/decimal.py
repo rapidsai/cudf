@@ -10,7 +10,6 @@ import pyarrow as pa
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
@@ -192,15 +191,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
     ) -> ColumnBase:
         quant = [float(q)] if not isinstance(q, (Sequence, np.ndarray)) else q
         # get sorted indices and exclude nulls
-        sorted_indices = self.as_frame()._get_sorted_inds(
-            ascending=True, na_position="first"
+        indices = libcudf.sort.order_by(
+            [self], [True], "first", stable=True
+        ).slice(self.null_count, len(self))
+        result = libcudf.quantiles.quantile(
+            self, quant, interpolation, indices, exact
         )
-        sorted_indices = sorted_indices[self.null_count :]
-
-        result = cpp_quantile(
-            self, quant, interpolation, sorted_indices, exact
-        )
-
         return result._with_type_metadata(self.dtype)
 
     def as_numerical_column(

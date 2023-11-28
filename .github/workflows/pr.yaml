@@ -25,6 +25,7 @@ jobs:
       - wheel-tests-cudf
       - wheel-build-dask-cudf
       - wheel-tests-dask-cudf
+      - devcontainer
       - unit-tests-cudf-pandas
       - pandas-tests
       #- pandas-tests-diff
@@ -130,6 +131,14 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
       script: ci/test_wheel_dask_cudf.sh
+  devcontainer:
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/build-in-devcontainer.yaml@branch-24.02
+    with:
+      build_command: |
+        sccache -z;
+        build-all -DBUILD_BENCHMARKS=ON -DNVBench_ENABLE_CUPTI=OFF --verbose;
+        sccache -s;
   unit-tests-cudf-pandas:
     needs: wheel-build-cudf
     secrets: inherit

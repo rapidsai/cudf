@@ -71,15 +71,15 @@ struct page_state_s {
   // points to either nesting_decode_cache above when possible, or to the global source otherwise
   PageNestingDecodeInfo* nesting_info{};
 
-  inline __device__ void set_error_code(decode_error err) volatile
+  inline __device__ void set_error_code(decode_error err)
   {
-    cuda::atomic_ref<int32_t, cuda::thread_scope_block> ref{const_cast<int&>(error)};
+    cuda::atomic_ref<int32_t, cuda::thread_scope_block> ref{error};
     ref.fetch_or(static_cast<int32_t>(err), cuda::std::memory_order_relaxed);
   }
 
-  inline __device__ void reset_error_code() volatile
+  inline __device__ void reset_error_code()
   {
-    cuda::atomic_ref<int32_t, cuda::thread_scope_block> ref{const_cast<int&>(error)};
+    cuda::atomic_ref<int32_t, cuda::thread_scope_block> ref{error};
     ref.store(0, cuda::std::memory_order_release);
   }
 };
@@ -185,8 +185,8 @@ inline __device__ bool is_page_contained(page_state_s* const s, size_t start_row
  * @return A pair containing a pointer to the string and its length
  */
 template <typename state_buf>
-inline __device__ cuda::std::pair<char const*, size_t> gpuGetStringData(page_state_s volatile* s,
-                                                                        state_buf volatile* sb,
+inline __device__ cuda::std::pair<char const*, size_t> gpuGetStringData(page_state_s* s,
+                                                                        state_buf* sb,
                                                                         int src_pos)
 {
   char const* ptr = nullptr;
@@ -232,8 +232,10 @@ inline __device__ cuda::std::pair<char const*, size_t> gpuGetStringData(page_sta
  * additional values.
  */
 template <bool sizes_only, typename state_buf>
-__device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(
-  page_state_s volatile* s, [[maybe_unused]] state_buf volatile* sb, int target_pos, int t)
+__device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(page_state_s* s,
+                                                                [[maybe_unused]] state_buf* sb,
+                                                                int target_pos,
+                                                                int t)
 {
   uint8_t const* end = s->data_end;
   int dict_bits      = s->dict_bits;
@@ -349,10 +351,7 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(
  * @return The new output position
  */
 template <typename state_buf>
-inline __device__ int gpuDecodeRleBooleans(page_state_s volatile* s,
-                                           state_buf volatile* sb,
-                                           int target_pos,
-                                           int t)
+inline __device__ int gpuDecodeRleBooleans(page_state_s* s, state_buf* sb, int target_pos, int t)
 {
   uint8_t const* end = s->data_end;
   int64_t pos        = s->dict_pos;
@@ -420,10 +419,8 @@ inline __device__ int gpuDecodeRleBooleans(page_state_s volatile* s,
  * @return Total length of strings processed
  */
 template <bool sizes_only, typename state_buf>
-__device__ size_type gpuInitStringDescriptors(page_state_s volatile* s,
-                                              [[maybe_unused]] state_buf volatile* sb,
-                                              int target_pos,
-                                              int t)
+__device__ size_type
+gpuInitStringDescriptors(page_state_s* s, [[maybe_unused]] state_buf* sb, int target_pos, int t)
 {
   int pos       = s->dict_pos;
   int total_len = 0;
