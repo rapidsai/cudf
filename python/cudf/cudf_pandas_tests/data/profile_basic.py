@@ -2,8 +2,12 @@
 
 import pandas as pd
 
-URL = "https://github.com/plotly/datasets/raw/master/tips.csv"
-df = pd.read_csv(URL)
+df = pd.DataFrame(
+    {
+        "size": [10, 11, 12, 10, 11, 12, 10, 6, 11, 10],
+        "total_bill": [100, 200, 100, 200, 100, 100, 200, 50, 10, 560],
+    }
+)
 df["size"].value_counts()
 df.groupby("size").total_bill.mean()
 df.apply(list, axis=1)
