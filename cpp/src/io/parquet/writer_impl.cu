@@ -2000,10 +2000,10 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   if (collect_compression_statistics) { comp_stats = writer_compression_statistics{}; }
 
   // Encode row groups in batches
-  for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
+  for (auto b = 0, batch_r_start = 0; b < static_cast<size_type>(batch_list.size()); b++) {
     // Count pages in this batch
-    auto const rnext               = r + batch_list[b];
-    auto const first_page_in_batch = chunks[r][0].first_page;
+    auto const rnext               = batch_r_start + batch_list[b];
+    auto const first_page_in_batch = chunks[batch_r_start][0].first_page;
     auto const first_page_in_next_batch =
       (rnext < num_rowgroups) ? chunks[rnext][0].first_page : num_pages;
     auto const pages_in_batch = first_page_in_next_batch - first_page_in_batch;
@@ -2014,7 +2014,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
       pages_in_batch,
       first_page_in_batch,
       batch_list[b],
-      r,
+      batch_r_start,
       (stats_granularity == statistics_freq::STATISTICS_PAGE) ? page_stats.data() : nullptr,
       (stats_granularity != statistics_freq::STATISTICS_NONE) ? page_stats.data() + num_pages
                                                               : nullptr,
@@ -2029,13 +2029,17 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
     // need to bring back the histogram data
     if (stats_granularity == statistics_freq::STATISTICS_COLUMN) {
-      if (def_histogram_bfr_size > 0) { def_level_histogram.device_to_host_async(stream); }
-      if (rep_histogram_bfr_size > 0) { rep_level_histogram.device_to_host_async(stream); }
-      need_sync = true;
+      if (def_histogram_bfr_size > 0) {
+        def_level_histogram.device_to_host_async(stream);
+        need_sync = true;
+      }
+      if (rep_histogram_bfr_size > 0) {
+        rep_level_histogram.device_to_host_async(stream);
+        need_sync = true;
+      }
     }
 
-    [[maybe_unused]] auto save_r = r;
-    for (; r < rnext; r++) {
+    for (int r = batch_r_start; r < rnext; r++) {
       int p           = rg_to_part[r];
       int global_r    = global_rowgroup_base[p] + r - first_rg_in_part[p];
       auto& row_group = agg_meta->file(p).row_groups[global_r];
@@ -2075,14 +2079,13 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
       auto h_def_ptr = def_level_histogram.host_ptr();
       auto h_rep_ptr = rep_level_histogram.host_ptr();
 
-      auto const rnext = save_r + batch_list[b];
-      for (; save_r < rnext; save_r++) {
-        int const p        = rg_to_part[save_r];
-        int const global_r = global_rowgroup_base[p] + save_r - first_rg_in_part[p];
+      for (int r = batch_r_start; r < rnext; r++) {
+        int const p        = rg_to_part[r];
+        int const global_r = global_rowgroup_base[p] + r - first_rg_in_part[p];
         auto& row_group    = agg_meta->file(p).row_groups[global_r];
 
         for (auto i = 0; i < num_columns; i++) {
-          auto const& ck          = chunks[save_r][i];
+          auto const& ck          = chunks[r][i];
           auto const& col         = col_desc[ck.col_desc_id];
           auto& column_chunk_meta = row_group.columns[i].meta_data;
 
@@ -2123,6 +2126,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         }
       }
     }
+
+    batch_r_start = rnext;
   }
 
   auto bounce_buffer =
