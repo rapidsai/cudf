@@ -59,16 +59,14 @@ class StructColumn(ColumnBase):
         )
 
     def to_pandas(
-        self, index: Optional[pd.Index] = None, **kwargs
+        self, *, index: Optional[pd.Index] = None, nullable: bool = False
     ) -> pd.Series:
         # We cannot go via Arrow's `to_pandas` because of the following issue:
         # https://issues.apache.org/jira/browse/ARROW-12680
+        if nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
 
-        pd_series = pd.Series(self.to_arrow().tolist(), dtype="object")
-
-        if index is not None:
-            pd_series.index = index
-        return pd_series
+        return pd.Series(self.to_arrow().tolist(), dtype="object", index=index)
 
     @cached_property
     def memory_usage(self):

@@ -2593,7 +2593,8 @@ def test_parquet_writer_decimal(decimal_type, data):
     gdf.to_parquet(buff)
 
     got = pd.read_parquet(buff, use_nullable_dtypes=True)
-    assert_eq(gdf.to_pandas(nullable=True), got)
+    assert_eq(gdf["val"].to_pandas(nullable=True), got["val"])
+    assert_eq(gdf["dec_val"].to_pandas(), got["dec_val"])
 
 
 def test_parquet_writer_column_validation():
@@ -2627,6 +2628,11 @@ def test_parquet_writer_nulls_pandas_read(tmpdir, pdf):
 
     got = pd.read_parquet(fname)
     nullable = num_rows > 0
+    if nullable:
+        gdf = gdf.drop(columns="col_datetime64[ms]")
+        gdf = gdf.drop(columns="col_datetime64[us]")
+        got = got.drop(columns="col_datetime64[ms]")
+        got = got.drop(columns="col_datetime64[us]")
     assert_eq(gdf.to_pandas(nullable=nullable), got)
 
 
@@ -2671,7 +2677,7 @@ def test_parquet_reader_one_level_list(datadir):
     fname = datadir / "one_level_list.parquet"
 
     expect = pd.read_parquet(fname)
-    got = cudf.read_parquet(fname).to_pandas(nullable=True)
+    got = cudf.read_parquet(fname)
 
     assert_eq(expect, got)
 

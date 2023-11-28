@@ -592,7 +592,9 @@ class GroupBy(Serializable, Reducible, Scannable):
                     # Structs lose their labels which we reconstruct here
                     col = col._with_type_metadata(cudf.ListDtype(orig_dtype))
 
-                if (
+                if agg_kind in {"COUNT", "SIZE"}:
+                    data[key] = col.astype("int64")
+                elif (
                     self.obj.empty
                     and (
                         isinstance(agg_name, str)
@@ -609,8 +611,6 @@ class GroupBy(Serializable, Reducible, Scannable):
                     )
                 ):
                     data[key] = col.astype(orig_dtype)
-                elif agg_kind in {"COUNT", "SIZE"}:
-                    data[key] = col.astype("int64")
                 else:
                     data[key] = col
         data = ColumnAccessor(data, multiindex=multilevel)
