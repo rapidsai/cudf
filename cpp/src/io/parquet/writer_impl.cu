@@ -2121,7 +2121,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           if (chunk_stats.unencoded_byte_array_data_bytes.has_value() ||
               chunk_stats.definition_level_histogram.has_value() ||
               chunk_stats.repetition_level_histogram.has_value()) {
-            column_chunk_meta.size_statistics = chunk_stats;
+            column_chunk_meta.size_statistics = std::move(chunk_stats);
           }
         }
       }
@@ -2355,7 +2355,6 @@ void writer::impl::write_parquet_data_to_sink(
   if (_stats_granularity == statistics_freq::STATISTICS_COLUMN) {
     // need pages on host to create offset_indexes
     auto const h_pages = cudf::detail::make_host_vector_sync(pages, _stream);
-    auto const& schema = _agg_meta->get_schema();
 
     // add column and offset indexes to metadata
     for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
