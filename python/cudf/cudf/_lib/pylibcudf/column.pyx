@@ -91,6 +91,33 @@ cdef class Column:
             self._null_count, self._offset, c_children
         )
 
+    cdef mutable_column_view mutable_view(self) nogil:
+        """Generate a libcudf mutable_column_view to pass to libcudf algorithms.
+
+        This method is for pylibcudf's functions to use to generate inputs when
+        calling libcudf algorithms, and should generally not be needed by users
+        (even direct pylibcudf Cython users).
+        """
+        cdef void * data = NULL
+        cdef bitmask_type * null_mask = NULL
+
+        if self._data is not None:
+            data = int_to_void_ptr(self._data.ptr)
+        if self._mask is not None:
+            null_mask = int_to_bitmask_ptr(self._mask.ptr)
+
+        cdef vector[mutable_column_view] c_children
+        with gil:
+            if self._children is not None:
+                for child in self._children:
+                    # See the view method for why this needs to be cast.
+                    c_children.push_back((<Column> child).mutable_view())
+
+        return mutable_column_view(
+            self._data_type.c_obj, self._size, data, null_mask,
+            self._null_count, self._offset, c_children
+        )
+
     @staticmethod
     cdef Column from_libcudf(unique_ptr[column] libcudf_col):
         """Create a Column from a libcudf column.

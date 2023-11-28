@@ -13,6 +13,7 @@ from libcpp.vector cimport vector
 # cimport libcudf... libcudf.copying.algo(...)
 from cudf._lib.cpp cimport copying as cpp_copying
 from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport mutable_column_view
 from cudf._lib.cpp.copying cimport mask_allocation_policy, out_of_bounds_policy
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
@@ -152,6 +153,27 @@ cpdef Column allocate_like(
         )
 
     return Column.from_libcudf(move(c_result))
+
+
+cpdef Column copy_range_in_place(
+    Column input_column,
+    Column target_column,
+    size_type input_begin,
+    size_type input_end,
+    size_type target_begin,
+):
+    # Need to initialize this outside the function call so that Cython doesn't
+    # try and pass a temporary that decays to an rvalue reference in where the
+    # function requires an lvalue reference.
+    cdef mutable_column_view target_view = target_column.mutable_view()
+    with nogil:
+        cpp_copying.copy_range_in_place(
+            input_column.view(),
+            target_view,
+            input_begin,
+            input_end,
+            target_begin
+        )
 
 
 cpdef Column copy_range(

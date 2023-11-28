@@ -29,7 +29,7 @@ from libcpp.memory cimport make_unique
 cimport cudf._lib.cpp.contiguous_split as cpp_contiguous_split
 cimport cudf._lib.cpp.copying as cpp_copying
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
+from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.lists.gather cimport (
     segmented_gather as cpp_segmented_gather,
 )
@@ -92,20 +92,13 @@ def _copy_range_in_place(Column input_column,
                          size_type input_begin,
                          size_type input_end,
                          size_type target_begin):
-
-    cdef column_view input_column_view = input_column.view()
-    cdef mutable_column_view target_column_view = target_column.mutable_view()
-    cdef size_type c_input_begin = input_begin
-    cdef size_type c_input_end = input_end
-    cdef size_type c_target_begin = target_begin
-
-    with nogil:
-        cpp_copying.copy_range_in_place(
-            input_column_view,
-            target_column_view,
-            c_input_begin,
-            c_input_end,
-            c_target_begin)
+    pylibcudf.copying.copy_range(
+        input_column.to_pylibcudf(mode="write"),
+        target_column.to_pylibcudf(mode="write"),
+        input_begin,
+        input_end,
+        target_begin
+    )
 
 
 def _copy_range(Column input_column,

@@ -26,6 +26,14 @@ cpdef object empty_table_like(Table input)
 
 cpdef Column allocate_like(Column input_column, mask_allocation_policy policy, size=*)
 
+cpdef Column copy_range_in_place(
+    Column input_column,
+    Column target_column,
+    size_type input_begin,
+    size_type input_end,
+    size_type target_begin,
+)
+
 cpdef Column copy_range(
     Column input_column,
     Column target_column,
