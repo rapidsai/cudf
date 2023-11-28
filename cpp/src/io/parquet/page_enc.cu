@@ -2765,36 +2765,36 @@ __global__ void __launch_bounds__(1)
   auto const ck_def_hist = ck_g->def_histogram_data + (num_data_pages) * (cd->max_def_level + 1);
   auto const ck_rep_hist = ck_g->rep_histogram_data + (num_data_pages) * (cd->max_rep_level + 1);
 
+  auto const page_start = ck_g->pages + first_data_page;
+  auto const page_end   = ck_g->pages + ck_g->num_pages;
+
   // optionally encode histograms and sum var_bytes.
   if (cd->max_rep_level > REP_LVL_HIST_CUTOFF) {
     encoder.field_list_begin(6, num_data_pages * (cd->max_rep_level + 1), ST_FLD_I64);
-    for (uint32_t page = first_data_page; page < num_pages; page++) {
-      auto const& pg = ck_g->pages[page];
+    thrust::for_each(thrust::seq, page_start, page_end, [&] __device__(auto const& page) {
       for (int i = 0; i < cd->max_rep_level + 1; i++) {
-        encoder.put_int64(pg.rep_histogram[i]);
-        ck_rep_hist[i] += pg.rep_histogram[i];
+        encoder.put_int64(page.rep_histogram[i]);
+        ck_rep_hist[i] += page.rep_histogram[i];
       }
-    }
+    });
     encoder.field_list_end(6);
   }
 
   if (cd->max_def_level > DEF_LVL_HIST_CUTOFF) {
     encoder.field_list_begin(7, num_data_pages * (cd->max_def_level + 1), ST_FLD_I64);
-    for (uint32_t page = first_data_page; page < num_pages; page++) {
-      auto const& pg = ck_g->pages[page];
+    thrust::for_each(thrust::seq, page_start, page_end, [&] __device__(auto const& page) {
       for (int i = 0; i < cd->max_def_level + 1; i++) {
-        encoder.put_int64(pg.def_histogram[i]);
-        ck_def_hist[i] += pg.def_histogram[i];
+        encoder.put_int64(page.def_histogram[i]);
+        ck_def_hist[i] += page.def_histogram[i];
       }
-    }
+    });
     encoder.field_list_end(7);
   }
 
   if (col_g.physical_type == BYTE_ARRAY) {
-    for (uint32_t page = first_data_page; page < num_pages; page++) {
-      auto const& pg = ck_g->pages[page];
-      var_bytes += pg.var_bytes_size;
-    }
+    thrust::for_each(thrust::seq, page_start, page_end, [&] __device__(auto const& page) {
+      var_bytes += page.var_bytes_size;
+    });
   }
 
   encoder.end(&col_idx_end, false);
