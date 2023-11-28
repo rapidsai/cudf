@@ -160,8 +160,6 @@ struct aggregate_writer_metadata {
   auto& file(size_t p) { return files[p]; }
   [[nodiscard]] size_t num_files() const { return files.size(); }
 
-  [[nodiscard]] auto const& get_schema() const { return schema; }
-
  private:
   int32_t version = 0;
   std::vector<SchemaElement> schema;
