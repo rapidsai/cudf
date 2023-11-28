@@ -1448,11 +1448,8 @@ size_t column_index_buffer_size(EncColumnChunk* ck,
   auto const def_hist_size = has_def ? 6 + 5 * num_pages * (col.max_def_level + 1) : 0;
   auto const rep_hist_size = has_rep ? 6 + 5 * num_pages * (col.max_rep_level + 1) : 0;
 
-  // for optional RepDefHist we need 1 byte of field marker, 1 byte end-of-struct
-  auto const rep_def_struct_size = (has_def or has_rep ? 2 : 0) + def_hist_size + rep_hist_size;
-
   // total size of SizeStruct is 1 byte marker, 1 byte end-of-struct, plus sizes for components
-  auto const size_struct_size = 2 + rep_def_struct_size + var_bytes_size;
+  auto const size_struct_size = 2 + def_hist_size + rep_hist_size + var_bytes_size;
 
   // calculating this per-chunk because the sizes can be wildly different.
   constexpr size_t padding = 7;
