@@ -31,6 +31,9 @@ cdef class Column:
     @staticmethod
     cdef Column from_libcudf(unique_ptr[column] libcudf_col)
 
+    @staticmethod
+    cdef Column from_column_view(const column_view& libcudf_col, Column owner)
+
     cpdef DataType type(self)
     cpdef Column child(self, size_type index)
     cpdef size_type num_children(self)

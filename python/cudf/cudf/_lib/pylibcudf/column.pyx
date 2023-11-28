@@ -162,6 +162,38 @@ cdef class Column:
             children,
         )
 
+    @staticmethod
+    cdef Column from_column_view(const column_view& cv, Column owner):
+        """Create a Column from a libcudf column_view.
+
+        This method accepts shared ownership of the underlying data from the
+        owner and relies on the offset from the view.
+
+        This method is for pylibcudf's functions to use to ingest outputs of
+        calling libcudf algorithms, and should generally not be needed by users
+        (even direct pylibcudf Cython users).
+        """
+        cdef DataType dtype = DataType.from_libcudf(cv.type())
+        cdef size_type size = cv.size()
+        cdef size_type null_count = cv.null_count()
+
+        children = []
+        if cv.num_children() != 0:
+            for i in range(cv.num_children()):
+                children.append(
+                    Column.from_column_view(cv.child(i), owner.child(i))
+                )
+
+        return Column(
+            dtype,
+            size,
+            owner._data,
+            owner._mask,
+            null_count,
+            cv.offset(),
+            children,
+        )
+
     cpdef DataType type(self):
         """The type of data in the column."""
         return self._data_type
