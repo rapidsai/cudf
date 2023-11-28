@@ -1933,19 +1933,19 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   rmm::device_uvector<EncPage> pages(num_pages, stream);
 
   // making these hostdevice because we'll need this on the host to sum up the histograms
-  cudf::detail::hostdevice_vector<uint32_t> def_level_histogram(def_histogram_bfr_size, stream);
-  cudf::detail::hostdevice_vector<uint32_t> rep_level_histogram(rep_histogram_bfr_size, stream);
+  rmm::device_uvector<uint32_t> def_level_histogram(def_histogram_bfr_size, stream);
+  rmm::device_uvector<uint32_t> rep_level_histogram(rep_histogram_bfr_size, stream);
 
   thrust::uninitialized_fill(
-    rmm::exec_policy(stream), def_level_histogram.d_begin(), def_level_histogram.d_end(), 0);
+    rmm::exec_policy(stream), def_level_histogram.begin(), def_level_histogram.end(), 0);
   thrust::uninitialized_fill(
-    rmm::exec_policy(stream), rep_level_histogram.d_begin(), rep_level_histogram.d_end(), 0);
+    rmm::exec_policy(stream), rep_level_histogram.begin(), rep_level_histogram.end(), 0);
 
   // This contains stats for both the pages and the rowgroups. TODO: make them separate.
   rmm::device_uvector<statistics_chunk> page_stats(num_stats_bfr, stream);
   auto bfr_i = static_cast<uint8_t*>(col_idx_bfr.data());
-  auto bfr_r = static_cast<uint32_t*>(rep_level_histogram.device_ptr());
-  auto bfr_d = static_cast<uint32_t*>(def_level_histogram.device_ptr());
+  auto bfr_r = static_cast<uint32_t*>(rep_level_histogram.data());
+  auto bfr_d = static_cast<uint32_t*>(def_level_histogram.data());
   for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
     auto bfr   = static_cast<uint8_t*>(uncomp_bfr.data());
     auto bfr_c = static_cast<uint8_t*>(comp_bfr.data());
@@ -2028,13 +2028,17 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
     bool need_sync{false};
 
     // need to bring back the histogram data
+    std::vector<uint32_t> h_def_histogram;
+    std::vector<uint32_t> h_rep_histogram;
     if (stats_granularity == statistics_freq::STATISTICS_COLUMN) {
       if (def_histogram_bfr_size > 0) {
-        def_level_histogram.device_to_host_async(stream);
+        h_def_histogram =
+          std::move(cudf::detail::make_std_vector_async(def_level_histogram, stream));
         need_sync = true;
       }
       if (rep_histogram_bfr_size > 0) {
-        rep_level_histogram.device_to_host_async(stream);
+        h_rep_histogram =
+          std::move(cudf::detail::make_std_vector_async(rep_level_histogram, stream));
         need_sync = true;
       }
     }
@@ -2076,8 +2080,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
     // now add to the column chunk SizeStatistics if necessary
     if (stats_granularity == statistics_freq::STATISTICS_COLUMN) {
-      auto h_def_ptr = def_level_histogram.host_ptr();
-      auto h_rep_ptr = rep_level_histogram.host_ptr();
+      auto h_def_ptr = h_def_histogram.data();
+      auto h_rep_ptr = h_rep_histogram.data();
 
       for (int r = batch_r_start; r < rnext; r++) {
         int const p        = rg_to_part[r];
