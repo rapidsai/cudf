@@ -298,29 +298,19 @@ def column_split(Column input_column, object splits):
         Column.from_pylibcudf(c)
         for c in pylibcudf.copying.column_split(
             input_column.to_pylibcudf(mode="read"),
-            splits,
+            list(splits),
         )
     ]
 
 
 @acquire_spill_lock()
 def columns_split(list input_columns, object splits):
-
-    cdef table_view input_table_view = table_view_from_columns(input_columns)
-    cdef vector[size_type] c_splits = splits
-    cdef vector[table_view] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_copying.split(
-                input_table_view,
-                c_splits)
-        )
-
     return [
-        columns_from_table_view(
-            c_result[i], input_columns
-        ) for i in range(c_result.size())
+        columns_from_pylibcudf_table(tbl)
+        for tbl in pylibcudf.copying.table_split(
+            pylibcudf.Table([col.to_pylibcudf(mode="read") for col in input_columns]),
+            list(splits),
+        )
     ]
 
 

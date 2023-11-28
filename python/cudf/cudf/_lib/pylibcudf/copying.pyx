@@ -17,6 +17,7 @@ from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
 from cudf._lib.cpp.copying cimport mask_allocation_policy, out_of_bounds_policy
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 
 from cudf._lib.cpp.copying import \
@@ -228,6 +229,24 @@ cpdef list column_split(Column input_column, list splits):
     cdef int i
     return [
         Column.from_column_view(c_result[i], input_column)
+        for i in range(c_result.size())
+    ]
+
+
+cpdef list table_split(Table input_table, list splits):
+    cdef vector[size_type] c_splits = splits
+    cdef vector[table_view] c_result
+    with nogil:
+        c_result = move(
+            cpp_copying.split(
+                input_table.view(),
+                c_splits
+            )
+        )
+
+    cdef int i
+    return [
+        Table.from_table_view(c_result[i], input_table)
         for i in range(c_result.size())
     ]
 
