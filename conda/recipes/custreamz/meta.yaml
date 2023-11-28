@@ -45,7 +45,7 @@ requirements:
     - streamz
     - cudf ={{ version }}
     - cudf_kafka ={{ version }}
-    - rapids-dask-dependency ={{ version }}
+    - rapids-dask-dependency ={{ minor_version }}
     - python-confluent-kafka >=1.9.0,<1.10.0a0
     - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
 

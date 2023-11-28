@@ -173,3 +173,7 @@ jupyter_execute
 
 # cibuildwheel
 /wheelhouse
+
+# clang tooling
+compile_commands.json
+.clangd/

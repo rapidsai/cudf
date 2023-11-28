@@ -1416,7 +1416,7 @@ std::vector<size_t> reader::impl::calculate_page_string_offsets()
     page_index.begin(), page_to_string_size{pages.device_ptr(), chunks.device_ptr()});
 
   // do scan by key to calculate string offsets for each page
-  thrust::exclusive_scan_by_key(rmm::exec_policy(_stream),
+  thrust::exclusive_scan_by_key(rmm::exec_policy_nosync(_stream),
                                 page_keys.begin(),
                                 page_keys.end(),
                                 val_iter,
@@ -1424,7 +1424,7 @@ std::vector<size_t> reader::impl::calculate_page_string_offsets()
 
   // now sum up page sizes
   rmm::device_uvector<int> reduce_keys(col_sizes.size(), _stream);
-  thrust::reduce_by_key(rmm::exec_policy(_stream),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(_stream),
                         page_keys.begin(),
                         page_keys.end(),
                         val_iter,

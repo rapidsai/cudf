@@ -52,6 +52,8 @@ namespace cudf {
  * If used at compile-time, this indicator can tell the optimizer
  * to include or exclude any null-checking clauses.
  *
+ * @ingroup column_classes
+ *
  */
 struct nullate {
   struct YES : std::bool_constant<true> {};

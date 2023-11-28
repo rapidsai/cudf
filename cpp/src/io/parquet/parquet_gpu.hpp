@@ -35,6 +35,7 @@
 
 #include <cuda_runtime.h>
 
+#include <type_traits>
 #include <vector>
 
 namespace cudf::io::parquet::detail {
@@ -64,7 +65,8 @@ constexpr bool is_supported_encoding(Encoding enc)
     case Encoding::PLAIN_DICTIONARY:
     case Encoding::RLE:
     case Encoding::RLE_DICTIONARY:
-    case Encoding::DELTA_BINARY_PACKED: return true;
+    case Encoding::DELTA_BINARY_PACKED:
+    case Encoding::DELTA_BYTE_ARRAY: return true;
     default: return false;
   }
 }
@@ -86,13 +88,15 @@ constexpr void set_error(int32_t error, int32_t* error_code)
  * These values are used as bitmasks, so they must be powers of 2.
  */
 enum class decode_error : int32_t {
-  DATA_STREAM_OVERRUN  = 0x1,
-  LEVEL_STREAM_OVERRUN = 0x2,
-  UNSUPPORTED_ENCODING = 0x4,
-  INVALID_LEVEL_RUN    = 0x8,
-  INVALID_DATA_TYPE    = 0x10,
-  EMPTY_PAGE           = 0x20,
-  INVALID_DICT_WIDTH   = 0x40,
+  DATA_STREAM_OVERRUN      = 0x1,
+  LEVEL_STREAM_OVERRUN     = 0x2,
+  UNSUPPORTED_ENCODING     = 0x4,
+  INVALID_LEVEL_RUN        = 0x8,
+  INVALID_DATA_TYPE        = 0x10,
+  EMPTY_PAGE               = 0x20,
+  INVALID_DICT_WIDTH       = 0x40,
+  DELTA_PARAM_MISMATCH     = 0x80,
+  DELTA_PARAMS_UNSUPPORTED = 0x100,
 };
 
 /**
@@ -145,6 +149,17 @@ constexpr uint32_t BitAnd(T1 a, T2 b)
   return static_cast<uint32_t>(a) & static_cast<uint32_t>(b);
 }
 
+template <class T1,
+          class T2,
+          typename std::enable_if_t<(is_scoped_enum<T1>::value and std::is_same_v<T1, T2>) or
+                                    (is_scoped_enum<T1>::value and std::is_same_v<uint32_t, T2>) or
+                                    (is_scoped_enum<T2>::value and std::is_same_v<uint32_t, T1>)>* =
+            nullptr>
+constexpr uint32_t BitOr(T1 a, T2 b)
+{
+  return static_cast<uint32_t>(a) | static_cast<uint32_t>(b);
+}
+
 /**
  * @brief Enums for the flags in the page header
  */
@@ -168,10 +183,12 @@ enum level_type {
  *
  * Used to control which decode kernels to run.
  */
-enum kernel_mask_bits {
-  KERNEL_MASK_GENERAL      = (1 << 0),  // Run catch-all decode kernel
-  KERNEL_MASK_STRING       = (1 << 1),  // Run decode kernel for string data
-  KERNEL_MASK_DELTA_BINARY = (1 << 2)   // Run decode kernel for DELTA_BINARY_PACKED data
+enum class decode_kernel_mask {
+  NONE             = 0,
+  GENERAL          = (1 << 0),  // Run catch-all decode kernel
+  STRING           = (1 << 1),  // Run decode kernel for string data
+  DELTA_BINARY     = (1 << 2),  // Run decode kernel for DELTA_BINARY_PACKED data
+  DELTA_BYTE_ARRAY = (1 << 3)   // Run decode kernel for DELTA_BYTE_ARRAY encoded data
 };
 
 /**
@@ -252,9 +269,11 @@ struct PageInfo {
   int32_t num_input_values;
   int32_t chunk_row;  // starting row of this page relative to the start of the chunk
   int32_t num_rows;   // number of rows in this page
-  // the next two are calculated in gpuComputePageStringSizes
+  // the next four are calculated in gpuComputePageStringSizes
   int32_t num_nulls;       // number of null values (V2 header), but recalculated for string cols
   int32_t num_valids;      // number of non-null values, taking into account skip_rows/num_rows
+  int32_t start_val;       // index of first value of the string data stream to use
+  int32_t end_val;         // index of last value in string data stream
   int32_t chunk_idx;       // column chunk this page belongs to
   int32_t src_col_schema;  // schema index of this column
   uint8_t flags;           // PAGEINFO_FLAGS_XXX
@@ -291,7 +310,11 @@ struct PageInfo {
   // level decode buffers
   uint8_t* lvl_decode_buf[level_type::NUM_LEVEL_TYPES];
 
-  uint32_t kernel_mask;
+  // temporary space for decoding DELTA_BYTE_ARRAY encoded strings
+  int64_t temp_string_size;
+  uint8_t* temp_string_buf;
+
+  decode_kernel_mask kernel_mask;
 };
 
 /**
@@ -597,16 +620,20 @@ void ComputePageSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
  *
  * @param[in,out] pages All pages to be decoded
  * @param[in] chunks All chunks to be decoded
+ * @param[out] temp_string_buf Temporary space needed for decoding DELTA_BYTE_ARRAY strings
  * @param[in] min_rows crop all rows below min_row
  * @param[in] num_rows Maximum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[in] kernel_mask Mask of kernels to run
  * @param[in] stream CUDA stream to use
  */
 void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
                             cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+                            rmm::device_uvector<uint8_t>& temp_string_buf,
                             size_t min_row,
                             size_t num_rows,
                             int level_type_size,
+                            uint32_t kernel_mask,
                             rmm::cuda_stream_view stream);
 
 /**
@@ -665,7 +692,7 @@ void DecodeStringPageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
  * @param[out] error_code Error code for kernel failures
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use
  */
 void DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages,
                        cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
@@ -674,6 +701,28 @@ void DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages,
                        int level_type_size,
                        int32_t* error_code,
                        rmm::cuda_stream_view stream);
+
+/**
+ * @brief Launches kernel for reading the DELTA_BYTE_ARRAY column data stored in the pages
+ *
+ * The page data will be written to the output pointed to in the page's
+ * associated column chunk.
+ *
+ * @param[in,out] pages All pages to be decoded
+ * @param[in] chunks All chunks to be decoded
+ * @param[in] num_rows Total number of rows to read
+ * @param[in] min_row Minimum number of rows to read
+ * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[out] error_code Error code for kernel failures
+ * @param[in] stream CUDA stream to use
+ */
+void DecodeDeltaByteArray(cudf::detail::hostdevice_vector<PageInfo>& pages,
+                          cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+                          size_t num_rows,
+                          size_t min_row,
+                          int level_type_size,
+                          int32_t* error_code,
+                          rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing encoder row group fragments
