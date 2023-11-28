@@ -1938,9 +1938,9 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   rmm::device_uvector<uint32_t> rep_level_histogram(rep_histogram_bfr_size, stream);
 
   thrust::uninitialized_fill(
-    rmm::exec_policy(stream), def_level_histogram.begin(), def_level_histogram.end(), 0);
+    rmm::exec_policy_nosync(stream), def_level_histogram.begin(), def_level_histogram.end(), 0);
   thrust::uninitialized_fill(
-    rmm::exec_policy(stream), rep_level_histogram.begin(), rep_level_histogram.end(), 0);
+    rmm::exec_policy_nosync(stream), rep_level_histogram.begin(), rep_level_histogram.end(), 0);
 
   // This contains stats for both the pages and the rowgroups. TODO: make them separate.
   rmm::device_uvector<statistics_chunk> page_stats(num_stats_bfr, stream);
