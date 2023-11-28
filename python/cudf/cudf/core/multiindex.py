@@ -188,7 +188,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             result_col = libcudf.copying.gather(
                 [level._column], code, nullify=True
             )
-            source_data[column_name] = result_col[0]
+            source_data[column_name] = result_col[0]._with_type_metadata(
+                level.dtype
+            )
 
         super().__init__(source_data)
         self._levels = levels
@@ -1625,7 +1627,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 False if cudf.get_option("mode.pandas_compatible") else None
             )
         levels = [
-            cudf.Index(level, nan_as_null=nan_as_null)
+            cudf.Index.from_pandas(level, nan_as_null=nan_as_null)
             for level in multiindex.levels
         ]
         return cls(
