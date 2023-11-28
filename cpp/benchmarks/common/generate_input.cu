@@ -536,10 +536,10 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
                            rmm::mr::get_current_device_resource());
   return cudf::make_strings_column(
     num_rows,
-    std::move(offsets),
-    std::move(chars),
-    profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{},
-    null_count);
+    std::make_unique<cudf::column>(std::move(offsets), rmm::device_buffer{}, 0),
+    std::make_unique<cudf::column>(std::move(chars), rmm::device_buffer{}, 0),
+    null_count,
+    profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{});
 }
 
 /**
