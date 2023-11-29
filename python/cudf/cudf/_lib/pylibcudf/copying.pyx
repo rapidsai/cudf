@@ -85,19 +85,6 @@ cpdef Table gather(
     return Table.from_libcudf(move(c_result))
 
 
-cpdef Column shift(Column input, size_type offset, Scalar fill_values):
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_copying.shift(
-                input.view(),
-                offset,
-                dereference(fill_values.c_obj)
-            )
-        )
-    return Column.from_libcudf(move(c_result))
-
-
 cpdef Table table_scatter(Table source, Column scatter_map, Table target_table):
     cdef unique_ptr[table] c_result
 
@@ -168,6 +155,40 @@ cpdef Column allocate_like(
             )
         )
 
+    return Column.from_libcudf(move(c_result))
+
+
+cpdef Column copy_range(
+    Column input_column,
+    Column target_column,
+    size_type input_begin,
+    size_type input_end,
+    size_type target_begin,
+):
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(cpp_copying.copy_range(
+            input_column.view(),
+            target_column.view(),
+            input_begin,
+            input_end,
+            target_begin)
+        )
+
+    return Column.from_libcudf(move(c_result))
+
+
+cpdef Column shift(Column input, size_type offset, Scalar fill_values):
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(
+            cpp_copying.shift(
+                input.view(),
+                offset,
+                dereference(fill_values.c_obj)
+            )
+        )
     return Column.from_libcudf(move(c_result))
 
 
@@ -246,24 +267,3 @@ cpdef Table scalar_boolean_mask_scatter(list input, Table target, Column boolean
         )
 
     return Table.from_libcudf(move(result))
-
-
-cpdef Column copy_range(
-    Column input_column,
-    Column target_column,
-    size_type input_begin,
-    size_type input_end,
-    size_type target_begin,
-):
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(cpp_copying.copy_range(
-            input_column.view(),
-            target_column.view(),
-            input_begin,
-            input_end,
-            target_begin)
-        )
-
-    return Column.from_libcudf(move(c_result))

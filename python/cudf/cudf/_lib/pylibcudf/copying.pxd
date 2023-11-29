@@ -16,8 +16,6 @@ cpdef Table gather(
     out_of_bounds_policy bounds_policy
 )
 
-cpdef Column shift(Column input, size_type offset, Scalar fill_values)
-
 cpdef Table table_scatter(Table source, Column scatter_map, Table target_table)
 
 cpdef Table scalar_scatter(list source, Column scatter_map, Table target_table)
@@ -28,12 +26,6 @@ cpdef object table_empty_like(Table input)
 
 cpdef Column allocate_like(Column input_column, mask_allocation_policy policy, size=*)
 
-cpdef Column copy_if_else(object lhs, object rhs, Column boolean_mask)
-
-cpdef Table table_boolean_mask_scatter(Table input, Table target, Column boolean_mask)
-
-cpdef Table scalar_boolean_mask_scatter(list input, Table target, Column boolean_mask)
-
 cpdef Column copy_range(
     Column input_column,
     Column target_column,
@@ -41,3 +33,11 @@ cpdef Column copy_range(
     size_type input_end,
     size_type target_begin,
 )
+
+cpdef Column shift(Column input, size_type offset, Scalar fill_values)
+
+cpdef Column copy_if_else(object lhs, object rhs, Column boolean_mask)
+
+cpdef Table table_boolean_mask_scatter(Table input, Table target, Column boolean_mask)
+
+cpdef Table scalar_boolean_mask_scatter(list input, Table target, Column boolean_mask)
