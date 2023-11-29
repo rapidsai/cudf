@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "error.hpp"
 #include "parquet_gpu.hpp"
 #include <io/utilities/block_utils.cuh>
 
@@ -345,14 +346,16 @@ struct gpuParsePageHeader {
  * @param[in] num_chunks Number of column chunks
  */
 // blockDim {128,1,1}
-__global__ void __launch_bounds__(128)
-  gpuDecodePageHeaders(ColumnChunkDesc* chunks, int32_t num_chunks, int32_t* error_code)
+__global__ void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chunks,
+                                                            int32_t num_chunks,
+                                                            kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
   gpuParsePageHeader parse_page_header;
   __shared__ byte_stream_s bs_g[4];
 
-  int32_t error[4]   = {0};
+  kernel_error::value_type error[4] = {0};
+
   auto const lane_id = threadIdx.x % warp_size;
   auto const warp_id = threadIdx.x / warp_size;
   auto const chunk   = (blockIdx.x * 4) + warp_id;
@@ -440,7 +443,8 @@ __global__ void __launch_bounds__(128)
           bs->page.page_data = const_cast<uint8_t*>(bs->cur);
           bs->cur += bs->page.compressed_page_size;
           if (bs->cur > bs->end) {
-            error[warp_id] |= static_cast<int32_t>(decode_error::DATA_STREAM_OVERRUN);
+            error[warp_id] |=
+              static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN);
           }
           bs->page.kernel_mask = kernel_mask_for_page(bs->page, bs->ck);
         } else {
@@ -513,7 +517,7 @@ __global__ void __launch_bounds__(128)
 
 void __host__ DecodePageHeaders(ColumnChunkDesc* chunks,
                                 int32_t num_chunks,
-                                int32_t* error_code,
+                                kernel_error::pointer error_code,
                                 rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
