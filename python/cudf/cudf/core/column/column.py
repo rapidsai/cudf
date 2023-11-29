@@ -1964,11 +1964,10 @@ def as_column(
             raise ValueError("Data must be 1-dimensional")
         current_dtype = np.dtype(desc["typestr"])
 
-        arb_dtype = (
-            np.dtype("float32")
-            if current_dtype == "float16"
-            else cudf.dtype(current_dtype)
-        )
+        if current_dtype == "float16":
+            raise TypeError("Unsupported type float16")
+
+        arb_dtype = cudf.dtype(current_dtype)
 
         if desc.get("mask", None) is not None:
             # Extract and remove the mask from arbitrary before
@@ -2043,69 +2042,124 @@ def as_column(
 
         return col
 
-    elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
-        if isinstance(arbitrary, pd.Series):
-            if isinstance(
-                arbitrary.array, pd.core.arrays.masked.BaseMaskedArray
-            ):
-                return as_column(arbitrary.array)
-            elif PANDAS_GE_150 and isinstance(arbitrary.dtype, pd.ArrowDtype):
-                if cudf.get_option("mode.pandas_compatible"):
-                    raise NotImplementedError("not supported")
-                return as_column(pa.array(arbitrary.array, from_pandas=True))
-            elif isinstance(arbitrary.dtype, pd.SparseDtype):
-                raise NotImplementedError(
-                    f"{arbitrary.dtype} is not supported. Convert first to "
-                    f"{arbitrary.dtype.subtype}."
+    elif isinstance(
+        arbitrary, (pd.Series, pd.Index, pd.api.extensions.ExtensionArray)
+    ):
+        if isinstance(arbitrary.dtype, (pd.SparseDtype, pd.PeriodDtype)):
+            raise NotImplementedError(
+                f"cuDF does not yet support {type(arbitrary.dtype).__name__}"
+            )
+        elif (
+            cudf.get_option("mode.pandas_compatible")
+            and isinstance(arbitrary, (pd.DatetimeIndex, pd.TimedeltaIndex))
+            and arbitrary.freq is not None
+        ):
+            raise NotImplementedError("freq is not implemented yet")
+        elif (
+            isinstance(arbitrary.dtype, pd.DatetimeTZDtype)
+            or (
+                isinstance(arbitrary.dtype, pd.IntervalDtype)
+                and isinstance(arbitrary.dtype.subtype, pd.DatetimeTZDtype)
+            )
+            or (
+                isinstance(arbitrary.dtype, pd.CategoricalDtype)
+                and isinstance(
+                    arbitrary.dtype.categories.dtype, pd.DatetimeTZDtype
                 )
-        if is_categorical_dtype(arbitrary.dtype):
-            if isinstance(
-                arbitrary.dtype.categories.dtype, pd.DatetimeTZDtype
-            ):
-                raise NotImplementedError(
-                    "cuDF does not yet support timezone-aware datetimes"
-                )
-            data = as_column(pa.array(arbitrary, from_pandas=True))
-        elif is_interval_dtype(arbitrary.dtype):
-            if isinstance(arbitrary.dtype.subtype, pd.DatetimeTZDtype):
-                raise NotImplementedError(
-                    "cuDF does not yet support timezone-aware datetimes"
-                )
-            data = as_column(pa.array(arbitrary, from_pandas=True))
-        elif arbitrary.dtype == np.bool_:
-            data = as_column(cupy.asarray(arbitrary), dtype=arbitrary.dtype)
-        elif arbitrary.dtype.kind in ("f"):
-            arb_dtype = np.dtype(arbitrary.dtype)
+            )
+        ):
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
+        elif _is_pandas_nullable_extension_dtype(arbitrary.dtype):
+            if cudf.get_option("mode.pandas_compatible"):
+                raise NotImplementedError("not supported")
+            if isinstance(arbitrary, (pd.Series, pd.Index)):
+                # pandas arrays define __arrow_array__ for better
+                # pyarrow.array conversion
+                arbitrary = arbitrary.array
             data = as_column(
-                cupy.asarray(arbitrary, dtype=arb_dtype),
+                pa.array(arbitrary, from_pandas=True),
                 nan_as_null=nan_as_null,
                 dtype=dtype,
+                length=length,
             )
-        elif arbitrary.dtype.kind in ("u", "i"):
+        elif isinstance(
+            arbitrary.dtype, (pd.CategoricalDtype, pd.IntervalDtype)
+        ):
             data = as_column(
-                cupy.asarray(arbitrary), nan_as_null=nan_as_null, dtype=dtype
+                pa.array(arbitrary, from_pandas=True),
+                nan_as_null=nan_as_null,
+                dtype=dtype,
+                length=length,
             )
-        elif isinstance(arbitrary.dtype, pd.PeriodDtype):
+        elif isinstance(
+            arbitrary.dtype, pd.api.extensions.ExtensionDtype
+        ) and not isinstance(arbitrary, pd.arrays.PandasArray):
             raise NotImplementedError(
-                "cuDF does not yet support `PeriodDtype`"
+                "Custom pandas ExtensionDtypes are not supported"
             )
-        else:
-            if cudf.get_option(
-                "mode.pandas_compatible"
-            ) and _is_pandas_nullable_extension_dtype(arbitrary.dtype):
-                raise NotImplementedError("not supported")
-            pyarrow_array = pa.array(arbitrary, from_pandas=nan_as_null)
-            if arbitrary.dtype == cudf.dtype("object") and cudf.dtype(
-                pyarrow_array.type.to_pandas_dtype()
-            ) != cudf.dtype(arbitrary.dtype):
+        elif arbitrary.dtype.kind in "fiubmM":
+            # numpy dtype like
+            if isinstance(arbitrary, pd.arrays.PandasArray):
+                arbitrary = np.array(arbitrary)
+            arb_dtype = np.dtype(arbitrary.dtype)
+            if arb_dtype.kind == "f" and arb_dtype.itemsize == 2:
+                raise TypeError("Unsupported type float16")
+            elif arb_dtype.kind in "mM":
+                # not supported by cupy
+                arbitrary = np.asarray(arbitrary)
+            else:
+                arbitrary = cupy.asarray(arbitrary)
+            data = as_column(
+                arbitrary, nan_as_null=nan_as_null, dtype=dtype, length=length
+            )
+        elif arbitrary.dtype.kind == "O":
+            if isinstance(arbitrary, pd.arrays.PandasArray):
+                # infer_dtype does not handle PandasArray
+                arbitrary = np.array(arbitrary, dtype=object)
+            inferred_dtype = infer_dtype(arbitrary)
+            if inferred_dtype in ("mixed-integer", "mixed-integer-float"):
                 raise MixedTypeError("Cannot create column with mixed types")
+            elif inferred_dtype not in (
+                "mixed",
+                "decimal",
+                "string",
+                "empty",
+                "boolean",
+            ):
+                raise TypeError(
+                    f"Cannot convert a {inferred_dtype} of object type"
+                )
+            elif nan_as_null is False and (
+                pd.isna(arbitrary).any()
+                and inferred_dtype not in ("decimal", "empty")
+            ):
+                # Decimal can hold float("nan")
+                # All np.nan is not restricted by type
+                raise MixedTypeError(f"Cannot have NaN with {inferred_dtype}")
+
+            pyarrow_array = pa.array(
+                arbitrary,
+                from_pandas=True,
+            )
             if isinstance(pyarrow_array.type, pa.Decimal128Type):
                 pyarrow_type = cudf.Decimal128Dtype.from_arrow(
                     pyarrow_array.type
                 )
             else:
                 pyarrow_type = arbitrary.dtype
-            data = as_column(pyarrow_array, dtype=pyarrow_type)
+            data = as_column(
+                pyarrow_array,
+                dtype=pyarrow_type,
+                nan_as_null=nan_as_null,
+                length=length,
+            )
+        else:
+            raise NotImplementedError(
+                f"{type(arbitrary).__name__} with "
+                f"{type(arbitrary.dtype).__name__} is not supported."
+            )
         if dtype is not None:
             data = data.astype(dtype)
 
@@ -2184,11 +2238,13 @@ def as_column(
                 arbitrary = arbitrary.astype(cudf.dtype("datetime64[s]"))
 
             buffer = as_buffer(arbitrary.view("|u1"))
-            mask = None
             if nan_as_null is None or nan_as_null is True:
                 data = build_column(buffer, dtype=arbitrary.dtype)
                 data = _make_copy_replacing_NaT_with_null(data)
                 mask = data.mask
+            else:
+                bool_mask = as_column(~np.isnat(arbitrary))
+                mask = as_buffer(bools_to_mask(bool_mask))
 
             data = build_column(data=buffer, mask=mask, dtype=arbitrary.dtype)
         elif arb_dtype.kind == "m":
@@ -2199,11 +2255,13 @@ def as_column(
                 arbitrary = arbitrary.astype(cudf.dtype("timedelta64[s]"))
 
             buffer = as_buffer(arbitrary.view("|u1"))
-            mask = None
             if nan_as_null is None or nan_as_null is True:
                 data = build_column(buffer, dtype=arbitrary.dtype)
                 data = _make_copy_replacing_NaT_with_null(data)
                 mask = data.mask
+            else:
+                bool_mask = as_column(~np.isnat(arbitrary))
+                mask = as_buffer(bools_to_mask(bool_mask))
 
             data = cudf.core.column.timedelta.TimeDeltaColumn(
                 data=buffer,
@@ -2233,7 +2291,7 @@ def as_column(
                 data = data.astype(dtype)
         elif arb_dtype.kind in ("f"):
             if arb_dtype == np.dtype("float16"):
-                arb_dtype = np.dtype("float32")
+                raise TypeError("Unsupported type float16")
             arb_dtype = cudf.dtype(arb_dtype if dtype is None else dtype)
             data = as_column(
                 cupy.asarray(arbitrary, dtype=arb_dtype),
@@ -2245,105 +2303,12 @@ def as_column(
         if delayed_cast:
             data = data.astype(cudf.dtype(dtype))
 
-    elif isinstance(arbitrary, pd.arrays.PandasArray):
-        if cudf.get_option(
-            "mode.pandas_compatible"
-        ) and _is_pandas_nullable_extension_dtype(arbitrary.dtype):
-            raise NotImplementedError("not supported")
-        if is_categorical_dtype(arbitrary.dtype):
-            arb_dtype = arbitrary.dtype
-        else:
-            if arbitrary.dtype == pd.StringDtype():
-                arb_dtype = cudf.dtype("O")
-            else:
-                arb_dtype = (
-                    cudf.dtype("float32")
-                    if arbitrary.dtype == "float16"
-                    else cudf.dtype(arbitrary.dtype)
-                )
-                if arb_dtype != arbitrary.dtype.numpy_dtype:
-                    arbitrary = arbitrary.astype(arb_dtype)
-        if (
-            arbitrary.size != 0
-            and isinstance(arbitrary[0], pd._libs.interval.Interval)
-            and arb_dtype.kind in ("O")
-        ):
-            # changing from pd array to series,possible arrow bug
-            interval_series = pd.Series(arbitrary)
-            data = as_column(
-                pa.Array.from_pandas(interval_series), dtype=arb_dtype
-            )
-        elif arb_dtype.kind in ("O", "U"):
-            pyarrow_array = pa.Array.from_pandas(arbitrary)
-            if not isinstance(
-                pyarrow_array,
-                (
-                    pa.ListArray,
-                    pa.StructArray,
-                    pa.NullArray,
-                    pa.Decimal128Array,
-                    pa.StringArray,
-                    pa.BooleanArray,
-                ),
-            ):
-                raise MixedTypeError("Cannot create column with mixed types")
-            data = as_column(pyarrow_array, dtype=arb_dtype)
-        else:
-            data = as_column(
-                pa.array(
-                    arbitrary,
-                    from_pandas=True if nan_as_null is None else nan_as_null,
-                ),
-                nan_as_null=nan_as_null,
-            )
-        if dtype is not None:
-            data = data.astype(dtype)
-    elif isinstance(arbitrary, pd.arrays.SparseArray):
-        raise NotImplementedError(
-            f"{arbitrary.dtype} is not supported. Convert first to "
-            f"{arbitrary.dtype.subtype}."
-        )
     elif isinstance(arbitrary, memoryview):
         data = as_column(
             np.asarray(arbitrary), dtype=dtype, nan_as_null=nan_as_null
         )
     elif isinstance(arbitrary, cudf.Scalar):
         data = ColumnBase.from_scalar(arbitrary, length if length else 1)
-    elif isinstance(arbitrary, pd.core.arrays.masked.BaseMaskedArray):
-        if cudf.get_option("mode.pandas_compatible"):
-            raise NotImplementedError("not supported")
-        data = as_column(pa.Array.from_pandas(arbitrary), dtype=dtype)
-    elif (
-        (
-            isinstance(arbitrary, pd.DatetimeIndex)
-            and isinstance(arbitrary.dtype, pd.DatetimeTZDtype)
-        )
-        or (
-            isinstance(arbitrary, pd.IntervalIndex)
-            and is_datetime64tz_dtype(arbitrary.dtype.subtype)
-        )
-        or (
-            isinstance(arbitrary, pd.CategoricalIndex)
-            and isinstance(
-                arbitrary.dtype.categories.dtype, pd.DatetimeTZDtype
-            )
-        )
-    ):
-        raise NotImplementedError(
-            "cuDF does not yet support timezone-aware datetimes"
-        )
-    elif isinstance(
-        arbitrary, (pd.core.arrays.period.PeriodArray, pd.PeriodIndex)
-    ):
-        raise NotImplementedError(
-            f"cuDF does not yet support {type(arbitrary).__name__}"
-        )
-    elif (
-        cudf.get_option("mode.pandas_compatible")
-        and isinstance(arbitrary, (pd.DatetimeIndex, pd.TimedeltaIndex))
-        and arbitrary.freq is not None
-    ):
-        raise NotImplementedError("freq is not implemented yet")
     else:
         try:
             data = as_column(
