@@ -81,61 +81,71 @@ cpdef Column shift(Column input, size_type offset, Scalar fill_values):
     return Column.from_libcudf(move(c_result))
 
 
-cpdef Table scatter(object source, Column scatter_map, Table target_table):
+cpdef Table table_scatter(Table source, Column scatter_map, Table target_table):
     cdef unique_ptr[table] c_result
-    cdef vector[reference_wrapper[constscalar]] source_scalars
-    cdef Scalar slr
 
-    if isinstance(source, Table):
-        with nogil:
-            c_result = move(
-                cpp_copying.scatter(
-                    (<Table> source).view(),
-                    scatter_map.view(),
-                    target_table.view(),
-                )
+    with nogil:
+        c_result = move(
+            cpp_copying.scatter(
+                source.view(),
+                scatter_map.view(),
+                target_table.view(),
             )
-    elif isinstance(source, list):  # TODO: is list too restrictive?
-        for slr in source:
-            source_scalars.push_back(
-                reference_wrapper[constscalar](dereference(slr.c_obj))
-            )
-
-        with nogil:
-            c_result = move(
-                cpp_copying.scatter(
-                    source_scalars,
-                    scatter_map.view(),
-                    target_table.view(),
-                )
-            )
-    else:
-        raise ValueError("source must be a Table or list[Scalar]")
+        )
 
     return Table.from_libcudf(move(c_result))
 
 
-cpdef object empty_like(object input):
+cdef _check_is_list_of_scalars(list source):
+    if not isinstance(source, list) or not isinstance(source[0], Scalar):
+        raise ValueError("source must be a list[Scalar]")
+
+
+# TODO: Could generalize list to sequence
+cpdef Table scalar_scatter(list source, Column scatter_map, Table target_table):
+    cdef unique_ptr[table] c_result
+    cdef vector[reference_wrapper[constscalar]] source_scalars
+    cdef Scalar slr
+
+    _check_is_list_of_scalars(source)
+
+    for slr in source:
+        source_scalars.push_back(
+            reference_wrapper[constscalar](dereference(slr.c_obj))
+        )
+
+    with nogil:
+        c_result = move(
+            cpp_copying.scatter(
+                source_scalars,
+                scatter_map.view(),
+                target_table.view(),
+            )
+        )
+
+    return Table.from_libcudf(move(c_result))
+
+
+cpdef object column_empty_like(Column input):
     cdef unique_ptr[column] c_column_result
+    with nogil:
+        c_column_result = move(
+            cpp_copying.empty_like(
+                (<Column> input).view(),
+            )
+        )
+    return Column.from_libcudf(move(c_column_result))
+
+
+cpdef object table_empty_like(Table input):
     cdef unique_ptr[table] c_table_result
-    if isinstance(input, Column):
-        with nogil:
-            c_column_result = move(
-                cpp_copying.empty_like(
-                    (<Column> input).view(),
-                )
+    with nogil:
+        c_table_result = move(
+            cpp_copying.empty_like(
+                (<Table> input).view(),
             )
-        return Column.from_libcudf(move(c_column_result))
-    elif isinstance(input, Table):
-        with nogil:
-            c_table_result = move(
-                cpp_copying.empty_like(
-                    (<Table> input).view(),
-                )
-            )
-        return Table.from_libcudf(move(c_table_result))
-    else:
-        raise ValueError("input must be a Table or a Column")
+        )
+    return Table.from_libcudf(move(c_table_result))
 
 
 cpdef Column allocate_like(
@@ -201,43 +211,45 @@ cpdef Column copy_if_else(object lhs, object rhs, Column boolean_mask):
     return Column.from_libcudf(move(result))
 
 
-cpdef Table boolean_mask_scatter(object input, Table target, Column boolean_mask):
+cpdef Table table_boolean_mask_scatter(Table input, Table target, Column boolean_mask):
     cdef unique_ptr[table] result
+
+    with nogil:
+        result = move(
+            cpp_copying.boolean_mask_scatter(
+                (<Table> input).view(),
+                target.view(),
+                boolean_mask.view()
+            )
+        )
+
+    return Table.from_libcudf(move(result))
+
+
+# TODO: Could generalize list to sequence
+cpdef Table scalar_boolean_mask_scatter(list input, Table target, Column boolean_mask):
+    _check_is_list_of_scalars(input)
+
     cdef vector[reference_wrapper[const scalar]] c_scalars
+    c_scalars.reserve(len(input))
+
     cdef Scalar slr
+    for slr in input:
+        c_scalars.push_back(
+            # TODO: This requires the constscalar ctypedef
+            # https://github.com/cython/cython/issues/4180
+            reference_wrapper[constscalar](dereference(slr.c_obj))
+        )
 
-    # TODO: Could generalize to sequence
-    if isinstance(input, list):
-        if not isinstance(input[0], Scalar):
-            raise TypeError("input must be a list of scalars")
-
-        c_scalars.reserve(len(input))
-        for slr in input:
-            c_scalars.push_back(
-                # TODO: This requires the constscalar ctypedef
-                # https://github.com/cython/cython/issues/4180
-                reference_wrapper[constscalar](dereference(slr.c_obj))
+    cdef unique_ptr[table] result
+    with nogil:
+        result = move(
+            cpp_copying.boolean_mask_scatter(
+                c_scalars,
+                target.view(),
+                boolean_mask.view(),
             )
-
-        with nogil:
-            result = move(
-                cpp_copying.boolean_mask_scatter(
-                    c_scalars,
-                    target.view(),
-                    boolean_mask.view(),
-                )
-            )
-    elif isinstance(input, Table):
-        with nogil:
-            result = move(
-                cpp_copying.boolean_mask_scatter(
-                    (<Table> input).view(),
-                    target.view(),
-                    boolean_mask.view()
-                )
-            )
-    else:
-        raise ValueError(f"Invalid argument {input}")
+        )
 
     return Table.from_libcudf(move(result))
 

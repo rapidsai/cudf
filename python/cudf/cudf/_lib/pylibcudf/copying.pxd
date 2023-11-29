@@ -18,15 +18,21 @@ cpdef Table gather(
 
 cpdef Column shift(Column input, size_type offset, Scalar fill_values)
 
-cpdef Table scatter(object source, Column scatter_map, Table target_table)
+cpdef Table table_scatter(Table source, Column scatter_map, Table target_table)
 
-cpdef object empty_like(object input)
+cpdef Table scalar_scatter(list source, Column scatter_map, Table target_table)
+
+cpdef object column_empty_like(Column input)
+
+cpdef object table_empty_like(Table input)
 
 cpdef Column allocate_like(Column input_column, mask_allocation_policy policy, size=*)
 
 cpdef Column copy_if_else(object lhs, object rhs, Column boolean_mask)
 
-cpdef Table boolean_mask_scatter(object input, Table target, Column boolean_mask)
+cpdef Table table_boolean_mask_scatter(Table input, Table target, Column boolean_mask)
+
+cpdef Table scalar_boolean_mask_scatter(list input, Table target, Column boolean_mask)
 
 cpdef Column copy_range(
     Column input_column,
