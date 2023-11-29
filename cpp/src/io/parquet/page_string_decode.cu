@@ -15,6 +15,7 @@
  */
 
 #include "delta_binary.cuh"
+#include "error.hpp"
 #include "page_decode.cuh"
 #include "page_string_utils.cuh"
 
@@ -784,7 +785,7 @@ __global__ void __launch_bounds__(decode_block_size)
                           device_span<ColumnChunkDesc const> chunks,
                           size_t min_row,
                           size_t num_rows,
-                          int32_t* error_code)
+                          kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
   __shared__ __align__(16) page_state_s state_g;
@@ -1057,7 +1058,7 @@ void __host__ DecodeStringPageData(cudf::detail::hostdevice_vector<PageInfo>& pa
                                    size_t num_rows,
                                    size_t min_row,
                                    int level_type_size,
-                                   int32_t* error_code,
+                                   kernel_error::pointer error_code,
                                    rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
