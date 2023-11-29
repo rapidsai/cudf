@@ -271,8 +271,12 @@ def assert_column_equal(
                 left = left.astype(left.categories.dtype)
                 right = right.astype(right.categories.dtype)
     if not columns_equal:
-        ldata = str([val for val in left.to_pandas(nullable=True)])
-        rdata = str([val for val in right.to_pandas(nullable=True)])
+        try:
+            ldata = str([val for val in left.to_pandas(nullable=True)])
+            rdata = str([val for val in right.to_pandas(nullable=True)])
+        except NotImplementedError:
+            ldata = str([val for val in left.to_pandas(nullable=False)])
+            rdata = str([val for val in right.to_pandas(nullable=False)])
         try:
             diff = 0
             for i in range(left.size):

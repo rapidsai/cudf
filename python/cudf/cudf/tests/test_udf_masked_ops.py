@@ -64,9 +64,9 @@ def substr(request):
     return request.param
 
 
-def run_masked_udf_test(func, data, args=(), **kwargs):
+def run_masked_udf_test(func, data, args=(), nullable=True, **kwargs):
     gdf = data
-    pdf = data.to_pandas(nullable=True)
+    pdf = data.to_pandas(nullable=nullable)
 
     expect = pdf.apply(func, args=args, axis=1)
     obtain = gdf.apply(func, args=args, axis=1)
@@ -184,7 +184,7 @@ def test_arith_masked_vs_masked_datelike(op, dtype_l, dtype_r):
     )
     gdf["a"] = gdf["a"].astype(dtype_l)
     gdf["b"] = gdf["b"].astype(dtype_r)
-    run_masked_udf_test(func, gdf, check_dtype=False)
+    run_masked_udf_test(func, gdf, nullable=False, check_dtype=False)
 
 
 @pytest.mark.parametrize("op", comparison_ops)

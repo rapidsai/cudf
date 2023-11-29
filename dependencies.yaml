@@ -14,6 +14,7 @@ files:
       - cudatoolkit
       - develop
       - docs
+      - libarrow_build
       - notebooks
       - py_version
       - run_common
@@ -242,9 +243,6 @@ dependencies:
           - &gmock gmock>=1.13.0
           - librmm==24.2.*
           - libkvikio==24.2.*
-          # Hard pin the patch version used during the build. This must be kept
-          # in sync with the version pinned in get_arrow.cmake.
-          - libarrow-all==14.0.1.*
           - librdkafka>=1.9.0,<1.10.0a0
           # Align nvcomp version with rapids-cmake
           - nvcomp==3.0.4
@@ -304,13 +302,26 @@ dependencies:
       - output_types: pyproject
         matrices:
           - {matrix: null, packages: [*rmm_conda] }
+  libarrow_build:
+    common:
+      - output_types: conda
+        packages:
+          # Hard pin the Arrow patch version used during the build. This must
+          # be kept in sync with the version pinned in get_arrow.cmake.
+          - libarrow-acero==14.0.1.*
+          - libarrow-dataset==14.0.1.*
+          - libarrow==14.0.1.*
+          - libparquet==14.0.1.*
   libarrow_run:
     common:
       - output_types: conda
         packages:
           # Allow runtime version to float up to minor version
           # Disallow libarrow 14.0.0 due to a CVE
-          - libarrow-all>=14.0.1,<15.0.0a0
+          - libarrow-acero>=14.0.1,<15.0.0a0
+          - libarrow-dataset>=14.0.1,<15.0.0a0
+          - libarrow>=14.0.1,<15.0.0a0
+          - libparquet>=14.0.1,<15.0.0a0
   pyarrow_run:
     common:
       - output_types: [conda, requirements, pyproject]
