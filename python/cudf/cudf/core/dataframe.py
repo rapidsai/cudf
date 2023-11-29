@@ -7172,13 +7172,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise NotImplementedError("freq parameter not supported yet.")
         elif fill_method not in {
             no_default,
+            None,
             "ffill",
             "pad",
             "bfill",
             "backfill",
         }:
             raise ValueError(
-                "fill_method must be one of 'ffill', 'pad', "
+                "fill_method must be one of None, 'ffill', 'pad', "
                 "'bfill', or 'backfill'."
             )
 
@@ -7192,7 +7193,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "values.",
                 FutureWarning,
             )
-        if fill_method in (no_default, None):
+        if fill_method is no_default:
             fill_method = "ffill"
         if limit is no_default:
             limit = None

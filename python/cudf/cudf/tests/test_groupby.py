@@ -3063,18 +3063,21 @@ def test_groupby_transform_maintain_index(by):
     ],
 )
 @pytest.mark.parametrize("periods", [-5, -2, 0, 2, 5])
-@pytest.mark.parametrize("fill_method", ["ffill", "bfill", no_default])
+@pytest.mark.parametrize("fill_method", ["ffill", "bfill", no_default, None])
 def test_groupby_pct_change(data, gkey, periods, fill_method):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
-    with expect_warning_if(fill_method is not no_default):
+    with expect_warning_if(fill_method not in (no_default, None)):
         actual = gdf.groupby(gkey).pct_change(
             periods=periods, fill_method=fill_method
         )
     with expect_warning_if(
         PANDAS_GE_210
-        and (fill_method is not no_default or pdf.isna().any().any())
+        and (
+            fill_method not in (no_default, None)
+            or (fill_method is not None and pdf.isna().any().any())
+        )
     ):
         expected = pdf.groupby(gkey).pct_change(
             periods=periods, fill_method=fill_method

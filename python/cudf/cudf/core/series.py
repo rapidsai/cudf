@@ -3604,13 +3604,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             raise NotImplementedError("freq parameter not supported yet.")
         elif fill_method not in {
             no_default,
+            None,
             "ffill",
             "pad",
             "bfill",
             "backfill",
         }:
             raise ValueError(
-                "fill_method must be one of 'ffill', 'pad', "
+                "fill_method must be one of None, 'ffill', 'pad', "
                 "'bfill', or 'backfill'."
             )
         if fill_method not in (no_default, None) or limit is not no_default:
@@ -3624,7 +3625,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 FutureWarning,
             )
 
-        if fill_method in (no_default, None):
+        if fill_method is no_default:
             fill_method = "ffill"
         if limit is no_default:
             limit = None

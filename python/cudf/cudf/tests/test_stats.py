@@ -359,18 +359,21 @@ def test_series_median(dtype, num_na):
 )
 @pytest.mark.parametrize("periods", range(-5, 5))
 @pytest.mark.parametrize(
-    "fill_method", ["ffill", "bfill", "pad", "backfill", no_default]
+    "fill_method", ["ffill", "bfill", "pad", "backfill", no_default, None]
 )
 def test_series_pct_change(data, periods, fill_method):
     cs = cudf.Series(data)
     ps = cs.to_pandas()
 
     if np.abs(periods) <= len(cs):
-        with expect_warning_if(fill_method is not no_default):
+        with expect_warning_if(fill_method not in (no_default, None)):
             got = cs.pct_change(periods=periods, fill_method=fill_method)
         with expect_warning_if(
             PANDAS_GE_210
-            and (fill_method is not no_default or ps.isna().any())
+            and (
+                fill_method not in (no_default, None)
+                or (fill_method is not None and ps.isna().any())
+            )
         ):
             expected = ps.pct_change(periods=periods, fill_method=fill_method)
         np.testing.assert_array_almost_equal(

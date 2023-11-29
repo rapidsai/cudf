@@ -2328,7 +2328,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             raise NotImplementedError("limit parameter not supported yet.")
         if freq is not None:
             raise NotImplementedError("freq parameter not supported yet.")
-        elif fill_method not in {no_default, "ffill", "bfill"}:
+        elif fill_method not in {no_default, None, "ffill", "bfill"}:
             raise ValueError(
                 "fill_method must be one of 'ffill', or" "'bfill'."
             )
