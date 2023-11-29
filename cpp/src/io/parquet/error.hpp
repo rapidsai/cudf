@@ -33,11 +33,11 @@ namespace cudf::io::parquet {
  */
 class kernel_error {
  public:
-  using error_type   = uint32_t;
-  using pointer_type = error_type*;
+  using value_type = uint32_t;
+  using pointer    = value_type*;
 
  private:
-  rmm::device_scalar<error_type> _error_code;
+  rmm::device_scalar<value_type> _error_code;
 
  public:
   /**

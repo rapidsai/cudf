@@ -76,10 +76,10 @@ constexpr bool is_supported_encoding(Encoding enc)
 /**
  * @brief Atomically OR `error` into `error_code`.
  */
-constexpr void set_error(kernel_error::error_type error, kernel_error::pointer_type error_code)
+constexpr void set_error(kernel_error::value_type error, kernel_error::pointer error_code)
 {
   if (error != 0) {
-    cuda::atomic_ref<kernel_error::error_type, cuda::thread_scope_device> ref{*error_code};
+    cuda::atomic_ref<kernel_error::value_type, cuda::thread_scope_device> ref{*error_code};
     ref.fetch_or(error, cuda::std::memory_order_relaxed);
   }
 }
@@ -89,7 +89,7 @@ constexpr void set_error(kernel_error::error_type error, kernel_error::pointer_t
  *
  * These values are used as bitmasks, so they must be powers of 2.
  */
-enum class decode_error : kernel_error::error_type {
+enum class decode_error : kernel_error::value_type {
   DATA_STREAM_OVERRUN      = 0x1,
   LEVEL_STREAM_OVERRUN     = 0x2,
   UNSUPPORTED_ENCODING     = 0x4,
@@ -551,7 +551,7 @@ constexpr bool is_string_col(ColumnChunkDesc const& chunk)
  */
 void DecodePageHeaders(ColumnChunkDesc* chunks,
                        int32_t num_chunks,
-                       kernel_error::pointer_type error_code,
+                       kernel_error::pointer error_code,
                        rmm::cuda_stream_view stream);
 
 /**
@@ -657,7 +657,7 @@ void DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
                     size_t num_rows,
                     size_t min_row,
                     int level_type_size,
-                    kernel_error::pointer_type error_code,
+                    kernel_error::pointer error_code,
                     rmm::cuda_stream_view stream);
 
 /**
@@ -679,7 +679,7 @@ void DecodeStringPageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
                           size_t num_rows,
                           size_t min_row,
                           int level_type_size,
-                          kernel_error::pointer_type error_code,
+                          kernel_error::pointer error_code,
                           rmm::cuda_stream_view stream);
 
 /**
@@ -701,7 +701,7 @@ void DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages,
                        size_t num_rows,
                        size_t min_row,
                        int level_type_size,
-                       kernel_error::pointer_type error_code,
+                       kernel_error::pointer error_code,
                        rmm::cuda_stream_view stream);
 
 /**
@@ -723,7 +723,7 @@ void DecodeDeltaByteArray(cudf::detail::hostdevice_vector<PageInfo>& pages,
                           size_t num_rows,
                           size_t min_row,
                           int level_type_size,
-                          kernel_error::pointer_type error_code,
+                          kernel_error::pointer error_code,
                           rmm::cuda_stream_view stream);
 
 /**

@@ -45,7 +45,7 @@ struct page_state_s {
   int32_t dict_val{};
   uint32_t initial_rle_run[NUM_LEVEL_TYPES]{};   // [def,rep]
   int32_t initial_rle_value[NUM_LEVEL_TYPES]{};  // [def,rep]
-  kernel_error::error_type error{};
+  kernel_error::value_type error{};
   PageInfo page{};
   ColumnChunkDesc col{};
 
@@ -74,13 +74,13 @@ struct page_state_s {
 
   inline __device__ void set_error_code(decode_error err)
   {
-    cuda::atomic_ref<kernel_error::error_type, cuda::thread_scope_block> ref{error};
-    ref.fetch_or(static_cast<kernel_error::error_type>(err), cuda::std::memory_order_relaxed);
+    cuda::atomic_ref<kernel_error::value_type, cuda::thread_scope_block> ref{error};
+    ref.fetch_or(static_cast<kernel_error::value_type>(err), cuda::std::memory_order_relaxed);
   }
 
   inline __device__ void reset_error_code()
   {
-    cuda::atomic_ref<kernel_error::error_type, cuda::thread_scope_block> ref{error};
+    cuda::atomic_ref<kernel_error::value_type, cuda::thread_scope_block> ref{error};
     ref.store(0, cuda::std::memory_order_release);
   }
 };
