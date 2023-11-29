@@ -26,7 +26,9 @@ from cudf._lib.cpp.copying import \
 from .column cimport Column
 from .table cimport Table
 
-# workaround for https://github.com/cython/cython/issues/3885
+# This is a workaround for
+# https://github.com/cython/cython/issues/4180
+# when creating reference_wrapper[constscalar] in the constructor
 ctypedef const scalar constscalar
 
 
@@ -104,7 +106,7 @@ cdef _check_is_list_of_scalars(list source):
 # TODO: Could generalize list to sequence
 cpdef Table scalar_scatter(list source, Column scatter_map, Table target_table):
     cdef unique_ptr[table] c_result
-    cdef vector[reference_wrapper[constscalar]] source_scalars
+    cdef vector[reference_wrapper[const scalar]] source_scalars
     cdef Scalar slr
 
     _check_is_list_of_scalars(source)
@@ -236,8 +238,6 @@ cpdef Table scalar_boolean_mask_scatter(list input, Table target, Column boolean
     cdef Scalar slr
     for slr in input:
         c_scalars.push_back(
-            # TODO: This requires the constscalar ctypedef
-            # https://github.com/cython/cython/issues/4180
             reference_wrapper[constscalar](dereference(slr.c_obj))
         )
 
