@@ -517,17 +517,11 @@ struct EncColumnChunk {
   uint32_t* def_histogram_data;  //!< Buffers for size histograms. One for chunk and one per page.
   uint32_t* rep_histogram_data;  //!< Size is (max(level) + 1) * (num_data_pages + 1).
   size_t var_bytes_size;         //!< Sum of var_bytes_size from the pages (byte arrays only)
+
+  constexpr uint32_t num_dict_pages() const { return use_dictionary ? 1 : 0; }
+
+  constexpr uint32_t num_data_pages() const { return num_pages - num_dict_pages(); }
 };
-
-constexpr uint32_t num_dict_pages(EncColumnChunk const* const ck)
-{
-  return ck->use_dictionary ? 1 : 0;
-}
-
-constexpr uint32_t num_data_pages(EncColumnChunk const* const ck)
-{
-  return ck->num_pages - num_dict_pages(ck);
-}
 
 /**
  * @brief Struct describing an encoder data page

@@ -732,7 +732,7 @@ __global__ void __launch_bounds__(128)
               page_g.kernel_mask = encode_kernel_mask::PLAIN;
             }
             // need space for the chunk histograms plus data page histograms
-            auto const num_histograms = num_pages - num_dict_pages(&ck_g);
+            auto const num_histograms = num_pages - ck_g.num_dict_pages();
             if (ck_g.def_histogram_data != nullptr && col_g.max_def_level > 0) {
               page_g.def_histogram =
                 ck_g.def_histogram_data + num_histograms * (col_g.max_def_level + 1);

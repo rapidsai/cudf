@@ -1433,7 +1433,7 @@ size_t column_index_buffer_size(EncColumnChunk* ck,
 
   // additional storage needed for SizeStatistics
   // don't need stats for dictionary pages
-  auto const num_pages = num_data_pages(ck);
+  auto const num_pages = ck->num_data_pages();
 
   // only need variable length size info for BYTE_ARRAY
   // 1 byte for marker, 1 byte vec type, 4 bytes length, 5 bytes per page for values
@@ -1884,7 +1884,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
           // SizeStatistics are on the ColumnIndex, so only need to allocate the histograms data
           // if we're doing page-level indexes. add 1 to num_pages for per-chunk histograms.
-          auto const num_histograms = num_data_pages(ck) + 1;
+          auto const num_histograms = ck->num_data_pages() + 1;
 
           if (col.max_def_level > DEF_LVL_HIST_CUTOFF) {
             def_histogram_bfr_size += (col.max_def_level + 1) * num_histograms;
@@ -1961,7 +1961,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           ck.column_index_size = column_index_buffer_size(&ck, col, column_index_truncate_length);
           bfr_i += ck.column_index_size;
 
-          auto const num_histograms = ck.num_pages - (ck.use_dictionary ? 1 : 0) + 1;
+          auto const num_histograms = ck.num_data_pages() + 1;
           if (col.max_def_level > DEF_LVL_HIST_CUTOFF) {
             ck.def_histogram_data = bfr_d;
             bfr_d += num_histograms * (col.max_def_level + 1);
@@ -2102,7 +2102,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
             chunk_stats.unencoded_byte_array_data_bytes = ck.var_bytes_size;
           }
 
-          auto const num_data_pages = detail::num_data_pages(&ck);
+          auto const num_data_pages = ck.num_data_pages();
           if (col.max_def_level > DEF_LVL_HIST_CUTOFF) {
             size_t const hist_size        = col.max_def_level + 1;
             uint32_t const* const ck_hist = h_def_ptr + hist_size * num_data_pages;
