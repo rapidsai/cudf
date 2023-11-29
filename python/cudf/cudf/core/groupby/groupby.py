@@ -2306,7 +2306,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             How to handle NAs before computing percent changes.
 
             .. deprecated:: 23.12
-                `fill_method` is deprecated.
+                All options of `fill_method` are deprecated except `fill_method=None`.
         limit : int, optional
             The number of consecutive NAs to fill before stopping.
             Not yet implemented.
@@ -2333,18 +2333,18 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "fill_method must be one of 'ffill', or" "'bfill'."
             )
 
-        if fill_method is not no_default or limit is not no_default:
+        if fill_method not in (no_default, None) or limit is not no_default:
             # Do not remove until pandas 3.0 support is added.
             warnings.warn(
-                "The 'fill_method' and 'limit' keywords in "
+                "The 'fill_method' keyword being not None and the 'limit' keywords in "
                 f"{type(self).__name__}.pct_change are deprecated and will be "
-                "removed in a future version. Call "
-                f"{'bfill' if fill_method in ('backfill', 'bfill') else 'ffill'} "  # noqa: E501
-                "before calling pct_change instead.",
+                "removed in a future version. Either fill in any non-leading NA values prior "
+                "to calling pct_change or specify 'fill_method=None' to not fill NA "
+                "values.",
                 FutureWarning,
             )
 
-        if fill_method is no_default:
+        if fill_method in (no_default, None):
             fill_method = "ffill"
         if limit is no_default:
             limit = None
