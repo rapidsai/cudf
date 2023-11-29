@@ -37,17 +37,11 @@ build:
 requirements:
   host:
     - python
-    - cudf ={{ version }}
-    - dask >=2023.9.2
-    - dask-core >=2023.9.2
-    - distributed >=2023.9.2
     - cuda-version ={{ cuda_version }}
   run:
     - python
     - cudf ={{ version }}
-    - dask >=2023.9.2
-    - dask-core >=2023.9.2
-    - distributed >=2023.9.2
+    - rapids-dask-dependency ={{ minor_version }}
     - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
 
 test:

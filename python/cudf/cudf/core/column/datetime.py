@@ -27,14 +27,18 @@ from cudf.api.types import (
     is_scalar,
     is_timedelta64_dtype,
 )
-from cudf.core._compat import PANDAS_GE_200
+
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_220
 from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.dtypes import _get_base_dtype
 from cudf.utils.utils import _all_bools_with_nulls
 
-_guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
+if PANDAS_GE_220:
+    _guess_datetime_format = pd.tseries.api.guess_datetime_format
+else:
+    _guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
 
 # nanoseconds per time_unit
 _dtype_to_format_conversion = {
@@ -313,10 +317,12 @@ class DatetimeColumn(column.ColumnBase):
 
     def to_pandas(
         self,
+        *,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
-        **kwargs,
-    ) -> "cudf.Series":
+    ) -> pd.Series:
+        if nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
         # `copy=True` workaround until following issue is fixed:
         # https://issues.apache.org/jira/browse/ARROW-9772
 
@@ -715,13 +721,18 @@ class DatetimeTZColumn(DatetimeColumn):
 
     def to_pandas(
         self,
+        *,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
-        **kwargs,
-    ) -> "cudf.Series":
-        return self._local_time.to_pandas().dt.tz_localize(
+    ) -> pd.Series:
+        if nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
+        series = self._local_time.to_pandas().dt.tz_localize(
             self.dtype.tz, ambiguous="NaT", nonexistent="NaT"
         )
+        if index is not None:
+            series.index = index
+        return series
 
     def to_arrow(self):
         return pa.compute.assume_timezone(

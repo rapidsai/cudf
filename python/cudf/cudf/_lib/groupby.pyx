@@ -23,6 +23,8 @@ from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 from cudf._lib.scalar import as_device_scalar
 
+from libcpp.functional cimport reference_wrapper
+
 cimport cudf._lib.cpp.groupby as libcudf_groupby
 cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.aggregation cimport (
@@ -32,7 +34,6 @@ from cudf._lib.aggregation cimport (
     make_groupby_scan_aggregation,
 )
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
 from cudf._lib.cpp.replace cimport replace_policy
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table, table_view

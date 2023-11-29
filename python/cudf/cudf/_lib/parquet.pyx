@@ -32,7 +32,7 @@ from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
 from libcpp.map cimport map
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 from libcpp.unordered_map cimport unordered_map
 from libcpp.utility cimport move
@@ -52,7 +52,6 @@ from cudf._lib.cpp.io.parquet cimport (
     write_parquet as parquet_writer,
 )
 from cudf._lib.cpp.io.types cimport column_in_metadata, table_input_metadata
-from cudf._lib.cpp.libcpp.memory cimport make_unique
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type, size_type
 from cudf._lib.io.datasource cimport NativeFileDatasource

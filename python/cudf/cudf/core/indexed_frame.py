@@ -2615,6 +2615,10 @@ class IndexedFrame(Frame):
 
         df = self
         if index is not None:
+            if not df._index.is_unique:
+                raise ValueError(
+                    "cannot reindex on an axis with duplicate labels"
+                )
             index = cudf.core.index.as_index(
                 index, name=getattr(index, "name", self._index.name)
             )
@@ -3264,8 +3268,11 @@ class IndexedFrame(Frame):
             # is on the end of the offset. See pandas gh29623 for detail.
             to_search = to_search - pd_offset.base
             return self.loc[:to_search]
+        needle = as_column(to_search, dtype=self._index.dtype)
         end_point = int(
-            self._index._column.searchsorted(to_search, side=side)[0]
+            self._index._column.searchsorted(
+                needle, side=side
+            ).element_indexing(0)
         )
         return slice_func(end_point)
 

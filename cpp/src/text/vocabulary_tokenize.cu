@@ -276,8 +276,12 @@ __global__ void token_counts_fn(cudf::column_device_view const d_strings,
   __syncwarp();
 
   for (auto itr = d_output + lane_idx + 1; itr < d_output_end; itr += cudf::detail::warp_size) {
-    // add one if at the edge of a token or at the string's end
-    count += ((*itr && !(*(itr - 1))) || (itr + 1 == d_output_end));
+    // add one if at the edge of a token or if at the string's end
+    if (*itr) {
+      count += !(*(itr - 1));
+    } else {
+      count += (itr + 1 == d_output_end);
+    }
   }
   __syncwarp();
 

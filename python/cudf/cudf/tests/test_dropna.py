@@ -256,19 +256,22 @@ def test_dropna_index(data, dtype):
 
 @pytest.mark.parametrize("data", [[[1, None, 2], [None, None, 2]]])
 @pytest.mark.parametrize("how", ["all", "any"])
-def test_dropna_multiindex(data, how):
+def test_dropna_multiindex(data, how, request):
     pi = pd.MultiIndex.from_arrays(data)
     gi = cudf.from_pandas(pi)
 
     expect = pi.dropna(how)
     got = gi.dropna(how)
 
-    with pytest.raises(AssertionError, match="different"):
-        # pandas-gh44792. Pandas infers the dtypes as (int64, int64), though
-        # int64 doesn't really store null/nans. The dtype propagates to the
-        # result of dropna. cuDF infers the dtypes as (float, float), which
-        # differs from pandas.
-        assert_eq(expect, got)
+    if how == "all" and "data0" in request.node.callspec.id:
+        request.applymarker(
+            pytest.mark.xfail(
+                reason="pandas NA value np.nan results in float type. "
+                "cuDF correctly retains int type "
+                "(https://github.com/pandas-dev/pandas/issues/44792)"
+            )
+        )
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(

@@ -179,6 +179,13 @@ def read_json(
     return df
 
 
+def maybe_return_nullable_pd_obj(cudf_obj):
+    try:
+        return cudf_obj.to_pandas(nullable=True)
+    except NotImplementedError:
+        return cudf_obj.to_pandas(nullable=False)
+
+
 @ioutils.doc_to_json()
 def to_json(
     cudf_val,
@@ -228,7 +235,14 @@ def to_json(
             return path_or_buf.read()
     elif engine == "pandas":
         warnings.warn("Using CPU via Pandas to write JSON dataset")
-        pd_value = cudf_val.to_pandas(nullable=True)
+        if isinstance(cudf_val, cudf.DataFrame):
+            pd_data = {
+                col: maybe_return_nullable_pd_obj(series)
+                for col, series in cudf_val.items()
+            }
+            pd_value = pd.DataFrame(pd_data)
+        else:
+            pd_value = maybe_return_nullable_pd_obj(cudf_val)
         return pd.io.json.to_json(
             path_or_buf,
             pd_value,

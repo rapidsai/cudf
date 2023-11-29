@@ -18,7 +18,8 @@ import pandas as pd
 from pandas._config import get_option
 
 import cudf
-from cudf import _lib as libcudf
+import cudf._lib as libcudf
+from cudf._lib.types import size_type_dtype
 from cudf._typing import DataFrameOrSeries
 from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_list_like, is_object_dtype
@@ -147,7 +148,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         if copy:
             if isinstance(codes, cudf.DataFrame):
                 codes = codes.copy(deep=True)
-            if len(levels) > 0 and isinstance(levels[0], cudf.Series):
+            if len(levels) > 0 and isinstance(
+                levels[0], (cudf.Index, cudf.Series)
+            ):
                 levels = [level.copy(deep=True) for level in levels]
 
         if not isinstance(codes, cudf.DataFrame):
@@ -164,7 +167,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                     "codes and is inconsistent!"
                 )
 
-        levels = [cudf.Series(level) for level in levels]
+        levels = [cudf.Index(level) for level in levels]
 
         if len(levels) != len(codes._data):
             raise ValueError(
@@ -176,26 +179,24 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 "MultiIndex length of codes does not match "
                 "and is inconsistent!"
             )
-        for level, code in zip(levels, codes._data.columns):
-            if code.max() > len(level) - 1:
-                raise ValueError(
-                    "MultiIndex code %d contains value %d larger "
-                    "than maximum level size at this position"
-                )
 
         source_data = {}
-        for i, (column_name, col) in enumerate(codes._data.items()):
-            if -1 in col:
-                level = cudf.DataFrame(
-                    {column_name: [None] + list(levels[i])},
-                    index=range(-1, len(levels[i])),
-                )
-            else:
-                level = cudf.DataFrame({column_name: levels[i]})
-
-            source_data[column_name] = libcudf.copying.gather(
-                [level._data[column_name]], col
-            )[0]
+        for (column_name, code), level in zip(codes._data.items(), levels):
+            if len(code):
+                lo, hi = libcudf.reduce.minmax(code)
+                if lo.value < -1 or hi.value > len(level) - 1:
+                    raise ValueError(
+                        f"Codes must be -1 <= codes <= {len(level) - 1}"
+                    )
+                if lo.value == -1:
+                    # Now we can gather and insert null automatically
+                    code[code == -1] = np.iinfo(size_type_dtype).min
+            result_col = libcudf.copying.gather(
+                [level._column], code, nullify=True
+            )
+            source_data[column_name] = result_col[0]._with_type_metadata(
+                level.dtype
+            )
 
         super().__init__(source_data)
         self._levels = levels
@@ -414,7 +415,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         mi = MultiIndex._from_data(self._data.copy(deep=deep))
         if self._levels is not None:
-            mi._levels = [s.copy(deep) for s in self._levels]
+            mi._levels = [idx.copy(deep=deep) for idx in self._levels]
         if self._codes is not None:
             mi._codes = self._codes.copy(deep)
         if names is not None:
@@ -1519,7 +1520,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             return mi
 
     @_cudf_nvtx_annotate
-    def to_pandas(self, nullable=False, **kwargs):
+    def to_pandas(self, *, nullable: bool = False) -> pd.MultiIndex:
         result = self.to_frame(
             index=False, name=list(range(self.nlevels))
         ).to_pandas(nullable=nullable)
@@ -1552,19 +1553,13 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             nan_as_null = (
                 False if cudf.get_option("mode.pandas_compatible") else None
             )
-
-        # if `multiindex` has two or more levels that
-        # have the same name, then `multiindex.to_frame()`
-        # results in a DataFrame containing only one of those
-        # levels. Thus, set `names` to some tuple of unique values
-        # and then call `multiindex.to_frame(name=names)`,
-        # which preserves all levels of `multiindex`.
-        names = tuple(range(len(multiindex.names)))
-
-        df = cudf.DataFrame.from_pandas(
-            multiindex.to_frame(index=False, name=names), nan_as_null
+        levels = [
+            cudf.Index.from_pandas(level, nan_as_null=nan_as_null)
+            for level in multiindex.levels
+        ]
+        return cls(
+            levels=levels, codes=multiindex.codes, names=multiindex.names
         )
-        return cls.from_frame(df, names=multiindex.names)
 
     @cached_property  # type: ignore
     @_cudf_nvtx_annotate

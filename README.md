@@ -51,10 +51,10 @@ print(tips_df.groupby("size").tip_percentage.mean())
 ## Resources
 
 - [Try cudf.pandas now](https://nvda.ws/rapids-cudf): Explore `cudf.pandas` on a free GPU enabled instance on Google Colab!
-- [Install](https://rapids.ai/start.html): Instructions for installing cuDF and other [RAPIDS](https://rapids.ai) libraries.
+- [Install](https://docs.rapids.ai/install): Instructions for installing cuDF and other [RAPIDS](https://rapids.ai) libraries.
 - [cudf (Python) documentation](https://docs.rapids.ai/api/cudf/stable/)
 - [libcudf (C++/CUDA) documentation](https://docs.rapids.ai/api/libcudf/stable/)
-- [RAPIDS Community](https://rapids.ai/community.html): Get help, contribute, and collaborate.
+- [RAPIDS Community](https://rapids.ai/learn-more/#get-involved): Get help, contribute, and collaborate.
 
 ## Installation
 
@@ -66,11 +66,11 @@ print(tips_df.groupby("size").tip_percentage.mean())
 
 ### Conda
 
-cuDF can be installed with conda (via [miniconda](https://conda.io/miniconda.html) or the full [Anaconda distribution](https://www.anaconda.com/download)) from the `rapidsai` channel:
+cuDF can be installed with conda (via [miniconda](https://docs.conda.io/projects/miniconda/en/latest/) or the full [Anaconda distribution](https://www.anaconda.com/download) from the `rapidsai` channel:
 
 ```bash
 conda install -c rapidsai -c conda-forge -c nvidia \
-    cudf=23.12 python=3.10 cuda-version=11.8
+    cudf=24.02 python=3.10 cuda-version=11.8
 ```
 
 We also provide [nightly Conda packages](https://anaconda.org/rapidsai-nightly) built from the HEAD
@@ -78,7 +78,7 @@ of our latest development branch.
 
 Note: cuDF is supported only on Linux, and with Python versions 3.9 and later.
 
-See the [Get RAPIDS version picker](https://rapids.ai/start.html) for more OS and version info.
+See the [RAPIDS installation guide](https://docs.rapids.ai/install) for more OS and version info.
 
 ## Build/Install from Source
 See build [instructions](CONTRIBUTING.md#setting-up-your-build-environment).
@@ -86,17 +86,3 @@ See build [instructions](CONTRIBUTING.md#setting-up-your-build-environment).
 ## Contributing
 
 Please see our [guide for contributing to cuDF](CONTRIBUTING.md).
-
-## Contact
-
-Find out more details on the [RAPIDS site](https://rapids.ai/community.html)
-
-## <div align="left"><img src="img/rapids_logo.png" width="265px"/></div> Open GPU Data Science
-
-The RAPIDS suite of open source software libraries aim to enable execution of end-to-end data science and analytics pipelines entirely on GPUs. It relies on NVIDIA® CUDA® primitives for low-level compute optimization, but exposing that GPU parallelism and high-bandwidth memory speed through user-friendly Python interfaces.
-
-<p align="center"><img src="img/rapids_arrow.png" width="80%"/></p>
-
-### Apache Arrow on GPU
-
-The GPU version of [Apache Arrow](https://arrow.apache.org/) is a common API that enables efficient interchange of tabular data between processes running on the GPU. End-to-end computation on the GPU avoids unnecessary copying and converting of data off the GPU, reducing compute time and cost for high-performance analytics common in artificial intelligence workloads. As the name implies, cuDF uses the Apache Arrow columnar data format on the GPU. Currently, a subset of the features in Apache Arrow are supported.

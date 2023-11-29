@@ -2949,11 +2949,14 @@ def test_index_error_list_index():
 )
 def test_index_hasnans(data):
     gs = cudf.Index(data, nan_as_null=False)
-    ps = gs.to_pandas(nullable=True)
-
-    # Check type to avoid mixing Python bool and NumPy bool
-    assert isinstance(gs.hasnans, bool)
-    assert gs.hasnans == ps.hasnans
+    if isinstance(gs, cudf.RangeIndex):
+        with pytest.raises(NotImplementedError):
+            gs.to_pandas(nullable=True)
+    else:
+        ps = gs.to_pandas(nullable=True)
+        # Check type to avoid mixing Python bool and NumPy bool
+        assert isinstance(gs.hasnans, bool)
+        assert gs.hasnans == ps.hasnans
 
 
 @pytest.mark.parametrize(
@@ -3148,3 +3151,23 @@ def test_index_getitem_from_int(idx):
 def test_index_getitem_from_nonint_raises(idx):
     with pytest.raises(ValueError):
         cudf.Index([1, 2])[idx]
+
+
+def test_from_pandas_rangeindex_return_rangeindex():
+    pidx = pd.RangeIndex(start=3, stop=9, step=3, name="a")
+    result = cudf.Index.from_pandas(pidx)
+    expected = cudf.RangeIndex(start=3, stop=9, step=3, name="a")
+    assert_eq(result, expected, exact=True)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        cudf.RangeIndex(1),
+        cudf.DatetimeIndex(np.array([1, 2], dtype="datetime64[ns]")),
+        cudf.TimedeltaIndex(np.array([1, 2], dtype="timedelta64[ns]")),
+    ],
+)
+def test_index_to_pandas_nullable_notimplemented(idx):
+    with pytest.raises(NotImplementedError):
+        idx.to_pandas(nullable=True)

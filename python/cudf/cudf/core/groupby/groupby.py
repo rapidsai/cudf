@@ -596,7 +596,9 @@ class GroupBy(Serializable, Reducible, Scannable):
                     # Structs lose their labels which we reconstruct here
                     col = col._with_type_metadata(cudf.ListDtype(orig_dtype))
 
-                if (
+                if agg_kind in {"COUNT", "SIZE"}:
+                    data[key] = col.astype("int64")
+                elif (
                     self.obj.empty
                     and (
                         isinstance(agg_name, str)
@@ -613,8 +615,6 @@ class GroupBy(Serializable, Reducible, Scannable):
                     )
                 ):
                     data[key] = col.astype(orig_dtype)
-                elif agg_kind in {"COUNT", "SIZE"}:
-                    data[key] = col.astype("int64")
                 else:
                     data[key] = col
         data = ColumnAccessor(data, multiindex=multilevel)
@@ -2306,7 +2306,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             How to handle NAs before computing percent changes.
 
             .. deprecated:: 23.12
-                All options of `fill_method` are deprecated except `fill_method=None`.
+                All options of `fill_method` are deprecated
+                except `fill_method=None`.
         limit : int, optional
             The number of consecutive NAs to fill before stopping.
             Not yet implemented.
@@ -2336,11 +2337,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         if fill_method not in (no_default, None) or limit is not no_default:
             # Do not remove until pandas 3.0 support is added.
             warnings.warn(
-                "The 'fill_method' keyword being not None and the 'limit' keywords in "
-                f"{type(self).__name__}.pct_change are deprecated and will be "
-                "removed in a future version. Either fill in any non-leading NA values prior "
-                "to calling pct_change or specify 'fill_method=None' to not fill NA "
-                "values.",
+                "The 'fill_method' keyword being not None and the 'limit' "
+                f"keywords in {type(self).__name__}.pct_change are "
+                "deprecated and will be removed in a future version. "
+                "Either fill in any non-leading NA values prior "
+                "to calling pct_change or specify 'fill_method=None' "
+                "to not fill NA values.",
                 FutureWarning,
             )
 
