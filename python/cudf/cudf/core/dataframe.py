@@ -666,8 +666,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def __init__(
         self, data=None, index=None, columns=None, dtype=None, nan_as_null=True
     ):
+        col_is_rangeindex = False
+        col_is_multiindex = False
+
         if columns is not None:
-            columns = as_index(columns).to_pandas()
+            columns = as_index(columns)
+            if columns.nunique() != len(columns):
+                raise ValueError("Columns cannot contain duplicate values")
+            columns = columns.to_pandas()
+            col_is_rangeindex = isinstance(columns, pd.RangeIndex)
+            col_is_multiindex = isinstance(columns, pd.MultiIndex)
 
         if index is not None:
             index = as_index(index)
@@ -708,10 +716,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     name = columns[0]
                 else:
                     name = 0
+                    col_is_rangeindex = True
+                col_dict = {name: data._column}
             else:
-                name = data.name
-                columns, columns_from_data = pd.Index([data.name]), columns
-            col_dict = {name: data._column}
+                if columns is not None and not columns.isin([data.name]).any():
+                    data = data.copy()[:0]
+                    col_dict = {col: data._column for col in columns}
+                else:
+                    col_dict = {data.name: data._column}
+                    columns, columns_from_data = pd.Index([data.name]), columns
             index, index_from_data = data.index, index
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
@@ -725,7 +738,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if "descr" in arr_interface:
                 if len(arr_interface["descr"]) == 1:
                     col_dict = self._from_arrays(
-                        data, index=index, columns=columns
+                        data, columns=columns, nan_as_null=nan_as_null
                     )
                 else:
                     col_dict = self.from_records(
@@ -733,33 +746,32 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     )._data
             else:
                 col_dict = self._from_arrays(
-                    data, index=index, columns=columns
+                    data, columns=columns, nan_as_null=nan_as_null
                 )
-
+            index, index_from_data = RangeIndex(data.shape[0]), index
         elif hasattr(data, "__array_interface__"):
             arr_interface = data.__array_interface__
             if len(arr_interface["descr"]) == 1:
                 # not record arrays
                 col_dict = self._from_arrays(
-                    data, index=index, columns=columns
+                    data, columns=columns, nan_as_null=nan_as_null
                 )
             else:
                 col_dict = self.from_records(
                     data, index=index, columns=columns
                 )._data
+            index, index_from_data = RangeIndex(data.shape[0]), index
         elif is_scalar(data):
             if index is None or columns is None:
-                raise ValueError("DataFrame constructor not properly called!")
+                raise ValueError(
+                    "Must provide an index and columns if data is a scalar."
+                )
             col_dict = {
                 col_label: as_column(
                     data, nan_as_null=nan_as_null, length=len(index)
                 )
                 for col_label in columns
             }
-        elif is_dict_like(data):
-            result = self._init_from_dict_like(data, nan_as_null=nan_as_null)
-            col_dict = result[0]
-            index, index_from_data = result[1], index
         elif is_list_like(data):
             super().__init__()
             if len(data) > 0 and is_scalar(data[0]):
@@ -789,6 +801,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 self._init_from_list_like(data, index=index, columns=columns)
             self._check_data_index_length_match()
             return
+        elif is_dict_like(data):
+            result = self._init_from_dict_like(
+                data, index, nan_as_null=nan_as_null
+            )
+            col_dict = result[0]
+            index, index_from_data = result[1], index
         else:
             raise TypeError(
                 f"data must be list or dict-like, not {type(data).__name__}"
@@ -798,6 +816,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if columns_from_data is not None:
             # TODO: This there a better way to do this?
             columns_from_data = as_index(columns_from_data)
+            col_is_rangeindex = isinstance(columns, cudf.RangeIndex)
+            col_is_multiindex = isinstance(columns, cudf.MultiIndex)
             reindexed = self.reindex(
                 columns=columns_from_data.to_pandas(), copy=False
             )
@@ -814,9 +834,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if dtype:
             self._data = self.astype(dtype)._data
 
-        self._data.multiindex = self._data.multiindex or isinstance(
-            columns, pd.MultiIndex
-        )
+        self._data.rangeindex = self._data.rangeindex or col_is_rangeindex
+        self._data.multiindex = self._data.multiindex or col_is_multiindex
 
     @_cudf_nvtx_annotate
     def _init_from_series_list(self, data, columns, index):
@@ -989,13 +1008,33 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def _init_from_dict_like(
-        self, data: dict, nan_as_null: bool | None = None
-    ) -> tuple[dict, None | cudf.Index]:
+        self, data: dict, index: None | cudf.Index, nan_as_null=None
+    ) -> tuple[dict, cudf.Index]:
         if not data:
-            return data, None
-        data, index_from_data, value_length = self._align_input_series_indices(
-            data, nan_as_null=nan_as_null
-        )
+            return data, cudf.RangeIndex(0)
+        data, index_from_data = self._align_input_series_indices(data)
+
+        value_lengths = set()
+        if index_from_data is not None:
+            value_lengths.add(len(index_from_data))
+
+        scalar_keys = []
+        col_data = {}
+        for key, value in data:
+            if is_scalar(value):
+                scalar_keys.append(key)
+                col_data[key] = value
+            else:
+                value_lengths.add(len(value))
+                col_data[key] = as_column(value, nan_as_null=nan_as_null)
+
+        if len(scalar_keys) != len(data) and len(value_lengths) > 1:
+            raise ValueError(
+                "Found varying value lengths when all values "
+                f"must have the same length: {value_lengths}"
+            )
+        # TODO: If all scalars, use index length
+
         col_data = {
             key: as_column(value, nan_as_null=nan_as_null, length=value_length)
             for key, value in data.items()
@@ -1017,32 +1056,27 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @staticmethod
     @_cudf_nvtx_annotate
     def _align_input_series_indices(
-        data: dict, nan_as_null: bool | None = None
-    ) -> tuple[dict, None | cudf.Index, int]:
-        input_series = {}
-        value_lengths: set[int] = set()
-        for key, val in data.items():
-            if isinstance(val, (pd.Series, Series, dict)):
-                val = Series(val, nan_as_null=nan_as_null)
-                input_series[key] = val
-            if not is_scalar(val):
-                value_lengths.add(len(val))
-        if len(value_lengths) > 1:
-            raise ValueError(f"Found varying data lengths: {value_lengths}")
+        data: dict,
+    ) -> tuple[dict, None | cudf.Index]:
+        """If data.values() contains Series/dicts, align their indexes before processing"""
+        input_series = {
+            key: val
+            for key, val in data.items()
+            if isinstance(val, (pd.Series, Series, dict))
+        }
 
         if not input_series:
-            return data, None, value_lengths.pop()
+            return data, None
 
         aligned_input_series = cudf.core.series._align_indices(
             list(input_series.values())
         )
-        index = aligned_input_series[0].index
         data = data.copy()
         for key, aligned_series in zip(
             input_series.keys(), aligned_input_series
         ):
             data[key] = aligned_series
-        return data, index, value_lengths.pop()
+        return data, aligned_series.index
 
     # The `constructor*` properties are used by `dask` (and `dask_cudf`)
     @property
@@ -5448,7 +5482,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @classmethod
     @_cudf_nvtx_annotate
-    def _from_arrays(cls, data, nan_as_null=False) -> dict[int, ColumnBase]:
+    def _from_arrays(
+        cls, data, columns, nan_as_null=False
+    ) -> dict[Any, ColumnBase]:
         """Convert a numpy/cupy array to a dict of columns.
 
         Parameters
@@ -5471,9 +5507,19 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if data.ndim == 1:
             data = data.reshape(1, len(data))
+
+        if columns is not None:
+            if len(columns) != data.shape[1]:
+                raise ValueError(
+                    f"columns length expected {data.shape[1]} but "
+                    f"found {len(columns)}"
+                )
+            columns_labels = columns
+        else:
+            columns_labels = range(data.shape[1])
         return {
-            i: column.as_column(data[:, i], nan_as_null=nan_as_null)
-            for i in range(data.shape[1])
+            column_label: column.as_column(data[:, i], nan_as_null=nan_as_null)
+            for column_label, i in zip(columns_labels, range(data.shape[1]))
         }
 
     @_cudf_nvtx_annotate
