@@ -259,13 +259,13 @@ def test_categorical_categories():
         {"a": ["a", "b", "c", "d", "e", "e", "a", "d"], "b": range(8)}
     )
     df["a"] = df["a"].astype("category")
-    pdf = df.to_pandas(nullable_pd_dtype=False)
+    pdf = df.to_pandas(nullable=False)
 
     ddf = dgd.from_cudf(df, 2)
     dpdf = dd.from_pandas(pdf, 2)
 
     dd.assert_eq(
-        ddf.a.cat.categories.to_series().to_pandas(nullable_pd_dtype=False),
+        ddf.a.cat.categories.to_series().to_pandas(nullable=False),
         dpdf.a.cat.categories.to_series(),
         check_index=False,
     )
