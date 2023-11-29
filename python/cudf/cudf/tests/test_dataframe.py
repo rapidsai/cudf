@@ -25,8 +25,10 @@ from cudf.core._compat import (
     PANDAS_GE_134,
     PANDAS_GE_150,
     PANDAS_GE_200,
+    PANDAS_GE_210,
     PANDAS_LT_140,
 )
+from cudf.api.extensions import no_default
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
 from cudf.testing import _utils as utils
@@ -9896,13 +9898,20 @@ def test_dataframe_rename_duplicate_column():
     ],
 )
 @pytest.mark.parametrize("periods", [-5, -2, 0, 2, 5])
-@pytest.mark.parametrize("fill_method", ["ffill", "bfill", "pad", "backfill"])
+@pytest.mark.parametrize(
+    "fill_method", ["ffill", "bfill", "pad", "backfill", no_default]
+)
 def test_dataframe_pct_change(data, periods, fill_method):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
-    actual = gdf.pct_change(periods=periods, fill_method=fill_method)
-    expected = pdf.pct_change(periods=periods, fill_method=fill_method)
+    with expect_warning_if(fill_method is not no_default):
+        actual = gdf.pct_change(periods=periods, fill_method=fill_method)
+    with expect_warning_if(
+        PANDAS_GE_210
+        and (fill_method is not no_default or pdf.isna().any().any())
+    ):
+        expected = pdf.pct_change(periods=periods, fill_method=fill_method)
 
     assert_eq(expected, actual)
 
