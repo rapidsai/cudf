@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 from functools import partial
 
@@ -359,3 +359,14 @@ def test_single_partition():
     m2 = dleft.merge(right, how="inner")
     assert len(m2.dask) < len(dleft.dask) * 3
     assert len(m2) == 100
+
+
+def test_issue_12773():
+    # https://github.com/rapidsai/cudf/issues/12773
+    df1 = cudf.DataFrame({"a": ["a", "b"], "b": [1, 2]})
+    df2 = cudf.DataFrame({"a": ["a", "c"], "b": [2, 3]})
+
+    ddf1 = dd.from_cudf(df1, npartitions=2).set_index("a")
+    ddf2 = dd.from_cudf(df2, npartitions=2).set_index("a")
+
+    ddf1.merge(ddf2, left_index=True, right_index=True, how="left").compute()
