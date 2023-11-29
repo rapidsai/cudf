@@ -201,7 +201,7 @@ cdef class GroupBy:
                 agg_obj = make_groupby_aggregation(agg)
                 if (valid_aggregations == "ALL"
                         or agg_obj.kind in valid_aggregations):
-                    included_aggregations_i.append(agg)
+                    included_aggregations_i.append((agg, agg_obj.kind))
                     c_agg_request.aggregations.push_back(
                         move(agg_obj.c_obj)
                     )
@@ -272,7 +272,7 @@ cdef class GroupBy:
                 agg_obj = make_groupby_scan_aggregation(agg)
                 if (valid_aggregations == "ALL"
                         or agg_obj.kind in valid_aggregations):
-                    included_aggregations_i.append(agg)
+                    included_aggregations_i.append((agg, agg_obj.kind))
                     c_agg_request.aggregations.push_back(
                         move(agg_obj.c_obj)
                     )

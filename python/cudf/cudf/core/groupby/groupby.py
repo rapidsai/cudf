@@ -22,7 +22,7 @@ from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
 from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
 from cudf.api.extensions import no_default
-from cudf.api.types import is_bool_dtype, is_list_like
+from cudf.api.types import is_bool_dtype, is_float_dtype, is_list_like
 from cudf.core.abc import Serializable
 from cudf.core.column.column import ColumnBase, arange, as_column
 from cudf.core.column_accessor import ColumnAccessor
@@ -30,7 +30,8 @@ from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
-from cudf.utils.utils import GetAttrGetItemMixin, _cudf_nvtx_annotate
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.utils import GetAttrGetItemMixin
 
 
 # The three functions below return the quantiles [25%, 50%, 75%]
@@ -427,6 +428,24 @@ class GroupBy(Serializable, Reducible, Scannable):
         if not axis == 0:
             raise NotImplementedError("Only axis=0 is supported.")
 
+        if na_option not in {"keep", "top", "bottom"}:
+            raise ValueError(
+                f"na_option must be one of 'keep', 'top', or 'bottom', "
+                f"but got {na_option}"
+            )
+
+        # TODO: in pandas compatibility mode, we should convert any
+        # NaNs to nulls in any float value columns, as Pandas
+        # treats NaNs the way we treat nulls.
+        if cudf.get_option("mode.pandas_compatible"):
+            if any(
+                is_float_dtype(typ)
+                for typ in self.grouping.values._dtypes.values()
+            ):
+                raise NotImplementedError(
+                    "NaNs are not supported in groupby.rank."
+                )
+
         def rank(x):
             return getattr(x, "rank")(
                 method=method,
@@ -435,7 +454,13 @@ class GroupBy(Serializable, Reducible, Scannable):
                 pct=pct,
             )
 
-        return self.agg(rank)
+        result = self.agg(rank)
+
+        if cudf.get_option("mode.pandas_compatible"):
+            # pandas always returns floats:
+            return result.astype("float64")
+
+        return result
 
     @cached_property
     def _groupby(self):
@@ -557,7 +582,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             result_columns,
             orig_dtypes,
         ):
-            for agg, col in zip(aggs, cols):
+            for agg_tuple, col in zip(aggs, cols):
+                agg, agg_kind = agg_tuple
                 agg_name = agg.__name__ if callable(agg) else agg
                 if multilevel:
                     key = (col_name, agg_name)
@@ -587,6 +613,8 @@ class GroupBy(Serializable, Reducible, Scannable):
                     )
                 ):
                     data[key] = col.astype(orig_dtype)
+                elif agg_kind in {"COUNT", "SIZE"}:
+                    data[key] = col.astype("int64")
                 else:
                     data[key] = col
         data = ColumnAccessor(data, multiindex=multilevel)
@@ -2184,6 +2212,14 @@ class GroupBy(Serializable, Reducible, Scannable):
         if method is not None:
             if method not in {"ffill", "bfill"}:
                 raise ValueError("Method can only be of 'ffill', 'bfill'.")
+            # Do not remove until pandas 3.0 support is added.
+            warnings.warn(
+                f"{type(self).__name__}.fillna with 'method' is "
+                "deprecated and will raise in a future version. "
+                "Use obj.ffill() or obj.bfill() instead.",
+                FutureWarning,
+            )
+
             return getattr(self, method, limit)()
 
         values = self.obj.__class__._from_data(
@@ -2313,7 +2349,10 @@ class GroupBy(Serializable, Reducible, Scannable):
         if limit is no_default:
             limit = None
 
-        filled = self.fillna(method=fill_method, limit=limit)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            filled = self.fillna(method=fill_method, limit=limit)
+
         fill_grp = filled.groupby(self.grouping)
         shifted = fill_grp.shift(periods=periods, freq=freq)
         return (filled / shifted) - 1

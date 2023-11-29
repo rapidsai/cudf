@@ -11,8 +11,8 @@
 project = "dask-cudf"
 copyright = "2018-2023, NVIDIA Corporation"
 author = "NVIDIA Corporation"
-version = '23.10'
-release = '23.10.00'
+version = '23.12'
+release = '23.12.00'
 
 language = "en"
 
@@ -57,6 +57,7 @@ html_theme_options = {
     "twitter_url": "https://twitter.com/rapidsai",
     "show_toc_level": 1,
     "navbar_align": "right",
+    "navigation_with_keys": True,
 }
 include_pandas_compat = True
 

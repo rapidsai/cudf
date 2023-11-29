@@ -1,6 +1,6 @@
 # Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
-{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
+{% set version = environ['RAPIDS_PACKAGE_VERSION'].lstrip('v') %}
 {% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set py_version = environ['CONDA_PY'] %}
 {% set cuda_version = '.'.join(environ['RAPIDS_CUDA_VERSION'].split('.')[:2]) %}
@@ -12,7 +12,7 @@ package:
   version: {{ version }}
 
 source:
-  git_url: ../../..
+  path: ../../..
 
 build:
   number: {{ GIT_DESCRIBE_NUMBER }}
@@ -55,13 +55,13 @@ requirements:
     - cuda-version ={{ cuda_version }}
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
-    - protobuf ==4.21.*
+    - protobuf ==4.24.*
     - python
     - cython >=3.0.0
     - scikit-build >=0.13.1
     - setuptools
     - dlpack >=0.5,<0.6.0a0
-    - pyarrow =12
+    - pyarrow ==14.0.1.*
     - libcudf ={{ version }}
     - rmm ={{ minor_version }}
     {% if cuda_major == "11" %}
@@ -82,7 +82,7 @@ requirements:
     - numba >=0.57,<0.58
     # TODO: Pin to numpy<1.25 until cudf requires pandas 2
     - numpy >=1.21,<1.25
-    - {{ pin_compatible('pyarrow', max_pin='x.x.x') }}
+    - {{ pin_compatible('pyarrow', max_pin='x') }}
     - libcudf ={{ version }}
     - {{ pin_compatible('rmm', max_pin='x.x') }}
     - fsspec >=0.6.0
@@ -103,6 +103,7 @@ requirements:
     - nvtx >=0.2.1
     - packaging
     - cachetools
+    - rich
 
 test:
   requires:

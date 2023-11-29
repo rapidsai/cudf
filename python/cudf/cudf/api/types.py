@@ -469,6 +469,18 @@ def is_datetime64tz_dtype(obj):
     return _is_datetime64tz_dtype(obj)
 
 
+def _is_pandas_nullable_extension_dtype(dtype_to_check):
+    if isinstance(
+        dtype_to_check, pd.api.extensions.ExtensionDtype
+    ) and not isinstance(dtype_to_check, pd.core.dtypes.dtypes.PandasDtype):
+        if isinstance(dtype_to_check, pd.CategoricalDtype):
+            return _is_pandas_nullable_extension_dtype(
+                dtype_to_check.categories.dtype
+            )
+        return True
+    return False
+
+
 # TODO: The below alias is removed for now since improving cudf categorical
 # support is ongoing and we don't want to introduce any ambiguities. The above
 # method _union_categoricals will take its place once exposed.

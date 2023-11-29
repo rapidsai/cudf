@@ -69,7 +69,8 @@ from cudf.core.udf.utils import (
 )
 from cudf.utils import docutils
 from cudf.utils._numba import _CUDFNumbaConfig
-from cudf.utils.utils import _cudf_nvtx_annotate, _warn_no_dask_cudf
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.utils import _warn_no_dask_cudf
 
 doc_reset_index_template = """
         Reset the index of the {klass}, or a level of it.
@@ -2148,6 +2149,14 @@ class IndexedFrame(Frame):
     def fillna(
         self, value=None, method=None, axis=None, inplace=False, limit=None
     ):  # noqa: D102
+        if method is not None:
+            # Do not remove until pandas 3.0 support is added.
+            warnings.warn(
+                f"{type(self).__name__}.fillna with 'method' is "
+                "deprecated and will raise in a future version. "
+                "Use obj.ffill() or obj.bfill() instead.",
+                FutureWarning,
+            )
         old_index = self._index
         ret = super().fillna(value, method, axis, inplace, limit)
         if inplace:
@@ -5349,7 +5358,7 @@ def _drop_rows_by_labels(
     if not isinstance(labels, cudf.core.single_column_frame.SingleColumnFrame):
         labels = as_column(labels)
 
-    if isinstance(obj._index, cudf.MultiIndex):
+    if isinstance(obj.index, cudf.MultiIndex):
         if level is None:
             level = 0
 
@@ -5403,13 +5412,22 @@ def _drop_rows_by_labels(
         if errors == "raise" and not labels.isin(obj.index).all():
             raise KeyError("One or more values not found in axis")
 
-        key_df = cudf.DataFrame(index=labels)
+        key_df = cudf.DataFrame._from_data(
+            data={},
+            index=cudf.Index(
+                labels, name=getattr(labels, "name", obj.index.name)
+            ),
+        )
         if isinstance(obj, cudf.DataFrame):
-            return obj.join(key_df, how="leftanti")
+            res = obj.join(key_df, how="leftanti")
         else:
             res = obj.to_frame(name="tmp").join(key_df, how="leftanti")["tmp"]
             res.name = obj.name
-            return res
+        # Join changes the index to common type,
+        # but we need to preserve the type of
+        # index being returned, Hence this type-cast.
+        res._index = res.index.astype(obj.index.dtype)
+        return res
 
 
 def _is_same_dtype(lhs_dtype, rhs_dtype):

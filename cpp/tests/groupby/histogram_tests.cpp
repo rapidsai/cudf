@@ -67,6 +67,7 @@ auto groupby_histogram(cudf::column_view const& keys,
   auto sorted_histograms = cudf::lists::sort_lists(cudf::lists_column_view{*sorted_vals},
                                                    cudf::order::ASCENDING,
                                                    cudf::null_order::BEFORE,
+                                                   cudf::get_default_stream(),
                                                    rmm::mr::get_current_device_resource());
 
   return std::pair{std::move(sorted_keys), std::move(sorted_histograms)};

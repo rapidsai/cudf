@@ -31,11 +31,13 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/atomic>
+
 #include <cuda_runtime.h>
 
 #include <vector>
 
-namespace cudf::io::parquet {
+namespace cudf::io::parquet::detail {
 
 using cudf::io::detail::string_index_pair;
 
@@ -52,6 +54,30 @@ template <int rolling_size>
 constexpr int rolling_index(int index)
 {
   return index % rolling_size;
+}
+
+// see setupLocalPageInfo() in page_decode.cuh for supported page encodings
+constexpr bool is_supported_encoding(Encoding enc)
+{
+  switch (enc) {
+    case Encoding::PLAIN:
+    case Encoding::PLAIN_DICTIONARY:
+    case Encoding::RLE:
+    case Encoding::RLE_DICTIONARY:
+    case Encoding::DELTA_BINARY_PACKED: return true;
+    default: return false;
+  }
+}
+
+/**
+ * @brief Atomically OR `error` into `error_code`.
+ */
+constexpr void set_error(int32_t error, int32_t* error_code)
+{
+  if (error != 0) {
+    cuda::atomic_ref<int32_t, cuda::thread_scope_device> ref{*error_code};
+    ref.fetch_or(error, cuda::std::memory_order_relaxed);
+  }
 }
 
 /**
@@ -88,7 +114,36 @@ struct input_column_info {
   auto nesting_depth() const { return nesting.size(); }
 };
 
-namespace gpu {
+// The delta encodings use ULEB128 integers, but parquet only uses max 64 bits.
+using uleb128_t   = uint64_t;
+using zigzag128_t = int64_t;
+
+// this is in C++23
+#if !defined(__cpp_lib_is_scoped_enum)
+template <typename Enum, bool = std::is_enum_v<Enum>>
+struct is_scoped_enum {
+  static const bool value = not std::is_convertible_v<Enum, std::underlying_type_t<Enum>>;
+};
+
+template <typename Enum>
+struct is_scoped_enum<Enum, false> {
+  static const bool value = false;
+};
+#else
+using std::is_scoped_enum;
+#endif
+
+// helpers to do bit operations on scoped enums
+template <class T1,
+          class T2,
+          typename std::enable_if_t<(is_scoped_enum<T1>::value and std::is_same_v<T1, T2>) or
+                                    (is_scoped_enum<T1>::value and std::is_same_v<uint32_t, T2>) or
+                                    (is_scoped_enum<T2>::value and std::is_same_v<uint32_t, T1>)>* =
+            nullptr>
+constexpr uint32_t BitAnd(T1 a, T2 b)
+{
+  return static_cast<uint32_t>(a) & static_cast<uint32_t>(b);
+}
 
 /**
  * @brief Enums for the flags in the page header
@@ -258,7 +313,7 @@ struct ColumnChunkDesc {
                            uint8_t rep_level_bits_,
                            int8_t codec_,
                            int8_t converted_type_,
-                           LogicalType logical_type_,
+                           thrust::optional<LogicalType> logical_type_,
                            int8_t decimal_precision_,
                            int32_t ts_clock_rate_,
                            int32_t src_col_index_,
@@ -300,97 +355,24 @@ struct ColumnChunkDesc {
   uint16_t data_type{};  // basic column data type, ((type_length << 3) |
                          // parquet::Type)
   uint8_t
-    level_bits[level_type::NUM_LEVEL_TYPES]{};  // bits to encode max definition/repetition levels
-  int32_t num_data_pages{};                     // number of data pages
-  int32_t num_dict_pages{};                     // number of dictionary pages
-  int32_t max_num_pages{};                      // size of page_info array
-  PageInfo* page_info{};                        // output page info for up to num_dict_pages +
-                                                // num_data_pages (dictionary pages first)
-  string_index_pair* str_dict_index{};          // index for string dictionary
-  bitmask_type** valid_map_base{};              // base pointers of valid bit map for this column
-  void** column_data_base{};                    // base pointers of column data
-  void** column_string_base{};                  // base pointers of column string data
-  int8_t codec{};                               // compressed codec enum
-  int8_t converted_type{};                      // converted type enum
-  LogicalType logical_type{};                   // logical type
-  int8_t decimal_precision{};                   // Decimal precision
+    level_bits[level_type::NUM_LEVEL_TYPES]{};   // bits to encode max definition/repetition levels
+  int32_t num_data_pages{};                      // number of data pages
+  int32_t num_dict_pages{};                      // number of dictionary pages
+  int32_t max_num_pages{};                       // size of page_info array
+  PageInfo* page_info{};                         // output page info for up to num_dict_pages +
+                                                 // num_data_pages (dictionary pages first)
+  string_index_pair* str_dict_index{};           // index for string dictionary
+  bitmask_type** valid_map_base{};               // base pointers of valid bit map for this column
+  void** column_data_base{};                     // base pointers of column data
+  void** column_string_base{};                   // base pointers of column string data
+  int8_t codec{};                                // compressed codec enum
+  int8_t converted_type{};                       // converted type enum
+  thrust::optional<LogicalType> logical_type{};  // logical type
+  int8_t decimal_precision{};                    // Decimal precision
   int32_t ts_clock_rate{};  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 
   int32_t src_col_index{};   // my input column index
   int32_t src_col_schema{};  // my schema index in the file
-};
-
-/**
- * @brief The row_group_info class
- */
-struct row_group_info {
-  size_type index;  // row group index within a file. aggregate_reader_metadata::get_row_group() is
-                    // called with index and source_index
-  size_t start_row;
-  size_type source_index;  // file index.
-
-  row_group_info() = default;
-
-  row_group_info(size_type index, size_t start_row, size_type source_index)
-    : index{index}, start_row{start_row}, source_index{source_index}
-  {
-  }
-};
-
-/**
- * @brief Struct to store file-level data that remains constant for
- * all passes/chunks for the file.
- */
-struct file_intermediate_data {
-  // all row groups to read
-  std::vector<row_group_info> row_groups{};
-
-  // all chunks from the selected row groups. We may end up reading these chunks progressively
-  // instead of all at once
-  std::vector<gpu::ColumnChunkDesc> chunks{};
-
-  // skip_rows/num_rows values for the entire file. these need to be adjusted per-pass because we
-  // may not be visiting every row group that contains these bounds
-  size_t global_skip_rows;
-  size_t global_num_rows;
-};
-
-/**
- * @brief Structs to identify the reading row range for each chunk of rows in chunked reading.
- */
-struct chunk_read_info {
-  size_t skip_rows;
-  size_t num_rows;
-};
-
-/**
- * @brief Struct to store pass-level data that remains constant for a single pass.
- */
-struct pass_intermediate_data {
-  std::vector<std::unique_ptr<datasource::buffer>> raw_page_data;
-  rmm::device_buffer decomp_page_data;
-
-  // rowgroup, chunk and page information for the current pass.
-  std::vector<row_group_info> row_groups{};
-  cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc> chunks{};
-  cudf::detail::hostdevice_vector<gpu::PageInfo> pages_info{};
-  cudf::detail::hostdevice_vector<gpu::PageNestingInfo> page_nesting_info{};
-  cudf::detail::hostdevice_vector<gpu::PageNestingDecodeInfo> page_nesting_decode_info{};
-
-  rmm::device_uvector<int32_t> page_keys{0, rmm::cuda_stream_default};
-  rmm::device_uvector<int32_t> page_index{0, rmm::cuda_stream_default};
-  rmm::device_uvector<string_index_pair> str_dict_index{0, rmm::cuda_stream_default};
-
-  std::vector<gpu::chunk_read_info> output_chunk_read_info;
-  std::size_t current_output_chunk{0};
-
-  rmm::device_buffer level_decode_data{};
-  int level_type_size{0};
-
-  // skip_rows and num_rows values for this particular pass. these may be adjusted values from the
-  // global values stored in file_intermediate_data.
-  size_t skip_rows;
-  size_t num_rows;
 };
 
 /**
@@ -445,6 +427,17 @@ constexpr uint32_t encoding_to_mask(Encoding encoding)
 {
   return 1 << static_cast<uint32_t>(encoding);
 }
+
+/**
+ * @brief Enum of mask bits for the EncPage kernel_mask
+ *
+ * Used to control which encode kernels to run.
+ */
+enum class encode_kernel_mask {
+  PLAIN        = (1 << 0),  // Run plain encoding kernel
+  DICTIONARY   = (1 << 1),  // Run dictionary encoding kernel
+  DELTA_BINARY = (1 << 2)   // Run DELTA_BINARY_PACKED encoding kernel
+};
 
 /**
  * @brief Struct describing an encoder column chunk
@@ -504,10 +497,11 @@ struct EncPage {
   uint32_t num_leaf_values;  //!< Values in page. Different from num_rows in case of nested types
   uint32_t num_values;  //!< Number of def/rep level values in page. Includes null/empty elements in
                         //!< non-leaf levels
-  uint32_t def_lvl_bytes;        //!< Number of bytes of encoded definition level data (V2 only)
-  uint32_t rep_lvl_bytes;        //!< Number of bytes of encoded repetition level data (V2 only)
-  compression_result* comp_res;  //!< Ptr to compression result
-  uint32_t num_nulls;            //!< Number of null values (V2 only) (down here for alignment)
+  uint32_t def_lvl_bytes;          //!< Number of bytes of encoded definition level data (V2 only)
+  uint32_t rep_lvl_bytes;          //!< Number of bytes of encoded repetition level data (V2 only)
+  compression_result* comp_res;    //!< Ptr to compression result
+  uint32_t num_nulls;              //!< Number of null values (V2 only) (down here for alignment)
+  encode_kernel_mask kernel_mask;  //!< Mask used to control which encoding kernels to run
 };
 
 /**
@@ -527,9 +521,13 @@ constexpr bool is_string_col(ColumnChunkDesc const& chunk)
  *
  * @param[in] chunks List of column chunks
  * @param[in] num_chunks Number of column chunks
+ * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
-void DecodePageHeaders(ColumnChunkDesc* chunks, int32_t num_chunks, rmm::cuda_stream_view stream);
+void DecodePageHeaders(ColumnChunkDesc* chunks,
+                       int32_t num_chunks,
+                       int32_t* error_code,
+                       rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for building the dictionary index for the column
@@ -739,7 +737,7 @@ void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_st
  * @param frags Column fragments
  * @param stream CUDA stream to use
  */
-void populate_chunk_hash_maps(cudf::detail::device_2dspan<gpu::PageFragment const> frags,
+void populate_chunk_hash_maps(cudf::detail::device_2dspan<PageFragment const> frags,
                               rmm::cuda_stream_view stream);
 
 /**
@@ -762,7 +760,7 @@ void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_vi
  * @param frags Column fragments
  * @param stream CUDA stream to use
  */
-void get_dictionary_indices(cudf::detail::device_2dspan<gpu::PageFragment const> frags,
+void get_dictionary_indices(cudf::detail::device_2dspan<PageFragment const> frags,
                             rmm::cuda_stream_view stream);
 
 /**
@@ -781,7 +779,7 @@ void get_dictionary_indices(cudf::detail::device_2dspan<gpu::PageFragment const>
  * @param[in] stream CUDA stream to use
  */
 void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                      device_span<gpu::EncPage> pages,
+                      device_span<EncPage> pages,
                       device_span<size_type> page_sizes,
                       device_span<size_type> comp_page_sizes,
                       device_span<parquet_column_device_view const> col_desc,
@@ -847,7 +845,7 @@ void EncodePageHeaders(device_span<EncPage> pages,
  * @param[in] stream CUDA stream to use
  */
 void GatherPages(device_span<EncColumnChunk> chunks,
-                 device_span<gpu::EncPage const> pages,
+                 device_span<EncPage const> pages,
                  rmm::cuda_stream_view stream);
 
 /**
@@ -863,5 +861,4 @@ void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,
                          int32_t column_index_truncate_length,
                          rmm::cuda_stream_view stream);
 
-}  // namespace gpu
-}  // namespace cudf::io::parquet
+}  // namespace cudf::io::parquet::detail

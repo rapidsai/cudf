@@ -131,6 +131,11 @@ def to_datetime(
             f"{['ignore', 'raise', 'coerce', 'warn']}, found: "
             f"{errors}"
         )
+    elif errors in {"ignore", "coerce"} and not is_scalar(arg):
+        raise NotImplementedError(
+            f"{errors=} is not implemented when arg is not scalar-like"
+        )
+
     if infer_datetime_format in {None, False}:
         warnings.warn(
             "`infer_datetime_format` is deprecated and will "

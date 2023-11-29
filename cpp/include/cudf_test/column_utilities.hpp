@@ -141,39 +141,6 @@ void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_byt
 void expect_column_empty(cudf::column_view const& col);
 
 /**
- * @brief Formats a column view as a string
- *
- * @param col The column view
- * @param delimiter The delimiter to put between strings
- */
-std::string to_string(cudf::column_view const& col, std::string const& delimiter);
-
-/**
- * @brief Formats a null mask as a string
- *
- * @param null_mask The null mask buffer
- * @param null_mask_size Size of the null mask (in rows)
- */
-std::string to_string(std::vector<bitmask_type> const& null_mask, size_type null_mask_size);
-
-/**
- * @brief Convert column values to a host vector of strings
- *
- * @param col The column view
- */
-std::vector<std::string> to_strings(cudf::column_view const& col);
-
-/**
- * @brief Print a column view to an ostream
- *
- * @param os        The output stream
- * @param col       The column view
- */
-void print(cudf::column_view const& col,
-           std::ostream& os             = std::cout,
-           std::string const& delimiter = ",");
-
-/**
  * @brief Copy the null bitmask from a column view to a host vector
  *
  * @param c      The column view

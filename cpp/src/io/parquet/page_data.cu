@@ -23,10 +23,7 @@
 #include <rmm/exec_policy.hpp>
 #include <thrust/reduce.h>
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace gpu {
+namespace cudf::io::parquet::detail {
 
 namespace {
 
@@ -602,10 +599,7 @@ __global__ void __launch_bounds__(decode_block_size)
     }
     __syncthreads();
   }
-  if (t == 0 and s->error != 0) {
-    cuda::atomic_ref<int32_t, cuda::thread_scope_device> ref{*error_code};
-    ref.fetch_or(s->error, cuda::std::memory_order_relaxed);
-  }
+  if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
 }
 
 struct mask_tform {
@@ -624,7 +618,7 @@ uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_vector<PageInfo>
 }
 
 /**
- * @copydoc cudf::io::parquet::gpu::DecodePageData
+ * @copydoc cudf::io::parquet::detail::DecodePageData
  */
 void __host__ DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
                              cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
@@ -648,7 +642,4 @@ void __host__ DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
   }
 }
 
-}  // namespace gpu
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

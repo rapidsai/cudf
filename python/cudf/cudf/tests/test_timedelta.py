@@ -1040,6 +1040,7 @@ def test_timedelta_index_properties(data, dtype, name):
         np.timedelta64(1, "ms"),
         np.timedelta64(1, "us"),
         np.timedelta64(1, "ns"),
+        "NaT",
     ],
 )
 def test_timedelta_fillna(data, dtype, fill_value):

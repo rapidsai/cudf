@@ -150,7 +150,8 @@ struct EncChunk {
   uint8_t dtype_len;                 // data type length
   int32_t scale;                     // scale for decimals or timestamps
 
-  uint32_t* dict_index;  // dictionary index from row index
+  uint32_t* dict_index;       // dictionary index from row index
+  uint32_t* dict_data_order;  // map from data to sorted data indices
   uint32_t* decimal_offsets;
   orc_column_device_view const* column;
 };
@@ -191,11 +192,12 @@ struct stripe_dictionary {
   size_type num_rows       = 0;      // number of rows in the stripe
 
   // output
-  device_span<uint32_t> data;     // index of elements in the column to include in the dictionary
-  device_span<uint32_t> index;    // index into the dictionary for each row in the column
-  size_type entry_count = 0;      // number of entries in the dictionary
-  size_type char_count  = 0;      // number of characters in the dictionary
-  bool is_enabled       = false;  // true if dictionary encoding is enabled for this stripe
+  device_span<uint32_t> data;        // index of elements in the column to include in the dictionary
+  device_span<uint32_t> index;       // index into the dictionary for each row in the column
+  device_span<uint32_t> data_order;  // map from data to sorted data indices
+  size_type entry_count = 0;         // number of entries in the dictionary
+  size_type char_count  = 0;         // number of characters in the dictionary
+  bool is_enabled       = false;     // true if dictionary encoding is enabled for this stripe
 };
 
 /**
@@ -423,6 +425,20 @@ void rowgroup_char_counts(device_2dspan<size_type> counts,
                           device_2dspan<rowgroup_rows const> rowgroup_bounds,
                           device_span<uint32_t const> str_col_indexes,
                           rmm::cuda_stream_view stream);
+
+/**
+ * @brief Converts sizes of decimal elements to offsets within the rowgroup.
+ *
+ * @note The conversion is done in-place. After the conversion, the device vectors in \p elem_sizes
+ * hold the offsets.
+ *
+ * @param rg_bounds Ranges of rows in each rowgroup [rowgroup][column]
+ * @param elem_sizes Map between column indexes and decimal element sizes
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
+void decimal_sizes_to_offsets(device_2dspan<rowgroup_rows const> rg_bounds,
+                              std::map<uint32_t, rmm::device_uvector<uint32_t>>& elem_sizes,
+                              rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernels to initialize statistics collection

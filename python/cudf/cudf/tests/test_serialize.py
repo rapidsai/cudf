@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_200
 from cudf.testing import _utils as utils
 from cudf.testing._utils import assert_eq
 
@@ -301,7 +302,12 @@ def test_serialize_string():
     "frames",
     [
         (cudf.Series([], dtype="str"), pd.Series([], dtype="str")),
-        (cudf.DataFrame([]), pd.DataFrame([])),
+        pytest.param(
+            (cudf.DataFrame([]), pd.DataFrame([])),
+            marks=pytest.mark.xfail(
+                not PANDAS_GE_200, reason=".column returns Index[object]"
+            ),
+        ),
         (cudf.DataFrame([1]).head(0), pd.DataFrame([1]).head(0)),
         (cudf.DataFrame({"a": []}), pd.DataFrame({"a": []})),
         (

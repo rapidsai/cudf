@@ -20,9 +20,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/lists/detail/scatter_helper.cuh>
 #include <cudf/lists/list_device_view.cuh>
-#include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -130,8 +130,8 @@ std::unique_ptr<column> scatter_impl(rmm::device_uvector<unbound_list_view> cons
   std::vector<std::unique_ptr<column>> children;
   children.emplace_back(std::move(offsets_column));
   children.emplace_back(std::move(child_column));
-  auto null_mask =
-    target.has_nulls() ? copy_bitmask(target, stream, mr) : rmm::device_buffer{0, stream, mr};
+  auto null_mask = target.has_nulls() ? cudf::detail::copy_bitmask(target, stream, mr)
+                                      : rmm::device_buffer{0, stream, mr};
 
   // The output column from this function only has null masks copied from the target columns.
   // That is still not a correct final null mask for the scatter result.

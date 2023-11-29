@@ -4,14 +4,7 @@ from cpython cimport pycapsule
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
-from pyarrow.lib cimport (
-    CScalar,
-    CTable,
-    pyarrow_unwrap_scalar,
-    pyarrow_unwrap_table,
-    pyarrow_wrap_scalar,
-    pyarrow_wrap_table,
-)
+from pyarrow.lib cimport CTable, pyarrow_unwrap_table, pyarrow_wrap_table
 
 from cudf._lib.cpp.interop cimport (
     DLManagedTensor,
@@ -21,22 +14,12 @@ from cudf._lib.cpp.interop cimport (
     to_arrow as cpp_to_arrow,
     to_dlpack as cpp_to_dlpack,
 )
-from cudf._lib.cpp.scalar.scalar cimport fixed_point_scalar, scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport type_id
-from cudf._lib.cpp.wrappers.decimals cimport (
-    decimal32,
-    decimal64,
-    decimal128,
-    scale_type,
-)
-from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 from cudf.api.types import is_list_dtype, is_struct_dtype
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype
 
 
 def from_dlpack(dlpack_capsule):
@@ -199,79 +182,3 @@ def from_arrow(object input_table):
         c_result = move(cpp_from_arrow(cpp_arrow_table.get()[0]))
 
     return columns_from_unique_ptr(move(c_result))
-
-
-@acquire_spill_lock()
-def to_arrow_scalar(DeviceScalar source_scalar):
-    """Convert a scalar to a PyArrow scalar.
-
-    Parameters
-    ----------
-    source_scalar : the scalar to convert
-
-    Returns
-    -------
-    pyarrow.lib.Scalar
-    """
-    cdef vector[column_metadata] cpp_metadata = gather_metadata(
-        [("", source_scalar.dtype)]
-    )
-    cdef const scalar* source_scalar_ptr = source_scalar.get_raw_ptr()
-
-    cdef shared_ptr[CScalar] cpp_arrow_scalar
-    with nogil:
-        cpp_arrow_scalar = cpp_to_arrow(
-            source_scalar_ptr[0], cpp_metadata[0]
-        )
-
-    return pyarrow_wrap_scalar(cpp_arrow_scalar)
-
-
-@acquire_spill_lock()
-def from_arrow_scalar(object input_scalar, output_dtype=None):
-    """Convert from PyArrow scalar to a cudf scalar.
-
-    Parameters
-    ----------
-    input_scalar : PyArrow scalar
-    output_dtype : output type to cast to, ignored except for decimals
-
-    Returns
-    -------
-    cudf._lib.DeviceScalar
-    """
-    cdef shared_ptr[CScalar] cpp_arrow_scalar = (
-        pyarrow_unwrap_scalar(input_scalar)
-    )
-    cdef unique_ptr[scalar] c_result
-
-    with nogil:
-        c_result = move(cpp_from_arrow(cpp_arrow_scalar.get()[0]))
-
-    cdef type_id ctype = c_result.get().type().id()
-    if ctype == type_id.DECIMAL128:
-        if output_dtype is None:
-            # Decimals must be cast to the cudf dtype of the right width
-            raise ValueError(
-                "Decimal scalars must be constructed with a dtype"
-            )
-
-        if isinstance(output_dtype, Decimal32Dtype):
-            c_result.reset(
-                new fixed_point_scalar[decimal32](
-                    (<fixed_point_scalar[decimal128]*> c_result.get()).value(),
-                    scale_type(-input_scalar.type.scale),
-                    c_result.get().is_valid()
-                )
-            )
-        elif isinstance(output_dtype, Decimal64Dtype):
-            c_result.reset(
-                new fixed_point_scalar[decimal64](
-                    (<fixed_point_scalar[decimal128]*> c_result.get()).value(),
-                    scale_type(-input_scalar.type.scale),
-                    c_result.get().is_valid()
-                )
-            )
-        # Decimal128Dtype is a no-op, no conversion needed.
-
-    return DeviceScalar.from_unique_ptr(move(c_result), output_dtype)

@@ -375,6 +375,14 @@ class user_datasource_wrapper : public datasource {
     return source->device_read(offset, size, stream);
   }
 
+  std::future<size_t> device_read_async(size_t offset,
+                                        size_t size,
+                                        uint8_t* dst,
+                                        rmm::cuda_stream_view stream) override
+  {
+    return source->device_read_async(offset, size, dst, stream);
+  }
+
   [[nodiscard]] size_t size() const override { return source->size(); }
 
  private:

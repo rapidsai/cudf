@@ -8,13 +8,19 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_134, PANDAS_GE_150, PANDAS_GE_200
+from cudf.core._compat import (
+    PANDAS_GE_134,
+    PANDAS_GE_150,
+    PANDAS_GE_200,
+    PANDAS_GE_210,
+)
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     INTEGER_TYPES,
     NUMERIC_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
 )
 
 
@@ -348,8 +354,10 @@ def test_fillna_method_numerical(data, container, data_dtype, method, inplace):
     # Explicitly using nans_as_nulls=True
     gdata = cudf.from_pandas(pdata, nan_as_null=True)
 
-    expected = pdata.fillna(method=method, inplace=inplace)
-    actual = gdata.fillna(method=method, inplace=inplace)
+    with expect_warning_if(PANDAS_GE_210):
+        expected = pdata.fillna(method=method, inplace=inplace)
+    with pytest.warns(FutureWarning):
+        actual = gdata.fillna(method=method, inplace=inplace)
 
     if inplace:
         expected = pdata
@@ -665,8 +673,10 @@ def test_fillna_method_fixed_width_non_num(data, container, method, inplace):
     # Explicitly using nans_as_nulls=True
     gdata = cudf.from_pandas(pdata, nan_as_null=True)
 
-    expected = pdata.fillna(method=method, inplace=inplace)
-    actual = gdata.fillna(method=method, inplace=inplace)
+    with expect_warning_if(PANDAS_GE_210):
+        expected = pdata.fillna(method=method, inplace=inplace)
+    with pytest.warns(FutureWarning):
+        actual = gdata.fillna(method=method, inplace=inplace)
 
     if inplace:
         expected = pdata

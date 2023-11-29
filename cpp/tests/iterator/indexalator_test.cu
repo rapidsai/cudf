@@ -20,9 +20,13 @@
 
 #include <cudf/detail/indexalator.cuh>
 
+#include <thrust/binary_search.h>
+#include <thrust/gather.h>
 #include <thrust/host_vector.h>
 #include <thrust/optional.h>
 #include <thrust/pair.h>
+#include <thrust/scatter.h>
+#include <thrust/sequence.h>
 
 using TestingTypes = cudf::test::IntegralTypesNotBool;
 
@@ -93,4 +97,100 @@ TYPED_TEST(IndexalatorTest, optional_iterator)
 
   auto it_dev = cudf::detail::indexalator_factory::make_input_optional_iterator(d_col);
   this->iterator_test_thrust(expected_values, it_dev, host_values.size());
+}
+
+template <typename Integer>
+struct transform_fn {
+  __device__ cudf::size_type operator()(Integer v)
+  {
+    return static_cast<cudf::size_type>(v) + static_cast<cudf::size_type>(v);
+  }
+};
+
+TYPED_TEST(IndexalatorTest, output_iterator)
+{
+  using T = TypeParam;
+
+  auto d_col1 =
+    cudf::test::fixed_width_column_wrapper<T, int32_t>({0, 6, 7, 14, 23, 33, 43, 45, 63});
+  auto d_col2 =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 0, 0, 0, 0, 0, 0, 0, 0});
+  auto itr    = cudf::detail::indexalator_factory::make_output_iterator(d_col2);
+  auto input  = cudf::column_view(d_col1);
+  auto stream = cudf::get_default_stream();
+
+  auto map   = cudf::test::fixed_width_column_wrapper<int>({0, 2, 4, 6, 8, 1, 3, 5, 7});
+  auto d_map = cudf::column_view(map);
+  thrust::gather(
+    rmm::exec_policy_nosync(stream), d_map.begin<int>(), d_map.end<int>(), input.begin<T>(), itr);
+  auto expected =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 7, 23, 43, 63, 6, 14, 33, 45});
+  thrust::scatter(
+    rmm::exec_policy_nosync(stream), input.begin<T>(), input.end<T>(), d_map.begin<int>(), itr);
+  expected =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 33, 6, 43, 7, 45, 14, 63, 23});
+
+  thrust::transform(
+    rmm::exec_policy(stream), input.begin<T>(), input.end<T>(), itr, transform_fn<T>{});
+  expected =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 12, 14, 28, 46, 66, 86, 90, 126});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(d_col2, expected);
+
+  thrust::fill(rmm::exec_policy(stream), itr, itr + input.size(), 77);
+  expected =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>({77, 77, 77, 77, 77, 77, 77, 77, 77});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(d_col2, expected);
+
+  thrust::sequence(rmm::exec_policy(stream), itr, itr + input.size());
+  expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 1, 2, 3, 4, 5, 6, 7, 8});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(d_col2, expected);
+
+  auto indices =
+    cudf::test::fixed_width_column_wrapper<T, int32_t>({0, 10, 20, 30, 40, 50, 60, 70, 80});
+  auto d_indices = cudf::column_view(indices);
+  thrust::lower_bound(rmm::exec_policy(stream),
+                      d_indices.begin<T>(),
+                      d_indices.end<T>(),
+                      input.begin<T>(),
+                      input.end<T>(),
+                      itr);
+  expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 1, 1, 2, 3, 4, 5, 5, 7});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(d_col2, expected);
+}
+
+/**
+ * For testing creating and using the indexalator in device code.
+ */
+struct device_functor_fn {
+  cudf::column_device_view const d_col;
+  __device__ cudf::size_type operator()(cudf::size_type idx)
+  {
+    auto itr = cudf::detail::input_indexalator(d_col.head(), d_col.type());
+    return itr[idx] * 3;
+  }
+};
+
+TYPED_TEST(IndexalatorTest, device_indexalator)
+{
+  using T = TypeParam;
+
+  auto d_col1 =
+    cudf::test::fixed_width_column_wrapper<T, int32_t>({0, 6, 7, 14, 23, 33, 43, 45, 63});
+  auto d_col2 =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 0, 0, 0, 0, 0, 0, 0, 0});
+  auto input  = cudf::column_view(d_col1);
+  auto output = cudf::mutable_column_view(d_col2);
+  auto stream = cudf::get_default_stream();
+
+  auto d_input = cudf::column_device_view::create(input, stream);
+
+  thrust::transform(rmm::exec_policy(stream),
+                    thrust::counting_iterator<int>(0),
+                    thrust::counting_iterator<int>(input.size()),
+                    output.begin<cudf::size_type>(),
+                    device_functor_fn{*d_input});
+
+  auto expected =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 18, 21, 42, 69, 99, 129, 135, 189});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(d_col2, expected);
 }
