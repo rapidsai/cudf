@@ -671,7 +671,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if columns is not None:
             columns = as_index(columns)
-            if columns.nunique() != len(columns):
+            if not isinstance(
+                columns, MultiIndex
+            ) and columns.nunique() != len(columns):
                 raise ValueError("Columns cannot contain duplicate values")
             columns = columns.to_pandas()
             col_is_rangeindex = isinstance(columns, pd.RangeIndex)
@@ -748,7 +750,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 col_dict = self._from_arrays(
                     data, columns=columns, nan_as_null=nan_as_null
                 )
-            index, index_from_data = RangeIndex(data.shape[0]), index
+            if index is None:
+                index = RangeIndex(arr_interface["shape"][0])
         elif hasattr(data, "__array_interface__"):
             arr_interface = data.__array_interface__
             if len(arr_interface["descr"]) == 1:
@@ -760,7 +763,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 col_dict = self.from_records(
                     data, index=index, columns=columns
                 )._data
-            index, index_from_data = RangeIndex(data.shape[0]), index
+            if index is None:
+                index = RangeIndex(arr_interface["shape"][0])
         elif is_scalar(data):
             if index is None or columns is None:
                 raise ValueError(
@@ -1010,36 +1014,58 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def _init_from_dict_like(
         self, data: dict, index: None | cudf.Index, nan_as_null=None
     ) -> tuple[dict, cudf.Index]:
+        # 1) Align indexes of all data.values() that are Series/dicts
+        # 2) Convert all array-like data.values() to columns
+        # 3) Convert all remaining scalar data.values() to columns
         if not data:
             return data, cudf.RangeIndex(0)
-        data, index_from_data = self._align_input_series_indices(data)
+        data, index_from_data = self._align_input_series_indices(
+            data, nan_as_null=nan_as_null
+        )
 
         value_lengths = set()
+        result_index = None
         if index_from_data is not None:
             value_lengths.add(len(index_from_data))
+            result_index = index_from_data
+        elif index is not None:
+            result_index = index
 
         scalar_keys = []
         col_data = {}
-        for key, value in data:
+        for key, value in data.items():
             if is_scalar(value):
                 scalar_keys.append(key)
                 col_data[key] = value
             else:
-                value_lengths.add(len(value))
-                col_data[key] = as_column(value, nan_as_null=nan_as_null)
+                column = as_column(value, nan_as_null=nan_as_null)
+                value_lengths.add(len(column))
+                col_data[key] = column
 
         if len(scalar_keys) != len(data) and len(value_lengths) > 1:
             raise ValueError(
                 "Found varying value lengths when all values "
                 f"must have the same length: {value_lengths}"
             )
-        # TODO: If all scalars, use index length
+        elif len(scalar_keys) == len(data):
+            # All data.values() are scalars
+            if index is None:
+                raise ValueError(
+                    "If using all scalar values, you must pass an index"
+                )
+            scalar_length = len(index)
+        else:
+            scalar_length = value_lengths.pop()
 
-        col_data = {
-            key: as_column(value, nan_as_null=nan_as_null, length=value_length)
-            for key, value in data.items()
-        }
-        return col_data, index_from_data
+        for key in scalar_keys:
+            col_data[key] = as_column(
+                col_data[key], nan_as_null=nan_as_null, length=scalar_length
+            )
+
+        if result_index is None:
+            result_index = cudf.RangeIndex(scalar_length)
+
+        return col_data, result_index
 
     @classmethod
     def _from_data(
@@ -1056,11 +1082,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @staticmethod
     @_cudf_nvtx_annotate
     def _align_input_series_indices(
-        data: dict,
+        data: dict, nan_as_null=None
     ) -> tuple[dict, None | cudf.Index]:
-        """If data.values() contains Series/dicts, align their indexes before processing"""
         input_series = {
-            key: val
+            key: Series(val, nan_as_null=nan_as_null)
             for key, val in data.items()
             if isinstance(val, (pd.Series, Series, dict))
         }
@@ -6408,11 +6433,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             inclusion = set()
         # remove all exclude types
         inclusion = inclusion - exclude_subtypes
-
-        for k, col in self._data.items():
-            infered_type = cudf_dtype_from_pydata_dtype(col.dtype)
-            if infered_type in inclusion:
-                df._insert(len(df._data), k, col)
+        if inclusion:
+            for k, col in self._data.items():
+                infered_type = cudf_dtype_from_pydata_dtype(col.dtype)
+                if infered_type in inclusion:
+                    df._insert(len(df._data), k, col)
+        else:
+            df.columns = df.columns[:0]
 
         return df
 

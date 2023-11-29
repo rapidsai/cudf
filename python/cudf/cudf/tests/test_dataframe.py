@@ -1581,7 +1581,15 @@ def test_concat_empty_dataframe(df_1, df_2):
     # ignoring dtypes as pandas upcasts int to float
     # on concatenation with empty dataframes
 
-    assert_eq(got, expect, check_dtype=False, check_index_type=True)
+    # pandas>=2.0 has RangeIndex columns (matching cudf)
+    # pandas<=1.5 returns Index[object] columns
+    assert_eq(
+        got,
+        expect,
+        check_dtype=False,
+        check_index_type=True,
+        check_column_type=PANDAS_GE_200,
+    )
 
 
 @pytest.mark.parametrize(
