@@ -314,6 +314,10 @@ def on_missing_reference(app, env, node, contnode):
         # TODO: This should be possible to crosslink by adding the dlpack
         # Sphinx docs to the inventory.
         "DLManagedTensor",
+        # TODO: This type is currently defined in a detail header but it's in
+        # the public namespace. However, it's used in the detail header, so it
+        # needs to be put into a public header that can be shared.
+        "char_utf8",
     ]
     if (
         node["refdomain"] == "cpp"
