@@ -237,7 +237,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - fmt>=9.1.0,<10
+          - fmt>=10.1.1,<11
           - &gbench benchmark==1.8.0
           - &gtest gtest>=1.13.0
           - &gmock gmock>=1.13.0
@@ -246,7 +246,7 @@ dependencies:
           - librdkafka>=1.9.0,<1.10.0a0
           # Align nvcomp version with rapids-cmake
           - nvcomp==3.0.4
-          - spdlog>=1.11.0,<1.12
+          - spdlog>=1.12.0,<1.13
   build_wheels:
     common:
       - output_types: [requirements, pyproject]
