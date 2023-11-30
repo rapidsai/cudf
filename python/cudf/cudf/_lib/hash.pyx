@@ -49,19 +49,10 @@ def hash(list source_columns, str method, int seed=0):
             c_result = move(murmurhash3_x86_32(c_source_view, seed))
     elif method == "md5":
         with nogil:
-            c_result = move(md5(c_source_view, seed))
+            c_result = move(md5(c_source_view))
     elif method == "xxhash_64":
         with nogil:
             c_result = move(xxhash_64(c_source_view, seed))
     else:
         raise ValueError(f"Unsupported hash function: {method}")
-    with nogil:
-        c_result = move(
-            cpp_hash(
-                c_source_view,
-                c_hash_function,
-                seed
-            )
-        )
-
     return Column.from_unique_ptr(move(c_result))
