@@ -285,7 +285,7 @@ def on_missing_reference(app, env, node, contnode):
         "thrust",
         "cuda",
         "arrow",
-        # # Unknown types
+        # Unknown types
         "int8_t",
         "int16_t",
         "int32_t",
@@ -311,6 +311,9 @@ def on_missing_reference(app, env, node, contnode):
         # Unsupported by Breathe
         # https://github.com/breathe-doc/breathe/issues/355
         "deprecated",
+        # TODO: This should be possible to crosslink by adding the dlpack
+        # Sphinx docs to the inventory.
+        "DLManagedTensor",
     ]
     if (
         node["refdomain"] == "cpp"
