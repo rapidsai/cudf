@@ -308,7 +308,7 @@ __global__ void __launch_bounds__(96)
                        device_span<ColumnChunkDesc const> chunks,
                        size_t min_row,
                        size_t num_rows,
-                       int32_t* error_code)
+                       kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
   __shared__ __align__(16) delta_binary_decoder db_state;
@@ -346,7 +346,8 @@ __global__ void __launch_bounds__(96)
 
   auto const batch_size = db->values_per_mb;
   if (batch_size > max_delta_mini_block_size) {
-    set_error(static_cast<int32_t>(decode_error::DELTA_PARAMS_UNSUPPORTED), error_code);
+    set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
+              error_code);
     return;
   }
 
@@ -428,7 +429,7 @@ __global__ void __launch_bounds__(decode_block_size)
                           device_span<ColumnChunkDesc const> chunks,
                           size_t min_row,
                           size_t num_rows,
-                          int32_t* error_code)
+                          kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
   __shared__ __align__(16) delta_byte_array_decoder db_state;
@@ -475,7 +476,8 @@ __global__ void __launch_bounds__(decode_block_size)
   if (prefix_db->values_per_mb != suffix_db->values_per_mb or
       prefix_db->block_size != suffix_db->block_size or
       prefix_db->value_count != suffix_db->value_count) {
-    set_error(static_cast<int32_t>(decode_error::DELTA_PARAM_MISMATCH), error_code);
+    set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAM_MISMATCH),
+              error_code);
     return;
   }
 
@@ -485,7 +487,8 @@ __global__ void __launch_bounds__(decode_block_size)
 
   auto const batch_size = prefix_db->values_per_mb;
   if (batch_size > max_delta_mini_block_size) {
-    set_error(static_cast<int32_t>(decode_error::DELTA_PARAMS_UNSUPPORTED), error_code);
+    set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
+              error_code);
     return;
   }
 
@@ -567,10 +570,7 @@ __global__ void __launch_bounds__(decode_block_size)
   auto const offptr = reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out);
   block_excl_sum<decode_block_size>(offptr, value_count, s->page.str_offset);
 
-  if (t == 0 and s->error != 0) {
-    cuda::atomic_ref<int32_t, cuda::thread_scope_device> ref{*error_code};
-    ref.fetch_or(s->error, cuda::std::memory_order_relaxed);
-  }
+  if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
 }
 
 }  // anonymous namespace
@@ -583,7 +583,7 @@ void __host__ DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages
                                 size_t num_rows,
                                 size_t min_row,
                                 int level_type_size,
-                                int32_t* error_code,
+                                kernel_error::pointer error_code,
                                 rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
@@ -608,7 +608,7 @@ void __host__ DecodeDeltaByteArray(cudf::detail::hostdevice_vector<PageInfo>& pa
                                    size_t num_rows,
                                    size_t min_row,
                                    int level_type_size,
-                                   int32_t* error_code,
+                                   kernel_error::pointer error_code,
                                    rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
