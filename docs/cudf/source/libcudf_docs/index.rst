@@ -110,6 +110,7 @@ libcudf documentation
    labeling_apis
    label_bins
    expressions
+   md_regex
 
 
 Indices and tables

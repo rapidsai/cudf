@@ -305,8 +305,6 @@ def on_missing_reference(app, env, node, contnode):
         "detail", # TODO: Look into why so many public APIs link to things in detail
         # Template types
         "Radix",
-        # Extra pages that don't exist in Sphinx (yet)
-        "md_regex",
         # Unsupported by Breathe
         # https://github.com/breathe-doc/breathe/issues/355
         "deprecated",
