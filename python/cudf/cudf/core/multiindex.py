@@ -747,7 +747,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 )
             self_df = self.to_frame(index=False).reset_index()
             values_df = values_idx.to_frame(index=False)
-            idx = self_df.merge(values_df)._data["index"]
+            idx = self_df.merge(values_df, how="leftsemi")._data["index"]
             res = cudf.core.column.full(size=len(self), fill_value=False)
             res[idx] = True
             result = res.values
