@@ -366,7 +366,7 @@ def test_issue_12773():
     df1 = cudf.DataFrame({"a": ["a", "b"], "b": [1, 2]})
     df2 = cudf.DataFrame({"a": ["a", "c"], "b": [2, 3]})
 
-    ddf1 = dd.from_cudf(df1, npartitions=2).set_index("a")
-    ddf2 = dd.from_cudf(df2, npartitions=2).set_index("a")
+    ddf1 = dgd.from_cudf(df1, npartitions=2).set_index("a")
+    ddf2 = dgd.from_cudf(df2, npartitions=2).set_index("a")
 
     ddf1.merge(ddf2, left_index=True, right_index=True, how="left").compute()
