@@ -1,6 +1,7 @@
 # Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import array as arr
+import contextlib
 import datetime
 import decimal
 import io
@@ -1392,42 +1393,39 @@ def test_assign_callable(mapping):
 @pytest.mark.parametrize("method", ["murmur3", "md5", "xxhash64"])
 @pytest.mark.parametrize("seed", [None, 42])
 def test_dataframe_hash_values(nrows, method, seed):
+    warning_expected = seed is not None and method not in {
+        "murmur3",
+        "xxhash64",
+    }
+    potential_warning = (
+        pytest.warns(UserWarning, match="Provided seed value has no effect*")
+        if warning_expected
+        else contextlib.nullcontext()
+    )
+
     gdf = cudf.DataFrame()
     data = np.arange(nrows)
     data[0] = data[-1]  # make first and last the same
     gdf["a"] = data
     gdf["b"] = gdf.a + 100
-    out = gdf.hash_values(method=method, seed=seed)
+    with potential_warning:
+        out = gdf.hash_values(method=method, seed=seed)
     assert isinstance(out, cudf.Series)
     assert len(out) == nrows
     expected_dtypes = {
         "murmur3": np.uint32,
-        "md5": str,
+        "md5": object,
         "xxhash64": np.uint64,
     }
     assert out.dtype == expected_dtypes[method]
 
-    warning_expected = seed is not None and method not in {
-        "murmur3",
-        "xxhash64",
-    }
     # Check single column
-    if warning_expected:
-        with pytest.warns(
-            UserWarning, match="Provided seed value has no effect*"
-        ):
-            out_one = gdf[["a"]].hash_values(method=method, seed=seed)
-    else:
+    with potential_warning:
         out_one = gdf[["a"]].hash_values(method=method, seed=seed)
     # First matches last
     assert out_one.iloc[0] == out_one.iloc[-1]
     # Equivalent to the cudf.Series.hash_values()
-    if warning_expected:
-        with pytest.warns(
-            UserWarning, match="Provided seed value has no effect*"
-        ):
-            assert_eq(gdf["a"].hash_values(method=method, seed=seed), out_one)
-    else:
+    with potential_warning:
         assert_eq(gdf["a"].hash_values(method=method, seed=seed), out_one)
 
 

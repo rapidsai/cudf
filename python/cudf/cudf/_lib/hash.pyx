@@ -50,7 +50,7 @@ def hash(list source_columns, str method, int seed=0):
     elif method == "md5":
         with nogil:
             c_result = move(md5(c_source_view))
-    elif method == "xxhash_64":
+    elif method == "xxhash64":
         with nogil:
             c_result = move(xxhash_64(c_source_view, seed))
     else:
