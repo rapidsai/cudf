@@ -1389,7 +1389,7 @@ def test_assign_callable(mapping):
 
 
 @pytest.mark.parametrize("nrows", [1, 8, 100, 1000])
-@pytest.mark.parametrize("method", ["murmur3", "md5"])
+@pytest.mark.parametrize("method", ["murmur3", "md5", "xxhash64"])
 @pytest.mark.parametrize("seed", [None, 42])
 def test_dataframe_hash_values(nrows, method, seed):
     gdf = cudf.DataFrame()
@@ -1397,14 +1397,20 @@ def test_dataframe_hash_values(nrows, method, seed):
     data[0] = data[-1]  # make first and last the same
     gdf["a"] = data
     gdf["b"] = gdf.a + 100
-    out = gdf.hash_values()
+    out = gdf.hash_values(method=method, seed=seed)
     assert isinstance(out, cudf.Series)
     assert len(out) == nrows
-    assert out.dtype == np.uint32
+    expected_dtypes = {
+        "murmur3": np.uint32,
+        "md5": str,
+        "xxhash64": np.uint64,
+    }
+    assert out.dtype == expected_dtypes[method]
 
-    warning_expected = (
-        True if seed is not None and method not in {"murmur3"} else False
-    )
+    warning_expected = seed is not None and method not in {
+        "murmur3",
+        "xxhash64",
+    }
     # Check single column
     if warning_expected:
         with pytest.warns(
@@ -1425,7 +1431,7 @@ def test_dataframe_hash_values(nrows, method, seed):
         assert_eq(gdf["a"].hash_values(method=method, seed=seed), out_one)
 
 
-@pytest.mark.parametrize("method", ["murmur3"])
+@pytest.mark.parametrize("method", ["murmur3", "xxhash64"])
 def test_dataframe_hash_values_seed(method):
     gdf = cudf.DataFrame()
     data = np.arange(10)
