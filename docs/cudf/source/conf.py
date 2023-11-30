@@ -323,22 +323,24 @@ def on_missing_reference(app, env, node, contnode):
         # Try to find the target prefixed with e.g. namespaces in case that's
         # all that's missing. Include the empty prefix in case we're searching
         # for a stripped template.
-        base_namespace = "cudf"
-        # Note that numeric will never actually be prefixed by cudf since it's
-        # its own namespace, but in this code we'll search the right one too.
-        other_namespaces = {"io", "strings", "ast", "ast::expression", "numeric"}
+        namespaces = {
+            "cudf": {"io", "strings", "ast", "ast::expression"},
+            "numeric": {},
+            "nvtext": {},
+        }
 
-        def generate_namespaces(base_namespace, other_namespaces):
-            yield base_namespace + "::"
-            for other_namespace in other_namespaces:
-                yield f"{other_namespace}::"
-                yield f"{base_namespace}::{other_namespace}::"
+        def generate_namespaces(namespaces):
+            for base_namespace, other_namespaces in namespaces.items():
+                yield base_namespace + "::"
+                for other_namespace in other_namespaces:
+                    yield f"{other_namespace}::"
+                    yield f"{base_namespace}::{other_namespace}::"
 
         for (name, _, _, docname, _, _) in env.domains[
             "cpp"
         ].get_objects():
 
-            for prefix in generate_namespaces(base_namespace, other_namespaces):
+            for prefix in generate_namespaces(namespaces):
                 if (
                     name == f"{prefix}{reftarget}"
                     or f"{prefix}{name}" == reftarget
