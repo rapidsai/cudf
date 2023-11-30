@@ -359,16 +359,15 @@ def on_missing_reference(app, env, node, contnode):
                     )
 
         intersphinx_extra_prefixes = ["rmm::", "rmm::mr::", "mr::", ""]
-        original_reftarget = node["reftarget"]
 
         for prefix in intersphinx_extra_prefixes:
             # First try adding the prefix.
-            node["reftarget"] = f"{prefix}{original_reftarget}"
+            node["reftarget"] = f"{prefix}{reftarget}"
             if (ref := intersphinx.resolve_reference_detect_inventory(env, node, contnode)) is not None:
                 return ref
 
             # Then try removing the prefix.
-            node["reftarget"] = original_reftarget.replace(prefix, "")
+            node["reftarget"] = reftarget.replace(prefix, "")
             if (ref := intersphinx.resolve_reference_detect_inventory(env, node, contnode)) is not None:
                 return ref
 
