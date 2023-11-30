@@ -112,6 +112,7 @@ libcudf documentation
    label_bins
    expressions
    md_regex
+   tdigest
 
 
 Indices and tables
