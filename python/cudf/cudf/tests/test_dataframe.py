@@ -1443,6 +1443,52 @@ def test_dataframe_hash_values_seed(method):
     assert_neq(out_one, out_two)
 
 
+def test_dataframe_hash_values_xxhash64():
+    # xxhash64 has no built-in implementation in Python and we don't want to
+    # add a testing dependency, so we use regression tests against known good
+    # values.
+    gdf = cudf.DataFrame({"a": [0.0, 1.0, 2.0, np.inf, np.nan]})
+    gdf["b"] = -gdf["a"]
+    out_a = gdf["a"].hash_values(method="xxhash64", seed=0)
+    expected_a = cudf.Series(
+        [
+            3803688792395291579,
+            10706502109028787093,
+            9835943264235290955,
+            18031741628920313605,
+            18446744073709551615,
+        ],
+        dtype=np.uint64,
+    )
+    assert_eq(out_a, expected_a)
+
+    out_b = gdf["b"].hash_values(method="xxhash64", seed=42)
+    expected_b = cudf.Series(
+        [
+            9826995235083043316,
+            10150515573749944095,
+            5005707091092326006,
+            5326262080505358431,
+            18446744073709551615,
+        ],
+        dtype=np.uint64,
+    )
+    assert_eq(out_b, expected_b)
+
+    out_df = gdf.hash_values(method="xxhash64", seed=0)
+    expected_df = cudf.Series(
+        [
+            10208049663714815266,
+            4949201786888768834,
+            18122173653994477335,
+            11133539368563441730,
+            18446744073709551615,
+        ],
+        dtype=np.uint64,
+    )
+    assert_eq(out_df, expected_df)
+
+
 @pytest.mark.parametrize("nrows", [3, 10, 100, 1000])
 @pytest.mark.parametrize("nparts", [1, 2, 8, 13])
 @pytest.mark.parametrize("nkeys", [1, 2])
