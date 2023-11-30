@@ -27,7 +27,7 @@ pytest \
   --cov=dask_cudf \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/dask-cudf-coverage.xml" \
   --cov-report=term \
-  tests
+  .
 popd
 
 rapids-logger "pytest custreamz"

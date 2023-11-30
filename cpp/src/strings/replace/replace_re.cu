@@ -134,11 +134,11 @@ std::unique_ptr<column> replace_re(strings_column_view const& strings,
                                    regex_program const& prog,
                                    string_scalar const& replacement,
                                    std::optional<size_type> max_replace_count,
+                                   rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_re(
-    strings, prog, replacement, max_replace_count, cudf::get_default_stream(), mr);
+  return detail::replace_re(strings, prog, replacement, max_replace_count, stream, mr);
 }
 
 }  // namespace strings

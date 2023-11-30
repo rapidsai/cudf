@@ -182,15 +182,12 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         self, q: np.ndarray, interpolation: str, exact: bool
     ) -> NumericalBaseColumn:
         # get sorted indices and exclude nulls
-        sorted_indices = self.as_frame()._get_sorted_inds(
-            ascending=True, na_position="first"
-        )
-        sorted_indices = sorted_indices.slice(
-            self.null_count, len(sorted_indices)
-        )
+        indices = libcudf.sort.order_by(
+            [self], [True], "first", stable=True
+        ).slice(self.null_count, len(self))
 
         return libcudf.quantiles.quantile(
-            self, q, interpolation, sorted_indices, exact
+            self, q, interpolation, indices, exact
         )
 
     def cov(self, other: NumericalBaseColumn) -> float:
@@ -219,6 +216,8 @@ class NumericalBaseColumn(ColumnBase, Scannable):
     def round(
         self, decimals: int = 0, how: str = "half_even"
     ) -> NumericalBaseColumn:
+        if not cudf.api.types.is_integer(decimals):
+            raise TypeError("Values in decimals must be integers")
         """Round the values in the Column to the given number of decimals."""
         return libcudf.round.round(self, decimal_places=decimals, how=how)
 

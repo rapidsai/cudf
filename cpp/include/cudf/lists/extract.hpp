@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,12 +59,14 @@ namespace lists {
  *
  * @param lists_column Column to extract elements from.
  * @param index The row within each sublist to retrieve.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return Column of extracted elements.
  */
 std::unique_ptr<column> extract_list_element(
   lists_column_view const& lists_column,
   size_type index,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -97,6 +99,7 @@ std::unique_ptr<column> extract_list_element(
  * @param lists_column Column to extract elements from.
  * @param indices The column whose rows indicate the element index to be retrieved from each list
  * row.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return Column of extracted elements.
  * @throws cudf::logic_error If the sizes of `lists_column` and `indices` do not match.
@@ -104,6 +107,7 @@ std::unique_ptr<column> extract_list_element(
 std::unique_ptr<column> extract_list_element(
   lists_column_view const& lists_column,
   column_view const& indices,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

@@ -500,9 +500,17 @@ struct column_to_strings_fn {
       struct_row_end_wrap("}", true, stream),
       list_value_separator(",", true, stream),
       list_row_begin_wrap("[", true, stream),
-      list_row_end_wrap("]", true, stream)
+      list_row_end_wrap("]", true, stream),
+      true_value(options_.get_true_value(), true, stream),
+      false_value(options_.get_false_value(), true, stream)
   {
   }
+
+  ~column_to_strings_fn()                                      = default;
+  column_to_strings_fn(column_to_strings_fn const&)            = delete;
+  column_to_strings_fn& operator=(column_to_strings_fn const&) = delete;
+  column_to_strings_fn(column_to_strings_fn&&)                 = delete;
+  column_to_strings_fn& operator=(column_to_strings_fn&&)      = delete;
 
   // unsupported type of column:
   template <typename column_type>
@@ -520,8 +528,7 @@ struct column_to_strings_fn {
   std::enable_if_t<std::is_same_v<column_type, bool>, std::unique_ptr<column>> operator()(
     column_view const& column) const
   {
-    return cudf::strings::detail::from_booleans(
-      column, options_.get_true_value(), options_.get_false_value(), stream_, mr_);
+    return cudf::strings::detail::from_booleans(column, true_value, false_value, stream_, mr_);
   }
 
   // strings:
@@ -614,17 +621,18 @@ struct column_to_strings_fn {
 
     auto child_string_with_null = [&]() {
       if (child_view.type().id() == type_id::STRUCT) {
-        return (*this).template operator()<cudf::struct_view>(
-          child_view,
-          children_names.size() > child_index ? children_names[child_index].children
-                                              : std::vector<column_name_info>{});
-      } else if (child_view.type().id() == type_id::LIST) {
-        return (*this).template operator()<cudf::list_view>(child_view,
+        return this->template operator()<cudf::struct_view>(child_view,
                                                             children_names.size() > child_index
                                                               ? children_names[child_index].children
                                                               : std::vector<column_name_info>{});
+      } else if (child_view.type().id() == type_id::LIST) {
+        return this->template operator()<cudf::list_view>(child_view,
+                                                          children_names.size() > child_index
+                                                            ? children_names[child_index].children
+                                                            : std::vector<column_name_info>{});
       } else {
-        return cudf::type_dispatcher(child_view.type(), *this, child_view);
+        return cudf::type_dispatcher<cudf::id_to_type_impl, column_to_strings_fn const&>(
+          child_view.type(), *this, child_view);
       }
     };
     auto new_offsets = cudf::lists::detail::get_normalized_offsets(
@@ -679,27 +687,29 @@ struct column_to_strings_fn {
     //
     auto i_col_begin =
       thrust::make_zip_iterator(thrust::counting_iterator<size_t>(0), column_begin);
-    std::transform(i_col_begin,
-                   i_col_begin + num_columns,
-                   std::back_inserter(str_column_vec),
-                   [this, &children_names](auto const& i_current_col) {
-                     auto const i            = thrust::get<0>(i_current_col);
-                     auto const& current_col = thrust::get<1>(i_current_col);
-                     // Struct needs children's column names
-                     if (current_col.type().id() == type_id::STRUCT) {
-                       return (*this).template operator()<cudf::struct_view>(
-                         current_col,
-                         children_names.size() > i ? children_names[i].children
-                                                   : std::vector<column_name_info>{});
-                     } else if (current_col.type().id() == type_id::LIST) {
-                       return (*this).template operator()<cudf::list_view>(
-                         current_col,
-                         children_names.size() > i ? children_names[i].children
-                                                   : std::vector<column_name_info>{});
-                     } else {
-                       return cudf::type_dispatcher(current_col.type(), *this, current_col);
-                     }
-                   });
+    std::transform(
+      i_col_begin,
+      i_col_begin + num_columns,
+      std::back_inserter(str_column_vec),
+      [this, &children_names](auto const& i_current_col) {
+        auto const i            = thrust::get<0>(i_current_col);
+        auto const& current_col = thrust::get<1>(i_current_col);
+        // Struct needs children's column names
+        if (current_col.type().id() == type_id::STRUCT) {
+          return this->template operator()<cudf::struct_view>(current_col,
+                                                              children_names.size() > i
+                                                                ? children_names[i].children
+                                                                : std::vector<column_name_info>{});
+        } else if (current_col.type().id() == type_id::LIST) {
+          return this->template operator()<cudf::list_view>(current_col,
+                                                            children_names.size() > i
+                                                              ? children_names[i].children
+                                                              : std::vector<column_name_info>{});
+        } else {
+          return cudf::type_dispatcher<cudf::id_to_type_impl, column_to_strings_fn const&>(
+            current_col.type(), *this, current_col);
+        }
+      });
 
     // create string table view from str_column_vec:
     //
@@ -733,6 +743,9 @@ struct column_to_strings_fn {
   string_scalar const list_value_separator;  // ","
   string_scalar const list_row_begin_wrap;   // "["
   string_scalar const list_row_end_wrap;     // "]"
+  // bool converter constants
+  string_scalar const true_value;
+  string_scalar const false_value;
 };
 
 }  // namespace

@@ -150,12 +150,14 @@ struct stats_caster {
         {
         }
 
-        void set_index(size_type index, std::vector<uint8_t> const& binary_value, Type const type)
+        void set_index(size_type index,
+                       thrust::optional<std::vector<uint8_t>> const& binary_value,
+                       Type const type)
         {
-          if (!binary_value.empty()) {
-            val[index] = convert<T>(binary_value.data(), binary_value.size(), type);
+          if (binary_value.has_value()) {
+            val[index] = convert<T>(binary_value.value().data(), binary_value.value().size(), type);
           }
-          if (binary_value.empty()) {
+          if (not binary_value.has_value()) {
             clear_bit_unsafe(null_mask.data(), index);
             null_count++;
           }
@@ -210,10 +212,10 @@ struct stats_caster {
           auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
           auto const& colchunk  = row_group.columns[col_idx];
           // To support deprecated min, max fields.
-          auto const& min_value = colchunk.meta_data.statistics.min_value.size() > 0
+          auto const& min_value = colchunk.meta_data.statistics.min_value.has_value()
                                     ? colchunk.meta_data.statistics.min_value
                                     : colchunk.meta_data.statistics.min;
-          auto const& max_value = colchunk.meta_data.statistics.max_value.size() > 0
+          auto const& max_value = colchunk.meta_data.statistics.max_value.has_value()
                                     ? colchunk.meta_data.statistics.max_value
                                     : colchunk.meta_data.statistics.max;
           // translate binary data to Type then to <T>

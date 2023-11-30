@@ -15,7 +15,7 @@ from dask.dataframe.groupby import DataFrameGroupBy, SeriesGroupBy
 from dask.utils import funcname
 
 import cudf
-from cudf.utils.utils import _dask_cudf_nvtx_annotate
+from cudf.utils.nvtx_annotation import _dask_cudf_nvtx_annotate
 
 # aggregations that are dask-cudf optimized
 OPTIMIZED_AGGS = (

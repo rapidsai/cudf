@@ -5665,6 +5665,28 @@ class StringColumn(column.ColumnBase):
         if (self == "None").any():
             raise ValueError("Could not convert `None` value to datetime")
 
+        is_nat = self == "NaT"
+        if dtype.kind == "M":
+            without_nat = self.apply_boolean_mask(is_nat.unary_operator("not"))
+            all_same_length = (
+                libstrings.count_characters(without_nat).distinct_count(
+                    dropna=True
+                )
+                == 1
+            )
+            if not all_same_length:
+                # Unfortunately disables OK cases like:
+                # ["2020-01-01", "2020-01-01 00:00:00"]
+                # But currently incorrect for cases like (drops 10):
+                # ["2020-01-01", "2020-01-01 10:00:00"]
+                raise NotImplementedError(
+                    "Cannot parse date-like strings with different formats"
+                )
+            valid_ts = str_cast.istimestamp(self, format)
+            valid = valid_ts | is_nat
+            if not valid.all():
+                raise ValueError(f"Column contains invalid data for {format=}")
+
         casting_func = (
             str_cast.timestamp2int
             if dtype.type == np.datetime64
@@ -5672,9 +5694,8 @@ class StringColumn(column.ColumnBase):
         )
         result_col = casting_func(self, dtype, format)
 
-        boolean_match = self == "NaT"
-        if (boolean_match).any():
-            result_col[boolean_match] = None
+        if is_nat.any():
+            result_col[is_nat] = None
 
         return result_col
 
@@ -5735,15 +5756,15 @@ class StringColumn(column.ColumnBase):
 
     def to_pandas(
         self,
+        *,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
-        **kwargs,
     ) -> pd.Series:
         if nullable:
             pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
             pd_series = pd.Series(pandas_array, copy=False)
         else:
-            pd_series = self.to_arrow().to_pandas(**kwargs)
+            pd_series = self.to_arrow().to_pandas()
 
         if index is not None:
             pd_series.index = index

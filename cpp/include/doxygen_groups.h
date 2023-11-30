@@ -29,6 +29,7 @@
 // Add a new group by first specifying in the hierarchy below.
 
 /**
+ * @defgroup default_stream Default Stream
  * @defgroup cudf_classes Classes
  * @{
  *   @defgroup column_classes Column
@@ -130,7 +131,6 @@
  *   @defgroup strings_replace Replacing
  *   @defgroup strings_split Splitting
  *   @defgroup strings_extract Extracting
- *   @defgroup strings_json JSON
  *   @defgroup strings_regex Regex
  * @}
  * @defgroup dictionary_apis Dictionary
@@ -145,6 +145,10 @@
  *   @defgroup io_writers Writers
  *   @defgroup io_datasources Data Sources
  *   @defgroup io_datasinks Data Sinks
+ * @}
+ * @defgroup json_apis JSON
+ * @{
+ *   @defgroup json_object JSON Path
  * @}
  * @defgroup lists_apis Lists
  * @{
@@ -176,9 +180,11 @@
  *   @defgroup utility_dispatcher Type Dispatcher
  *   @defgroup utility_bitmask Bitmask
  *   @defgroup utility_error Exception
+ *   @defgroup utility_span Exception
  * @}
  * @defgroup labeling_apis Labeling
  * @{
  *   @defgroup label_bins Bin Labeling
  * @}
+ * @defgroup expressions Expression Evaluation
  */

@@ -24,6 +24,8 @@ from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 from cudf._lib.scalar import as_device_scalar
 
+from libcpp.functional cimport reference_wrapper
+
 cimport cudf._lib.cpp.groupby as libcudf_groupby
 cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.aggregation cimport (
@@ -33,7 +35,6 @@ from cudf._lib.aggregation cimport (
     make_groupby_scan_aggregation,
 )
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
 from cudf._lib.cpp.replace cimport replace_policy
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table, table_view
@@ -202,7 +203,7 @@ cdef class GroupBy:
                 agg_obj = make_groupby_aggregation(agg)
                 if (valid_aggregations == "ALL"
                         or agg_obj.kind in valid_aggregations):
-                    included_aggregations_i.append(agg)
+                    included_aggregations_i.append((agg, agg_obj.kind))
                     c_agg_request.aggregations.push_back(
                         move(agg_obj.c_obj)
                     )
@@ -273,7 +274,7 @@ cdef class GroupBy:
                 agg_obj = make_groupby_scan_aggregation(agg)
                 if (valid_aggregations == "ALL"
                         or agg_obj.kind in valid_aggregations):
-                    included_aggregations_i.append(agg)
+                    included_aggregations_i.append((agg, agg_obj.kind))
                     c_agg_request.aggregations.push_back(
                         move(agg_obj.c_obj)
                     )

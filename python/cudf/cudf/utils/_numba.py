@@ -7,6 +7,19 @@ import warnings
 
 from numba import config as numba_config
 
+try:
+    from pynvjitlink.patch import (
+        patch_numba_linker as patch_numba_linker_pynvjitlink,
+    )
+except ImportError:
+
+    def patch_numba_linker_pynvjitlink():
+        warnings.warn(
+            "CUDA Toolkit is newer than CUDA driver. "
+            "Numba features will not work in this configuration. "
+        )
+
+
 CC_60_PTX_FILE = os.path.join(
     os.path.dirname(__file__), "../core/udf/shim_60.ptx"
 )
@@ -65,7 +78,7 @@ def _get_ptx_file(path, prefix):
         return regular_result[1]
 
 
-def _patch_numba_mvc():
+def patch_numba_linker_cuda_11():
     # Enable the config option for minor version compatibility
     numba_config.CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY = 1
 
@@ -106,29 +119,19 @@ def _setup_numba():
     versions = safe_get_versions()
     if versions != NO_DRIVER:
         driver_version, runtime_version = versions
-        if driver_version >= (12, 0) and runtime_version > driver_version:
-            warnings.warn(
-                f"Using CUDA toolkit version {runtime_version} with CUDA "
-                f"driver version {driver_version} requires minor version "
-                "compatibility, which is not yet supported for CUDA "
-                "driver versions 12.0 and above. It is likely that many "
-                "cuDF operations will not work in this state. Please "
-                f"install CUDA toolkit version {driver_version} to "
-                "continue using cuDF."
-            )
-        else:
-            # Support MVC for all CUDA versions in the 11.x range
-            ptx_toolkit_version = _get_cuda_version_from_ptx_file(
-                CC_60_PTX_FILE
-            )
-            # Numba thinks cubinlinker is only needed if the driver is older
-            # than the CUDA runtime, but when PTX files are present, it might
-            # also need to patch because those PTX files may be compiled by
-            # a CUDA version that is newer than the driver as well
-            if (driver_version < ptx_toolkit_version) or (
-                driver_version < runtime_version
-            ):
-                _patch_numba_mvc()
+        ptx_toolkit_version = _get_cuda_version_from_ptx_file(CC_60_PTX_FILE)
+
+        # MVC is required whenever any PTX is newer than the driver
+        # This could be the shipped PTX file or the PTX emitted by
+        # the version of NVVM on the user system, the latter aligning
+        # with the runtime version
+        if (driver_version < ptx_toolkit_version) or (
+            driver_version < runtime_version
+        ):
+            if driver_version < (12, 0):
+                patch_numba_linker_cuda_11()
+            else:
+                patch_numba_linker_pynvjitlink()
 
 
 def _get_cuda_version_from_ptx_file(path):
@@ -171,6 +174,8 @@ def _get_cuda_version_from_ptx_file(path):
         "7.8": (11, 8),
         "8.0": (12, 0),
         "8.1": (12, 1),
+        "8.2": (12, 2),
+        "8.3": (12, 3),
     }
 
     cuda_ver = ver_map.get(version)

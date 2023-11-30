@@ -360,6 +360,11 @@ class user_datasource_wrapper : public datasource {
     return source->supports_device_read();
   }
 
+  [[nodiscard]] bool is_device_read_preferred(size_t size) const override
+  {
+    return source->is_device_read_preferred(size);
+  }
+
   size_t device_read(size_t offset,
                      size_t size,
                      uint8_t* dst,
@@ -375,7 +380,17 @@ class user_datasource_wrapper : public datasource {
     return source->device_read(offset, size, stream);
   }
 
+  std::future<size_t> device_read_async(size_t offset,
+                                        size_t size,
+                                        uint8_t* dst,
+                                        rmm::cuda_stream_view stream) override
+  {
+    return source->device_read_async(offset, size, dst, stream);
+  }
+
   [[nodiscard]] size_t size() const override { return source->size(); }
+
+  [[nodiscard]] bool is_empty() const override { return source->is_empty(); }
 
  private:
   datasource* const source;  ///< A non-owning pointer to the user-implemented datasource
