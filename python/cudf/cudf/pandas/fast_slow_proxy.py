@@ -466,8 +466,16 @@ class _FastSlowProxyMeta(type):
     """
 
     _fsproxy_slow_dir: list
-    _fsproxy_slow: type
-    _fsproxy_fast: type
+    _fsproxy_slow_type: type
+    _fsproxy_fast_type: type
+
+    @property
+    def _fsproxy_slow(self) -> type:
+        return self._fsproxy_slow_type
+
+    @property
+    def _fsproxy_fast(self) -> type:
+        return self._fsproxy_fast_type
 
     def __dir__(self):
         # Try to return the cached dir of the slow object, but if it
