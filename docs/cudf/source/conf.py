@@ -303,6 +303,9 @@ def on_missing_reference(app, env, node, contnode):
         "type_to_scalar_type_impl",
         "type_to_scalar_type_impl",
         "detail", # TODO: Look into why so many public APIs link to things in detail
+        # kafka objects
+        "python_callable_type",
+        "kafka_oauth_callback_wrapper_type",
         # Template types
         "Radix",
         # Unsupported by Breathe
