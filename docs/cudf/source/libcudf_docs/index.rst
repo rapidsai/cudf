@@ -107,6 +107,7 @@ libcudf documentation
    utility_dispatcher
    utility_bitmask
    utility_error
+   utility_span
    labeling_apis
    label_bins
    expressions
