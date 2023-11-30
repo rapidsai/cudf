@@ -324,7 +324,9 @@ def on_missing_reference(app, env, node, contnode):
         # all that's missing. Include the empty prefix in case we're searching
         # for a stripped template.
         base_namespace = "cudf"
-        other_namespaces = {"io", "strings", "ast", "ast::expression"}
+        # Note that numeric will never actually be prefixed by cudf since it's
+        # its own namespace, but in this code we'll search the right one too.
+        other_namespaces = {"io", "strings", "ast", "ast::expression", "numeric"}
 
         def generate_namespaces(base_namespace, other_namespaces):
             yield base_namespace + "::"

@@ -14,3 +14,6 @@ libcudf
 
 .. doxygennamespace:: cudf::hashing
    :desc-only:
+
+.. doxygennamespace:: numeric
+   :desc-only:
