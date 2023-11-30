@@ -404,22 +404,22 @@ void traverse_children::operator()<cudf::string_view>(host_span<column_view cons
   check_offsets_size(cols);
 
   // chars
-  size_t const total_char_count = std::accumulate(
-    cols.begin(), cols.end(), std::size_t{}, [stream](size_t a, auto const& b) -> size_t {
-      strings_column_view scv(b);
-      return a + (scv.is_empty() ? 0
-                  // if the column is unsliced, skip the offset retrieval.
-                  : scv.offset() > 0
-                    ? cudf::detail::get_value<size_type>(
-                        scv.offsets(), scv.offset() + scv.size(), stream) -
-                        cudf::detail::get_value<size_type>(scv.offsets(), scv.offset(), stream)
-                  // if the offset() is 0, it can still be sliced to a shorter length. in this case
-                  // we only need to read a single offset. otherwise just return the full length
-                  // (chars_size())
-                  : scv.size() + 1 == scv.offsets().size()
-                    ? scv.chars_size()
-                    : cudf::detail::get_value<size_type>(scv.offsets(), scv.size(), stream));
-    });
+  auto const [device_view_owners, device_views_ptr] =
+    contiguous_copy_column_device_views<column_device_view>(cols, stream);
+
+  auto const total_char_count = thrust::transform_reduce(
+    rmm::exec_policy(stream),
+    device_views_ptr,
+    device_views_ptr + cols.size(),
+    [] __device__(auto const& col) {
+      if (col.size() == 0) return 0L;
+      auto const offsets = col.child(strings_column_view::offsets_column_index);
+      auto const itr     = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
+      return itr[col.offset() + col.size()] - itr[col.offset()];
+    },
+    std::size_t(0),
+    thrust::plus{});
+
   CUDF_EXPECTS(total_char_count <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
                "Total number of concatenated chars exceeds the column size limit",
                std::overflow_error);
