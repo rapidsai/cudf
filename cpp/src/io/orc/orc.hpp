@@ -144,6 +144,8 @@ struct StripeFooter {
 /**
  * @brief Contains per-column ORC statistics.
  *
+ * @ingroup io_types
+ *
  * At most one of the `***_statistics` members has a value.
  */
 struct column_statistics {
