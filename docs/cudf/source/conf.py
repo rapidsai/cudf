@@ -324,6 +324,8 @@ def on_missing_reference(app, env, node, contnode):
         # the public namespace. However, it's used in the detail header, so it
         # needs to be put into a public header that can be shared.
         "char_utf8",
+        # TODO: This type should probably be made private in C++
+        "bpe_merge_pairs_impl",
     ]
 
     if (
