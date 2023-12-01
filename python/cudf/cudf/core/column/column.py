@@ -2173,7 +2173,10 @@ def as_column(
         if dtype is not None:
             data = data.astype(dtype)
 
-    elif np.isscalar(arbitrary) and not isinstance(arbitrary, memoryview):
+    elif arbitrary is None or (
+        np.isscalar(arbitrary) and not isinstance(arbitrary, memoryview)
+    ):
+        # TODO: use is_scalar instead of np.isscalar
         length = length or 1
         if (
             (nan_as_null is True)
@@ -2183,6 +2186,8 @@ def as_column(
             arbitrary = None
             if dtype is None:
                 dtype = cudf.dtype("float64")
+        elif arbitrary is None and dtype is None:
+            dtype = cudf.dtype("object")
 
         data = as_column(full(length, arbitrary, dtype=dtype))
         if not nan_as_null and not is_decimal_dtype(data.dtype):
@@ -2201,6 +2206,11 @@ def as_column(
             raise ValueError("Data must be 1-dimensional")
 
         arbitrary = np.asarray(arbitrary)
+
+        if arbitrary.ndim == 0:
+            arbitrary = arbitrary.reshape(
+                1,
+            )
 
         # Handle case that `arbitrary` elements are cupy arrays
         if (

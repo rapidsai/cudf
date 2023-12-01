@@ -668,6 +668,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     ):
         col_is_rangeindex = False
         col_is_multiindex = False
+        col_dtype = None
 
         if columns is not None:
             columns = as_index(columns)
@@ -678,13 +679,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             columns = columns.to_pandas()
             col_is_rangeindex = isinstance(columns, pd.RangeIndex)
             col_is_multiindex = isinstance(columns, pd.MultiIndex)
+            if not isinstance(columns, pd.MultiIndex):
+                col_dtype = columns.dtype
 
         if index is not None:
             index = as_index(index)
 
-        if data is None:
-            data = []
-        elif isinstance(data, Iterator) and not isinstance(data, str):
+        if isinstance(data, Iterator) and not isinstance(data, str):
             data = list(data)
 
         index_from_data = None
@@ -728,6 +729,27 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     col_dict = {data.name: data._column}
                     columns, columns_from_data = pd.Index([data.name]), columns
             index, index_from_data = data.index, index
+        elif data is None:
+            if index is None:
+                index = RangeIndex(0)
+            if columns is not None:
+                level_names = (
+                    tuple(columns.names)
+                    if isinstance(columns, pd.Index)
+                    else None
+                )
+                col_dict = ColumnAccessor(
+                    {
+                        k: column.column_empty(
+                            len(index), dtype="object", masked=True
+                        )
+                        for k in columns
+                    },
+                    level_names=level_names,
+                )
+            else:
+                col_dict = {}
+                col_is_rangeindex = True
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
                 "Use cudf.Series._from_data for constructing a Series from "
@@ -811,6 +833,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
             col_dict = result[0]
             index, index_from_data = result[1], index
+            columns, columns_from_data = result[2], columns
+            col_is_multiindex = isinstance(columns, pd.MultiIndex)
         else:
             raise TypeError(
                 f"data must be list or dict-like, not {type(data).__name__}"
@@ -840,6 +864,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         self._data.rangeindex = self._data.rangeindex or col_is_rangeindex
         self._data.multiindex = self._data.multiindex or col_is_multiindex
+        self._data.label_dtype = self._data.label_dtype or col_dtype
 
     @_cudf_nvtx_annotate
     def _init_from_series_list(self, data, columns, index):
@@ -1013,12 +1038,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @_cudf_nvtx_annotate
     def _init_from_dict_like(
         self, data: dict, index: None | cudf.Index, nan_as_null=None
-    ) -> tuple[dict, cudf.Index]:
+    ) -> tuple[dict, cudf.Index, pd.Index]:
         # 1) Align indexes of all data.values() that are Series/dicts
         # 2) Convert all array-like data.values() to columns
         # 3) Convert all remaining scalar data.values() to columns
         if not data:
-            return data, cudf.RangeIndex(0)
+            return data, cudf.RangeIndex(0), pd.RangeIndex(0)
         data, index_from_data = self._align_input_series_indices(
             data, nan_as_null=nan_as_null
         )
@@ -1065,7 +1090,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if result_index is None:
             result_index = cudf.RangeIndex(scalar_length)
 
-        return col_data, result_index
+        return col_data, result_index, pd.Index(col_data)
 
     @classmethod
     def _from_data(
@@ -5531,7 +5556,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         if data.ndim == 1:
-            data = data.reshape(1, len(data))
+            data = data.reshape(len(data), 1)
 
         if columns is not None:
             if len(columns) != data.shape[1]:
