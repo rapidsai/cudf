@@ -12,8 +12,17 @@ libcudf
 .. doxygennamespace:: cudf::io
    :desc-only:
 
+.. doxygennamespace:: cudf::io::orc
+   :desc-only:
+
+.. doxygennamespace:: cudf::io::parquet
+   :desc-only:
+
 .. doxygennamespace:: cudf::hashing
    :desc-only:
 
 .. doxygennamespace:: numeric
+   :desc-only:
+
+.. doxygennamespace:: cudf::tdigest
    :desc-only:
