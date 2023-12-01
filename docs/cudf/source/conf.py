@@ -273,6 +273,12 @@ def on_missing_reference(app, env, node, contnode):
         # use `cudf.Index`
         node["reftarget"] = "cudf.Index"
         return contnode
+    if "namespacecudf" in name:
+        node["reftarget"] = "cudf"
+        return contnode
+    if "classcudf_1_1column__device__view_" in name:
+        node["reftarget"] = "cudf::column_device_view"
+        return contnode
 
     if (refid := node.get("refid")) is not None and "hpp" in refid:
         # We don't want to link to C++ header files directly from the
