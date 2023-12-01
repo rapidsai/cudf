@@ -86,7 +86,7 @@ class _AccessorAttr:
         if obj is None:
             return self._typ
         else:
-            return _FastSlowAttribute(self._name).__get__(obj, self._typ)
+            return _FastSlowAttribute(self._name).__get__(obj, type(obj))
 
 
 DatetimeProperties = make_intermediate_proxy_type(

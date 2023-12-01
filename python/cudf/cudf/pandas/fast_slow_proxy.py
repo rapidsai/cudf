@@ -330,15 +330,14 @@ def make_intermediate_proxy_type(
         "_fsproxy_fast_to_slow": _fsproxy_fast_to_slow,
         "_fsproxy_state": _fsproxy_state,
     }
-
-    for method in _SPECIAL_METHODS:
-        if getattr(slow_type, method, False):
-            cls_dict[method] = _FastSlowAttribute(method)
-
     for slow_name in dir(slow_type):
         if slow_name in cls_dict or slow_name.startswith("_"):
             continue
         cls_dict[slow_name] = _FastSlowAttribute(slow_name)
+
+    for method in _SPECIAL_METHODS:
+        if getattr(slow_type, method, False):
+            cls_dict[method] = _FastSlowAttribute(method)
 
     cls = types.new_class(
         name,
@@ -772,37 +771,6 @@ class _FastSlowAttribute:
             slow_attr = getattr(owner._fsproxy_slow, self._name)
             if _is_function_or_method(slow_attr):
                 self._attr = _MethodProxy(fast_attr, slow_attr)
-            elif isinstance(slow_attr, property):
-                # for properties, we need to wrap the getter and setter
-                # functions
-                fast_fget = (
-                    _Unusable
-                    if isinstance(fast_attr, _Unusable)
-                    else fast_attr.fget,
-                )
-                fast_fset = (
-                    _Unusable
-                    if isinstance(fast_attr, _Unusable)
-                    else fast_attr.fset,
-                )
-                slow_fget = slow_attr.fget
-                slow_fset = slow_attr.fset
-                self._attr = property(
-                    _MethodProxy(fast_fget, slow_fget),
-                    _MethodProxy(fast_fset, slow_fset),
-                )
-            elif isinstance(slow_attr, functools.cached_property):
-                # for cached properties, we need to wrap the wrapped
-                # function
-                fast_cached_attr = (
-                    _Unusable
-                    if isinstance(fast_attr, _Unusable)
-                    else fast_attr.func
-                )
-                slow_cached_attr = slow_attr.func
-                self._attr = functools.cached_property(
-                    _MethodProxy(fast_cached_attr, slow_cached_attr)
-                )
             else:
                 # for anything else, use a fast-slow attribute:
                 self._attr = _fast_slow_function_call(
@@ -812,11 +780,6 @@ class _FastSlowAttribute:
         if instance is not None:
             if isinstance(self._attr, _MethodProxy):
                 return types.MethodType(self._attr, instance)
-            elif isinstance(self._attr, property):
-                return self._attr.fget(instance)  # type: ignore
-            elif isinstance(self._attr, functools.cached_property):
-                # TODO: is this right?
-                self._attr
             else:
                 return _fast_slow_function_call(getattr, instance, self._name)[
                     0
