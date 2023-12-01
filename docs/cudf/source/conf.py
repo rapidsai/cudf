@@ -341,7 +341,8 @@ def on_missing_reference(app, env, node, contnode):
         # all that's missing. Include the empty prefix in case we're searching
         # for a stripped template.
         namespaces = {
-            "cudf": {"io", "strings", "ast", "ast::expression"},
+            # Note that io::datasource is actually a nested class
+            "cudf": {"io", "io::datasource", "strings", "ast", "ast::expression"},
             "numeric": {},
             "nvtext": {},
         }
