@@ -319,8 +319,9 @@ def on_missing_reference(app, env, node, contnode):
         # needs to be put into a public header that can be shared.
         "char_utf8",
     ]
+
     if (
-        node["refdomain"] == "cpp"
+        node["refdomain"] in ("std", "cpp")
         and (reftarget := node.get("reftarget")) is not None
     ):
         if any(toskip in reftarget for toskip in names_to_skip):
