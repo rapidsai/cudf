@@ -900,8 +900,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_codePoints(JNIEnv *env, j
   JNI_NULL_CHECK(env, view_handle, "input column is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    cudf::column_view *n_column = reinterpret_cast<cudf::column_view *>(view_handle);
-    return release_as_jlong(cudf::strings::code_points(cudf::strings_column_view(*n_column)));
+    auto const input = reinterpret_cast<cudf::column_view const*>(view_handle);
+    return release_as_jlong(cudf::strings::code_points(cudf::strings_column_view{*input}));
   }
   CATCH_STD(env, 0);
 }
