@@ -227,7 +227,7 @@ intersphinx_mapping = {
     "pyarrow": ("https://arrow.apache.org/docs/", None),
     "pandas": ("https://pandas.pydata.org/docs/", None),
     "typing_extensions": ("https://typing-extensions.readthedocs.io/en/stable/", None),
-    "rmm": ("../../../../../rmm/python/docs/_build/html/", "../../../../rmm/python/docs/_build/html/objects.inv"),
+    "rmm": ("https://docs.rapids.ai/api/rmm/nightly/", None),
 }
 
 # Config numpydoc
