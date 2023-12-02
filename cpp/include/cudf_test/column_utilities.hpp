@@ -18,6 +18,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -246,28 +247,60 @@ inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to
 }  // namespace cudf::test
 
 // Macros for showing line of failure.
-#define CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(lhs, rhs)        \
-  do {                                                            \
-    SCOPED_TRACE(" <--  line of failure\n");                      \
-    cudf::test::detail::expect_column_properties_equal(lhs, rhs); \
+#define CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(lhs, rhs)                        \
+  do {                                                                            \
+    SCOPED_TRACE(" <--  line of failure\n");                                      \
+    if (cudf::column_view const& lhs_view = (lhs);                                \
+        cudf::detail::has_nonempty_nulls(lhs_view, cudf::get_default_stream())) { \
+      throw std::invalid_argument("Unsanitized lhs column");                      \
+    }                                                                             \
+    if (cudf::column_view const& rhs_view = (rhs);                                \
+        cudf::detail::has_nonempty_nulls(rhs_view, cudf::get_default_stream())) { \
+      throw std::invalid_argument("Unsanitized rhs column");                      \
+    }                                                                             \
+    cudf::test::detail::expect_column_properties_equal(lhs, rhs);                 \
   } while (0)
 
-#define CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(lhs, rhs)        \
-  do {                                                                 \
-    SCOPED_TRACE(" <--  line of failure\n");                           \
-    cudf::test::detail::expect_column_properties_equivalent(lhs, rhs); \
+#define CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(lhs, rhs)                   \
+  do {                                                                            \
+    SCOPED_TRACE(" <--  line of failure\n");                                      \
+    if (cudf::column_view const& lhs_view = (lhs);                                \
+        cudf::detail::has_nonempty_nulls(lhs_view, cudf::get_default_stream())) { \
+      throw std::invalid_argument("Unsanitized lhs column");                      \
+    }                                                                             \
+    if (cudf::column_view const& rhs_view = (rhs);                                \
+        cudf::detail::has_nonempty_nulls(rhs_view, cudf::get_default_stream())) { \
+      throw std::invalid_argument("Unsanitized rhs column");                      \
+    }                                                                             \
+    cudf::test::detail::expect_column_properties_equivalent(lhs, rhs);            \
   } while (0)
 
-#define CUDF_TEST_EXPECT_COLUMNS_EQUAL(lhs, rhs...)     \
-  do {                                                  \
-    SCOPED_TRACE(" <--  line of failure\n");            \
-    cudf::test::detail::expect_columns_equal(lhs, rhs); \
+#define CUDF_TEST_EXPECT_COLUMNS_EQUAL(lhs, rhs, ...)                             \
+  do {                                                                            \
+    SCOPED_TRACE(" <--  line of failure\n");                                      \
+    if (cudf::column_view const& lhs_view = (lhs);                                \
+        cudf::detail::has_nonempty_nulls(lhs_view, cudf::get_default_stream())) { \
+      throw std::invalid_argument("Unsanitized lhs column");                      \
+    }                                                                             \
+    if (cudf::column_view const& rhs_view = (rhs);                                \
+        cudf::detail::has_nonempty_nulls(rhs_view, cudf::get_default_stream())) { \
+      throw std::invalid_argument("Unsanitized rhs column");                      \
+    }                                                                             \
+    cudf::test::detail::expect_columns_equal(lhs, rhs, ##__VA_ARGS__);            \
   } while (0)
 
-#define CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(lhs, rhs...)     \
-  do {                                                       \
-    SCOPED_TRACE(" <--  line of failure\n");                 \
-    cudf::test::detail::expect_columns_equivalent(lhs, rhs); \
+#define CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(lhs, rhs, ...)                        \
+  do {                                                                            \
+    SCOPED_TRACE(" <--  line of failure\n");                                      \
+    if (cudf::column_view const& lhs_view = (lhs);                                \
+        cudf::detail::has_nonempty_nulls(lhs_view, cudf::get_default_stream())) { \
+      throw std::invalid_argument("Unsanitized lhs column");                      \
+    }                                                                             \
+    if (cudf::column_view const& rhs_view = (rhs);                                \
+        cudf::detail::has_nonempty_nulls(rhs_view, cudf::get_default_stream())) { \
+      throw std::invalid_argument("Unsanitized rhs column");                      \
+    }                                                                             \
+    cudf::test::detail::expect_columns_equivalent(lhs, rhs, ##__VA_ARGS__);       \
   } while (0)
 
 #define CUDF_TEST_EXPECT_EQUAL_BUFFERS(lhs, rhs, size_bytes)        \
