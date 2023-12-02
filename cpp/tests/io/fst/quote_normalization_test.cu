@@ -121,7 +121,7 @@ static std::pair<OutputItT, IndexOutputItT> fst_baseline(InputItT begin,
 // Base test fixture for tests
 struct FstTest : public cudf::test::BaseFixture {};
 
-TEST_F(FstTest, GroundTruth_QuoteNormalizationSimple)
+void run_test(std::string& input)
 {
   // Type used to represent the atomic symbol type used within the finite-state machine
   using SymbolT = char;
@@ -133,17 +133,7 @@ TEST_F(FstTest, GroundTruth_QuoteNormalizationSimple)
   rmm::cuda_stream stream{};
   rmm::cuda_stream_view stream_view(stream);
 
-  // Test input
-  std::string input   = R"({"A" : 'TEST"'})";
-  auto d_input_scalar = cudf::make_string_scalar(input);
-  auto& d_input       = static_cast<cudf::scalar_type_t<std::string>&>(*d_input_scalar);
-
-  // Prepare input & output buffers
-  constexpr std::size_t single_item = 1;
-  cudf::detail::hostdevice_vector<SymbolT> output_gpu(input.size() * 2, stream_view);
-  cudf::detail::hostdevice_vector<SymbolOffsetT> output_gpu_size(single_item, stream_view);
-  cudf::detail::hostdevice_vector<SymbolOffsetT> out_indexes_gpu(input.size(), stream_view);
-
+  // Run algorithm
   enum class dfa_states : char { TT_OOS = 0U, TT_DQS, TT_SQS, TT_DEC, TT_SEC, TT_NUM_STATES };
 
   enum class dfa_symbol_group_id : uint32_t {
@@ -194,12 +184,20 @@ TEST_F(FstTest, GroundTruth_QuoteNormalizationSimple)
   // The DFA's starting state
   constexpr char start_state = static_cast<char>(TT_OOS);
 
-  // Run algorithm
   auto parser = cudf::io::fst::detail::make_fst(
     cudf::io::fst::detail::make_symbol_group_lut(qna_sgs),
     cudf::io::fst::detail::make_transition_table(qna_state_tt),
     cudf::io::fst::detail::make_translation_table<TT_NUM_STATES * NUM_SYMBOL_GROUPS>(qna_out_tt),
     stream);
+
+  auto d_input_scalar = cudf::make_string_scalar(input);
+  auto& d_input       = static_cast<cudf::scalar_type_t<std::string>&>(*d_input_scalar);
+
+  // Prepare input & output buffers
+  constexpr std::size_t single_item = 1;
+  cudf::detail::hostdevice_vector<SymbolT> output_gpu(input.size() * 2, stream_view);
+  cudf::detail::hostdevice_vector<SymbolOffsetT> output_gpu_size(single_item, stream_view);
+  cudf::detail::hostdevice_vector<SymbolOffsetT> out_indexes_gpu(input.size(), stream_view);
 
   // Allocate device-side temporary storage & run algorithm
   parser.Transduce(d_input.data(),
@@ -236,9 +234,45 @@ TEST_F(FstTest, GroundTruth_QuoteNormalizationSimple)
 
   // Verify results
   ASSERT_EQ(output_gpu_size[0], output_cpu.size());
+  std::cout << output_cpu << std::endl;
   CUDF_TEST_EXPECT_VECTOR_EQUAL(output_gpu, output_cpu, output_cpu.size());
   // TODO: indexing for multicharacter translations
   // CUDF_TEST_EXPECT_VECTOR_EQUAL(out_indexes_gpu, out_index_cpu, output_cpu.size());
 }
 
+TEST_F(FstTest, GroundTruth_QuoteNormalizationSimple1)
+{
+  std::string input = R"({"A":'TEST"'})";
+  run_test(input);
+}
+TEST_F(FstTest, GroundTruth_QuoteNormalizationSimple2)
+{
+  std::string input = R"({'A':"TEST'"} ['OTHER STUFF'])";
+  run_test(input);
+}
+TEST_F(FstTest, GroundTruth_QuoteNormalizationSimple3)
+{
+  std::string input = R"(['{"A": "B"}',"{'A': 'B'}"])";
+  run_test(input);
+}
+TEST_F(FstTest, GroundTruth_QuoteNormalizationSimple4)
+{
+  std::string input = R"({"ain't ain't a word and you ain't supposed to say it":'"""""""""""'})";
+  run_test(input);
+}
+TEST_F(FstTest, GroundTruth_QuoteNormalizationSimple5)
+{
+  std::string input = R"({"\"'\"'\"'\"'":'"\'"\'"\'"\'"'})";
+  run_test(input);
+}
+TEST_F(FstTest, GroundTruth_QuoteNormalizationSimple6)
+{
+  std::string input = R"([{"ABC':'CBA":'XYZ":"ZXY'}])";
+  run_test(input);
+}
+TEST_F(FstTest, GroundTruth_QuoteNormalizationSimple7)
+{
+  std::string input = R"(["\t","\\t","\\","\\\'\"\\\\","\n","\b"])";
+  run_test(input);
+}
 CUDF_TEST_PROGRAM_MAIN()
