@@ -328,6 +328,9 @@ def on_missing_reference(app, env, node, contnode):
         "bpe_merge_pairs_impl",
         # TODO: This is currently in a src file but perhaps should be public
         "orc::column_statistics",
+        # Sphinx doesn't know how to distinguish between the ORC and Parquet
+        # definitions because Breathe doesn't to preserve namespaces for enums.
+        "TypeKind",
     ]
 
     if (
