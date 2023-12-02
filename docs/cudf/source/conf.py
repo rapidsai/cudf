@@ -326,6 +326,8 @@ def on_missing_reference(app, env, node, contnode):
         "char_utf8",
         # TODO: This type should probably be made private in C++
         "bpe_merge_pairs_impl",
+        # TODO: This is currently in a src file but perhaps should be public
+        "orc::column_statistics",
     ]
 
     if (
