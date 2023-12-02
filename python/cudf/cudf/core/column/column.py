@@ -919,13 +919,21 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         Helper function for `isin` which merges `self` & `rhs`
         to determine what values of `rhs` exist in `self`.
         """
-        ldf = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
-        rdf = cudf.DataFrame(
-            {"x": rhs, "bool": full(len(rhs), True, dtype="bool")}
-        )
-        res = ldf.merge(rdf, on="x", how="left").sort_values(by="orig_order")
-        res = res.drop_duplicates(subset="orig_order", ignore_index=True)
-        return res._data["bool"].fillna(False)
+        # We've already matched dtypes by now
+        # self.isin(other) asks "which values of self are in other"
+        # contains(haystack, needles) asks "which needles are in haystack"
+        # hence this argument ordering.
+        result = libcudf.search.contains(rhs, self)
+        if self.null_count > 0:
+            # If one of the needles is null, then the result contains
+            # nulls, these nulls should be replaced by whether or not the
+            # haystack contains a null.
+            # TODO: this is unnecessary if we resolve
+            # https://github.com/rapidsai/cudf/issues/14515 by
+            # providing a mode in which cudf::contains does not mask
+            # the result.
+            result = result.fillna(rhs.null_count > 0, dtype=bool)
+        return result
 
     def as_mask(self) -> Buffer:
         """Convert booleans to bitmask
