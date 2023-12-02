@@ -764,8 +764,12 @@ class _FastSlowAttribute:
     def __init__(self, name: str):
         self._name = name
         self._attr = None
+        self._doc = None
+        self._dir = None
 
     def __get__(self, instance, owner) -> Any:
+        from .module_accelerator import disable_module_accelerator
+
         if self._attr is None:
             fast_attr = getattr(owner._fsproxy_fast, self._name, _Unusable())
             slow_attr = getattr(owner._fsproxy_slow, self._name)
@@ -773,9 +777,15 @@ class _FastSlowAttribute:
                 self._attr = _MethodProxy(fast_attr, slow_attr)
             else:
                 # for anything else, use a fast-slow attribute:
-                self._attr = _fast_slow_function_call(
+                self._attr, _ = _fast_slow_function_call(
                     getattr, owner, self._name
                 )
+
+                if isinstance(
+                    self._attr, (property, functools.cached_property)
+                ):
+                    with disable_module_accelerator():
+                        self._attr.__doc__ = inspect.getdoc(slow_attr)
 
         if instance is not None:
             if isinstance(self._attr, _MethodProxy):
@@ -798,6 +808,13 @@ class _MethodProxy(_FunctionProxy):
             ),
         )
 
+    def __dir__(self):
+        return self._fsproxy_slow.__dir__()
+
+    @property
+    def __doc__(self):
+        return self._fsproxy_slow.__doc__
+
     @property
     def __name__(self):
         return self._fsproxy_slow.__name__
@@ -809,13 +826,6 @@ class _MethodProxy(_FunctionProxy):
         except AttributeError:
             pass
         setattr(self._fsproxy_slow, "__name__", value)
-
-    @property
-    def __doc__(self):
-        from .module_accelerator import disable_module_accelerator
-
-        with disable_module_accelerator():
-            return inspect.getdoc(self._fsproxy_slow)  # type: ignore
 
 
 def _fast_slow_function_call(func: Callable, /, *args, **kwargs) -> Any:
