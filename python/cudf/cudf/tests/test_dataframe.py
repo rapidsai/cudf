@@ -31,6 +31,7 @@ from cudf.core._compat import (
 from cudf.api.extensions import no_default
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
+from cudf.errors import MixedTypeError
 from cudf.testing import _utils as utils
 from cudf.testing._utils import (
     ALL_TYPES,
@@ -3895,29 +3896,44 @@ def test_diff(dtype, period, data_empty):
 @pytest.mark.parametrize("df", _dataframe_na_data())
 @pytest.mark.parametrize("nan_as_null", [True, False, None])
 def test_dataframe_isnull_isna(df, nan_as_null):
-    gdf = cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
 
-    assert_eq(df.isnull(), gdf.isnull())
-    assert_eq(df.isna(), gdf.isna())
+    if nan_as_null is False and (
+        df.select_dtypes(object).isna().any().any()
+        and not df.select_dtypes(object).isna().all().all()
+    ):
+        with pytest.raises(MixedTypeError):
+            cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
+    else:
+        gdf = cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
 
-    # Test individual columns
-    for col in df:
-        assert_eq(df[col].isnull(), gdf[col].isnull())
-        assert_eq(df[col].isna(), gdf[col].isna())
+        assert_eq(df.isnull(), gdf.isnull())
+        assert_eq(df.isna(), gdf.isna())
+
+        # Test individual columns
+        for col in df:
+            assert_eq(df[col].isnull(), gdf[col].isnull())
+            assert_eq(df[col].isna(), gdf[col].isna())
 
 
 @pytest.mark.parametrize("df", _dataframe_na_data())
 @pytest.mark.parametrize("nan_as_null", [True, False, None])
 def test_dataframe_notna_notnull(df, nan_as_null):
-    gdf = cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
+    if nan_as_null is False and (
+        df.select_dtypes(object).isna().any().any()
+        and not df.select_dtypes(object).isna().all().all()
+    ):
+        with pytest.raises(MixedTypeError):
+            cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
+    else:
+        gdf = cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
 
-    assert_eq(df.notnull(), gdf.notnull())
-    assert_eq(df.notna(), gdf.notna())
+        assert_eq(df.notnull(), gdf.notnull())
+        assert_eq(df.notna(), gdf.notna())
 
-    # Test individual columns
-    for col in df:
-        assert_eq(df[col].notnull(), gdf[col].notnull())
-        assert_eq(df[col].notna(), gdf[col].notna())
+        # Test individual columns
+        for col in df:
+            assert_eq(df[col].notnull(), gdf[col].notnull())
+            assert_eq(df[col].notna(), gdf[col].notna())
 
 
 def test_ndim():
@@ -6281,8 +6297,8 @@ def test_df_string_cat_types_mask_where(data, condition, other, has_cat):
         ),
         (
             pd.Series([random.random() for _ in range(10)], dtype="float16"),
-            np.dtype("float32"),
             None,
+            TypeError,
         ),
         (
             pd.Series([random.random() for _ in range(10)], dtype="float64"),
@@ -6292,17 +6308,17 @@ def test_df_string_cat_types_mask_where(data, condition, other, has_cat):
         (
             pd.Series([random.random() for _ in range(10)], dtype="float128"),
             None,
-            TypeError,
+            ValueError,
         ),
     ],
 )
 def test_from_pandas_unsupported_types(data, expected_upcast_type, error):
     pdf = pd.DataFrame({"one_col": data})
     if error is not None:
-        with pytest.raises(ValueError):
+        with pytest.raises(error):
             cudf.from_pandas(data)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(error):
             cudf.Series(data)
 
         with pytest.raises(error):

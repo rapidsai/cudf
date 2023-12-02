@@ -15,6 +15,7 @@ import numpy as np
 
 import cudf
 import pandas as pd
+from cudf.core._compat import PANDAS_GE_150
 from cudf.core.dtypes import (  # noqa: F401
     _BaseDtype,
     _is_categorical_dtype,
@@ -469,15 +470,31 @@ def is_datetime64tz_dtype(obj):
     return _is_datetime64tz_dtype(obj)
 
 
-def _is_pandas_nullable_extension_dtype(dtype_to_check):
+def _is_pandas_nullable_extension_dtype(dtype_to_check) -> bool:
     if isinstance(
-        dtype_to_check, pd.api.extensions.ExtensionDtype
-    ) and not isinstance(dtype_to_check, pd.core.dtypes.dtypes.PandasDtype):
-        if isinstance(dtype_to_check, pd.CategoricalDtype):
-            return _is_pandas_nullable_extension_dtype(
-                dtype_to_check.categories.dtype
-            )
+        dtype_to_check,
+        (
+            pd.UInt8Dtype,
+            pd.UInt16Dtype,
+            pd.UInt32Dtype,
+            pd.UInt64Dtype,
+            pd.Int8Dtype,
+            pd.Int16Dtype,
+            pd.Int32Dtype,
+            pd.Int64Dtype,
+            pd.Float32Dtype,
+            pd.Float64Dtype,
+            pd.BooleanDtype,
+            pd.StringDtype,
+        ),
+    ) or (PANDAS_GE_150 and isinstance(dtype_to_check, pd.ArrowDtype)):
         return True
+    elif isinstance(dtype_to_check, pd.CategoricalDtype):
+        return _is_pandas_nullable_extension_dtype(
+            dtype_to_check.categories.dtype
+        )
+    elif isinstance(dtype_to_check, pd.IntervalDtype):
+        return _is_pandas_nullable_extension_dtype(dtype_to_check.subtype)
     return False
 
 
