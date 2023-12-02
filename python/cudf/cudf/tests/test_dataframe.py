@@ -7539,7 +7539,11 @@ def test_dataframe_append_dataframe(df, other, sort, ignore_index):
     if expected.shape != df.shape:
         assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
     else:
-        assert_eq(expected, actual, check_index_type=not gdf.empty)
+        # pandas returns Index[object] while this should be an empty RangeIndex
+        # for empty df/other
+        assert_eq(
+            expected, actual, check_index_type=False, check_column_type=False
+        )
 
 
 @pytest_unmark_spilling
@@ -7579,8 +7583,8 @@ def test_dataframe_append_dataframe(df, other, sort, ignore_index):
                 "https://github.com/pandas-dev/pandas/issues/35092",
             ),
         ),
-        {1: 1},
-        {0: 10, 1: 100, 2: 102},
+        {1: [1]},
+        {0: [10], 1: [100], 2: [102]},
     ],
 )
 @pytest.mark.parametrize("sort", [False, True])
@@ -7769,7 +7773,11 @@ def test_dataframe_append_dataframe_lists(df, other, sort, ignore_index):
     if expected.shape != df.shape:
         assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
     else:
-        assert_eq(expected, actual, check_index_type=not gdf.empty)
+        # pandas returns Index[object] while this should be an empty RangeIndex
+        # for empty df/other
+        assert_eq(
+            expected, actual, check_index_type=False, check_column_type=False
+        )
 
 
 @pytest.mark.parametrize(
@@ -8152,11 +8160,7 @@ def test_series_empty(ps):
     "columns",
     [["a"], ["another column name"], None, pd.Index(["a"], name="index name")],
 )
-def test_dataframe_init_with_columns(data, columns, request):
-    if data == [] and columns is None and not PANDAS_GE_200:
-        request.node.add_marker(
-            pytest.mark.xfail(reason=".column returns Index[object]")
-        )
+def test_dataframe_init_with_columns(data, columns):
     pdf = pd.DataFrame(data, columns=columns)
     gdf = cudf.DataFrame(data, columns=columns)
 
@@ -8164,6 +8168,7 @@ def test_dataframe_init_with_columns(data, columns, request):
         pdf,
         gdf,
         check_index_type=len(pdf.index) != 0,
+        check_column_type=data is not None and columns is not None,
         check_dtype=not (pdf.empty and len(pdf.columns)),
     )
 

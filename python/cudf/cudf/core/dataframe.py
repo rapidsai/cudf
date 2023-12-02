@@ -729,7 +729,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     col_dict = {data.name: data._column}
                     columns, columns_from_data = pd.Index([data.name]), columns
             index, index_from_data = data.index, index
-        elif data is None:
+        elif data is None or (
+            isinstance(data, dict)
+            and columns is not None
+            and (~columns.isin(data.keys())).all()
+        ):
             if index is None:
                 index = RangeIndex(0)
             if columns is not None:
@@ -826,10 +830,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             else:
                 self._init_from_list_like(data, index=index, columns=columns)
             self._check_data_index_length_match()
+
+            if dtype:
+                self._data = self.astype(dtype)._data
             return
         elif is_dict_like(data):
             result = self._init_from_dict_like(
-                data, index, nan_as_null=nan_as_null
+                data, index=index, nan_as_null=nan_as_null
             )
             col_dict = result[0]
             index, index_from_data = result[1], index
@@ -6199,7 +6206,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ]
 
         if len(mode_results) == 0:
-            return DataFrame()
+            return DataFrame(columns=self.columns[:0])
 
         df = cudf.concat(mode_results, axis=1)
         if isinstance(df, Series):
