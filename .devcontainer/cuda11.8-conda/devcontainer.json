@@ -5,7 +5,7 @@
     "args": {
       "CUDA": "11.8",
       "PYTHON_PACKAGE_MANAGER": "conda",
-      "BASE": "rapidsai/devcontainers:24.02-cpp-llvm16-cuda11.8-mambaforge-ubuntu22.04"
+      "BASE": "rapidsai/devcontainers:24.02-cpp-cuda11.8-mambaforge-ubuntu22.04"
     }
   },
   "hostRequirements": {"gpu": "optional"},
