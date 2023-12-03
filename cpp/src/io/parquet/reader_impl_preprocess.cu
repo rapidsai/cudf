@@ -305,7 +305,9 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
  * @param pass_intermediate_data The struct containing pass information
  *
  */
-void decode_page_headers(pass_intermediate_data& pass, rmm::cuda_stream_view stream)
+void decode_page_headers(pass_intermediate_data& pass,
+                         device_span<PageInfo> unsorted_pages,
+                         rmm::cuda_stream_view stream)
 {
   cudf::detail::hostdevice_vector<chunk_page_info> chunk_page_info(pass.chunks.size(), stream);
 
@@ -313,7 +315,7 @@ void decode_page_headers(pass_intermediate_data& pass, rmm::cuda_stream_view str
   // please update preprocess_nested_columns to reflect this.
   for (size_t c = 0, page_count = 0; c < pass.chunks.size(); c++) {
     pass.chunks[c].max_num_pages = pass.chunks[c].num_data_pages + pass.chunks[c].num_dict_pages;
-    chunk_page_info[c].pages     = pass.pages.device_ptr(page_count);
+    chunk_page_info[c].pages     = &unsorted_pages[page_count];
     page_count += pass.chunks[c].max_num_pages;
   }
 
@@ -368,19 +370,33 @@ void decode_page_headers(pass_intermediate_data& pass, rmm::cuda_stream_view str
   //
   // We also need to preserve key-relative page ordering, so we need to use a stable sort.
   {
-    rmm::device_uvector<int32_t> page_keys{pass.pages.size(), stream};
+    rmm::device_uvector<int32_t> page_keys{unsorted_pages.size(), stream};
     thrust::transform(rmm::exec_policy(stream),
-                      pass.pages.d_begin(),
-                      pass.pages.d_begin() + pass.pages.size(),
+                      unsorted_pages.begin(),
+                      unsorted_pages.end(),
                       page_keys.begin(),
                       [chunks = pass.chunks.d_begin()] __device__(PageInfo const& page) {
                         return chunks[page.chunk_idx].src_col_index;
                       });
+    // we are doing this by sorting indices first and then transforming the output because nvcc
+    // started generating kernels using too much shared memory when trying to sort the pages
+    // directly.
+    rmm::device_uvector<int32_t> sort_indices(unsorted_pages.size(), stream);
+    thrust::sequence(rmm::exec_policy(stream), sort_indices.begin(), sort_indices.end(), 0);
     thrust::stable_sort_by_key(rmm::exec_policy(stream),
                                page_keys.begin(),
                                page_keys.end(),
-                               pass.pages.d_begin(),
+                               sort_indices.begin(),
                                thrust::less<int>());
+    pass.pages = cudf::detail::hostdevice_vector<PageInfo>(
+      unsorted_pages.size(), unsorted_pages.size(), stream);
+    thrust::transform(rmm::exec_policy(stream),
+                      sort_indices.begin(),
+                      sort_indices.end(),
+                      pass.pages.d_begin(),
+                      [unsorted_pages = unsorted_pages.begin()] __device__(int32_t i) {
+                        return unsorted_pages[i];
+                      });
   }
 
   // compute offsets to each group of input pages.
@@ -758,7 +774,6 @@ void reader::impl::load_compressed_data()
   // CUDF_EXPECTS(_pass_itm_data->num_rows > 0, "Number of reading rows must not be zero.");
 
   auto& chunks = pass.chunks;
-  auto& pages  = pass.pages;
 
   auto const [has_compressed_data, read_chunks_tasks] = read_column_chunks();
   pass.has_compressed_data                            = has_compressed_data;
@@ -770,10 +785,11 @@ void reader::impl::load_compressed_data()
   // Process dataset chunk pages into output columns
   auto const total_pages = count_page_headers(chunks, _stream);
   if (total_pages <= 0) { return; }
-  pages = cudf::detail::hostdevice_vector<PageInfo>(total_pages, total_pages, _stream);
+  rmm::device_uvector<PageInfo> unsorted_pages(total_pages, _stream);
+  // pages = cudf::detail::hostdevice_vector<PageInfo>(total_pages, total_pages, _stream);
 
   // decoding of column/page information
-  decode_page_headers(pass, _stream);
+  decode_page_headers(pass, unsorted_pages, _stream);
   CUDF_EXPECTS(pass.page_offsets.size() - 1 == static_cast<size_t>(_input_columns.size()),
                "Encountered page_offsets / num_columns mismatch");
 }
@@ -1323,7 +1339,7 @@ std::vector<size_t> reader::impl::calculate_page_string_offsets()
                                                   page_to_string_size{pass.chunks.d_begin()});
 
   // do scan by key to calculate string offsets for each page
-  thrust::exclusive_scan_by_key(rmm::exec_policy(_stream),
+  thrust::exclusive_scan_by_key(rmm::exec_policy_nosync(_stream),
                                 page_keys,
                                 page_keys + subpass.pages.size(),
                                 val_iter,
@@ -1331,7 +1347,7 @@ std::vector<size_t> reader::impl::calculate_page_string_offsets()
 
   // now sum up page sizes
   rmm::device_uvector<int> reduce_keys(col_sizes.size(), _stream);
-  thrust::reduce_by_key(rmm::exec_policy(_stream),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(_stream),
                         page_keys,
                         page_keys + subpass.pages.size(),
                         val_iter,

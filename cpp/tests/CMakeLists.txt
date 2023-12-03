@@ -635,6 +635,7 @@ ConfigureTest(
 ConfigureTest(STREAM_BINARYOP_TEST streams/binaryop_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_CONCATENATE_TEST streams/concatenate_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_COPYING_TEST streams/copying_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_CSVIO_TEST streams/io/csv_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_DICTIONARY_TEST streams/dictionary_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_FILLING_TEST streams/filling_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_GROUPBY_TEST streams/groupby_test.cpp STREAM_MODE testing)
@@ -663,8 +664,14 @@ ConfigureTest(
   testing
 )
 ConfigureTest(
-  STREAM_TEXT_TEST streams/text/ngrams_test.cpp streams/text/replace_test.cpp
-  streams/text/tokenize_test.cpp STREAM_MODE testing
+  STREAM_TEXT_TEST
+  streams/text/edit_distance_test.cpp
+  streams/text/ngrams_test.cpp
+  streams/text/replace_test.cpp
+  streams/text/stemmer_test.cpp
+  streams/text/tokenize_test.cpp
+  STREAM_MODE
+  testing
 )
 ConfigureTest(STREAM_UNARY_TEST streams/unary_test.cpp STREAM_MODE testing)
 
