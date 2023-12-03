@@ -583,7 +583,7 @@ std::vector<row_range> compute_page_splits_by_row(
   // note: we are working with absolute row indices so skip_rows represents the absolute min row
   // index we care about
   size_t cur_pos             = find_start_index(h_aggregated_info, skip_rows);
-  size_t cur_row_index       = h_aggregated_info[cur_pos].row_index;
+  size_t cur_row_index       = skip_rows;
   size_t cur_cumulative_size = 0;
   auto const max_row         = min(skip_rows + num_rows, h_aggregated_info.back().row_index);
   while (cur_row_index < max_row) {
