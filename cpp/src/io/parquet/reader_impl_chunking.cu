@@ -41,16 +41,16 @@ namespace cudf::io::parquet::detail {
 
 namespace {
 
-struct cumulative_page_info {
-  size_t row_count;   // cumulative row count
-  size_t size_bytes;  // cumulative size in bytes
-  int key;            // schema index
-};
-
 struct split_info {
   row_range rows;
   int64_t split_pos;
 };
+
+// the minimum amount of memory we can safely expect to be enough to
+// do a subpass decode. if the difference between the user specified limit and
+// the actual memory used for compressed/temp data is > than this value, we will still use
+// at least this many additional bytes.
+constexpr size_t minimum_subpass_expected_size = 200 * 1024 * 1024;
 
 #if defined(CHUNKING_DEBUG)
 void print_cumulative_page_info(cudf::detail::hostdevice_vector<PageInfo>& pages,
@@ -79,43 +79,43 @@ void print_cumulative_page_info(cudf::detail::hostdevice_vector<PageInfo>& pages
       if (page.flags & PAGEINFO_FLAGS_DICTIONARY || page.src_col_schema != schemas[idx]) {
         continue;
       }
-      printf("\tP: {%lu, %lu}\n", h_cinfo[pidx].row_count, h_cinfo[pidx].size_bytes);
+      printf("\tP: {%lu, %lu, %lu}\n", pidx, h_cinfo[pidx].row_index, h_cinfo[pidx].size_bytes);
     }
   }
 }
 
 void print_cumulative_row_info(host_span<cumulative_page_info const> sizes,
                                std::string const& label,
-                               std::optional<std::vector<split_info>> splits = std::nullopt)
+                               std::optional<std::vector<row_range>> splits = std::nullopt)
 {
   if (splits.has_value()) {
     printf("------------\nSplits (skip_rows, num_rows)\n");
     for (size_t idx = 0; idx < splits->size(); idx++) {
-      printf("{%lu, %lu}\n", splits.value()[idx].rows.skip_rows, splits.value()[idx].rows.num_rows);
+      printf("{%lu, %lu}\n", splits.value()[idx].skip_rows, splits.value()[idx].num_rows);
     }
   }
 
-  printf("------------\nCumulative sizes %s (row_count, size_bytes, page_key)\n", label.c_str());
+  printf("------------\nCumulative sizes %s (index, row_index, size_bytes, page_key)\n",
+         label.c_str());
   for (size_t idx = 0; idx < sizes.size(); idx++) {
-    printf("{%lu, %lu, %d}", sizes[idx].row_count, sizes[idx].size_bytes, sizes[idx].key);
+    printf("{%lu, %lu, %lu, %d}", idx, sizes[idx].row_index, sizes[idx].size_bytes, sizes[idx].key);
     if (splits.has_value()) {
       // if we have a split at this row count and this is the last instance of this row count
-      auto start = thrust::make_transform_iterator(
-        splits->begin(), [](split_info const& i) { return i.rows.skip_rows; });
+      auto start             = thrust::make_transform_iterator(splits->begin(),
+                                                   [](row_range const& i) { return i.skip_rows; });
       auto end               = start + splits->size();
-      auto split             = std::find(start, end, sizes[idx].row_count);
+      auto split             = std::find(start, end, sizes[idx].row_index);
       auto const split_index = [&]() -> int {
         if (split != end &&
-            ((idx == sizes.size() - 1) || (sizes[idx + 1].row_count > sizes[idx].row_count))) {
+            ((idx == sizes.size() - 1) || (sizes[idx + 1].row_index > sizes[idx].row_index))) {
           return static_cast<int>(std::distance(start, split));
         }
         return idx == 0 ? 0 : -1;
       }();
       if (split_index >= 0) {
-        printf(" <-- split {%lu, %lu, %lu}",
-               splits.value()[split_index].rows.skip_rows,
-               splits.value()[split_index].rows.num_rows,
-               splits.value()[split_index].split_pos);
+        printf(" <-- split {%lu, %lu}",
+               splits.value()[split_index].skip_rows,
+               splits.value()[split_index].num_rows);
       }
     }
     printf("\n");
@@ -130,7 +130,7 @@ struct cumulative_page_sum {
   cumulative_page_info operator()
     __device__(cumulative_page_info const& a, cumulative_page_info const& b) const
   {
-    return cumulative_page_info{a.row_count + b.row_count, a.size_bytes + b.size_bytes, a.key};
+    return cumulative_page_info{0, a.size_bytes + b.size_bytes, a.key};
   }
 };
 
@@ -188,7 +188,7 @@ __device__ size_t row_size_functor::operator()<string_view>(size_t num_rows, boo
  *
  * Sums across all nesting levels.
  */
-struct get_cumulative_page_info {
+struct get_page_output_size {
   __device__ cumulative_page_info operator()(PageInfo const& page)
   {
     if (page.flags & PAGEINFO_FLAGS_DICTIONARY) {
@@ -200,19 +200,17 @@ struct get_cumulative_page_info {
       auto const& pni = page.nesting[i];
       return cudf::type_dispatcher(data_type{pni.type}, row_size_functor{}, pni.size, pni.nullable);
     });
-
-    size_t const row_count = static_cast<size_t>(page.nesting[0].size);
     return {
-      row_count,
+      0,
       thrust::reduce(thrust::seq, iter, iter + page.num_output_nesting_levels) + page.str_bytes,
       page.src_col_schema};
   }
 };
 
 /**
- * @brief Functor which computes the (uncompressed) size of a page.
+ * @brief Functor which sets the (uncompressed) size of a page.
  */
-struct get_page_size {
+struct get_page_input_size {
   device_span<const ColumnChunkDesc> chunks;
 
   __device__ cumulative_page_info operator()(PageInfo const& page)
@@ -222,11 +220,24 @@ struct get_page_size {
     if (page.flags & PAGEINFO_FLAGS_DICTIONARY) {
       return cumulative_page_info{0, 0, page.src_col_schema};
     }
-    // TODO: this is not accurate for lists. it might make sense to make a guess
-    // based on total-rowgroup-size / # of rows in the rowgroup for an average of
-    // rows-per-byte.
-    size_t const row_count = page.num_rows;
-    return {row_count, static_cast<size_t>(page.uncompressed_page_size), page.src_col_schema};
+    return {0, static_cast<size_t>(page.uncompressed_page_size), page.src_col_schema};
+  }
+};
+
+/**
+ * @brief Functor which sets the absolute row index of a page in a cumulative_page_info struct
+ */
+struct set_row_index {
+  device_span<const ColumnChunkDesc> chunks;
+  device_span<const PageInfo> pages;
+  device_span<cumulative_page_info> c_info;
+
+  __device__ void operator()(size_t i)
+  {
+    auto const& page            = pages[i];
+    auto const& chunk           = chunks[page.chunk_idx];
+    size_t const page_start_row = chunk.start_row + page.chunk_row + page.num_rows;
+    c_info[i].row_index         = page_start_row;
   }
 };
 
@@ -258,17 +269,24 @@ struct page_total_size {
       auto const start = key_offsets[idx];
       auto const end   = key_offsets[idx + 1];
       auto iter        = cudf::detail::make_counting_transform_iterator(
-        0, [&] __device__(size_type i) { return c_info[i].row_count; });
+        0, [&] __device__(size_type i) { return c_info[i].row_index; });
       auto const page_index =
-        thrust::lower_bound(thrust::seq, iter + start, iter + end, i.row_count) - iter;
+        thrust::lower_bound(thrust::seq, iter + start, iter + end, i.row_index) - iter;
       sum += c_info[page_index].size_bytes;
     }
-    return {i.row_count, sum, i.key};
+    return {i.row_index, sum, i.key};
   }
 };
 
+/**
+ * @brief Functor which returns the compressed data size for a chunk
+ */
+struct get_chunk_compressed_size {
+  __device__ size_t operator()(ColumnChunkDesc const& chunk) { return chunk.compressed_size; }
+};
+
 int64_t find_next_split(int64_t cur_pos,
-                        size_t cur_row_count,
+                        size_t cur_row_index,
                         size_t cur_cumulative_size,
                         std::vector<cumulative_page_info> const& sizes,
                         size_t chunk_read_limit)
@@ -294,47 +312,11 @@ int64_t find_next_split(int64_t cur_pos,
   // the list twice. so we have to iterate until we skip past all of them.  The idea is that we
   // either do this, or we have to call unique() on the input first.
   while (split_pos < (static_cast<int64_t>(sizes.size()) - 1) &&
-         (split_pos < 0 || sizes[split_pos].row_count == cur_row_count)) {
+         (split_pos < 0 || sizes[split_pos].row_index == cur_row_index)) {
     split_pos++;
   }
 
   return split_pos;
-}
-
-/**
- * @brief Given a vector of cumulative {row_count, byte_size} pairs and a chunk read
- * limit, determine the set of splits.
- *
- * @param sizes Vector of cumulative {row_count, byte_size} pairs
- * @param chunk_read_limit Limit on total number of bytes to be returned per read, for all columns
- */
-std::vector<split_info> find_splits(std::vector<cumulative_page_info> const& sizes,
-                                    size_t chunk_read_limit)
-{
-  // now we have an array of {row_count, real output bytes}. just walk through it and generate
-  // splits.
-  // TODO: come up with a clever way to do this entirely in parallel. For now, as long as batch
-  // sizes are reasonably large, this shouldn't iterate too many times
-  std::vector<split_info> splits;
-  {
-    size_t cur_pos             = 0;
-    size_t cur_row_count       = 0;
-    size_t cur_cumulative_size = 0;
-    auto const num_rows        = sizes.back().row_count;
-    while (cur_row_count < num_rows) {
-      auto const split_pos =
-        find_next_split(cur_pos, cur_row_count, cur_cumulative_size, sizes, chunk_read_limit);
-
-      auto const start_row = cur_row_count;
-      cur_row_count        = sizes[split_pos].row_count;
-      splits.push_back(split_info{row_range{start_row, cur_row_count - start_row}, split_pos});
-      cur_pos             = split_pos;
-      cur_cumulative_size = sizes[split_pos].size_bytes;
-    }
-  }
-  // print_cumulative_row_info(sizes, "adjusted w/splits", splits);
-
-  return splits;
 }
 
 /**
@@ -381,10 +363,14 @@ template <typename T = uint8_t>
 struct row_count_compare {
   __device__ bool operator()(cumulative_page_info const& a, cumulative_page_info const& b)
   {
-    return a.row_count < b.row_count;
+    return a.row_index < b.row_index;
   }
 };
 
+/**
+ * @brief return compressed and total size of the data in a row group
+ *
+ */
 std::pair<size_t, size_t> get_row_group_size(RowGroup const& rg)
 {
   auto compressed_size_iter = thrust::make_transform_iterator(
@@ -397,6 +383,14 @@ std::pair<size_t, size_t> get_row_group_size(RowGroup const& rg)
   return {compressed_size, total_size};
 }
 
+/**
+ * @brief For a set of cumulative_page_info data, adjust the size_bytes field
+ * such that it reflects the worst case for all pages that span the same rows.
+ *
+ * By doing this, we can now look at row X and know the total
+ * byte cost for all pages that span row X, not just the cost up to row X itself.
+ *
+ */
 std::pair<rmm::device_uvector<cumulative_page_info>, rmm::device_uvector<int32_t>>
 adjust_cumulative_sizes(rmm::device_uvector<cumulative_page_info> const& c_info,
                         cudf::detail::hostdevice_vector<PageInfo> const& pages,
@@ -456,10 +450,24 @@ adjust_cumulative_sizes(rmm::device_uvector<cumulative_page_info> const& c_info,
   return {std::move(aggregated_info), std::move(page_keys_by_split)};
 }
 
+/**
+ * @brief Find the first entry in the aggreggated_info that corresponds to the specified row
+ *
+ */
+size_t find_start_index(std::vector<cumulative_page_info> const& aggregated_info, size_t min_row)
+{
+  auto start = thrust::make_transform_iterator(
+    aggregated_info.begin(), [&](cumulative_page_info const& i) { return i.row_index; });
+  auto start_index =
+    thrust::lower_bound(thrust::host, start, start + aggregated_info.size(), min_row) - start;
+  if (aggregated_info[start_index].row_index == min_row) { start_index++; }
+  return start_index;
+}
+
 struct page_span {
   size_t start, end;
 };
-std::pair<std::vector<page_span>, size_t> compute_next_subpass(
+std::tuple<std::vector<page_span>, size_t> compute_next_subpass(
   rmm::device_uvector<cumulative_page_info> const& c_info,
   cudf::detail::hostdevice_vector<PageInfo> const& pages,
   cudf::detail::hostdevice_vector<size_type> const& page_offsets,
@@ -480,13 +488,12 @@ std::pair<std::vector<page_span>, size_t> compute_next_subpass(
   stream.synchronize();
   // print_cumulative_row_info(h_aggregated_info, "adjusted");
 
-  // first, find the min row
-  auto start = thrust::make_transform_iterator(
-    h_aggregated_info.begin(), [&](cumulative_page_info const& i) { return i.row_count; });
-  auto const start_index =
-    thrust::upper_bound(thrust::host, start, start + h_aggregated_info.size(), min_row) - start;
+  // TODO: if the user has explicitly specified skip_rows/num_rows we could be more intelligent
+  // about skipping subpasses/pages that do not fall within the range of values, but only if the
+  // data does not contain lists (because our row counts are only estimates in that case)/
 
   // find the next split
+  auto const start_index     = find_start_index(h_aggregated_info, min_row);
   auto const cumulative_size = start_index == 0 ? 0 : h_aggregated_info[start_index - 1].size_bytes;
   auto const end_index       = find_next_split(start_index,
                                          min_row,
@@ -552,9 +559,11 @@ std::pair<std::vector<page_span>, size_t> compute_next_subpass(
   return {out, total_pages};
 }
 
-std::pair<std::vector<split_info>, rmm::device_uvector<int32_t>> compute_page_splits_by_row(
+std::vector<row_range> compute_page_splits_by_row(
   rmm::device_uvector<cumulative_page_info> const& c_info,
   cudf::detail::hostdevice_vector<PageInfo> const& pages,
+  size_t skip_rows,
+  size_t num_rows,
   size_t size_limit,
   rmm::cuda_stream_view stream)
 {
@@ -568,9 +577,28 @@ std::pair<std::vector<split_info>, rmm::device_uvector<int32_t>> compute_page_sp
                                 cudaMemcpyDefault,
                                 stream.value()));
   stream.synchronize();
+  // print_cumulative_row_info(h_aggregated_info, "adjusted");
 
-  // generate the actual splits
-  return {find_splits(h_aggregated_info, size_limit), std::move(page_keys_by_split)};
+  std::vector<row_range> splits;
+  // note: we are working with absolute row indices so skip_rows represents the absolute min row
+  // index we care about
+  size_t cur_pos             = find_start_index(h_aggregated_info, skip_rows);
+  size_t cur_row_index       = h_aggregated_info[cur_pos].row_index;
+  size_t cur_cumulative_size = 0;
+  auto const max_row         = min(skip_rows + num_rows, h_aggregated_info.back().row_index);
+  while (cur_row_index < max_row) {
+    auto const split_pos =
+      find_next_split(cur_pos, cur_row_index, cur_cumulative_size, h_aggregated_info, size_limit);
+
+    auto const start_row = cur_row_index;
+    cur_row_index        = min(max_row, h_aggregated_info[split_pos].row_index);
+    splits.push_back({start_row, cur_row_index - start_row});
+    cur_pos             = split_pos;
+    cur_cumulative_size = h_aggregated_info[split_pos].size_bytes;
+  }
+  // print_cumulative_row_info(h_aggregated_info, "adjusted w/splits", splits);
+
+  return splits;
 }
 
 /**
@@ -920,7 +948,6 @@ void reader::impl::setup_next_pass(bool uses_custom_row_bounds)
               _file_itm_data.row_groups.begin() + row_group_end,
               pass.row_groups.begin());
 
-    auto const num_passes = _file_itm_data.num_passes();
     CUDF_EXPECTS(_file_itm_data._current_input_pass < num_passes,
                  "Encountered an invalid read pass index");
 
@@ -940,17 +967,19 @@ void reader::impl::setup_next_pass(bool uses_custom_row_bounds)
     } else {
       auto const global_start_row = _file_itm_data.global_skip_rows;
       auto const global_end_row   = global_start_row + _file_itm_data.global_num_rows;
-      auto const start_row        = std::max(
-        _file_itm_data.input_pass_row_count[_file_itm_data._current_input_pass], global_start_row);
+      auto const start_row =
+        std::max(_file_itm_data.input_pass_start_row_count[_file_itm_data._current_input_pass],
+                 global_start_row);
       auto const end_row =
-        std::min(_file_itm_data.input_pass_row_count[_file_itm_data._current_input_pass + 1],
+        std::min(_file_itm_data.input_pass_start_row_count[_file_itm_data._current_input_pass + 1],
                  global_end_row);
 
       // skip_rows is always global in the sense that it is relative to the first row of
       // everything we will be reading, regardless of what pass we are on.
       // num_rows is how many rows we are reading this pass.
       pass.skip_rows =
-        global_start_row + _file_itm_data.input_pass_row_count[_file_itm_data._current_input_pass];
+        global_start_row +
+        _file_itm_data.input_pass_start_row_count[_file_itm_data._current_input_pass];
       pass.num_rows = end_row - start_row;
     }
 
@@ -975,18 +1004,38 @@ void reader::impl::setup_next_pass(bool uses_custom_row_bounds)
       pass.decomp_dict_data = decompress_page_data(pass.chunks, pass.pages, true, _stream);
     }
 
-    // since there is only ever 1 dictionary per chunk (the 0th path), do it at the
+    // store off how much memory we've used so far. This includes the compressed page data and the
+    // decompressed dictionary data. we will subtract this from the available total memory for the
+    // subpasses
+    auto chunk_iter =
+      thrust::make_transform_iterator(pass.chunks.d_begin(), get_chunk_compressed_size{});
+    pass.base_mem_size =
+      pass.decomp_dict_data.size() +
+      thrust::reduce(rmm::exec_policy(_stream), chunk_iter, chunk_iter + pass.chunks.size());
+
+    // since there is only ever 1 dictionary per chunk (the first page), do it at the
     // pass level.
     build_string_dict_indices();
 
-    // compute subpasses for this pass using the page information we now have.
-    // compute_subpasses();
-    /*
-    if (_output_chunk_read_limit == 0) {  // read the whole file at once
-      CUDF_EXPECTS(_pass_itm_data->output_chunk_read_info.size() == 1,
-                    "Reading the whole file should yield only one chunk.");
+    // if we are doing subpass reading, generate more accurate num_row estimates for list columns.
+    // this helps us to generate more accurate subpass splits.
+    if (_input_pass_read_limit != 0) { generate_list_column_row_count_estimates(); }
+
+#if defined(PARQUET_CHUNK_LOGGING)
+    printf("Pass: row_groups(%'lu), chunks(%'lu), pages(%'lu)\n",
+           pass.row_groups.size(),
+           pass.chunks.size(),
+           pass.pages.size());
+    printf("\tskip_rows: %'lu\n", pass.skip_rows);
+    printf("\tnum_rows: %'lu\n", pass.num_rows);
+    printf("\tbase mem usage: %'lu\n", pass.base_mem_size);
+    auto const num_columns = _input_columns.size();
+    for (size_t c_idx = 0; c_idx < num_columns; c_idx++) {
+      printf("\t\tColumn %'lu: num_pages(%'d)\n",
+             c_idx,
+             pass.page_offsets[c_idx + 1] - pass.page_offsets[c_idx]);
     }
-    */
+#endif
 
     _stream.synchronize();
   }
@@ -1000,7 +1049,17 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
 
   auto const num_columns = _input_columns.size();
 
-  auto [page_indices, total_pages] = [&]() -> std::pair<std::vector<page_span>, size_t> {
+  // what do we do if the base memory size (the compressed data) itself is approaching or larger
+  // than the overall read limit? we are still going to be decompressing in subpasses, but we have
+  // to assume some reasonable minimum size needed to safely decompress a single subpass. so always
+  // reserve at least that much space.
+  size_t const remaining_read_limit =
+    _input_pass_read_limit == 0 ? 0
+    : pass.base_mem_size + minimum_subpass_expected_size >= _input_pass_read_limit
+      ? minimum_subpass_expected_size
+      : _input_pass_read_limit - pass.base_mem_size;
+
+  auto [page_indices, total_pages] = [&]() -> std::tuple<std::vector<page_span>, size_t> {
     // special case:  if we contain no compressed data, or if we have no input limit, we can always
     // just do 1 subpass since what we already have loaded is all the temporary memory we will ever
     // use.
@@ -1017,11 +1076,13 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
     }
     // otherwise we have to look forward and choose a batch of pages
 
-    // generate cumulative page sizes.
+    // as subpasses get decoded, the initial estimates we have for list row counts
+    // get updated with accurate data, so regenerate cumulative size info and row
+    // indices
     rmm::device_uvector<cumulative_page_info> c_info(pass.pages.size(), _stream);
     auto page_keys = make_page_key_iterator(pass.pages);
     auto page_size =
-      thrust::make_transform_iterator(pass.pages.d_begin(), get_page_size{pass.chunks});
+      thrust::make_transform_iterator(pass.pages.d_begin(), get_page_input_size{pass.chunks});
     thrust::inclusive_scan_by_key(rmm::exec_policy(_stream),
                                   page_keys,
                                   page_keys + pass.pages.size(),
@@ -1029,6 +1090,11 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
                                   c_info.begin(),
                                   thrust::equal_to{},
                                   cumulative_page_sum{});
+    auto iter = thrust::make_counting_iterator(0);
+    thrust::for_each(rmm::exec_policy(_stream),
+                     iter,
+                     iter + pass.pages.size(),
+                     set_row_index{pass.chunks, pass.pages, c_info});
     // print_cumulative_page_info(pass.pages, c_info, _stream);
 
     // get the next batch of pages
@@ -1036,7 +1102,7 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
                                 pass.pages,
                                 pass.page_offsets,
                                 pass.processed_rows,
-                                _input_pass_read_limit,
+                                remaining_read_limit,
                                 num_columns,
                                 _stream);
   }();
@@ -1086,6 +1152,28 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
   // preprocess pages (computes row counts for lists, computes output chunks and computes
   // the actual row counts we will be able load out of this subpass)
   preprocess_subpass_pages(uses_custom_row_bounds, _output_chunk_read_limit);
+
+#if defined(PARQUET_CHUNK_LOGGING)
+  printf("\tSubpass: skip_rows(%'lu), num_rows(%'lu), remaining read limit(%'lu)\n",
+         subpass.skip_rows,
+         subpass.num_rows,
+         remaining_read_limit);
+  printf("\t\tDecompressed size: %'lu\n", subpass.decomp_page_data.size());
+  printf("\t\tTotal expected usage: %'lu\n", subpass.decomp_page_data.size() + pass.base_mem_size);
+  for (size_t c_idx = 0; c_idx < num_columns; c_idx++) {
+    printf("\t\tColumn %'lu: pages(%'lu - %'lu)\n",
+           c_idx,
+           page_indices[c_idx].start,
+           page_indices[c_idx].end);
+  }
+  printf("\t\tOutput chunks:\n");
+  for (size_t idx = 0; idx < subpass.output_chunk_read_info.size(); idx++) {
+    printf("\t\t\t%'lu: skip_rows(%'lu) num_rows(%'lu)\n",
+           idx,
+           subpass.output_chunk_read_info[idx].skip_rows,
+           subpass.output_chunk_read_info[idx].num_rows);
+  }
+#endif
 }
 
 void reader::impl::create_global_chunk_info()
@@ -1119,6 +1207,13 @@ void reader::impl::create_global_chunk_info()
                         schema.converted_type,
                         schema.type_length);
 
+      // for lists, estimate the number of bytes per row. this is used by the subpass reader to
+      // determine where to split the decompression boundaries
+      float const list_bytes_per_row_est =
+        schema.max_repetition_level > 0 ? static_cast<float>(col_meta.total_uncompressed_size) /
+                                            static_cast<float>(row_group.num_rows)
+                                        : 0.0f;
+
       chunks.push_back(ColumnChunkDesc(col_meta.total_compressed_size,
                                        nullptr,
                                        col_meta.num_values,
@@ -1137,7 +1232,8 @@ void reader::impl::create_global_chunk_info()
                                        schema.decimal_precision,
                                        clock_rate,
                                        i,
-                                       col.schema_idx));
+                                       col.schema_idx,
+                                       list_bytes_per_row_est));
     }
 
     remaining_rows -= row_group_rows;
@@ -1154,6 +1250,14 @@ void reader::impl::compute_input_passes()
   if (_input_pass_read_limit == 0) {
     _file_itm_data.input_pass_row_group_offsets.push_back(0);
     _file_itm_data.input_pass_row_group_offsets.push_back(row_groups_info.size());
+    _file_itm_data.input_pass_start_row_count.push_back(0);
+    auto rg_row_count = cudf::detail::make_counting_transform_iterator(0, [&](size_t i) {
+      auto const& rgi       = row_groups_info[i];
+      auto const& row_group = _metadata->get_row_group(rgi.index, rgi.source_index);
+      return row_group.num_rows;
+    });
+    _file_itm_data.input_pass_start_row_count.push_back(
+      std::reduce(rg_row_count, rg_row_count + row_groups_info.size()));
     return;
   }
 
@@ -1165,7 +1269,7 @@ void reader::impl::compute_input_passes()
   std::size_t cur_rg_start       = 0;
   std::size_t cur_row_count      = 0;
   _file_itm_data.input_pass_row_group_offsets.push_back(0);
-  _file_itm_data.input_pass_row_count.push_back(0);
+  _file_itm_data.input_pass_start_row_count.push_back(0);
 
   for (size_t cur_rg_index = 0; cur_rg_index < row_groups_info.size(); cur_rg_index++) {
     auto const& rgi       = row_groups_info[cur_rg_index];
@@ -1182,14 +1286,14 @@ void reader::impl::compute_input_passes()
       // row group
       if (cur_rg_start == cur_rg_index) {
         _file_itm_data.input_pass_row_group_offsets.push_back(cur_rg_index + 1);
-        _file_itm_data.input_pass_row_count.push_back(cur_row_count + row_group.num_rows);
+        _file_itm_data.input_pass_start_row_count.push_back(cur_row_count + row_group.num_rows);
         cur_rg_start       = cur_rg_index + 1;
         cur_pass_byte_size = 0;
       }
       // End the pass at the end of the previous row group
       else {
         _file_itm_data.input_pass_row_group_offsets.push_back(cur_rg_index);
-        _file_itm_data.input_pass_row_count.push_back(cur_row_count);
+        _file_itm_data.input_pass_start_row_count.push_back(cur_row_count);
         cur_rg_start       = cur_rg_index;
         cur_pass_byte_size = compressed_rg_size;
       }
@@ -1202,11 +1306,11 @@ void reader::impl::compute_input_passes()
   // add the last pass if necessary
   if (_file_itm_data.input_pass_row_group_offsets.back() != row_groups_info.size()) {
     _file_itm_data.input_pass_row_group_offsets.push_back(row_groups_info.size());
-    _file_itm_data.input_pass_row_count.push_back(cur_row_count);
+    _file_itm_data.input_pass_start_row_count.push_back(cur_row_count);
   }
 }
 
-void reader::impl::compute_chunks_for_subpass()
+void reader::impl::compute_output_chunks_for_subpass()
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
@@ -1217,11 +1321,10 @@ void reader::impl::compute_chunks_for_subpass()
     return;
   }
 
-  // generate cumulative row counts and sizes
+  // generate row_indices and cumulative output sizes for all pages
   rmm::device_uvector<cumulative_page_info> c_info(subpass.pages.size(), _stream);
-  // convert PageInfo to cumulative_page_info
   auto page_input =
-    thrust::make_transform_iterator(subpass.pages.d_begin(), get_cumulative_page_info{});
+    thrust::make_transform_iterator(subpass.pages.d_begin(), get_page_output_size{});
   auto page_keys = make_page_key_iterator(subpass.pages);
   thrust::inclusive_scan_by_key(rmm::exec_policy(_stream),
                                 page_keys,
@@ -1230,22 +1333,16 @@ void reader::impl::compute_chunks_for_subpass()
                                 c_info.begin(),
                                 thrust::equal_to{},
                                 cumulative_page_sum{});
+  auto iter = thrust::make_counting_iterator(0);
+  thrust::for_each(rmm::exec_policy(_stream),
+                   iter,
+                   iter + subpass.pages.size(),
+                   set_row_index{pass.chunks, subpass.pages, c_info});
   // print_cumulative_page_info(subpass.pages, c_info, _stream);
 
   // compute the splits
-  auto [splits, _] =
-    compute_page_splits_by_row(c_info, subpass.pages, _output_chunk_read_limit, _stream);
-  subpass.output_chunk_read_info.reserve(splits.size());
-
-  // apply skip_rows from the subpass
-  std::transform(splits.begin(),
-                 splits.end(),
-                 std::back_inserter(subpass.output_chunk_read_info),
-                 [&subpass](split_info const& s) {
-                   row_range r = s.rows;
-                   r.skip_rows += subpass.skip_rows;
-                   return r;
-                 });
+  subpass.output_chunk_read_info = compute_page_splits_by_row(
+    c_info, subpass.pages, subpass.skip_rows, subpass.num_rows, _output_chunk_read_limit, _stream);
 }
 
 }  // namespace cudf::io::parquet::detail

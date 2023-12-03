@@ -224,6 +224,17 @@ class reader::impl {
   void build_string_dict_indices();
 
   /**
+   * @brief For list columns, generate estimated row counts for pages in the current pass.
+   *
+   * The row counts in the pages that come out of the file only reflect the number of values in
+   * all of the rows in the page, not the number of rows themselves. In order to do subpass reading
+   * more accurately, we would like to have a more accurate guess of the real number of rows per
+   * page.
+   *
+   */
+  void generate_list_column_row_count_estimates();
+
+  /**
    * @brief Perform some preprocessing for subpass page data and also compute the split locations
    * {skip_rows, num_rows} for chunked reading.
    *
@@ -324,7 +335,7 @@ class reader::impl {
    * a limit on total read size, generate a set of {skip_rows, num_rows} pairs representing
    * a set of reads that will generate output columns of total size <= `chunk_read_limit` bytes.
    */
-  void compute_chunks_for_subpass();
+  void compute_output_chunks_for_subpass();
 
   bool has_more_work()
   {

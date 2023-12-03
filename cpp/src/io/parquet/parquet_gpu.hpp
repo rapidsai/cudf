@@ -252,6 +252,7 @@ struct PageInfo {
   int32_t num_input_values;
   int32_t chunk_row;  // starting row of this page relative to the start of the chunk
   int32_t num_rows;   // number of rows in this page
+  // in the case of list columns, rows can span page boundaries, so even though row N
   // the next two are calculated in gpuComputePageStringSizes
   int32_t num_nulls;       // number of null values (V2 header), but recalculated for string cols
   int32_t num_valids;      // number of non-null values, taking into account skip_rows/num_rows
@@ -332,7 +333,8 @@ struct ColumnChunkDesc {
                            int8_t decimal_precision_,
                            int32_t ts_clock_rate_,
                            int32_t src_col_index_,
-                           int32_t src_col_schema_)
+                           int32_t src_col_schema_,
+                           float list_bytes_per_row_est_)
     : compressed_data(compressed_data_),
       compressed_size(compressed_size_),
       num_values(num_values_),
@@ -356,7 +358,8 @@ struct ColumnChunkDesc {
       decimal_precision(decimal_precision_),
       ts_clock_rate(ts_clock_rate_),
       src_col_index(src_col_index_),
-      src_col_schema(src_col_schema_)
+      src_col_schema(src_col_schema_),
+      list_bytes_per_row_est(list_bytes_per_row_est_)
   {
   }
 
@@ -387,6 +390,8 @@ struct ColumnChunkDesc {
 
   int32_t src_col_index{};   // my input column index
   int32_t src_col_schema{};  // my schema index in the file
+
+  float list_bytes_per_row_est{};  // for LIST columns, an estimate on number of bytes per row
 };
 
 /**

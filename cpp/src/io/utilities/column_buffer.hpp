@@ -253,6 +253,10 @@ std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr);
 
+template <class string_policy>
+std::string type_to_name(column_buffer_base<string_policy> const& buffer,
+                         bool include_nesting = true);
+
 }  // namespace detail
 }  // namespace io
 }  // namespace cudf

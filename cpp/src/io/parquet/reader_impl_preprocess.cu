@@ -454,7 +454,35 @@ struct set_str_dict_index_ptr {
   }
 };
 
-}  // namespace
+/**
+ * @brief Functor which computes an estimated row count for list pages.
+ *
+ */
+struct set_list_row_count_estimate {
+  device_span<const ColumnChunkDesc> chunks;
+
+  __device__ void operator()(PageInfo& page)
+  {
+    if (page.flags & PAGEINFO_FLAGS_DICTIONARY) { return; }
+    auto const& chunk  = chunks[page.chunk_idx];
+    auto const is_list = chunk.max_level[level_type::REPETITION] > 0;
+    if (!is_list) { return; }
+
+    // For LIST pages that we have not yet decoded, page.num_rows is not an accurate number.
+    // so we instead estimate the number of rows as follows:
+    // - each chunk stores an estimated number of bytes per row E
+    // - estimate number of rows in a page = page.uncompressed_page_size / E
+    //
+    // it is not required that this number is accurate. we just want it to be somewhat close so that
+    // we get reasonable results as we choose subpass splits.
+    //
+    // all other columns can use page.num_rows directly as it will be accurate.
+    page.num_rows = static_cast<size_t>(static_cast<float>(page.uncompressed_page_size) /
+                                        chunk.list_bytes_per_row_est);
+  }
+};
+
+}  // anonymous namespace
 
 void reader::impl::build_string_dict_indices()
 {
@@ -923,6 +951,30 @@ struct page_offset_output_iter {
   __device__ reference operator*() { return p->str_offset; }
 };
 
+// update chunk_row field in subpass page from pass page
+struct update_subpass_chunk_row {
+  device_span<PageInfo> pass_pages;
+  device_span<PageInfo> subpass_pages;
+  device_span<size_t> page_src_index;
+
+  __device__ void operator()(size_t i)
+  {
+    subpass_pages[i].chunk_row = pass_pages[page_src_index[i]].chunk_row;
+  }
+};
+
+// update num_rows field from pass page to subpass page
+struct update_pass_num_rows {
+  device_span<PageInfo> pass_pages;
+  device_span<PageInfo> subpass_pages;
+  device_span<size_t> page_src_index;
+
+  __device__ void operator()(size_t i)
+  {
+    pass_pages[page_src_index[i]].num_rows = subpass_pages[i].num_rows;
+  }
+};
+
 }  // anonymous namespace
 
 void reader::impl::preprocess_file(
@@ -956,32 +1008,55 @@ void reader::impl::preprocess_file(
     compute_input_passes();
   }
 
+#if defined(PARQUET_CHUNK_LOGGING)
+  printf("==============================================\n");
+  setlocale(LC_NUMERIC, "");
+  printf("File: skip_rows(%'lu), num_rows(%'lu), input_read_limit(%'lu), output_read_limit(%'lu)\n",
+         _file_itm_data.global_skip_rows,
+         _file_itm_data.global_num_rows,
+         _input_pass_read_limit,
+         _output_chunk_read_limit);
+  printf("# Row groups: %'lu\n", _file_itm_data.row_groups.size());
+  printf("# Input passes: %'lu\n", _file_itm_data.num_passes());
+  printf("# Input columns: %'lu\n", _input_columns.size());
+  for (size_t idx = 0; idx < _input_columns.size(); idx++) {
+    auto const& schema = _metadata->get_schema(_input_columns[idx].schema_idx);
+    auto const type_id = to_type_id(schema, _strings_to_categorical, _timestamp_type.id());
+    printf("\tC(%'lu, %s): %s\n",
+           idx,
+           _input_columns[idx].name.c_str(),
+           cudf::type_to_name(cudf::data_type{type_id}).c_str());
+  }
+  printf("# Output columns: %'lu\n", _output_buffers.size());
+  for (size_t idx = 0; idx < _output_buffers.size(); idx++) {
+    printf("\tC(%'lu): %s\n", idx, cudf::io::detail::type_to_name(_output_buffers[idx]).c_str());
+  }
+#endif
+
   _file_preprocessed = true;
 }
 
-// update chunk_row field in subpass page from pass page
-struct update_subpass_chunk_row {
-  device_span<PageInfo> pass_pages;
-  device_span<PageInfo> subpass_pages;
-  device_span<size_t> page_src_index;
+void reader::impl::generate_list_column_row_count_estimates()
+{
+  auto& pass = *_pass_itm_data;
+  thrust::for_each(rmm::exec_policy(_stream),
+                   pass.pages.d_begin(),
+                   pass.pages.d_end(),
+                   set_list_row_count_estimate{pass.chunks});
 
-  __device__ void operator()(size_t i)
-  {
-    subpass_pages[i].chunk_row = pass_pages[page_src_index[i]].chunk_row;
-  }
-};
-
-// update num_rows field from pass page to subpass page
-struct update_pass_num_rows {
-  device_span<PageInfo> pass_pages;
-  device_span<PageInfo> subpass_pages;
-  device_span<size_t> page_src_index;
-
-  __device__ void operator()(size_t i)
-  {
-    pass_pages[page_src_index[i]].num_rows = subpass_pages[i].num_rows;
-  }
-};
+  // computes:
+  // PageInfo::chunk_row (the chunk-relative row index) for all pages in the pass. The start_row
+  // field in ColumnChunkDesc is the absolute row index for the whole file. chunk_row in PageInfo is
+  // relative to the beginning of the chunk. so in the kernels, chunk.start_row + page.chunk_row
+  // gives us the absolute row index
+  auto key_input  = thrust::make_transform_iterator(pass.pages.d_begin(), get_page_chunk_idx{});
+  auto page_input = thrust::make_transform_iterator(pass.pages.d_begin(), get_page_num_rows{});
+  thrust::exclusive_scan_by_key(rmm::exec_policy(_stream),
+                                key_input,
+                                key_input + pass.pages.size(),
+                                page_input,
+                                chunk_row_output_iter{pass.pages.device_ptr()});
+}
 
 void reader::impl::preprocess_subpass_pages(bool uses_custom_row_bounds, size_t chunk_read_limit)
 {
@@ -1045,10 +1120,7 @@ void reader::impl::preprocess_subpass_pages(bool uses_custom_row_bounds, size_t 
   // PageInfo::chunk_row (the chunk-relative row index) for all pages in the pass. The start_row
   // field in ColumnChunkDesc is the absolute row index for the whole file. chunk_row in PageInfo is
   // relative to the beginning of the chunk. so in the kernels, chunk.start_row + page.chunk_row
-  // gives us the absolute row index. NOTE: this is recomputing chunk_row for -all- pages in the
-  // pass, not just the pages in the current subpass.  the reason we do this is that we may visit
-  // the same page multiple times over multiple subpasses (if we didn't process all rows in a given
-  // subpass). this greatly simplifies the logic.
+  // gives us the absolute row index
   auto key_input  = thrust::make_transform_iterator(pass.pages.d_begin(), get_page_chunk_idx{});
   auto page_input = thrust::make_transform_iterator(pass.pages.d_begin(), get_page_num_rows{});
   thrust::exclusive_scan_by_key(rmm::exec_policy(_stream),
@@ -1057,7 +1129,7 @@ void reader::impl::preprocess_subpass_pages(bool uses_custom_row_bounds, size_t 
                                 page_input,
                                 chunk_row_output_iter{pass.pages.device_ptr()});
 
-  // finally, copy chunk row into the subpass.
+  // copy chunk row into the subpass pages
   thrust::for_each(rmm::exec_policy(_stream),
                    iter,
                    iter + subpass.pages.size(),
@@ -1072,11 +1144,26 @@ void reader::impl::preprocess_subpass_pages(bool uses_custom_row_bounds, size_t 
   // rows as the smallest batch (by column) we have decompressed.
   size_t page_index = 0;
   size_t max_row    = std::numeric_limits<size_t>::max();
+  auto const last_pass_row =
+    _file_itm_data.input_pass_start_row_count[_file_itm_data._current_input_pass + 1];
   for (size_t idx = 0; idx < subpass.column_page_count.size(); idx++) {
     auto const& last_page = subpass.pages[page_index + (subpass.column_page_count[idx] - 1)];
     auto const& chunk     = pass.chunks[last_page.chunk_idx];
-    max_row =
-      min(max_row, static_cast<size_t>(chunk.start_row + last_page.chunk_row + last_page.num_rows));
+
+    size_t max_page_row =
+      static_cast<size_t>(chunk.start_row + last_page.chunk_row + last_page.num_rows);
+    // special case.  list rows can span page boundaries, but we can't tell if that is happening
+    // here because we have not yet decoded the pages. the very last row starting in the page may
+    // not terminate in the page. to handle this, only decode up to the second to last row in the
+    // page since we know that will safely completed.
+    bool const is_list = chunk.max_level[level_type::REPETITION] > 0;
+    if (is_list && max_page_row < last_pass_row) {
+      CUDF_EXPECTS(last_page.num_rows > 1, "Unexpected short list page");
+      max_page_row--;
+    }
+
+    max_row = min(max_row, max_page_row);
+
     page_index += subpass.column_page_count[idx];
   }
   subpass.skip_rows   = pass.skip_rows + pass.processed_rows;
@@ -1085,7 +1172,7 @@ void reader::impl::preprocess_subpass_pages(bool uses_custom_row_bounds, size_t 
   subpass.num_rows    = max_row - subpass.skip_rows;
 
   // now split up the output into chunks as necessary
-  compute_chunks_for_subpass();
+  compute_output_chunks_for_subpass();
 }
 
 void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses_custom_row_bounds)

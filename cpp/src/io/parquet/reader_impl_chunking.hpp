@@ -37,14 +37,14 @@ struct file_intermediate_data {
   // the start/end of the chunks to be loaded for a given pass.
   std::vector<std::size_t> input_pass_row_group_offsets{};
 
-  // row counts per input-pass
-  std::vector<std::size_t> input_pass_row_count{};
+  // start row counts per input-pass. this includes all rows in the row groups of the pass and
+  // is not capped by global_skip_rows and global_num_rows.
+  std::vector<std::size_t> input_pass_start_row_count{};
 
   size_t _current_input_pass{0};  // current input pass index
   size_t _output_chunk_count{0};  // how many output chunks we have produced
 
-  // skip_rows/num_rows values for the entire file. these need to be adjusted per-pass because we
-  // may not be visiting every row group that contains these bounds
+  // skip_rows/num_rows values for the entire file.
   size_t global_skip_rows;
   size_t global_num_rows;
 
@@ -81,9 +81,16 @@ struct subpass_intermediate_data {
   std::vector<row_range> output_chunk_read_info;
   std::size_t current_output_chunk{0};
 
-  // skip_rows and num_rows values for this particular subpass.
+  // skip_rows and num_rows values for this particular subpass. in absolute
+  // row indices.
   size_t skip_rows;
   size_t num_rows;
+};
+
+struct cumulative_page_info {
+  size_t row_index;   // row index
+  size_t size_bytes;  // cumulative size in bytes
+  int key;            // schema index
 };
 
 /**
@@ -100,6 +107,10 @@ struct pass_intermediate_data {
   std::vector<row_group_info> row_groups{};
   cudf::detail::hostdevice_vector<ColumnChunkDesc> chunks{};
   cudf::detail::hostdevice_vector<PageInfo> pages{};
+
+  // base memory used for the pass itself (compressed data in the loaded chunks and any
+  // decompressed dictionary pages)
+  size_t base_mem_size{0};
 
   // offsets to each group of input pages (by column/schema, indexed by _input_columns.size())
   // so if we had 2 columns/schemas, with page keys
