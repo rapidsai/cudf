@@ -233,9 +233,12 @@ def make_final_proxy_type(
             cls_dict[k] = v
 
     for slow_name in dir(slow_type):
-        if slow_name in cls_dict or slow_name.startswith("_"):
+        if slow_name in cls_dict or slow_name.startswith("__"):
             continue
-        cls_dict[slow_name] = _FastSlowAttribute(slow_name)
+        elif slow_name.startswith("_"):
+            cls_dict[slow_name] = getattr(slow_type, slow_name)
+        else:
+            cls_dict[slow_name] = _FastSlowAttribute(slow_name)
 
     cls = types.new_class(
         name,
@@ -330,14 +333,17 @@ def make_intermediate_proxy_type(
         "_fsproxy_fast_to_slow": _fsproxy_fast_to_slow,
         "_fsproxy_state": _fsproxy_state,
     }
-    for slow_name in dir(slow_type):
-        if slow_name in cls_dict or slow_name.startswith("_"):
-            continue
-        cls_dict[slow_name] = _FastSlowAttribute(slow_name)
-
     for method in _SPECIAL_METHODS:
         if getattr(slow_type, method, False):
             cls_dict[method] = _FastSlowAttribute(method)
+
+    for slow_name in dir(slow_type):
+        if slow_name in cls_dict or slow_name.startswith("__"):
+            continue
+        elif slow_name.startswith("_"):
+            cls_dict[slow_name] = getattr(slow_type, slow_name)
+        else:
+            cls_dict[slow_name] = _FastSlowAttribute(slow_name)
 
     cls = types.new_class(
         name,
