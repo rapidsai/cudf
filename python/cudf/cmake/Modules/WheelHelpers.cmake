@@ -14,7 +14,7 @@
 include_guard(GLOBAL)
 
 # Making libraries available inside wheels by installing the associated targets.
-function(add_target_libs_to_wheel)
+function(install_aliased_imported_targets)
   list(APPEND CMAKE_MESSAGE_CONTEXT "install_aliased_imported_targets")
 
   set(options "")

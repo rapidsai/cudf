@@ -76,14 +76,11 @@ include(rapids-cython)
 if(NOT cudf_FOUND)
   set(BUILD_TESTS OFF)
   set(BUILD_BENCHMARKS OFF)
+  set(CUDF_BUILD_TESTUTIL OFF)
+  set(CUDF_BUILD_STREAMS_TEST_UTIL OFF)
 
   set(_exclude_from_all "")
   if(CUDF_BUILD_WHEELS)
-    # We don't build C++ tests when building wheels, so we can also omit the test util and shrink
-    # the wheel by avoiding embedding GTest.
-    set(CUDF_BUILD_TESTUTIL OFF)
-    set(CUDF_BUILD_STREAMS_TEST_UTIL OFF)
-
     # Statically link cudart if building wheels
     set(CUDA_STATIC_RUNTIME ON)
 
