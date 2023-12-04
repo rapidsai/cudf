@@ -2096,7 +2096,7 @@ class IndexedFrame(Frame):
             columns, keep=keep
         )
         (result,) = libcudf.copying.scatter(
-            [full(len(distinct), False, dtype=bool)],
+            [cudf.Scalar(False, dtype=bool)],
             distinct,
             [full(len(self), True, dtype=bool)],
             bounds_check=False,
