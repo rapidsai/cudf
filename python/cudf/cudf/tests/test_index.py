@@ -3098,10 +3098,9 @@ def test_index_to_frame(data, data_name, index, name):
     pidx = pd.Index(data, name=data_name)
     gidx = cudf.from_pandas(pidx)
 
-    with expect_warning_if(name is None):
+    with expect_warning_if(not PANDAS_GE_200 and name is None):
         expected = pidx.to_frame(index=index, name=name)
-    with expect_warning_if(name is None):
-        actual = gidx.to_frame(index=index, name=name)
+    actual = gidx.to_frame(index=index, name=name)
 
     assert_eq(expected, actual)
 

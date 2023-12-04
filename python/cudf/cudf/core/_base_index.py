@@ -796,6 +796,12 @@ class BaseIndex(Serializable):
 
         return super().fillna(value=value)
 
+    def _get_level_names(self):
+        """
+        Return a name or list of names with None replaced by the level number.
+        """
+        return 0 if self.name is None else self.name
+
     def to_frame(self, index=True, name=no_default):
         """Create a DataFrame with a column containing this Index
 
@@ -844,22 +850,12 @@ class BaseIndex(Serializable):
         1  Bear
         2   Cow
         """
-        if name is None:
-            warnings.warn(
-                "Explicitly passing `name=None` currently preserves "
-                "the Index's name or uses a default name of 0. This "
-                "behaviour is deprecated, and in the future `None` "
-                "will be used as the name of the "
-                "resulting DataFrame column.",
-                FutureWarning,
-            )
-            name = no_default
-        if name is not no_default:
-            col_name = name
-        elif self.name is None:
-            col_name = 0
+
+        if name is no_default:
+            col_name = self._get_level_names()
         else:
-            col_name = self.name
+            col_name = name
+
         return cudf.DataFrame(
             {col_name: self._values}, index=self if index else None
         )
