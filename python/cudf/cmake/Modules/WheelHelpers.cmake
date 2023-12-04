@@ -49,7 +49,10 @@ function(install_aliased_imported_targets)
         message(VERBOSE "install(FILES $<TARGET_FILE:${target}> DESTINATION ${__DESTINATION})")
       else()
         install(IMPORTED_RUNTIME_ARTIFACTS ${target} DESTINATION ${__DESTINATION})
-        message(VERBOSE "install(IMPORTED_RUNTIME_ARTIFACTS $<TARGET_FILE:${target}> DESTINATION ${__DESTINATION})")
+        message(
+          VERBOSE
+          "install(IMPORTED_RUNTIME_ARTIFACTS $<TARGET_FILE:${target}> DESTINATION ${__DESTINATION})"
+        )
       endif()
     endif()
   endforeach()

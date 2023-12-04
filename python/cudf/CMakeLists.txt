@@ -34,26 +34,25 @@ option(FIND_CUDF_CPP "Search for existing CUDF C++ installations before defaulti
        OFF
 )
 
-# When building the Python package, always defer to pyarrow to tell us where to
-# find libarrow. This works whether libarrow is installed by pyarrow itself
-# (i.e. as part of a wheel) or as part of a separate libarrow package (i.e. in
-# conda) because pyarrow always knows where it is. libcudf must be built
-# against an ABI-compatible arrow library for the package to load at runtime,
-# so searching this way is always correct.
+# When building the Python package, always defer to pyarrow to tell us where to find libarrow. This
+# works whether libarrow is installed by pyarrow itself (i.e. as part of a wheel) or as part of a
+# separate libarrow package (i.e. in conda) because pyarrow always knows where it is. libcudf must
+# be built against an ABI-compatible arrow library for the package to load at runtime, so searching
+# this way is always correct.
 set(USE_LIBARROW_FROM_PYARROW ON)
 
 # If the user requested it we attempt to find CUDF.
 if(FIND_CUDF_CPP)
-  # We need to find arrow before libcudf since libcudf requires it but doesn't
-  # bundle arrow libraries.
+  # We need to find arrow before libcudf since libcudf requires it but doesn't bundle arrow
+  # libraries.
   include(rapids-find)
   include(rapids-export)
   include(../../cpp/cmake/thirdparty/get_arrow.cmake)
 
   find_package(cudf ${cudf_version} REQUIRED)
 
-  # an installed version of libcudf doesn't provide the dlpack headers so we
-  # need to download dlpack for the interop.pyx
+  # an installed version of libcudf doesn't provide the dlpack headers so we need to download dlpack
+  # for the interop.pyx
   include(rapids-cpm)
   rapids_cpm_init()
   include(../../cpp/cmake/thirdparty/get_dlpack.cmake)
@@ -72,21 +71,21 @@ if(NOT cudf_FOUND)
 
   add_subdirectory(../../cpp cudf-cpp EXCLUDE_FROM_ALL)
 
-  # libcudf targets are excluded by default above via EXCLUDE_FROM_ALL to
-  # remove extraneous components like headers from libcudacxx, but we do need
-  # the libraries. However, we want to control where they are installed to.
-  # Since there are multiple subpackages of cudf._lib that require access to
-  # libcudf, we place the library and all its dependent artifacts in the cudf
-  # directory as a single source of truth and modify the other rpaths
-  # appropriately.
+  # libcudf targets are excluded by default above via EXCLUDE_FROM_ALL to remove extraneous
+  # components like headers from libcudacxx, but we do need the libraries. However, we want to
+  # control where they are installed to. Since there are multiple subpackages of cudf._lib that
+  # require access to libcudf, we place the library and all its dependent artifacts in the cudf
+  # directory as a single source of truth and modify the other rpaths appropriately.
   set(cython_lib_dir cudf)
   include(cmake/Modules/WheelHelpers.cmake)
-  # TODO: This install is currently overzealous. We should only install the
-  # libraries that are downloaded by CPM during the build, not libraries that
-  # were found on the system.  However, in practice right this would only be a
-  # problem is if libcudf was not found but some of the dependencies were, and
-  # we have no real use cases where that happens.
-  install_aliased_imported_targets(TARGETS cudf arrow_shared nvcomp::nvcomp nvcomp::nvcomp_gdeflate nvcomp::nvcomp_bitcomp DESTINATION ${cython_lib_dir})
+  # TODO: This install is currently overzealous. We should only install the libraries that are
+  # downloaded by CPM during the build, not libraries that were found on the system.  However, in
+  # practice right this would only be a problem is if libcudf was not found but some of the
+  # dependencies were, and we have no real use cases where that happens.
+  install_aliased_imported_targets(
+    TARGETS cudf arrow_shared nvcomp::nvcomp nvcomp::nvcomp_gdeflate nvcomp::nvcomp_bitcomp
+    DESTINATION ${cython_lib_dir}
+  )
 endif()
 
 rapids_cython_init()
