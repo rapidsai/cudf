@@ -47,9 +47,8 @@ if(FIND_CUDF_CPP)
   # libraries.
   include(rapids-find)
   include(rapids-export)
-  # These variables have no effect because we are always searching for arrow
-  # via pyarrow, but they must be set as they are required arguments to the
-  # function in get_arrow.cmake.
+  # These variables have no effect because we are always searching for arrow via pyarrow, but they
+  # must be set as they are required arguments to the function in get_arrow.cmake.
   set(CUDF_USE_ARROW_STATIC OFF)
   set(CUDF_ENABLE_ARROW_S3 OFF)
   set(CUDF_ENABLE_ARROW_ORC OFF)
