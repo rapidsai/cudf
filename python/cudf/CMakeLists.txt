@@ -35,30 +35,26 @@ project(
 option(FIND_CUDF_CPP "Search for existing CUDF C++ installations before defaulting to local files"
        OFF
 )
-option(CUDF_BUILD_WHEELS "Whether this build is generating a Python wheel." OFF)
-option(USE_LIBARROW_FROM_PYARROW "Use the libarrow contained within pyarrow." OFF)
-mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
 
-# Always build wheels against the pyarrow libarrow.
-if(CUDF_BUILD_WHEELS)
-  set(USE_LIBARROW_FROM_PYARROW ON)
-endif()
+# When building the Python package, always defer to pyarrow to tell us where to
+# find libarrow. This works whether libarrow is installed by pyarrow itself
+# (i.e. as part of a wheel) or as part of a separate libarrow package (i.e. in
+# conda) because pyarrow always knows where it is.
+set(USE_LIBARROW_FROM_PYARROW ON)
 
 # If the user requested it we attempt to find CUDF.
 if(FIND_CUDF_CPP)
-  if(USE_LIBARROW_FROM_PYARROW)
-    # We need to find arrow before libcudf since libcudf requires it but doesn't bundle it. TODO:
-    # These options should probably all become optional since in practice they aren't meaningful
-    # except in the case where we actually compile Arrow.
-    set(CUDF_USE_ARROW_STATIC OFF)
-    set(CUDF_ENABLE_ARROW_S3 OFF)
-    set(CUDF_ENABLE_ARROW_ORC OFF)
-    set(CUDF_ENABLE_ARROW_PYTHON OFF)
-    set(CUDF_ENABLE_ARROW_PARQUET OFF)
-    include(rapids-find)
-    include(rapids-export)
-    include(../../cpp/cmake/thirdparty/get_arrow.cmake)
-  endif()
+  # We need to find arrow before libcudf since libcudf requires it but doesn't bundle it. TODO:
+  # These options should probably all become optional since in practice they aren't meaningful
+  # except in the case where we actually compile Arrow.
+  set(CUDF_USE_ARROW_STATIC OFF)
+  set(CUDF_ENABLE_ARROW_S3 OFF)
+  set(CUDF_ENABLE_ARROW_ORC OFF)
+  set(CUDF_ENABLE_ARROW_PYTHON OFF)
+  set(CUDF_ENABLE_ARROW_PARQUET OFF)
+  include(rapids-find)
+  include(rapids-export)
+  include(../../cpp/cmake/thirdparty/get_arrow.cmake)
 
   find_package(cudf ${cudf_version} REQUIRED)
 
@@ -78,17 +74,9 @@ if(NOT cudf_FOUND)
   set(BUILD_BENCHMARKS OFF)
   set(CUDF_BUILD_TESTUTIL OFF)
   set(CUDF_BUILD_STREAMS_TEST_UTIL OFF)
+  set(CUDA_STATIC_RUNTIME ON)
 
-  set(_exclude_from_all "")
-  if(CUDF_BUILD_WHEELS)
-    # Statically link cudart if building wheels
-    set(CUDA_STATIC_RUNTIME ON)
-
-    # Don't install the cuDF C++ targets into wheels
-    set(_exclude_from_all EXCLUDE_FROM_ALL)
-  endif()
-
-  add_subdirectory(../../cpp cudf-cpp ${_exclude_from_all})
+  add_subdirectory(../../cpp cudf-cpp EXCLUDE_FROM_ALL)
 
   # libcudf targets are excluded by default above via EXCLUDE_FROM_ALL to
   # remove extraneous components like headers from libcudacxx, but we do need
