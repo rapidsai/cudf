@@ -1038,7 +1038,7 @@ void sub_rowgroup_test(std::string const& filepath,
   {
     cudf::io::parquet_writer_options out_opts =
       cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, t)
-        .compression(cudf::io::compression_type::SNAPPY)
+        .compression(cudf::io::compression_type::ZSTD)
         .dictionary_policy(cudf::io::dictionary_policy::NEVER);
     cudf::io::write_parquet(out_opts);
 
@@ -1062,7 +1062,7 @@ void sub_rowgroup_test(std::string const& filepath,
   {
     cudf::io::parquet_writer_options out_opts =
       cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, t)
-        .compression(cudf::io::compression_type::SNAPPY)
+        .compression(cudf::io::compression_type::ZSTD)
         .dictionary_policy(cudf::io::dictionary_policy::ALWAYS);
     cudf::io::write_parquet(out_opts);
 
@@ -1073,7 +1073,7 @@ void sub_rowgroup_test(std::string const& filepath,
 
 TEST_F(ParquetChunkedSubRowgroupReaderTest, SingleFixedWidthColumnNoSplits)
 {
-  auto filepath           = std::string("table_with_dict.parquet");
+  auto filepath           = temp_env->get_temp_filepath("table_with_dict.parquet");
   constexpr auto num_rows = 100;
   auto iter1 = cudf::detail::make_counting_transform_iterator(0, [](int i) { return 15; });
   cudf::test::fixed_width_column_wrapper<int> col1(iter1, iter1 + num_rows);
@@ -1083,7 +1083,7 @@ TEST_F(ParquetChunkedSubRowgroupReaderTest, SingleFixedWidthColumnNoSplits)
 
 TEST_F(ParquetChunkedSubRowgroupReaderTest, MultipleFixedWidthColumns)
 {
-  auto filepath           = std::string("multiple_col_fixed_width.parquet");
+  auto filepath           = temp_env->get_temp_filepath("multiple_col_fixed_width.parquet");
   constexpr auto num_rows = 200000;
 
   auto iter1 = thrust::make_counting_iterator<int>(0);

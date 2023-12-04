@@ -484,7 +484,7 @@ std::tuple<std::vector<page_span>, size_t> compute_next_subpass(
                                 aggregated_info.data(),
                                 sizeof(cumulative_page_info) * c_info.size(),
                                 cudaMemcpyDefault,
-                                stream.value()));
+                                stream));
   stream.synchronize();
   // print_cumulative_row_info(h_aggregated_info, "adjusted");
 
@@ -537,7 +537,8 @@ std::tuple<std::vector<page_span>, size_t> compute_next_subpass(
     cudaMemcpyAsync(h_page_counts.data(),
                     page_counts.data(),
                     sizeof(size_t) * num_columns,
-                    cudaMemcpyDeviceToHost);
+                    cudaMemcpyDeviceToHost,
+                    stream);
     stream.synchronize();
     return h_page_counts;
   };
