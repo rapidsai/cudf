@@ -103,12 +103,12 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
  *
  * @return A device_uvector containing the result indices
  */
-rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
-                                                    duplicate_keep_option keep,
-                                                    null_equality nulls_equal,
-                                                    nan_equality nans_equal,
-                                                    rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr);
+rmm::device_uvector<size_type> distinct_indices(table_view const& input,
+                                                duplicate_keep_option keep,
+                                                null_equality nulls_equal,
+                                                nan_equality nans_equal,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::unique_count(column_view const&, null_policy, nan_policy)
