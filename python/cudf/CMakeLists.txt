@@ -47,6 +47,11 @@ if(FIND_CUDF_CPP)
   # libraries.
   include(rapids-find)
   include(rapids-export)
+  set(CUDF_USE_ARROW_STATIC OFF)
+  set(CUDF_ENABLE_ARROW_S3 OFF)
+  set(CUDF_ENABLE_ARROW_ORC OFF)
+  set(CUDF_ENABLE_ARROW_PYTHON OFF)
+  set(CUDF_ENABLE_ARROW_PARQUET OFF)
   include(../../cpp/cmake/thirdparty/get_arrow.cmake)
 
   find_package(cudf ${cudf_version} REQUIRED)
