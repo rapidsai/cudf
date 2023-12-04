@@ -103,7 +103,7 @@ if(NOT cudf_FOUND)
   # Ensure all the shared objects we need at runtime are in the wheel
   set(cython_lib_dir cudf)
   include(cmake/Modules/WheelHelpers.cmake)
-  add_target_libs_to_wheel(LIB_DIR cudf TARGETS cudf arrow_shared nvcomp::nvcomp nvcomp::nvcomp_gdeflate nvcomp::nvcomp_bitcomp)
+  install_aliased_imported_targets(TARGETS cudf arrow_shared nvcomp::nvcomp nvcomp::nvcomp_gdeflate nvcomp::nvcomp_bitcomp DESTINATION ${cython_lib_dir})
 endif()
 
 rapids_cython_init()
