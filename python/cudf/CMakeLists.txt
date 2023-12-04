@@ -70,7 +70,7 @@ if(NOT cudf_FOUND)
   set(CUDF_BUILD_STREAMS_TEST_UTIL OFF)
   set(CUDA_STATIC_RUNTIME ON)
 
-  add_subdirectory(../../cpp cudf-cpp)
+  add_subdirectory(../../cpp cudf-cpp EXCLUDE_FROM_ALL)
 
   # libcudf targets are excluded by default above via EXCLUDE_FROM_ALL to
   # remove extraneous components like headers from libcudacxx, but we do need
@@ -79,13 +79,9 @@ if(NOT cudf_FOUND)
   # libcudf, we place the library and all its dependent artifacts in the cudf
   # directory as a single source of truth and modify the other rpaths
   # appropriately.
-  #set(cython_lib_dir cudf)
-  #include(cmake/Modules/WheelHelpers.cmake)
-  # TODO: Currently this installation is overzealous. We really should only
-  # install libraries that were downloaded as part of the build (or arrow from
-  # pyarrow, a special case), not libraries that were found (e.g. in the conda
-  # environment).
-#  install_aliased_imported_targets(TARGETS cudf arrow_shared nvcomp::nvcomp nvcomp::nvcomp_gdeflate nvcomp::nvcomp_bitcomp DESTINATION ${cython_lib_dir})
+  set(cython_lib_dir cudf)
+  include(cmake/Modules/WheelHelpers.cmake)
+  install_aliased_imported_targets(TARGETS cudf arrow_shared nvcomp::nvcomp nvcomp::nvcomp_gdeflate nvcomp::nvcomp_bitcomp DESTINATION ${cython_lib_dir})
 endif()
 
 rapids_cython_init()
