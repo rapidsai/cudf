@@ -97,17 +97,13 @@ if(NOT cudf_FOUND)
 
   add_subdirectory(../../cpp cudf-cpp ${_exclude_from_all})
 
-  if(CUDF_BUILD_WHEELS)
-    include(cmake/Modules/WheelHelpers.cmake)
-    get_target_property(_nvcomp_link_libs nvcomp::nvcomp INTERFACE_LINK_LIBRARIES)
-    # Ensure all the shared objects we need at runtime are in the wheel
-    add_target_libs_to_wheel(LIB_DIR cudf TARGETS arrow_shared nvcomp::nvcomp ${_nvcomp_link_libs})
-  endif()
   # Since there are multiple subpackages of cudf._lib that require access to libcudf, we place the
   # library in the cudf directory as a single source of truth and modify the other rpaths
   # appropriately.
+  # Ensure all the shared objects we need at runtime are in the wheel
   set(cython_lib_dir cudf)
-  install(TARGETS cudf DESTINATION ${cython_lib_dir})
+  include(cmake/Modules/WheelHelpers.cmake)
+  add_target_libs_to_wheel(LIB_DIR cudf TARGETS cudf arrow_shared nvcomp::nvcomp nvcomp::nvcomp_gdeflate nvcomp::nvcomp_bitcomp)
 endif()
 
 rapids_cython_init()
