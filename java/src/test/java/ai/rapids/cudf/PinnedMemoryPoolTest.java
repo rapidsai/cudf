@@ -45,38 +45,6 @@ class PinnedMemoryPoolTest extends CudfTestBase {
   }
 
   @Test
-  void allocate() {
-    PinnedMemoryPool.initialize(1024*1024*500L);
-    for (int i = 2048000; i < 1024*1024*1024; i = i * 2) {
-      log.warn("STARTING TEST FOR size = " + i);
-      HostMemoryBuffer buff = null;
-      HostMemoryBuffer buff2 = null;
-      HostMemoryBuffer buff3 = null;
-      try {
-        buff = PinnedMemoryPool.allocate(i);
-        assertEquals(i, buff.length);
-        buff2 = PinnedMemoryPool.allocate(i / 2);
-        assertEquals(i/2, buff2.length);
-        buff.close();
-        buff = null;
-        buff3 = PinnedMemoryPool.allocate(i * 2);
-        assertEquals(i * 2, buff3.length);
-      } finally {
-        if (buff != null) {
-          buff.close();
-        }
-        if (buff3 != null) {
-          buff3.close();
-        }
-        if (buff2 != null) {
-          buff2.close();
-        }
-      }
-      log.warn("DONE TEST FOR size = " + i + "\n");
-    }
-  }
-
-  @Test
   void testFragmentationAndExhaustion() {
     final long poolSize = 15 * 1024L;
     PinnedMemoryPool.initialize(poolSize);

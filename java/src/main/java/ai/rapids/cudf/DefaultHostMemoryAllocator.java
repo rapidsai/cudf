@@ -32,7 +32,7 @@ public class DefaultHostMemoryAllocator implements HostMemoryAllocator {
 
   /**
    * Sets a new default host memory allocator implementation by default.
-   * @param hostMemoryAllocator
+   * @param hostMemoryAllocator the allocator to use from here on
    */
   public static void set(HostMemoryAllocator hostMemoryAllocator) {
     instance = hostMemoryAllocator;
@@ -40,11 +40,17 @@ public class DefaultHostMemoryAllocator implements HostMemoryAllocator {
 
   @Override
   public HostMemoryBuffer allocate(long bytes, boolean preferPinned) {
-    return HostMemoryBuffer.allocate(bytes, preferPinned);
+    if (preferPinned) {
+      HostMemoryBuffer pinnedBuffer = PinnedMemoryPool.tryAllocate(bytes);
+      if (pinnedBuffer != null) {
+        return pinnedBuffer;
+      }
+    }
+    return HostMemoryBuffer.allocateRaw(bytes);
   }
 
   @Override
   public HostMemoryBuffer allocate(long bytes) {
-    return HostMemoryBuffer.allocate(bytes);
+    return allocate(bytes, HostMemoryBuffer.defaultPreferPinned);
   }
 }
