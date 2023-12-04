@@ -16,6 +16,8 @@ cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
 
 set(cudf_version 24.02.00)
 
+set(rapids-cmake-repo "vyasr/rapids-cmake")
+set(rapids-cmake-branch "feat/nvcomp_global_targets")
 include(../../fetch_rapids.cmake)
 include(rapids-cuda)
 rapids_cuda_init_architectures(cudf-python)
@@ -87,7 +89,7 @@ if(NOT cudf_FOUND)
 
     # Need to set this so all the nvcomp targets are global, not only nvcomp::nvcomp
     # https://cmake.org/cmake/help/latest/variable/CMAKE_FIND_PACKAGE_TARGETS_GLOBAL.html#variable:CMAKE_FIND_PACKAGE_TARGETS_GLOBAL
-    set(CMAKE_FIND_PACKAGE_TARGETS_GLOBAL ON)
+    #set(CMAKE_FIND_PACKAGE_TARGETS_GLOBAL ON)
 
     # Don't install the cuDF C++ targets into wheels
     set(_exclude_from_all EXCLUDE_FROM_ALL)
