@@ -44,10 +44,10 @@ if(${PYARROW_RESULT})
   message(FATAL_ERROR "Error while trying to obtain pyarrow include directory:\n${PYARROW_ERROR}")
 endif()
 
-# Due to cudf's scalar.pyx needing to cimport pylibcudf's scalar.pyx (because there are parts
-# of cudf Cython that need to directly access the c_obj underlying the pylibcudf Scalar) the
-# requirement for arrow headers infects all of cudf. These requirements will
-# go away once all scalar-related Cython code is removed from cudf.
+# Due to cudf's scalar.pyx needing to cimport pylibcudf's scalar.pyx (because there are parts of
+# cudf Cython that need to directly access the c_obj underlying the pylibcudf Scalar) the
+# requirement for arrow headers infects all of cudf. These requirements will go away once all
+# scalar-related Cython code is removed from cudf.
 function(link_to_pyarrow_headers targets)
   foreach(target IN LISTS targets)
     # PyArrow headers require numpy headers.
