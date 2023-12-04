@@ -6,8 +6,10 @@ import pytest
 from pandas.api import types as pd_types
 
 import cudf
-from cudf.core._compat import PANDAS_GE_200
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210
 from cudf.api import types
+
+from cudf.testing._utils import expect_warning_if
 
 
 @pytest.mark.parametrize(
@@ -1036,10 +1038,11 @@ def test_is_decimal_dtype(obj, expect):
     ),
 )
 def test_pandas_agreement(obj):
+    with expect_warning_if(PANDAS_GE_210):
+        expected = pd_types.is_categorical_dtype(obj)
     with pytest.warns(FutureWarning):
-        assert types.is_categorical_dtype(
-            obj
-        ) == pd_types.is_categorical_dtype(obj)
+        actual = types.is_categorical_dtype(obj)
+    assert expected == actual
     assert types.is_numeric_dtype(obj) == pd_types.is_numeric_dtype(obj)
     assert types.is_integer_dtype(obj) == pd_types.is_integer_dtype(obj)
     assert types.is_integer(obj) == pd_types.is_integer(obj)
