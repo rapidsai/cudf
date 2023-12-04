@@ -22,6 +22,7 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -804,6 +805,12 @@ bool expect_column_properties_equal(column_view const& lhs,
                                     column_view const& rhs,
                                     debug_output_level verbosity)
 {
+  if (cudf::detail::has_nonempty_nulls(lhs, cudf::get_default_stream())) {
+    throw std::invalid_argument("Unsanitized lhs column");
+  }
+  if (cudf::detail::has_nonempty_nulls(rhs, cudf::get_default_stream())) {
+    throw std::invalid_argument("Unsanitized rhs column");
+  }
   auto lhs_indices = generate_all_row_indices(lhs.size());
   auto rhs_indices = generate_all_row_indices(rhs.size());
   return cudf::type_dispatcher(lhs.type(),
@@ -822,6 +829,12 @@ bool expect_column_properties_equivalent(column_view const& lhs,
                                          column_view const& rhs,
                                          debug_output_level verbosity)
 {
+  if (cudf::detail::has_nonempty_nulls(lhs, cudf::get_default_stream())) {
+    throw std::invalid_argument("Unsanitized lhs column");
+  }
+  if (cudf::detail::has_nonempty_nulls(rhs, cudf::get_default_stream())) {
+    throw std::invalid_argument("Unsanitized rhs column");
+  }
   auto lhs_indices = generate_all_row_indices(lhs.size());
   auto rhs_indices = generate_all_row_indices(rhs.size());
   return cudf::type_dispatcher(lhs.type(),
@@ -840,6 +853,12 @@ bool expect_columns_equal(cudf::column_view const& lhs,
                           cudf::column_view const& rhs,
                           debug_output_level verbosity)
 {
+  if (cudf::detail::has_nonempty_nulls(lhs, cudf::get_default_stream())) {
+    throw std::invalid_argument("Unsanitized lhs column");
+  }
+  if (cudf::detail::has_nonempty_nulls(rhs, cudf::get_default_stream())) {
+    throw std::invalid_argument("Unsanitized rhs column");
+  }
   auto lhs_indices = generate_all_row_indices(lhs.size());
   auto rhs_indices = generate_all_row_indices(rhs.size());
   return cudf::type_dispatcher(lhs.type(),
@@ -860,6 +879,12 @@ bool expect_columns_equivalent(cudf::column_view const& lhs,
                                debug_output_level verbosity,
                                size_type fp_ulps)
 {
+  if (cudf::detail::has_nonempty_nulls(lhs, cudf::get_default_stream())) {
+    throw std::invalid_argument("Unsanitized lhs column");
+  }
+  if (cudf::detail::has_nonempty_nulls(rhs, cudf::get_default_stream())) {
+    throw std::invalid_argument("Unsanitized rhs column");
+  }
   auto lhs_indices = generate_all_row_indices(lhs.size());
   auto rhs_indices = generate_all_row_indices(rhs.size());
   return cudf::type_dispatcher(lhs.type(),
