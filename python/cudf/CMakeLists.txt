@@ -16,8 +16,6 @@ cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
 
 set(cudf_version 24.02.00)
 
-set(rapids-cmake-repo "vyasr/rapids-cmake")
-set(rapids-cmake-branch "feat/nvcomp_global_targets")
 include(../../fetch_rapids.cmake)
 include(rapids-cuda)
 rapids_cuda_init_architectures(cudf-python)
