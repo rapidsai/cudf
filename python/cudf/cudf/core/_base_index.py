@@ -1109,6 +1109,7 @@ class BaseIndex(Serializable):
 
         if is_mixed_with_object_dtype(self, other) or len(other) == 0:
             difference = self.copy()
+            difference.name = res_name
             if sort is True:
                 return difference.sort_values()
         else:
@@ -1122,11 +1123,10 @@ class BaseIndex(Serializable):
                 )
                 ._data
             )
+            difference.name = res_name
 
             if self.dtype != other.dtype:
                 difference = difference.astype(self.dtype)
-
-        difference.name = res_name
 
         if sort in {None, True} and len(other):
             return difference.sort_values()
