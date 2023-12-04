@@ -39,27 +39,23 @@ option(FIND_CUDF_CPP "Search for existing CUDF C++ installations before defaulti
 # When building the Python package, always defer to pyarrow to tell us where to
 # find libarrow. This works whether libarrow is installed by pyarrow itself
 # (i.e. as part of a wheel) or as part of a separate libarrow package (i.e. in
-# conda) because pyarrow always knows where it is.
+# conda) because pyarrow always knows where it is. libcudf must be built
+# against an ABI-compatible arrow library for the package to load at runtime,
+# so searching this way is always correct.
 set(USE_LIBARROW_FROM_PYARROW ON)
 
 # If the user requested it we attempt to find CUDF.
 if(FIND_CUDF_CPP)
-  # We need to find arrow before libcudf since libcudf requires it but doesn't bundle it. TODO:
-  # These options should probably all become optional since in practice they aren't meaningful
-  # except in the case where we actually compile Arrow.
-  set(CUDF_USE_ARROW_STATIC OFF)
-  set(CUDF_ENABLE_ARROW_S3 OFF)
-  set(CUDF_ENABLE_ARROW_ORC OFF)
-  set(CUDF_ENABLE_ARROW_PYTHON OFF)
-  set(CUDF_ENABLE_ARROW_PARQUET OFF)
+  # We need to find arrow before libcudf since libcudf requires it but doesn't
+  # bundle arrow libraries.
   include(rapids-find)
   include(rapids-export)
   include(../../cpp/cmake/thirdparty/get_arrow.cmake)
 
   find_package(cudf ${cudf_version} REQUIRED)
 
-  # an installed version of libcudf doesn't provide the dlpack headers so we need to download dlpack
-  # for the interop.pyx
+  # an installed version of libcudf doesn't provide the dlpack headers so we
+  # need to download dlpack for the interop.pyx
   include(rapids-cpm)
   rapids_cpm_init()
   include(../../cpp/cmake/thirdparty/get_dlpack.cmake)
