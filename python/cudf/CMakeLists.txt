@@ -87,20 +87,19 @@ if(NOT cudf_FOUND)
     # Statically link cudart if building wheels
     set(CUDA_STATIC_RUNTIME ON)
 
-    # Need to set this so all the nvcomp targets are global, not only nvcomp::nvcomp
-    # https://cmake.org/cmake/help/latest/variable/CMAKE_FIND_PACKAGE_TARGETS_GLOBAL.html#variable:CMAKE_FIND_PACKAGE_TARGETS_GLOBAL
-    #set(CMAKE_FIND_PACKAGE_TARGETS_GLOBAL ON)
-
     # Don't install the cuDF C++ targets into wheels
     set(_exclude_from_all EXCLUDE_FROM_ALL)
   endif()
 
   add_subdirectory(../../cpp cudf-cpp ${_exclude_from_all})
 
-  # Since there are multiple subpackages of cudf._lib that require access to libcudf, we place the
-  # library in the cudf directory as a single source of truth and modify the other rpaths
+  # libcudf targets are excluded by default above via EXCLUDE_FROM_ALL to
+  # remove extraneous components like headers from libcudacxx, but we do need
+  # the libraries. However, we want to control where they are installed to.
+  # Since there are multiple subpackages of cudf._lib that require access to
+  # libcudf, we place the library and all its dependent artifacts in the cudf
+  # directory as a single source of truth and modify the other rpaths
   # appropriately.
-  # Ensure all the shared objects we need at runtime are in the wheel
   set(cython_lib_dir cudf)
   include(cmake/Modules/WheelHelpers.cmake)
   install_aliased_imported_targets(TARGETS cudf arrow_shared nvcomp::nvcomp nvcomp::nvcomp_gdeflate nvcomp::nvcomp_bitcomp DESTINATION ${cython_lib_dir})
