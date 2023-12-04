@@ -48,12 +48,7 @@ public class ParquetChunkedReader implements AutoCloseable {
    * @param filePath Full path of the input Parquet file to read.
    */
   public ParquetChunkedReader(long chunkSizeByteLimit, ParquetOptions opts, File filePath) {
-    handle = create(chunkSizeByteLimit, 0, opts.getIncludeColumnNames(), opts.getReadBinaryAsString(),
-        filePath.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId());
-
-    if (handle == 0) {
-      throw new IllegalStateException("Cannot create native chunked Parquet reader object.");
-    }
+    this(chunkSizeByteLimit, 0, opts, filePath);
   }
 
   /**
@@ -87,12 +82,7 @@ public class ParquetChunkedReader implements AutoCloseable {
    */
   public ParquetChunkedReader(long chunkSizeByteLimit, ParquetOptions opts, HostMemoryBuffer buffer,
                               long offset, long len) {
-    handle = create(chunkSizeByteLimit,0,  opts.getIncludeColumnNames(), opts.getReadBinaryAsString(), null,
-        buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId());
-
-    if (handle == 0) {
-      throw new IllegalStateException("Cannot create native chunked Parquet reader object.");
-    }
+    this(chunkSizeByteLimit, 0L, opts, buffer, offset, len);
   }
 
   /**
