@@ -185,14 +185,13 @@ def test_arith_masked_vs_masked_datelike(op, dtype_l, dtype_r):
     gdf["a"] = gdf["a"].astype(dtype_l)
     gdf["b"] = gdf["b"].astype(dtype_r)
 
-    pdf = gdf.to_pandas(nullable=True)
-
+    pdf = gdf.to_pandas()
     expect = op(pdf["a"], pdf["b"])
     obtain = gdf.apply(func, axis=1)
     assert_eq(expect, obtain, check_dtype=False)
     # TODO: After the following pandas issue is
     # fixed, uncomment the following line and delete
-    # through `to_pandas(nullable=True)` statement.
+    # through `to_pandas()` statement.
     # https://github.com/pandas-dev/pandas/issues/52411
 
     # run_masked_udf_test(func, gdf, nullable=False, check_dtype=False)
