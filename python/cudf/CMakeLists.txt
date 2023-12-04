@@ -90,6 +90,7 @@ endif()
 
 rapids_cython_init()
 
+include(cmake/Modules/LinkPyarrowHeaders.cmake)
 add_subdirectory(cudf/_lib)
 add_subdirectory(udf_cpp)
 
