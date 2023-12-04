@@ -20,5 +20,5 @@ rapids_cython_create_modules(
   SOURCE_FILES "${cython_sources}"
   LINKED_LIBRARIES "${linked_libraries}"
 )
-include(cmake/Modules/LinkPyarrowHeaders.cmake
+include(../../../cudf/cmake/Modules/LinkPyarrowHeaders.cmake)
 link_to_pyarrow_headers("${RAPIDS_CYTHON_CREATED_TARGETS}")
