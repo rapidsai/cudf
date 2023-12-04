@@ -36,8 +36,9 @@ extern "C" {
 // This function should take all the parameters that `Table.readParquet` takes,
 // plus one more parameter `long chunkSizeByteLimit`.
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ParquetChunkedReader_create(
-    JNIEnv *env, jclass, jlong chunk_read_limit, jobjectArray filter_col_names,
-    jbooleanArray j_col_binary_read, jstring inp_file_path, jlong buffer, jlong buffer_length,
+    JNIEnv *env, jclass, jlong chunk_read_limit, jlong pass_read_limit,
+    jobjectArray filter_col_names, jbooleanArray j_col_binary_read, jstring inp_file_path,
+    jlong buffer, jlong buffer_length,
     jint unit) {
   JNI_NULL_CHECK(env, j_col_binary_read, "Null col_binary_read", 0);
   bool read_buffer = true;
@@ -80,7 +81,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ParquetChunkedReader_create(
                                .build();
 
     return reinterpret_cast<jlong>(new cudf::io::chunked_parquet_reader(
-        static_cast<std::size_t>(chunk_read_limit), read_opts));
+        static_cast<std::size_t>(chunk_read_limit),
+        static_cast<std::size_t>(pass_read_limit),
+        read_opts));
   }
   CATCH_STD(env, 0);
 }
