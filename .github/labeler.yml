@@ -1,25 +1,21 @@
 # Documentation for config - https://github.com/actions/labeler#common-examples
 
 cuDF (Python):
-- changed-files:
-  - any-glob-to-any-file: ['python/**', 'notebooks/**']
+  - 'python/**'
+  - 'notebooks/**'
 
 libcudf:
-- changed-files: 
-  - any-glob-to-any-file: 'cpp/**'
+  - 'cpp/**'
 
 CMake:
-- changed-files:
-  - any-glob-to-any-file: ['**/CMakeLists.txt', '**/cmake/**']
+  - '**/CMakeLists.txt'
+  - '**/cmake/**'
 
 cuDF (Java):
-- changed-files:
-  - any-glob-to-any-file: 'java/**'
+  - 'java/**'
 
 ci:
-- changed-files:
-  - any-glob-to-any-file: 'ci/**'
+  - 'ci/**'
 
 conda:
-- changed-files:
-  - any-glob-to-any-file: 'conda/**'
+  - 'conda/**'
