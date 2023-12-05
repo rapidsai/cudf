@@ -19,9 +19,23 @@
 package ai.rapids.cudf;
 
 public class DefaultHostMemoryAllocator implements HostMemoryAllocator {
-  private static final HostMemoryAllocator INSTANCE = new DefaultHostMemoryAllocator();
+  private static volatile HostMemoryAllocator instance = new DefaultHostMemoryAllocator();
+
+  /**
+   * Retrieve current host memory allocator used by default if not passed directly to API
+   *
+   * @return current default HostMemoryAllocator implementation
+   */
   public static HostMemoryAllocator get() {
-    return INSTANCE;
+    return instance;
+  }
+
+  /**
+   * Sets a new default host memory allocator implementation by default.
+   * @param hostMemoryAllocator
+   */
+  public static void set(HostMemoryAllocator hostMemoryAllocator) {
+    instance = hostMemoryAllocator;
   }
 
   @Override

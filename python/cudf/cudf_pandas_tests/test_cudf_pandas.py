@@ -1076,6 +1076,10 @@ def test_np_array_of_timestamps():
         xpd.Index(["a", 2, 3]),
         # Other types
         xpd.tseries.offsets.BDay(5),
+        xpd.Timestamp("2001-01-01"),
+        xpd.Timestamp("2001-01-01", freq="D"),
+        xpd.Timedelta("1 days"),
+        xpd.Timedelta(1, "D"),
     ],
 )
 def test_pickle(obj):
