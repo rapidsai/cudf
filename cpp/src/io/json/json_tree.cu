@@ -58,7 +58,37 @@
 #include <limits>
 
 namespace cudf::io::json {
+// Debug print helpers
+[[maybe_unused]] auto to_token_str = [](PdaTokenT token) -> std::string {
+  switch (token) {
+    case token_t::StructBegin: return " {";
+    case token_t::StructEnd: return " }";
+    case token_t::ListBegin: return " [";
+    case token_t::ListEnd: return " ]";
+    case token_t::FieldNameBegin: return "FB";
+    case token_t::FieldNameEnd: return "FE";
+    case token_t::StringBegin: return "SB";
+    case token_t::StringEnd: return "SE";
+    case token_t::ErrorBegin: return "er";
+    case token_t::ValueBegin: return "VB";
+    case token_t::ValueEnd: return "VE";
+    case token_t::StructMemberBegin: return " <";
+    case token_t::StructMemberEnd: return " >";
+    case token_t::LineEnd: return ";";
+    default: return ".";
+  }
+};
+auto to_int    = [](auto v) { return std::to_string(static_cast<int>(v)); };
+auto print_vec = [](auto const& cpu, auto const name, auto converter) {
+  for (auto const& v : cpu)
+    printf("%3s,", converter(v).c_str());
+  std::cout << name << std::endl;
+};
 namespace detail {
+
+void print_tree(host_span<SymbolT const> input,
+                tree_meta_t const& d_gpu_tree,
+                rmm::cuda_stream_view stream);
 
 // The node that a token represents
 struct token_to_node {
@@ -129,6 +159,14 @@ struct node_ranges {
       }
     }
     return thrust::make_tuple(range_begin, range_end);
+  }
+};
+
+struct is_nested_end {
+  SymbolT const* tokens;
+  __device__ auto operator()(NodeIndexT i) -> bool
+  {
+    return tokens[i] == token_t::StructEnd or tokens[i] == token_t::ListEnd;
   }
 };
 
@@ -293,9 +331,9 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   // Node parent ids:
   // previous push node_id transform, stable sort by level, segmented scan with Max, reorder.
   rmm::device_uvector<NodeIndexT> parent_node_ids(num_nodes, stream, mr);
+  rmm::device_uvector<NodeIndexT> node_token_ids(num_nodes, stream);  // needed for SE, LE later
   // This block of code is generalized logical stack algorithm. TODO: make this a separate function.
   {
-    rmm::device_uvector<NodeIndexT> node_token_ids(num_nodes, stream);
     cudf::detail::copy_if_safe(thrust::make_counting_iterator<NodeIndexT>(0),
                                thrust::make_counting_iterator<NodeIndexT>(0) + num_tokens,
                                tokens.begin(),
@@ -375,6 +413,118 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     },
     stream);
   CUDF_EXPECTS(node_range_out_end - node_range_out_it == num_nodes, "node range count mismatch");
+
+  // TODO do this only if mixed type as string flag is enabled.
+  // Fixes here for struct, list nodes with correct range_end. How?
+  // Extract, struct, list - begin & end separately, then push, pop, levels, scan, similar propagate
+  // (segmented scan), then scatter.
+  {
+    // Whether the token pushes onto the parent node stack
+    auto const is_nested = [] __device__(PdaTokenT const token) -> bool {
+      switch (token) {
+        case token_t::StructBegin:
+        case token_t::StructEnd:
+        case token_t::ListBegin:
+        case token_t::ListEnd: return true;
+        default: return false;
+      };
+    };
+    auto const num_nested =
+      thrust::count_if(rmm::exec_policy(stream), tokens.begin(), tokens.end(), is_nested);
+    rmm::device_uvector<TreeDepthT> token_levels(num_nested, stream);
+    rmm::device_uvector<NodeIndexT> token_id(num_nested, stream);         // 4B*2=8B, or 2B+
+    rmm::device_uvector<NodeIndexT> parent_node_ids(num_nested, stream);  // 4B*2=8B, or 2B+
+    auto const push_pop_it = thrust::make_transform_iterator(
+      tokens.begin(), [] __device__(PdaTokenT const token) -> size_type {
+        int const is_begin = token == token_t::StructBegin or token == token_t::ListBegin;
+        int const is_end   = token == token_t::StructEnd or token == token_t::ListEnd;
+        return is_begin - is_end;
+      });
+    // copy_if only struct/list, stable sort by level,
+    // corresponding node indices?,
+    // then scatter to node_range_end for struct/list end.
+    cudf::detail::copy_if_safe(push_pop_it,
+                               push_pop_it + num_tokens,
+                               tokens.begin(),
+                               token_levels.begin(),
+                               is_nested,
+                               stream);
+    cudf::detail::copy_if_safe(thrust::make_counting_iterator<NodeIndexT>(0),
+                               thrust::make_counting_iterator<NodeIndexT>(0) + num_tokens,
+                               tokens.begin(),
+                               token_id.begin(),
+                               is_nested,
+                               stream);
+
+    print_vec(cudf::detail::make_std_vector_async(token_levels, stream), "ntoken_levels", to_int);
+
+    thrust::exclusive_scan(
+      rmm::exec_policy(stream), token_levels.begin(), token_levels.end(), token_levels.begin());
+
+    print_vec(cudf::detail::make_std_vector_async(token_levels, stream), "ntoken_levels", to_int);
+
+    rmm::device_uvector<TreeDepthT> ntokens(num_nested, stream);
+    cudf::detail::copy_if_safe(
+      tokens.begin(), tokens.end(), tokens.begin(), ntokens.begin(), is_nested, stream);
+    print_vec(cudf::detail::make_std_vector_async(ntokens, stream), "ntokens", to_token_str);
+    print_vec(cudf::detail::make_std_vector_async(token_id, stream), "ntoken_id", to_int);
+    //
+    auto const first_childs_parent_token_id2 =
+      [tokens_gpu = tokens.begin(), token_id = token_id.begin()] __device__(auto i) -> NodeIndexT {
+      if (i <= 0) { return -1; }
+      auto id = token_id[i - 1];  // token indices.
+      if (tokens_gpu[id] == token_t::StructBegin or tokens_gpu[id] == token_t::ListBegin) {
+        return token_id[i - 1];
+      } else {
+        return -1;
+      }
+    };
+
+    // copied L+S tokens, and their token ids, their token levels.
+    // first child parent token ids
+    // propagate to siblings
+    // parent token id for all ends -> similar binary search here to find its node id.
+    // scatter to that location.
+    thrust::transform(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator<NodeIndexT>(0),
+      thrust::make_counting_iterator<NodeIndexT>(0) + num_nested,
+      parent_node_ids.begin(),
+      [node_ids_gpu = node_token_ids.begin(), num_nodes, first_childs_parent_token_id2] __device__(
+        NodeIndexT const tid) -> NodeIndexT {
+        auto const pid = first_childs_parent_token_id2(tid);
+        // return pid;
+        return pid < 0
+                 ? parent_node_sentinel
+                 : thrust::lower_bound(thrust::seq, node_ids_gpu, node_ids_gpu + num_nodes, pid) -
+                     node_ids_gpu;
+        // parent_node_sentinel is -1, useful for segmented max operation below
+      });
+
+    print_vec(
+      cudf::detail::make_std_vector_async(parent_node_ids, stream), "nparent_node_ids", to_int);
+    // propagate to siblings.
+    propagate_parent_to_siblings(
+      cudf::device_span<TreeDepthT const>{token_levels.data(), token_levels.size()},
+      parent_node_ids,
+      stream);
+    print_vec(
+      cudf::detail::make_std_vector_async(parent_node_ids, stream), "nparent_node_ids", to_int);
+
+    // scatter to node_range_end for all nested end tokens. (if it's end)
+    auto token_indices_it =
+      thrust::make_permutation_iterator(token_indices.begin(), token_id.begin());
+    // add +1 to include end symbol.
+    auto nested_node_range_end_it = thrust::make_transform_output_iterator(
+      node_range_end.begin(), [] __device__(auto i) { return i + 1; });
+    auto stencil = thrust::make_transform_iterator(token_id.begin(), is_nested_end{tokens.begin()});
+    thrust::scatter_if(rmm::exec_policy(stream),
+                       token_indices_it,
+                       token_indices_it + num_nested,
+                       parent_node_ids.begin(),
+                       stencil,
+                       nested_node_range_end_it);
+  }
 
   return {std::move(node_categories),
           std::move(parent_node_ids),

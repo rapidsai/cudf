@@ -276,6 +276,16 @@ reduce_to_column_tree(tree_meta_t& tree,
       return is_non_list_parent(parent_col_id);
     });
 
+  // For Struct and List (to avoid copying entire strings when mixed type as string is enabled)
+  thrust::transform_if(
+    rmm::exec_policy(stream),
+    col_range_begin.begin(),
+    col_range_begin.end(),
+    column_categories.begin(),
+    col_range_end.begin(),
+    [] __device__(auto i) { return i + 1; },
+    [] __device__(NodeT type) { return type == NC_STRUCT || type == NC_LIST; });
+
   return std::tuple{tree_meta_t{std::move(column_categories),
                                 std::move(parent_col_ids),
                                 std::move(column_levels),
