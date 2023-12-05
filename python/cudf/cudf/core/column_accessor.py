@@ -366,11 +366,15 @@ class ColumnAccessor(abc.MutableMapping):
                 {k: v.copy(deep=deep) for k, v in self._data.items()},
                 multiindex=self.multiindex,
                 level_names=self.level_names,
+                rangeindex=self.rangeindex,
+                label_dtype=self.label_dtype,
             )
         return self.__class__(
             self._data.copy(),
             multiindex=self.multiindex,
             level_names=self.level_names,
+            rangeindex=self.rangeindex,
+            label_dtype=self.label_dtype,
         )
 
     def select_by_label(self, key: Any) -> ColumnAccessor:
