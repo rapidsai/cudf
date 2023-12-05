@@ -1989,22 +1989,20 @@ def test_multiindex_to_frame_allow_duplicates(
         ) or (isinstance(name, list) and len(name) != len(set(name))):
             # cudf doesn't have the ability to construct dataframes
             # with duplicate column names
-            with expect_warning_if(name is None):
-                with pytest.raises(ValueError):
-                    gidx.to_frame(
-                        index=index,
-                        name=name,
-                        allow_duplicates=allow_duplicates,
-                    )
+            with pytest.raises(ValueError):
+                gidx.to_frame(
+                    index=index,
+                    name=name,
+                    allow_duplicates=allow_duplicates,
+                )
         else:
-            with expect_warning_if(name is None):
+            with expect_warning_if(not PANDAS_GE_200 and name is None):
                 expected = pidx.to_frame(
                     index=index, name=name, allow_duplicates=allow_duplicates
                 )
-            with expect_warning_if(name is None):
-                actual = gidx.to_frame(
-                    index=index, name=name, allow_duplicates=allow_duplicates
-                )
+            actual = gidx.to_frame(
+                index=index, name=name, allow_duplicates=allow_duplicates
+            )
 
             assert_eq(expected, actual)
 

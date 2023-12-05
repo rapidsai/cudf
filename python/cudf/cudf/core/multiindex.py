@@ -6,7 +6,6 @@ import itertools
 import numbers
 import operator
 import pickle
-import warnings
 from collections import abc
 from functools import cached_property
 from numbers import Integral
@@ -1023,25 +1022,19 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         # TODO: Currently this function makes a shallow copy, which is
         # incorrect. We want to make a deep copy, otherwise further
         # modifications of the resulting DataFrame will affect the MultiIndex.
-        if name is None:
-            warnings.warn(
-                "Explicitly passing `name=None` currently preserves the "
-                "Index's name or uses a default name of 0. This behaviour "
-                "is deprecated, and in the future `None` will be used "
-                "as the name of the resulting DataFrame column.",
-                FutureWarning,
-            )
-            name = no_default
-
-        if name is not no_default:
+        if name is no_default:
+            column_names = [
+                level if name is None else name
+                for level, name in enumerate(self.names)
+            ]
+        else:
             if len(name) != len(self.levels):
                 raise ValueError(
                     "'name' should have the same length as "
                     "number of levels on index."
                 )
             column_names = name
-        else:
-            column_names = self.names
+
         all_none_names = None
         if not (
             all_none_names := all(x is None for x in column_names)
