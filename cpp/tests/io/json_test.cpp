@@ -18,6 +18,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/default_stream.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
@@ -2088,6 +2089,32 @@ TEST_F(JsonReaderTest, JSONLinesRecoveringIgnoreExcessChars)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     result.tbl->get_column(2),
     float64_wrapper{{0.0, 0.0, 0.0, 1.2, 0.0, 0.0, 0.0, 0.0}, c_validity.cbegin()});
+}
+
+TEST_F(JsonReaderTest, Mixed)
+{
+  // std::string json_string = R"( [{"a":[123], "b":1.0}, {"b":1.1, "c": {"0": 123}}, {"b":2.1}])";
+  std::string json_string = R"( [{"a":[123], "b":1.0}, {"a":1.1}, {"b":2.1, "a": {"0": 123}}])";
+
+  // TODO Force to string via schema
+  // std::map<std::string, cudf::io::schema_element> dtype_schema{
+  //   {"a",
+  //    {
+  //      data_type{cudf::type_id::LIST},
+  //      {{"element", {data_type{cudf::type_id::STRUCT}, {{"0", {dtype<float>()}}}}}},
+  //    }},
+  //   {"b", {dtype<int32_t>()}},
+  // };
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{json_string.data(), json_string.size()})
+      // .dtypes(dtype_schema)
+      .mixed_types_as_string(true)
+      .lines(false);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+  cudf::test::print(result.tbl->view().column(0));
 }
 
 CUDF_TEST_PROGRAM_MAIN()
