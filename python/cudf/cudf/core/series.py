@@ -3120,7 +3120,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if dropna and self.null_count == len(self):
             return Series(
                 [],
-                dtype=np.int34,
+                dtype=np.int64,
                 name=result_name,
                 index=cudf.Index([], dtype=self.dtype, name=self.name),
             )
