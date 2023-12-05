@@ -40,6 +40,21 @@ function(find_libarrow_in_python_wheel PYARROW_VERSION)
     OUTPUT_STRIP_TRAILING_WHITESPACE
   )
   list(APPEND CMAKE_PREFIX_PATH "${CUDF_PYARROW_WHEEL_DIR}")
+
+  string(
+      APPEND
+      initial_code_block
+      [=[
+find_package(Python 3.9 REQUIRED COMPONENTS Interpreter)
+execute_process(
+    COMMAND "${Python_EXECUTABLE}" -c "import pyarrow; print(pyarrow.get_library_dirs()[0])"
+    OUTPUT_VARIABLE CUDF_PYARROW_WHEEL_DIR
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    COMMAND_ERROR_IS_FATAL ANY
+)
+list(APPEND CMAKE_PREFIX_PATH "${CUDF_PYARROW_WHEEL_DIR}")
+]=]
+  )
   rapids_find_generate_module(
     Arrow NO_CONFIG
     VERSION "${PYARROW_VERSION}"
@@ -47,6 +62,7 @@ function(find_libarrow_in_python_wheel PYARROW_VERSION)
     BUILD_EXPORT_SET cudf-exports
     INSTALL_EXPORT_SET cudf-exports
     HEADER_NAMES arrow/python/arrow_to_pandas.h
+    INITIAL_CODE_BLOCK initial_code_block
   )
 
   find_package(Arrow ${PYARROW_VERSION} MODULE REQUIRED GLOBAL)
