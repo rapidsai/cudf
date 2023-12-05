@@ -46,7 +46,7 @@ execute_process(
   OUTPUT_VARIABLE _pyarrow_lib_dir
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
-file(GLOB _pyarrow_libs "${_pyarrow_lib_dir}/libarrow.${CMAKE_SHARED_LIBRARY_SUFFIX}.*")
+file(GLOB _pyarrow_libs "${_pyarrow_lib_dir}/libarrow.${CMAKE_SHARED_LIBRARY_SUFFIX}*")
 list(LENGTH _pyarrow_libs _pyarrow_libs_len)
 if(_pyarrow_libs_len GREATER 0)
   set(USE_LIBARROW_FROM_PYARROW ON)
