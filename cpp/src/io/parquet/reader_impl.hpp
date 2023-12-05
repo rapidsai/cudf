@@ -90,17 +90,20 @@ class reader::impl {
    * ```
    *
    * Reading the whole given file at once through `read()` function is still supported if
-   * `chunk_read_limit == 0` (i.e., no reading limit).
-   * In such case, `read_chunk()` will also return rows of the entire file.
+   * `chunk_read_limit == 0` (i.e., no reading limit) and `pass_read_limit == 0` (no temporary
+   * memory limit) In such case, `read_chunk()` will also return rows of the entire file.
    *
    * @param chunk_read_limit Limit on total number of bytes to be returned per read,
    *        or `0` if there is no limit
+   * @param pass_read_limit Limit on memory usage for the purposes of decompression and processing
+   * of input, or `0` if there is no limit.
    * @param sources Dataset sources
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::size_t chunk_read_limit,
+                std::size_t pass_read_limit,
                 std::vector<std::unique_ptr<datasource>>&& sources,
                 parquet_reader_options const& options,
                 rmm::cuda_stream_view stream,
@@ -133,22 +136,22 @@ class reader::impl {
                     host_span<std::vector<size_type> const> row_group_indices,
                     std::optional<std::reference_wrapper<ast::expression const>> filter);
 
+  void load_global_chunk_info();
+  void compute_input_pass_row_group_info();
+  void setup_pass();
+
   /**
    * @brief Create chunk information and start file reads
    *
-   * @param row_groups_info vector of information about row groups to read
-   * @param num_rows  Maximum number of rows to read
    * @return pair of boolean indicating if compressed chunks were found and a vector of futures for
    * read completion
    */
-  std::pair<bool, std::vector<std::future<void>>> create_and_read_column_chunks(
-    cudf::host_span<row_group_info const> const row_groups_info, size_type num_rows);
+  std::pair<bool, std::vector<std::future<void>>> read_and_decompress_column_chunks();
 
   /**
    * @brief Load and decompress the input file(s) into memory.
    */
-  void load_and_decompress_data(cudf::host_span<row_group_info const> const row_groups_info,
-                                size_type num_rows);
+  void load_and_decompress_data();
 
   /**
    * @brief Perform some preprocessing for page data and also compute the split locations
@@ -161,17 +164,12 @@ class reader::impl {
    *
    * For flat schemas, these values are computed during header decoding (see gpuDecodePageHeaders).
    *
-   * @param skip_rows Crop all rows below skip_rows
-   * @param num_rows Maximum number of rows to read
    * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
    *        bounds
    * @param chunk_read_limit Limit on total number of bytes to be returned per read,
    *        or `0` if there is no limit
    */
-  void preprocess_pages(size_t skip_rows,
-                        size_t num_rows,
-                        bool uses_custom_row_bounds,
-                        size_t chunk_read_limit);
+  void preprocess_pages(bool uses_custom_row_bounds, size_t chunk_read_limit);
 
   /**
    * @brief Allocate nesting information storage for all pages and set pointers to it.
@@ -278,12 +276,28 @@ class reader::impl {
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
   data_type _timestamp_type{type_id::EMPTY};
 
-  // Variables used for chunked reading:
+  // chunked reading happens in 2 parts:
+  //
+  // At the top level there is the "pass" in which we try and limit the
+  // total amount of temporary memory (compressed data, decompressed data) in use
+  // via _input_pass_read_limit.
+  //
+  // Within a pass, we produce one or more chunks of output, whose maximum total
+  // byte size is controlled by _output_chunk_read_limit.
+
   cudf::io::parquet::gpu::file_intermediate_data _file_itm_data;
-  cudf::io::parquet::gpu::chunk_intermediate_data _chunk_itm_data;
-  std::vector<cudf::io::parquet::gpu::chunk_read_info> _chunk_read_info;
-  std::size_t _chunk_read_limit{0};
-  std::size_t _current_read_chunk{0};
+  std::unique_ptr<cudf::io::parquet::gpu::pass_intermediate_data> _pass_itm_data;
+
+  // an array of offsets into _file_itm_data::global_chunks. Each pair of offsets represents
+  // the start/end of the chunks to be loaded for a given pass.
+  std::vector<std::size_t> _input_pass_row_group_offsets{};
+  std::vector<std::size_t> _input_pass_row_count{};
+  std::size_t _current_input_pass{0};
+  std::size_t _chunk_count{0};
+
+  std::size_t _output_chunk_read_limit{0};
+  std::size_t _input_pass_read_limit{0};
+  bool _pass_preprocessed{false};
   bool _file_preprocessed{false};
 };
 

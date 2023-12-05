@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,12 +53,14 @@ namespace dictionary {
  *
  * @param column The column to dictionary encode
  * @param indices_type The integer type to use for the indices
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Returns a dictionary column
  */
 std::unique_ptr<column> encode(
   column_view const& column,
   data_type indices_type              = data_type{type_id::UINT32},
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -72,11 +74,13 @@ std::unique_ptr<column> encode(
  * @endcode
  *
  * @param dictionary_column Existing dictionary column
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column with type matching the dictionary_column's keys
  */
 std::unique_ptr<column> decode(
   dictionary_column_view const& dictionary_column,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

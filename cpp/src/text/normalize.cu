@@ -70,7 +70,7 @@ struct normalize_spaces_fn {
     cudf::string_view const single_space(" ", 1);
     auto const d_str = d_strings.element<cudf::string_view>(idx);
     char* buffer     = d_chars ? d_chars + d_offsets[idx] : nullptr;
-    char* optr       = buffer;   // running output pointer
+    char* optr       = buffer;  // running output pointer
 
     cudf::size_type nbytes = 0;  // holds the number of bytes per output string
 
@@ -146,7 +146,7 @@ struct codepoint_to_utf8_fn {
     char* out_ptr = d_chars + d_offsets[idx];
     for (uint32_t jdx = 0; jdx < count; ++jdx) {
       uint32_t code_point = *str_cps++;
-      if (code_point < UTF8_1BYTE)         // ASCII range
+      if (code_point < UTF8_1BYTE)  // ASCII range
         *out_ptr++ = static_cast<char>(code_point);
       else if (code_point < UTF8_2BYTE) {  // create two-byte UTF-8
         // b00001xxx:byyyyyyyy => b110xxxyy:b10yyyyyy

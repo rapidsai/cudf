@@ -33,9 +33,6 @@
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 
-#include <algorithm>
-#include <vector>
-
 const std::string cuda_func{
   R"***(
     template <typename OutType, typename InType>
@@ -637,7 +634,7 @@ TYPED_TEST(GroupedRollingTest, ZeroWindow)
                                                                          key_1_vec.end());
   const cudf::table_view grouping_keys{std::vector<cudf::column_view>{key_0, key_1}};
 
-  cudf::size_type preceding_window = 0;
+  cudf::size_type preceding_window = 1;
   cudf::size_type following_window = 0;
   std::vector<cudf::size_type> expected_group_offsets{0, 4, 8, DATA_SIZE};
 

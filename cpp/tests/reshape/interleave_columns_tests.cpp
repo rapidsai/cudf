@@ -806,7 +806,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedInputListsOfListsWithNulls)
     ListsCol{ListsCol{{null, 11}, null_at(0)},
              ListsCol{{22, null, null}, nulls_at({1, 2})}},  // don't care
     ListsCol{ListsCol{{null, 11}, null_at(0)},
-             ListsCol{{22, null, null}, nulls_at({1, 2})}}   // don't care
+             ListsCol{{22, null, null}, nulls_at({1, 2})}}  // don't care
   };
 
   auto const col1 = cudf::slice(col1_original, {3, 6})[0];

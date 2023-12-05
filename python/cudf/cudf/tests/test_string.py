@@ -200,12 +200,12 @@ def test_string_astype(dtype):
         data = ["True", "False", "True", "False", "False"]
     elif dtype.startswith("datetime64"):
         data = [
-            "2019-06-04T00:00:00Z",
-            "2019-06-04T12:12:12Z",
-            "2019-06-03T00:00:00Z",
-            "2019-05-04T00:00:00Z",
-            "2018-06-04T00:00:00Z",
-            "1922-07-21T01:02:03Z",
+            "2019-06-04T00:00:00",
+            "2019-06-04T12:12:12",
+            "2019-06-03T00:00:00",
+            "2019-05-04T00:00:00",
+            "2018-06-04T00:00:00",
+            "1922-07-21T01:02:03",
         ]
     elif dtype == "str" or dtype == "object":
         data = ["ab", "cd", "ef", "gh", "ij"]
@@ -3468,3 +3468,9 @@ def test_str_find_multiple_error():
         match=re.escape("patterns can only be of 'string' dtype, got: int64"),
     ):
         s.str.find_multiple(t)
+
+
+def test_str_iterate_error():
+    s = cudf.Series(["abc", "xyz"])
+    with pytest.raises(TypeError):
+        iter(s.str)

@@ -1393,7 +1393,7 @@ struct pair_accessor {
  */
 template <typename T, bool has_nulls = false>
 struct pair_rep_accessor {
-  column_device_view const col;               ///< column view of column in device
+  column_device_view const col;  ///< column view of column in device
 
   using rep_type = device_storage_type_t<T>;  ///< representation type
 

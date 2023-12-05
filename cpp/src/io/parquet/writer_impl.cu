@@ -74,8 +74,11 @@ struct aggregate_writer_metadata {
     for (size_t i = 0; i < partitions.size(); ++i) {
       this->files[i].num_rows = partitions[i].num_rows;
     }
-    this->column_order_listsize =
-      (stats_granularity != statistics_freq::STATISTICS_NONE) ? num_columns : 0;
+
+    if (stats_granularity != statistics_freq::STATISTICS_NONE) {
+      ColumnOrder default_order = {ColumnOrder::TYPE_ORDER};
+      this->column_orders       = std::vector<ColumnOrder>(num_columns, default_order);
+    }
 
     for (size_t p = 0; p < kv_md.size(); ++p) {
       std::transform(kv_md[p].begin(),
@@ -102,13 +105,13 @@ struct aggregate_writer_metadata {
   {
     CUDF_EXPECTS(part < files.size(), "Invalid part index queried");
     FileMetaData meta{};
-    meta.version               = this->version;
-    meta.schema                = this->schema;
-    meta.num_rows              = this->files[part].num_rows;
-    meta.row_groups            = this->files[part].row_groups;
-    meta.key_value_metadata    = this->files[part].key_value_metadata;
-    meta.created_by            = this->created_by;
-    meta.column_order_listsize = this->column_order_listsize;
+    meta.version            = this->version;
+    meta.schema             = this->schema;
+    meta.num_rows           = this->files[part].num_rows;
+    meta.row_groups         = this->files[part].row_groups;
+    meta.key_value_metadata = this->files[part].key_value_metadata;
+    meta.created_by         = this->created_by;
+    meta.column_orders      = this->column_orders;
     return meta;
   }
 
@@ -170,8 +173,8 @@ struct aggregate_writer_metadata {
     std::vector<std::vector<uint8_t>> column_indexes;
   };
   std::vector<per_file_metadata> files;
-  std::string created_by         = "";
-  uint32_t column_order_listsize = 0;
+  std::string created_by                                   = "";
+  thrust::optional<std::vector<ColumnOrder>> column_orders = thrust::nullopt;
 };
 
 namespace {
@@ -2373,20 +2376,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_row_group_metadata(
       md.num_rows += tmp.num_rows;
     }
   }
-  // Reader doesn't currently populate column_order, so infer it here
-  if (not md.row_groups.empty()) {
-    auto const is_valid_stats = [](auto const& stats) {
-      return not stats.max.empty() || not stats.min.empty() || stats.null_count != -1 ||
-             stats.distinct_count != -1 || not stats.max_value.empty() ||
-             not stats.min_value.empty();
-    };
 
-    uint32_t num_columns = static_cast<uint32_t>(md.row_groups[0].columns.size());
-    md.column_order_listsize =
-      (num_columns > 0 && is_valid_stats(md.row_groups[0].columns[0].meta_data.statistics))
-        ? num_columns
-        : 0;
-  }
   // Thrift-encode the resulting output
   file_header_s fhdr;
   file_ender_s fendr;

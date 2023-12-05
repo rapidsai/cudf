@@ -271,7 +271,10 @@ std::unique_ptr<column> round_with(column_view const& input,
                                out_view.template end<Type>(),
                                static_cast<Type>(0));
   } else {
-    Type const n = std::pow(10, scale_movement);
+    Type n = 10;
+    for (int i = 1; i < scale_movement; ++i) {
+      n *= 10;
+    }
     thrust::transform(rmm::exec_policy(stream),
                       input.begin<Type>(),
                       input.end<Type>(),

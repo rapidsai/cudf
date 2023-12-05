@@ -287,25 +287,28 @@ std::unique_ptr<column> is_title(strings_column_view const& input,
 
 std::unique_ptr<column> capitalize(strings_column_view const& input,
                                    string_scalar const& delimiter,
+                                   rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::capitalize(input, delimiter, cudf::get_default_stream(), mr);
+  return detail::capitalize(input, delimiter, stream, mr);
 }
 
 std::unique_ptr<column> title(strings_column_view const& input,
                               string_character_types sequence_type,
+                              rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::title(input, sequence_type, cudf::get_default_stream(), mr);
+  return detail::title(input, sequence_type, stream, mr);
 }
 
 std::unique_ptr<column> is_title(strings_column_view const& input,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_title(input, cudf::get_default_stream(), mr);
+  return detail::is_title(input, stream, mr);
 }
 
 }  // namespace strings

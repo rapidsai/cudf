@@ -152,7 +152,7 @@ class table_view_base {
 
   table_view_base(table_view_base const&) = default;  ///< Copy constructor
 
-  table_view_base(table_view_base&&) = default;       ///< Move constructor
+  table_view_base(table_view_base&&) = default;  ///< Move constructor
   /**
    * @brief Copy assignment operator
    *

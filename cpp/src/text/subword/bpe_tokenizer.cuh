@@ -18,10 +18,9 @@
 
 #include <nvtext/bpe_tokenize.hpp>
 
-#include <hash/hash_allocator.cuh>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/hashing/detail/hash_allocator.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/strings/string_view.cuh>
 

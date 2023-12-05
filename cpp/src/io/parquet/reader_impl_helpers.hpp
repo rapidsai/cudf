@@ -54,19 +54,6 @@ using namespace cudf::io::parquet;
 }
 
 /**
- * @brief The row_group_info class
- */
-struct row_group_info {
-  size_type const index;
-  size_t const start_row;  // TODO source index
-  size_type const source_index;
-  row_group_info(size_type index, size_t start_row, size_type source_index)
-    : index(index), start_row(start_row), source_index(source_index)
-  {
-  }
-};
-
-/**
  * @brief Class for parsing dataset metadata
  */
 struct metadata : public FileMetaData {
@@ -194,7 +181,7 @@ class aggregate_reader_metadata {
    * @return A tuple of corrected row_start, row_count and list of row group indexes and its
    *         starting row
    */
-  [[nodiscard]] std::tuple<int64_t, size_type, std::vector<row_group_info>> select_row_groups(
+  [[nodiscard]] std::tuple<int64_t, size_type, std::vector<gpu::row_group_info>> select_row_groups(
     host_span<std::vector<size_type> const> row_group_indices,
     int64_t row_start,
     std::optional<size_type> const& row_count,

@@ -10,7 +10,7 @@ import pytest
 import cudf
 from cudf import concat
 from cudf.testing._utils import (
-    _create_pandas_series,
+    _create_pandas_series_float64_default,
     assert_eq,
     assert_exceptions_equal,
 )
@@ -62,7 +62,7 @@ def test_duplicated_with_misspelled_column_name(subset):
     ],
 )
 def test_drop_duplicates_series(data, keep):
-    pds = _create_pandas_series(data)
+    pds = _create_pandas_series_float64_default(data)
     gds = cudf.from_pandas(pds)
 
     assert_df(pds.drop_duplicates(keep=keep), gds.drop_duplicates(keep=keep))

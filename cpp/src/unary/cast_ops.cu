@@ -199,7 +199,13 @@ std::unique_ptr<column> rescale(column_view input,
       }
       return output_column;
     }
-    auto const scalar = make_fixed_point_scalar<T>(std::pow(10, -diff), scale_type{diff}, stream);
+
+    RepType scalar_value = 10;
+    for (int i = 1; i < -diff; ++i) {
+      scalar_value *= 10;
+    }
+
+    auto const scalar = make_fixed_point_scalar<T>(scalar_value, scale_type{diff}, stream);
     return detail::binary_operation(input, *scalar, binary_operator::DIV, type, stream, mr);
   }
 };

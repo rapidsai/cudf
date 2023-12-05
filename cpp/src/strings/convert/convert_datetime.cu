@@ -317,8 +317,8 @@ struct parse_datetime {
           bytes_read -= left;
           break;
         }
-        case 'u': [[fallthrough]];      // day of week: Mon(1)-Sat(6),Sun(7)
-        case 'w': {                     // day of week; Sun(0),Mon(1)-Sat(6)
+        case 'u': [[fallthrough]];  // day of week: Mon(1)-Sat(6),Sun(7)
+        case 'w': {                 // day of week; Sun(0),Mon(1)-Sat(6)
           auto const [weekday, left] = parse_int(ptr, item.length);
           timeparts.weekday          =  // 0 is mapped to 7 for chrono library
             static_cast<int8_t>((item.value == 'w' && weekday == 0) ? 7 : weekday);
@@ -1000,7 +1000,7 @@ struct datetime_formatter_fn {
         case 'S':  // second
           copy_value = timeparts.second;
           break;
-        case 'f':                                 // sub-second
+        case 'f':  // sub-second
         {
           char subsecond_digits[] = "000000000";  // 9 max digits
           int const digits        = [] {

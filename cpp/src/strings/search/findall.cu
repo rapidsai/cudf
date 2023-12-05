@@ -134,10 +134,11 @@ std::unique_ptr<column> findall(strings_column_view const& input,
 
 std::unique_ptr<column> findall(strings_column_view const& input,
                                 regex_program const& prog,
+                                rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::findall(input, prog, cudf::get_default_stream(), mr);
+  return detail::findall(input, prog, stream, mr);
 }
 
 }  // namespace strings

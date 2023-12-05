@@ -86,9 +86,9 @@ thread_safe_per_context_cache<special_case_mapping> d_special_case_mappings;
 
 }  // namespace
 
-   /**
-    * @copydoc cudf::strings::detail::get_character_flags_table
-    */
+/**
+ * @copydoc cudf::strings::detail::get_character_flags_table
+ */
 character_flags_table_type const* get_character_flags_table()
 {
   return d_character_codepoint_flags.find_or_initialize([&](void) {

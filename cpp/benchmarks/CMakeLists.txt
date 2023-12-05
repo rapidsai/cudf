@@ -173,7 +173,7 @@ ConfigureBench(ITERATOR_BENCH iterator/iterator.cu)
 # ##################################################################################################
 # * search benchmark ------------------------------------------------------------------------------
 ConfigureBench(SEARCH_BENCH search/search.cpp)
-ConfigureNVBench(SEARCH_NVBENCH search/contains.cpp)
+ConfigureNVBench(SEARCH_NVBENCH search/contains_scalar.cpp search/contains_table.cpp)
 
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------

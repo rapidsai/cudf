@@ -45,13 +45,13 @@ static const __device__ __constant__ uint8_t g_list2struct[16] = {0,
                                                                   ST_FLD_LIST};
 
 struct byte_stream_s {
-  uint8_t const* cur;
-  uint8_t const* end;
-  uint8_t const* base;
+  uint8_t const* cur{};
+  uint8_t const* end{};
+  uint8_t const* base{};
   // Parsed symbols
-  PageType page_type;
-  PageInfo page;
-  ColumnChunkDesc ck;
+  PageType page_type{};
+  PageInfo page{};
+  ColumnChunkDesc ck{};
 };
 
 /**

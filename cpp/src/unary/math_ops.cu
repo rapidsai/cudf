@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -295,7 +295,11 @@ std::unique_ptr<column> unary_op_with(column_view const& input,
     input.type(), input.size(), copy_bitmask(input, stream, mr), input.null_count(), stream, mr);
 
   auto out_view = result->mutable_view();
-  Type const n  = std::pow(10, -input.type().scale());
+
+  Type n = 10;
+  for (int i = 1; i < -input.type().scale(); ++i) {
+    n *= 10;
+  }
 
   thrust::transform(rmm::exec_policy(stream),
                     input.begin<Type>(),

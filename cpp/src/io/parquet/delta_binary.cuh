@@ -90,16 +90,16 @@ inline __device__ zigzag128_t get_zz128(uint8_t const*& cur, uint8_t const* end)
 }
 
 struct delta_binary_decoder {
-  uint8_t const* block_start;    // start of data, but updated as data is read
-  uint8_t const* block_end;      // end of data
-  uleb128_t block_size;          // usually 128, must be multiple of 128
-  uleb128_t mini_block_count;    // usually 4, chosen such that block_size/mini_block_count is a
-                                 // multiple of 32
-  uleb128_t value_count;         // total values encoded in the block
-  zigzag128_t last_value;        // last value decoded, initialized to first_value from header
+  uint8_t const* block_start;  // start of data, but updated as data is read
+  uint8_t const* block_end;    // end of data
+  uleb128_t block_size;        // usually 128, must be multiple of 128
+  uleb128_t mini_block_count;  // usually 4, chosen such that block_size/mini_block_count is a
+                               // multiple of 32
+  uleb128_t value_count;       // total values encoded in the block
+  zigzag128_t last_value;      // last value decoded, initialized to first_value from header
 
-  uint32_t values_per_mb;        // block_size / mini_block_count, must be multiple of 32
-  uint32_t current_value_idx;    // current value index, initialized to 0 at start of block
+  uint32_t values_per_mb;      // block_size / mini_block_count, must be multiple of 32
+  uint32_t current_value_idx;  // current value index, initialized to 0 at start of block
 
   zigzag128_t cur_min_delta;     // min delta for the block
   uint32_t cur_mb;               // index of the current mini-block within the block

@@ -284,7 +284,7 @@ struct ftos_converter {
       while (pb != buffer)  // reverses the digits
         *ptr++ = *--pb;     // e.g. 54321 -> 12345
     } else
-      *ptr++ = '0';         // always include at least .0
+      *ptr++ = '0';  // always include at least .0
     // exponent
     if (exp10) {
       *ptr++ = 'e';
@@ -310,7 +310,7 @@ struct ftos_converter {
   {
     if (std::isnan(value)) return 3;  // NaN
     bool bneg = false;
-    if (signbit(value)) {             // handles -0.0 too
+    if (signbit(value)) {  // handles -0.0 too
       value = -value;
       bneg  = true;
     }
@@ -337,7 +337,7 @@ struct ftos_converter {
       ++count;  // always include .0
     // exponent
     if (exp10) {
-      count += 2;                  // 'e±'
+      count += 2;  // 'e±'
       if (exp10 < 0) exp10 = -exp10;
       count += (int)(exp10 < 10);  // padding
       while (exp10 > 0) {

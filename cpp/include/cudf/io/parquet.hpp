@@ -446,6 +446,30 @@ class chunked_parquet_reader {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
+   * @brief Constructor for chunked reader.
+   *
+   * This constructor requires the same `parquet_reader_option` parameter as in
+   * `cudf::read_parquet()`, with additional parameters to specify the size byte limit of the
+   * output table for each reading, and a byte limit on the amount of temporary memory to use
+   * when reading. pass_read_limit affects how many row groups we can read at a time by limiting
+   * the amount of memory dedicated to decompression space. pass_read_limit is a hint, not an
+   * absolute limit - if a single row group cannot fit within the limit given, it will still be
+   * loaded.
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
+   * or `0` if there is no limit
+   * @param pass_read_limit Limit on the amount of memory used for reading and decompressing data or
+   * `0` if there is no limit
+   * @param options The options used to read Parquet file
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  chunked_parquet_reader(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    parquet_reader_options const& options,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+  /**
    * @brief Destructor, destroying the internal reader instance.
    *
    * Since the declaration of the internal `reader` object does not exist in this header, this

@@ -70,8 +70,8 @@ std::unique_ptr<column> find_multiple(strings_column_view const& input,
   results->set_null_count(0);
 
   auto offsets = cudf::detail::sequence(strings_count + 1,
-                                        numeric_scalar<size_type>(0),
-                                        numeric_scalar<size_type>(targets_count),
+                                        numeric_scalar<size_type>(0, true, stream),
+                                        numeric_scalar<size_type>(targets_count, true, stream),
                                         stream,
                                         mr);
   return make_lists_column(strings_count,
@@ -88,10 +88,11 @@ std::unique_ptr<column> find_multiple(strings_column_view const& input,
 // external API
 std::unique_ptr<column> find_multiple(strings_column_view const& input,
                                       strings_column_view const& targets,
+                                      rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::find_multiple(input, targets, cudf::get_default_stream(), mr);
+  return detail::find_multiple(input, targets, stream, mr);
 }
 
 }  // namespace strings

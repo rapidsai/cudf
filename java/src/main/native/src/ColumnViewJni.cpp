@@ -2563,4 +2563,13 @@ Java_ai_rapids_cudf_ColumnView_purgeNonEmptyNulls(JNIEnv *env, jclass, jlong col
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_toHex(JNIEnv *env, jclass, jlong input_ptr) {
+  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    const cudf::column_view *input = reinterpret_cast<cudf::column_view *>(input_ptr);
+    return release_as_jlong(cudf::strings::integers_to_hex(*input));
+  }
+  CATCH_STD(env, 0);
+}
 } // extern "C"

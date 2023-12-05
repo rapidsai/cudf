@@ -107,7 +107,7 @@ rmm::device_uvector<cudf::size_type> compute_unique_counts(cudf::column_view con
  *
  * This is called with a warp per row
  */
-struct sorted_interset_fn {
+struct sorted_intersect_fn {
   cudf::column_device_view const d_input1;
   cudf::column_device_view const d_input2;
   cudf::size_type* d_results;
@@ -151,7 +151,7 @@ rmm::device_uvector<cudf::size_type> compute_intersect_counts(cudf::column_view 
   auto const d_input1 = cudf::column_device_view::create(input1, stream);
   auto const d_input2 = cudf::column_device_view::create(input2, stream);
   auto d_results      = rmm::device_uvector<cudf::size_type>(input1.size(), stream);
-  sorted_interset_fn fn{*d_input1, *d_input2, d_results.data()};
+  sorted_intersect_fn fn{*d_input1, *d_input2, d_results.data()};
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::counting_iterator<cudf::size_type>(0),
                      input1.size() * cudf::detail::warp_size,

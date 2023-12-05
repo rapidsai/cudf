@@ -895,14 +895,14 @@ def test_memory_usage():
     "data, idx",
     [
         (
-            [[{"f2": {"a": 100}, "f1": "a"}, {"f1": "sf12", "f2": None}]],
+            [[{"f2": {"a": 100}, "f1": "a"}, {"f1": "sf12", "f2": NA}]],
             0,
         ),
         (
             [
                 [
                     {"f2": {"a": 100, "c": 90, "f2": 10}, "f1": "a"},
-                    {"f1": "sf12", "f2": None},
+                    {"f1": "sf12", "f2": NA},
                 ]
             ],
             0,
@@ -919,3 +919,14 @@ def test_nested_list_extract_host_scalars(data, idx):
     series = cudf.Series(data)
 
     assert series[idx] == data[idx]
+
+
+def test_list_iterate_error():
+    s = cudf.Series([[[[1, 2]], [[2], [3]]], [[[2]]], [[[3]]]])
+    with pytest.raises(TypeError):
+        iter(s.list)
+
+
+def test_list_struct_list_memory_usage():
+    df = cudf.DataFrame({"a": [[{"b": [1]}]]})
+    assert df.memory_usage().sum() == 16

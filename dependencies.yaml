@@ -91,6 +91,22 @@ files:
     includes:
       - test_python_common
       - test_python_cudf
+  py_test_pandas_cudf:
+    output: pyproject
+    pyproject_dir: python/cudf
+    extras:
+      table: project.optional-dependencies
+      key: pandas_tests
+    includes:
+      - test_python_pandas_cudf
+  py_test_cudf_pandas:
+    output: pyproject
+    pyproject_dir: python/cudf
+    extras:
+      table: project.optional-dependencies
+      key: cudf_pandas_tests
+    includes:
+      - test_python_cudf_pandas
   py_build_dask_cudf:
     output: pyproject
     pyproject_dir: python/dask_cudf
@@ -259,7 +275,8 @@ dependencies:
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
           - pyarrow==12.0.1.*
-          - numpy>=1.21
+          # TODO: Pin to numpy<1.25 until cudf requires pandas 2
+          - &numpy numpy>=1.21,<1.25
   build_python:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -386,6 +403,7 @@ dependencies:
         packages:
           - dask-cuda==23.10.*
           - *doxygen
+          - libarrow==12.0.1.*
           - make
           - myst-nb
           - nbsphinx
@@ -425,16 +443,18 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          - numpy>=1.21
+          - *numpy
           - pandas>=1.3,<1.6.0dev0
   run_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - &numba numba>=0.57
+          # TODO: Pin to numba<0.58 until #14160 is resolved
+          - &numba numba>=0.57,<0.58
           - nvtx>=0.2.1
           - packaging
+          - rich
           - rmm==23.10.*
           - typing_extensions>=4.0.0
           - *protobuf
@@ -488,12 +508,12 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - dask>=2023.7.1
-          - distributed>=2023.7.1
+          - dask==2023.9.2
+          - distributed==2023.9.2
       - output_types: conda
         packages:
           - cupy>=12.0.0
-          - dask-core>=2023.7.1  # dask-core in conda is the actual package & dask is the meta package
+          - dask-core==2023.9.2  # dask-core in conda is the actual package & dask is the meta package
       - output_types: pyproject
         packages:
           - &cudf cudf==23.10.*
@@ -558,6 +578,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
+          - cramjam
           - fastavro>=0.22.9
           - hypothesis
           - mimesis>=4.1.0
@@ -601,3 +622,57 @@ dependencies:
         packages:
           - dask-cuda==23.10.*
           - *numba
+  test_python_pandas_cudf:
+    common:
+      - output_types: pyproject
+        packages:
+          # dependencies to run pandas tests
+          # https://github.com/pandas-dev/pandas/blob/main/environment.yml
+          # TODO: When pandas 2.0 is the minimum version, can just specify pandas[all]
+          - beautifulsoup4
+          - blosc
+          - brotlipy
+          - boto3
+          - botocore>=1.24.21
+          - bottleneck
+          - fastparquet
+          - flask
+          - fsspec
+          - html5lib
+          - hypothesis
+          - gcsfs
+          - ipython
+          - jinja2
+          - lxml
+          - matplotlib
+          - moto
+          - numba
+          - numexpr
+          - openpyxl
+          - odfpy
+          - py
+          - psycopg2-binary
+          - pyarrow
+          - pymysql
+          - pyreadstat
+          - pytest-asyncio
+          - pytest-reportlog
+          - python-snappy
+          - pyxlsb
+          - s3fs
+          - scipy
+          - sqlalchemy
+          - tables
+          - pandas-gbq
+          - tabulate
+          - xarray
+          - xlrd
+          - xlsxwriter
+          - xlwt
+          - zstandard
+  test_python_cudf_pandas:
+    common:
+      - output_types: pyproject
+        packages:
+          - ipython
+          - openpyxl

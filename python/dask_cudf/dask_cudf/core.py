@@ -421,7 +421,7 @@ def _naive_var(ddf, meta, skipna, ddof, split_every, out):
 def _parallel_var(ddf, meta, skipna, split_every, out):
     def _local_var(x, skipna):
         if skipna:
-            n = x.count(skipna=skipna)
+            n = x.count()
             avg = x.mean(skipna=skipna)
         else:
             # Not skipping nulls, so might as well

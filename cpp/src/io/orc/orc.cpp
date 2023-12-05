@@ -178,7 +178,9 @@ void ProtobufReader::read(timestamp_statistics& s, size_t maxlen)
   auto op = std::tuple(field_reader(1, s.minimum),
                        field_reader(2, s.maximum),
                        field_reader(3, s.minimum_utc),
-                       field_reader(4, s.maximum_utc));
+                       field_reader(4, s.maximum_utc),
+                       field_reader(5, s.minimum_nanos),
+                       field_reader(6, s.maximum_nanos));
   function_builder(s, maxlen, op);
 }
 

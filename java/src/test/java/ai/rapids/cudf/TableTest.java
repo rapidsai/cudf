@@ -4130,6 +4130,115 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testGroupbyHistogram() {
+    StructType histogramStruct = new StructType(false,
+        new BasicType(false, DType.INT32), // values
+        new BasicType(false, DType.INT64)); // frequencies
+    ListType histogramList = new ListType(false, histogramStruct);
+
+    // key = 0: values = [2, 2, -3, -2, 2]
+    // key = 1: values = [2, 0, 5, 2, 1]
+    // key = 2: values = [-3, 1, 1, 2, 2]
+    try (Table input = new Table.TestBuilder()
+        .column(2, 0, 2, 1, 1, 1, 0, 0, 0, 1, 2, 2, 1, 0, 2)
+        .column(-3, 2, 1, 2, 0, 5, 2, -3, -2, 2, 1, 2, 1, 2, 2)
+        .build();
+         Table result = input.groupBy(0)
+             .aggregate(GroupByAggregation.histogram().onColumn(1));
+         Table sortedResult = result.orderBy(OrderByArg.asc(0));
+         ColumnVector sortedOutHistograms = sortedResult.getColumn(1).listSortRows(false, false);
+
+         ColumnVector expectedKeys = ColumnVector.fromInts(0, 1, 2);
+         ColumnVector expectedHistograms = ColumnVector.fromLists(histogramList,
+             Arrays.asList(new StructData(-3, 1L), new StructData(-2, 1L), new StructData(2, 3L)),
+             Arrays.asList(new StructData(0, 1L), new StructData(1, 1L), new StructData(2, 2L),
+                 new StructData(5, 1L)),
+             Arrays.asList(new StructData(-3, 1L), new StructData(1, 2L), new StructData(2, 2L)))
+    ) {
+      assertColumnsAreEqual(expectedKeys, sortedResult.getColumn(0));
+      assertColumnsAreEqual(expectedHistograms, sortedOutHistograms);
+    }
+  }
+
+  @Test
+  void testGroupbyMergeHistogram() {
+    StructType histogramStruct = new StructType(false,
+        new BasicType(false, DType.INT32), // values
+        new BasicType(false, DType.INT64)); // frequencies
+    ListType histogramList = new ListType(false, histogramStruct);
+
+    // key = 0: histograms = [[<-3, 1>, <-2, 1>, <2, 3>], [<0, 1>, <1, 1>], [<-3, 3>, <0, 1>, <1, 2>]]
+    // key = 1: histograms = [[<-2, 1>, <1, 3>, <2, 2>], [<0, 2>, <1, 1>, <2, 2>]]
+    try (Table input = new Table.TestBuilder()
+        .column(0, 1, 0, 1, 0)
+        .column(histogramStruct,
+            new StructData[]{new StructData(-3, 1L), new StructData(-2, 1L), new StructData(2, 3L)},
+            new StructData[]{new StructData(-2, 1L), new StructData(1, 3L), new StructData(2, 2L)},
+            new StructData[]{new StructData(0, 1L), new StructData(1, 1L)},
+            new StructData[]{new StructData(0, 2L), new StructData(1, 1L), new StructData(2, 2L)},
+            new StructData[]{new StructData(-3, 3L), new StructData(0, 1L), new StructData(1, 2L)})
+        .build();
+         Table result = input.groupBy(0)
+             .aggregate(GroupByAggregation.mergeHistogram().onColumn(1));
+         Table sortedResult = result.orderBy(OrderByArg.asc(0));
+         ColumnVector sortedOutHistograms = sortedResult.getColumn(1).listSortRows(false, false);
+
+         ColumnVector expectedKeys = ColumnVector.fromInts(0, 1);
+         ColumnVector expectedHistograms = ColumnVector.fromLists(histogramList,
+             Arrays.asList(new StructData(-3, 4L), new StructData(-2, 1L), new StructData(0, 2L),
+                           new StructData(1, 3L), new StructData(2, 3L)),
+             Arrays.asList(new StructData(-2, 1L), new StructData(0, 2L), new StructData(1, 4L),
+                           new StructData(2, 4L)))
+    ) {
+      assertColumnsAreEqual(expectedKeys, sortedResult.getColumn(0));
+      assertColumnsAreEqual(expectedHistograms, sortedOutHistograms);
+    }
+  }
+
+  @Test
+  void testReductionHistogram() {
+    StructType histogramStruct = new StructType(false,
+        new BasicType(false, DType.INT32), // values
+        new BasicType(false, DType.INT64)); // frequencies
+
+    try (ColumnVector input = ColumnVector.fromInts(-3, 2, 1, 2, 0, 5, 2, -3, -2, 2, 1);
+         Scalar result = input.reduce(ReductionAggregation.histogram(), DType.LIST);
+         ColumnVector resultCV = result.getListAsColumnView().copyToColumnVector();
+         Table resultTable = new Table(resultCV);
+         Table sortedResult = resultTable.orderBy(OrderByArg.asc(0));
+
+         ColumnVector expectedHistograms = ColumnVector.fromStructs(histogramStruct,
+             new StructData(-3, 2L), new StructData(-2, 1L), new StructData(0, 1L),
+             new StructData(1, 2L), new StructData(2, 4L), new StructData(5, 1L))
+    ) {
+      assertColumnsAreEqual(expectedHistograms, sortedResult.getColumn(0));
+    }
+  }
+
+  @Test
+  void testReductionMergeHistogram() {
+    StructType histogramStruct = new StructType(false,
+        new BasicType(false, DType.INT32), // values
+        new BasicType(false, DType.INT64)); // frequencies
+
+    try (ColumnVector input = ColumnVector.fromStructs(histogramStruct,
+             new StructData(-3, 2L), new StructData(2, 1L), new StructData(1, 1L),
+             new StructData(2, 2L), new StructData(0, 4L), new StructData(5, 1L),
+             new StructData(2, 2L), new StructData(-3, 3L), new StructData(-2, 5L),
+             new StructData(2, 3L), new StructData(1, 4L));
+         Scalar result = input.reduce(ReductionAggregation.mergeHistogram(), DType.LIST);
+         ColumnVector resultCV = result.getListAsColumnView().copyToColumnVector();
+         Table resultTable = new Table(resultCV);
+         Table sortedResult = resultTable.orderBy(OrderByArg.asc(0));
+
+         ColumnVector expectedHistograms = ColumnVector.fromStructs(histogramStruct,
+             new StructData(-3, 5L), new StructData(-2, 5L), new StructData(0, 4L),
+             new StructData(1, 5L), new StructData(2, 8L), new StructData(5, 1L))
+    ) {
+      assertColumnsAreEqual(expectedHistograms, sortedResult.getColumn(0));
+    }
+  }
+  @Test
   void testGroupByMinMaxDecimal() {
     try (Table t1 = new Table.TestBuilder()
         .column( "1",  "1", "1", "1", "2")

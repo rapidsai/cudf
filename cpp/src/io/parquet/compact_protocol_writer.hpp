@@ -53,6 +53,7 @@ class CompactProtocolWriter {
   size_t write(Statistics const&);
   size_t write(PageLocation const&);
   size_t write(OffsetIndex const&);
+  size_t write(ColumnOrder const&);
 
  protected:
   std::vector<uint8_t>& m_buf;
@@ -93,6 +94,8 @@ class CompactProtocolFieldWriter {
 
   template <typename T>
   inline void field_struct(int field, T const& val);
+
+  inline void field_empty_struct(int field);
 
   template <typename T>
   inline void field_struct_list(int field, std::vector<T> const& val);
