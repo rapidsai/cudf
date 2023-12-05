@@ -44,6 +44,8 @@
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace detail {
 namespace {
@@ -93,25 +95,26 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
   size_type null_count     = input.null_count();
 
   // build offset column
-  auto offsets_transformer = [lo_itr, hi_itr, lo_replace_itr, hi_replace_itr] __device__(
-                               string_view element, bool is_valid = true) {
-    const auto d_lo         = (*lo_itr).value_or(element);
-    const auto d_hi         = (*hi_itr).value_or(element);
-    const auto d_lo_replace = *(*lo_replace_itr);
-    const auto d_hi_replace = *(*hi_replace_itr);
-    size_type bytes         = 0;
+  auto offsets_transformer = cuda::proclaim_return_type<size_type>(
+    [lo_itr, hi_itr, lo_replace_itr, hi_replace_itr] __device__(string_view element,
+                                                                bool is_valid = true) {
+      const auto d_lo         = (*lo_itr).value_or(element);
+      const auto d_hi         = (*hi_itr).value_or(element);
+      const auto d_lo_replace = *(*lo_replace_itr);
+      const auto d_hi_replace = *(*hi_replace_itr);
+      size_type bytes         = 0;
 
-    if (is_valid) {
-      if (element < d_lo) {
-        bytes = d_lo_replace.size_bytes();
-      } else if (d_hi < element) {
-        bytes = d_hi_replace.size_bytes();
-      } else {
-        bytes = element.size_bytes();
+      if (is_valid) {
+        if (element < d_lo) {
+          bytes = d_lo_replace.size_bytes();
+        } else if (d_hi < element) {
+          bytes = d_hi_replace.size_bytes();
+        } else {
+          bytes = element.size_bytes();
+        }
       }
-    }
-    return bytes;
-  };
+      return bytes;
+    });
 
   auto [offsets_column, chars_column] =
     form_offsets_and_char_column(d_input, null_count, offsets_transformer, stream, mr);
@@ -173,19 +176,20 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
   auto scalar_zip_itr =
     thrust::make_zip_iterator(thrust::make_tuple(lo_itr, lo_replace_itr, hi_itr, hi_replace_itr));
 
-  auto trans = [] __device__(auto element_optional, auto scalar_tuple) {
-    if (element_optional.has_value()) {
-      auto lo_optional = thrust::get<0>(scalar_tuple);
-      auto hi_optional = thrust::get<2>(scalar_tuple);
-      if (lo_optional.has_value() and (*element_optional < *lo_optional)) {
-        return *(thrust::get<1>(scalar_tuple));
-      } else if (hi_optional.has_value() and (*element_optional > *hi_optional)) {
-        return *(thrust::get<3>(scalar_tuple));
+  auto trans =
+    cuda::proclaim_return_type<T>([] __device__(auto element_optional, auto scalar_tuple) {
+      if (element_optional.has_value()) {
+        auto lo_optional = thrust::get<0>(scalar_tuple);
+        auto hi_optional = thrust::get<2>(scalar_tuple);
+        if (lo_optional.has_value() and (*element_optional < *lo_optional)) {
+          return *(thrust::get<1>(scalar_tuple));
+        } else if (hi_optional.has_value() and (*element_optional > *hi_optional)) {
+          return *(thrust::get<3>(scalar_tuple));
+        }
       }
-    }
 
-    return *element_optional;
-  };
+      return *element_optional;
+    });
 
   auto input_pair_iterator =
     make_optional_iterator<T>(*input_device_view, nullate::DYNAMIC{input.has_nulls()});

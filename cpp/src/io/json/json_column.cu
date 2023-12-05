@@ -47,6 +47,7 @@
 #include <thrust/unique.h>
 
 #include <cuda/atomic>
+#include <cuda/functional>
 
 #include <algorithm>
 #include <cstdint>
@@ -648,11 +649,12 @@ void make_device_json_column(device_span<SymbolT const> input,
   auto& parent_col_ids = sorted_col_ids;  // reuse sorted_col_ids
   auto parent_col_id   = thrust::make_transform_iterator(
     thrust::make_counting_iterator<size_type>(0),
-    [col_ids         = col_ids.begin(),
-     parent_node_ids = tree.parent_node_ids.begin()] __device__(size_type node_id) {
-      return parent_node_ids[node_id] == parent_node_sentinel ? parent_node_sentinel
-                                                                : col_ids[parent_node_ids[node_id]];
-    });
+    cuda::proclaim_return_type<NodeIndexT>(
+      [col_ids         = col_ids.begin(),
+       parent_node_ids = tree.parent_node_ids.begin()] __device__(size_type node_id) {
+        return parent_node_ids[node_id] == parent_node_sentinel ? parent_node_sentinel
+                                                                  : col_ids[parent_node_ids[node_id]];
+      }));
   auto const list_children_end = thrust::copy_if(
     rmm::exec_policy(stream),
     thrust::make_zip_iterator(thrust::make_counting_iterator<size_type>(0), parent_col_id),
