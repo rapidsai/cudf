@@ -796,12 +796,6 @@ class BaseIndex(Serializable):
 
         return super().fillna(value=value)
 
-    def _get_level_names(self):
-        """
-        Return a name or list of names with None replaced by the level number.
-        """
-        return 0 if self.name is None else self.name
-
     def to_frame(self, index=True, name=no_default):
         """Create a DataFrame with a column containing this Index
 
@@ -852,7 +846,7 @@ class BaseIndex(Serializable):
         """
 
         if name is no_default:
-            col_name = self._get_level_names()
+            col_name = 0 if self.name is None else self.name
         else:
             col_name = name
 

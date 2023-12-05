@@ -970,16 +970,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return result
 
     @_cudf_nvtx_annotate
-    def _get_level_names(self):
-        """
-        Return a name or list of names with None replaced by the level number.
-        """
-        return [
-            level if name is None else name
-            for level, name in enumerate(self.names)
-        ]
-
-    @_cudf_nvtx_annotate
     def to_frame(self, index=True, name=no_default, allow_duplicates=False):
         """
         Create a DataFrame with the levels of the MultiIndex as columns.
@@ -1033,7 +1023,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         # incorrect. We want to make a deep copy, otherwise further
         # modifications of the resulting DataFrame will affect the MultiIndex.
         if name is no_default:
-            column_names = self._get_level_names()
+            column_names = [
+                level if name is None else name
+                for level, name in enumerate(self.names)
+            ]
         else:
             if len(name) != len(self.levels):
                 raise ValueError(
