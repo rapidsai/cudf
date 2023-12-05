@@ -29,6 +29,26 @@
 #include <thrust/transform.h>
 
 template <typename PhysicalElementComparator>
+void self_comparison_nested(
+  cudf::size_type num_rows,
+  cudf::experimental::row::lexicographic::self_comparator table_comparator,
+  PhysicalElementComparator comparator,
+  bool* d_output,
+  rmm::cuda_stream_view stream);
+
+template <typename PhysicalElementComparator>
+void self_comparison(cudf::size_type num_rows,
+                     cudf::experimental::row::lexicographic::self_comparator table_comparator,
+                     PhysicalElementComparator comparator,
+                     bool* d_output,
+                     rmm::cuda_stream_view stream)
+{
+  auto const itr     = thrust::make_counting_iterator<cudf::size_type>(0);
+  auto const less_fn = table_comparator.less<false>(cudf::nullate::NO{}, comparator);
+  thrust::transform(rmm::exec_policy(stream), itr, itr + num_rows, itr, d_output, less_fn);
+}
+
+template <typename PhysicalElementComparator>
 std::unique_ptr<cudf::column> self_comparison(cudf::table_view input,
                                               std::vector<cudf::order> const& column_order,
                                               PhysicalElementComparator comparator)
@@ -42,20 +62,13 @@ std::unique_ptr<cudf::column> self_comparison(cudf::table_view input,
     cudf::data_type(cudf::type_id::BOOL8), input.num_rows(), cudf::mask_state::UNALLOCATED);
 
   if (cudf::detail::has_nested_columns(input)) {
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(input.num_rows()),
-                      thrust::make_counting_iterator(0),
-                      output->mutable_view().data<bool>(),
-                      table_comparator.less<true>(cudf::nullate::NO{}, comparator));
+    self_comparison_nested(
+      input.num_rows(), table_comparator, comparator, output->mutable_view().data<bool>(), stream);
   } else {
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(input.num_rows()),
-                      thrust::make_counting_iterator(0),
-                      output->mutable_view().data<bool>(),
-                      table_comparator.less<false>(cudf::nullate::NO{}, comparator));
+    self_comparison(
+      input.num_rows(), table_comparator, comparator, output->mutable_view().data<bool>(), stream);
   }
+
   return output;
 }
 
@@ -73,6 +86,27 @@ template std::unique_ptr<cudf::column> self_comparison<sorting_comparator_t>(
   sorting_comparator_t comparator);
 
 template <typename PhysicalElementComparator>
+void two_table_comparison_nested(cudf::size_type num_rows,
+                                 cudf::experimental::row::lexicographic::two_table_comparator,
+                                 PhysicalElementComparator comparator,
+                                 bool* d_output,
+                                 rmm::cuda_stream_view stream);
+
+template <typename PhysicalElementComparator>
+void two_table_comparison(
+  cudf::size_type num_rows,
+  cudf::experimental::row::lexicographic::two_table_comparator table_comparator,
+  PhysicalElementComparator comparator,
+  bool* d_output,
+  rmm::cuda_stream_view stream)
+{
+  auto const lhs_it  = cudf::experimental::row::lhs_iterator(0);
+  auto const rhs_it  = cudf::experimental::row::rhs_iterator(0);
+  auto const less_fn = table_comparator.less<false>(cudf::nullate::NO{}, comparator);
+  thrust::transform(rmm::exec_policy(stream), lhs_it, lhs_it + num_rows, rhs_it, d_output, less_fn);
+}
+
+template <typename PhysicalElementComparator>
 std::unique_ptr<cudf::column> two_table_comparison(cudf::table_view lhs,
                                                    cudf::table_view rhs,
                                                    std::vector<cudf::order> const& column_order,
@@ -82,27 +116,18 @@ std::unique_ptr<cudf::column> two_table_comparison(cudf::table_view lhs,
 
   auto const table_comparator = cudf::experimental::row::lexicographic::two_table_comparator{
     lhs, rhs, column_order, {}, stream};
-  auto const lhs_it = cudf::experimental::row::lhs_iterator(0);
-  auto const rhs_it = cudf::experimental::row::rhs_iterator(0);
 
   auto output = cudf::make_numeric_column(
     cudf::data_type(cudf::type_id::BOOL8), lhs.num_rows(), cudf::mask_state::UNALLOCATED);
 
   if (cudf::detail::has_nested_columns(lhs) || cudf::detail::has_nested_columns(rhs)) {
-    thrust::transform(rmm::exec_policy(stream),
-                      lhs_it,
-                      lhs_it + lhs.num_rows(),
-                      rhs_it,
-                      output->mutable_view().data<bool>(),
-                      table_comparator.less<true>(cudf::nullate::NO{}, comparator));
+    two_table_comparison_nested(
+      lhs.num_rows(), table_comparator, comparator, output->mutable_view().data<bool>(), stream);
   } else {
-    thrust::transform(rmm::exec_policy(stream),
-                      lhs_it,
-                      lhs_it + lhs.num_rows(),
-                      rhs_it,
-                      output->mutable_view().data<bool>(),
-                      table_comparator.less<false>(cudf::nullate::NO{}, comparator));
+    two_table_comparison(
+      lhs.num_rows(), table_comparator, comparator, output->mutable_view().data<bool>(), stream);
   }
+
   return output;
 }
 
@@ -116,6 +141,24 @@ template std::unique_ptr<cudf::column> two_table_comparison<sorting_comparator_t
   cudf::table_view rhs,
   std::vector<cudf::order> const& column_order,
   sorting_comparator_t comparator);
+
+template <typename PhysicalElementComparator>
+void sorted_order_nested(cudf::experimental::row::lexicographic::self_comparator table_comparator,
+                         cudf::size_type num_rows,
+                         PhysicalElementComparator comparator,
+                         cudf::size_type* d_output,
+                         rmm::cuda_stream_view stream);
+
+template <typename PhysicalElementComparator>
+void sorted_order(cudf::experimental::row::lexicographic::self_comparator table_comparator,
+                  cudf::size_type num_rows,
+                  PhysicalElementComparator comparator,
+                  cudf::size_type* d_output,
+                  rmm::cuda_stream_view stream)
+{
+  auto const comp = table_comparator.less<false>(cudf::nullate::NO{}, comparator);
+  thrust::stable_sort(rmm::exec_policy(stream), d_output, d_output + num_rows, comp);
+}
 
 template <typename PhysicalElementComparator>
 std::unique_ptr<cudf::column> sorted_order(
@@ -135,11 +178,9 @@ std::unique_ptr<cudf::column> sorted_order(
   auto const table_comparator =
     cudf::experimental::row::lexicographic::self_comparator{preprocessed_input};
   if (has_nested) {
-    auto const comp = table_comparator.less<true>(cudf::nullate::NO{}, comparator);
-    thrust::stable_sort(rmm::exec_policy(stream), out_begin, out_begin + num_rows, comp);
+    sorted_order_nested(table_comparator, num_rows, comparator, out_begin, stream);
   } else {
-    auto const comp = table_comparator.less<false>(cudf::nullate::NO{}, comparator);
-    thrust::stable_sort(rmm::exec_policy(stream), out_begin, out_begin + num_rows, comp);
+    sorted_order(table_comparator, num_rows, comparator, out_begin, stream);
   }
 
   return output;
@@ -159,6 +200,29 @@ template std::unique_ptr<cudf::column> sorted_order<sorting_comparator_t>(
   rmm::cuda_stream_view stream);
 
 template <typename PhysicalElementComparator>
+void two_table_equality_nested(
+  cudf::size_type num_rows,
+  cudf::experimental::row::equality::two_table_comparator table_comparator,
+  PhysicalElementComparator comparator,
+  bool* d_output,
+  rmm::cuda_stream_view stream);
+
+template <typename PhysicalElementComparator>
+void two_table_equality(cudf::size_type num_rows,
+                        cudf::experimental::row::equality::two_table_comparator table_comparator,
+                        PhysicalElementComparator comparator,
+                        bool* d_output,
+                        rmm::cuda_stream_view stream)
+{
+  auto const lhs_it = cudf::experimental::row::lhs_iterator(0);
+  auto const rhs_it = cudf::experimental::row::rhs_iterator(0);
+  auto const equal_comparator =
+    table_comparator.equal_to<false>(cudf::nullate::NO{}, cudf::null_equality::EQUAL, comparator);
+  thrust::transform(
+    rmm::exec_policy(stream), lhs_it, lhs_it + num_rows, rhs_it, d_output, equal_comparator);
+}
+
+template <typename PhysicalElementComparator>
 std::unique_ptr<cudf::column> two_table_equality(cudf::table_view lhs,
                                                  cudf::table_view rhs,
                                                  std::vector<cudf::order> const& column_order,
@@ -169,32 +233,15 @@ std::unique_ptr<cudf::column> two_table_equality(cudf::table_view lhs,
   auto const table_comparator =
     cudf::experimental::row::equality::two_table_comparator{lhs, rhs, stream};
 
-  auto const lhs_it = cudf::experimental::row::lhs_iterator(0);
-  auto const rhs_it = cudf::experimental::row::rhs_iterator(0);
-
   auto output = cudf::make_numeric_column(
     cudf::data_type(cudf::type_id::BOOL8), lhs.num_rows(), cudf::mask_state::UNALLOCATED);
 
   if (cudf::detail::has_nested_columns(lhs) or cudf::detail::has_nested_columns(rhs)) {
-    auto const equal_comparator =
-      table_comparator.equal_to<true>(cudf::nullate::NO{}, cudf::null_equality::EQUAL, comparator);
-
-    thrust::transform(rmm::exec_policy(stream),
-                      lhs_it,
-                      lhs_it + lhs.num_rows(),
-                      rhs_it,
-                      output->mutable_view().data<bool>(),
-                      equal_comparator);
+    two_table_equality_nested(
+      lhs.num_rows(), table_comparator, comparator, output->mutable_view().data<bool>(), stream);
   } else {
-    auto const equal_comparator =
-      table_comparator.equal_to<false>(cudf::nullate::NO{}, cudf::null_equality::EQUAL, comparator);
-
-    thrust::transform(rmm::exec_policy(stream),
-                      lhs_it,
-                      lhs_it + lhs.num_rows(),
-                      rhs_it,
-                      output->mutable_view().data<bool>(),
-                      equal_comparator);
+    two_table_equality_nested(
+      lhs.num_rows(), table_comparator, comparator, output->mutable_view().data<bool>(), stream);
   }
   return output;
 }
