@@ -34,7 +34,6 @@ function(find_libarrow_in_python_wheel PYARROW_VERSION)
   # version number soname, just `${MAJOR_VERSION}00`
   set(PYARROW_LIB "libarrow.so.${PYARROW_SO_VER}00")
 
-  find_package(Python REQUIRED)
   execute_process(
     COMMAND "${Python_EXECUTABLE}" -c "import pyarrow; print(pyarrow.get_library_dirs()[0])"
     OUTPUT_VARIABLE CUDF_PYARROW_WHEEL_DIR

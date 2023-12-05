@@ -13,8 +13,6 @@
 # =============================================================================
 include_guard(GLOBAL)
 
-find_package(Python 3.9 REQUIRED COMPONENTS Interpreter)
-
 # TODO: Finding NumPy currently requires finding Development due to a bug in CMake. This bug was
 # fixed in https://gitlab.kitware.com/cmake/cmake/-/merge_requests/7410 and will be available in
 # CMake 3.24, so we can remove the Development component once we upgrade to CMake 3.24.
