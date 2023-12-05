@@ -194,7 +194,9 @@ class memory_mapped_source : public file_source {
     if (result == cudaSuccess) {
       _is_map_registered = true;
     } else {
-      CUDF_LOG_WARN("cudaHostRegister failed with {} ({})", result, cudaGetErrorString(result));
+      CUDF_LOG_WARN("cudaHostRegister failed with {} ({})",
+                    static_cast<int>(result),
+                    cudaGetErrorString(result));
     }
   }
 
@@ -207,7 +209,9 @@ class memory_mapped_source : public file_source {
 
     auto const result = cudaHostUnregister(_map_addr);
     if (result != cudaSuccess) {
-      CUDF_LOG_WARN("cudaHostUnregister failed with {} ({})", result, cudaGetErrorString(result));
+      CUDF_LOG_WARN("cudaHostUnregister failed with {} ({})",
+                    static_cast<int>(result),
+                    cudaGetErrorString(result));
     }
   }
 
