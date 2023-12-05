@@ -2175,7 +2175,7 @@ class IndexedFrame(Frame):
             Object with missing values filled or None if ``inplace=True``.
         """
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
+            warnings.simplefilter("ignore", FutureWarning)
             return self.fillna(
                 method="bfill",
                 value=value,
@@ -2214,7 +2214,7 @@ class IndexedFrame(Frame):
             Object with missing values filled or None if ``inplace=True``.
         """
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
+            warnings.simplefilter("ignore", FutureWarning)
             return self.fillna(
                 method="ffill",
                 value=value,
