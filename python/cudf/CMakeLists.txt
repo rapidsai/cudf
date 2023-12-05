@@ -34,24 +34,8 @@ option(FIND_CUDF_CPP "Search for existing CUDF C++ installations before defaulti
        OFF
 )
 
-# If the pyarrow package contains libarrow we want to link against it directly instead of searching
-# for a separate libarrow. Even if libcudf was built against a different libarrow, that library
-# would have to be ABI-compatible with the one in pyarrow for the packages to work together, and for
-# wheels we must use the library in the pyarrow wheel.
+# Find Python early so that later commands can use it
 find_package(Python 3.9 REQUIRED COMPONENTS Interpreter)
-
-execute_process(
-  COMMAND "${Python_EXECUTABLE}" -c "import pyarrow; print(pyarrow.get_library_dirs()[0])"
-  OUTPUT_VARIABLE _pyarrow_lib_dir
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-file(GLOB _pyarrow_libs "${_pyarrow_lib_dir}/libarrow.${CMAKE_SHARED_LIBRARY_SUFFIX}*")
-list(LENGTH _pyarrow_libs _pyarrow_libs_len)
-if(_pyarrow_libs_len GREATER 0)
-  set(USE_LIBARROW_FROM_PYARROW ON)
-else()
-  set(USE_LIBARROW_FROM_PYARROW OFF)
-endif()
 
 # If the user requested it we attempt to find CUDF.
 if(FIND_CUDF_CPP)

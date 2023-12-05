@@ -90,9 +90,6 @@ option(
 )
 mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
 
-option(USE_LIBARROW_FROM_PYARROW "Use the libarrow contained within pyarrow." OFF)
-mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
-
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
 message(VERBOSE "CUDF: Configure CMake to build (google & nvbench) benchmarks: ${BUILD_BENCHMARKS}")
