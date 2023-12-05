@@ -264,7 +264,7 @@ metadata::metadata(datasource* source)
 
   auto const buffer = source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
   CompactProtocolReader cp(buffer->data(), ender->footer_len);
-  CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
+  cp.read(this);
   CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
   sanitize_schema();
 }
