@@ -860,6 +860,9 @@ table_with_metadata read_csv(cudf::io::datasource* source,
       num_active_columns,
       stream,
       mr);
+
+    string_scalar quotechar_scalar(std::string(1, parse_opts.quotechar), true, stream);
+    string_scalar dblquotechar_scalar(std::string(2, parse_opts.quotechar), true, stream);
     for (size_t i = 0; i < column_types.size(); ++i) {
       metadata.schema_info.emplace_back(out_buffers[i].name);
       if (column_types[i].id() == type_id::STRING && parse_opts.quotechar != '\0' &&
@@ -868,11 +871,9 @@ table_with_metadata read_csv(cudf::io::datasource* source,
         // quotechars in quoted fields results in reduction to a single quotechar
         // TODO: Would be much more efficient to perform this operation in-place
         // during the conversion stage
-        std::string const quotechar(1, parse_opts.quotechar);
-        std::string const dblquotechar(2, parse_opts.quotechar);
         std::unique_ptr<column> col = cudf::make_strings_column(*out_buffers[i]._strings, stream);
-        out_columns.emplace_back(
-          cudf::strings::detail::replace(col->view(), dblquotechar, quotechar, -1, stream, mr));
+        out_columns.emplace_back(cudf::strings::detail::replace(
+          col->view(), dblquotechar_scalar, quotechar_scalar, -1, stream, mr));
       } else {
         out_columns.emplace_back(make_column(out_buffers[i], nullptr, std::nullopt, stream));
       }

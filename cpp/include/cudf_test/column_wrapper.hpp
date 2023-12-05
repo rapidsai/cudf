@@ -177,6 +177,9 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
     elements.data(), size * sizeof(ElementTo), cudf::test::get_default_stream()};
 }
 
+// The two signatures below are identical to the above overload apart from
+// SFINAE so doxygen sees it as a duplicate.
+//! @cond Doxygen_Suppress
 /**
  * @brief Creates a `device_buffer` containing the elements in the range `[begin,end)`.
  *
@@ -231,6 +234,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   return rmm::device_buffer{
     elements.data(), size * sizeof(RepType), cudf::test::get_default_stream()};
 }
+//! @endcond
 
 /**
  * @brief Create a `std::vector` containing a validity indicator bitmask using
@@ -1569,7 +1573,8 @@ class lists_column_wrapper : public detail::column_wrapper {
    * while at the same time, allowing further nesting
    * List<List<int> = { {{0, 1}} }
    *
-   * @param c Input column to be wrapped
+   * @param elements Input columns to be wrapped
+   * @param v The validity of each row
    *
    */
   void build_from_nested(std::initializer_list<lists_column_wrapper<T, SourceElementT>> elements,
