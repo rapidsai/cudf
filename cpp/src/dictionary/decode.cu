@@ -16,7 +16,8 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/gather.hpp>
+#include <cudf/detail/gather.cuh>
+#include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
@@ -30,6 +31,18 @@
 namespace cudf {
 namespace dictionary {
 namespace detail {
+namespace {
+struct indices_handler_fn {
+  cudf::detail::input_indexalator const d_iterator;
+  column_device_view const d_indices;
+  size_type oob_index;
+  __device__ size_type operator()(size_type idx)
+  {
+    return d_indices.is_null(idx) ? oob_index : d_iterator[idx];
+  }
+};
+}  // namespace
+
 /**
  * @brief Decode a column from a dictionary.
  */
@@ -39,17 +52,16 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
 {
   if (source.is_empty()) return make_empty_column(type_id::EMPTY);
 
-  column_view indices{source.indices().type(),
-                      source.size(),
-                      source.indices().head(),
-                      nullptr,  // no nulls for gather indices
-                      0,
-                      source.offset()};
-  // use gather to create the output column -- use ignore_out_of_bounds=true
+  auto const d_indices = column_device_view::create(source.get_indices_annotated(), stream);
+  auto const d_iterator =
+    cudf::detail::indexalator_factory::make_input_iterator(source.get_indices_annotated());
+  auto const indices_begin = cudf::detail::make_counting_transform_iterator(
+    0, indices_handler_fn{d_iterator, *d_indices, source.keys().size()});
+
   auto table_column = cudf::detail::gather(table_view{{source.keys()}},
-                                           indices,
+                                           indices_begin,
+                                           indices_begin + source.size(),
                                            cudf::out_of_bounds_policy::NULLIFY,
-                                           cudf::detail::negative_index_policy::NOT_ALLOWED,
                                            stream,
                                            mr)
                         ->release();
