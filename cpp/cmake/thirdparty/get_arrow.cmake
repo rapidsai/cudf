@@ -437,13 +437,14 @@ endif()
 # wheels we must use the library in the pyarrow wheel, so it's best to simply be consistent.
 find_package(Python 3.9 COMPONENTS Interpreter)
 
-if (${Python_FOUND})
+if(${Python_FOUND})
   execute_process(
-    COMMAND "${Python_EXECUTABLE}" -c "import importlib; print(importlib.util.find_spec('pyarrow') is not None)"
+    COMMAND "${Python_EXECUTABLE}" -c
+            "import importlib; print(importlib.util.find_spec('pyarrow') is not None)"
     OUTPUT_VARIABLE _pyarrow_installed
     OUTPUT_STRIP_TRAILING_WHITESPACE
   )
-  if (${_pyarrow_installed} STREQUAL "True")
+  if(${_pyarrow_installed} STREQUAL "True")
     execute_process(
       COMMAND "${Python_EXECUTABLE}" -c "import pyarrow; print(pyarrow.get_library_dirs()[0])"
       OUTPUT_VARIABLE _pyarrow_lib_dir
