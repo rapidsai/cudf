@@ -92,7 +92,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     to_cudf_compatible_scalar,
 )
-from cudf.utils.utils import _cudf_nvtx_annotate
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 
 
 def _format_percentile_names(percentiles):
@@ -2064,7 +2064,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return super().any(axis, skipna, level, **kwargs)
 
     @_cudf_nvtx_annotate
-    def to_pandas(self, index=True, nullable=False, **kwargs):
+    def to_pandas(
+        self, *, index: bool = True, nullable: bool = False
+    ) -> pd.Series:
         """
         Convert to a Pandas Series.
 
@@ -2126,6 +2128,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         if index is True:
             index = self.index.to_pandas()
+        else:
+            index = None  # type: ignore[assignment]
         s = self._column.to_pandas(index=index, nullable=nullable)
         s.name = self.name
         return s
@@ -3370,7 +3374,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             data=data.values(),
             index=data.keys(),
             dtype=dtype,
-            nan_as_null=False,
             name=self.name,
         )
 

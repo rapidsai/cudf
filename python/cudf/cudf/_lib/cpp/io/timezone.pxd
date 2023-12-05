@@ -2,9 +2,9 @@
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
+from libcpp.optional cimport optional
 from libcpp.string cimport string
 
-from cudf._lib.cpp.libcpp.optional cimport optional
 from cudf._lib.cpp.table.table cimport table
 
 

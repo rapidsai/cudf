@@ -102,6 +102,7 @@ enum class binary_operator : int32_t {
  * @param rhs         The right operand column
  * @param op          The binary operator
  * @param output_type The desired data type of the output column
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return            Output column of `output_type` type containing the result of
  *                    the binary operation
@@ -115,6 +116,7 @@ std::unique_ptr<column> binary_operation(
   column_view const& rhs,
   binary_operator op,
   data_type output_type,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -131,6 +133,7 @@ std::unique_ptr<column> binary_operation(
  * @param rhs         The right operand scalar
  * @param op          The binary operator
  * @param output_type The desired data type of the output column
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return            Output column of `output_type` type containing the result of
  *                    the binary operation
@@ -144,6 +147,7 @@ std::unique_ptr<column> binary_operation(
   scalar const& rhs,
   binary_operator op,
   data_type output_type,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -158,6 +162,7 @@ std::unique_ptr<column> binary_operation(
  * @param rhs         The right operand column
  * @param op          The binary operator
  * @param output_type The desired data type of the output column
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return            Output column of `output_type` type containing the result of
  *                    the binary operation
@@ -172,6 +177,7 @@ std::unique_ptr<column> binary_operation(
   column_view const& rhs,
   binary_operator op,
   data_type output_type,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -189,6 +195,7 @@ std::unique_ptr<column> binary_operation(
  * @param output_type The desired data type of the output column. It is assumed
  *                    that output_type is compatible with the output data type
  *                    of the function in the PTX code
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return            Output column of `output_type` type containing the result of
  *                    the binary operation
@@ -201,6 +208,7 @@ std::unique_ptr<column> binary_operation(
   column_view const& rhs,
   std::string const& ptx,
   data_type output_type,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

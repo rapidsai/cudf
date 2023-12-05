@@ -157,16 +157,21 @@ void set_null_mask(bitmask_type* bitmask,
 // Create a device_buffer for a null mask
 rmm::device_buffer create_null_mask(size_type size,
                                     mask_state state,
+                                    rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  return detail::create_null_mask(size, state, cudf::get_default_stream(), mr);
+  return detail::create_null_mask(size, state, stream, mr);
 }
 
 // Set pre-allocated null mask of given bit range [begin_bit, end_bit) to valid, if valid==true,
 // or null, otherwise;
-void set_null_mask(bitmask_type* bitmask, size_type begin_bit, size_type end_bit, bool valid)
+void set_null_mask(bitmask_type* bitmask,
+                   size_type begin_bit,
+                   size_type end_bit,
+                   bool valid,
+                   rmm::cuda_stream_view stream)
 {
-  return detail::set_null_mask(bitmask, begin_bit, end_bit, valid, cudf::get_default_stream());
+  return detail::set_null_mask(bitmask, begin_bit, end_bit, valid, stream);
 }
 
 namespace detail {
@@ -505,39 +510,67 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(table_view const& view,
   return std::pair(std::move(null_mask), 0);
 }
 
+void set_all_valid_null_masks(column_view const& input,
+                              column& output,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
+{
+  if (input.nullable()) {
+    auto mask = detail::create_null_mask(output.size(), mask_state::ALL_VALID, stream, mr);
+    output.set_null_mask(std::move(mask), 0);
+
+    for (size_type i = 0; i < input.num_children(); ++i) {
+      set_all_valid_null_masks(input.child(i), output.child(i), stream, mr);
+    }
+  }
+}
+
 }  // namespace detail
 
 // Create a bitmask from a specific range
 rmm::device_buffer copy_bitmask(bitmask_type const* mask,
                                 size_type begin_bit,
                                 size_type end_bit,
+                                rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
-  return detail::copy_bitmask(mask, begin_bit, end_bit, cudf::get_default_stream(), mr);
+  CUDF_FUNC_RANGE();
+  return detail::copy_bitmask(mask, begin_bit, end_bit, stream, mr);
 }
 
 // Create a bitmask from a column view
-rmm::device_buffer copy_bitmask(column_view const& view, rmm::mr::device_memory_resource* mr)
+rmm::device_buffer copy_bitmask(column_view const& view,
+                                rmm::cuda_stream_view stream,
+                                rmm::mr::device_memory_resource* mr)
 {
-  return detail::copy_bitmask(view, cudf::get_default_stream(), mr);
+  CUDF_FUNC_RANGE();
+  return detail::copy_bitmask(view, stream, mr);
 }
 
 std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
+                                                     rmm::cuda_stream_view stream,
                                                      rmm::mr::device_memory_resource* mr)
 {
-  return detail::bitmask_and(view, cudf::get_default_stream(), mr);
+  CUDF_FUNC_RANGE();
+  return detail::bitmask_and(view, stream, mr);
 }
 
 std::pair<rmm::device_buffer, size_type> bitmask_or(table_view const& view,
+                                                    rmm::cuda_stream_view stream,
                                                     rmm::mr::device_memory_resource* mr)
 {
-  return detail::bitmask_or(view, cudf::get_default_stream(), mr);
+  CUDF_FUNC_RANGE();
+  return detail::bitmask_or(view, stream, mr);
 }
 
 // Count non-zero bits in the specified range
-cudf::size_type null_count(bitmask_type const* bitmask, size_type start, size_type stop)
+cudf::size_type null_count(bitmask_type const* bitmask,
+                           size_type start,
+                           size_type stop,
+                           rmm::cuda_stream_view stream)
 {
-  return detail::null_count(bitmask, start, stop, cudf::get_default_stream());
+  CUDF_FUNC_RANGE();
+  return detail::null_count(bitmask, start, stop, stream);
 }
 
 }  // namespace cudf

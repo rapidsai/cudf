@@ -533,3 +533,18 @@ def test_write_chunked_parquet(s3_base, s3so):
             actual.sort_values(["b"]).reset_index(drop=True),
             cudf.concat([df1, df2]).sort_values(["b"]).reset_index(drop=True),
         )
+
+
+def test_no_s3fs_on_cudf_import():
+    import subprocess
+    import sys
+
+    output = subprocess.check_output(
+        [
+            sys.executable,
+            "-c",
+            "import cudf; import sys; print('pyarrow._s3fs' in sys.modules)",
+        ],
+        cwd="/",
+    )
+    assert output.strip() == b"False"

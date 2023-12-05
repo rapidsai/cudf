@@ -66,6 +66,7 @@ def test_cudf_import_no_cuinit(cuda_gdb):
         env=env,
         capture_output=True,
         text=True,
+        cwd="/",
     )
 
     cuInit_called = output.stdout.find("in cuInit ()")

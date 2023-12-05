@@ -69,7 +69,8 @@ from cudf.core.udf.utils import (
 )
 from cudf.utils import docutils
 from cudf.utils._numba import _CUDFNumbaConfig
-from cudf.utils.utils import _cudf_nvtx_annotate, _warn_no_dask_cudf
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.utils import _warn_no_dask_cudf
 
 doc_reset_index_template = """
         Reset the index of the {klass}, or a level of it.
@@ -3259,8 +3260,11 @@ class IndexedFrame(Frame):
             # is on the end of the offset. See pandas gh29623 for detail.
             to_search = to_search - pd_offset.base
             return self.loc[:to_search]
+        needle = as_column(to_search, dtype=self._index.dtype)
         end_point = int(
-            self._index._column.searchsorted(to_search, side=side)[0]
+            self._index._column.searchsorted(
+                needle, side=side
+            ).element_indexing(0)
         )
         return slice_func(end_point)
 

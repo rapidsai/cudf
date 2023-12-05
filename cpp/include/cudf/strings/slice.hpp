@@ -50,18 +50,20 @@ namespace strings {
  * r2 is now ["lo","ob"]
  * @endcode
  *
- * @param strings Strings column for this operation.
- * @param start First character position to begin the substring.
- * @param stop Last character position (exclusive) to end the substring.
- * @param step Distance between input characters retrieved.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings column with sorted elements of this instance.
+ * @param input Strings column for this operation
+ * @param start First character position to begin the substring
+ * @param stop Last character position (exclusive) to end the substring
+ * @param step Distance between input characters retrieved
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings column with sorted elements of this instance
  */
 std::unique_ptr<column> slice_strings(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   numeric_scalar<size_type> const& start = numeric_scalar<size_type>(0, false),
   numeric_scalar<size_type> const& stop  = numeric_scalar<size_type>(0, false),
   numeric_scalar<size_type> const& step  = numeric_scalar<size_type>(1),
+  rmm::cuda_stream_view stream           = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
 
 /**
@@ -95,16 +97,18 @@ std::unique_ptr<column> slice_strings(
  * @throw cudf::logic_error if starts and stops are not same integer type.
  * @throw cudf::logic_error if starts or stops contains nulls.
  *
- * @param strings Strings column for this operation.
- * @param starts First character positions to begin the substring.
- * @param stops Last character (exclusive) positions to end the substring.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings column with sorted elements of this instance.
+ * @param input Strings column for this operation
+ * @param starts First character positions to begin the substring
+ * @param stops Last character (exclusive) positions to end the substring
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings column with sorted elements of this instance
  */
 std::unique_ptr<column> slice_strings(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   column_view const& starts,
   column_view const& stops,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group

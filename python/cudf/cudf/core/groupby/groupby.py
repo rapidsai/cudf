@@ -29,7 +29,8 @@ from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
-from cudf.utils.utils import GetAttrGetItemMixin, _cudf_nvtx_annotate
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.utils import GetAttrGetItemMixin
 
 
 # The three functions below return the quantiles [25%, 50%, 75%]
@@ -591,7 +592,9 @@ class GroupBy(Serializable, Reducible, Scannable):
                     # Structs lose their labels which we reconstruct here
                     col = col._with_type_metadata(cudf.ListDtype(orig_dtype))
 
-                if (
+                if agg_kind in {"COUNT", "SIZE"}:
+                    data[key] = col.astype("int64")
+                elif (
                     self.obj.empty
                     and (
                         isinstance(agg_name, str)
@@ -608,8 +611,6 @@ class GroupBy(Serializable, Reducible, Scannable):
                     )
                 ):
                     data[key] = col.astype(orig_dtype)
-                elif agg_kind in {"COUNT", "SIZE"}:
-                    data[key] = col.astype("int64")
                 else:
                     data[key] = col
         data = ColumnAccessor(data, multiindex=multilevel)

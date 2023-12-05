@@ -119,20 +119,21 @@ std::unique_ptr<column> stable_sort_lists(lists_column_view const& input,
 std::unique_ptr<column> sort_lists(lists_column_view const& input,
                                    order column_order,
                                    null_order null_precedence,
+                                   rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sort_lists(input, column_order, null_precedence, cudf::get_default_stream(), mr);
+  return detail::sort_lists(input, column_order, null_precedence, stream, mr);
 }
 
 std::unique_ptr<column> stable_sort_lists(lists_column_view const& input,
                                           order column_order,
                                           null_order null_precedence,
+                                          rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::stable_sort_lists(
-    input, column_order, null_precedence, cudf::get_default_stream(), mr);
+  return detail::stable_sort_lists(input, column_order, null_precedence, stream, mr);
 }
 
 }  // namespace lists
