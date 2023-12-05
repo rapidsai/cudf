@@ -2174,13 +2174,15 @@ class IndexedFrame(Frame):
         -------
             Object with missing values filled or None if ``inplace=True``.
         """
-        return self.fillna(
-            method="bfill",
-            value=value,
-            axis=axis,
-            inplace=inplace,
-            limit=limit,
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            return self.fillna(
+                method="bfill",
+                value=value,
+                axis=axis,
+                inplace=inplace,
+                limit=limit,
+            )
 
     @_cudf_nvtx_annotate
     def backfill(self, value=None, axis=None, inplace=None, limit=None):
@@ -2211,13 +2213,15 @@ class IndexedFrame(Frame):
         -------
             Object with missing values filled or None if ``inplace=True``.
         """
-        return self.fillna(
-            method="ffill",
-            value=value,
-            axis=axis,
-            inplace=inplace,
-            limit=limit,
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            return self.fillna(
+                method="ffill",
+                value=value,
+                axis=axis,
+                inplace=inplace,
+                limit=limit,
+            )
 
     @_cudf_nvtx_annotate
     def pad(self, value=None, axis=None, inplace=None, limit=None):
