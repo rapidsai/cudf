@@ -440,7 +440,7 @@ find_package(Python 3.9 COMPONENTS Interpreter)
 if(${Python_FOUND})
   execute_process(
     COMMAND "${Python_EXECUTABLE}" -c
-            "import importlib; print(importlib.util.find_spec('pyarrow') is not None)"
+            "import importlib.util; print(importlib.util.find_spec('pyarrow') is not None)"
     OUTPUT_VARIABLE _pyarrow_installed
     OUTPUT_STRIP_TRAILING_WHITESPACE
   )
