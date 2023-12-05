@@ -1930,8 +1930,6 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
   rmm::device_buffer col_idx_bfr(column_index_bfr_size, stream);
   rmm::device_uvector<EncPage> pages(num_pages, stream);
-
-  // making these hostdevice because we'll need this on the host to sum up the histograms
   rmm::device_uvector<uint32_t> def_level_histogram(def_histogram_bfr_size, stream);
   rmm::device_uvector<uint32_t> rep_level_histogram(rep_histogram_bfr_size, stream);
 
@@ -2026,7 +2024,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
     bool need_sync{false};
 
-    // need to bring back the histogram data
+    // need to fetch the histogram data from the device
     std::vector<uint32_t> h_def_histogram;
     std::vector<uint32_t> h_rep_histogram;
     if (stats_granularity == statistics_freq::STATISTICS_COLUMN) {
