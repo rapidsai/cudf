@@ -2109,13 +2109,13 @@ def as_column(
             )
         elif isinstance(
             arbitrary.dtype, pd.api.extensions.ExtensionDtype
-        ) and not isinstance(arbitrary, pd.arrays.PandasArray):
+        ) and not isinstance(arbitrary, NumpyExtensionArray):
             raise NotImplementedError(
                 "Custom pandas ExtensionDtypes are not supported"
             )
         elif arbitrary.dtype.kind in "fiubmM":
             # numpy dtype like
-            if isinstance(arbitrary, pd.arrays.PandasArray):
+            if isinstance(arbitrary, NumpyExtensionArray):
                 arbitrary = np.array(arbitrary)
             arb_dtype = np.dtype(arbitrary.dtype)
             if arb_dtype.kind == "f" and arb_dtype.itemsize == 2:
@@ -2129,8 +2129,8 @@ def as_column(
                 arbitrary, nan_as_null=nan_as_null, dtype=dtype, length=length
             )
         elif arbitrary.dtype.kind == "O":
-            if isinstance(arbitrary, pd.arrays.PandasArray):
-                # infer_dtype does not handle PandasArray
+            if isinstance(arbitrary, NumpyExtensionArray):
+                # infer_dtype does not handle NumpyExtensionArray
                 arbitrary = np.array(arbitrary, dtype=object)
             inferred_dtype = infer_dtype(arbitrary)
             if inferred_dtype in ("mixed-integer", "mixed-integer-float"):
