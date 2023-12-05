@@ -437,6 +437,7 @@ endif()
 # wheels we must use the library in the pyarrow wheel, so it's best to simply be consistent.
 find_package(Python 3.9 COMPONENTS Interpreter)
 
+set(USE_LIBARROW_FROM_PYARROW OFF)
 if(${Python_FOUND})
   execute_process(
     COMMAND "${Python_EXECUTABLE}" -c
@@ -454,8 +455,6 @@ if(${Python_FOUND})
     list(LENGTH _pyarrow_libs _pyarrow_libs_len)
     if(_pyarrow_libs_len GREATER 0)
       set(USE_LIBARROW_FROM_PYARROW ON)
-    else()
-      set(USE_LIBARROW_FROM_PYARROW OFF)
     endif()
   endif()
 endif()
