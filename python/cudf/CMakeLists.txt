@@ -59,6 +59,8 @@ if(FIND_CUDF_CPP)
   # libraries.
   include(rapids-find)
   include(rapids-export)
+  include(rapids-cpm)
+  rapids_cpm_init()
   # These variables have no effect because we are always searching for arrow via pyarrow, but they
   # must be set as they are required arguments to the function in get_arrow.cmake.
   set(CUDF_USE_ARROW_STATIC OFF)
@@ -72,8 +74,6 @@ if(FIND_CUDF_CPP)
 
   # an installed version of libcudf doesn't provide the dlpack headers so we need to download dlpack
   # for the interop.pyx
-  include(rapids-cpm)
-  rapids_cpm_init()
   include(../../cpp/cmake/thirdparty/get_dlpack.cmake)
 else()
   set(cudf_FOUND OFF)
