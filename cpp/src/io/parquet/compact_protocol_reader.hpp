@@ -94,7 +94,7 @@ class CompactProtocolReader {
     return {t, sz};
   }
 
-  bool skip_struct_field(int t, int depth = 0);
+  void skip_struct_field(int t, int depth = 0);
 
  public:
   // Generate Thrift structure parsing routines

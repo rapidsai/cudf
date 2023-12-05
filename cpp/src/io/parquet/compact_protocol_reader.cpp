@@ -16,6 +16,8 @@
 
 #include "compact_protocol_reader.hpp"
 
+#include <cudf/utilities/error.hpp>
+
 #include <algorithm>
 #include <cstddef>
 #include <functional>
@@ -440,7 +442,7 @@ class parquet_field_optional : public parquet_field {
  *
  * @return True if the struct type is recognized, false otherwise
  */
-bool CompactProtocolReader::skip_struct_field(int t, int depth)
+void CompactProtocolReader::skip_struct_field(int t, int depth)
 {
   switch (t) {
     case ST_FLD_TRUE:
@@ -454,7 +456,7 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
     case ST_FLD_LIST: [[fallthrough]];
     case ST_FLD_SET: {
       auto const [t, n] = get_listh();
-      if (depth > 10) { return false; }
+      CUDF_EXPECTS(depth <= 10, "struct nesting too deep");
       for (uint32_t i = 0; i < n; i++) {
         skip_struct_field(t, depth + 1);
       }
@@ -465,7 +467,7 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
         t           = c & 0xf;
         if (c == 0) { break; }               // end of struct
         if ((c & 0xf0) == 0) { get_i16(); }  // field id is not a delta
-        if (depth > 10) { return false; }
+        CUDF_EXPECTS(depth <= 10, "struct nesting too deep");
         skip_struct_field(t, depth + 1);
       }
       break;
@@ -473,21 +475,20 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
       // printf("unsupported skip for type %d\n", t);
       break;
   }
-  return true;
 }
 
 template <int index>
 struct FunctionSwitchImpl {
   template <typename... Operator>
-  static inline bool run(CompactProtocolReader* cpr,
+  static inline void run(CompactProtocolReader* cpr,
                          int field_type,
                          int const& field,
                          std::tuple<Operator...>& ops)
   {
     if (field == std::get<index>(ops).field()) {
-      return std::get<index>(ops)(cpr, field_type);
+      std::get<index>(ops)(cpr, field_type);
     } else {
-      return FunctionSwitchImpl<index - 1>::run(cpr, field_type, field, ops);
+      FunctionSwitchImpl<index - 1>::run(cpr, field_type, field, ops);
     }
   }
 };
@@ -495,35 +496,32 @@ struct FunctionSwitchImpl {
 template <>
 struct FunctionSwitchImpl<0> {
   template <typename... Operator>
-  static inline bool run(CompactProtocolReader* cpr,
+  static inline void run(CompactProtocolReader* cpr,
                          int field_type,
                          int const& field,
                          std::tuple<Operator...>& ops)
   {
     if (field == std::get<0>(ops).field()) {
-      return std::get<0>(ops)(cpr, field_type);
+      std::get<0>(ops)(cpr, field_type);
     } else {
       cpr->skip_struct_field(field_type);
-      return false;
     }
   }
 };
 
 template <typename... Operator>
-inline bool function_builder(CompactProtocolReader* cpr, std::tuple<Operator...>& op)
+inline void function_builder(CompactProtocolReader* cpr, std::tuple<Operator...>& op)
 {
   constexpr int index = std::tuple_size<std::tuple<Operator...>>::value - 1;
   int field           = 0;
   while (true) {
     int const current_byte = cpr->getb();
     if (!current_byte) { break; }
-    int const field_delta    = current_byte >> 4;
-    int const field_type     = current_byte & 0xf;
-    field                    = field_delta ? field + field_delta : cpr->get_i16();
-    bool const exit_function = FunctionSwitchImpl<index>::run(cpr, field_type, field, op);
-    if (exit_function) { return false; }
+    int const field_delta = current_byte >> 4;
+    int const field_type  = current_byte & 0xf;
+    field                 = field_delta ? field + field_delta : cpr->get_i16();
+    FunctionSwitchImpl<index>::run(cpr, field_type, field, op);
   }
-  return true;
 }
 
 void CompactProtocolReader::read(FileMetaData* f)
