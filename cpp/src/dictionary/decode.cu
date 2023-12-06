@@ -34,7 +34,7 @@ struct indices_handler_fn {
   cudf::detail::input_indexalator const d_iterator;
   column_device_view const d_indices;
   size_type oob_index;  // out-of-bounds index identifies nulls
-  __device__ size_type operator()(size_type idx)
+  __device__ size_type operator()(size_type idx) const
   {
     return d_indices.is_null(idx) ? oob_index : d_iterator[idx];
   }
