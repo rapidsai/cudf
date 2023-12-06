@@ -1318,7 +1318,7 @@ __global__ void __launch_bounds__(block_size, 8) gpuEncodePageLevels(device_span
         __syncthreads();
         // if max_def <= 1, then the histogram is trivial to calculate
         if (s->page.def_histogram != nullptr and s->col.max_def_level > 1) {
-          // Only calculate up to max_def_level...the last entry is valid_count and will be filled
+          // Only calculate up to max_def_level...the last entry is num_valid and will be filled
           // in later.
           generate_def_level_histogram<block_size>(
             s->page.def_histogram, s, nrows, rle_numvals, s->col.max_def_level);
@@ -2019,36 +2019,13 @@ __global__ void __launch_bounds__(block_size, 8)
   }
   __syncthreads();
 
-  // need to know the number of valid values for the null values calculation and to size
-  // the delta binary encoder.
-  uint32_t valid_count = 0;
-  if (not s->col.leaf_column->nullable()) {
-    valid_count = s->page.num_leaf_values;
-  } else {
-    uint32_t num_valid = 0;
-    for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
-      uint32_t const nvals                = min(s->page.num_leaf_values - cur_val_idx, block_size);
-      size_type const val_idx_in_block    = cur_val_idx + t;
-      size_type const val_idx_in_leaf_col = s->page_start_val + val_idx_in_block;
-
-      if (val_idx_in_leaf_col < s->col.leaf_column->size() &&
-          val_idx_in_block < s->page.num_leaf_values &&
-          s->col.leaf_column->is_valid(val_idx_in_leaf_col)) {
-        num_valid++;
-      }
-      cur_val_idx += nvals;
-    }
-    valid_count = block_reduce(temp_storage.reduce_storage).Sum(num_valid);
-  }
-
   // encode the lengths as DELTA_BINARY_PACKED
   if (t == 0) {
     first_string = nullptr;
-    packer.init(s->cur, valid_count, reinterpret_cast<int32_t*>(delta_shared), &temp_storage);
+    packer.init(s->cur, s->page.num_valid, reinterpret_cast<int32_t*>(delta_shared), &temp_storage);
 
     // if there are valid values, find a pointer to the first valid string
-    // TODO: can this be done above while calculating num_valid?
-    if (valid_count != 0) {
+    if (s->page.num_valid != 0) {
       for (uint32_t idx = 0; idx < s->page.num_leaf_values; idx++) {
         size_type const idx_in_col = s->page_start_val + idx;
         if (s->col.leaf_column->is_valid(idx_in_col)) {
@@ -2095,7 +2072,7 @@ __global__ void __launch_bounds__(block_size, 8)
   memcpy_block<block_size, true>(output_ptr, first_string, string_data_len, t);
 
   finish_page_encode<block_size>(
-    s, valid_count, output_ptr + string_len, pages, comp_in, comp_out, comp_results, true);
+    s, output_ptr + string_len, pages, comp_in, comp_out, comp_results, true);
 }
 
 constexpr int decide_compression_warps_in_block = 4;
