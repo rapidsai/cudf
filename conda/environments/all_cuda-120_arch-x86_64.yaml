@@ -60,7 +60,7 @@ dependencies:
 - numba>=0.57,<0.58
 - numpy>=1.21,<1.25
 - numpydoc
-- nvcomp==3.0.4
+- nvcomp==3.0.5
 - nvtx>=0.2.1
 - packaging
 - pandas>=1.3,<1.6.0dev0
