@@ -116,6 +116,7 @@ class CompactProtocolReader {
   void read(KeyValue* k);
   void read(PageLocation* p);
   void read(OffsetIndex* o);
+  void read(SizeStatistics* s);
   void read(ColumnIndex* c);
   void read(Statistics* s);
   void read(ColumnOrder* c);
