@@ -58,7 +58,7 @@ struct clamp_strings_fn {
   size_type* d_offsets{};
   char* d_chars{};
 
-  __device__ void operator()(size_type idx)
+  __device__ void operator()(size_type idx) const
   {
     if (d_strings.is_null(idx)) {
       if (!d_chars) { d_offsets[idx] = 0; }
