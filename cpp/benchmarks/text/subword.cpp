@@ -29,10 +29,9 @@
 #include <iostream>
 #include <vector>
 
-temp_directory const subword_tmpdir{"cudf_gbench"};
-
 static std::string create_hash_vocab_file()
 {
+  static temp_directory const subword_tmpdir{"cudf_gbench"};
   auto dir_template     = subword_tmpdir.path();
   std::string hash_file = dir_template + "/hash_vocab.txt";
   // create a fake hashed vocab text file for this test
