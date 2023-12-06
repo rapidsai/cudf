@@ -50,7 +50,7 @@ class table {
    *
    * @param other The table to copy
    */
-  table(table const& other);
+  explicit table(table const& other);
 
   /**
    * @brief Moves the contents from a vector of `unique_ptr`s to columns to
