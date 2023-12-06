@@ -215,7 +215,7 @@ class delta_binary_packer {
   }
 
   // Called by each thread to flush data to the sink.
-  inline __device__ uint8_t const* flush()
+  inline __device__ uint8_t* flush()
   {
     using cudf::detail::warp_size;
     __shared__ T block_min;
