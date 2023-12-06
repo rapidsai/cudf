@@ -105,13 +105,14 @@ Function application, GroupBy & window
 .. autosummary::
    :toctree: api/
 
+   DataFrame.agg
    DataFrame.apply
    DataFrame.applymap
    DataFrame.apply_chunks
    DataFrame.apply_rows
-   DataFrame.pipe
-   DataFrame.agg
    DataFrame.groupby
+   DataFrame.map
+   DataFrame.pipe
    DataFrame.rolling
 
 .. _api.dataframe.stats:

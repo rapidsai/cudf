@@ -1,9 +1,10 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import pytest
 
 from cudf import NA, DataFrame
 from cudf.testing import _utils as utils
+from cudf.core._compat import PANDAS_GE_210
 
 
 @pytest.mark.parametrize(
@@ -29,8 +30,10 @@ def test_applymap_dataframe(data, func, na_action):
     gdf = DataFrame(data)
     pdf = gdf.to_pandas(nullable=True)
 
-    expect = pdf.applymap(func, na_action=na_action)
-    got = gdf.applymap(func, na_action=na_action)
+    with utils.expect_warning_if(PANDAS_GE_210):
+        expect = pdf.applymap(func, na_action=na_action)
+    with pytest.warns(FutureWarning):
+        got = gdf.applymap(func, na_action=na_action)
 
     utils.assert_eq(expect, got, check_dtype=False)
 
@@ -41,8 +44,10 @@ def test_applymap_raise_cases():
     def f(x, some_kwarg=0):
         return x + some_kwarg
 
-    with pytest.raises(NotImplementedError):
-        df.applymap(f, some_kwarg=1)
+    with pytest.warns(FutureWarning):
+        with pytest.raises(NotImplementedError):
+            df.applymap(f, some_kwarg=1)
 
-    with pytest.raises(ValueError):
-        df.applymap(f, na_action="some_invalid_option")
+    with pytest.warns(FutureWarning):
+        with pytest.raises(ValueError):
+            df.applymap(f, na_action="some_invalid_option")

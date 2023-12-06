@@ -2823,7 +2823,7 @@ def test_parquet_reader_one_level_list2(datadir):
     fname = datadir / "one_level_list2.parquet"
 
     expect = pd.read_parquet(fname)
-    expect = expect.applymap(postprocess)
+    expect = expect.map(postprocess)
     got = cudf.read_parquet(fname)
 
     assert_eq(expect, got, check_dtype=False)
