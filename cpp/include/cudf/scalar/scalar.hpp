@@ -716,9 +716,10 @@ class duration_scalar : public chrono_scalar<T> {
 
   /**
    * @brief Returns the duration in number of ticks.
+   * @param stream CUDA stream used for device memory operations.
    * @return The duration in number of ticks
    */
-  rep_type count();
+  rep_type count(rmm::cuda_stream_view stream);
 };
 
 /**

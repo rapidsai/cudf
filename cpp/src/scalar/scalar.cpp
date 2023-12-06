@@ -419,9 +419,9 @@ duration_scalar<T>::duration_scalar(duration_scalar<T> const& other,
 }
 
 template <typename T>
-typename duration_scalar<T>::rep_type duration_scalar<T>::count()
+typename duration_scalar<T>::rep_type duration_scalar<T>::count(rmm::cuda_stream_view stream)
 {
-  return this->value(cudf::get_default_stream()).count();
+  return this->value(stream).count();
 }
 
 /**
