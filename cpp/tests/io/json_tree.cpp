@@ -56,8 +56,8 @@ tree_meta_t2 to_cpu_tree(cuio_json::tree_meta_t const& d_value, rmm::cuda_stream
 }
 
 // change this to non-zero and recompile to dump debug info to stdout
-#define NJP_DEBUG_DUMP 0
-#if NJP_DEBUG_DUMP
+#define LIBCUDF_JSON_DEBUG_DUMP 0
+#if LIBCUDF_JSON_DEBUG_DUMP
 std::string get_node_string(std::size_t const node_id,
                             tree_meta_t2 const& tree_rep,
                             std::string const& json_input)
@@ -182,7 +182,7 @@ void compare_trees(tree_meta_t2 const& cpu_tree, cuio_json::tree_meta_t const& d
   COMPARE_MEMBER(node_range_end);
 #undef COMPARE_MEMBER
 
-#if NJP_DEBUG_DUMP
+#if LIBCUDF_JSON_DEBUG_DUMP
   bool mismatch = false;
 #define PRINT_VEC(vec, conv) print_vec(vec, #vec, conv);
 #define PRINT_COMPARISON(vec, conv)                                                  \
@@ -241,7 +241,7 @@ tree_meta_t2 get_tree_representation_cpu(
   // Make sure tokens have been copied to the host
   stream.synchronize();
 
-#if NJP_DEBUG_DUMP
+#if LIBCUDF_JSON_DEBUG_DUMP
   // DEBUG print
   [[maybe_unused]] auto to_token_str = [](cuio_json::PdaTokenT token) {
     switch (token) {
@@ -447,7 +447,7 @@ records_orient_tree_traversal_cpu(cudf::host_span<cuio_json::SymbolT const> inpu
     }
   }
 
-#if NJP_DEBUG_DUMP
+#if LIBCUDF_JSON_DEBUG_DUMP
   for (int i = 0; i < int(tree.node_range_begin.size()); i++) {
     printf("%3s ",
            std::string(input.data() + tree.node_range_begin[i],
@@ -522,7 +522,7 @@ records_orient_tree_traversal_cpu(cudf::host_span<cuio_json::SymbolT const> inpu
     if (parent_node_id != top_node) parent_node_id = node_ids[parent_node_id];
   }
 
-#if NJP_DEBUG_DUMP
+#if LIBCUDF_JSON_DEBUG_DUMP
   print_vec(node_ids, "cpu.node_ids (after)", to_int);
   print_vec(tree.parent_node_ids, "cpu.parent_node_ids (after)", to_int);
 #endif
@@ -550,7 +550,7 @@ records_orient_tree_traversal_cpu(cudf::host_span<cuio_json::SymbolT const> inpu
     }
   }
 
-#if NJP_DEBUG_DUMP
+#if LIBCUDF_JSON_DEBUG_DUMP
   print_vec(row_offsets, "cpu.row_offsets (generated)", to_int);
 #endif
 
@@ -599,7 +599,7 @@ TEST_F(JsonTest, TreeRepresentation)
   auto cpu_tree = get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
   compare_trees(cpu_tree, gpu_tree);
 
-#if NJP_DEBUG_DUMP
+#if LIBCUDF_JSON_DEBUG_DUMP
   print_tree_representation(input, cpu_tree);
 #endif
 
@@ -687,7 +687,7 @@ TEST_F(JsonTest, TreeRepresentation2)
   auto cpu_tree = get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
   compare_trees(cpu_tree, gpu_tree);
 
-#if NJP_DEBUG_DUMP
+#if LIBCUDF_JSON_DEBUG_DUMP
   print_tree_representation(input, cpu_tree);
 #endif
 
@@ -762,7 +762,7 @@ TEST_F(JsonTest, TreeRepresentation3)
   auto cpu_tree = get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
   compare_trees(cpu_tree, gpu_tree);
 
-#if NJP_DEBUG_DUMP
+#if LIBCUDF_JSON_DEBUG_DUMP
   print_tree_representation(input, cpu_tree);
 #endif
 }
@@ -876,7 +876,7 @@ TEST_P(JsonTreeTraversalTest, CPUvsGPUTraversal)
   auto gpu_tree = cuio_json::detail::get_tree_representation(
     tokens_gpu, token_indices_gpu, stream, rmm::mr::get_current_device_resource());
 
-#if NJP_DEBUG_DUMP
+#if LIBCUDF_JSON_DEBUG_DUMP
   printf("BEFORE traversal (gpu_tree):\n");
   print_tree(gpu_tree);
 #endif
@@ -889,7 +889,7 @@ TEST_P(JsonTreeTraversalTest, CPUvsGPUTraversal)
                                                      json_lines,
                                                      stream,
                                                      rmm::mr::get_current_device_resource());
-#if NJP_DEBUG_DUMP
+#if LIBCUDF_JSON_DEBUG_DUMP
   printf("AFTER  traversal (gpu_tree):\n");
   print_tree(gpu_tree);
 #endif
