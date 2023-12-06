@@ -974,8 +974,11 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def to_pandas(
-        self, index: Optional[pd.Index] = None, **kwargs
+        self, *, index: Optional[pd.Index] = None, nullable: bool = False
     ) -> pd.Series:
+        if nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
+
         if self.categories.dtype.kind == "f":
             new_mask = bools_to_mask(self.notnull())
             col = column.build_categorical_column(

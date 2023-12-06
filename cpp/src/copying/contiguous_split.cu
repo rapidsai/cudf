@@ -852,7 +852,11 @@ struct dst_offset_output_iterator {
 
   dst_offset_output_iterator operator+ __host__ __device__(int i) { return {c + i}; }
 
-  void operator++ __host__ __device__() { c++; }
+  dst_offset_output_iterator& operator++ __host__ __device__()
+  {
+    c++;
+    return *this;
+  }
 
   reference operator[] __device__(int i) { return dereference(c + i); }
   reference operator* __device__() { return dereference(c); }
@@ -873,12 +877,13 @@ struct dst_valid_count_output_iterator {
   using reference         = size_type&;
   using iterator_category = thrust::output_device_iterator_tag;
 
-  dst_valid_count_output_iterator operator+ __host__ __device__(int i)
-  {
-    return dst_valid_count_output_iterator{c + i};
-  }
+  dst_valid_count_output_iterator operator+ __host__ __device__(int i) { return {c + i}; }
 
-  void operator++ __host__ __device__() { c++; }
+  dst_valid_count_output_iterator& operator++ __host__ __device__()
+  {
+    c++;
+    return *this;
+  }
 
   reference operator[] __device__(int i) { return dereference(c + i); }
   reference operator* __device__() { return dereference(c); }

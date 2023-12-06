@@ -673,14 +673,20 @@ std::unique_ptr<table> gather(table_view const& source_table,
                                                    mr));
   }
 
-  auto const nullable = bounds_policy == out_of_bounds_policy::NULLIFY ||
-                        std::any_of(source_table.begin(), source_table.end(), [](auto const& col) {
-                          return col.nullable();
-                        });
-  if (nullable) {
-    auto const op = bounds_policy == out_of_bounds_policy::NULLIFY ? gather_bitmask_op::NULLIFY
-                                                                   : gather_bitmask_op::DONT_CHECK;
-    gather_bitmask(source_table, gather_map_begin, destination_columns, op, stream, mr);
+  auto needs_new_bitmask = bounds_policy == out_of_bounds_policy::NULLIFY ||
+                           cudf::has_nested_nullable_columns(source_table);
+  if (needs_new_bitmask) {
+    needs_new_bitmask = needs_new_bitmask || cudf::has_nested_nulls(source_table);
+    if (needs_new_bitmask) {
+      auto const op = bounds_policy == out_of_bounds_policy::NULLIFY
+                        ? gather_bitmask_op::NULLIFY
+                        : gather_bitmask_op::DONT_CHECK;
+      gather_bitmask(source_table, gather_map_begin, destination_columns, op, stream, mr);
+    } else {
+      for (size_type i = 0; i < source_table.num_columns(); ++i) {
+        set_all_valid_null_masks(source_table.column(i), *destination_columns[i], stream, mr);
+      }
+    }
   }
 
   return std::make_unique<table>(std::move(destination_columns));
