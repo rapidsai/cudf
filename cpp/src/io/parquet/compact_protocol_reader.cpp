@@ -289,7 +289,7 @@ class parquet_field_union_struct : public parquet_field {
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     T v;
-    bool const res = parquet_field_struct<T>(field(), v).operator()(cpr, field_type);
+    bool const res = parquet_field_struct<T>{field(), v}(cpr, field_type);
     if (!res) {
       val      = v;
       enum_val = static_cast<E>(field());
@@ -424,7 +424,7 @@ class parquet_field_optional : public parquet_field {
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     T v;
-    bool const res = FieldFunctor(field(), v).operator()(cpr, field_type);
+    bool const res = FieldFunctor{field(), v}(cpr, field_type);
     if (!res) { val = v; }
     return res;
   }
@@ -631,6 +631,8 @@ bool CompactProtocolReader::read(ColumnChunk* c)
 
 bool CompactProtocolReader::read(ColumnChunkMetaData* c)
 {
+  using optional_size_statistics =
+    parquet_field_optional<SizeStatistics, parquet_field_struct<SizeStatistics>>;
   auto op = std::make_tuple(parquet_field_enum<Type>(1, c->type),
                             parquet_field_enum_list(2, c->encodings),
                             parquet_field_string_list(3, c->path_in_schema),
@@ -641,7 +643,8 @@ bool CompactProtocolReader::read(ColumnChunkMetaData* c)
                             parquet_field_int64(9, c->data_page_offset),
                             parquet_field_int64(10, c->index_page_offset),
                             parquet_field_int64(11, c->dictionary_page_offset),
-                            parquet_field_struct(12, c->statistics));
+                            parquet_field_struct(12, c->statistics),
+                            optional_size_statistics(16, c->size_statistics));
   return function_builder(this, op);
 }
 
@@ -700,17 +703,35 @@ bool CompactProtocolReader::read(PageLocation* p)
 
 bool CompactProtocolReader::read(OffsetIndex* o)
 {
-  auto op = std::make_tuple(parquet_field_struct_list(1, o->page_locations));
+  using optional_list_i64 = parquet_field_optional<std::vector<int64_t>, parquet_field_int64_list>;
+
+  auto op = std::make_tuple(parquet_field_struct_list(1, o->page_locations),
+                            optional_list_i64(2, o->unencoded_byte_array_data_bytes));
+  return function_builder(this, op);
+}
+
+bool CompactProtocolReader::read(SizeStatistics* s)
+{
+  using optional_i64      = parquet_field_optional<int64_t, parquet_field_int64>;
+  using optional_list_i64 = parquet_field_optional<std::vector<int64_t>, parquet_field_int64_list>;
+
+  auto op = std::make_tuple(optional_i64(1, s->unencoded_byte_array_data_bytes),
+                            optional_list_i64(2, s->repetition_level_histogram),
+                            optional_list_i64(3, s->definition_level_histogram));
   return function_builder(this, op);
 }
 
 bool CompactProtocolReader::read(ColumnIndex* c)
 {
+  using optional_list_i64 = parquet_field_optional<std::vector<int64_t>, parquet_field_int64_list>;
+
   auto op = std::make_tuple(parquet_field_bool_list(1, c->null_pages),
                             parquet_field_binary_list(2, c->min_values),
                             parquet_field_binary_list(3, c->max_values),
                             parquet_field_enum<BoundaryOrder>(4, c->boundary_order),
-                            parquet_field_int64_list(5, c->null_counts));
+                            parquet_field_int64_list(5, c->null_counts),
+                            optional_list_i64(6, c->repetition_level_histogram),
+                            optional_list_i64(7, c->definition_level_histogram));
   return function_builder(this, op);
 }
 
