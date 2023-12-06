@@ -23,10 +23,7 @@
 #include <rmm/exec_policy.hpp>
 #include <thrust/reduce.h>
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace gpu {
+namespace cudf::io::parquet::detail {
 
 namespace {
 
@@ -452,8 +449,13 @@ __global__ void __launch_bounds__(decode_block_size)
   int out_thread0;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  if (!setupLocalPageInfo(
-        s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{KERNEL_MASK_GENERAL}, true)) {
+  if (!setupLocalPageInfo(s,
+                          &pages[page_idx],
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{decode_kernel_mask::GENERAL},
+                          true)) {
     return;
   }
 
@@ -489,6 +491,7 @@ __global__ void __launch_bounds__(decode_block_size)
       target_pos = min(s->nz_count, src_pos + decode_block_size - out_thread0);
       if (out_thread0 > 32) { target_pos = min(target_pos, s->dict_pos); }
     }
+    // TODO(ets): see if this sync can be removed
     __syncthreads();
     if (t < 32) {
       // decode repetition and definition levels.
@@ -602,14 +605,11 @@ __global__ void __launch_bounds__(decode_block_size)
     }
     __syncthreads();
   }
-  if (t == 0 and s->error != 0) {
-    cuda::atomic_ref<int32_t, cuda::thread_scope_device> ref{*error_code};
-    ref.fetch_or(s->error, cuda::std::memory_order_relaxed);
-  }
+  if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
 }
 
 struct mask_tform {
-  __device__ uint32_t operator()(PageInfo const& p) { return p.kernel_mask; }
+  __device__ uint32_t operator()(PageInfo const& p) { return static_cast<uint32_t>(p.kernel_mask); }
 };
 
 }  // anonymous namespace
@@ -624,7 +624,7 @@ uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_vector<PageInfo>
 }
 
 /**
- * @copydoc cudf::io::parquet::gpu::DecodePageData
+ * @copydoc cudf::io::parquet::detail::DecodePageData
  */
 void __host__ DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
                              cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
@@ -648,7 +648,4 @@ void __host__ DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
   }
 }
 
-}  // namespace gpu
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

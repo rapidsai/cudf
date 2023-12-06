@@ -16,7 +16,7 @@
 
 #include "reader_impl.hpp"
 
-namespace cudf::io::detail::parquet {
+namespace cudf::io::parquet::detail {
 
 reader::reader() = default;
 
@@ -59,4 +59,4 @@ bool chunked_reader::has_next() const { return _impl->has_next(); }
 
 table_with_metadata chunked_reader::read_chunk() const { return _impl->read_chunk(); }
 
-}  // namespace cudf::io::detail::parquet
+}  // namespace cudf::io::parquet::detail

@@ -57,7 +57,7 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& input,
                              std::move(offsets),
                              std::move(results),
                              input.null_count(),
-                             copy_bitmask(input.parent(), stream, mr),
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr),
                              stream,
                              mr);
   }
@@ -72,7 +72,7 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& input,
                            std::move(offsets),
                            std::move(strings_child),
                            input.null_count(),
-                           copy_bitmask(input.parent(), stream, mr),
+                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
                            stream,
                            mr);
 }
@@ -160,7 +160,7 @@ std::unique_ptr<column> whitespace_split_record_fn(strings_column_view const& in
                            std::move(offsets),
                            std::move(strings_output),
                            input.null_count(),
-                           copy_bitmask(input.parent(), stream, mr),
+                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
                            stream,
                            mr);
 }

@@ -194,5 +194,18 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
 std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Return a maximum precision for a given type.
+ *
+ * @tparam T the type to get the maximum precision for
+ */
+template <typename T>
+constexpr std::size_t max_precision()
+{
+  auto constexpr num_bits = sizeof(T) * 8;
+  return std::floor(num_bits * std::log(2) / std::log(10));
+}
+
 }  // namespace detail
 }  // namespace cudf

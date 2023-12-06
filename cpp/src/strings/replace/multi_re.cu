@@ -206,10 +206,11 @@ std::unique_ptr<column> replace_re(strings_column_view const& strings,
                                    std::vector<std::string> const& patterns,
                                    strings_column_view const& replacements,
                                    regex_flags const flags,
+                                   rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_re(strings, patterns, replacements, flags, cudf::get_default_stream(), mr);
+  return detail::replace_re(strings, patterns, replacements, flags, stream, mr);
 }
 
 }  // namespace strings
