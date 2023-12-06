@@ -364,9 +364,6 @@ TEST_P(JsonReaderParamTest, FloatingPoint)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     result.tbl->get_column(0),
     float_wrapper{{5.6, 56.79, 12000000000., 0.7, 3.000, 12.34, 0.31, -73.98007199999998}});
-
-  // auto const bitmask = cudf::test::bitmask_to_host(result.tbl->get_column(0));
-  // ASSERT_EQ((1u << result.tbl->get_column(0).size()) - 1, bitmask[0]);
 }
 
 TEST_P(JsonReaderParamTest, JsonLinesStrings)
