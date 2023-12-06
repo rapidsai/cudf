@@ -192,13 +192,13 @@ enum class decode_kernel_mask {
   STRING           = (1 << 1),  // Run decode kernel for string data
   DELTA_BINARY     = (1 << 2),  // Run decode kernel for DELTA_BINARY_PACKED data
   DELTA_BYTE_ARRAY = (1 << 3),  // Run decode kernel for DELTA_BYTE_ARRAY encoded data
-  DELTA_LENGTH     = (1 << 4),  // Run decode kernel for DELTA_LENGTH_BYTE_ARRAY encoded data
+  DELTA_LENGTH_BA  = (1 << 4),  // Run decode kernel for DELTA_LENGTH_BYTE_ARRAY encoded data
 };
 
-// mask representing all the way in which a string can be encoded
-constexpr uint32_t STRING_MASK =
+// mask representing all the ways in which a string can be encoded
+constexpr uint32_t STRINGS_MASK =
   BitOr(BitOr(decode_kernel_mask::DELTA_BYTE_ARRAY, decode_kernel_mask::STRING),
-        decode_kernel_mask::DELTA_LENGTH);
+        decode_kernel_mask::DELTA_LENGTH_BA);
 /**
  * @brief Nesting information specifically needed by the decode and preprocessing
  * kernels.
@@ -465,10 +465,10 @@ constexpr uint32_t encoding_to_mask(Encoding encoding)
  * Used to control which encode kernels to run.
  */
 enum class encode_kernel_mask {
-  PLAIN        = (1 << 0),  // Run plain encoding kernel
-  DICTIONARY   = (1 << 1),  // Run dictionary encoding kernel
-  DELTA_BINARY = (1 << 2),  // Run DELTA_BINARY_PACKED encoding kernel
-  DELTA_LENGTH = (1 << 3),  // Run DELTA_LENGTH_BYTE_ARRAY encoding kernel
+  PLAIN           = (1 << 0),  // Run plain encoding kernel
+  DICTIONARY      = (1 << 1),  // Run dictionary encoding kernel
+  DELTA_BINARY    = (1 << 2),  // Run DELTA_BINARY_PACKED encoding kernel
+  DELTA_LENGTH_BA = (1 << 3),  // Run DELTA_LENGTH_BYTE_ARRAY encoding kernel
 };
 
 /**

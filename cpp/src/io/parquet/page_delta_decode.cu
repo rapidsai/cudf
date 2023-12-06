@@ -600,7 +600,7 @@ __global__ void __launch_bounds__(decode_block_size)
   auto* const db        = &db_state;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  auto const mask = decode_kernel_mask::DELTA_LENGTH;
+  auto const mask = decode_kernel_mask::DELTA_LENGTH_BA;
   if (!setupLocalPageInfo(
         s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{mask}, true)) {
     return;

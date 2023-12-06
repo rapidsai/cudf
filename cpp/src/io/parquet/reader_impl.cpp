@@ -56,7 +56,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   // doing a gather operation later on.
   // TODO: This step is somewhat redundant if size info has already been calculated (nested schema,
   // chunked reader).
-  auto const has_strings = (kernel_mask & STRING_MASK) != 0;
+  auto const has_strings = (kernel_mask & STRINGS_MASK) != 0;
   std::vector<size_t> col_sizes(_input_columns.size(), 0L);
   if (has_strings) {
     ComputePageStringSizes(
@@ -190,7 +190,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   }
 
   // launch delta length byte array decoder
-  if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_LENGTH) != 0) {
+  if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_LENGTH_BA) != 0) {
     DecodeDeltaLengthByteArray(
       pages, chunks, num_rows, skip_rows, level_type_size, error_code.data(), streams[s_idx++]);
   }

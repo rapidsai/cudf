@@ -640,11 +640,11 @@ __global__ void __launch_bounds__(128)
         if (t == 0) {
           if (not pages.empty()) {
             if (is_use_delta) {
-              // TODO(ets): at some point make a more intelligent decision on this. DELTA_LENGTH
+              // TODO(ets): at some point make a more intelligent decision on this. DELTA_LENGTH_BA
               // should always be preferred over PLAIN, but DELTA_BINARY is a different matter.
               // If the delta encoding size is going to be close to 32 bits anyway, then plain
               // is a better choice.
-              page_g.kernel_mask = physical_type == BYTE_ARRAY ? encode_kernel_mask::DELTA_LENGTH
+              page_g.kernel_mask = physical_type == BYTE_ARRAY ? encode_kernel_mask::DELTA_LENGTH_BA
                                                                : encode_kernel_mask::DELTA_BINARY;
             } else if (ck_g.use_dictionary || physical_type == BOOLEAN) {
               page_g.kernel_mask = encode_kernel_mask::DICTIONARY;
@@ -1876,7 +1876,7 @@ __global__ void __launch_bounds__(block_size, 8)
   }
   __syncthreads();
 
-  if (BitAnd(s->page.kernel_mask, encode_kernel_mask::DELTA_LENGTH) == 0) { return; }
+  if (BitAnd(s->page.kernel_mask, encode_kernel_mask::DELTA_LENGTH_BA) == 0) { return; }
 
   // Encode data values
   if (t == 0) {
@@ -2879,10 +2879,10 @@ void EncodePages(device_span<EncPage> pages,
     gpuEncodeDeltaBinaryPages<encode_block_size>
       <<<num_pages, encode_block_size, 0, strm.value()>>>(pages, comp_in, comp_out, comp_results);
   }
-  if (BitAnd(kernel_mask, encode_kernel_mask::DELTA_LENGTH) != 0) {
+  if (BitAnd(kernel_mask, encode_kernel_mask::DELTA_LENGTH_BA) != 0) {
     auto const strm = streams[s_idx++];
     gpuEncodePageLevels<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
-      pages, write_v2_headers, encode_kernel_mask::DELTA_LENGTH);
+      pages, write_v2_headers, encode_kernel_mask::DELTA_LENGTH_BA);
     gpuEncodeDeltaLengthByteArrayPages<encode_block_size>
       <<<num_pages, encode_block_size, 0, strm.value()>>>(pages, comp_in, comp_out, comp_results);
   }

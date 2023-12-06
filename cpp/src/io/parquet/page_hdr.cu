@@ -157,7 +157,7 @@ __device__ decode_kernel_mask kernel_mask_for_page(PageInfo const& page,
   } else if (page.encoding == Encoding::DELTA_BYTE_ARRAY) {
     return decode_kernel_mask::DELTA_BYTE_ARRAY;
   } else if (page.encoding == Encoding::DELTA_LENGTH_BYTE_ARRAY) {
-    return decode_kernel_mask::DELTA_LENGTH;
+    return decode_kernel_mask::DELTA_LENGTH_BA;
   } else if (is_string_col(chunk)) {
     return decode_kernel_mask::STRING;
   }
