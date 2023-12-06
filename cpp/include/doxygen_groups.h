@@ -29,6 +29,7 @@
 // Add a new group by first specifying in the hierarchy below.
 
 /**
+ * @defgroup default_stream Default Stream
  * @defgroup cudf_classes Classes
  * @{
  *   @defgroup column_classes Column
@@ -179,9 +180,11 @@
  *   @defgroup utility_dispatcher Type Dispatcher
  *   @defgroup utility_bitmask Bitmask
  *   @defgroup utility_error Exception
+ *   @defgroup utility_span Exception
  * @}
  * @defgroup labeling_apis Labeling
  * @{
  *   @defgroup label_bins Bin Labeling
  * @}
+ * @defgroup expressions Expression Evaluation
  */

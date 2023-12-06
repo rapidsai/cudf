@@ -251,14 +251,15 @@ struct BitwiseOr {
   }
 };
 
-// I is the column type from the input table
-template <typename I>
+// PT is the parquet physical type (INT32 or INT64).
+// I is the column type from the input table.
+template <Type PT, typename I>
 __device__ uint8_t const* delta_encode(page_enc_state_s<0>* s,
                                        uint32_t valid_count,
                                        uint64_t* buffer,
                                        void* temp_space)
 {
-  using output_type = std::conditional_t<std::is_signed_v<I>, zigzag128_t, uleb128_t>;
+  using output_type = std::conditional_t<PT == INT32, int32_t, int64_t>;
   __shared__ delta_binary_packer<output_type> packer;
 
   auto const t = threadIdx.x;
@@ -1711,9 +1712,10 @@ __global__ void __launch_bounds__(block_size, 8)
   using block_reduce = cub::BlockReduce<uint32_t, block_size>;
   __shared__ union {
     typename block_reduce::TempStorage reduce_storage;
-    typename delta::index_scan::TempStorage delta_index_tmp;
-    typename delta::block_reduce::TempStorage delta_reduce_tmp;
-    typename delta::warp_reduce::TempStorage delta_warp_red_tmp[delta::num_mini_blocks];
+    typename delta_binary_packer<uleb128_t>::index_scan::TempStorage delta_index_tmp;
+    typename delta_binary_packer<uleb128_t>::block_reduce::TempStorage delta_reduce_tmp;
+    typename delta_binary_packer<uleb128_t>::warp_reduce::TempStorage
+      delta_warp_red_tmp[delta::num_mini_blocks];
   } temp_storage;
 
   auto* const s = &state_g;
@@ -1784,30 +1786,30 @@ __global__ void __launch_bounds__(block_size, 8)
     switch (dtype_len_in) {
       case 8: {
         // only DURATIONS map to 8 bytes, so safe to just use signed here?
-        delta_ptr = delta_encode<int64_t>(s, valid_count, delta_shared, &temp_storage);
+        delta_ptr = delta_encode<INT32, int64_t>(s, valid_count, delta_shared, &temp_storage);
         break;
       }
       case 4: {
         if (type_id == type_id::UINT32) {
-          delta_ptr = delta_encode<uint32_t>(s, valid_count, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<INT32, uint32_t>(s, valid_count, delta_shared, &temp_storage);
         } else {
-          delta_ptr = delta_encode<int32_t>(s, valid_count, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<INT32, int32_t>(s, valid_count, delta_shared, &temp_storage);
         }
         break;
       }
       case 2: {
         if (type_id == type_id::UINT16) {
-          delta_ptr = delta_encode<uint16_t>(s, valid_count, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<INT32, uint16_t>(s, valid_count, delta_shared, &temp_storage);
         } else {
-          delta_ptr = delta_encode<int16_t>(s, valid_count, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<INT32, int16_t>(s, valid_count, delta_shared, &temp_storage);
         }
         break;
       }
       case 1: {
         if (type_id == type_id::UINT8) {
-          delta_ptr = delta_encode<uint8_t>(s, valid_count, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<INT32, uint8_t>(s, valid_count, delta_shared, &temp_storage);
         } else {
-          delta_ptr = delta_encode<int8_t>(s, valid_count, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<INT32, int8_t>(s, valid_count, delta_shared, &temp_storage);
         }
         break;
       }
@@ -1815,9 +1817,9 @@ __global__ void __launch_bounds__(block_size, 8)
     }
   } else {
     if (type_id == type_id::UINT64) {
-      delta_ptr = delta_encode<uint64_t>(s, valid_count, delta_shared, &temp_storage);
+      delta_ptr = delta_encode<INT64, uint64_t>(s, valid_count, delta_shared, &temp_storage);
     } else {
-      delta_ptr = delta_encode<int64_t>(s, valid_count, delta_shared, &temp_storage);
+      delta_ptr = delta_encode<INT64, int64_t>(s, valid_count, delta_shared, &temp_storage);
     }
   }
 

@@ -62,7 +62,6 @@ TEST_F(CSVTest, CSVWriter)
 
   auto const filepath = temp_env->get_temp_dir() + "multicolumn.csv";
   auto w_options      = cudf::io::csv_writer_options::builder(cudf::io::sink_info{filepath}, tab)
-                     .include_header(false)
                      .inter_column_delimiter(',');
   cudf::io::write_csv(w_options.build(), cudf::test::get_default_stream());
 }
@@ -96,7 +95,10 @@ TEST_F(CSVTest, CSVReader)
 
   auto const filepath = temp_env->get_temp_dir() + "multicolumn.csv";
   auto w_options      = cudf::io::csv_writer_options::builder(cudf::io::sink_info{filepath}, tab)
-                     .include_header(false)
                      .inter_column_delimiter(',');
   cudf::io::write_csv(w_options.build(), cudf::test::get_default_stream());
+
+  auto const r_options =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath}).build();
+  cudf::io::read_csv(r_options, cudf::test::get_default_stream());
 }
