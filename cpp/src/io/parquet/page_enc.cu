@@ -216,7 +216,8 @@ void __device__ calculate_frag_size(frag_init_state_s* const s, int t)
 
   __syncthreads();
   // page fragment size must fit in a 32-bit signed integer
-  if (s->frag.fragment_data_size > std::numeric_limits<int32_t>::max()) {
+  if (s->frag.fragment_data_size > static_cast<uint32_t>(std::numeric_limits<int32_t>::max())) {
+    // TODO need to propagate this error back to the host
     CUDF_UNREACHABLE("page fragment size exceeds maximum for i32");
   }
 }
