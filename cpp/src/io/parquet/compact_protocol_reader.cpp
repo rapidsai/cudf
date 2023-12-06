@@ -132,12 +132,12 @@ class parquet_field_int : public parquet_field {
 
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
+    CUDF_EXPECTS(field_type == EXPECTED_TYPE, "unexpected int field type");
     if constexpr (is_byte) {
       val = cpr->getb();
     } else {
       val = cpr->get_zigzag<T>();
     }
-    CUDF_EXPECTS(field_type == EXPECTED_TYPE, "unexpected int field type");
   }
 };
 
@@ -221,8 +221,8 @@ class parquet_field_enum : public parquet_field {
   parquet_field_enum(int f, Enum& v) : parquet_field(f), val(v) {}
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    val = static_cast<Enum>(cpr->get_i32());
     CUDF_EXPECTS(field_type == ST_FLD_I32, "unexpected enum field type");
+    val = static_cast<Enum>(cpr->get_i32());
   }
 };
 
