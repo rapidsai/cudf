@@ -403,26 +403,7 @@ void traverse_children::operator()<cudf::string_view>(host_span<column_view cons
   // verify offsets
   check_offsets_size(cols);
 
-  // chars
-  auto const [device_view_owners, device_views_ptr] =
-    contiguous_copy_column_device_views<column_device_view>(cols, stream);
-
-  auto const total_char_count = thrust::transform_reduce(
-    rmm::exec_policy(stream),
-    device_views_ptr,
-    device_views_ptr + cols.size(),
-    [] __device__(auto const& col) {
-      if (col.size() == 0) return 0L;
-      auto const offsets = col.child(strings_column_view::offsets_column_index);
-      auto const itr     = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
-      return itr[col.offset() + col.size()] - itr[col.offset()];
-    },
-    std::size_t(0),
-    thrust::plus{});
-
-  CUDF_EXPECTS(total_char_count <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
-               "Total number of concatenated chars exceeds the column size limit",
-               std::overflow_error);
+  // chars -- checked in call to cudf::strings::detail::concatenate
 }
 
 template <>
