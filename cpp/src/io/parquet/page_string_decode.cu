@@ -142,6 +142,25 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
     bool skipped_values_set = false;
     bool end_value_set      = false;
 
+    // If page_start_row >= min_row, then skipped_values is 0 and we don't have to search for
+    // start_value. If there's repetition then we've already calculated
+    // skipped_values/skipped_leaf_values.
+    // TODO(ets): If we hit this condition, and end_row > last row in page, then we can skip
+    // more of the processing below.
+    if (has_repetition or page_start_row >= min_row) {
+      if (t == 0) {
+        if (has_repetition) {
+          skipped_values      = pp->skipped_values;
+          skipped_leaf_values = pp->skipped_leaf_values;
+        } else {
+          skipped_values      = 0;
+          skipped_leaf_values = 0;
+        }
+      }
+      skipped_values_set = true;
+      __syncthreads();
+    }
+
     while (processed < s->page.num_input_values) {
       thread_index_type start_val = processed;
 
@@ -151,11 +170,6 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
 
         // special case where page does not begin at a row boundary
         if (processed == 0 && rep_decode[0] != 0) {
-          if (t == 0) {
-            skipped_values      = 0;
-            skipped_leaf_values = 0;
-          }
-          skipped_values_set = true;
           end_row++;  // need to finish off the previous row
           row_fudge = 0;
         }
