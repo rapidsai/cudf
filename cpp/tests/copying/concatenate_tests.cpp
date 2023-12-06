@@ -214,9 +214,10 @@ TEST_F(StringColumnTest, ConcatenateManyColumns)
 
 TEST_F(StringColumnTest, ConcatenateTooLarge)
 {
-  std::string big_str(1000000, 'a');
+  std::string big_str(1000000, 'a');  // 1 million bytes x 5 = 5 million bytes
   cudf::test::strings_column_wrapper input{big_str, big_str, big_str, big_str, big_str};
   std::vector<cudf::column_view> input_cols;
+  // 5 millions bytes x 500 = 2.5GB > std::numeric_limits<size_type>::max()
   for (int i = 0; i < 500; ++i) {
     input_cols.push_back(input);
   }
