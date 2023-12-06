@@ -15,14 +15,12 @@
  */
 
 #include <cudf/column/column.hpp>
-#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/dictionary/encode.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -35,7 +33,7 @@ namespace {
 struct indices_handler_fn {
   cudf::detail::input_indexalator const d_iterator;
   column_device_view const d_indices;
-  size_type oob_index;
+  size_type oob_index;  // out-of-bounds index identifies nulls
   __device__ size_type operator()(size_type idx)
   {
     return d_indices.is_null(idx) ? oob_index : d_iterator[idx];
@@ -52,9 +50,10 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
 {
   if (source.is_empty()) return make_empty_column(type_id::EMPTY);
 
-  auto const d_indices = column_device_view::create(source.get_indices_annotated(), stream);
-  auto const d_iterator =
-    cudf::detail::indexalator_factory::make_input_iterator(source.get_indices_annotated());
+  // annotated indices include the offset, size and bitmask from it's parent
+  auto const indices       = source.get_indices_annotated();
+  auto const d_indices     = column_device_view::create(indices, stream);
+  auto const d_iterator    = cudf::detail::indexalator_factory::make_input_iterator(indices);
   auto const indices_begin = cudf::detail::make_counting_transform_iterator(
     0, indices_handler_fn{d_iterator, *d_indices, source.keys().size()});
 
