@@ -245,7 +245,7 @@ dependencies:
           - libkvikio==24.2.*
           - librdkafka>=1.9.0,<1.10.0a0
           # Align nvcomp version with rapids-cmake
-          - nvcomp==3.0.4
+          - nvcomp==3.0.5
           - spdlog>=1.12.0,<1.13
   build_wheels:
     common:
