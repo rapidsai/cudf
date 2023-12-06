@@ -13,7 +13,12 @@ import cudf
 import warnings
 import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
-from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140, PANDAS_EQ_200
+from cudf.core._compat import (
+    PANDAS_GE_150,
+    PANDAS_LT_140,
+    PANDAS_EQ_200,
+    PANDAS_GE_210,
+)
 from cudf.core.index import DatetimeIndex
 from cudf.testing._utils import (
     DATETIME_TYPES,
@@ -2070,8 +2075,10 @@ def test_first(idx, offset):
     p = pd.Series(range(len(idx)), dtype="int64", index=idx)
     g = cudf.from_pandas(p)
 
-    expect = p.first(offset=offset)
-    got = g.first(offset=offset)
+    with expect_warning_if(PANDAS_GE_210):
+        expect = p.first(offset=offset)
+    with pytest.warns(FutureWarning):
+        got = g.first(offset=offset)
 
     assert_eq(expect, got)
 
@@ -2100,8 +2107,10 @@ def test_first_start_at_end_of_month(idx, offset):
     p = pd.Series(range(len(idx)), index=idx)
     g = cudf.from_pandas(p)
 
-    expect = p.first(offset=offset)
-    got = g.first(offset=offset)
+    with expect_warning_if(PANDAS_GE_210):
+        expect = p.first(offset=offset)
+    with pytest.warns(FutureWarning):
+        got = g.first(offset=offset)
 
     assert_eq(expect, got)
 
@@ -2137,8 +2146,10 @@ def test_last(idx, offset):
     p = pd.Series(range(len(idx)), dtype="int64", index=idx)
     g = cudf.from_pandas(p)
 
-    expect = p.last(offset=offset)
-    got = g.last(offset=offset)
+    with expect_warning_if(PANDAS_GE_210):
+        expect = p.last(offset=offset)
+    with pytest.warns(FutureWarning):
+        got = g.last(offset=offset)
 
     assert_eq(expect, got)
 
