@@ -345,12 +345,10 @@ struct ParquetWriterSchemaTest : public ParquetWriterTest {
 };
 
 template <typename T>
-struct ParquetReaderSourceTest : public ParquetReaderTest {
-};
+struct ParquetReaderSourceTest : public ParquetReaderTest {};
 
 template <typename T>
-struct ParquetWriterDeltaTest : public ParquetWriterTest {
-};
+struct ParquetWriterDeltaTest : public ParquetWriterTest {};
 
 // Declare typed test cases
 // TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5352
@@ -6080,8 +6078,7 @@ TEST_F(ParquetReaderTest, FilterNamedExpression)
 
 // Test for Types - numeric, chrono, string.
 template <typename T>
-struct ParquetReaderPredicatePushdownTest : public ParquetReaderTest {
-};
+struct ParquetReaderPredicatePushdownTest : public ParquetReaderTest {};
 
 // These chrono types are not supported because parquet writer does not have a type to represent
 // them.
