@@ -154,7 +154,7 @@ std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c);
  * This takes care of padded bits
  *
  * @param        expected_mask A vector representing expected mask
- * @param        got_mask A vector representing mask obtained from column
+ * @param        got_mask_begin A vector representing mask obtained from column
  * @param        number_of_elements number of elements the mask represent
  *
  * @returns      true if both vector match till the `number_of_elements`
@@ -179,6 +179,9 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
   return {host_data, bitmask_to_host(c)};
 }
 
+// This signature is identical to the above overload apart from SFINAE so
+// doxygen sees it as a duplicate.
+//! @cond Doxygen_Suppress
 /**
  * @brief Copies the data and bitmask of a `column_view` to the host.
  *
@@ -207,6 +210,7 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
 
   return {host_fixed_points, bitmask_to_host(c)};
 }
+//! @endcond
 
 /**
  * @brief Copies the data and bitmask of a `column_view` of strings
