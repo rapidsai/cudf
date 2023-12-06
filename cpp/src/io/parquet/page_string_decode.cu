@@ -705,6 +705,8 @@ __global__ void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageS
  * This call ignores columns that are not DELTA_LENGTH_BYTE_ARRAY encoded. On exit the `str_bytes`
  * field of the `PageInfo` struct will be populated.
  *
+ * Currently this function only supports being called by a single warp.
+ *
  * @param pages All pages to be decoded
  * @param chunks All chunks to be decoded
  * @param min_rows crop all rows below min_row
@@ -740,9 +742,6 @@ __global__ void __launch_bounds__(delta_length_block_size) gpuComputeDeltaLength
   // if this isn't a bounds page.
   if (not is_bounds_pg) {
     if (t == 0) {
-      // TODO there's too many of these things floating around...should probably allocate this
-      // higher up the chain and pass in.
-
       auto const* string_start = string_lengths.find_end_of_block(s->data_start, s->data_end);
       size_t len               = static_cast<size_t>(s->data_end - string_start);
       // TODO check for overflow
@@ -760,8 +759,8 @@ __global__ void __launch_bounds__(delta_length_block_size) gpuComputeDeltaLength
 
     size_t total_bytes = 0;
 
-    // initialize with first value (which is stored in last_value)
-    if (t == 0 && start_value == 0) { total_bytes = string_lengths.last_value; }
+    // initialize with first value
+    if (t == 0 && start_value == 0) { total_bytes = string_lengths.value_at(0); }
 
     uleb128_t lane_sum = 0;
     while (string_lengths.current_value_idx < end_value &&

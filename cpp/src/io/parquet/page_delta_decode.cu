@@ -487,6 +487,7 @@ __global__ void __launch_bounds__(decode_block_size)
   int const leaf_level_index = s->col.max_nesting_depth - 1;
   auto strings_data          = nesting_info_base[leaf_level_index].string_out;
 
+  // sanity check to make sure we can process this page
   auto const batch_size = prefix_db->values_per_mb;
   if (batch_size > max_delta_mini_block_size) {
     set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
@@ -624,9 +625,10 @@ __global__ void __launch_bounds__(decode_block_size)
   }
   __syncthreads();
 
-  // pointer to location to output final strings
   int const leaf_level_index = s->col.max_nesting_depth - 1;
-  auto const batch_size      = db->values_per_mb;
+
+  // sanity check to make sure we can process this page
+  auto const batch_size = db->values_per_mb;
   if (batch_size > max_delta_mini_block_size) {
     set_error(static_cast<int32_t>(decode_error::DELTA_PARAMS_UNSUPPORTED), error_code);
     return;
