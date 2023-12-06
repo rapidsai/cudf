@@ -48,7 +48,7 @@ static constexpr char const* MAGIC = "ORC";
 static constexpr int32_t cudf_writer_code = 5;
 // Each ORC writer implementation should write its version to the PostScript
 // The version values are based on the ORC Java writer bug fixes and features
-// From https://github.com/apache/orc/blob/main/proto/orc_proto.proto:
+// From https://github.com/apache/orc-format/blob/main/src/main/proto/orc_proto.proto:
 //   0 = original
 //   1 = HIVE-8732 fixed (fixed stripe/file maximum statistics &
 //                        string statistics use utf8 for min/max)
