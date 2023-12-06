@@ -275,7 +275,7 @@ metadata::metadata(datasource* source)
           source->host_read(col.column_index_offset, col.column_index_length);
         cp.init(col_idx_buf->data(), col_idx_buf->size());
         ColumnIndex ci;
-        CUDF_EXPECTS(cp.read(&ci), "Cannot parse column index");
+        cp.read(&ci);
         col.column_index = std::move(ci);
       }
       if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
@@ -283,7 +283,7 @@ metadata::metadata(datasource* source)
           source->host_read(col.offset_index_offset, col.offset_index_length);
         cp.init(off_idx_buf->data(), off_idx_buf->size());
         OffsetIndex oi;
-        CUDF_EXPECTS(cp.read(&oi), "Cannot parse offset index");
+        cp.read(&oi);
         col.offset_index = std::move(oi);
       }
     }

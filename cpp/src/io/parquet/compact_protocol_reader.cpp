@@ -686,7 +686,7 @@ void CompactProtocolReader::read(OffsetIndex* o)
   function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(SizeStatistics* s)
+void CompactProtocolReader::read(SizeStatistics* s)
 {
   using optional_i64      = parquet_field_optional<int64_t, parquet_field_int64>;
   using optional_list_i64 = parquet_field_optional<std::vector<int64_t>, parquet_field_int64_list>;
