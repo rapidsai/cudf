@@ -2049,30 +2049,73 @@ TEST_F(JsonReaderTest, JSONLinesRecoveringIgnoreExcessChars)
     float64_wrapper{{0.0, 0.0, 0.0, 1.2, 0.0, 0.0, 0.0, 0.0}, c_validity.cbegin()});
 }
 
-TEST_F(JsonReaderTest, Mixed)
+TEST_F(JsonReaderTest, MixedTypes)
 {
-  // std::string json_string = R"( [{"a":[123], "b":1.0}, {"b":1.1, "c": {"0": 123}}, {"b":2.1}])";
-  std::string json_string = R"( [{"a":[123], "b":1.0}, {"a":1.1}, {"b":2.1, "a": {"0": 123}}])";
+  {
+    std::string json_string = R"({ "foo": [1,2,3], "bar": 123 }
+                               { "foo": { "a": 1 }, "bar": 456 })";
 
-  // TODO Force to string via schema
-  // std::map<std::string, cudf::io::schema_element> dtype_schema{
-  //   {"a",
-  //    {
-  //      data_type{cudf::type_id::LIST},
-  //      {{"element", {data_type{cudf::type_id::STRUCT}, {{"0", {dtype<float>()}}}}}},
-  //    }},
-  //   {"b", {dtype<int32_t>()}},
-  // };
+    cudf::io::json_reader_options in_options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{json_string.data(), json_string.size()})
+        .mixed_types_as_string(true)
+        .lines(true);
 
-  cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(
-      cudf::io::source_info{json_string.data(), json_string.size()})
-      // .dtypes(dtype_schema)
-      .mixed_types_as_string(true)
-      .lines(false);
+    cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
-  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
-  cudf::test::print(result.tbl->view().column(0));
+    EXPECT_EQ(result.tbl->num_columns(), 2);
+    EXPECT_EQ(result.tbl->num_rows(), 2);
+    EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRING);
+    EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::INT64);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                   cudf::test::strings_column_wrapper({"[1,2,3]", "{ \"a\": 1 }"}));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
+                                   cudf::test::fixed_width_column_wrapper<int64_t>({123, 456}));
+  }
+
+  auto test_fn = [](std::string_view json_string, cudf::column_view expected) {
+    cudf::io::json_reader_options in_options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{json_string.data(), json_string.size()})
+        .mixed_types_as_string(true)
+        .lines(true);
+
+    cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), expected);
+  };
+
+  // test cases.
+  test_fn(R"(
+{ "a": "123" }
+{ "a": 123 }
+)",
+          cudf::test::strings_column_wrapper({"123", "123"}));
+
+  test_fn(R"(
+{ "a": [1,2,3] }
+{ "a": { "b": 1 } }
+)",
+          cudf::test::strings_column_wrapper({"[1,2,3]", "{ \"b\": 1 }"}));
+
+  test_fn(R"(
+{ "a": "fox" }
+{ "a": { "b": 1 } }
+)",
+          cudf::test::strings_column_wrapper({"fox", "{ \"b\": 1 }"}));
+
+  test_fn(R"(
+{ "a": [1,2,3] }
+{ "a": "fox" }
+)",
+          cudf::test::strings_column_wrapper({"[1,2,3]", "fox"}));
+
+  test_fn(R"(
+{ "a": [1,2,3] }
+{ "a": [true,false,true] }
+{ "a": ["a", "b", "c"] }
+)",
+          cudf::test::lists_column_wrapper<cudf::string_view>{
+            {"1", "2", "3"}, {"true", "false", "true"}, {"a", "b", "c"}});
 }
 
 CUDF_TEST_PROGRAM_MAIN()
