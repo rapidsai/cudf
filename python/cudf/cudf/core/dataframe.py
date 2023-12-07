@@ -698,6 +698,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             col_dict = data._data
             index, index_from_data = data.index, index
             columns, columns_from_data = data.columns, columns
+            if columns_from_data is not None and len(columns_from_data) == 0:
+                # TODO: Can this be avoided?
+                # as_index([]) returns Index[float64]
+                columns_from_data = columns_from_data.astype(columns.dtype)
         elif isinstance(data, (cudf.Series, pd.Series)):
             if isinstance(data, pd.Series):
                 data = cudf.Series.from_pandas(data, nan_as_null=nan_as_null)
@@ -854,6 +858,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             columns_from_data = as_index(columns_from_data)
             col_is_rangeindex = isinstance(columns, cudf.RangeIndex)
             col_is_multiindex = isinstance(columns, cudf.MultiIndex)
+            col_dtype = columns_from_data.dtype
             reindexed = self.reindex(
                 columns=columns_from_data.to_pandas(), copy=False
             )
@@ -3516,12 +3521,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
 
             if level is not None and isinstance(self.index, MultiIndex):
-                out_index = self.index.copy(deep=copy)
-                out_index.get_level_values(level).to_frame().replace(
-                    to_replace=list(index.keys()),
-                    value=list(index.values()),
-                    inplace=True,
+                out_frame = self.index.to_frame(index=False)
+                level = self.index._get_level_label(level)
+                out_frame[level] = out_frame[level].replace(
+                    to_replace=list(index.keys()), value=list(index.values())
                 )
+                out_index = type(self.index).from_frame(out_frame)
                 out = DataFrame(index=out_index)
             else:
                 to_replace = list(index.keys())

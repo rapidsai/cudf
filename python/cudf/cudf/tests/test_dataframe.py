@@ -8951,8 +8951,9 @@ def test_dataframe_from_pandas_duplicate_columns():
         ["column_not_exists1", "column_not_exists2"],
     ],
 )
-@pytest.mark.parametrize("index", [["abc", "def", "ghi"]])
-def test_dataframe_constructor_columns(df, columns, index, request):
+def test_dataframe_constructor_columns(df, columns, request):
+    index = ["abc", "def", "ghi"]
+
     def assert_local_eq(actual, df, expected, host_columns):
         check_index_type = not expected.empty
         if host_columns is not None and any(
@@ -8967,12 +8968,6 @@ def test_dataframe_constructor_columns(df, columns, index, request):
         else:
             assert_eq(expected, actual, check_index_type=check_index_type)
 
-    if df.empty and columns is None and not PANDAS_GE_200:
-        request.node.add_marker(
-            pytest.mark.xfail(
-                reason="pandas returns Index[object] instead of RangeIndex"
-            )
-        )
     gdf = cudf.from_pandas(df)
     host_columns = (
         columns.to_pandas() if isinstance(columns, cudf.BaseIndex) else columns
@@ -9280,22 +9275,19 @@ def test_dataframe_setitem_cupy_array():
 
 
 @pytest.mark.parametrize(
-    "data", [{"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}]
-)
-@pytest.mark.parametrize(
-    "index",
-    [{0: 123, 1: 4, 2: 6}],
-)
-@pytest.mark.parametrize(
     "level",
     ["x", 0],
 )
-def test_rename_for_level_MultiIndex_dataframe(data, index, level):
+def test_rename_for_level_MultiIndex_dataframe(level):
+    data = {"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}
+    index = {0: 123, 1: 4, 2: 6}
     pdf = pd.DataFrame(
         data,
-        index=pd.MultiIndex.from_tuples([(0, 1, 2), (1, 2, 3), (2, 3, 4)]),
+        index=pd.MultiIndex.from_tuples(
+            [(0, 1, 2), (1, 2, 3), (2, 3, 4)], names=["x", "y", "z"]
+        ),
     )
-    pdf.index.names = ["x", "y", "z"]
+
     gdf = cudf.from_pandas(pdf)
 
     expect = pdf.rename(index=index, level=level)
@@ -9305,9 +9297,6 @@ def test_rename_for_level_MultiIndex_dataframe(data, index, level):
 
 
 @pytest.mark.parametrize(
-    "data", [{"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}]
-)
-@pytest.mark.parametrize(
     "columns",
     [{"a": "f", "b": "g"}, {1: 3, 2: 4}, lambda s: 2 * s],
 )
@@ -9315,7 +9304,8 @@ def test_rename_for_level_MultiIndex_dataframe(data, index, level):
     "level",
     [0, 1],
 )
-def test_rename_for_level_MultiColumn_dataframe(data, columns, level):
+def test_rename_for_level_MultiColumn_dataframe(columns, level):
+    data = {"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}
     gdf = cudf.DataFrame(data)
     gdf.columns = pd.MultiIndex.from_tuples([("a", 1), ("a", 2), ("b", 1)])
 
