@@ -763,10 +763,16 @@ std::unique_ptr<column> make_strings_column_from_host(host_span<std::string cons
                                 offsets.begin() + 1,
                                 std::plus<cudf::size_type>{},
                                 [](auto& str) { return str.size(); });
-  auto d_offsets =
-    cudf::detail::make_device_uvector_sync(offsets, stream, rmm::mr::get_current_device_resource());
+  auto d_offsets = std::make_unique<cudf::column>(
+    cudf::detail::make_device_uvector_sync(offsets, stream, rmm::mr::get_current_device_resource()),
+    rmm::device_buffer{},
+    0);
   return cudf::make_strings_column(
-    host_strings.size(), std::move(d_offsets), std::move(d_chars), {}, 0);
+    host_strings.size(),
+    std::move(d_offsets),
+    std::make_unique<cudf::column>(std::move(d_chars), rmm::device_buffer{}, 0),
+    0,
+    {});
 }
 
 std::unique_ptr<column> make_column_names_column(host_span<column_name_info const> column_names,

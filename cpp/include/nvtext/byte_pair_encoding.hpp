@@ -65,43 +65,6 @@ struct bpe_merge_pairs {
 };
 
 /**
- * @brief Create a nvtext::bpe_merge_pairs from an input file.
- *
- * @deprecated Since 23.12
- *
- * The file should contain a pair of strings per line separated by
- * a single space.
- *
- * Example:
- * @code{.txt}
- * e n
- * i t
- * i s
- * e s
- * en t
- * c e
- * es t
- * en ce
- * T h
- * Th is
- * t est
- * s ent
- * ...
- * @endcode
- *
- * The pairs are expected to be ordered in the file by their rank
- * relative to each other. A pair earlier in the file has priority over
- * any pairs below it.
- *
- * @param filename_merges Local file path of pairs encoded in UTF-8.
- * @param mr Memory resource to allocate any returned objects.
- * @return A nvtext::bpe_merge_pairs object
- */
-[[deprecated]] std::unique_ptr<bpe_merge_pairs> load_merge_pairs_file(
-  std::string const& filename_merges,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
  * @brief Create a nvtext::bpe_merge_pairs from a strings column
  *
  * The input column should contain a unique pair of strings per line separated by
