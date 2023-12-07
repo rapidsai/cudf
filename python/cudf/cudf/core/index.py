@@ -1228,7 +1228,8 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         name = self.name if name is None else name
 
         col = self._values.astype(dtype)
-        return _index_from_data({name: col.copy(True) if deep else col})
+        idx_copy = _index_from_data({name: col.copy(True) if deep else col})
+        return idx_copy._copy_type_metadata(self)
 
     @_cudf_nvtx_annotate
     def astype(self, dtype, copy: bool = True):
@@ -2164,6 +2165,14 @@ class DatetimeIndex(GenericIndex):
             unique_vals = self[1:] - self[:-1]
             if len(unique_vals) != 1 or unique_vals[0] != self._freq:
                 raise ValueError()
+
+    @_cudf_nvtx_annotate
+    def _copy_type_metadata(
+        self: DatetimeIndex, other: DatetimeIndex, *, override_dtypes=None
+    ) -> GenericIndex:
+        super()._copy_type_metadata(other, override_dtypes=override_dtypes)
+        self._freq = other._freq
+        return self
 
     @classmethod
     def _from_data(
