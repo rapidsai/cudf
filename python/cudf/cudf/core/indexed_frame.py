@@ -3318,6 +3318,12 @@ class IndexedFrame(Frame):
         2018-04-09  1
         2018-04-11  2
         """
+        # Do not remove until pandas 3.0 support is added.
+        warnings.warn(
+            "first is deprecated and will be removed in a future version. "
+            "Please create a mask and filter using `.loc` instead",
+            FutureWarning,
+        )
         return self._first_or_last(
             offset,
             idx=0,
@@ -3364,6 +3370,12 @@ class IndexedFrame(Frame):
         2018-04-13  3
         2018-04-15  4
         """
+        # Do not remove until pandas 3.0 support is added.
+        warnings.warn(
+            "last is deprecated and will be removed in a future version. "
+            "Please create a mask and filter using `.loc` instead",
+            FutureWarning,
+        )
         return self._first_or_last(
             offset,
             idx=-1,
