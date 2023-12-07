@@ -1433,9 +1433,10 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         if self.name is not None:
             lines[-1] = lines[-1] + ", name='%s'" % self.name
         if "length" in tmp_meta:
-            lines[-1] = lines[-1] + ", length=%d)" % len(self)
-        else:
-            lines[-1] = lines[-1] + ")"
+            lines[-1] = lines[-1] + ", length=%d" % len(self)
+        if "freq" in tmp_meta and self._freq is not None:
+            lines[-1] = lines[-1] + f", freq={self._freq}"
+        lines[-1] = lines[-1] + ")"
 
         return "\n".join(lines)
 
@@ -2127,8 +2128,6 @@ class DatetimeIndex(GenericIndex):
         # pandas dtindex creation first which.  For now
         # just make sure we handle np.datetime64 arrays
         # and then just dispatch upstream
-        if freq is not None:
-            raise NotImplementedError("Freq is not yet supported")
         if tz is not None:
             raise NotImplementedError("tz is not yet supported")
         if normalize is not False:
@@ -2141,6 +2140,8 @@ class DatetimeIndex(GenericIndex):
             raise NotImplementedError("dayfirst == True is not yet supported")
         if yearfirst is not False:
             raise NotImplementedError("yearfirst == True is not yet supported")
+
+        self._freq = _validate_freq(freq)
 
         valid_dtypes = tuple(
             f"datetime64[{res}]" for res in ("s", "ms", "us", "ns")
@@ -2158,6 +2159,19 @@ class DatetimeIndex(GenericIndex):
             data = data.copy()
 
         super().__init__(data, **kwargs)
+
+        if self._freq is not None:
+            unique_vals = self[1:] - self[:-1]
+            if len(unique_vals) != 1 or unique_vals[0] != self._freq:
+                raise ValueError()
+
+    @classmethod
+    def _from_data(
+        cls, data: MutableMapping, name: Any = no_default, freq: Any = None
+    ):
+        result = super()._from_data(data, name)
+        result._freq = _validate_freq(freq)
+        return result
 
     def __getitem__(self, index):
         value = super().__getitem__(index)
@@ -2520,7 +2534,13 @@ class DatetimeIndex(GenericIndex):
             )
         else:
             nanos = self._values.astype("datetime64[ns]")
-        return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
+
+        freq = (
+            self._freq._maybe_as_fast_pandas_offset()
+            if self._freq is not None
+            else None
+        )
+        return pd.DatetimeIndex(nanos.to_pandas(), name=self.name, freq=freq)
 
     @_cudf_nvtx_annotate
     def _get_dt_field(self, field):
@@ -3625,3 +3645,12 @@ def _extended_gcd(a: int, b: int) -> Tuple[int, int, int]:
         old_s, s = s, old_s - quotient * s
         old_t, t = t, old_t - quotient * t
     return old_r, old_s, old_t
+
+
+def _validate_freq(freq: Any) -> cudf.DateOffset:
+    if isinstance(freq, str):
+        return cudf.DateOffset._from_freqstr(freq)
+    elif freq is not None:
+        if not isinstance(freq, cudf.DateOffset):
+            raise ValueError(f"Invalid frequency: {freq}")
+    return freq
