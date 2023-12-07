@@ -1130,8 +1130,10 @@ def is_interval_dtype(obj):
         )
         or (
             isinstance(
-                getattr(obj, "dtype", None), (pd.IntervalDtype, cudf.core.dtypes.IntervalDtype)
+                getattr(obj, "dtype", None),
+                (pd.IntervalDtype, cudf.core.dtypes.IntervalDtype),
             )
+        )
     )
 
 
