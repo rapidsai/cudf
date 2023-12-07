@@ -505,19 +505,23 @@ struct get_page_span {
 
   __device__ page_span operator()(size_t column_index)
   {
-    auto const column_page_start = page_row_index + page_offsets[column_index];
+    auto const first_page_index  = page_offsets[column_index];
+    auto const column_page_start = page_row_index + first_page_index;
     auto const column_page_end   = page_row_index + page_offsets[column_index + 1];
     auto const num_pages         = column_page_end - column_page_start;
-    auto start_page =
-      thrust::lower_bound(thrust::seq, column_page_start, column_page_end, start_row) -
-      column_page_start;
-    if (page_row_index[start_page] == start_row) { start_page++; }
-    auto end_page = thrust::lower_bound(thrust::seq, column_page_start, column_page_end, end_row) -
-                    column_page_start;
-    if (end_page < num_pages) { end_page++; }
 
-    return {static_cast<size_t>(start_page + page_offsets[column_index]),
-            static_cast<size_t>(end_page + page_offsets[column_index])};
+    auto start_page =
+      (thrust::lower_bound(thrust::seq, column_page_start, column_page_end, start_row) -
+       column_page_start) +
+      first_page_index;
+    if (page_row_index[start_page] == start_row) { start_page++; }
+
+    auto end_page = (thrust::lower_bound(thrust::seq, column_page_start, column_page_end, end_row) -
+                     column_page_start) +
+                    first_page_index;
+    if (end_page < (first_page_index + num_pages)) { end_page++; }
+
+    return {static_cast<size_t>(start_page), static_cast<size_t>(end_page)};
   }
 };
 
