@@ -463,7 +463,9 @@ class DateOffset:
     }
 
     _CODES_TO_UNITS = {
+        "N": "nanoseconds",
         "ns": "nanoseconds",
+        "U": "microseconds",
         "us": "microseconds",
         "ms": "milliseconds",
         "L": "milliseconds",
@@ -491,7 +493,7 @@ class DateOffset:
         pd_offset.Nano: "nanoseconds",
     }
 
-    _FREQSTR_REGEX = re.compile("([0-9]*)([a-zA-Z]+)")
+    _FREQSTR_REGEX = re.compile("([-+]?[0-9]*)([a-zA-Z]+)")
 
     def __init__(self, n=1, normalize=False, **kwds):
         if normalize:

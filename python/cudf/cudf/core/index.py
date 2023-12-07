@@ -1228,8 +1228,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         name = self.name if name is None else name
 
         col = self._values.astype(dtype)
-        idx_copy = _index_from_data({name: col.copy(True) if deep else col})
-        return idx_copy._copy_type_metadata(self)
+        return _index_from_data({name: col.copy(True) if deep else col})
 
     @_cudf_nvtx_annotate
     def astype(self, dtype, copy: bool = True):
@@ -2189,6 +2188,11 @@ class DatetimeIndex(GenericIndex):
         ):
             return pd.Timestamp(value)
         return value
+
+    @_cudf_nvtx_annotate
+    def copy(self, name=None, deep=False, dtype=None, names=None):
+        idx_copy = super().copy(name=name, deep=deep, dtype=dtype, names=names)
+        return idx_copy._copy_type_metadata(self)
 
     def searchsorted(
         self,
