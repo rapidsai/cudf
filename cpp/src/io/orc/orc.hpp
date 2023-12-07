@@ -40,6 +40,28 @@ namespace orc {
 static constexpr uint32_t block_header_size = 3;
 // Seconds from January 1st, 1970 to January 1st, 2015
 static constexpr int64_t orc_utc_epoch = 1420070400;
+// ORC datasets start with a 3 byte header
+static constexpr char const* MAGIC = "ORC";
+
+// Each ORC writer implementation should write its code to the file footer
+// the codes are specified in the ORC specification
+static constexpr int32_t cudf_writer_code = 5;
+// Each ORC writer implementation should write its version to the PostScript
+// The version values are based on the ORC Java writer bug fixes and features
+// From https://github.com/apache/orc-format/blob/main/src/main/proto/orc_proto.proto:
+//   0 = original
+//   1 = HIVE-8732 fixed (fixed stripe/file maximum statistics &
+//                        string statistics use utf8 for min/max)
+//   2 = HIVE-4243 fixed (use real column names from Hive tables)
+//   3 = HIVE-12055 added (vectorized writer implementation)
+//   4 = HIVE-13083 fixed (decimals write present stream correctly)
+//   5 = ORC-101 fixed (bloom filters use utf8 consistently)
+//   6 = ORC-135 fixed (timestamp statistics use utc)
+//   7 = ORC-517 fixed (decimal64 min/max incorrect)
+//   8 = ORC-203 added (trim very long string statistics)
+//   9 = ORC-14 added (column encryption)
+// Our version should be updated as we implement the features from the list above
+static constexpr uint32_t cudf_writer_version = 7;
 
 // Used for the nanosecond remainder in timestamp statistics when the actual nanoseconds of min/max
 // are not included. As the timestamp statistics are stored as milliseconds + nanosecond remainder,
@@ -48,12 +70,13 @@ static constexpr int32_t DEFAULT_MIN_NANOS = 0;
 static constexpr int32_t DEFAULT_MAX_NANOS = 999'999;
 
 struct PostScript {
-  uint64_t footerLength       = 0;     // the length of the footer section in bytes
-  CompressionKind compression = NONE;  // the kind of generic compression used
-  uint32_t compressionBlockSize{};     // the maximum size of each compression chunk
-  std::vector<uint32_t> version;       // the version of the writer [major, minor]
-  uint64_t metadataLength = 0;         // the length of the metadata section in bytes
-  std::string magic       = "";        // the fixed string "ORC"
+  uint64_t footerLength       = 0;        // the length of the footer section in bytes
+  CompressionKind compression = NONE;     // the kind of generic compression used
+  uint32_t compressionBlockSize{};        // the maximum size of each compression chunk
+  std::vector<uint32_t> version;          // the version of the file format [major, minor]
+  uint64_t metadataLength = 0;            // the length of the metadata section in bytes
+  std::optional<uint32_t> writerVersion;  // The version of the writer that wrote the file
+  std::string magic = "";                 // the fixed string "ORC"
 };
 
 struct StripeInformation {
@@ -90,6 +113,7 @@ struct FileFooter {
   uint64_t numberOfRows = 0;               // the total number of rows in the file
   std::vector<ColStatsBlob> statistics;    // Column statistics blobs
   uint32_t rowIndexStride = 0;             // the maximum number of rows in each index entry
+  std::optional<uint32_t> writer;          // Writer code
 };
 
 struct Stream {
