@@ -1948,8 +1948,7 @@ TEST_F(OrcWriterTest, UnorderedDictionary)
 
   std::vector<char> out_buffer_sorted;
   cudf::io::orc_writer_options out_opts_sorted =
-    cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer_sorted}, expected)
-      .enable_dictionary_sort(true);
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer_sorted}, expected);
   cudf::io::write_orc(out_opts_sorted);
 
   cudf::io::orc_reader_options in_opts_sorted = cudf::io::orc_reader_options::builder(

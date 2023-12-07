@@ -451,7 +451,7 @@ class orc_writer_options {
   // Optional compression statistics
   std::shared_ptr<writer_compression_statistics> _compression_stats;
   // Specify whether string dictionaries should be alphabetically sorted
-  bool _enable_dictionary_sort = false;
+  bool _enable_dictionary_sort = true;
 
   friend orc_writer_options_builder;
 
@@ -895,7 +895,7 @@ class chunked_orc_writer_options {
   // Optional compression statistics
   std::shared_ptr<writer_compression_statistics> _compression_stats;
   // Specify whether string dictionaries should be alphabetically sorted
-  bool _enable_dictionary_sort = false;
+  bool _enable_dictionary_sort = true;
 
   friend chunked_orc_writer_options_builder;
 
