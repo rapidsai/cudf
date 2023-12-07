@@ -4614,6 +4614,12 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStructNulls)
 
   read_footer(source, &fmd);
 
+  // all struct columns will have num_ordered_rows / 5 nulls at level 0.
+  // col1 will have num_ordered_rows / 2 nulls total
+  // col2 will have num_ordered_rows / 3 nulls total
+  // col3 will have num_ordered_rows / 4 nulls total
+  int const null_mods[] = {0, 2, 3, 4};
+
   for (size_t r = 0; r < fmd.row_groups.size(); r++) {
     auto const& rg = fmd.row_groups[r];
     for (size_t c = 0; c < rg.columns.size(); c++) {
@@ -4623,6 +4629,26 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStructNulls)
       // the first row index is correct
       auto const oi = read_offset_index(source, chunk);
       auto const ci = read_column_index(source, chunk);
+
+      // check definition level histogram (repetition will not be present)
+      if (c != 0) {
+        ASSERT_TRUE(chunk.meta_data.size_statistics.has_value());
+        ASSERT_TRUE(chunk.meta_data.size_statistics->definition_level_histogram.has_value());
+        // there are no lists so there should be no repetition level histogram
+        EXPECT_FALSE(chunk.meta_data.size_statistics->repetition_level_histogram.has_value());
+        auto const& def_hist = chunk.meta_data.size_statistics->definition_level_histogram.value();
+        ASSERT_TRUE(def_hist.size() == 3L);
+        auto const l0_nulls    = num_ordered_rows / 5;
+        auto const l1_l0_nulls = num_ordered_rows / (5 * null_mods[c]);
+        auto const l1_nulls    = num_ordered_rows / null_mods[c] - l1_l0_nulls;
+        auto const l2_vals     = num_ordered_rows - l1_nulls - l0_nulls;
+        EXPECT_EQ(def_hist[0], l0_nulls);
+        EXPECT_EQ(def_hist[1], l1_nulls);
+        EXPECT_EQ(def_hist[2], l2_vals);
+      } else {
+        // column 0 has no lists and no nulls and no strings, so there should be no size stats
+        EXPECT_FALSE(chunk.meta_data.size_statistics.has_value());
+      }
 
       int64_t num_vals = 0;
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
@@ -4653,6 +4679,8 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
   // []
   // [4, 5]
   // NULL
+  // def histogram [1, 1, 2, 3]
+  // rep histogram [4, 3]
   lcw col0{{{{1, 2, 3}, nulls_at({0, 2})}, {}, {4, 5}, {}}, null_at(3)};
 
   // 4 nulls
@@ -4660,6 +4688,8 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
   // [[7, 8]]
   // []
   // [[]]
+  // def histogram [1, 3, 10]
+  // rep histogram [4, 4, 6]
   lcw col1{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, {{7, 8}}, lcw{}, lcw{lcw{}}};
 
   // 4 nulls
@@ -4667,6 +4697,8 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
   // [[7, 8]]
   // []
   // [[]]
+  // def histogram [1, 1, 2, 10]
+  // rep histogram [4, 4, 6]
   lcw col2{{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, null_at(3)}, {{7, 8}}, lcw{}, lcw{lcw{}}};
 
   // 6 nulls
@@ -4674,6 +4706,8 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
   // [[7, 8]]
   // []
   // [[]]
+  // def histogram [1, 1, 2, 2, 8]
+  // rep histogram [4, 4, 6]
   using dlcw = cudf::test::lists_column_wrapper<double>;
   dlcw col3{{{{1., 2., 3.}, {}, {4., 5.}, {}, {{0., 6., 0.}, nulls_at({0, 2})}}, null_at(3)},
             {{7., 8.}},
@@ -4685,6 +4719,8 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
   // [[7, 8]]
   // []
   // NULL
+  // def histogram [1, 1, 1, 1, 10]
+  // rep histogram [4, 4, 6]
   using ui16lcw = cudf::test::lists_column_wrapper<uint16_t>;
   cudf::test::lists_column_wrapper<uint16_t> col4{
     {{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, null_at(3)}, {{7, 8}}, ui16lcw{}, ui16lcw{ui16lcw{}}},
@@ -4695,6 +4731,8 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
   // [[7, 8]]
   // []
   // NULL
+  // def histogram [1, 1, 1, 1, 2, 8]
+  // rep histogram [4, 4, 6]
   lcw col5{{{{{1, 2, 3}, {}, {4, 5}, {}, {{0, 6, 0}, nulls_at({0, 2})}}, null_at(3)},
             {{7, 8}},
             lcw{},
@@ -4702,6 +4740,8 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
            null_at(3)};
 
   // 4 nulls
+  // def histogram [1, 3, 9]
+  // rep histogram [4, 4, 5]
   using strlcw = cudf::test::lists_column_wrapper<cudf::string_view>;
   cudf::test::lists_column_wrapper<cudf::string_view> col6{
     {{"Monday", "Monday", "Friday"}, {}, {"Monday", "Friday"}, {}, {"Sunday", "Funday"}},
@@ -4709,12 +4749,35 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
     strlcw{},
     strlcw{strlcw{}}};
 
+  // 5 nulls
+  // def histogram [1, 3, 1, 8]
+  // rep histogram [4, 4, 5]
+  using strlcw = cudf::test::lists_column_wrapper<cudf::string_view>;
+  cudf::test::lists_column_wrapper<cudf::string_view> col7{{{"Monday", "Monday", "Friday"},
+                                                            {},
+                                                            {{"Monday", "Friday"}, null_at(1)},
+                                                            {},
+                                                            {"Sunday", "Funday"}},
+                                                           {{"bee", "sting"}},
+                                                           strlcw{},
+                                                           strlcw{strlcw{}}};
+
   // 11 nulls
+  // D   5   6   5  6        5  6  5      6 6
+  // R   0   3   3  3        1  3  3      2 3
   // [[[NULL,2,NULL,4]], [[NULL,6,NULL], [8,9]]]
+  // D 2      6    6   6  6      2
+  // R 0      1    2   3  3      1
   // [NULL, [[13],[14,15,16]],  NULL]
+  // D 2     3   2      4
+  // R 0     1   1      1
   // [NULL, [], NULL, [[]]]
+  // D 0
+  // R 0
   // NULL
-  lcw col7{{
+  // def histogram [1, 0, 4, 1, 1, 4, 9]
+  // rep histogram [4, 6, 2, 8]
+  lcw col8{{
              {{{{1, 2, 3, 4}, nulls_at({0, 2})}}, {{{5, 6, 7}, nulls_at({0, 2})}, {8, 9}}},
              {{{{10, 11}, {12}}, {{13}, {14, 15, 16}}, {{17, 18}}}, nulls_at({0, 2})},
              {{lcw{lcw{}}, lcw{}, lcw{}, lcw{lcw{}}}, nulls_at({0, 2})},
@@ -4724,7 +4787,25 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
 
   table_view expected({col0, col1, col2, col3, col4, col5, col6, col7});
 
-  int64_t const expected_null_counts[] = {4, 4, 4, 6, 4, 6, 4, 11};
+  int64_t const expected_null_counts[]            = {4, 4, 4, 6, 4, 6, 4, 5, 11};
+  std::vector<int64_t> const expected_def_hists[] = {{1, 1, 2, 3},
+                                                     {1, 3, 10},
+                                                     {1, 1, 2, 10},
+                                                     {1, 1, 2, 2, 8},
+                                                     {1, 1, 1, 1, 10},
+                                                     {1, 1, 1, 1, 2, 8},
+                                                     {1, 3, 9},
+                                                     {1, 3, 1, 8},
+                                                     {1, 0, 4, 1, 1, 4, 9}};
+  std::vector<int64_t> const expected_rep_hists[] = {{4, 3},
+                                                     {4, 4, 6},
+                                                     {4, 4, 6},
+                                                     {4, 4, 6},
+                                                     {4, 4, 6},
+                                                     {4, 4, 6},
+                                                     {4, 4, 5},
+                                                     {4, 4, 5},
+                                                     {4, 6, 2, 8}};
 
   auto const filepath = temp_env->get_temp_filepath("ColumnIndexListWithNulls.parquet");
   auto out_opts = cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
@@ -4743,6 +4824,25 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
     auto const& rg = fmd.row_groups[r];
     for (size_t c = 0; c < rg.columns.size(); c++) {
       auto const& chunk = rg.columns[c];
+
+      ASSERT_TRUE(chunk.meta_data.size_statistics.has_value());
+      ASSERT_TRUE(chunk.meta_data.size_statistics->definition_level_histogram.has_value());
+      ASSERT_TRUE(chunk.meta_data.size_statistics->repetition_level_histogram.has_value());
+      // there is only one page, so chunk stats should match the page stats
+      EXPECT_EQ(chunk.meta_data.size_statistics->definition_level_histogram.value(),
+                expected_def_hists[c]);
+      EXPECT_EQ(chunk.meta_data.size_statistics->repetition_level_histogram.value(),
+                expected_rep_hists[c]);
+      // only column 6 has string data
+      if (c == 6) {
+        ASSERT_TRUE(chunk.meta_data.size_statistics->unencoded_byte_array_data_bytes.has_value());
+        EXPECT_EQ(chunk.meta_data.size_statistics->unencoded_byte_array_data_bytes.value(), 50L);
+      } else if (c == 7) {
+        ASSERT_TRUE(chunk.meta_data.size_statistics->unencoded_byte_array_data_bytes.has_value());
+        EXPECT_EQ(chunk.meta_data.size_statistics->unencoded_byte_array_data_bytes.value(), 44L);
+      } else {
+        EXPECT_FALSE(chunk.meta_data.size_statistics->unencoded_byte_array_data_bytes.has_value());
+      }
 
       // loop over offsets, read each page header, make sure it's a data page and that
       // the first row index is correct
@@ -4764,6 +4864,22 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
       // should only be one page
       EXPECT_FALSE(ci.null_pages[0]);
       EXPECT_EQ(ci.null_counts[0], expected_null_counts[c]);
+
+      ASSERT_TRUE(ci.definition_level_histogram.has_value());
+      EXPECT_EQ(ci.definition_level_histogram.value(), expected_def_hists[c]);
+
+      ASSERT_TRUE(ci.repetition_level_histogram.has_value());
+      EXPECT_EQ(ci.repetition_level_histogram.value(), expected_rep_hists[c]);
+
+      if (c == 6) {
+        ASSERT_TRUE(oi.unencoded_byte_array_data_bytes.has_value());
+        EXPECT_EQ(oi.unencoded_byte_array_data_bytes.value()[0], 50L);
+      } else if (c == 7) {
+        ASSERT_TRUE(oi.unencoded_byte_array_data_bytes.has_value());
+        EXPECT_EQ(oi.unencoded_byte_array_data_bytes.value()[0], 44L);
+      } else {
+        EXPECT_FALSE(oi.unencoded_byte_array_data_bytes.has_value());
+      }
     }
   }
 }

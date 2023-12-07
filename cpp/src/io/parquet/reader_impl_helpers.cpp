@@ -266,6 +266,29 @@ metadata::metadata(datasource* source)
   CompactProtocolReader cp(buffer->data(), ender->footer_len);
   CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
   CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
+
+  // loop through the column chunks and read column and offset indexes
+  for (auto& rg : row_groups) {
+    for (auto& col : rg.columns) {
+      if (col.column_index_length > 0 && col.column_index_offset > 0) {
+        auto const col_idx_buf =
+          source->host_read(col.column_index_offset, col.column_index_length);
+        cp.init(col_idx_buf->data(), col_idx_buf->size());
+        ColumnIndex ci;
+        CUDF_EXPECTS(cp.read(&ci), "Cannot parse column index");
+        col.column_index = std::move(ci);
+      }
+      if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
+        auto const off_idx_buf =
+          source->host_read(col.offset_index_offset, col.offset_index_length);
+        cp.init(off_idx_buf->data(), off_idx_buf->size());
+        OffsetIndex oi;
+        CUDF_EXPECTS(cp.read(&oi), "Cannot parse offset index");
+        col.offset_index = std::move(oi);
+      }
+    }
+  }
+
   sanitize_schema();
 }
 
