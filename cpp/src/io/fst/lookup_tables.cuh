@@ -609,8 +609,7 @@ class TransducerLookupTable {
     }
 
     // Check whether runtime-provided table size exceeds the compile-time given max. table size
-    // TODO: Support for multicharater translations?
-    // CUDF_EXPECTS(out_symbols.size() <= MAX_TABLE_SIZE, "Unsupported translation table");
+    CUDF_EXPECTS(out_symbols.size() <= MAX_TABLE_SIZE, "Unsupported translation table");
 
     // Prepare host-side data to be copied and passed to the device
     std::copy(
