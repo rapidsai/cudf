@@ -469,6 +469,7 @@ class DateOffset:
         "L": "milliseconds",
         "s": "seconds",
         "m": "minutes",
+        "T": "minutes",
         "h": "hours",
         "D": "days",
         "W": "weeks",
