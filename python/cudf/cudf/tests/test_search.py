@@ -38,7 +38,10 @@ def test_searchsorted(side, obj_class, vals_class):
     pvals = vals.to_pandas()
 
     expect = psr.searchsorted(pvals, side)
-    got = sr.searchsorted(vals, side)
+    if obj_class == "column":
+        got = sr.searchsorted(vals._column, side)
+    else:
+        got = sr.searchsorted(vals, side)
 
     assert_eq(expect, cupy.asnumpy(got))
 

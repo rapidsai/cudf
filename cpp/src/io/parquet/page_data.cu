@@ -39,10 +39,7 @@ constexpr int rolling_buf_size  = decode_block_size * 2;
  * @param[in] dstv Pointer to row output data (string descriptor or 32-bit hash)
  */
 template <typename state_buf>
-inline __device__ void gpuOutputString(volatile page_state_s* s,
-                                       volatile state_buf* sb,
-                                       int src_pos,
-                                       void* dstv)
+inline __device__ void gpuOutputString(page_state_s* s, state_buf* sb, int src_pos, void* dstv)
 {
   auto [ptr, len] = gpuGetStringData(s, sb, src_pos);
   // make sure to only hash `BYTE_ARRAY` when specified with the output type size
@@ -69,7 +66,7 @@ inline __device__ void gpuOutputString(volatile page_state_s* s,
  * @param[in] dst Pointer to row output data
  */
 template <typename state_buf>
-inline __device__ void gpuOutputBoolean(volatile state_buf* sb, int src_pos, uint8_t* dst)
+inline __device__ void gpuOutputBoolean(state_buf* sb, int src_pos, uint8_t* dst)
 {
   *dst = sb->dict_idx[rolling_index<state_buf::dict_buf_size>(src_pos)];
 }
@@ -143,8 +140,8 @@ inline __device__ void gpuStoreOutput(uint2* dst,
  * @param[out] dst Pointer to row output data
  */
 template <typename state_buf>
-inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s* s,
-                                               volatile state_buf* sb,
+inline __device__ void gpuOutputInt96Timestamp(page_state_s* s,
+                                               state_buf* sb,
                                                int src_pos,
                                                int64_t* dst)
 {
@@ -218,8 +215,8 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s* s,
  * @param[in] dst Pointer to row output data
  */
 template <typename state_buf>
-inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s* s,
-                                               volatile state_buf* sb,
+inline __device__ void gpuOutputInt64Timestamp(page_state_s* s,
+                                               state_buf* sb,
                                                int src_pos,
                                                int64_t* dst)
 {
@@ -301,10 +298,7 @@ __device__ void gpuOutputByteArrayAsInt(char const* ptr, int32_t len, T* dst)
  * @param[in] dst Pointer to row output data
  */
 template <typename T, typename state_buf>
-__device__ void gpuOutputFixedLenByteArrayAsInt(volatile page_state_s* s,
-                                                volatile state_buf* sb,
-                                                int src_pos,
-                                                T* dst)
+__device__ void gpuOutputFixedLenByteArrayAsInt(page_state_s* s, state_buf* sb, int src_pos, T* dst)
 {
   uint32_t const dtype_len_in = s->dtype_len_in;
   uint8_t const* data         = s->dict_base ? s->dict_base : s->data_start;
@@ -338,10 +332,7 @@ __device__ void gpuOutputFixedLenByteArrayAsInt(volatile page_state_s* s,
  * @param[in] dst Pointer to row output data
  */
 template <typename T, typename state_buf>
-inline __device__ void gpuOutputFast(volatile page_state_s* s,
-                                     volatile state_buf* sb,
-                                     int src_pos,
-                                     T* dst)
+inline __device__ void gpuOutputFast(page_state_s* s, state_buf* sb, int src_pos, T* dst)
 {
   uint8_t const* dict;
   uint32_t dict_pos, dict_size = s->dict_size;
@@ -371,7 +362,7 @@ inline __device__ void gpuOutputFast(volatile page_state_s* s,
  */
 template <typename state_buf>
 static __device__ void gpuOutputGeneric(
-  volatile page_state_s* s, volatile state_buf* sb, int src_pos, uint8_t* dst8, int len)
+  page_state_s* s, state_buf* sb, int src_pos, uint8_t* dst8, int len)
 {
   uint8_t const* dict;
   uint32_t dict_pos, dict_size = s->dict_size;
@@ -435,7 +426,7 @@ __global__ void __launch_bounds__(decode_block_size)
                     device_span<ColumnChunkDesc const> chunks,
                     size_t min_row,
                     size_t num_rows,
-                    int32_t* error_code)
+                    kernel_error::pointer error_code)
 {
   __shared__ __align__(16) page_state_s state_g;
   __shared__ __align__(16)
@@ -449,8 +440,13 @@ __global__ void __launch_bounds__(decode_block_size)
   int out_thread0;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  if (!setupLocalPageInfo(
-        s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{KERNEL_MASK_GENERAL}, true)) {
+  if (!setupLocalPageInfo(s,
+                          &pages[page_idx],
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{decode_kernel_mask::GENERAL},
+                          true)) {
     return;
   }
 
@@ -486,6 +482,7 @@ __global__ void __launch_bounds__(decode_block_size)
       target_pos = min(s->nz_count, src_pos + decode_block_size - out_thread0);
       if (out_thread0 > 32) { target_pos = min(target_pos, s->dict_pos); }
     }
+    // TODO(ets): see if this sync can be removed
     __syncthreads();
     if (t < 32) {
       // decode repetition and definition levels.
@@ -506,7 +503,7 @@ __global__ void __launch_bounds__(decode_block_size)
                  (s->col.data_type & 7) == FIXED_LEN_BYTE_ARRAY) {
         gpuInitStringDescriptors<false>(s, sb, src_target_pos, t & 0x1f);
       }
-      if (t == 32) { *(volatile int32_t*)&s->dict_pos = src_target_pos; }
+      if (t == 32) { s->dict_pos = src_target_pos; }
     } else {
       // WARP1..WARP3: Decode values
       int const dtype = s->col.data_type & 7;
@@ -595,7 +592,7 @@ __global__ void __launch_bounds__(decode_block_size)
         }
       }
 
-      if (t == out_thread0) { *(volatile int32_t*)&s->src_pos = target_pos; }
+      if (t == out_thread0) { s->src_pos = target_pos; }
     }
     __syncthreads();
   }
@@ -603,7 +600,7 @@ __global__ void __launch_bounds__(decode_block_size)
 }
 
 struct mask_tform {
-  __device__ uint32_t operator()(PageInfo const& p) { return p.kernel_mask; }
+  __device__ uint32_t operator()(PageInfo const& p) { return static_cast<uint32_t>(p.kernel_mask); }
 };
 
 }  // anonymous namespace
@@ -625,7 +622,7 @@ void __host__ DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
                              size_t num_rows,
                              size_t min_row,
                              int level_type_size,
-                             int32_t* error_code,
+                             kernel_error::pointer error_code,
                              rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
