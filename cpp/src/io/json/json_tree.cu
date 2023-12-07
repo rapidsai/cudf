@@ -248,6 +248,7 @@ void propagate_parent_to_siblings(cudf::device_span<TreeDepthT const> node_level
 // Generates a tree representation of the given tokens, token_indices.
 tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                     device_span<SymbolOffsetT const> token_indices,
+                                    bool is_strict_nested_boundaries,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
@@ -414,11 +415,13 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     stream);
   CUDF_EXPECTS(node_range_out_end - node_range_out_it == num_nodes, "node range count mismatch");
 
-  // TODO do this only if mixed type as string flag is enabled.
-  // Fixes here for struct, list nodes with correct range_end. How?
-  // Extract, struct, list - begin & end separately, then push, pop, levels, scan, similar propagate
-  // (segmented scan), then scatter.
-  {
+  // Extract Struct, List range_end
+  // 1. Extract Struct, List - begin & end separately, their token ids
+  // 2. push, pop to get levels
+  // 3. copy first child's parent token_id, also translate to node_id
+  // 4. propagate to siblings using levels, parent token id. (segmented scan)
+  // 5. scatter to node_range_end for all nested end tokens. (if it's end)
+  if (is_strict_nested_boundaries) {
     // Whether the token pushes onto the parent node stack
     auto const is_nested = [] __device__(PdaTokenT const token) -> bool {
       switch (token) {
