@@ -707,6 +707,14 @@ Resampler = make_intermediate_proxy_type(
     "Resampler", cudf.core.resample._Resampler, pd_Resampler
 )
 
+DataFrameResampler = make_intermediate_proxy_type(
+    "DataFrameResampler", cudf.core.resample.DataFrameResampler, pd_Resampler
+)
+
+SeriesResampler = make_intermediate_proxy_type(
+    "SeriesResampler", cudf.core.resample.SeriesResampler, pd_Resampler
+)
+
 StataReader = make_intermediate_proxy_type(
     "StataReader",
     _Unusable,
