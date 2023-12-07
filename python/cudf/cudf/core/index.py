@@ -3663,7 +3663,6 @@ def _extended_gcd(a: int, b: int) -> Tuple[int, int, int]:
 def _validate_freq(freq: Any) -> cudf.DateOffset:
     if isinstance(freq, str):
         return cudf.DateOffset._from_freqstr(freq)
-    elif freq is not None:
-        if not isinstance(freq, cudf.DateOffset):
-            raise ValueError(f"Invalid frequency: {freq}")
+    elif freq is not None and not isinstance(freq, cudf.DateOffset):
+        raise ValueError(f"Invalid frequency: {freq}")
     return freq
