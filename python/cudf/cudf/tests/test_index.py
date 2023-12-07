@@ -683,7 +683,7 @@ def test_index_where(data, condition, other, error):
         gs_other = other
 
     if error is None:
-        if pd.api.types.is_categorical_dtype(ps):
+        if isinstance(ps.dtype, pd.CategoricalDtype):
             expect = ps.where(ps_condition, other=ps_other)
             got = gs.where(gs_condition, other=gs_other)
             np.testing.assert_array_equal(
