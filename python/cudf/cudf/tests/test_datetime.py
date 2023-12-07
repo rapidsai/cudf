@@ -1571,6 +1571,44 @@ def test_date_range_start_end_freq(request, start, end, freq):
             reason="https://github.com/rapidsai/cudf/issues/12133",
         )
     )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                isinstance(freq, dict)
+                and freq.get("hours", None) == 10
+                and freq.get("days", None) == 57
+                and freq.get("nanoseconds", None) == 3
+                and (
+                    (
+                        start == "1996-11-21 04:05:30"
+                        and end == "2000-02-13 08:41:06"
+                    )
+                    or (
+                        start == "1970-01-01 00:00:00"
+                        and end == "2000-02-13 08:41:06"
+                    )
+                    or (
+                        start == "1970-01-01 00:00:00"
+                        and end == "1996-11-21 04:05:30"
+                    )
+                    or (
+                        start == "1831-05-08 15:23:21"
+                        and end == "2000-02-13 08:41:06"
+                    )
+                    or (
+                        start == "1831-05-08 15:23:21"
+                        and end == "1996-11-21 04:05:30"
+                    )
+                    or (
+                        start == "1831-05-08 15:23:21"
+                        and end == "1970-01-01 00:00:00"
+                    )
+                )
+            ),
+            reason="Nanosecond offsets being dropped by pandas, which is "
+            "fixed in pandas-2.0+",
+        )
+    )
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
     else:
@@ -1586,7 +1624,29 @@ def test_date_range_start_end_freq(request, start, end, freq):
     )
 
 
-def test_date_range_start_freq_periods(start, freq, periods):
+def test_date_range_start_freq_periods(request, start, freq, periods):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                isinstance(freq, dict)
+                and freq.get("hours", None) == 10
+                and freq.get("days", None) == 57
+                and freq.get("nanoseconds", None) == 3
+                and periods in (10, 100)
+                and (
+                    start
+                    in {
+                        "2000-02-13 08:41:06",
+                        "1996-11-21 04:05:30",
+                        "1970-01-01 00:00:00",
+                        "1831-05-08 15:23:21",
+                    }
+                )
+            ),
+            reason="Nanosecond offsets being dropped by pandas, which is "
+            "fixed in pandas-2.0+",
+        )
+    )
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
     else:
@@ -1611,6 +1671,28 @@ def test_date_range_end_freq_periods(request, end, freq, periods):
                 and end == "1970-01-01 00:00:00"
             ),
             reason="https://github.com/pandas-dev/pandas/issues/46877",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                isinstance(freq, dict)
+                and freq.get("hours", None) == 10
+                and freq.get("days", None) == 57
+                and freq.get("nanoseconds", None) == 3
+                and periods in (10, 100)
+                and (
+                    end
+                    in {
+                        "2000-02-13 08:41:06",
+                        "1996-11-21 04:05:30",
+                        "1970-01-01 00:00:00",
+                        "1831-05-08 15:23:21",
+                    }
+                )
+            ),
+            reason="Nanosecond offsets being dropped by pandas, which is "
+            "fixed in pandas-2.0+",
         )
     )
     if isinstance(freq, str):
@@ -2163,8 +2245,6 @@ def test_datetime_getitem_na():
 
 def test_daterange_pandas_compatibility():
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.date_range("20010101", "20020215", freq="400h", name="times")
         expected = pd.date_range(
             "2010-01-01", "2010-02-01", periods=10, name="times"
         )

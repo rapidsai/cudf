@@ -17,6 +17,7 @@ from typing import (
     Tuple,
     Type,
     Union,
+    cast,
 )
 
 import cupy
@@ -1434,7 +1435,11 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             lines[-1] = lines[-1] + ", name='%s'" % self.name
         if "length" in tmp_meta:
             lines[-1] = lines[-1] + ", length=%d" % len(self)
-        if "freq" in tmp_meta and self._freq is not None:
+        if (
+            "freq" in tmp_meta
+            and isinstance(self, DatetimeIndex)
+            and self._freq is not None
+        ):
             lines[-1] = lines[-1] + f", freq={self._freq}"
         lines[-1] = lines[-1] + ")"
 
@@ -3665,4 +3670,4 @@ def _validate_freq(freq: Any) -> cudf.DateOffset:
         return cudf.DateOffset._from_freqstr(freq)
     elif freq is not None and not isinstance(freq, cudf.DateOffset):
         raise ValueError(f"Invalid frequency: {freq}")
-    return freq
+    return cast(cudf.DateOffset, freq)
