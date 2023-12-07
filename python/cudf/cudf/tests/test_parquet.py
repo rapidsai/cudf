@@ -1293,7 +1293,7 @@ def delta_num_rows():
     return [1, 2, 23, 32, 33, 34, 64, 65, 66, 128, 129, 130, 20000, 50000]
 
 
-@pytest.mark.parametrize("nrows", [1, 100000])
+@pytest.mark.parametrize("nrows", delta_num_rows())
 @pytest.mark.parametrize("add_nulls", [True, False])
 @pytest.mark.parametrize(
     "dtype",
@@ -1346,18 +1346,8 @@ def test_delta_binary(nrows, add_nulls, dtype, tmpdir):
         use_dictionary=False,
     )
 
-    # FIXME(ets): should probably not use more bits than the data type
-    try:
-        cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
-    except OSError as e:
-        if dtype == "int32" and nrows == 100000:
-            pytest.mark.xfail(
-                reason="arrow does not support 33-bit delta encoding"
-            )
-        else:
-            raise e
-    else:
-        assert_eq(cdf2, cdf)
+    cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
+    assert_eq(cdf2, cdf)
 
 
 @pytest.mark.parametrize("nrows", delta_num_rows())
