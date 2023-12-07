@@ -188,11 +188,11 @@ struct stats_caster {
             auto [d_chars, d_offsets] = make_strings_children(val, stream, mr);
             return cudf::make_strings_column(
               val.size(),
-              std::move(d_offsets),
-              std::move(d_chars),
+              std::make_unique<column>(std::move(d_offsets), rmm::device_buffer{}, 0),
+              std::make_unique<column>(std::move(d_chars), rmm::device_buffer{}, 0),
+              null_count,
               rmm::device_buffer{
-                null_mask.data(), cudf::bitmask_allocation_size_bytes(val.size()), stream, mr},
-              null_count);
+                null_mask.data(), cudf::bitmask_allocation_size_bytes(val.size()), stream, mr});
           }
           return std::make_unique<column>(
             dtype,

@@ -874,12 +874,13 @@ struct chunk_row_output_iter {
   using reference         = size_type&;
   using iterator_category = thrust::output_device_iterator_tag;
 
-  __host__ __device__ chunk_row_output_iter operator+(int i)
-  {
-    return chunk_row_output_iter{p + i};
-  }
+  __host__ __device__ chunk_row_output_iter operator+(int i) { return {p + i}; }
 
-  __host__ __device__ void operator++() { p++; }
+  __host__ __device__ chunk_row_output_iter& operator++()
+  {
+    p++;
+    return *this;
+  }
 
   __device__ reference operator[](int i) { return p[i].chunk_row; }
   __device__ reference operator*() { return p->chunk_row; }
@@ -915,7 +916,11 @@ struct start_offset_output_iterator {
     return start_offset_output_iterator{pages, cur_index + i, input_cols, max_depth, num_pages};
   }
 
-  constexpr void operator++() { cur_index++; }
+  constexpr start_offset_output_iterator& operator++()
+  {
+    cur_index++;
+    return *this;
+  }
 
   __device__ reference operator[](size_t i) { return dereference(cur_index + i); }
   __device__ reference operator*() { return dereference(cur_index); }
@@ -956,12 +961,13 @@ struct page_offset_output_iter {
   using reference         = size_type&;
   using iterator_category = thrust::output_device_iterator_tag;
 
-  __host__ __device__ page_offset_output_iter operator+(int i)
-  {
-    return page_offset_output_iter{p + i};
-  }
+  __host__ __device__ page_offset_output_iter operator+(int i) { return {p + i}; }
 
-  __host__ __device__ void operator++() { p++; }
+  __host__ __device__ page_offset_output_iter& operator++()
+  {
+    p++;
+    return *this;
+  }
 
   __device__ reference operator[](int i) { return p[i].str_offset; }
   __device__ reference operator*() { return p->str_offset; }
