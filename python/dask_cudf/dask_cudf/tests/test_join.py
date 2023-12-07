@@ -366,7 +366,15 @@ def test_issue_12773():
     df1 = cudf.DataFrame({"a": ["a", "b"], "b": [1, 2]})
     df2 = cudf.DataFrame({"a": ["a", "c"], "b": [2, 3]})
 
-    ddf1 = dgd.from_cudf(df1, npartitions=2).set_index("a")
-    ddf2 = dgd.from_cudf(df2, npartitions=2).set_index("a")
+    dleft = dd.from_pandas(df1, npartitions=2).set_index("a")
+    dright = dd.from_pandas(df2, npartitions=2).set_index("a")
 
-    ddf1.merge(ddf2, left_index=True, right_index=True, how="left").compute()
+    expected = df1.set_index("a").merge(
+        df2.set_index("a"), left_index=True, right_index=True, how="left"
+    )
+    result = dleft.merge(dright, left_index=True, right_index=True, how="left")
+    dd.assert_eq(
+        result.compute().to_pandas(),
+        expected.to_pandas(),
+        check_index=False,
+    )
