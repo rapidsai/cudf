@@ -439,9 +439,10 @@ template class duration_scalar<duration_us>;
 template class duration_scalar<duration_ns>;
 
 template <typename T>
-typename timestamp_scalar<T>::rep_type timestamp_scalar<T>::ticks_since_epoch()
+typename timestamp_scalar<T>::rep_type timestamp_scalar<T>::ticks_since_epoch(
+  rmm::cuda_stream_view stream)
 {
-  return this->value(cudf::get_default_stream()).time_since_epoch().count();
+  return this->value(stream).time_since_epoch().count();
 }
 
 /**
