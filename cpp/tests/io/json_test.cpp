@@ -146,12 +146,10 @@ MATCHER_P(FloatNearPointwise, tolerance, "Out-of-range")
 
 // temporary method to verify the float columns until
 // CUDF_TEST_EXPECT_COLUMNS_EQUAL supports floating point
-template <typename T, typename valid_t>
-void check_float_column(cudf::column_view const& col,
-                        std::vector<T> const& data,
-                        valid_t const& validity)
+template <typename T>
+void check_float_column(cudf::column_view const& col, std::vector<T> const& data)
 {
-  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(col, (wrapper<T>{data.begin(), data.end(), validity}));
+  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(col, (wrapper<T>(data.begin(), data.end())));
   EXPECT_EQ(col.null_count(), 0);
   EXPECT_THAT(cudf::test::to_host<T>(col).first,
               ::testing::Pointwise(FloatNearPointwise(1e-6), data));
@@ -326,11 +324,8 @@ TEST_P(JsonReaderParamTest, BasicJsonLines)
   EXPECT_EQ(result.metadata.schema_info[0].name, "0");
   EXPECT_EQ(result.metadata.schema_info[1].name, "1");
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int_wrapper{{1, 2, 3}, validity});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
-                                 float64_wrapper{{1.1, 2.2, 3.3}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int_wrapper{{1, 2, 3}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2, 3.3}});
 }
 
 TEST_P(JsonReaderParamTest, FloatingPoint)
@@ -367,15 +362,9 @@ TEST_P(JsonReaderParamTest, FloatingPoint)
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::FLOAT32);
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     result.tbl->get_column(0),
-    float_wrapper{{5.6, 56.79, 12000000000., 0.7, 3.000, 12.34, 0.31, -73.98007199999998},
-                  validity});
-
-  auto const bitmask = cudf::test::bitmask_to_host(result.tbl->get_column(0));
-  ASSERT_EQ((1u << result.tbl->get_column(0).size()) - 1, bitmask[0]);
+    float_wrapper{{5.6, 56.79, 12000000000., 0.7, 3.000, 12.34, 0.31, -73.98007199999998}});
 }
 
 TEST_P(JsonReaderParamTest, JsonLinesStrings)
@@ -406,10 +395,8 @@ TEST_P(JsonReaderParamTest, JsonLinesStrings)
   EXPECT_EQ(result.metadata.schema_info[1].name, "1");
   EXPECT_EQ(result.metadata.schema_info[2].name, "2");
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int_wrapper{{1, 2}, validity});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int_wrapper{{1, 2}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2),
                                  cudf::test::strings_column_wrapper({"aa ", "  bbb"}));
 }
@@ -466,8 +453,6 @@ TEST_P(JsonReaderParamTest, MultiColumn)
       .legacy(is_legacy_test(test_opt));
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
   auto const view = result.tbl->view();
 
   EXPECT_EQ(view.num_columns(), 6);
@@ -479,15 +464,15 @@ TEST_P(JsonReaderParamTest, MultiColumn)
   EXPECT_EQ(view.column(5).type().id(), cudf::type_id::FLOAT64);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.column(0),
-                                 int8_wrapper{int8_values.begin(), int8_values.end(), validity});
+                                 int8_wrapper(int8_values.begin(), int8_values.end()));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.column(1),
-                                 int16_wrapper{int16_values.begin(), int16_values.end(), validity});
+                                 int16_wrapper(int16_values.begin(), int16_values.end()));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.column(2),
-                                 int_wrapper{int32_values.begin(), int32_values.end(), validity});
+                                 int_wrapper(int32_values.begin(), int32_values.end()));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.column(3),
-                                 int64_wrapper{int64_values.begin(), int64_values.end(), validity});
-  check_float_column(view.column(4), float32_values, validity);
-  check_float_column(view.column(5), float64_values, validity);
+                                 int64_wrapper(int64_values.begin(), int64_values.end()));
+  check_float_column(view.column(4), float32_values);
+  check_float_column(view.column(5), float64_values);
 }
 
 TEST_P(JsonReaderParamTest, Booleans)
@@ -523,10 +508,8 @@ TEST_P(JsonReaderParamTest, Booleans)
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::BOOL8);
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
-                                 bool_wrapper{{true, true, false, false, true}, validity});
+                                 bool_wrapper{{true, true, false, false, true}});
 }
 
 TEST_P(JsonReaderParamTest, Dates)
@@ -670,10 +653,8 @@ TEST_P(JsonReaderParamTest, JsonLinesDtypeInference)
   EXPECT_EQ(result.metadata.schema_info[1].name, "1");
   EXPECT_EQ(result.metadata.schema_info[2].name, "2");
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{100, 200}, validity});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{100, 200}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2),
                                  cudf::test::strings_column_wrapper({"aa ", "  bbb"}));
 }
@@ -707,10 +688,8 @@ TEST_P(JsonReaderParamTest, JsonLinesFileInput)
   EXPECT_EQ(result.metadata.schema_info[0].name, "0");
   EXPECT_EQ(result.metadata.schema_info[1].name, "1");
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{11, 22}, validity});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{11, 22}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}});
 }
 
 TEST_F(JsonReaderTest, JsonLinesByteRange)
@@ -735,10 +714,7 @@ TEST_F(JsonReaderTest, JsonLinesByteRange)
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
   EXPECT_EQ(result.metadata.schema_info[0].name, "0");
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
-                                 int64_wrapper{{3000, 4000, 5000}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{3000, 4000, 5000}});
 }
 
 TEST_P(JsonReaderDualTest, JsonLinesObjects)
@@ -764,10 +740,8 @@ TEST_P(JsonReaderDualTest, JsonLinesObjects)
   EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
   EXPECT_EQ(result.metadata.schema_info[1].name, "col2");
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{1}, validity});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{2.0}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{1}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{2.0}});
 }
 
 TEST_P(JsonReaderDualTest, JsonLinesObjectsStrings)
@@ -792,11 +766,8 @@ TEST_P(JsonReaderDualTest, JsonLinesObjectsStrings)
     EXPECT_EQ(result.metadata.schema_info[1].name, "col2");
     EXPECT_EQ(result.metadata.schema_info[2].name, "col3");
 
-    auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{100, 200}, validity});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
-                                   float64_wrapper{{1.1, 2.2}, validity});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{100, 200}});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2),
                                    cudf::test::strings_column_wrapper({"aaa", "bbb"}));
   };
@@ -871,10 +842,8 @@ TEST_P(JsonReaderDualTest, JsonLinesObjectsOutOfOrder)
   EXPECT_EQ(result.metadata.schema_info[1].name, "col2");
   EXPECT_EQ(result.metadata.schema_info[2].name, "col3");
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{100, 200}, validity});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{100, 200}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2),
                                  cudf::test::strings_column_wrapper({"aaa", "bbb"}));
 }
@@ -953,10 +922,7 @@ TEST_F(JsonReaderTest, ArrowFileSource)
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT8);
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
-                                 int8_wrapper{{9, 8, 7, 6, 5, 4, 3, 2}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int8_wrapper{{9, 8, 7, 6, 5, 4, 3, 2}});
 }
 
 TEST_P(JsonReaderParamTest, InvalidFloatingPoint)
@@ -1242,12 +1208,8 @@ TEST_P(JsonReaderParamTest, JsonLinesMultipleFileInputs)
   EXPECT_EQ(result.metadata.schema_info[0].name, "0");
   EXPECT_EQ(result.metadata.schema_info[1].name, "1");
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
-                                 int64_wrapper{{11, 22, 33, 44}, validity});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
-                                 float64_wrapper{{1.1, 2.2, 3.3, 4.4}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{11, 22, 33, 44}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2, 3.3, 4.4}});
 }
 
 TEST_P(JsonReaderNoLegacy, JsonLinesMultipleFileInputsNoNL)
@@ -1287,12 +1249,8 @@ TEST_P(JsonReaderNoLegacy, JsonLinesMultipleFileInputsNoNL)
   EXPECT_EQ(result.metadata.schema_info[0].name, "0");
   EXPECT_EQ(result.metadata.schema_info[1].name, "1");
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
-                                 int64_wrapper{{11, 22, 33, 44}, validity});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
-                                 float64_wrapper{{1.1, 2.2, 3.3, 4.4}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{11, 22, 33, 44}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2, 3.3, 4.4}});
 }
 
 TEST_F(JsonReaderTest, BadDtypeParams)
@@ -1428,7 +1386,10 @@ TEST_F(JsonReaderTest, JsonLongString)
                        cudf::test::get_default_stream(),
                        rmm::mr::get_current_device_resource());
 
-  cudf::table_view const expected = tbl_view;
+  cudf::column_view int16_with_mask(repeat_times);
+  cudf::column_view int16(
+    int16_with_mask.type(), int16_with_mask.size(), int16_with_mask.head(), nullptr, 0);
+  cudf::table_view const expected = cudf::table_view{{col1, col2, int16}};
   std::map<std::string, data_type> types;
   types["col1"]  = data_type{type_id::STRING};
   types["col2"]  = data_type{type_id::STRING};
@@ -1642,10 +1603,8 @@ TEST_P(JsonReaderParamTest, JsonDtypeSchema)
   EXPECT_EQ(result.metadata.schema_info[1].name, "1");
   EXPECT_EQ(result.metadata.schema_info[2].name, "2");
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int_wrapper{{1, 2}, validity});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int_wrapper{{1, 2}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2),
                                  cudf::test::strings_column_wrapper({"aa ", "  bbb"}));
 }
@@ -1701,8 +1660,7 @@ TEST_F(JsonReaderTest, JsonNestedDtypeSchema)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0).child(0), int_wrapper{{0, 2, 2, 2}});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0).child(1).child(0),
                                  float_wrapper{{0.0, 123.0}, {false, true}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
-                                 int_wrapper{{1, 1, 2}, {true, true, true}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), int_wrapper{{1, 1, 2}});
   // List column expected
   auto leaf_child     = float_wrapper{{0.0, 123.0}, {false, true}};
   auto const validity = {1, 0, 0};
