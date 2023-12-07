@@ -54,6 +54,7 @@ constexpr size_t minimum_subpass_expected_size = 200 * 1024 * 1024;
 
 #if defined(CHUNKING_DEBUG)
 void print_cumulative_page_info(cudf::detail::hostdevice_vector<PageInfo>& pages,
+                                cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks,
                                 rmm::device_uvector<cumulative_page_info> const& c_info,
                                 rmm::cuda_stream_view stream)
 {
@@ -79,7 +80,12 @@ void print_cumulative_page_info(cudf::detail::hostdevice_vector<PageInfo>& pages
       if (page.flags & PAGEINFO_FLAGS_DICTIONARY || page.src_col_schema != schemas[idx]) {
         continue;
       }
-      printf("\tP: {%lu, %lu, %lu}\n", pidx, h_cinfo[pidx].row_index, h_cinfo[pidx].size_bytes);
+      bool const is_list = chunks[page.chunk_idx].max_level[level_type::REPETITION] > 0;
+      printf("\tP %s: {%lu, %lu, %lu}\n",
+             is_list ? "(L)" : "",
+             pidx,
+             h_cinfo[pidx].row_index,
+             h_cinfo[pidx].size_bytes);
     }
   }
 }
@@ -285,32 +291,54 @@ struct get_chunk_compressed_size {
   __device__ size_t operator()(ColumnChunkDesc const& chunk) { return chunk.compressed_size; }
 };
 
+/**
+ * @brief Find the first entry in the aggreggated_info that corresponds to the specified row
+ *
+ */
+size_t find_start_index(std::vector<cumulative_page_info> const& aggregated_info, size_t start_row)
+{
+  auto start = thrust::make_transform_iterator(
+    aggregated_info.begin(), [&](cumulative_page_info const& i) { return i.row_index; });
+  auto start_index =
+    thrust::lower_bound(thrust::host, start, start + aggregated_info.size(), start_row) - start;
+
+  // cumulative_page_info.row_index is the -end- of the rows of a given page. so move forward until
+  // we find the next group of pages
+  while (start_index < (static_cast<int64_t>(aggregated_info.size()) - 1) &&
+         (start_index < 0 || aggregated_info[start_index].row_index == start_row)) {
+    start_index++;
+  }
+
+  return start_index;
+}
+
+/**
+ * @brief Given a current position and row index, find the next split based on the
+ * specified size limit
+ *
+ */
 int64_t find_next_split(int64_t cur_pos,
                         size_t cur_row_index,
                         size_t cur_cumulative_size,
                         std::vector<cumulative_page_info> const& sizes,
-                        size_t chunk_read_limit)
+                        size_t size_limit)
 {
   auto start = thrust::make_transform_iterator(sizes.begin(), [&](cumulative_page_info const& i) {
     return i.size_bytes - cur_cumulative_size;
   });
   auto end   = start + sizes.size();
 
-  int64_t split_pos =
-    thrust::lower_bound(thrust::seq, start + cur_pos, end, chunk_read_limit) - start;
+  int64_t split_pos = thrust::lower_bound(thrust::seq, start + cur_pos, end, size_limit) - start;
 
   // if we're past the end, or if the returned bucket is > than the chunk_read_limit, move back
   // one.
   if (static_cast<size_t>(split_pos) >= sizes.size() ||
-      (sizes[split_pos].size_bytes - cur_cumulative_size > chunk_read_limit)) {
+      (sizes[split_pos].size_bytes - cur_cumulative_size > size_limit)) {
     split_pos--;
   }
 
-  // best-try. if we can't find something that'll fit, we have to go bigger. we're doing this in
-  // a loop because all of the cumulative sizes for all the pages are sorted into one big list.
-  // so if we had two columns, both of which had an entry {1000, 10000}, that entry would be in
-  // the list twice. so we have to iterate until we skip past all of them.  The idea is that we
-  // either do this, or we have to call unique() on the input first.
+  // cumulative_page_info.row_index is the -end- of the rows of a given page. so move forward until
+  // we find the next group of pages
   while (split_pos < (static_cast<int64_t>(sizes.size()) - 1) &&
          (split_pos < 0 || sizes[split_pos].row_index == cur_row_index)) {
     split_pos++;
@@ -409,13 +437,6 @@ adjust_cumulative_sizes(rmm::device_uvector<cumulative_page_info> const& c_info,
                     page_keys_by_split.begin(),
                     [] __device__(cumulative_page_info const& c) { return c.key; });
 
-  std::vector<cumulative_page_info> h_c_info_sorted(c_info_sorted.size());
-  CUDF_CUDA_TRY(cudaMemcpy(h_c_info_sorted.data(),
-                           c_info_sorted.data(),
-                           sizeof(cumulative_page_info) * c_info_sorted.size(),
-                           cudaMemcpyDefault));
-  // print_cumulative_row_info(h_c_info_sorted, "raw");
-
   // generate key offsets (offsets to the start of each partition of keys). worst case is 1 page per
   // key
   rmm::device_uvector<size_type> key_offsets(pages.size() + 1, stream);
@@ -450,28 +471,61 @@ adjust_cumulative_sizes(rmm::device_uvector<cumulative_page_info> const& c_info,
   return {std::move(aggregated_info), std::move(page_keys_by_split)};
 }
 
-/**
- * @brief Find the first entry in the aggreggated_info that corresponds to the specified row
- *
- */
-size_t find_start_index(std::vector<cumulative_page_info> const& aggregated_info, size_t min_row)
-{
-  auto start = thrust::make_transform_iterator(
-    aggregated_info.begin(), [&](cumulative_page_info const& i) { return i.row_index; });
-  auto start_index =
-    thrust::lower_bound(thrust::host, start, start + aggregated_info.size(), min_row) - start;
-  if (aggregated_info[start_index].row_index == min_row) { start_index++; }
-  return start_index;
-}
-
 struct page_span {
   size_t start, end;
 };
+
+struct get_page_row_index {
+  device_span<const cumulative_page_info> c_info;
+
+  __device__ size_t operator()(size_t i) { return c_info[i].row_index; }
+};
+
+/**
+ * @brief Return the span of page indices for a given column index that spans start_row and end_row
+ *
+ */
+template <typename RowIndexIter>
+struct get_page_span {
+  device_span<const size_type> page_offsets;
+  RowIndexIter page_row_index;
+  size_t const start_row;
+  size_t const end_row;
+
+  get_page_span(device_span<const size_type> _page_offsets,
+                RowIndexIter _page_row_index,
+                size_t _start_row,
+                size_t _end_row)
+    : page_offsets(_page_offsets),
+      page_row_index(_page_row_index),
+      start_row(_start_row),
+      end_row(_end_row)
+  {
+  }
+
+  __device__ page_span operator()(size_t column_index)
+  {
+    auto const column_page_start = page_row_index + page_offsets[column_index];
+    auto const column_page_end   = page_row_index + page_offsets[column_index + 1];
+    auto const num_pages         = column_page_end - column_page_start;
+    auto start_page =
+      thrust::lower_bound(thrust::seq, column_page_start, column_page_end, start_row) -
+      column_page_start;
+    if (page_row_index[start_page] == start_row) { start_page++; }
+    auto end_page = thrust::lower_bound(thrust::seq, column_page_start, column_page_end, end_row) -
+                    column_page_start;
+    if (end_page < num_pages) { end_page++; }
+
+    return {static_cast<size_t>(start_page + page_offsets[column_index]),
+            static_cast<size_t>(end_page + page_offsets[column_index])};
+  }
+};
+
 std::tuple<std::vector<page_span>, size_t> compute_next_subpass(
   rmm::device_uvector<cumulative_page_info> const& c_info,
   cudf::detail::hostdevice_vector<PageInfo> const& pages,
   cudf::detail::hostdevice_vector<size_type> const& page_offsets,
-  size_t min_row,
+  size_t start_row,
   size_t size_limit,
   size_t num_columns,
   rmm::cuda_stream_view stream)
@@ -483,81 +537,46 @@ std::tuple<std::vector<page_span>, size_t> compute_next_subpass(
   CUDF_CUDA_TRY(cudaMemcpyAsync(h_aggregated_info.data(),
                                 aggregated_info.data(),
                                 sizeof(cumulative_page_info) * c_info.size(),
-                                cudaMemcpyDefault,
+                                cudaMemcpyDeviceToHost,
                                 stream));
   stream.synchronize();
   // print_cumulative_row_info(h_aggregated_info, "adjusted");
 
   // TODO: if the user has explicitly specified skip_rows/num_rows we could be more intelligent
   // about skipping subpasses/pages that do not fall within the range of values, but only if the
-  // data does not contain lists (because our row counts are only estimates in that case)/
+  // data does not contain lists (because our row counts are only estimates in that case)
 
   // find the next split
-  auto const start_index     = find_start_index(h_aggregated_info, min_row);
-  auto const cumulative_size = start_index == 0 ? 0 : h_aggregated_info[start_index - 1].size_bytes;
-  auto const end_index       = find_next_split(start_index,
-                                         min_row,
-                                         cumulative_size,
-                                         h_aggregated_info,
-                                         size_limit) +
-                         1;  // the split index returned is inclusive
+  auto const start_index     = find_start_index(h_aggregated_info, start_row);
+  auto const cumulative_size = start_row == 0 ? 0 : h_aggregated_info[start_index].size_bytes;
+  auto const end_index =
+    find_next_split(start_index, start_row, cumulative_size, h_aggregated_info, size_limit);
+  auto const end_row = h_aggregated_info[end_index].row_index;
 
-  // get the number of pages for each column/schema
-  auto get_page_counts = [num_columns, stream](
-                           rmm::device_uvector<cumulative_page_info> const& aggregated_info,
-                           int start_index,
-                           int end_index) {
-    std::vector<size_t> h_page_counts(num_columns);
+  // for each column, collect the set of pages that spans start_row / end_row
+  rmm::device_uvector<page_span> page_bounds(num_columns, stream);
+  auto iter = thrust::make_counting_iterator(size_t{0});
+  auto page_row_index =
+    cudf::detail::make_counting_transform_iterator(0, get_page_row_index{c_info});
+  thrust::transform(rmm::exec_policy(stream),
+                    iter,
+                    iter + num_columns,
+                    page_bounds.begin(),
+                    get_page_span{page_offsets, page_row_index, start_row, end_row});
+  std::vector<page_span> h_page_bounds(num_columns);
+  cudaMemcpyAsync(h_page_bounds.data(),
+                  page_bounds.data(),
+                  sizeof(page_span) * num_columns,
+                  cudaMemcpyDeviceToHost,
+                  stream);
+  stream.synchronize();
 
-    auto const num_pages = end_index - start_index;
-    if (num_pages == 0) {
-      std::fill(h_page_counts.begin(), h_page_counts.end(), 0);
-      return h_page_counts;
-    }
+  // total page count over all columns
+  auto page_count_iter = thrust::make_transform_iterator(
+    h_page_bounds.begin(), [](page_span const& s) { return s.end - s.start; });
+  size_t const total_pages = std::reduce(page_count_iter, page_count_iter + num_columns);
 
-    rmm::device_uvector<int32_t> page_keys(num_pages, stream);
-    thrust::transform(rmm::exec_policy(stream),
-                      aggregated_info.begin() + start_index,
-                      aggregated_info.begin() + end_index,
-                      page_keys.begin(),
-                      [] __device__(cumulative_page_info const& i) { return i.key; });
-    thrust::sort(rmm::exec_policy(stream), page_keys.begin(), page_keys.end());
-    rmm::device_uvector<size_t> page_counts(num_pages, stream);
-    auto page_counts_end = thrust::reduce_by_key(rmm::exec_policy(stream),
-                                                 page_keys.begin(),
-                                                 page_keys.end(),
-                                                 thrust::make_constant_iterator(1),
-                                                 thrust::make_discard_iterator(),
-                                                 page_counts.begin())
-                             .second;
-    auto const num_page_counts = page_counts_end - page_counts.begin();
-    CUDF_EXPECTS(static_cast<size_t>(num_page_counts) == num_columns,
-                 "Encountered a mismatch in column/schema counts while computing subpass split");
-
-    cudaMemcpyAsync(h_page_counts.data(),
-                    page_counts.data(),
-                    sizeof(size_t) * num_columns,
-                    cudaMemcpyDeviceToHost,
-                    stream);
-    stream.synchronize();
-    return h_page_counts;
-  };
-
-  // get count of pages before this split and in this split.
-  auto last_counts = get_page_counts(aggregated_info, 0, start_index);
-  auto this_counts = get_page_counts(aggregated_info, start_index, end_index);
-
-  // convert to page spans
-  std::vector<page_span> out(num_columns);
-  size_t total_pages = 0;
-  for (size_t c_idx = 0; c_idx < num_columns; c_idx++) {
-    // add page_offsets to get proper indices into the pages array
-    out[c_idx].start = (last_counts[c_idx]) + page_offsets[c_idx];
-    out[c_idx].end   = (last_counts[c_idx] + this_counts[c_idx]) + page_offsets[c_idx];
-    total_pages += this_counts[c_idx];
-  }
-
-  return {out, total_pages};
+  return {h_page_bounds, total_pages};
 }
 
 std::vector<row_range> compute_page_splits_by_row(
@@ -1091,12 +1110,13 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
                                   c_info.begin(),
                                   thrust::equal_to{},
                                   cumulative_page_sum{});
+
     auto iter = thrust::make_counting_iterator(0);
     thrust::for_each(rmm::exec_policy(_stream),
                      iter,
                      iter + pass.pages.size(),
                      set_row_index{pass.chunks, pass.pages, c_info});
-    // print_cumulative_page_info(pass.pages, c_info, _stream);
+    // print_cumulative_page_info(pass.pages, pass.chunks, c_info, _stream);
 
     // get the next batch of pages
     return compute_next_subpass(c_info,

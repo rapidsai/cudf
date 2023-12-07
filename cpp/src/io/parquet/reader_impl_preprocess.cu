@@ -498,6 +498,26 @@ struct set_list_row_count_estimate {
   }
 };
 
+/**
+ * @brief Set the expected row count on the final page for all columns.
+ *
+ */
+struct set_final_row_count {
+  device_span<PageInfo> pages;
+  device_span<const ColumnChunkDesc> chunks;
+  device_span<const size_type> page_offsets;
+  size_t const max_row;
+
+  __device__ void operator()(size_t i)
+  {
+    auto const last_page_index      = page_offsets[i + 1] - 1;
+    auto const& page                = pages[last_page_index];
+    auto const& chunk               = chunks[page.chunk_idx];
+    size_t const page_start_row     = chunk.start_row + page.chunk_row;
+    pages[last_page_index].num_rows = max_row - page_start_row;
+  }
+};
+
 }  // anonymous namespace
 
 void reader::impl::build_string_dict_indices()
@@ -889,6 +909,9 @@ struct chunk_row_output_iter {
 /**
  * @brief Writes to the page_start_value field of the PageNestingInfo struct, keyed by schema.
  */
+/**
+ * @brief Writes to the page_start_value field of the PageNestingInfo struct, keyed by schema.
+ */
 struct start_offset_output_iterator {
   PageInfo const* pages;
   size_t cur_index;
@@ -972,7 +995,6 @@ struct page_offset_output_iter {
   __device__ reference operator[](int i) { return p[i].str_offset; }
   __device__ reference operator*() { return p->str_offset; }
 };
-
 // update chunk_row field in subpass page from pass page
 struct update_subpass_chunk_row {
   device_span<PageInfo> pass_pages;
@@ -1078,6 +1100,22 @@ void reader::impl::generate_list_column_row_count_estimates()
                                 key_input + pass.pages.size(),
                                 page_input,
                                 chunk_row_output_iter{pass.pages.device_ptr()});
+
+  // finally, fudge the last page for each column such that it ends on the real known row count
+  // for the pass. this is so that as we march through the subpasses, we will find that every column
+  // cleanly ends up the expected row count at the row group boundary.
+  auto const& last_chunk = pass.chunks[pass.chunks.size() - 1];
+  auto const num_columns = _input_columns.size();
+  size_t const max_row   = last_chunk.start_row + last_chunk.num_rows;
+  auto iter              = thrust::make_counting_iterator(0);
+  thrust::for_each(rmm::exec_policy(_stream),
+                   iter,
+                   iter + num_columns,
+                   set_final_row_count{pass.pages, pass.chunks, pass.page_offsets, max_row});
+
+  pass.chunks.device_to_host_async(_stream);
+  pass.pages.device_to_host_async(_stream);
+  _stream.synchronize();
 }
 
 void reader::impl::preprocess_subpass_pages(bool uses_custom_row_bounds, size_t chunk_read_limit)
@@ -1158,7 +1196,9 @@ void reader::impl::preprocess_subpass_pages(bool uses_custom_row_bounds, size_t 
                    update_subpass_chunk_row{pass.pages, subpass.pages, subpass.page_src_index});
 
   // retrieve pages back
-  subpass.pages.device_to_host_sync(_stream);
+  pass.pages.device_to_host_async(_stream);
+  subpass.pages.device_to_host_async(_stream);
+  _stream.synchronize();
 
   // at this point we have an accurate row count so we can compute how many rows we will actually be
   // able to decode for this pass. we will have selected a set of pages for each column in the
