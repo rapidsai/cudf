@@ -35,8 +35,6 @@
 #include <thrust/distance.h>
 #include <thrust/iterator/counting_iterator.h>
 
-#include <cuda/functional>
-
 namespace cudf {
 namespace detail {
 namespace {

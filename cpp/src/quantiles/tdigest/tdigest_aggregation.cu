@@ -33,7 +33,6 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/adjacent_difference.h>
 #include <thrust/advance.h>
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
@@ -630,18 +629,17 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
 
   // adjust offsets.
   rmm::device_uvector<size_type> sizes(num_rows, stream);
-  auto offsets_iter = offsets->view().begin<size_type>();
-  thrust::adjacent_difference(rmm::exec_policy(stream),
-                              offsets->view().begin<size_type>() + 1,
-                              offsets->view().end<size_type>(),
-                              sizes.begin());
-
+  thrust::transform(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(0) + num_rows,
+    sizes.begin(),
+    cuda::proclaim_return_type<size_type>([offsets = offsets->view().begin<size_type>()] __device__(
+                                            size_type i) { return offsets[i + 1] - offsets[i]; }));
   auto iter = cudf::detail::make_counting_transform_iterator(
-    0,
-    cuda::proclaim_return_type<size_type>(
-      [sizes = sizes.begin(), is_stub_digest, num_rows] __device__(size_type i) {
-        return i == num_rows || is_stub_digest(i) ? 0 : sizes[i];
-      }));
+    0, [sizes = sizes.begin(), is_stub_digest, num_rows] __device__(size_type i) {
+      return i == num_rows || is_stub_digest(i) ? 0 : sizes[i];
+    });
   thrust::exclusive_scan(rmm::exec_policy(stream),
                          iter,
                          iter + num_rows + 1,

@@ -45,8 +45,6 @@
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
-#include <cuda/functional>
-
 #include <limits>
 #include <stack>
 

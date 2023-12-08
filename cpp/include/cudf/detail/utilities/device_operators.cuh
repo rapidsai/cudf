@@ -55,7 +55,6 @@ CUDF_HOST_DEVICE inline auto max(LHS const& lhs, RHS const& rhs)
 {
   return std::max(lhs, rhs);
 }
-
 }  // namespace detail
 
 /**
