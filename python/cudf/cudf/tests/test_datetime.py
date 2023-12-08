@@ -12,7 +12,7 @@ import pytest
 import cudf
 import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
-from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140
+from cudf.core._compat import PANDAS_GE_150, PANDAS_GE_200, PANDAS_LT_140
 from cudf.core.index import DatetimeIndex
 from cudf.testing._utils import (
     DATETIME_TYPES,
@@ -2252,6 +2252,46 @@ def test_daterange_pandas_compatibility():
             "2010-01-01", "2010-02-01", periods=10, name="times"
         )
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data,dtype,freq",
+    [
+        ([10], "datetime64[ns]", "2N"),
+        ([10, 12, 14, 16], "datetime64[ns]", "2N"),
+        ([10, 11, 12, 13], "datetime64[ns]", "1N"),
+        ([100, 200, 300, 400], "datetime64[s]", "100s"),
+        ([101, 201, 301, 401], "datetime64[ms]", "100ms"),
+    ],
+)
+def test_datetime_index_with_freq(request, data, dtype, freq):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(not PANDAS_GE_200 and dtype != "datetime64[ns]"),
+            reason="Pandas < 2.0 lacks non-nano-second dtype support.",
+        )
+    )
+    actual = cudf.DatetimeIndex(data, dtype=dtype, freq=freq)
+    expected = pd.DatetimeIndex(data, dtype=dtype, freq=freq)
+    assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "data,dtype,freq",
+    [
+        ([10, 1232, 13244, 13426], "datetime64[ns]", "2N"),
+        ([10, 11, 12, 13], "datetime64[ns]", "1s"),
+        ([10000, 200, 300, 400], "datetime64[s]", "100s"),
+        ([107871, 201, 301, 401], "datetime64[ms]", "100ns"),
+    ],
+)
+def test_datetime_index_freq_error(data, dtype, freq):
+    assert_exceptions_equal(
+        pd.DatetimeIndex,
+        cudf.DatetimeIndex,
+        ([data], {"dtype": dtype, "freq": freq}),
+        ([data], {"dtype": dtype, "freq": freq}),
+    )
 
 
 def test_strings_with_utc_offset_not_implemented():

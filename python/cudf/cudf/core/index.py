@@ -2166,9 +2166,12 @@ class DatetimeIndex(GenericIndex):
         super().__init__(data, **kwargs)
 
         if self._freq is not None:
-            unique_vals = self.diff().unique()
-            if len(unique_vals) != 1 or unique_vals[0] != self._freq:
-                raise ValueError()
+            unique_vals = self.to_series().diff().unique()
+            if len(unique_vals) > 2 or (
+                len(unique_vals) == 2
+                and unique_vals[1] != self._freq._maybe_as_fast_pandas_offset()
+            ):
+                raise ValueError("No unique frequency found")
 
     @_cudf_nvtx_annotate
     def _copy_type_metadata(
