@@ -30,6 +30,8 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace detail {
 
@@ -71,9 +73,10 @@ std::unique_ptr<column> create_collect_offsets(size_type input_size,
                     preceding_begin + input_size,
                     following_begin,
                     mutable_sizes.begin<size_type>(),
-                    [min_periods] __device__(auto const preceding, auto const following) {
-                      return (preceding + following) < min_periods ? 0 : (preceding + following);
-                    });
+                    cuda::proclaim_return_type<size_type>(
+                      [min_periods] __device__(auto const preceding, auto const following) {
+                        return (preceding + following) < min_periods ? 0 : (preceding + following);
+                      }));
 
   // Convert `sizes` to an offsets column, via inclusive_scan():
   auto offsets_column = std::get<0>(cudf::detail::make_offsets_child_column(
@@ -115,17 +118,18 @@ std::unique_ptr<column> create_collect_gather_map(column_view const& child_offse
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(per_row_mapping.size()),
     gather_map->mutable_view().template begin<size_type>(),
-    [d_offsets =
-       child_offsets.template begin<size_type>(),  // E.g. [0,   2,     5,     8,     11, 13]
-     d_groups =
-       per_row_mapping.template begin<size_type>(),  // E.g. [0,0, 1,1,1, 2,2,2, 3,3,3, 4,4]
-     d_prev = preceding_iter] __device__(auto i) {
-      auto group              = d_groups[i];
-      auto group_start_offset = d_offsets[group];
-      auto relative_index     = i - group_start_offset;
+    cuda::proclaim_return_type<size_type>(
+      [d_offsets =
+         child_offsets.template begin<size_type>(),  // E.g. [0,   2,     5,     8,     11, 13]
+       d_groups =
+         per_row_mapping.template begin<size_type>(),  // E.g. [0,0, 1,1,1, 2,2,2, 3,3,3, 4,4]
+       d_prev = preceding_iter] __device__(auto i) {
+        auto group              = d_groups[i];
+        auto group_start_offset = d_offsets[group];
+        auto relative_index     = i - group_start_offset;
 
-      return (group - d_prev[group] + 1) + relative_index;
-    });
+        return (group - d_prev[group] + 1) + relative_index;
+      }));
   return gather_map;
 }
 
@@ -168,14 +172,16 @@ std::unique_ptr<column> rolling_collect_list(column_view const& input,
   // column boundaries.
   // `grouped_rolling_window()` and `time_range_based_grouped_rolling_window() do.
   auto preceding_begin = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<size_type>(0), [preceding_begin_raw] __device__(auto i) {
+    thrust::make_counting_iterator<size_type>(0),
+    cuda::proclaim_return_type<size_type>([preceding_begin_raw] __device__(auto i) {
       return thrust::min(preceding_begin_raw[i], i + 1);
-    });
-  auto following_begin =
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
-                                    [following_begin_raw, size = input.size()] __device__(auto i) {
-                                      return thrust::min(following_begin_raw[i], size - i - 1);
-                                    });
+    }));
+  auto following_begin = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<size_type>(0),
+    cuda::proclaim_return_type<size_type>(
+      [following_begin_raw, size = input.size()] __device__(auto i) {
+        return thrust::min(following_begin_raw[i], size - i - 1);
+      }));
 
   // Materialize collect list's offsets.
   auto offsets =

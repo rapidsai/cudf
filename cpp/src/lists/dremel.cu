@@ -34,6 +34,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 
+#include <cuda/functional>
+
 namespace cudf::detail {
 namespace {
 /**
@@ -338,8 +340,10 @@ dremel_data get_encoding(column_view h_col,
     // Scan to get distance by which each offset value is shifted due to the insertion of empties
     auto scan_it = cudf::detail::make_counting_transform_iterator(
       column_offsets[level],
-      [off = lcv.offsets().data<size_type>(), size = lcv.offsets().size()] __device__(
-        auto i) -> int { return (i + 1 < size) && (off[i] == off[i + 1]); });
+      cuda::proclaim_return_type<int>([off  = lcv.offsets().data<size_type>(),
+                                       size = lcv.offsets().size()] __device__(auto i) -> int {
+        return (i + 1 < size) && (off[i] == off[i + 1]);
+      }));
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
     thrust::exclusive_scan(
       rmm::exec_policy(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());
@@ -375,10 +379,11 @@ dremel_data get_encoding(column_view h_col,
     auto [empties, empties_idx, empties_size] =
       get_empties(nesting_levels[level], column_offsets[level], column_ends[level]);
 
-    auto offset_transformer = [new_child_offsets = new_offsets.data(),
-                               child_start       = column_offsets[level + 1]] __device__(auto x) {
-      return new_child_offsets[x - child_start];  // (x - child's offset)
-    };
+    auto offset_transformer = cuda::proclaim_return_type<size_type>(
+      [new_child_offsets = new_offsets.data(),
+       child_start       = column_offsets[level + 1]] __device__(auto x) {
+        return new_child_offsets[x - child_start];  // (x - child's offset)
+      });
 
     // We will be reading from old rep_levels and writing again to rep_levels. Swap the current
     // rep values into temp_rep_vals so it can become the input and rep_levels can again be output.
@@ -423,8 +428,10 @@ dremel_data get_encoding(column_view h_col,
     // level value fof an empty list
     auto scan_it = cudf::detail::make_counting_transform_iterator(
       column_offsets[level],
-      [off = lcv.offsets().data<size_type>(), size = lcv.offsets().size()] __device__(
-        auto i) -> int { return (i + 1 < size) && (off[i] == off[i + 1]); });
+      cuda::proclaim_return_type<int>([off  = lcv.offsets().data<size_type>(),
+                                       size = lcv.offsets().size()] __device__(auto i) -> int {
+        return (i + 1 < size) && (off[i] == off[i + 1]);
+      }));
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
     thrust::exclusive_scan(
       rmm::exec_policy(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());

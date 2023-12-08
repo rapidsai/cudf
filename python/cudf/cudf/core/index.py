@@ -34,7 +34,6 @@ from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_dtype_equal,
     is_integer,
-    is_interval_dtype,
     is_list_like,
     is_scalar,
     is_signed_integer_dtype,
@@ -3192,7 +3191,9 @@ class IntervalIndex(GenericIndex):
 
         if isinstance(data, IntervalColumn):
             data = data
-        elif isinstance(data, pd.Series) and (is_interval_dtype(data.dtype)):
+        elif isinstance(data, pd.Series) and isinstance(
+            data.dtype, pd.IntervalDtype
+        ):
             data = column.as_column(data, data.dtype)
         elif isinstance(data, (pd.Interval, pd.IntervalIndex)):
             data = column.as_column(
