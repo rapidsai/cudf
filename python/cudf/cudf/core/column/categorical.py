@@ -17,7 +17,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
-from cudf.api.types import is_categorical_dtype, is_interval_dtype
+from cudf.api.types import is_interval_dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
@@ -99,7 +99,7 @@ class CategoricalAccessor(ColumnMethods):
     _column: CategoricalColumn
 
     def __init__(self, parent: SeriesOrSingleColumnIndex):
-        if not is_categorical_dtype(parent.dtype):
+        if not isinstance(parent.dtype, CategoricalDtype):
             raise AttributeError(
                 "Can only use .cat accessor with a 'category' dtype"
             )
@@ -974,8 +974,11 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def to_pandas(
-        self, index: Optional[pd.Index] = None, **kwargs
+        self, *, index: Optional[pd.Index] = None, nullable: bool = False
     ) -> pd.Series:
+        if nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
+
         if self.categories.dtype.kind == "f":
             new_mask = bools_to_mask(self.notnull())
             col = column.build_categorical_column(
