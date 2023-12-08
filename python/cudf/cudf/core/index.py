@@ -2177,7 +2177,7 @@ class DatetimeIndex(GenericIndex):
         self: DatetimeIndex, other: DatetimeIndex, *, override_dtypes=None
     ) -> GenericIndex:
         super()._copy_type_metadata(other, override_dtypes=override_dtypes)
-        self._freq = other._freq
+        self._freq = _validate_freq(other._freq)
         return self
 
     @classmethod
