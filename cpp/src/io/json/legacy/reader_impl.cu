@@ -569,6 +569,9 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
     } else {
       out_columns.emplace_back(std::move(out_column));
     }
+    if (out_columns.back()->null_count() == 0) {
+      out_columns.back()->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
+    }
   }
 
   std::vector<column_name_info> column_infos;

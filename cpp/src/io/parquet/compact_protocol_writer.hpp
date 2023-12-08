@@ -51,6 +51,7 @@ class CompactProtocolWriter {
   size_t write(Statistics const&);
   size_t write(PageLocation const&);
   size_t write(OffsetIndex const&);
+  size_t write(SizeStatistics const&);
   size_t write(ColumnOrder const&);
 
  protected:
@@ -112,5 +113,9 @@ class CompactProtocolFieldWriter {
 
   inline void set_current_field(int const& field);
 };
+
+template <>
+inline void CompactProtocolFieldWriter::field_int_list<int64_t>(int field,
+                                                                std::vector<int64_t> const& val);
 
 }  // namespace cudf::io::parquet::detail
