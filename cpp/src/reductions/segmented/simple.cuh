@@ -121,8 +121,9 @@ struct reduce_argminmax_fn {
 
   __device__ inline auto operator()(size_type const& lhs_idx, size_type const& rhs_idx) const
   {
-    if (lhs_idx < 0 || lhs_idx >= d_col.size()) { return rhs_idx; }  // CUB segmented reduce
-    if (rhs_idx < 0 || rhs_idx >= d_col.size()) { return lhs_idx; }  // calls with OOB indices
+    // CUB segmented reduce calls with OOB indices
+    if (lhs_idx < 0 || lhs_idx >= d_col.size()) { return rhs_idx; }
+    if (rhs_idx < 0 || rhs_idx >= d_col.size()) { return lhs_idx; }
     if (d_col.is_null(lhs_idx)) { return null_handler == null_policy::INCLUDE ? lhs_idx : rhs_idx; }
     if (d_col.is_null(rhs_idx)) { return null_handler == null_policy::INCLUDE ? rhs_idx : lhs_idx; }
     auto const less = d_col.element<T>(lhs_idx) < d_col.element<T>(rhs_idx);
