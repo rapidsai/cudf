@@ -2166,7 +2166,7 @@ class DatetimeIndex(GenericIndex):
         super().__init__(data, **kwargs)
 
         if self._freq is not None:
-            unique_vals = self[1:] - self[:-1]
+            unique_vals = self.diff().unique()
             if len(unique_vals) != 1 or unique_vals[0] != self._freq:
                 raise ValueError()
 
