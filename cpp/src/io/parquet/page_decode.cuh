@@ -551,7 +551,7 @@ __device__ void gpuDecodeStream(
   }
   // issue #14597
   // racecheck reported race between reads at the start of this function and the writes below
-  __syncthreads();
+  __syncwarp();
 
   // update the stream info
   if (!t) {
