@@ -5569,7 +5569,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Returns
         -------
-        {int: Column}
+        {Any: Column}
         """
 
         data = cupy.asarray(data)

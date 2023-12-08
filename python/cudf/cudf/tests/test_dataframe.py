@@ -10619,8 +10619,8 @@ def test_series_data_with_name_with_columns_not_matching():
 def test_series_data_with_name_with_columns_matching_align():
     gdf = cudf.DataFrame(cudf.Series([1], name=2), columns=[1, 2])
     pdf = pd.DataFrame(pd.Series([1], name=2), columns=[1, 2])
-    # pandas A column is NaN of object type
-    # cudf A column is NA of type float
+    # pandas 1 column is NaN of object type
+    # cudf 1 column is NA of type float
     assert_eq(gdf, pdf, check_dtype=False)
 
 
