@@ -213,7 +213,7 @@ struct delta_byte_array_decoder {
     using cudf::detail::warp_size;
     __shared__ __align__(8) uint8_t* so_ptr;
 
-    if (start_idx >= suffixes.value_count) { return; }
+    if (start_idx >= suffixes.value_count) { return 0; }
     auto end_idx = start_idx + min(suffixes.values_per_mb, num_values);
     end_idx      = min(end_idx, static_cast<uint32_t>(suffixes.value_count));
 
