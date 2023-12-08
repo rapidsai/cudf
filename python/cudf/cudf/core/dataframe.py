@@ -846,7 +846,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 data, index=index, nan_as_null=nan_as_null
             )
             col_dict = result[0]
-            index, index_from_data = result[1], index
+            index = result[1]
             columns, columns_from_data = result[2], columns
             col_is_multiindex = isinstance(columns, pd.MultiIndex)
         else:
@@ -1063,7 +1063,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if not data:
             return data, cudf.RangeIndex(0), pd.RangeIndex(0)
         data, index_from_data = self._align_input_series_indices(
-            data, nan_as_null=nan_as_null
+            data, index=index, nan_as_null=nan_as_null
         )
 
         value_lengths = set()
@@ -1125,7 +1125,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @staticmethod
     @_cudf_nvtx_annotate
     def _align_input_series_indices(
-        data: dict, nan_as_null=None
+        data: dict, index: cudf.Index | None, nan_as_null=None
     ) -> tuple[dict, None | cudf.Index]:
         input_series = {
             key: Series(val, nan_as_null=nan_as_null)
@@ -1143,6 +1143,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         for key, aligned_series in zip(
             input_series.keys(), aligned_input_series
         ):
+            if index is not None:
+                aligned_series = aligned_series.reindex(index=index)
             data[key] = aligned_series
         return data, aligned_series.index
 
