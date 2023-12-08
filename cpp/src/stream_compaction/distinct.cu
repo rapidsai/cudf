@@ -32,6 +32,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 
+#include <cuda/functional>
+
 #include <utility>
 #include <vector>
 
@@ -66,7 +68,9 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   auto const row_comp = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
   auto const pair_iter = cudf::detail::make_counting_transform_iterator(
-    size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
+    size_type{0},
+    cuda::proclaim_return_type<cuco::pair<size_type, size_type>>(
+      [] __device__(size_type const i) { return cuco::make_pair(i, i); }));
 
   auto const insert_keys = [&](auto const value_comp) {
     if (has_nested_columns) {
