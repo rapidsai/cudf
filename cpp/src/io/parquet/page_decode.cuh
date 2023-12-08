@@ -549,6 +549,9 @@ __device__ void gpuDecodeStream(
     batch_coded_count += batch_len;
     value_count += batch_len;
   }
+  // issue #14597
+  // racecheck reported race between reads at the start of this function and the writes below
+  __syncthreads();
 
   // update the stream info
   if (!t) {
