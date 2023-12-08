@@ -34,12 +34,9 @@ function(find_libarrow_in_python_wheel PYARROW_VERSION)
   # version number soname, just `${MAJOR_VERSION}00`
   set(PYARROW_LIB "libarrow.so.${PYARROW_SO_VER}00")
 
-  execute_process(
-    COMMAND "${Python_EXECUTABLE}" -c "import pyarrow; print(pyarrow.get_library_dirs()[0])"
-    OUTPUT_VARIABLE CUDF_PYARROW_WHEEL_DIR
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-  )
-  list(APPEND CMAKE_PREFIX_PATH "${CUDF_PYARROW_WHEEL_DIR}")
+  if(NOT DEFINED Python_EXECUTABLE)
+    message(FATAL_ERROR "You must run FindPython before calling find_libarrow_in_python_wheel")
+  endif()
 
   string(
     APPEND
@@ -55,6 +52,13 @@ execute_process(
 list(APPEND CMAKE_PREFIX_PATH "${CUDF_PYARROW_WHEEL_DIR}")
 ]=]
   )
+  string(
+    APPEND
+    final_code_block
+    [=[
+list(POP_BACK CMAKE_PREFIX_PATH)
+]=]
+  )
   rapids_find_generate_module(
     Arrow NO_CONFIG
     VERSION "${PYARROW_VERSION}"
@@ -62,6 +66,7 @@ list(APPEND CMAKE_PREFIX_PATH "${CUDF_PYARROW_WHEEL_DIR}")
     BUILD_EXPORT_SET cudf-exports
     INSTALL_EXPORT_SET cudf-exports
     HEADER_NAMES arrow/python/arrow_to_pandas.h INITIAL_CODE_BLOCK initial_code_block
+                 FINAL_CODE_BLOCK final_code_block
   )
 
   find_package(Arrow ${PYARROW_VERSION} MODULE REQUIRED GLOBAL)
@@ -76,20 +81,20 @@ list(APPEND CMAKE_PREFIX_PATH "${CUDF_PYARROW_WHEEL_DIR}")
   # benchmarks will not work without updating GBench (and possibly NVBench) builds. We are currently
   # ignoring these limitations since we don't anticipate using this feature except for building
   # wheels.
-  EXECUTE_PROCESS(
+  execute_process(
     COMMAND ${CMAKE_C_COMPILER} -print-file-name=libc.so.6
     OUTPUT_VARIABLE GLIBC_EXECUTABLE
     OUTPUT_STRIP_TRAILING_WHITESPACE
   )
-  EXECUTE_PROCESS(
+  execute_process(
     COMMAND ${GLIBC_EXECUTABLE}
     OUTPUT_VARIABLE GLIBC_OUTPUT
     OUTPUT_STRIP_TRAILING_WHITESPACE
   )
-  STRING(REGEX MATCH "stable release version ([0-9]+\\.[0-9]+)" GLIBC_VERSION ${GLIBC_OUTPUT})
-  STRING(REPLACE "stable release version " "" GLIBC_VERSION ${GLIBC_VERSION})
-  STRING(REPLACE "." ";" GLIBC_VERSION_LIST ${GLIBC_VERSION})
-  LIST(GET GLIBC_VERSION_LIST 1 GLIBC_VERSION_MINOR)
+  string(REGEX MATCH "stable release version ([0-9]+\\.[0-9]+)" GLIBC_VERSION ${GLIBC_OUTPUT})
+  string(REPLACE "stable release version " "" GLIBC_VERSION ${GLIBC_VERSION})
+  string(REPLACE "." ";" GLIBC_VERSION_LIST ${GLIBC_VERSION})
+  list(GET GLIBC_VERSION_LIST 1 GLIBC_VERSION_MINOR)
   if(GLIBC_VERSION_MINOR LESS 28)
     target_compile_options(
       Arrow::Arrow INTERFACE "$<$<COMPILE_LANGUAGE:CXX>:-D_GLIBCXX_USE_CXX11_ABI=0>"
@@ -99,8 +104,6 @@ list(APPEND CMAKE_PREFIX_PATH "${CUDF_PYARROW_WHEEL_DIR}")
 
   rapids_export_package(BUILD Arrow cudf-exports)
   rapids_export_package(INSTALL Arrow cudf-exports)
-
-  list(POP_BACK CMAKE_PREFIX_PATH)
 endfunction()
 
 # This function finds arrow and sets any additional necessary environment variables.
