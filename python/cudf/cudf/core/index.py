@@ -1431,16 +1431,16 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         lines = lines[:-1]
         lines.append(prior_to_dtype + " dtype='%s'" % self.dtype)
         if self.name is not None:
-            lines[-1] = lines[-1] + ", name='%s'" % self.name
+            lines[-1] += f", name='{self.name}'"
         if "length" in tmp_meta:
-            lines[-1] = lines[-1] + ", length=%d" % len(self)
+            lines[-1] += f", length={len(self)}"
         if (
             "freq" in tmp_meta
             and isinstance(self, DatetimeIndex)
             and self._freq is not None
         ):
-            lines[-1] = lines[-1] + f", freq={self._freq}"
-        lines[-1] = lines[-1] + ")"
+            lines[-1] += f", freq={self._freq}"
+        lines[-1] += ")"
 
         return "\n".join(lines)
 
