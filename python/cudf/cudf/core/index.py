@@ -1429,19 +1429,19 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         dtype_index = tmp_meta.rfind(" dtype=")
         prior_to_dtype = tmp_meta[:dtype_index]
         lines = lines[:-1]
-        lines.append(prior_to_dtype + " dtype='%s'" % self.dtype)
+        keywords = [f"dtype='{self.dtype}'"]
         if self.name is not None:
-            lines[-1] += f", name='{self.name}'"
+            keywords.append(f"name={self.name!r}")
         if "length" in tmp_meta:
-            lines[-1] += f", length={len(self)}"
+            keywords.append(f"length={len(self)}")
         if (
             "freq" in tmp_meta
             and isinstance(self, DatetimeIndex)
             and self._freq is not None
         ):
-            lines[-1] += f", freq={self._freq}"
-        lines[-1] += ")"
-
+            keywords.append(f"freq={self._freq}")
+        keywords = ", ".join(keywords)
+        lines.append(f"{prior_to_dtype} {keywords})")
         return "\n".join(lines)
 
     @_cudf_nvtx_annotate
