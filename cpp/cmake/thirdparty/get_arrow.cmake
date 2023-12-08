@@ -34,10 +34,6 @@ function(find_libarrow_in_python_wheel PYARROW_VERSION)
   # version number soname, just `${MAJOR_VERSION}00`
   set(PYARROW_LIB "libarrow.so.${PYARROW_SO_VER}00")
 
-  if(NOT DEFINED Python_EXECUTABLE)
-    message(FATAL_ERROR "You must run FindPython before calling find_libarrow_in_python_wheel")
-  endif()
-
   string(
     APPEND
     initial_code_block
@@ -447,34 +443,6 @@ if(NOT DEFINED CUDF_VERSION_Arrow)
       14.0.1
       CACHE STRING "The version of Arrow to find (or build)"
   )
-endif()
-
-# If the pyarrow package contains libarrow we want to link against it directly instead of searching
-# for a separate libarrow. Even if libcudf was built against a different libarrow, that library
-# would have to be ABI-compatible with the one in pyarrow for the packages to work together, and for
-# wheels we must use the library in the pyarrow wheel, so it's best to simply be consistent.
-find_package(Python 3.9 COMPONENTS Interpreter)
-
-set(USE_LIBARROW_FROM_PYARROW OFF)
-if(${Python_FOUND})
-  execute_process(
-    COMMAND "${Python_EXECUTABLE}" -c
-            "import importlib.util; print(importlib.util.find_spec('pyarrow') is not None)"
-    OUTPUT_VARIABLE _pyarrow_installed
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-  )
-  if(${_pyarrow_installed} STREQUAL "True")
-    execute_process(
-      COMMAND "${Python_EXECUTABLE}" -c "import pyarrow; print(pyarrow.get_library_dirs()[0])"
-      OUTPUT_VARIABLE _pyarrow_lib_dir
-      OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-    file(GLOB _pyarrow_libs "${_pyarrow_lib_dir}/libarrow.so*")
-    list(LENGTH _pyarrow_libs _pyarrow_libs_len)
-    if(_pyarrow_libs_len GREATER 0)
-      set(USE_LIBARROW_FROM_PYARROW ON)
-    endif()
-  endif()
 endif()
 
 find_and_configure_arrow(

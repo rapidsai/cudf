@@ -5,6 +5,8 @@ set -euo pipefail
 
 package_dir="python/cudf"
 
+export SKBUILD_CONFIGURE_OPTIONS="-DUSE_LIBARROW_FROM_PYARROW=ON"
+
 ./ci/build_wheel.sh cudf ${package_dir}
 
 python -m auditwheel repair -w ${package_dir}/final_dist ${package_dir}/dist/*

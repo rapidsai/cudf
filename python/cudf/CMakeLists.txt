@@ -33,6 +33,8 @@ project(
 option(FIND_CUDF_CPP "Search for existing CUDF C++ installations before defaulting to local files"
        OFF
 )
+option(USE_LIBARROW_FROM_PYARROW "Only use the libarrow contained in pyarrow" OFF)
+mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
 
 # Find Python early so that later commands can use it
 find_package(Python 3.9 REQUIRED COMPONENTS Interpreter)
