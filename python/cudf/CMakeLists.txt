@@ -41,15 +41,16 @@ find_package(Python 3.9 REQUIRED COMPONENTS Interpreter)
 
 # If the user requested it we attempt to find CUDF.
 if(FIND_CUDF_CPP)
+  include(rapids-cpm)
+  include(rapids-export)
+  include(rapids-find)
+  rapids_cpm_init()
+
   if(USE_LIBARROW_FROM_PYARROW)
     # We need to find arrow before libcudf since libcudf requires it but doesn't bundle arrow
-    # libraries.
-    include(rapids-find)
-    include(rapids-export)
-    include(rapids-cpm)
-    rapids_cpm_init()
-    # These variables have no effect because we are always searching for arrow via pyarrow, but they
-    # must be set as they are required arguments to the function in get_arrow.cmake.
+    # libraries. These variables have no effect because we are always searching for arrow via
+    # pyarrow, but they must be set as they are required arguments to the function in
+    # get_arrow.cmake.
     set(CUDF_USE_ARROW_STATIC OFF)
     set(CUDF_ENABLE_ARROW_S3 OFF)
     set(CUDF_ENABLE_ARROW_ORC OFF)
