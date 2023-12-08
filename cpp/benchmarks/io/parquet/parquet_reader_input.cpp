@@ -59,9 +59,9 @@ void parquet_read_common(cudf::io::parquet_writer_options const& write_opts,
 template <data_type DataType>
 void BM_parquet_read_data(nvbench::state& state, nvbench::type_list<nvbench::enum_type<DataType>>)
 {
-  auto const d_type                   = get_type_or_group(static_cast<int32_t>(DataType));
-  cudf::size_type const cardinality   = state.get_int64("cardinality");
-  cudf::size_type const run_length    = state.get_int64("run_length");
+  auto const d_type      = get_type_or_group(static_cast<int32_t>(DataType));
+  auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
+  auto const run_length  = static_cast<cudf::size_type>(state.get_int64("run_length"));
   cudf::io::io_type const source_type = retrieve_io_type_enum(state.get_string("io_type"));
   auto const compression              = cudf::io::compression_type::SNAPPY;
 
@@ -90,8 +90,8 @@ void BM_parquet_read_io_compression(nvbench::state& state)
                                          static_cast<int32_t>(data_type::LIST),
                                          static_cast<int32_t>(data_type::STRUCT)});
 
-  cudf::size_type const cardinality   = state.get_int64("cardinality");
-  cudf::size_type const run_length    = state.get_int64("run_length");
+  auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
+  auto const run_length  = static_cast<cudf::size_type>(state.get_int64("run_length"));
   cudf::io::io_type const source_type = retrieve_io_type_enum(state.get_string("io_type"));
   cudf::io::compression_type const compression =
     retrieve_compression_type_enum(state.get_string("compression_type"));
@@ -115,9 +115,9 @@ void BM_parquet_read_io_small_mixed(nvbench::state& state)
   auto const d_type =
     std::pair<cudf::type_id, cudf::type_id>{cudf::type_id::STRING, cudf::type_id::INT32};
 
-  cudf::size_type const cardinality   = state.get_int64("cardinality");
-  cudf::size_type const run_length    = state.get_int64("run_length");
-  cudf::size_type const num_strings   = state.get_int64("num_string_cols");
+  auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
+  auto const run_length  = static_cast<cudf::size_type>(state.get_int64("run_length"));
+  auto const num_strings = static_cast<cudf::size_type>(state.get_int64("num_string_cols"));
   cudf::io::io_type const source_type = retrieve_io_type_enum(state.get_string("io_type"));
 
   // want 80 pages total, across 4 columns, so 20 pages per column
@@ -143,10 +143,10 @@ void BM_parquet_read_io_small_mixed(nvbench::state& state)
 template <data_type DataType>
 void BM_parquet_read_chunks(nvbench::state& state, nvbench::type_list<nvbench::enum_type<DataType>>)
 {
-  auto const d_type                   = get_type_or_group(static_cast<int32_t>(DataType));
-  cudf::size_type const cardinality   = state.get_int64("cardinality");
-  cudf::size_type const run_length    = state.get_int64("run_length");
-  cudf::size_type const byte_limit    = state.get_int64("byte_limit");
+  auto const d_type      = get_type_or_group(static_cast<int32_t>(DataType));
+  auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
+  auto const run_length  = static_cast<cudf::size_type>(state.get_int64("run_length"));
+  auto const byte_limit  = static_cast<cudf::size_type>(state.get_int64("byte_limit"));
   cudf::io::io_type const source_type = retrieve_io_type_enum(state.get_string("io_type"));
   auto const compression              = cudf::io::compression_type::SNAPPY;
 
