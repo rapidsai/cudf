@@ -799,9 +799,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       // This is to match the existing JSON reader's behaviour:
       // - Non-string columns will always be returned as nullable
       // - String columns will be returned as nullable, iff there's at least one null entry
-      if (target_type.id() == type_id::STRING and col->null_count() == 0) {
-        col->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
-      }
+      if (col->null_count() == 0) { col->set_null_mask(rmm::device_buffer{0, stream, mr}, 0); }
 
       // For string columns return ["offsets", "char"] schema
       if (target_type.id() == type_id::STRING) {
@@ -830,7 +828,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       // The null_mask is set after creation of struct column is to skip the superimpose_nulls and
       // null validation applied in make_structs_column factory, which is not needed for json
       auto ret_col = make_structs_column(num_rows, std::move(child_columns), 0, {}, stream, mr);
-      ret_col->set_null_mask(std::move(result_bitmask), null_count);
+      if (null_count != 0) { ret_col->set_null_mask(std::move(result_bitmask), null_count); }
       return {std::move(ret_col), column_names};
     }
     case json_col_t::ListColumn: {
@@ -877,7 +875,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       // The null_mask is set after creation of list column is to skip the purge_nonempty_nulls and
       // null validation applied in make_lists_column factory, which is not needed for json
       // parent column cannot be null when its children is non-empty in JSON
-      ret_col->set_null_mask(std::move(result_bitmask), null_count);
+      if (null_count != 0) { ret_col->set_null_mask(std::move(result_bitmask), null_count); }
       return {std::move(ret_col), std::move(column_names)};
     }
     default: CUDF_FAIL("Unsupported column type"); break;

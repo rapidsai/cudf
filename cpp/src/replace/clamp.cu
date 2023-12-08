@@ -47,37 +47,43 @@
 namespace cudf {
 namespace detail {
 namespace {
-template <typename Transformer>
-std::pair<std::unique_ptr<column>, std::unique_ptr<column>> form_offsets_and_char_column(
-  cudf::column_device_view input,
-  size_type,
-  Transformer offsets_transformer,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  std::unique_ptr<column> offsets_column{};
-  auto strings_count = input.size();
-  size_type bytes    = 0;
 
-  if (input.nullable()) {
-    auto input_begin =
-      cudf::detail::make_null_replacement_iterator<string_view>(input, string_view{});
-    auto offsets_transformer_itr =
-      thrust::make_transform_iterator(input_begin, offsets_transformer);
-    std::tie(offsets_column, bytes) = cudf::detail::make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
-  } else {
-    auto offsets_transformer_itr =
-      thrust::make_transform_iterator(input.begin<string_view>(), offsets_transformer);
-    std::tie(offsets_column, bytes) = cudf::detail::make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
+template <typename OptionalScalarIterator, typename ReplaceScalarIterator>
+struct clamp_strings_fn {
+  column_device_view const d_strings;
+  OptionalScalarIterator lo_itr;
+  ReplaceScalarIterator lo_replace_itr;
+  OptionalScalarIterator hi_itr;
+  ReplaceScalarIterator hi_replace_itr;
+  size_type* d_offsets{};
+  char* d_chars{};
+
+  __device__ void operator()(size_type idx) const
+  {
+    if (d_strings.is_null(idx)) {
+      if (!d_chars) { d_offsets[idx] = 0; }
+      return;
+    }
+    auto const element      = d_strings.element<string_view>(idx);
+    auto const d_lo         = (*lo_itr).value_or(element);
+    auto const d_hi         = (*hi_itr).value_or(element);
+    auto const d_lo_replace = *(*lo_replace_itr);
+    auto const d_hi_replace = *(*hi_replace_itr);
+    auto d_output           = d_chars ? d_chars + d_offsets[idx] : nullptr;
+
+    auto d_str = [d_lo, d_lo_replace, d_hi, d_hi_replace, element] {
+      if (element < d_lo) { return d_lo_replace; }
+      if (d_hi < element) { return d_hi_replace; }
+      return element;
+    }();
+
+    if (d_output) {
+      cudf::strings::detail::copy_string(d_output, d_str);
+    } else {
+      d_offsets[idx] = d_str.size_bytes();
+    }
   }
-
-  // build chars column
-  auto chars_column = cudf::strings::detail::create_chars_child_column(bytes, stream, mr);
-
-  return std::pair(std::move(offsets_column), std::move(chars_column));
-}
+};
 
 template <typename OptionalScalarIterator, typename ReplaceScalarIterator>
 std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& input,
@@ -90,58 +96,11 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
 {
   auto input_device_column = column_device_view::create(input.parent(), stream);
   auto d_input             = *input_device_column;
-  size_type null_count     = input.null_count();
 
-  // build offset column
-  auto offsets_transformer = [lo_itr, hi_itr, lo_replace_itr, hi_replace_itr] __device__(
-                               string_view element, bool is_valid = true) {
-    const auto d_lo         = (*lo_itr).value_or(element);
-    const auto d_hi         = (*hi_itr).value_or(element);
-    const auto d_lo_replace = *(*lo_replace_itr);
-    const auto d_hi_replace = *(*hi_replace_itr);
-    size_type bytes         = 0;
-
-    if (is_valid) {
-      if (element < d_lo) {
-        bytes = d_lo_replace.size_bytes();
-      } else if (d_hi < element) {
-        bytes = d_hi_replace.size_bytes();
-      } else {
-        bytes = element.size_bytes();
-      }
-    }
-    return bytes;
-  };
-
+  auto fn = clamp_strings_fn<OptionalScalarIterator, ReplaceScalarIterator>{
+    d_input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr};
   auto [offsets_column, chars_column] =
-    form_offsets_and_char_column(d_input, null_count, offsets_transformer, stream, mr);
-
-  auto d_offsets = offsets_column->view().template data<size_type>();
-  auto d_chars   = chars_column->mutable_view().template data<char>();
-  // fill in chars
-  auto copy_transformer =
-    [d_input, lo_itr, hi_itr, lo_replace_itr, hi_replace_itr, d_offsets, d_chars] __device__(
-      size_type idx) {
-      if (d_input.is_null(idx)) { return; }
-      auto input_element      = d_input.element<string_view>(idx);
-      const auto d_lo         = (*lo_itr).value_or(input_element);
-      const auto d_hi         = (*hi_itr).value_or(input_element);
-      const auto d_lo_replace = *(*lo_replace_itr);
-      const auto d_hi_replace = *(*hi_replace_itr);
-
-      if (input_element < d_lo) {
-        memcpy(d_chars + d_offsets[idx], d_lo_replace.data(), d_lo_replace.size_bytes());
-      } else if (d_hi < input_element) {
-        memcpy(d_chars + d_offsets[idx], d_hi_replace.data(), d_hi_replace.size_bytes());
-      } else {
-        memcpy(d_chars + d_offsets[idx], input_element.data(), input_element.size_bytes());
-      }
-    };
-
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     input.size(),
-                     copy_transformer);
+    cudf::strings::detail::make_strings_children(fn, input.size(), stream, mr);
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),
