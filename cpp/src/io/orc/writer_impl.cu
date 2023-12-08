@@ -2137,7 +2137,8 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
       }
     }
   }
-  stripe_dicts.host_to_device_async(stream);
+  // Synchronize to ensure the copy is complete before we clear `map_slots`
+  stripe_dicts.host_to_device_sync(stream);
 
   gpu::collect_map_entries(stripe_dicts, stream);
   gpu::get_dictionary_indices(stripe_dicts, orc_table.d_columns, stream);
