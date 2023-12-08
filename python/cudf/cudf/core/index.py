@@ -33,7 +33,6 @@ from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
-    is_categorical_dtype,
     is_dtype_equal,
     is_integer,
     is_interval_dtype,
@@ -1432,16 +1431,16 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         lines = lines[:-1]
         lines.append(prior_to_dtype + " dtype='%s'" % self.dtype)
         if self.name is not None:
-            lines[-1] = lines[-1] + ", name='%s'" % self.name
+            lines[-1] += f", name='{self.name}'"
         if "length" in tmp_meta:
-            lines[-1] = lines[-1] + ", length=%d" % len(self)
+            lines[-1] += f", length={len(self)}"
         if (
             "freq" in tmp_meta
             and isinstance(self, DatetimeIndex)
             and self._freq is not None
         ):
-            lines[-1] = lines[-1] + f", freq={self._freq}"
-        lines[-1] = lines[-1] + ")"
+            lines[-1] += f", freq={self._freq}"
+        lines[-1] += ")"
 
         return "\n".join(lines)
 
@@ -3016,7 +3015,7 @@ class CategoricalIndex(GenericIndex):
         if isinstance(data, CategoricalColumn):
             data = data
         elif isinstance(data, pd.Series) and (
-            is_categorical_dtype(data.dtype)
+            isinstance(data.dtype, pd.CategoricalDtype)
         ):
             codes_data = column.as_column(data.cat.codes.values)
             data = column.build_categorical_column(
