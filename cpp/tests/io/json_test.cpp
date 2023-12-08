@@ -2116,6 +2116,21 @@ TEST_F(JsonReaderTest, MixedTypes)
 )",
           cudf::test::lists_column_wrapper<cudf::string_view>{
             {"1", "2", "3"}, {"true", "false", "true"}, {"a", "b", "c"}});
+  {
+    std::string json_string = R"(
+{ "var1": true }
+{ "var1": [{ "var0": true, "var1": "hello", "var2": null }, null, [true, null, null]] }
+  )";
+
+    cudf::io::json_reader_options in_options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{json_string.data(), json_string.size()})
+        .mixed_types_as_string(true)
+        .lines(true);
+
+    cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+    cudf::test::print(result.tbl->get_column(0));
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()
