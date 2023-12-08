@@ -55,6 +55,8 @@
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
 
+#include <cuda/functional>
+
 #include <limits>
 
 namespace cudf::io::json {
@@ -274,9 +276,11 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   {
     rmm::device_uvector<TreeDepthT> token_levels(num_tokens, stream);
     auto const push_pop_it = thrust::make_transform_iterator(
-      tokens.begin(), [does_push, does_pop] __device__(PdaTokenT const token) -> size_type {
-        return does_push(token) - does_pop(token);
-      });
+      tokens.begin(),
+      cuda::proclaim_return_type<size_type>(
+        [does_push, does_pop] __device__(PdaTokenT const token) -> size_type {
+          return does_push(token) - does_pop(token);
+        }));
     thrust::exclusive_scan(
       rmm::exec_policy(stream), push_pop_it, push_pop_it + num_tokens, token_levels.begin());
 
@@ -407,13 +411,15 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
                                         d_tree.node_categories.end(),
                                         node_t::NC_FN);
 
-  auto const d_hasher = [d_input          = d_input.data(),
-                         node_range_begin = d_tree.node_range_begin.data(),
-                         node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id) {
-    auto const field_name = cudf::string_view(d_input + node_range_begin[node_id],
-                                              node_range_end[node_id] - node_range_begin[node_id]);
-    return cudf::hashing::detail::default_hash<cudf::string_view>{}(field_name);
-  };
+  auto const d_hasher = cuda::proclaim_return_type<
+    typename cudf::hashing::detail::default_hash<cudf::string_view>::result_type>(
+    [d_input          = d_input.data(),
+     node_range_begin = d_tree.node_range_begin.data(),
+     node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id) {
+      auto const field_name = cudf::string_view(
+        d_input + node_range_begin[node_id], node_range_end[node_id] - node_range_begin[node_id]);
+      return cudf::hashing::detail::default_hash<cudf::string_view>{}(field_name);
+    });
   auto const d_equal = [d_input          = d_input.data(),
                         node_range_begin = d_tree.node_range_begin.data(),
                         node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id1,

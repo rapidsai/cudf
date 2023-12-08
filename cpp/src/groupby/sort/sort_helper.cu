@@ -42,6 +42,8 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/unique.h>
 
+#include <cuda/functional>
+
 #include <algorithm>
 #include <numeric>
 #include <tuple>
@@ -291,8 +293,10 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::cuda_stream_view st
 {
   auto idx_data = key_sort_order(stream).data<size_type>();
 
-  auto gather_map_it = thrust::make_transform_iterator(
-    group_offsets(stream).begin(), [idx_data] __device__(size_type i) { return idx_data[i]; });
+  auto gather_map_it =
+    thrust::make_transform_iterator(group_offsets(stream).begin(),
+                                    cuda::proclaim_return_type<size_type>(
+                                      [idx_data] __device__(size_type i) { return idx_data[i]; }));
 
   return cudf::detail::gather(_keys,
                               gather_map_it,

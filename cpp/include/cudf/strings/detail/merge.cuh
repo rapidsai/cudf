@@ -32,6 +32,8 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/tuple.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -73,13 +75,14 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
     null_mask = cudf::detail::create_null_mask(strings_count, mask_state::ALL_VALID, stream, mr);
 
   // build offsets column
-  auto offsets_transformer = [d_lhs, d_rhs] __device__(auto index_pair) {
-    auto const [side, index] = index_pair;
-    if (side == side::LEFT ? d_lhs.is_null(index) : d_rhs.is_null(index)) return 0;
-    auto d_str =
-      side == side::LEFT ? d_lhs.element<string_view>(index) : d_rhs.element<string_view>(index);
-    return d_str.size_bytes();
-  };
+  auto offsets_transformer =
+    cuda::proclaim_return_type<size_type>([d_lhs, d_rhs] __device__(auto index_pair) {
+      auto const [side, index] = index_pair;
+      if (side == side::LEFT ? d_lhs.is_null(index) : d_rhs.is_null(index)) return 0;
+      auto d_str =
+        side == side::LEFT ? d_lhs.element<string_view>(index) : d_rhs.element<string_view>(index);
+      return d_str.size_bytes();
+    });
   auto offsets_transformer_itr = thrust::make_transform_iterator(begin, offsets_transformer);
   auto [offsets_column, bytes] = cudf::detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
