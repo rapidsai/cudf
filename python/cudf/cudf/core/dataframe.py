@@ -672,7 +672,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         col_dtype = None
 
         if columns is not None:
-            columns = as_index(columns)
+            dtype = None
+            if isinstance(columns, list) and len(columns) == 0:
+                # TODO: Generically, an empty dtype-less container
+                # TODO: Why does as_index([]) return FloatIndex
+                dtype = object
+            columns = as_index(columns, dtype=dtype)
             if not isinstance(
                 columns, MultiIndex
             ) and columns.nunique() != len(columns):
@@ -698,10 +703,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             col_dict = data._data
             index, index_from_data = data.index, index
             columns, columns_from_data = data.columns, columns
-            if columns_from_data is not None and len(columns_from_data) == 0:
-                # TODO: Can this be avoided?
-                # as_index([]) returns Index[float64]
-                columns_from_data = columns_from_data.astype(columns.dtype)
         elif isinstance(data, (cudf.Series, pd.Series)):
             if isinstance(data, pd.Series):
                 data = cudf.Series.from_pandas(data, nan_as_null=nan_as_null)
@@ -794,6 +795,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 col_dict = self.from_records(
                     data, index=index, columns=columns
                 )._data
+            columns_from_data = columns
             if index is None:
                 index = RangeIndex(arr_interface["shape"][0])
         elif is_scalar(data):
@@ -851,8 +853,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise TypeError(
                 f"data must be list or dict-like, not {type(data).__name__}"
             )
-
         super().__init__(col_dict, index=index)
+        self._check_data_index_length_match()
         if columns_from_data is not None:
             # TODO: This there a better way to do this?
             columns_from_data = as_index(columns_from_data)
@@ -870,12 +872,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             reindexed = self.reindex(index=index_from_data, copy=False)
             self._data = reindexed._data
             self._index = index_from_data
+        # TODO this one might not be needed
         self._check_data_index_length_match()
 
         if dtype:
             self._data = self.astype(dtype)._data
 
         self._data.rangeindex = self._data.rangeindex or col_is_rangeindex
+        # TODO: multiindex assignment
+        # test_non_string_column_name_to_arrow to fail
         self._data.multiindex = self._data.multiindex or col_is_multiindex
         self._data.label_dtype = self._data.label_dtype or col_dtype
 
