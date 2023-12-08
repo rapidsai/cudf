@@ -2661,13 +2661,17 @@ class IndexedFrame(Frame):
             )
             for name in names
         }
+        if column_names is None:
+            level_names = self._data.level_names
+        elif isinstance(column_names, pd.Index):
+            level_names = tuple(column_names.names)
+        else:
+            level_names = None
         result = self.__class__._from_data(
             data=cudf.core.column_accessor.ColumnAccessor(
                 cols,
                 multiindex=self._data.multiindex,
-                level_names=tuple(column_names.names)
-                if isinstance(column_names, pd.Index)
-                else None,
+                level_names=level_names,
             ),
             index=index,
         )
