@@ -662,6 +662,8 @@ __global__ void __launch_bounds__(decode_block_size)
     } else {  // warp2
       target_pos = min(s->nz_count, src_pos + batch_size);
     }
+    // this needs to be here to prevent warp 2 modifying src_pos before all threads have read it
+    __syncthreads();
 
     // warp0 will decode the rep/def levels, warp1 will unpack a mini-batch of deltas.
     // warp2 waits one cycle for warps 0/1 to produce a batch, and then stuffs string sizes
