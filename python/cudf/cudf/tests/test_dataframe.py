@@ -3378,15 +3378,32 @@ def test_series_string_reindex(copy):
     )
 
 
-def test_reindex_tuple_col_to_multiindex():
+@pytest.mark.parametrize("names", [None, ["a", "b"]])
+@pytest.mark.parametrize("klass", [cudf.MultiIndex, pd.MultiIndex])
+def test_reindex_multiindex_col_to_multiindex(names, klass):
+    idx = pd.Index(
+        [("A", "one"), ("A", "two")],
+        dtype="object",
+    )
+    df = pd.DataFrame([[1, 2]], columns=idx)
+    gdf = cudf.from_pandas(df)
+    midx = klass.from_tuples([("A", "one"), ("A", "three")], names=names)
+    result = gdf.reindex(columns=midx)
+    expected = cudf.DataFrame([[1, None]], columns=midx)
+    # (pandas2.0): check_dtype=False won't be needed
+    # as None col will return object instead of float
+    assert_eq(result, expected, check_dtype=False)
+
+
+@pytest.mark.parametrize("names", [None, ["a", "b"]])
+@pytest.mark.parametrize("klass", [cudf.MultiIndex, pd.MultiIndex])
+def test_reindex_tuple_col_to_multiindex(names, klass):
     idx = pd.Index(
         [("A", "one"), ("A", "two")], dtype="object", tupleize_cols=False
     )
     df = pd.DataFrame([[1, 2]], columns=idx)
     gdf = cudf.from_pandas(df)
-    midx = cudf.MultiIndex.from_tuples(
-        [("A", "one"), ("A", "two")], names=["a", "b"]
-    )
+    midx = klass.from_tuples([("A", "one"), ("A", "two")], names=names)
     result = gdf.reindex(columns=midx)
     expected = cudf.DataFrame([[1, 2]], columns=midx)
     assert_eq(result, expected)
