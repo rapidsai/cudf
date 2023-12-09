@@ -337,6 +337,8 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(page_state_s* s,
 
     pos += batch_len;
   }
+  // racecheck wants a sync here
+  __syncwarp();
   return {pos, str_len};
 }
 
@@ -693,6 +695,10 @@ __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value
   int input_row_count = s->input_row_count;
 
   PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
+
+  // need this to ensure input_value_count is read by all threads before s->input_value_count
+  // is modified below (just in case input_value count >= target_input_value_count).
+  __syncwarp();
 
   // process until we've reached the target
   while (input_value_count < target_input_value_count) {
