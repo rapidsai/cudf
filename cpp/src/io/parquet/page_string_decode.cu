@@ -78,8 +78,11 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
 
   // can skip all this if we know there are no nulls
   if (max_def == 0 && !is_bounds_pg) {
-    s->page.num_valids = s->num_input_values;
-    s->page.num_nulls  = 0;
+    if (t == 0) {
+      s->page.num_valids = s->num_input_values;
+      s->page.num_nulls  = 0;
+    }
+    __syncthreads();
     return {0, s->num_input_values};
   }
 
@@ -268,6 +271,7 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
       pp->num_nulls               = num_nulls;
       pp->num_valids              = total_leaf_values;
     }
+    __syncthreads();
   }
   // already filtered out unwanted pages, so need to count all non-null values in this page
   else {
