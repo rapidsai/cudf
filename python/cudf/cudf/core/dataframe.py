@@ -2744,11 +2744,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             if columns is None:
                 columns = labels
-        df = (
-            self
-            if columns is None
-            else self[list(set(self._column_names) & set(columns))]
-        )
+        if columns is None:
+            df = self
+        else:
+            columns = as_index(columns)
+            intersection = self.columns.intersection(columns.to_pandas())
+            df = self.loc[:, intersection]
 
         return df._reindex(
             column_names=columns,
