@@ -24,6 +24,8 @@
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 
+#include <cuda/functional>
+
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
@@ -55,29 +57,31 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
   };
 
   // Calculate Flattened gather indices  (value_offset[row]+sub_index
-  auto transformer = [values_lists_view = *value_device_view,
-                      value_offsets,
-                      map_begin,
-                      gather_index_begin,
-                      gather_index_end,
-                      bounds_policy,
-                      out_of_bounds] __device__(size_type index) -> size_type {
-    // Get each row's offset. (Each row is a list).
-    auto offset_idx =
-      thrust::upper_bound(
-        thrust::seq, gather_index_begin, gather_index_end, gather_index_begin[-1] + index) -
-      gather_index_begin;
-    // Get each sub_index in list in each row of gather_map.
-    auto sub_index    = map_begin[index];
-    auto list_is_null = values_lists_view.is_null(offset_idx);
-    auto list_size = list_is_null ? 0 : (value_offsets[offset_idx + 1] - value_offsets[offset_idx]);
-    auto wrapped_sub_index  = sub_index < 0 ? sub_index + list_size : sub_index;
-    auto constexpr null_idx = cuda::std::numeric_limits<cudf::size_type>::max();
-    // Add sub_index to value_column offsets, to get gather indices of child of value_column
-    return (bounds_policy == out_of_bounds_policy::NULLIFY && out_of_bounds(sub_index, list_size))
-             ? null_idx
-             : value_offsets[offset_idx] + wrapped_sub_index - value_offsets[0];
-  };
+  auto transformer =
+    cuda::proclaim_return_type<size_type>([values_lists_view = *value_device_view,
+                                           value_offsets,
+                                           map_begin,
+                                           gather_index_begin,
+                                           gather_index_end,
+                                           bounds_policy,
+                                           out_of_bounds] __device__(size_type index) -> size_type {
+      // Get each row's offset. (Each row is a list).
+      auto offset_idx =
+        thrust::upper_bound(
+          thrust::seq, gather_index_begin, gather_index_end, gather_index_begin[-1] + index) -
+        gather_index_begin;
+      // Get each sub_index in list in each row of gather_map.
+      auto sub_index    = map_begin[index];
+      auto list_is_null = values_lists_view.is_null(offset_idx);
+      auto list_size =
+        list_is_null ? 0 : (value_offsets[offset_idx + 1] - value_offsets[offset_idx]);
+      auto wrapped_sub_index  = sub_index < 0 ? sub_index + list_size : sub_index;
+      auto constexpr null_idx = cuda::std::numeric_limits<cudf::size_type>::max();
+      // Add sub_index to value_column offsets, to get gather indices of child of value_column
+      return (bounds_policy == out_of_bounds_policy::NULLIFY && out_of_bounds(sub_index, list_size))
+               ? null_idx
+               : value_offsets[offset_idx] + wrapped_sub_index - value_offsets[0];
+    });
   auto child_gather_index_begin = cudf::detail::make_counting_transform_iterator(0, transformer);
 
   // Call gather on child of value_column

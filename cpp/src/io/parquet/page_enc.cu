@@ -205,8 +205,9 @@ void __device__ calculate_frag_size(frag_init_state_s* const s, int t)
       }
     }
   }
+
+  auto const total_len = block_reduce(reduce_storage).Sum(len);
   __syncthreads();
-  auto const total_len   = block_reduce(reduce_storage).Sum(len);
   auto const total_valid = block_reduce(reduce_storage).Sum(num_valid);
 
   if (t == 0) {
