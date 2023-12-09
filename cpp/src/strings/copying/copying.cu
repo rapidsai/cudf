@@ -26,6 +26,8 @@
 
 #include <thrust/transform.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -58,7 +60,8 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
                       d_offsets.begin<int32_t>(),
                       d_offsets.end<int32_t>(),
                       d_offsets.begin<int32_t>(),
-                      [chars_offset] __device__(auto offset) { return offset - chars_offset; });
+                      cuda::proclaim_return_type<int32_t>(
+                        [chars_offset] __device__(auto offset) { return offset - chars_offset; }));
   }
 
   // slice the chars child column

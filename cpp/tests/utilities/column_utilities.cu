@@ -49,6 +49,8 @@
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
 
+#include <cuda/functional>
+
 #include <numeric>
 #include <sstream>
 
@@ -117,17 +119,17 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   // compute total # of child row indices we will be emitting.
   auto row_size_iter = cudf::detail::make_counting_transform_iterator(
     0,
-    [row_indices = row_indices.begin<size_type>(),
-     validity    = c.null_mask(),
-     offsets     = c.offsets().begin<size_type>(),
-     offset      = c.offset()] __device__(int index) {
+    cuda::proclaim_return_type<size_type>([row_indices = row_indices.begin<size_type>(),
+                                           validity    = c.null_mask(),
+                                           offsets     = c.offsets().begin<size_type>(),
+                                           offset      = c.offset()] __device__(int index) {
       // both null mask and offsets data are not pre-sliced. so we need to add the column offset to
       // every incoming index.
       auto const true_index = row_indices[index] + offset;
       return !validity || cudf::bit_is_set(validity, true_index)
                ? (offsets[true_index + 1] - offsets[true_index])
                : 0;
-    });
+    }));
   auto const output_size = thrust::reduce(rmm::exec_policy(cudf::test::get_default_stream()),
                                           row_size_iter,
                                           row_size_iter + row_indices.size());
@@ -155,7 +157,7 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   thrust::generate(rmm::exec_policy(cudf::test::get_default_stream()),
                    result->mutable_view().begin<size_type>(),
                    result->mutable_view().end<size_type>(),
-                   [] __device__() { return 1; });
+                   cuda::proclaim_return_type<size_type>([] __device__() { return 1; }));
 
   // scatter the output row positions into result buffer
   //
@@ -163,14 +165,15 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   //
   auto output_row_iter = cudf::detail::make_counting_transform_iterator(
     0,
-    [row_indices  = row_indices.begin<size_type>(),
-     offsets      = c.offsets().begin<size_type>(),
-     offset       = c.offset(),
-     first_offset = cudf::detail::get_value<size_type>(
-       c.offsets(), c.offset(), cudf::test::get_default_stream())] __device__(int index) {
-      auto const true_index = row_indices[index] + offset;
-      return offsets[true_index] - first_offset;
-    });
+    cuda::proclaim_return_type<size_type>(
+      [row_indices  = row_indices.begin<size_type>(),
+       offsets      = c.offsets().begin<size_type>(),
+       offset       = c.offset(),
+       first_offset = cudf::detail::get_value<size_type>(
+         c.offsets(), c.offset(), cudf::test::get_default_stream())] __device__(int index) {
+        auto const true_index = row_indices[index] + offset;
+        return offsets[true_index] - first_offset;
+      }));
   thrust::scatter_if(rmm::exec_policy(cudf::test::get_default_stream()),
                      output_row_iter,
                      output_row_iter + row_indices.size(),
@@ -188,7 +191,7 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   thrust::generate(rmm::exec_policy(cudf::test::get_default_stream()),
                    keys->mutable_view().begin<size_type>(),
                    keys->mutable_view().end<size_type>(),
-                   [] __device__() { return 0; });
+                   cuda::proclaim_return_type<size_type>([] __device__() { return 0; }));
   thrust::scatter_if(rmm::exec_policy(cudf::test::get_default_stream()),
                      row_size_iter,
                      row_size_iter + row_indices.size(),
@@ -244,14 +247,14 @@ struct column_property_comparator {
   {
     auto validity_iter = cudf::detail::make_counting_transform_iterator(
       0,
-      [row_indices = row_indices.begin<size_type>(),
-       validity    = c.null_mask(),
-       offset      = c.offset()] __device__(int index) {
+      cuda::proclaim_return_type<size_type>([row_indices = row_indices.begin<size_type>(),
+                                             validity    = c.null_mask(),
+                                             offset      = c.offset()] __device__(int index) {
         // both null mask and offsets data are not pre-sliced. so we need to add the column offset
         // to every incoming index.
         auto const true_index = row_indices[index] + offset;
         return !validity || cudf::bit_is_set(validity, true_index) ? 0 : 1;
-      });
+      }));
     return thrust::reduce(rmm::exec_policy(cudf::test::get_default_stream()),
                           validity_iter,
                           validity_iter + row_indices.size());
@@ -623,24 +626,28 @@ struct column_comparator_impl<list_view, check_exact_equality> {
       lhs_l.offsets(), lhs_l.offset(), cudf::test::get_default_stream());
     auto lhs_offsets = thrust::make_transform_iterator(
       lhs_l.offsets().begin<size_type>() + lhs_l.offset(),
-      [lhs_shift] __device__(size_type offset) { return offset - lhs_shift; });
+      cuda::proclaim_return_type<size_type>(
+        [lhs_shift] __device__(size_type offset) { return offset - lhs_shift; }));
     auto lhs_valids = thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
-      [mask = lhs_l.null_mask(), offset = lhs_l.offset()] __device__(size_type index) {
-        return mask == nullptr ? true : cudf::bit_is_set(mask, index + offset);
-      });
+      cuda::proclaim_return_type<bool>(
+        [mask = lhs_l.null_mask(), offset = lhs_l.offset()] __device__(size_type index) {
+          return mask == nullptr ? true : cudf::bit_is_set(mask, index + offset);
+        }));
 
     // right side
     size_type rhs_shift = cudf::detail::get_value<size_type>(
       rhs_l.offsets(), rhs_l.offset(), cudf::test::get_default_stream());
     auto rhs_offsets = thrust::make_transform_iterator(
       rhs_l.offsets().begin<size_type>() + rhs_l.offset(),
-      [rhs_shift] __device__(size_type offset) { return offset - rhs_shift; });
+      cuda::proclaim_return_type<size_type>(
+        [rhs_shift] __device__(size_type offset) { return offset - rhs_shift; }));
     auto rhs_valids = thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
-      [mask = rhs_l.null_mask(), offset = rhs_l.offset()] __device__(size_type index) {
-        return mask == nullptr ? true : cudf::bit_is_set(mask, index + offset);
-      });
+      cuda::proclaim_return_type<bool>(
+        [mask = rhs_l.null_mask(), offset = rhs_l.offset()] __device__(size_type index) {
+          return mask == nullptr ? true : cudf::bit_is_set(mask, index + offset);
+        }));
 
     // when checking for equivalency, we can't compare offset values directly, we can only
     // compare lengths of the rows, and only if valid.  as a concrete example, you could have two
