@@ -58,7 +58,6 @@ class strings_column_view : private column_view {
   strings_column_view& operator=(strings_column_view&&) = default;
 
   static constexpr size_type offsets_column_index{0};  ///< Child index of the offsets column
-  static constexpr size_type chars_column_index{1};    ///< Child index of the characters column
 
   using column_view::has_nulls;
   using column_view::is_empty;

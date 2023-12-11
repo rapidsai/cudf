@@ -51,16 +51,16 @@ namespace {
  * @brief Create arrow data buffer from given cudf column
  */
 template <typename T>
-std::shared_ptr<arrow::Buffer> fetch_data_buffer(column_view input_view,
+std::shared_ptr<arrow::Buffer> fetch_data_buffer(device_span<T const> input_span,
                                                  arrow::MemoryPool* ar_mr,
                                                  rmm::cuda_stream_view stream)
 {
-  int64_t const data_size_in_bytes = sizeof(T) * input_view.size();
+  int64_t const data_size_in_bytes = sizeof(T) * input_span.size();
 
   auto data_buffer = allocate_arrow_buffer(data_size_in_bytes, ar_mr);
 
   CUDF_CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
-                                input_view.data<T>(),
+                                input_span.data(),
                                 data_size_in_bytes,
                                 cudaMemcpyDefault,
                                 stream.value()));
@@ -299,8 +299,12 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
   }
   auto offset_buffer = child_arrays[strings_column_view::offsets_column_index]->data()->buffers[1];
   // auto data_buffer   = child_arrays[1]->data()->buffers[1];
-  auto data_buffer =
-    fetch_data_buffer<int8_t>(strings_column_view{input_view}.chars(stream), ar_mr, stream);
+  auto data_buffer = fetch_data_buffer<char>(
+    device_span<char const>{
+      static_cast<char const*>(input_view.head()),
+      static_cast<std::size_t>(strings_column_view{input_view}.chars_size(stream))},
+    ar_mr,
+    stream);
   return std::make_shared<arrow::StringArray>(static_cast<int64_t>(input_view.size()),
                                               offset_buffer,
                                               data_buffer,
