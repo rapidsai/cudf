@@ -53,6 +53,8 @@
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
+#include <cuda/functional>
+
 #include <algorithm>
 #include <cstdint>
 #include <memory>
@@ -247,12 +249,12 @@ struct random_value_fn<T, std::enable_if_t<cudf::is_chrono<T>()>> {
       sec.end(),
       ns.begin(),
       result.begin(),
-      [] __device__(int64_t sec_value, int64_t nanoseconds_value) {
+      cuda::proclaim_return_type<T>([] __device__(int64_t sec_value, int64_t nanoseconds_value) {
         auto const timestamp_ns =
           cudf::duration_s{sec_value} + cudf::duration_ns{nanoseconds_value};
         // Return value in the type's precision
         return T(cuda::std::chrono::duration_cast<typename T::duration>(timestamp_ns));
-      });
+      }));
     return result;
   }
 };
@@ -367,12 +369,13 @@ rmm::device_uvector<cudf::size_type> sample_indices_with_run_length(cudf::size_t
     // This is gather.
     auto avg_repeated_sample_indices_iterator = thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
-      [rb              = run_lens.begin(),
-       re              = run_lens.end(),
-       samples_indices = samples_indices.begin()] __device__(cudf::size_type i) {
-        auto sample_idx = thrust::upper_bound(thrust::seq, rb, re, i) - rb;
-        return samples_indices[sample_idx];
-      });
+      cuda::proclaim_return_type<cudf::size_type>(
+        [rb              = run_lens.begin(),
+         re              = run_lens.end(),
+         samples_indices = samples_indices.begin()] __device__(cudf::size_type i) {
+          auto sample_idx = thrust::upper_bound(thrust::seq, rb, re, i) - rb;
+          return samples_indices[sample_idx];
+        }));
     rmm::device_uvector<cudf::size_type> repeated_sample_indices(num_rows,
                                                                  cudf::get_default_stream());
     thrust::copy(thrust::device,
@@ -513,7 +516,7 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
     lengths.end(),
     null_mask.begin(),
     lengths.begin(),
-    [] __device__(auto) { return 0; },
+    cuda::proclaim_return_type<cudf::size_type>([] __device__(auto) { return 0; }),
     thrust::logical_not<bool>{});
   auto valid_lengths = thrust::make_transform_iterator(
     thrust::make_zip_iterator(thrust::make_tuple(lengths.begin(), null_mask.begin())),

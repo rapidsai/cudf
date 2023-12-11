@@ -5,9 +5,9 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf.api.types import is_categorical_dtype, is_interval_dtype
+from cudf.api.types import is_interval_dtype
 from cudf.core.column import StructColumn
-from cudf.core.dtypes import IntervalDtype
+from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 
 
 class IntervalColumn(StructColumn):
@@ -102,7 +102,7 @@ class IntervalColumn(StructColumn):
 
     def as_interval_column(self, dtype, **kwargs):
         if is_interval_dtype(dtype):
-            if is_categorical_dtype(self):
+            if isinstance(self.dtype, CategoricalDtype):
                 new_struct = self._get_decategorized_column()
                 return IntervalColumn.from_struct_column(new_struct)
             if is_interval_dtype(dtype):

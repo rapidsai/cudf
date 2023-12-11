@@ -29,7 +29,7 @@ using strings::detail::fixed_point_string_size;
 
 // Nanosecond statistics should not be enabled until the spec version is set correctly in the output
 // files. See https://github.com/rapidsai/cudf/issues/14325 for more details
-constexpr bool enable_nanosecond_statistics = false;
+constexpr bool enable_nanosecond_statistics = true;
 
 constexpr unsigned int init_threads_per_group = 32;
 constexpr unsigned int init_groups_per_block  = 4;
