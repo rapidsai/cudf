@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 /**
  * @file
@@ -101,6 +102,16 @@ class strings_column_view : private column_view {
    * @return Iterator pointing 1 past the last offset value.
    */
   [[nodiscard]] offset_iterator offsets_end() const;
+
+  /**
+   * @brief Returns the internal column of chars
+   *
+   * @throw cudf::logic error if this is an empty column
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @return The chars column
+   */
+  [[deprecated]] [[nodiscard]] column_view chars(
+    rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
 
   /**
    * @brief Returns the number of bytes in the chars child column.

@@ -23,7 +23,6 @@
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <cuda/std/type_traits>
-#include <type_traits>
 
 namespace cudf {
 
