@@ -32,7 +32,6 @@ from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
-    is_categorical_dtype,
     is_dtype_equal,
     is_integer,
     is_interval_dtype,
@@ -2975,7 +2974,7 @@ class CategoricalIndex(GenericIndex):
         if isinstance(data, CategoricalColumn):
             data = data
         elif isinstance(data, pd.Series) and (
-            is_categorical_dtype(data.dtype)
+            isinstance(data.dtype, pd.CategoricalDtype)
         ):
             codes_data = column.as_column(data.cat.codes.values)
             data = column.build_categorical_column(

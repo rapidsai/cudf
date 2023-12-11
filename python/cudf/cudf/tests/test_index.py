@@ -6,6 +6,7 @@ Test related to Index
 import operator
 import re
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -682,7 +683,7 @@ def test_index_where(data, condition, other, error):
         gs_other = other
 
     if error is None:
-        if pd.api.types.is_categorical_dtype(ps):
+        if isinstance(ps.dtype, pd.CategoricalDtype):
             expect = ps.where(ps_condition, other=ps_other)
             got = gs.where(gs_condition, other=gs_other)
             np.testing.assert_array_equal(
@@ -2952,6 +2953,25 @@ def test_index_getitem_from_int(idx):
 def test_index_getitem_from_nonint_raises(idx):
     with pytest.raises(ValueError):
         cudf.Index([1, 2])[idx]
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        cp.ones(5, dtype=cp.float16),
+        np.ones(5, dtype="float16"),
+        pd.Series([0.1, 1.2, 3.3], dtype="float16"),
+        pytest.param(
+            pa.array(np.ones(5, dtype="float16")),
+            marks=pytest.mark.xfail(
+                reason="https://issues.apache.org/jira/browse/ARROW-13762"
+            ),
+        ),
+    ],
+)
+def test_index_raises_float16(data):
+    with pytest.raises(TypeError):
+        cudf.Index(data)
 
 
 def test_from_pandas_rangeindex_return_rangeindex():

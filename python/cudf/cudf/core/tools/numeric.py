@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import warnings
 
@@ -10,7 +10,6 @@ from cudf import _lib as libcudf
 from cudf._lib import strings as libstrings
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
-    is_categorical_dtype,
     is_datetime_dtype,
     is_list_dtype,
     is_string_dtype,
@@ -18,6 +17,7 @@ from cudf.api.types import (
     is_timedelta_dtype,
 )
 from cudf.core.column import as_column
+from cudf.core.dtypes import CategoricalDtype
 from cudf.utils.dtypes import can_convert_to_column
 
 
@@ -110,7 +110,7 @@ def to_numeric(arg, errors="raise", downcast=None):
 
     if is_datetime_dtype(dtype) or is_timedelta_dtype(dtype):
         col = col.as_numerical_column(cudf.dtype("int64"))
-    elif is_categorical_dtype(dtype):
+    elif isinstance(dtype, CategoricalDtype):
         cat_dtype = col.dtype.type
         if _is_non_decimal_numeric_dtype(cat_dtype):
             col = col.as_numerical_column(cat_dtype)
