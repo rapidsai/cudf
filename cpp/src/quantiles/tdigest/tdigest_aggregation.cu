@@ -587,7 +587,9 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
   auto is_stub_weight = [weights = weights->view().begin<double>()] __device__(size_type i) {
     return weights[i] == 0;
   };
-  // whether or not this particular tdigest is a stub
+  // Whether or not this particular tdigest is a stub.
+  // This should not be wrapped in `proclaim_return_type` as it will be used inside another
+  // device lambda.
   auto is_stub_digest = [offsets = offsets->view().begin<size_type>(), is_stub_weight] __device__(
                           size_type i) { return is_stub_weight(offsets[i]) ? 1 : 0; };
 
