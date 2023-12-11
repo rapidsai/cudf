@@ -2,177 +2,15 @@
 from __future__ import annotations
 
 import functools
-import itertools
-from typing import Dict, List, Set, Tuple, TypeVar, cast
+from typing import Tuple, cast
 
 import numpy as np
-from pandas.api.types import is_numeric_dtype
 
 import cudf.core.column as column
 from cudf.core.dtypes import is_categorical_dtype
 
-T = TypeVar("T")
-
-
-def toposort(graph: Dict[T, Set[T]]) -> List[T]:
-    """
-    Return nodes in a DAG in a (non-unique) topological order.
-
-    The order may not be unique.
-
-    Raises RuntimeError if the provided graph is not a DAG.
-    """
-    # Kahn's algorithm, https://dl.acm.org/doi/10.1145/368996.369025
-    # Copy because we'll modify the graph in place.
-    graph = {k: set(v) for k, v in graph.items()}
-    invgraph: Dict[T, Set[T]] = {k: set() for k in graph}
-    for k, v in graph.items():
-        for v_ in v:
-            invgraph[v_].add(k)
-    order = []
-    predecessors = set(k for k, v in invgraph.items() if not v)
-    while predecessors:
-        order.append(n := predecessors.pop())
-        edges = graph[n]
-        while edges:
-            invgraph[m := edges.pop()].remove(n)
-            if not invgraph[m]:
-                predecessors.add(m)
-    if any(v for v in graph.values()):
-        raise RuntimeError("Provided lattice structure is not a DAG")
-    return order
-
-
-def ancestors(graph: Dict[T, Set[T]]) -> Dict[T, Set[T]]:
-    """
-    Return the graph of the ancestors of a DAG
-
-    Arrows in the graph should point from child to parent.
-
-    Raises RuntimeError if the provided graph is not a DAG.
-    """
-    graph = {k: set(v) for k, v in graph.items()}
-    order = toposort(graph)
-    for k in reversed(order):
-        graph[k] |= set(
-            itertools.chain.from_iterable(graph[v_] for v_ in graph[k])
-        )
-    return graph
-
-
-def least_common_ancestors(
-    a: T, b: T, *, ancestors: Dict[T, Set[T]]
-) -> Set[T]:
-    r"""
-    Return the least common ancestors of a and b
-
-    Arrows in the graph should point from child to parent
-
-    For example, given the graph
-
-    C  D
-    ^  ^
-    |\/|
-    |/\|
-    A  B
-
-    LCA(A, B) = (C, D)
-    LCA(A, C) = (C)
-    LCA(A, D) = (D)
-    LCA(B, C) = (C)
-    LCA(B, D) = (D)
-    LCA(C, D) = ()
-    """
-    # This is not very sophisticated but the graphs are tiny.
-    # It's basically the algorithm described in Section 4.3 of Bender,
-    # Farach-Colton, Pemmasani, Skiena, and Sumazin, J. Algorithms
-    # (2005) https://doi.org/10.1016/j.jalgor.2005.08.001
-
-    # Candidate subgraph is intersection of the closure of the nodes
-    # closure is ancestors + self.
-    subnodes = (ancestors[a] | {a}) & (ancestors[b] | {b})
-
-    # least common ancestors are all nodes in the subgraph that are
-    # roots (i.e. have no edges pointing in to them)
-    return subnodes - set(
-        itertools.chain.from_iterable(ancestors[node] for node in subnodes)
-    )
-
-
-def promotion_table(graph: Dict[T, Set[T]]) -> Dict[Tuple[T, T], T]:
-    """
-    Return a type promotion table for all pairs of types in the
-    provided partial semi-lattice.
-
-    Raises RuntimeError if the input is not a DAG
-
-    Raises ValueError if any pair does not have a unique least upper
-    bound.
-
-    The promotion for each pair in the input is the unique least upper
-    bound of the pair in the input. The absence of a pair in the
-    return value means that no unique upper bound exists, so there is
-    no safe promotion route for that pair.
-
-    Arrows in the graph should point from child to parent.
-    """
-    successors = ancestors(graph)
-    table = dict()
-    for pair in itertools.product(graph, graph):
-        lca = least_common_ancestors(*pair, ancestors=successors)
-        if len(lca) > 1:
-            # Malformed input
-            raise ValueError("Provided DAG is not a partial semi-lattice")
-        try:
-            # Is there a unique least upper bound?
-            (table[pair],) = lca
-        except ValueError:
-            # No, no safe promotion route
-            pass
-    return table
-
 
 @functools.cache
-def numeric_promotions() -> Dict[Tuple[np.dtype, np.dtype], np.dtype]:
-    """
-    Return a type promotion table for all pairs of non-decimal numeric types.
-
-    If a pair exists as a key in the return value, the value is the
-    safe type to promote to. If a pair does not exist, there is no
-    safe promotion route.
-    """
-    # Direct promotion routes for integer types
-    # +----+    +-----+    +-----+    +-----+
-    # | i8 |--->| i16 |--->| i32 |--->| i64 |
-    # +----+    +--^--+    +--^--+    +--^--+
-    #             /          /          /
-    #         /---'      /---'      /---'
-    #     /---'      /---'      /---'
-    # +--+-+    +---+-+    +---+-+    +-----+
-    # | u8 |--->| u16 |--->| u32 |--->| u64 |
-    # +----+    +-----+    +-----+    +-----+
-    int_lattice: Dict[np.dtype, Set[np.dtype]] = {
-        np.dtype("uint8"): {np.dtype("uint16"), np.dtype("int16")},
-        np.dtype("int8"): {np.dtype("int16")},
-        np.dtype("uint16"): {np.dtype("uint32"), np.dtype("int32")},
-        np.dtype("int16"): {np.dtype("int32")},
-        np.dtype("uint32"): {np.dtype("uint64"), np.dtype("int64")},
-        np.dtype("int32"): {np.dtype("int64")},
-        np.dtype("uint64"): set(),
-        np.dtype("int64"): set(),
-    }
-    # Direct promotion routes for float types
-    # +-----+    +-----+    +-----+
-    # | f16 |--->| f32 |--->| f64 |
-    # +-----+    +-----+    +-----+
-    float_lattice: Dict[np.dtype, Set[np.dtype]] = {
-        np.dtype("float16"): {np.dtype("float32")},
-        np.dtype("float32"): {np.dtype("float64")},
-        np.dtype("float64"): set(),
-    }
-    return {**promotion_table(int_lattice), **promotion_table(float_lattice)}
-
-
 def common_numeric_type(ltype: np.dtype, rtype: np.dtype) -> np.dtype | None:
     """Return the common type between ltype and rtype or None.
 
@@ -181,7 +19,60 @@ def common_numeric_type(ltype: np.dtype, rtype: np.dtype) -> np.dtype | None:
     promotion route, None is returned, and it is up to the caller to
     decide how to proceed.
     """
-    return numeric_promotions().get((ltype, rtype), None)
+    kinds = {ltype.kind, rtype.kind}
+    assert kinds.issubset({"i", "u", "f", "c", "b", "m", "M"})
+    # integer
+    if kinds.issubset({"i", "u"}):
+        # Direct promotion routes for integer types
+        # +----+    +-----+    +-----+    +-----+
+        # | i8 |--->| i16 |--->| i32 |--->| i64 |
+        # +----+    +--^--+    +--^--+    +--^--+
+        #             /          /          /
+        #         /---'      /---'      /---'
+        #     /---'      /---'      /---'
+        # +--+-+    +---+-+    +---+-+    +-----+
+        # | u8 |--->| u16 |--->| u32 |--->| u64 |
+        # +----+    +-----+    +-----+    +-----+
+        candidate = np.promote_types(ltype, rtype)
+        if candidate.kind in {"i", "u"}:
+            return candidate
+        else:
+            # Promotion to float types not allowed
+            return None
+    # float/complex
+    if kinds.issubset({"f", "c"}):
+        # Direct promotion routes for float types
+        #            +-----+    +------+    +------+
+        #            | c64 |--->| c128 |--->| c256 |
+        #            +-----+    +------+    +------+
+        #               ^          ^           ^
+        #               |          |           |
+        #               |          |           |
+        # +-----+    +-----+    +-----+     +------+
+        # | f16 |--->| f32 |--->| f64 |---->| f128 |
+        # +-----+    +-----+    +-----+     +------+
+        return np.promote_types(ltype, rtype)
+    # These are belt-and-braces since match_join_types checking for
+    # dtype equality early means we should succeed in these checks,
+    # but we encode the rules in case someone else wants to use them.
+    # bool
+    if kinds.issubset({"b"}):
+        return ltype
+    # datetime
+    if kinds.issubset({"m", "M"}):
+        # Promotion between mixed-resolution datetimes is not
+        # guaranteed safe without inspecting the values, since the
+        # range of a datetime[M] is much larger than a datetime[ns].
+        # Pandas does value-dependent cast or raise. We will just
+        # raise. Similarly, we're not allowed to promote between
+        # datetime and timedelta which is handled by the equality
+        # check here.
+        if ltype == rtype:
+            return ltype
+        else:
+            return None
+    # Nothing else is safe
+    return None
 
 
 def match_join_types(
@@ -240,20 +131,24 @@ def match_join_types(
             left,
             cast(column.CategoricalColumn, right)._get_decategorized_column(),
         )
-    else:
-        pass
-    if is_numeric_dtype(ltype) and is_numeric_dtype(rtype):
-        common_type = common_numeric_type(
+    elif ltype.kind == "O" or rtype.kind == "O":
+        # Categorical columns also have kind == "O" but are handled
+        # explicitly above.
+        raise ValueError(
+            f"Cannot merge on non-matching key types {ltype} and {rtype}"
+        )
+    elif (
+        common_type := common_numeric_type(
             cast(np.dtype, ltype), cast(np.dtype, rtype)
         )
-        if common_type is None:
-            raise ValueError(
-                f"Cannot safely promote numeric pair {ltype} and {rtype}. "
-                "To perform the merge, manually cast the merge keys to "
-                "an appropriate common type first."
-            )
+        is not None
+    ):
+        # Numpy-supported dtype which we can safely promote
         return left.astype(common_type), right.astype(common_type)
-
-    raise ValueError(
-        f"Cannot merge on non-matching key types {ltype} and {rtype}"
-    )
+    else:
+        # Numpy-supported dtype which we cannot safely promote
+        raise ValueError(
+            f"Cannot safely promote numeric pair {ltype} and {rtype}. "
+            "To perform the merge, manually cast the merge keys to "
+            "an appropriate common type first."
+        )
