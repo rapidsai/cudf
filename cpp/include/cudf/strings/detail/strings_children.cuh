@@ -122,6 +122,60 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
   return make_strings_children(size_and_exec_fn, strings_count, strings_count, stream, mr);
 }
 
+/**
+ * @brief Create an offsets column to be a child of a compound column
+ *
+ * This function sets the offsets values by executing scan over the sizes in the provided
+ * Iterator.
+ *
+ * The return also includes the total number of elements -- the last element value from the
+ * scan.
+ *
+ * @throw std::overflow_error if the total size of the scan (last element) greater than maximum
+ * value of `size_type`
+ *
+ * @tparam InputIterator Used as input to scan to set the offset values
+ * @param begin The beginning of the input sequence
+ * @param end The end of the input sequence
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Offsets column and total elements
+ */
+template <typename InputIterator>
+std::pair<std::unique_ptr<column>, size_type> make_offsets_child_column(
+  InputIterator begin,
+  InputIterator end,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
+{
+  auto count = static_cast<size_type>(std::distance(begin, end));
+  auto offsets_column =
+    make_numeric_column(data_type{type_id::INT32}, count + 1, mask_state::UNALLOCATED, stream, mr);
+  auto offsets_view = offsets_column->mutable_view();
+  auto d_offsets    = offsets_view.template data<int32_t>();
+
+  // The number of offsets is count+1 so to build the offsets from the sizes
+  // using exclusive-scan technically requires count+1 input values even though
+  // the final input value is never used.
+  // The input iterator is wrapped here to allow the last value to be safely read.
+  auto map_fn =
+    cuda::proclaim_return_type<size_type>([begin, count] __device__(size_type idx) -> size_type {
+      return idx < count ? static_cast<size_type>(begin[idx]) : size_type{0};
+    });
+  auto input_itr = cudf::detail::make_counting_transform_iterator(0, map_fn);
+  // Use the sizes-to-offsets iterator to compute the total number of elements
+  auto const total_elements = sizes_to_offsets(input_itr, input_itr + count + 1, d_offsets, stream);
+  if (total_elements >= get_offset64_threshold()) {
+    // recompute as int64 offsets when above the threshold
+    offsets_column = make_numeric_column(
+      data_type{type_id::INT64}, count + 1, mask_state::UNALLOCATED, stream, mr);
+    auto d_offsets64 = offsets_column->mutable_view().template data<int64_t>();
+    sizes_to_offsets(input_itr, input_itr + count + 1, d_offsets64, stream);
+  }
+
+  return std::pair(std::move(offsets_column), static_cast<size_type>(total_elements));
+}
+
 }  // namespace detail
 }  // namespace strings
 }  // namespace cudf
