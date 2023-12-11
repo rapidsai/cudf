@@ -138,11 +138,13 @@ struct dispatch_to_arrow {
                                            arrow::MemoryPool* ar_mr,
                                            rmm::cuda_stream_view stream)
   {
-    return to_arrow_array(id,
-                          static_cast<int64_t>(input_view.size()),
-                          fetch_data_buffer<T>(input_view, ar_mr, stream),
-                          fetch_mask_buffer(input_view, ar_mr, stream),
-                          static_cast<int64_t>(input_view.null_count()));
+    return to_arrow_array(
+      id,
+      static_cast<int64_t>(input_view.size()),
+      fetch_data_buffer<T>(
+        device_span<T const>(input_view.data<T>(), input_view.size()), ar_mr, stream),
+      fetch_mask_buffer(input_view, ar_mr, stream),
+      static_cast<int64_t>(input_view.null_count()));
   }
 };
 
