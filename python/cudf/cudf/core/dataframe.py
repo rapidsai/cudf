@@ -672,12 +672,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         col_dtype = None
 
         if columns is not None:
-            dtype = None
+            as_idx_typ = None
             if isinstance(columns, list) and len(columns) == 0:
                 # TODO: Generically, an empty dtype-less container
                 # TODO: Why does as_index([]) return FloatIndex
-                dtype = object
-            columns = as_index(columns, dtype=dtype)
+                as_idx_typ = object
+            columns = as_index(columns, dtype=as_idx_typ)
             if not isinstance(
                 columns, MultiIndex
             ) and columns.nunique() != len(columns):

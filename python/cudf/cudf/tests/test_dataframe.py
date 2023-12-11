@@ -10467,10 +10467,18 @@ def test_dataframe_dict_like_with_columns(columns, index):
     data = {"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}
     expect = pd.DataFrame(data, columns=columns, index=index)
     actual = cudf.DataFrame(data, columns=columns, index=index)
+    # TODO(pandas2.0): New NA columns will be object instead of float type
+    check_dtype = isinstance(columns, list) and columns == [
+        "a",
+        "d",
+        "b",
+        "e",
+        "c",
+    ]
     if index is None and len(columns) == 0:
         # We make an empty range index, pandas makes an empty index
         expect = expect.reset_index(drop=True)
-    assert_eq(expect, actual)
+    assert_eq(expect, actual, check_dtype=not check_dtype)
 
 
 def test_dataframe_init_columns_named_multiindex():
