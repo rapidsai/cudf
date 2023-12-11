@@ -187,6 +187,20 @@ CUDF_TYPE_MAPPING(numeric::decimal128, type_id::DECIMAL128)
 CUDF_TYPE_MAPPING(cudf::struct_view, type_id::STRUCT)
 
 /**
+ * @brief Specialization to map 'char' type to type_id::INT8
+ *
+ * Required when passing device_uvector<char> to column constructor.
+ * Possibly can be removed when PR 14202 is merged.
+ *
+ * @return id for 'char' type
+ */
+template <>  // CUDF_TYPE_MAPPING(char,INT8) causes duplicate id_to_type_impl definition
+constexpr inline type_id type_to_id<char>()
+{
+  return type_id::INT8;
+}
+
+/**
  * @brief Use this specialization on `type_dispatcher` whenever you only need to operate on the
  * underlying stored type.
  *

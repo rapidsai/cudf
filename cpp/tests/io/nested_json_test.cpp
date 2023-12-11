@@ -646,10 +646,8 @@ TEST_P(JsonParserTest, ExtractColumn)
   auto const expected_col_count = 2;
   EXPECT_EQ(cudf_table.tbl->num_columns(), expected_col_count);
 
-  auto expected_col1 =
-    cudf::test::fixed_width_column_wrapper<double>({0.0, 0.1, 0.2}, {true, true, true});
-  auto expected_col2 =
-    cudf::test::fixed_width_column_wrapper<double>({1.0, 1.1, 1.2}, {true, true, true});
+  auto expected_col1            = cudf::test::fixed_width_column_wrapper<double>({0.0, 0.1, 0.2});
+  auto expected_col2            = cudf::test::fixed_width_column_wrapper<double>({1.0, 1.1, 1.2});
   cudf::column_view parsed_col1 = cudf_table.tbl->get_column(0);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col1, parsed_col1);
   cudf::column_view parsed_col2 = cudf_table.tbl->get_column(1);
@@ -952,8 +950,7 @@ TEST_P(JsonParserTest, ExtractColumnWithQuotes)
 
   auto expected_col1 =
     cudf::test::strings_column_wrapper({R"("0.0")", R"()", R"("2.0")"}, {true, false, true});
-  auto expected_col2 =
-    cudf::test::fixed_width_column_wrapper<double>({1.0, 1.1, 2.1}, {true, true, true});
+  auto expected_col2            = cudf::test::fixed_width_column_wrapper<double>({1.0, 1.1, 2.1});
   cudf::column_view parsed_col1 = cudf_table.tbl->get_column(0);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col1, parsed_col1);
   cudf::column_view parsed_col2 = cudf_table.tbl->get_column(1);

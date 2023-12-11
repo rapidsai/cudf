@@ -54,11 +54,12 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
+#include <cuda/functional>
+#include <cuda/std/atomic>
+
 #include <memory>
 #include <unordered_set>
 #include <utility>
-
-#include <cuda/std/atomic>
 
 namespace cudf {
 namespace groupby {
@@ -524,7 +525,8 @@ rmm::device_uvector<size_type> extract_populated_keys(map_type<ComparatorType> c
 {
   rmm::device_uvector<size_type> populated_keys(num_keys, stream);
 
-  auto const get_key = [] __device__(auto const& element) { return element.first; };  // first = key
+  auto const get_key = cuda::proclaim_return_type<typename map_type<ComparatorType>::key_type>(
+    [] __device__(auto const& element) { return element.first; });  // first = key
   auto const key_used = [unused = map.get_unused_key()] __device__(auto key) {
     return key != unused;
   };
