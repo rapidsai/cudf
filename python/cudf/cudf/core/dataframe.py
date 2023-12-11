@@ -756,6 +756,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         for k in columns
                     },
                     level_names=level_names,
+                    multiindex=col_is_multiindex,
+                    rangeindex=col_is_rangeindex,
+                    label_dtype=col_dtype,
                 )
             else:
                 col_dict = {}
@@ -853,18 +856,28 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise TypeError(
                 f"data must be list or dict-like, not {type(data).__name__}"
             )
-        super().__init__(col_dict, index=index)
+        col_accessor = ColumnAccessor(
+            col_dict,
+            multiindex=col_is_multiindex,
+            rangeindex=col_is_rangeindex,
+            label_dtype=col_dtype,
+        )
+        super().__init__(col_accessor, index=index)
         self._check_data_index_length_match()
         if columns_from_data is not None:
             # TODO: This there a better way to do this?
             columns_from_data = as_index(columns_from_data)
-            col_is_rangeindex = isinstance(columns, cudf.RangeIndex)
-            col_is_multiindex = isinstance(columns, cudf.MultiIndex)
-            col_dtype = columns_from_data.dtype
             reindexed = self.reindex(
                 columns=columns_from_data.to_pandas(), copy=False
             )
             self._data = reindexed._data
+            self._data.rangeindex = isinstance(
+                columns_from_data, cudf.RangeIndex
+            )
+            self._data.multiindex = isinstance(
+                columns_from_data, cudf.MultiIndex
+            )
+            self._data.label_dtype = columns_from_data.dtype
             self._index = index
         if index_from_data is not None:
             # TODO: This there a better way to do this?
@@ -877,12 +890,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if dtype:
             self._data = self.astype(dtype)._data
-
-        self._data.rangeindex = self._data.rangeindex or col_is_rangeindex
-        # TODO: multiindex assignment
-        # test_non_string_column_name_to_arrow to fail
-        self._data.multiindex = self._data.multiindex or col_is_multiindex
-        self._data.label_dtype = self._data.label_dtype or col_dtype
 
     @_cudf_nvtx_annotate
     def _init_from_series_list(self, data, columns, index):
