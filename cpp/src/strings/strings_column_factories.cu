@@ -139,6 +139,30 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
 }
 
 std::unique_ptr<column> make_strings_column(size_type num_strings,
+                                            std::unique_ptr<column> offsets_column,
+                                            rmm::device_buffer&& chars_buffer,
+                                            size_type null_count,
+                                            rmm::device_buffer&& null_mask)
+{
+  CUDF_FUNC_RANGE();
+
+  if (null_count > 0) CUDF_EXPECTS(null_mask.size() > 0, "Column with nulls must be nullable.");
+  CUDF_EXPECTS(num_strings == offsets_column->size() - 1,
+               "Invalid offsets column size for strings column.");
+  CUDF_EXPECTS(offsets_column->null_count() == 0, "Offsets column should not contain nulls");
+
+  std::vector<std::unique_ptr<column>> children;
+  children.emplace_back(std::move(offsets_column));
+
+  return std::make_unique<column>(data_type{type_id::STRING},
+                                  num_strings,
+                                  std::move(chars_buffer),
+                                  std::move(null_mask),
+                                  null_count,
+                                  std::move(children));
+}
+
+std::unique_ptr<column> make_strings_column(size_type num_strings,
                                             rmm::device_uvector<size_type>&& offsets,
                                             rmm::device_uvector<char>&& chars,
                                             rmm::device_buffer&& null_mask,
