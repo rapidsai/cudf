@@ -279,7 +279,7 @@ TEST_F(FstTest, GroundTruth_QuoteNormalization6)
 TEST_F(FstTest, GroundTruth_QuoteNormalization7)
 {
   std::string input  = R"(["\t","\\t","\\","\\\'\"\\\\","\n","\b"])";
-  std::string output = R"(["\t","\\t","\\","\\'\"\\\\","\n","\b"])";
+  std::string output = R"(["\t","\\t","\\","\\\'\"\\\\","\n","\b"])";
   run_test(input, output);
 }
 TEST_F(FstTest, GroundTruth_QuoteNormalization8)
@@ -309,7 +309,7 @@ TEST_F(FstTest, GroundTruth_QuoteNormalization_Invalid3)
 TEST_F(FstTest, GroundTruth_QuoteNormalization_Invalid4)
 {
   std::string input  = R"({"NUMBER":100'0,'STRING':'SOMETHING'})";
-  std::string output = R"({"NUMBER":100"0,"STRING":"SOMETHING'})";
+  std::string output = R"({"NUMBER":100"0,"STRING":"SOMETHING"})";
   run_test(input, output);
 }
 TEST_F(FstTest, GroundTruth_QuoteNormalization_Invalid5)
