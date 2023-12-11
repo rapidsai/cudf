@@ -146,8 +146,7 @@ def match_join_types(
         common_type := common_numeric_type(
             cast(np.dtype, ltype), cast(np.dtype, rtype)
         )
-        is not None
-    ):
+    ) is not None:
         # Numpy-supported dtype which we can safely promote
         return left.astype(common_type), right.astype(common_type)
     else:
