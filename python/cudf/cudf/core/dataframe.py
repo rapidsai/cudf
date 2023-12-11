@@ -2748,7 +2748,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             df = self
         else:
             columns = as_index(columns)
-            intersection = self.columns.intersection(columns.to_pandas())
+            intersection = self._data.to_pandas_index().intersection(
+                columns.to_pandas()
+            )
             df = self.loc[:, intersection]
 
         return df._reindex(

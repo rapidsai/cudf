@@ -2663,6 +2663,8 @@ class IndexedFrame(Frame):
             else:
                 multiindex = False
                 names = column_names
+                if isinstance(names, cudf.Index):
+                    names = names.to_pandas()
                 rangeindex = isinstance(
                     column_names, (pd.RangeIndex, cudf.RangeIndex)
                 )
