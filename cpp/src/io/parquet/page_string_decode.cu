@@ -137,6 +137,7 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
         pp->num_nulls  = 0;
         pp->num_valids = end_row - begin_row;
       }
+      __syncthreads();
       return {begin_row, end_row};
     }
 
