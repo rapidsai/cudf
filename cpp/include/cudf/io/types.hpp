@@ -45,6 +45,12 @@ namespace cudf {
 //! IO interfaces
 namespace io {
 /**
+ * @addtogroup io_types
+ * @{
+ * @file
+ */
+
+/**
  * @brief Compression algorithms
  */
 enum class compression_type {
@@ -943,5 +949,6 @@ class reader_column_schema {
   [[nodiscard]] size_t get_num_children() const { return children.size(); }
 };
 
+/** @} */  // end of group
 }  // namespace io
 }  // namespace cudf

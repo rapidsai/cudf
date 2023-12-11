@@ -104,7 +104,7 @@ class SingleSymbolSmemLUT {
     SymbolGroupIdT no_match_id = symbol_strings.size();
 
     // The symbol with the largest value that is mapped to a symbol group id
-    SymbolGroupIdT max_base_match_val = 0;
+    SymbolGroupIdT max_lookup_index = 0;
 
     // Initialize all entries: by default we return the no-match-id
     std::fill(&init_data.sym_to_sgid[0], &init_data.sym_to_sgid[NUM_ENTRIES_PER_LUT], no_match_id);
@@ -115,17 +115,19 @@ class SingleSymbolSmemLUT {
     for (auto const& sg_symbols : symbol_strings) {
       // Iterate over all symbols that belong to the current symbol group
       for (auto const& sg_symbol : sg_symbols) {
-        max_base_match_val = std::max(max_base_match_val, static_cast<SymbolGroupIdT>(sg_symbol));
+        max_lookup_index = std::max(max_lookup_index, static_cast<SymbolGroupIdT>(sg_symbol));
         init_data.sym_to_sgid[static_cast<int32_t>(sg_symbol)] = sg_id;
       }
       sg_id++;
     }
 
-    // Initialize the out-of-bounds lookup: sym_to_sgid[max_base_match_val+1] -> no_match_id
-    init_data.sym_to_sgid[max_base_match_val + 1] = no_match_id;
+    // Initialize the out-of-bounds lookup: sym_to_sgid[max_lookup_index+1] -> no_match_id
+    auto const oob_match_index             = max_lookup_index + 1;
+    init_data.sym_to_sgid[oob_match_index] = no_match_id;
 
-    // Alias memory / return memory requirements
-    init_data.num_valid_entries = max_base_match_val + 1;
+    // The number of valid entries in the table (including the entry for the out-of-bounds symbol
+    // group id)
+    init_data.num_valid_entries = oob_match_index + 1;
     init_data.pre_map_op        = pre_map_op;
 
     return init_data;
