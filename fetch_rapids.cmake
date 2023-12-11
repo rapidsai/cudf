@@ -11,6 +11,8 @@
 # or implied. See the License for the specific language governing permissions and limitations under
 # the License.
 # =============================================================================
+set(rapids-cmake-repo bdice/rapids-cmake)
+set(rapids-cmake-branch cuco-cccl-2.2.0)
 if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake)
   file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-24.02/RAPIDS.cmake
        ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake
