@@ -43,6 +43,7 @@
 
 #include <cuda/functional>
 
+#include <bitset>
 #include <numeric>
 
 namespace cudf::io::parquet::detail {
@@ -286,7 +287,7 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
  * @brief Returns a string representation of known encodings
  *
  * @param encoding Given encoding
- * @return STring representation of encoding
+ * @return String representation of encoding
  */
 std::string encoding_to_string(Encoding encoding)
 {
@@ -302,7 +303,7 @@ std::string encoding_to_string(Encoding encoding)
     case Encoding::RLE_DICTIONARY: return "RLE_DICTIONARY";
     case Encoding::BYTE_STREAM_SPLIT: return "BYTE_STREAM_SPLIT";
     case Encoding::NUM_ENCODINGS:
-    default: return "UNKNOWN";
+    default: return "UNKNOWN(" + std::to_string(static_cast<int>(encoding)) + ")";
   }
 }
 
@@ -314,16 +315,17 @@ std::string encoding_to_string(Encoding encoding)
  */
 std::string encoding_bitmask_to_str(int32_t encoding_bitmask)
 {
+  std::bitset<32> bits(encoding_bitmask);
   std::string result;
-  for (int32_t i = 0; i < 32; ++i) {
-    if (encoding_bitmask & (1 << i)) {
+
+  for (size_t i = 0; i < bits.size(); ++i) {
+    if (bits.test(i)) {
       Encoding current = static_cast<Encoding>(i);
       if (!is_supported_encoding(current)) { result.append(encoding_to_string(current) + " "); }
     }
   }
   return result;
 }
-
 /**
  * @brief Create a readable string for the user that will list out all unsupported encodings found.
  *
