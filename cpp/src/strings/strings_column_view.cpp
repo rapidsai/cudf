@@ -45,18 +45,9 @@ strings_column_view::offset_iterator strings_column_view::offsets_end() const
   return offsets_begin() + size() + 1;
 }
 
-column_view strings_column_view::chars(rmm::cuda_stream_view stream) const
-{
-  CUDF_EXPECTS(num_children() > 0, "strings column has no children");
-  // return child(chars_column_index);
-  return column_view(data_type{type_id::INT8}, chars_size(stream), chars_begin(), nullptr, 0, 0);
-}
-
 size_type strings_column_view::chars_size(rmm::cuda_stream_view stream) const noexcept
 {
   if (size() == 0) return 0;
-  // return chars().size();
-  // TODO
   return detail::get_value<size_type>(offsets(), offset() + size(), stream);
 }
 

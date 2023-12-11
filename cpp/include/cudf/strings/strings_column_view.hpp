@@ -103,15 +103,6 @@ class strings_column_view : private column_view {
   [[nodiscard]] offset_iterator offsets_end() const;
 
   /**
-   * @brief Returns the internal column of chars
-   *
-   * @throw cudf::logic error if this is an empty column
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @return The chars column
-   */
-  [[nodiscard]] column_view chars(rmm::cuda_stream_view stream) const;
-
-  /**
    * @brief Returns the number of bytes in the chars child column.
    *
    * This accounts for empty columns but does not reflect a sliced parent column
