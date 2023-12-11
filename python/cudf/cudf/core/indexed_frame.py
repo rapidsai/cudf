@@ -42,7 +42,6 @@ from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_bool_dtype,
-    is_categorical_dtype,
     is_decimal_dtype,
     is_dict_like,
     is_list_dtype,
@@ -171,7 +170,7 @@ def _indices_from_labels(obj, labels):
     if not isinstance(labels, cudf.MultiIndex):
         labels = cudf.core.column.as_column(labels)
 
-        if is_categorical_dtype(obj.index):
+        if isinstance(obj.index.dtype, cudf.CategoricalDtype):
             labels = labels.astype("category")
             codes = labels.codes.astype(obj.index._values.codes.dtype)
             labels = cudf.core.column.build_categorical_column(
@@ -2662,13 +2661,17 @@ class IndexedFrame(Frame):
             )
             for name in names
         }
+        if column_names is None:
+            level_names = self._data.level_names
+        elif isinstance(column_names, pd.Index):
+            level_names = tuple(column_names.names)
+        else:
+            level_names = None
         result = self.__class__._from_data(
             data=cudf.core.column_accessor.ColumnAccessor(
                 cols,
                 multiindex=self._data.multiindex,
-                level_names=tuple(column_names.names)
-                if isinstance(column_names, pd.Index)
-                else None,
+                level_names=level_names,
             ),
             index=index,
         )
@@ -3260,8 +3263,11 @@ class IndexedFrame(Frame):
             # is on the end of the offset. See pandas gh29623 for detail.
             to_search = to_search - pd_offset.base
             return self.loc[:to_search]
+        needle = as_column(to_search, dtype=self._index.dtype)
         end_point = int(
-            self._index._column.searchsorted(to_search, side=side)[0]
+            self._index._column.searchsorted(
+                needle, side=side
+            ).element_indexing(0)
         )
         return slice_func(end_point)
 
@@ -5455,21 +5461,21 @@ def _is_same_dtype(lhs_dtype, rhs_dtype):
     if lhs_dtype == rhs_dtype:
         return True
     elif (
-        is_categorical_dtype(lhs_dtype)
-        and is_categorical_dtype(rhs_dtype)
+        isinstance(lhs_dtype, cudf.CategoricalDtype)
+        and isinstance(rhs_dtype, cudf.CategoricalDtype)
         and lhs_dtype.categories.dtype == rhs_dtype.categories.dtype
     ):
         # OK if categories are not all the same
         return True
     elif (
-        is_categorical_dtype(lhs_dtype)
-        and not is_categorical_dtype(rhs_dtype)
+        isinstance(lhs_dtype, cudf.CategoricalDtype)
+        and not isinstance(rhs_dtype, cudf.CategoricalDtype)
         and lhs_dtype.categories.dtype == rhs_dtype
     ):
         return True
     elif (
-        is_categorical_dtype(rhs_dtype)
-        and not is_categorical_dtype(lhs_dtype)
+        isinstance(rhs_dtype, cudf.CategoricalDtype)
+        and not isinstance(lhs_dtype, cudf.CategoricalDtype)
         and rhs_dtype.categories.dtype == lhs_dtype
     ):
         return True

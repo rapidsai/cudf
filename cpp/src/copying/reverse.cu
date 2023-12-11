@@ -32,6 +32,8 @@
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/scan.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace detail {
 std::unique_ptr<table> reverse(table_view const& source_table,
@@ -39,8 +41,10 @@ std::unique_ptr<table> reverse(table_view const& source_table,
                                rmm::mr::device_memory_resource* mr)
 {
   size_type num_rows = source_table.num_rows();
-  auto elements =
-    make_counting_transform_iterator(0, [num_rows] __device__(auto i) { return num_rows - i - 1; });
+  auto elements      = make_counting_transform_iterator(
+    0, cuda::proclaim_return_type<size_type>([num_rows] __device__(auto i) {
+      return num_rows - i - 1;
+    }));
   auto elements_end = elements + source_table.num_rows();
 
   return gather(source_table, elements, elements_end, out_of_bounds_policy::DONT_CHECK, stream, mr);

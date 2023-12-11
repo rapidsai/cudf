@@ -32,7 +32,7 @@ dependencies:
 - dlpack>=0.5,<0.6.0a0
 - doxygen=1.9.1
 - fastavro>=0.22.9
-- fmt>=9.1.0,<10
+- fmt>=10.1.1,<11
 - fsspec>=0.6.0
 - gcc_linux-64=11.*
 - gmock>=1.13.0
@@ -40,10 +40,13 @@ dependencies:
 - hypothesis
 - identify>=2.5.20
 - ipython
-- libarrow-all==14.0.1.*
+- libarrow-acero==14.0.1.*
+- libarrow-dataset==14.0.1.*
+- libarrow==14.0.1.*
 - libcufile-dev
 - libcurand-dev
 - libkvikio==24.2.*
+- libparquet==14.0.1.*
 - librdkafka>=1.9.0,<1.10.0a0
 - librmm==24.2.*
 - make
@@ -57,7 +60,7 @@ dependencies:
 - numba>=0.57,<0.58
 - numpy>=1.21,<1.25
 - numpydoc
-- nvcomp==3.0.4
+- nvcomp==3.0.5
 - nvtx>=0.2.1
 - packaging
 - pandas>=1.3,<1.6.0dev0
@@ -82,7 +85,7 @@ dependencies:
 - s3fs>=2022.3.0
 - scikit-build>=0.13.1
 - scipy
-- spdlog>=1.11.0,<1.12
+- spdlog>=1.12.0,<1.13
 - sphinx
 - sphinx-autobuild
 - sphinx-copybutton

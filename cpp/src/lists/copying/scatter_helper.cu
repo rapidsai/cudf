@@ -30,6 +30,8 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace lists {
 namespace detail {
@@ -189,11 +191,11 @@ struct list_child_constructor {
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(child_column->size()),
       child_column->mutable_view().begin<T>(),
-      [offset_begin  = list_offsets.begin<size_type>(),
-       offset_size   = list_offsets.size(),
-       d_list_vector = list_vector.begin(),
-       source_lists,
-       target_lists] __device__(auto index) {
+      cuda::proclaim_return_type<T>([offset_begin  = list_offsets.begin<size_type>(),
+                                     offset_size   = list_offsets.size(),
+                                     d_list_vector = list_vector.begin(),
+                                     source_lists,
+                                     target_lists] __device__(auto index) {
         auto const list_index_iter =
           thrust::upper_bound(thrust::seq, offset_begin, offset_begin + offset_size, index);
         auto const list_index =
@@ -201,7 +203,7 @@ struct list_child_constructor {
         auto const intra_index = static_cast<size_type>(index - offset_begin[list_index]);
         auto actual_list_row = d_list_vector[list_index].bind_to_column(source_lists, target_lists);
         return actual_list_row.template element<T>(intra_index);
-      });
+      }));
 
     child_column->set_null_count(child_null_mask.second);
 
@@ -241,12 +243,12 @@ struct list_child_constructor {
       thrust::make_counting_iterator<size_type>(0),
       thrust::make_counting_iterator<size_type>(string_views.size()),
       string_views.begin(),
-      [offset_begin  = list_offsets.begin<size_type>(),
-       offset_size   = list_offsets.size(),
-       d_list_vector = list_vector.begin(),
-       source_lists,
-       target_lists,
-       null_string_view] __device__(auto index) {
+      cuda::proclaim_return_type<string_view>([offset_begin  = list_offsets.begin<size_type>(),
+                                               offset_size   = list_offsets.size(),
+                                               d_list_vector = list_vector.begin(),
+                                               source_lists,
+                                               target_lists,
+                                               null_string_view] __device__(auto index) {
         auto const list_index_iter =
           thrust::upper_bound(thrust::seq, offset_begin, offset_begin + offset_size, index);
         auto const list_index =
@@ -264,7 +266,7 @@ struct list_child_constructor {
         // ensure a string from an all-empty column is not mapped to the null placeholder
         auto const empty_string_view = string_view{};
         return d_str.empty() ? empty_string_view : d_str;
-      });
+      }));
 
     // string_views should now have been populated with source and target references.
     auto sv_span = cudf::device_span<string_view const>(string_views);
@@ -308,11 +310,11 @@ struct list_child_constructor {
       thrust::make_counting_iterator<size_type>(0),
       thrust::make_counting_iterator<size_type>(child_list_views.size()),
       child_list_views.begin(),
-      [offset_begin  = list_offsets.begin<size_type>(),
-       offset_size   = list_offsets.size(),
-       d_list_vector = list_vector.begin(),
-       source_lists,
-       target_lists] __device__(auto index) {
+      cuda::proclaim_return_type<unbound_list_view>([offset_begin = list_offsets.begin<size_type>(),
+                                                     offset_size  = list_offsets.size(),
+                                                     d_list_vector = list_vector.begin(),
+                                                     source_lists,
+                                                     target_lists] __device__(auto index) {
         auto const list_index_iter =
           thrust::upper_bound(thrust::seq, offset_begin, offset_begin + offset_size, index);
         auto const list_index =
@@ -331,12 +333,13 @@ struct list_child_constructor {
         auto size =
           child_lists_offsets_ptr[child_row_index + 1] - child_lists_offsets_ptr[child_row_index];
         return unbound_list_view{label, child_row_index, size};
-      });
+      }));
 
     // child_list_views should now have been populated, with source and target references.
 
     auto begin = thrust::make_transform_iterator(
-      child_list_views.begin(), [] __device__(auto const& row) { return row.size(); });
+      child_list_views.begin(),
+      cuda::proclaim_return_type<size_type>([] __device__(auto const& row) { return row.size(); }));
 
     auto child_offsets = std::get<0>(
       cudf::detail::make_offsets_child_column(begin, begin + child_list_views.size(), stream, mr));
