@@ -243,6 +243,9 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(page_state_s* s,
   int pos            = s->dict_pos;
   int str_len        = 0;
 
+  // ensure all threads read s->dict_pos before returning
+  __syncwarp();
+
   while (pos < target_pos) {
     int is_literal, batch_len;
     if (!t) {
@@ -337,8 +340,6 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(page_state_s* s,
 
     pos += batch_len;
   }
-  // racecheck wants a sync here
-  __syncwarp();
   return {pos, str_len};
 }
 
@@ -358,6 +359,9 @@ inline __device__ int gpuDecodeRleBooleans(page_state_s* s, state_buf* sb, int t
 {
   uint8_t const* end = s->data_end;
   int64_t pos        = s->dict_pos;
+
+  // ensure all threads read s->dict_pos before returning
+  __syncwarp();
 
   while (pos < target_pos) {
     int is_literal, batch_len;
@@ -427,6 +431,9 @@ gpuInitStringDescriptors(page_state_s* s, [[maybe_unused]] state_buf* sb, int ta
 {
   int pos       = s->dict_pos;
   int total_len = 0;
+
+  // ensure all threads read s->dict_pos before returning
+  __syncwarp();
 
   // This step is purely serial
   if (!t) {
