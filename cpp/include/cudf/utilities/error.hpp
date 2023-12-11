@@ -76,6 +76,12 @@ struct logic_error : public std::logic_error, public stacktrace_recorder {
 
   // TODO Add an error code member? This would be useful for translating an
   // exception to an error code in a pure-C API
+
+  ~logic_error()
+  {
+    // Needed so that the first instance of the implicit destructor for any TU isn't 'constructed'
+    // from a host+device function marking the implicit version also as host+device
+  }
 };
 /**
  * @brief Exception thrown when a CUDA error is encountered.

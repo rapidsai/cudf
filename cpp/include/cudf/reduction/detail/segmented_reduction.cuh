@@ -18,6 +18,8 @@
 
 #include "reduction_operators.cuh"
 
+#include <cudf/detail/utilities/cast_functor.cuh>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
@@ -45,7 +47,7 @@ namespace detail {
  * @param d_offset_begin Begin iterator to segment indices
  * @param d_offset_end   End iterator to segment indices
  * @param d_out          Output data iterator
- * @param binary_op      The reduction operator
+ * @param op             The reduction operator
  * @param initial_value  Initial value of the reduction
  * @param stream         CUDA stream used for device memory operations and kernel launches
  *
@@ -61,12 +63,12 @@ void segmented_reduce(InputIterator d_in,
                       OffsetIterator d_offset_begin,
                       OffsetIterator d_offset_end,
                       OutputIterator d_out,
-                      BinaryOp binary_op,
+                      BinaryOp op,
                       OutputType initial_value,
                       rmm::cuda_stream_view stream)
 {
   auto const num_segments = static_cast<size_type>(std::distance(d_offset_begin, d_offset_end)) - 1;
-
+  auto const binary_op    = cudf::detail::cast_functor<OutputType>(op);
   // Allocate temporary storage
   size_t temp_storage_bytes = 0;
   cub::DeviceSegmentedReduce::Reduce(nullptr,
@@ -148,8 +150,8 @@ void segmented_reduce(InputIterator d_in,
   using OutputType       = typename thrust::iterator_value<OutputIterator>::type;
   using IntermediateType = typename thrust::iterator_value<InputIterator>::type;
   auto num_segments      = static_cast<size_type>(std::distance(d_offset_begin, d_offset_end)) - 1;
-  auto const binary_op   = op.get_binary_op();
   auto const initial_value = op.template get_identity<IntermediateType>();
+  auto const binary_op     = cudf::detail::cast_functor<IntermediateType>(op.get_binary_op());
 
   rmm::device_uvector<IntermediateType> intermediate_result{static_cast<std::size_t>(num_segments),
                                                             stream};

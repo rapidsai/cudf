@@ -43,6 +43,8 @@
 #include <thrust/scan.h>
 #include <thrust/sort.h>
 
+#include <cuda/functional>
+
 #include <limits>
 #include <memory>
 
@@ -146,7 +148,8 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 
   auto output_size = input_table.num_rows() * count;
   auto map_begin   = cudf::detail::make_counting_transform_iterator(
-    0, [count] __device__(auto i) { return i / count; });
+    0,
+    cuda::proclaim_return_type<size_type>([count] __device__(size_type i) { return i / count; }));
   auto map_end = map_begin + output_size;
 
   return gather(input_table, map_begin, map_end, out_of_bounds_policy::DONT_CHECK, stream, mr);

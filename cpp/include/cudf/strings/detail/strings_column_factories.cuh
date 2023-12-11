@@ -37,6 +37,8 @@
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -79,9 +81,10 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
   if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   // build offsets column from the strings sizes
-  auto offsets_transformer = [] __device__(string_index_pair item) -> size_type {
-    return (item.first != nullptr ? static_cast<size_type>(item.second) : size_type{0});
-  };
+  auto offsets_transformer =
+    cuda::proclaim_return_type<size_type>([] __device__(string_index_pair item) -> size_type {
+      return (item.first != nullptr ? static_cast<size_type>(item.second) : size_type{0});
+    });
   auto offsets_transformer_itr = thrust::make_transform_iterator(begin, offsets_transformer);
   auto [offsets_column, bytes] = cudf::detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
@@ -103,9 +106,10 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
         auto const d_data = offsets_view.template data<size_type>();
         auto const d_offsets =
           device_span<size_type const>{d_data, static_cast<std::size_t>(offsets_view.size())};
-        auto const str_begin = thrust::make_transform_iterator(begin, [] __device__(auto ip) {
-          return string_view{ip.first, ip.second};
-        });
+        auto const str_begin = thrust::make_transform_iterator(
+          begin, cuda::proclaim_return_type<string_view>([] __device__(auto ip) {
+            return string_view{ip.first, ip.second};
+          }));
 
         return gather_chars(str_begin,
                             thrust::make_counting_iterator<size_type>(0),
@@ -180,7 +184,8 @@ std::unique_ptr<column> make_strings_column(CharIterator chars_begin,
                     offsets_begin,
                     offsets_end,
                     offsets_view.data<int32_t>(),
-                    [] __device__(auto offset) { return static_cast<int32_t>(offset); });
+                    cuda::proclaim_return_type<int32_t>(
+                      [] __device__(auto offset) { return static_cast<int32_t>(offset); }));
 
   // build chars column
   auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
