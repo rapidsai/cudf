@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ rmm::device_uvector<string_view> create_string_vector_from_column(
  *
  * A computed size above this threshold should using int64 offsets, otherwise
  * int32 offsets. By default this function will return std::numeric_limits<int32_t>::max().
- * This value can be overriden at runtime using the environment variable
+ * This value can be overridden at runtime using the environment variable
  * LIBCUDF_LARGE_STRINGS_THRESHOLD.
  *
  * @return size in bytes
