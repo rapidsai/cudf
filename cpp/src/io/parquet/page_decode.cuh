@@ -361,6 +361,8 @@ inline __device__ int gpuDecodeRleBooleans(page_state_s* s, state_buf* sb, int t
   int64_t pos        = s->dict_pos;
 
   // ensure all threads read s->dict_pos before returning
+  // NOTE: Removing this does not trigger any race warnings, but is similar to access pattern
+  // in gpuDecodeDictionaryIndices which does.
   __syncwarp();
 
   while (pos < target_pos) {
@@ -433,6 +435,8 @@ gpuInitStringDescriptors(page_state_s* s, [[maybe_unused]] state_buf* sb, int ta
   int total_len = 0;
 
   // ensure all threads read s->dict_pos before returning
+  // NOTE: Removing this does not trigger any race warnings, but is similar to access pattern
+  // in gpuDecodeDictionaryIndices which does.
   __syncwarp();
 
   // This step is purely serial
