@@ -119,8 +119,13 @@ def match_join_types(
     left_is_cat = is_categorical_dtype(left.dtype)
     right_is_cat = is_categorical_dtype(right.dtype)
 
+    # If categorical dtypes don't match exactly, decategorize and try
+    # matching those.
     if left_is_cat and right_is_cat:
-        raise ValueError("Cannot merge on non-matching categorical types")
+        return match_join_types(
+            cast(column.CategoricalColumn, left)._get_decategorized_column(),
+            cast(column.CategoricalColumn, right)._get_decategorized_column(),
+        )
     elif left_is_cat:
         return match_join_types(
             cast(column.CategoricalColumn, left)._get_decategorized_column(),
