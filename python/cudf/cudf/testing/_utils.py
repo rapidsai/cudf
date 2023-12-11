@@ -76,7 +76,7 @@ SERIES_OR_INDEX_NAMES = [
 ]
 
 
-def set_random_null_mask_inplace(series, null_probability=0.5, seed=None):
+def set_random_null_mask_inplace(series, null_probability=0.5, seed=1):
     """Randomly nullify elements in series with the provided probability."""
     probs = [null_probability, 1 - null_probability]
     rng = np.random.default_rng(seed=seed)

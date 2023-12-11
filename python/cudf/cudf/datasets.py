@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -18,7 +18,7 @@ def timeseries(
     freq="1s",
     dtypes=None,
     nulls_frequency=0,
-    seed=None,
+    seed=1,
 ):
     """Create timeseries dataframe with random data
 
@@ -80,7 +80,7 @@ def timeseries(
     return gdf
 
 
-def randomdata(nrows=10, dtypes=None, seed=None):
+def randomdata(nrows=10, dtypes=None, seed=1):
     """Create a dataframe with random data
 
     Parameters
