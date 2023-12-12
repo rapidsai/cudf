@@ -1439,7 +1439,9 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             and isinstance(self, DatetimeIndex)
             and self._freq is not None
         ):
-            keywords.append(f"freq={self._freq}")
+            keywords.append(
+                f"freq={self._freq._maybe_as_fast_pandas_offset().freqstr!r}"
+            )
         keywords = ", ".join(keywords)
         lines.append(f"{prior_to_dtype} {keywords})")
         return "\n".join(lines)
@@ -2705,10 +2707,9 @@ class DatetimeIndex(GenericIndex):
         >>> tz_naive = cudf.date_range('2018-03-01 09:00', periods=3, freq='D')
         >>> tz_aware = tz_naive.tz_localize("America/New_York")
         >>> tz_aware
-        DatetimeIndex(['2018-03-01 09:00:00-05:00',
-                       '2018-03-02 09:00:00-05:00',
+        DatetimeIndex(['2018-03-01 09:00:00-05:00', '2018-03-02 09:00:00-05:00',
                        '2018-03-03 09:00:00-05:00'],
-                      dtype='datetime64[ns, America/New_York]')
+                      dtype='datetime64[ns, America/New_York]', freq='D')
 
         Ambiguous or nonexistent datetimes are converted to NaT.
 
@@ -2727,14 +2728,16 @@ class DatetimeIndex(GenericIndex):
         ``ambiguous`` and ``nonexistent`` arguments. Any
         ambiguous or nonexistent timestamps are converted
         to 'NaT'.
-        """
+        """  # noqa: E501
         from cudf.core._internals.timezones import delocalize, localize
 
         if tz is None:
             result_col = delocalize(self._column)
         else:
             result_col = localize(self._column, tz, ambiguous, nonexistent)
-        return DatetimeIndex._from_data({self.name: result_col})
+        return DatetimeIndex._from_data(
+            {self.name: result_col}, freq=self._freq
+        )
 
     def tz_convert(self, tz):
         """
@@ -2759,16 +2762,15 @@ class DatetimeIndex(GenericIndex):
         >>> dti = cudf.date_range('2018-03-01 09:00', periods=3, freq='D')
         >>> dti = dti.tz_localize("America/New_York")
         >>> dti
-        DatetimeIndex(['2018-03-01 09:00:00-05:00',
-                       '2018-03-02 09:00:00-05:00',
+        DatetimeIndex(['2018-03-01 09:00:00-05:00', '2018-03-02 09:00:00-05:00',
                        '2018-03-03 09:00:00-05:00'],
-                      dtype='datetime64[ns, America/New_York]')
+                      dtype='datetime64[ns, America/New_York]', freq='D')
         >>> dti.tz_convert("Europe/London")
         DatetimeIndex(['2018-03-01 14:00:00+00:00',
                        '2018-03-02 14:00:00+00:00',
                        '2018-03-03 14:00:00+00:00'],
                       dtype='datetime64[ns, Europe/London]')
-        """
+        """  # noqa: E501
         from cudf.core._internals.timezones import convert
 
         if tz is None:
