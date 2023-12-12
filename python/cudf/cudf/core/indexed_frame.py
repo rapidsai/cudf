@@ -31,7 +31,6 @@ from typing_extensions import Self
 
 import cudf
 import cudf._lib as libcudf
-from cudf._lib.types import size_type_dtype
 from cudf._typing import (
     ColumnLike,
     DataFrameOrSeries,
@@ -2089,26 +2088,19 @@ class IndexedFrame(Frame):
         subset = self._preprocess_subset(subset)
 
         if isinstance(self, cudf.Series):
-            df = self.to_frame(name="None")
-            subset = ["None"]
+            columns = [self._column]
         else:
-            df = self.copy(deep=False)
-        df._data["index"] = cudf.core.column.arange(
-            0, len(self), dtype=size_type_dtype
+            columns = [self._data[n] for n in subset]
+        distinct = libcudf.stream_compaction.distinct_indices(
+            columns, keep=keep
         )
-
-        new_df = df.drop_duplicates(subset=subset, keep=keep)
-        idx = df.merge(new_df, how="inner")["index"]
-        s = cudf.Series._from_data(
-            {
-                None: cudf.core.column.full(
-                    size=len(self), fill_value=True, dtype="bool"
-                )
-            },
-            index=self.index,
+        (result,) = libcudf.copying.scatter(
+            [cudf.Scalar(False, dtype=bool)],
+            distinct,
+            [full(len(self), True, dtype=bool)],
+            bounds_check=False,
         )
-        s.iloc[idx] = False
-        return s
+        return cudf.Series(result, index=self.index)
 
     @_cudf_nvtx_annotate
     def _empty_like(self, keep_index=True) -> Self:
