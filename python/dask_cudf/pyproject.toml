@@ -38,7 +38,7 @@ classifiers = [
 [project.optional-dependencies]
 test = [
     "dask-cuda==24.2.*",
-    "numba",
+    "numba>=0.57",
     "pytest",
     "pytest-cov",
     "pytest-xdist",

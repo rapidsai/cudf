@@ -481,7 +481,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - numba
+          - &numba numba>=0.57
           - nvtx>=0.2.1
           - packaging
           - rich
@@ -638,7 +638,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - dask-cuda==24.2.*
-          - numba
+          - *numba
   depends_on_cudf:
     common:
       - output_types: conda
