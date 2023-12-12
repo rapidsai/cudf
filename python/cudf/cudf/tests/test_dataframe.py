@@ -10285,17 +10285,11 @@ def test_dataframe_assign_scalar_to_empty_series():
 )
 def test_non_string_column_name_to_arrow(data):
     df = cudf.DataFrame(data)
+
     expected = df.to_arrow()
     actual = pa.Table.from_pandas(df.to_pandas())
 
     assert expected.equals(actual)
-
-
-def test_dict_uneven_tuple_keys_fill_with_NA():
-    data = ({("a", "b"): [1, 2, 3], ("2",): [10, 11, 23]},)
-    result = cudf.DataFrame(data)
-    expected = pd.DataFrame(data)
-    assert_eq(result, expected)
 
 
 def test_complex_types_from_arrow():
@@ -10772,31 +10766,6 @@ def test_dataframe_from_ndarray_dup_columns():
         cudf.DataFrame(np.eye(2), columns=["A", "A"])
 
 
-def test_dataframe_from_dict_only_scalar_values_raises():
-    with pytest.raises(ValueError):
-        cudf.DataFrame({0: 3, 1: 2})
-
-
-@pytest.mark.parametrize("klass", [cudf.DataFrame, pd.DataFrame])
-@pytest.mark.parametrize(
-    "axis_kwargs, exp_data",
-    [
-        [
-            {"index": [1, 2], "columns": [1, 2]},
-            np.array([[1.0, np.nan], [np.nan, np.nan]]),
-        ],
-        [{"index": [1, 2]}, np.array([[0.0, 1.0], [np.nan, np.nan]])],
-        [{"columns": [1, 2]}, np.array([[0.0, np.nan], [1.0, np.nan]])],
-    ],
-)
-def test_dataframe_from_frame_with_index_or_columns_reindexes(
-    klass, axis_kwargs, exp_data
-):
-    result = cudf.DataFrame(klass(np.eye(2)), **axis_kwargs)
-    expected = cudf.DataFrame(exp_data, **axis_kwargs)
-    assert_eq(result, expected)
-
-
 @pytest.mark.parametrize("name", ["a", 0, None, np.nan, cudf.NA])
 @pytest.mark.parametrize("contains", ["a", 0, None, np.nan, cudf.NA])
 @pytest.mark.parametrize("other_names", [[], ["b", "c"], [1, 2]])
@@ -10880,11 +10849,6 @@ def test_dataframe_series_dot():
     assert_eq(expected, actual)
 
 
-def test_dict_tuple_keys_must_all_be_tuple_keys():
-    with pytest.raises(ValueError):
-        cudf.DataFrame({(1, 2): [1], 3: [2]})
-
-
 def test_dataframe_reindex_keep_colname():
     gdf = cudf.DataFrame([1], columns=cudf.Index([1], name="foo"))
     result = gdf.reindex(index=[0, 1])
@@ -10904,6 +10868,43 @@ def test_dataframe_duplicate_index_reindex():
         lfunc_args_and_kwargs=([10, 11, 12, 13], {}),
         rfunc_args_and_kwargs=([10, 11, 12, 13], {}),
     )
+
+
+def test_dict_uneven_tuple_keys_fill_with_NA():
+    data = ({("a", "b"): [1, 2, 3], ("2",): [10, 11, 23]},)
+    result = cudf.DataFrame(data)
+    expected = pd.DataFrame(data)
+    assert_eq(result, expected)
+
+
+def test_dataframe_from_dict_only_scalar_values_raises():
+    with pytest.raises(ValueError):
+        cudf.DataFrame({0: 3, 1: 2})
+
+
+@pytest.mark.parametrize("klass", [cudf.DataFrame, pd.DataFrame])
+@pytest.mark.parametrize(
+    "axis_kwargs, exp_data",
+    [
+        [
+            {"index": [1, 2], "columns": [1, 2]},
+            np.array([[1.0, np.nan], [np.nan, np.nan]]),
+        ],
+        [{"index": [1, 2]}, np.array([[0.0, 1.0], [np.nan, np.nan]])],
+        [{"columns": [1, 2]}, np.array([[0.0, np.nan], [1.0, np.nan]])],
+    ],
+)
+def test_dataframe_from_frame_with_index_or_columns_reindexes(
+    klass, axis_kwargs, exp_data
+):
+    result = cudf.DataFrame(klass(np.eye(2)), **axis_kwargs)
+    expected = cudf.DataFrame(exp_data, **axis_kwargs)
+    assert_eq(result, expected)
+
+
+def test_dict_tuple_keys_must_all_be_tuple_keys():
+    with pytest.raises(ValueError):
+        cudf.DataFrame({(1, 2): [1], 3: [2]})
 
 
 def test_dataframe_reindex_doesnt_remove_column_name():

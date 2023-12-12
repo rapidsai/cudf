@@ -2645,7 +2645,6 @@ class IndexedFrame(Frame):
             name: (
                 df._data[name].copy(deep=deep)
                 if name in df._data
-                # Why does this default to np.float64?
                 else cudf.core.column.column.column_empty(
                     dtype=dtypes.get(name, np.float64),
                     masked=True,
