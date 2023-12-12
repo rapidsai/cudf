@@ -386,22 +386,12 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ScalarListBothInvalid)
   using bools = cudf::test::fixed_width_column_wrapper<bool, int32_t>;
   using lcw   = cudf::test::lists_column_wrapper<T, int32_t>;
 
-  auto lhs_scalar = cudf::list_scalar{ints{33, 33, 33}, false};
-  auto rhs_scalar = cudf::list_scalar{ints{22, 22}, false};
+  auto lhs_scalar = cudf::list_scalar{ints{}, false};
+  auto rhs_scalar = cudf::list_scalar{ints{}, false};
 
   auto selector_column = bools{1, 1, 0, 1, 1, 0, 1}.release();
 
-  auto expected = lcw{{
-                        {-33, -33, -33},
-                        {-33, -33, -33},
-                        {-22, -22},
-                        {-33, -33, -33},
-                        {-33, -33, -33},
-                        {-22, -22},
-                        {-33, -33, -33},
-                      },
-                      all_nulls()}
-                    .release();
+  auto expected = lcw{{lcw{}, lcw{}, lcw{}, lcw{}, lcw{}, lcw{}, lcw{}}, all_nulls()}.release();
 
   auto result = cudf::copy_if_else(lhs_scalar, rhs_scalar, selector_column->view());
 
