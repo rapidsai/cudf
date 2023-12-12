@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,8 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <thrust/iterator/discard_iterator.h>
+
 #include <cstdlib>
 #include <string>
 #include <vector>
@@ -57,24 +59,11 @@ constexpr auto TT_DEC            = dfa_states::TT_DEC;
 constexpr auto TT_SEC            = dfa_states::TT_SEC;
 constexpr auto TT_NUM_STATES     = static_cast<char>(dfa_states::TT_NUM_STATES);
 constexpr auto NUM_SYMBOL_GROUPS = static_cast<uint32_t>(dfa_symbol_group_id::NUM_SYMBOL_GROUPS);
+
 // The i-th string representing all the characters of a symbol group
-// TODO: We should reinstantiate this lookup table approach once
-// https://github.com/rapidsai/cudf/pull/14561 is merged std::array<std::vector<SymbolT>,
-// NUM_SYMBOL_GROUPS - 1> const qna_sgs{
-//  {{'\"'}, {'\''}, {'\\'}, {'\n'}}};
-// Temporary workaround:
-struct SymbolToSymbolGroup {
-  CUDF_HOST_DEVICE uint32_t operator()(SymbolT symbol) const
-  {
-    switch (symbol) {
-      case '\"': return static_cast<uint32_t>(dfa_symbol_group_id::DOUBLE_QUOTE_CHAR);
-      case '\'': return static_cast<uint32_t>(dfa_symbol_group_id::SINGLE_QUOTE_CHAR);
-      case '\\': return static_cast<uint32_t>(dfa_symbol_group_id::ESCAPE_CHAR);
-      case '\n': return static_cast<uint32_t>(dfa_symbol_group_id::NEWLINE_CHAR);
-      default: return static_cast<uint32_t>(dfa_symbol_group_id::OTHER_SYMBOLS);
-    }
-  };
-};
+std::array<std::vector<SymbolT>, NUM_SYMBOL_GROUPS - 1> const qna_sgs{
+  {{'\"'}, {'\''}, {'\\'}, {'\n'}}};
+
 // Transition table
 std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const qna_state_tt{{
   /* IN_STATE      "       '       \       \n    OTHER  */
@@ -145,12 +134,6 @@ struct TransduceToNormalizedQuotes {
       return (relative_offset == 0) ? '\\' : read_symbol;
     }
     // In all other cases we simply output the input symbol
-    /*
-    else if (!((match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::ESCAPE_CHAR)) &&
-            ((state_id == static_cast<StateT>(dfa_states::TT_SQS))))) {
-      return read_symbol;
-    }
-    */
     else
       return read_symbol;
   }
@@ -199,7 +182,7 @@ void run_test(std::string& input, std::string& output)
   rmm::cuda_stream_view stream_view(stream);
 
   auto parser = cudf::io::fst::detail::make_fst(
-    cudf::io::fst::detail::make_symbol_group_lookup_op(SymbolToSymbolGroup{}),
+    cudf::io::fst::detail::make_symbol_group_lut(qna_sgs),
     cudf::io::fst::detail::make_transition_table(qna_state_tt),
     cudf::io::fst::detail::make_translation_functor(TransduceToNormalizedQuotes{}),
     stream);
@@ -211,20 +194,18 @@ void run_test(std::string& input, std::string& output)
   constexpr std::size_t single_item = 1;
   cudf::detail::hostdevice_vector<SymbolT> output_gpu(input.size() * 2, stream_view);
   cudf::detail::hostdevice_vector<SymbolOffsetT> output_gpu_size(single_item, stream_view);
-  cudf::detail::hostdevice_vector<SymbolOffsetT> out_indexes_gpu(input.size(), stream_view);
 
   // Allocate device-side temporary storage & run algorithm
   parser.Transduce(d_input.data(),
                    static_cast<SymbolOffsetT>(d_input.size()),
                    output_gpu.device_ptr(),
-                   out_indexes_gpu.device_ptr(),
+                   thrust::make_discard_iterator(),
                    output_gpu_size.device_ptr(),
                    start_state,
                    stream.value());
 
   // Async copy results from device to host
   output_gpu.device_to_host_async(stream.view());
-  out_indexes_gpu.device_to_host_async(stream.view());
   output_gpu_size.device_to_host_async(stream.view());
 
   // Make sure results have been copied back to host
@@ -322,6 +303,12 @@ TEST_F(FstTest, GroundTruth_QuoteNormalization_Invalid6)
 {
   std::string input  = R"({'a':'\\''})";
   std::string output = R"({"a":"\\""})";
+  run_test(input, output);
+}
+TEST_F(FstTest, GroundTruth_QuoteNormalization_Invalid7)
+{
+  std::string input  = R"(}'a': 'b'{)";
+  std::string output = R"(}"a": "b"{)";
   run_test(input, output);
 }
 
