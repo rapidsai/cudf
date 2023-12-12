@@ -1009,7 +1009,7 @@ void reader::impl::setup_next_pass(bool uses_custom_row_bounds)
 
     // load page information for the chunk. this retrieves the compressed bytes for all the
     // pages, and their headers (which we can access without decompressing)
-    load_compressed_data();
+    read_compressed_data();
 
     // detect malformed columns.
     // - we have seen some cases in the wild where we have a row group containing N

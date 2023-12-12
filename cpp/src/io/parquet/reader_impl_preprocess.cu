@@ -371,7 +371,7 @@ void decode_page_headers(pass_intermediate_data& pass,
   // We also need to preserve key-relative page ordering, so we need to use a stable sort.
   {
     rmm::device_uvector<int32_t> page_keys{unsorted_pages.size(), stream};
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       unsorted_pages.begin(),
                       unsorted_pages.end(),
                       page_keys.begin(),
@@ -382,15 +382,15 @@ void decode_page_headers(pass_intermediate_data& pass,
     // started generating kernels using too much shared memory when trying to sort the pages
     // directly.
     rmm::device_uvector<int32_t> sort_indices(unsorted_pages.size(), stream);
-    thrust::sequence(rmm::exec_policy(stream), sort_indices.begin(), sort_indices.end(), 0);
-    thrust::stable_sort_by_key(rmm::exec_policy(stream),
+    thrust::sequence(rmm::exec_policy_nosync(stream), sort_indices.begin(), sort_indices.end(), 0);
+    thrust::stable_sort_by_key(rmm::exec_policy_nosync(stream),
                                page_keys.begin(),
                                page_keys.end(),
                                sort_indices.begin(),
                                thrust::less<int>());
     pass.pages = cudf::detail::hostdevice_vector<PageInfo>(
       unsorted_pages.size(), unsorted_pages.size(), stream);
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       sort_indices.begin(),
                       sort_indices.end(),
                       pass.pages.d_begin(),
@@ -414,13 +414,13 @@ void decode_page_headers(pass_intermediate_data& pass,
                                  .second;
   auto const num_page_counts = page_counts_end - page_counts.begin();
   pass.page_offsets = cudf::detail::hostdevice_vector<size_type>(num_page_counts + 1, stream);
-  thrust::exclusive_scan(rmm::exec_policy(stream),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          page_counts.begin(),
                          page_counts.begin() + num_page_counts + 1,
                          pass.page_offsets.d_begin());
 
   // setup dict_page for each chunk if necessary
-  thrust::for_each(rmm::exec_policy(stream),
+  thrust::for_each(rmm::exec_policy_nosync(stream),
                    pass.pages.d_begin(),
                    pass.pages.d_end(),
                    [chunks = pass.chunks.d_begin()] __device__(PageInfo const& p) {
@@ -560,23 +560,26 @@ void reader::impl::allocate_nesting_info()
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
-  // auto const& chunks             = pass.chunks;
   auto const num_columns         = _input_columns.size();
   auto& pages                    = subpass.pages;
   auto& page_nesting_info        = subpass.page_nesting_info;
   auto& page_nesting_decode_info = subpass.page_nesting_decode_info;
+
+  // generate the number of nesting info structs needed per-page, by column
+  std::vector<int> per_page_nesting_info_size(num_columns);
+  auto iter = thrust::make_counting_iterator(size_type{0});
+  std::transform(iter, iter + num_columns, per_page_nesting_info_size.begin(), [&](size_type i) {
+    auto const schema_idx = _input_columns[i].schema_idx;
+    auto const& schema    = _metadata->get_schema(schema_idx);
+    return max(schema.max_definition_level + 1, _metadata->get_output_nesting_depth(schema_idx));
+  });
 
   // compute total # of page_nesting infos needed and allocate space. doing this in one
   // buffer to keep it to a single gpu allocation
   auto counting_iter = thrust::make_counting_iterator(size_t{0});
   size_t const total_page_nesting_infos =
     std::accumulate(counting_iter, counting_iter + num_columns, 0, [&](int total, size_t index) {
-      // the schema of the input column
-      auto const schema_idx = _input_columns[index].schema_idx;
-      auto const& schema    = _metadata->get_schema(schema_idx);
-      auto const per_page_nesting_info_size =
-        max(schema.max_definition_level + 1, _metadata->get_output_nesting_depth(schema_idx));
-      return total + (per_page_nesting_info_size * subpass.column_page_count[index]);
+      return total + (per_page_nesting_info_size[index] * subpass.column_page_count[index]);
     });
 
   page_nesting_info =
@@ -588,24 +591,26 @@ void reader::impl::allocate_nesting_info()
   int target_page_index = 0;
   int src_info_index    = 0;
   for (size_t idx = 0; idx < _input_columns.size(); idx++) {
-    auto const src_col_schema             = _input_columns[idx].schema_idx;
-    auto& schema                          = _metadata->get_schema(src_col_schema);
-    auto const per_page_nesting_info_size = std::max(
-      schema.max_definition_level + 1, _metadata->get_output_nesting_depth(src_col_schema));
+    auto const src_col_schema = _input_columns[idx].schema_idx;
 
     for (size_t p_idx = 0; p_idx < subpass.column_page_count[idx]; p_idx++) {
       pages[target_page_index + p_idx].nesting = page_nesting_info.device_ptr() + src_info_index;
       pages[target_page_index + p_idx].nesting_decode =
         page_nesting_decode_info.device_ptr() + src_info_index;
 
-      pages[target_page_index + p_idx].nesting_info_size = per_page_nesting_info_size;
+      pages[target_page_index + p_idx].nesting_info_size = per_page_nesting_info_size[idx];
       pages[target_page_index + p_idx].num_output_nesting_levels =
         _metadata->get_output_nesting_depth(src_col_schema);
 
-      src_info_index += per_page_nesting_info_size;
+      src_info_index += per_page_nesting_info_size[idx];
     }
     target_page_index += subpass.column_page_count[idx];
   }
+
+  // set type to invalid for all page_nesting_infos so we can verify we've initialized everything.
+  std::for_each(page_nesting_info.begin(), page_nesting_info.end(), [](PageNestingInfo& pni) {
+    pni.type = cudf::type_id::NUM_TYPE_IDS;
+  });
 
   // fill in
   int nesting_info_index = 0;
@@ -616,10 +621,7 @@ void reader::impl::allocate_nesting_info()
     // schema of the input column
     auto& schema = _metadata->get_schema(src_col_schema);
     // real depth of the output cudf column hierarchy (1 == no nesting, 2 == 1 level, etc)
-    int max_depth = _metadata->get_output_nesting_depth(src_col_schema);
-
-    // # of nesting infos stored per page for this column
-    auto const per_page_nesting_info_size = std::max(schema.max_definition_level + 1, max_depth);
+    int const max_output_depth = _metadata->get_output_nesting_depth(src_col_schema);
 
     // if this column has lists, generate depth remapping
     std::map<int, std::pair<std::vector<int>, std::vector<int>>> depth_remapping;
@@ -627,10 +629,19 @@ void reader::impl::allocate_nesting_info()
       generate_depth_remappings(depth_remapping, src_col_schema, *_metadata);
     }
 
+    // PageNestingInfo structs above max_output_depth are unused. set them to empty.
+    for (size_t p_idx = 0; p_idx < subpass.column_page_count[idx]; p_idx++) {
+      auto const nesting_size = per_page_nesting_info_size[idx];
+      for (int e_idx = max_output_depth - 1; e_idx < nesting_size; e_idx++) {
+        page_nesting_info[nesting_info_index + (p_idx * nesting_size) + e_idx].type =
+          cudf::type_id::EMPTY;
+      }
+    }
+
     // fill in host-side nesting info
     int schema_idx  = src_col_schema;
     auto cur_schema = _metadata->get_schema(schema_idx);
-    int cur_depth   = max_depth - 1;
+    int cur_depth   = max_output_depth - 1;
     while (schema_idx > 0) {
       // stub columns (basically the inner field of a list schema element) are not real columns.
       // we can ignore them for the purposes of output nesting info
@@ -638,10 +649,11 @@ void reader::impl::allocate_nesting_info()
         // initialize each page within the chunk
         for (size_t p_idx = 0; p_idx < subpass.column_page_count[idx]; p_idx++) {
           PageNestingInfo* pni =
-            &page_nesting_info[nesting_info_index + (p_idx * per_page_nesting_info_size)];
+            &page_nesting_info[nesting_info_index + (p_idx * per_page_nesting_info_size[idx])];
 
           PageNestingDecodeInfo* nesting_info =
-            &page_nesting_decode_info[nesting_info_index + (p_idx * per_page_nesting_info_size)];
+            &page_nesting_decode_info[nesting_info_index +
+                                      (p_idx * per_page_nesting_info_size[idx])];
 
           // if we have lists, set our start and end depth remappings
           if (schema.max_repetition_level > 0) {
@@ -676,8 +688,15 @@ void reader::impl::allocate_nesting_info()
       cur_schema = _metadata->get_schema(schema_idx);
     }
 
-    nesting_info_index += (per_page_nesting_info_size * subpass.column_page_count[idx]);
+    nesting_info_index += (per_page_nesting_info_size[idx] * subpass.column_page_count[idx]);
   }
+
+  // verify all of the page_nesting_info structs have been initialized
+  CUDF_EXPECTS(
+    std::all_of(page_nesting_info.begin(),
+                page_nesting_info.end(),
+                [](PageNestingInfo const& pni) { return pni.type != cudf::type_id::NUM_TYPE_IDS; }),
+    "Encountered uninitialized PageNestingInfo structs");
 
   // copy nesting info to the device
   page_nesting_info.host_to_device_async(_stream);
@@ -780,7 +799,7 @@ std::pair<bool, std::vector<std::future<void>>> reader::impl::read_column_chunks
   return {total_decompressed_size > 0, std::move(read_chunk_tasks)};
 }
 
-void reader::impl::load_compressed_data()
+void reader::impl::read_compressed_data()
 {
   auto& pass = *_pass_itm_data;
 
@@ -800,7 +819,6 @@ void reader::impl::load_compressed_data()
   auto const total_pages = count_page_headers(chunks, _stream);
   if (total_pages <= 0) { return; }
   rmm::device_uvector<PageInfo> unsorted_pages(total_pages, _stream);
-  // pages = cudf::detail::hostdevice_vector<PageInfo>(total_pages, total_pages, _stream);
 
   // decoding of column/page information
   decode_page_headers(pass, unsorted_pages, _stream);

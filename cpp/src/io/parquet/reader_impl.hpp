@@ -213,9 +213,9 @@ class reader::impl {
   std::pair<bool, std::vector<std::future<void>>> read_column_chunks();
 
   /**
-   * @brief Load compressed data and page information for the current pass.
+   * @brief Read compressed data and page information for the current pass.
    */
-  void load_compressed_data();
+  void read_compressed_data();
 
   /**
    * @brief Build string dictionary indices for a pass.
