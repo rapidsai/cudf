@@ -131,9 +131,6 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
  * The return also includes the total number of elements -- the last element value from the
  * scan.
  *
- * @throw std::overflow_error if the total size of the scan (last element) greater than maximum
- * value of `size_type`
- *
  * @tparam InputIterator Used as input to scan to set the offset values
  * @param begin The beginning of the input sequence
  * @param end The end of the input sequence
