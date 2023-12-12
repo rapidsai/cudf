@@ -375,7 +375,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get the code point values (integers) for each character of each string.
-   * 
+   *
    * @return ColumnVector, with code point integer values for each character as INT32
    */
   public final ColumnVector codePoints() {
