@@ -340,7 +340,7 @@ std::string list_unsupported_encodings(const cudf::detail::hostdevice_vector<Pag
     return is_supported_encoding(page.encoding) ? 0U : encoding_to_mask(page.encoding);
   };
   uint32_t const unsupported = thrust::transform_reduce(
-    rmm::exec_policy(stream), pages.begin(), pages.end(), to_mask, 0U, thrust::bit_or<uint32_t>());
+    rmm::exec_policy(stream), pages.d_begin(), pages.d_end(), to_mask, 0U, thrust::bit_or<uint32_t>());
   return encoding_bitmask_to_str(unsupported);
 }
 
