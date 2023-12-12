@@ -40,6 +40,8 @@
 #include <thrust/reduce.h>
 #include <thrust/transform.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -129,18 +131,22 @@ std::unique_ptr<table> split_fn(strings_column_view const& input,
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(input.size()),
-    [d_offsets] __device__(auto idx) -> size_type { return d_offsets[idx + 1] - d_offsets[idx]; },
+    cuda::proclaim_return_type<size_type>([d_offsets] __device__(auto idx) -> size_type {
+      return d_offsets[idx + 1] - d_offsets[idx];
+    }),
     0,
     thrust::maximum{});
 
   // build strings columns for each token position
   for (size_type col = 0; col < columns_count; ++col) {
     auto itr = cudf::detail::make_counting_transform_iterator(
-      0, [d_tokens, d_offsets, col] __device__(size_type idx) {
-        auto const offset      = d_offsets[idx];
-        auto const token_count = d_offsets[idx + 1] - offset;
-        return (col < token_count) ? d_tokens[offset + col] : string_index_pair{nullptr, 0};
-      });
+      0,
+      cuda::proclaim_return_type<string_index_pair>(
+        [d_tokens, d_offsets, col] __device__(size_type idx) {
+          auto const offset      = d_offsets[idx];
+          auto const token_count = d_offsets[idx + 1] - offset;
+          return (col < token_count) ? d_tokens[offset + col] : string_index_pair{nullptr, 0};
+        }));
     results.emplace_back(make_strings_column(itr, itr + input.size(), stream, mr));
   }
 
@@ -334,7 +340,9 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_token_counts,
-                    [tokenizer] __device__(size_type idx) { return tokenizer.count_tokens(idx); });
+                    cuda::proclaim_return_type<size_type>([tokenizer] __device__(size_type idx) {
+                      return tokenizer.count_tokens(idx);
+                    }));
 
   // column count is the maximum number of tokens for any string
   size_type const columns_count = thrust::reduce(

@@ -2137,7 +2137,8 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
       }
     }
   }
-  stripe_dicts.host_to_device_async(stream);
+  // Synchronize to ensure the copy is complete before we clear `map_slots`
+  stripe_dicts.host_to_device_sync(stream);
 
   gpu::collect_map_entries(stripe_dicts, stream);
   gpu::get_dictionary_indices(stripe_dicts, orc_table.d_columns, stream);
@@ -2589,6 +2590,7 @@ void writer::impl::add_table_to_footer_data(orc_table_view const& orc_table,
   if (_ffooter.headerLength == 0) {
     // First call
     _ffooter.headerLength   = std::strlen(MAGIC);
+    _ffooter.writer         = cudf_writer_code;
     _ffooter.rowIndexStride = _row_index_stride;
     _ffooter.types.resize(1 + orc_table.num_columns());
     _ffooter.types[0].kind = STRUCT;
@@ -2702,7 +2704,8 @@ void writer::impl::close()
   ps.footerLength         = pbw.size();
   ps.compression          = _compression_kind;
   ps.compressionBlockSize = _compression_blocksize;
-  ps.version              = {0, 12};
+  ps.version              = {0, 12};  // Hive 0.12
+  ps.writerVersion        = cudf_writer_version;
   ps.magic                = MAGIC;
 
   auto const ps_length = static_cast<uint8_t>(pbw.write(ps));
