@@ -217,8 +217,6 @@ struct get_page_output_size {
  * @brief Functor which sets the (uncompressed) size of a page.
  */
 struct get_page_input_size {
-  device_span<const ColumnChunkDesc> chunks;
-
   __device__ cumulative_page_info operator()(PageInfo const& page)
   {
     // we treat dictionary page sizes as 0 for subpasses because we have already paid the price for
@@ -315,6 +313,8 @@ size_t find_start_index(std::vector<cumulative_page_info> const& aggregated_info
 /**
  * @brief Given a current position and row index, find the next split based on the
  * specified size limit
+ *
+ * @returns The inclusive index within `sizes` where the next split should happen
  *
  */
 int64_t find_next_split(int64_t cur_pos,
@@ -418,6 +418,9 @@ std::pair<size_t, size_t> get_row_group_size(RowGroup const& rg)
  * By doing this, we can now look at row X and know the total
  * byte cost for all pages that span row X, not just the cost up to row X itself.
  *
+ * This function is asynchronous. Call stream.synchronize() before using the
+ * results.
+ *
  */
 std::pair<rmm::device_uvector<cumulative_page_info>, rmm::device_uvector<int32_t>>
 adjust_cumulative_sizes(rmm::device_uvector<cumulative_page_info> const& c_info,
@@ -426,12 +429,14 @@ adjust_cumulative_sizes(rmm::device_uvector<cumulative_page_info> const& c_info,
 {
   // sort by row count
   rmm::device_uvector<cumulative_page_info> c_info_sorted{c_info, stream};
-  thrust::sort(
-    rmm::exec_policy(stream), c_info_sorted.begin(), c_info_sorted.end(), row_count_compare{});
+  thrust::sort(rmm::exec_policy_nosync(stream),
+               c_info_sorted.begin(),
+               c_info_sorted.end(),
+               row_count_compare{});
 
   // page keys grouped by split.
   rmm::device_uvector<int32_t> page_keys_by_split{c_info.size(), stream};
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     c_info_sorted.begin(),
                     c_info_sorted.end(),
                     page_keys_by_split.begin(),
@@ -450,7 +455,7 @@ adjust_cumulative_sizes(rmm::device_uvector<cumulative_page_info> const& c_info,
                                  .second;
   size_t const num_unique_keys = key_offsets_end - key_offsets.begin();
   thrust::exclusive_scan(
-    rmm::exec_policy(stream), key_offsets.begin(), key_offsets.end(), key_offsets.begin());
+    rmm::exec_policy_nosync(stream), key_offsets.begin(), key_offsets.end(), key_offsets.begin());
 
   // adjust the cumulative info such that for each row count, the size includes any pages that span
   // that row count. this is so that if we have this case:
@@ -463,7 +468,7 @@ adjust_cumulative_sizes(rmm::device_uvector<cumulative_page_info> const& c_info,
   // page.
   //
   rmm::device_uvector<cumulative_page_info> aggregated_info(c_info.size(), stream);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     c_info_sorted.begin(),
                     c_info_sorted.end(),
                     aggregated_info.begin(),
@@ -525,6 +530,27 @@ struct get_page_span {
   }
 };
 
+/**
+ * @brief Computes the next subpass within the current pass.
+ *
+ * A subpass is a subset of the pages within the parent pass that is decompressed
+ * as a batch and decoded.  Subpasses are the level at which we control memory intermediate
+ * memory usage. A pass consists of >= 1 subpass.  We cannot compute all subpasses in one
+ * shot because we do not know how many rows we actually have in the pages of list columns.
+ * So we have to make an educated guess that fits within the memory limits, and then adjust
+ * for subsequent subpasses when we see how many rows we actually receive.
+ *
+ * @param c_info The cumulative page size information (row count and byte size) per column
+ * @param pages All of the pages in the pass
+ * @param page_offsets Offsets into the pages array representing the first page for each column
+ * @param start_row The row to start the subpass at
+ * @param size_limit The size limit in bytes of the subpass
+ * @param num_columns The number of columns
+ * @param stream The stream to execute cuda operations on
+ * @returns A vector of page_span structs indicating the page indices to include for each column
+ * to be processed, and the total number of pages over all columns
+ *
+ */
 std::tuple<std::vector<page_span>, size_t> compute_next_subpass(
   rmm::device_uvector<cumulative_page_info> const& c_info,
   cudf::detail::hostdevice_vector<PageInfo> const& pages,
@@ -537,13 +563,7 @@ std::tuple<std::vector<page_span>, size_t> compute_next_subpass(
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  std::vector<cumulative_page_info> h_aggregated_info(aggregated_info.size());
-  CUDF_CUDA_TRY(cudaMemcpyAsync(h_aggregated_info.data(),
-                                aggregated_info.data(),
-                                sizeof(cumulative_page_info) * c_info.size(),
-                                cudaMemcpyDeviceToHost,
-                                stream));
-  stream.synchronize();
+  auto const h_aggregated_info = cudf::detail::make_std_vector_sync(aggregated_info, stream);
   // print_cumulative_row_info(h_aggregated_info, "adjusted");
 
   // TODO: if the user has explicitly specified skip_rows/num_rows we could be more intelligent
@@ -562,18 +582,12 @@ std::tuple<std::vector<page_span>, size_t> compute_next_subpass(
   auto iter = thrust::make_counting_iterator(size_t{0});
   auto page_row_index =
     cudf::detail::make_counting_transform_iterator(0, get_page_row_index{c_info});
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_columns,
                     page_bounds.begin(),
                     get_page_span{page_offsets, page_row_index, start_row, end_row});
-  std::vector<page_span> h_page_bounds(num_columns);
-  cudaMemcpyAsync(h_page_bounds.data(),
-                  page_bounds.data(),
-                  sizeof(page_span) * num_columns,
-                  cudaMemcpyDeviceToHost,
-                  stream);
-  stream.synchronize();
+  auto h_page_bounds = cudf::detail::make_std_vector_sync(page_bounds, stream);
 
   // total page count over all columns
   auto page_count_iter = thrust::make_transform_iterator(
@@ -594,13 +608,8 @@ std::vector<row_range> compute_page_splits_by_row(
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  std::vector<cumulative_page_info> h_aggregated_info(aggregated_info.size());
-  CUDF_CUDA_TRY(cudaMemcpyAsync(h_aggregated_info.data(),
-                                aggregated_info.data(),
-                                sizeof(cumulative_page_info) * c_info.size(),
-                                cudaMemcpyDefault,
-                                stream.value()));
-  stream.synchronize();
+  std::vector<cumulative_page_info> h_aggregated_info =
+    cudf::detail::make_std_vector_sync(aggregated_info, stream);
   // print_cumulative_row_info(h_aggregated_info, "adjusted");
 
   std::vector<row_range> splits;
@@ -1105,8 +1114,7 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
     // indices
     rmm::device_uvector<cumulative_page_info> c_info(pass.pages.size(), _stream);
     auto page_keys = make_page_key_iterator(pass.pages);
-    auto page_size =
-      thrust::make_transform_iterator(pass.pages.d_begin(), get_page_input_size{pass.chunks});
+    auto page_size = thrust::make_transform_iterator(pass.pages.d_begin(), get_page_input_size{});
     thrust::inclusive_scan_by_key(rmm::exec_policy(_stream),
                                   page_keys,
                                   page_keys + pass.pages.size(),

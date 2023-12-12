@@ -1109,7 +1109,7 @@ void reader::impl::generate_list_column_row_count_estimates()
   // gives us the absolute row index
   auto key_input  = thrust::make_transform_iterator(pass.pages.d_begin(), get_page_chunk_idx{});
   auto page_input = thrust::make_transform_iterator(pass.pages.d_begin(), get_page_num_rows{});
-  thrust::exclusive_scan_by_key(rmm::exec_policy(_stream),
+  thrust::exclusive_scan_by_key(rmm::exec_policy_nosync(_stream),
                                 key_input,
                                 key_input + pass.pages.size(),
                                 page_input,
@@ -1122,7 +1122,7 @@ void reader::impl::generate_list_column_row_count_estimates()
   auto const num_columns = _input_columns.size();
   size_t const max_row   = last_chunk.start_row + last_chunk.num_rows;
   auto iter              = thrust::make_counting_iterator(0);
-  thrust::for_each(rmm::exec_policy(_stream),
+  thrust::for_each(rmm::exec_policy_nosync(_stream),
                    iter,
                    iter + num_columns,
                    set_final_row_count{pass.pages, pass.chunks, pass.page_offsets, max_row});
