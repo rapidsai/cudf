@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,8 @@
 #include <thrust/optional.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
+
+#include <cuda/functional>
 
 #include <memory>
 #include <type_traits>
@@ -122,7 +124,9 @@ std::unique_ptr<table> explode(table_view const& input_table,
   auto offsets = explode_col.offsets_begin();
   // offsets + 1 here to skip the 0th offset, which removes a - 1 operation later.
   auto offsets_minus_one = thrust::make_transform_iterator(
-    thrust::next(offsets), [offsets] __device__(auto i) { return (i - offsets[0]) - 1; });
+    thrust::next(offsets), cuda::proclaim_return_type<size_type>([offsets] __device__(auto i) {
+      return (i - offsets[0]) - 1;
+    }));
   auto counting_iter = thrust::make_counting_iterator(0);
 
   // This looks like an off-by-one bug, but what is going on here is that we need to reduce each
@@ -158,7 +162,9 @@ std::unique_ptr<table> explode_position(table_view const& input_table,
   auto offsets = explode_col.offsets_begin();
   // offsets + 1 here to skip the 0th offset, which removes a - 1 operation later.
   auto offsets_minus_one = thrust::make_transform_iterator(
-    offsets + 1, [offsets] __device__(auto i) { return (i - offsets[0]) - 1; });
+    offsets + 1, cuda::proclaim_return_type<size_type>([offsets] __device__(auto i) {
+      return (i - offsets[0]) - 1;
+    }));
   auto counting_iter = thrust::make_counting_iterator(0);
 
   rmm::device_uvector<size_type> pos(sliced_child.size(), stream, mr);
@@ -171,16 +177,17 @@ std::unique_ptr<table> explode_position(table_view const& input_table,
     counting_iter,
     counting_iter + gather_map.size(),
     gather_map.begin(),
-    [position_array = pos.data(),
-     offsets_minus_one,
-     offsets,
-     offset_size = explode_col.size()] __device__(auto idx) -> size_type {
+    cuda::proclaim_return_type<size_type>([position_array = pos.data(),
+                                           offsets_minus_one,
+                                           offsets,
+                                           offset_size =
+                                             explode_col.size()] __device__(auto idx) -> size_type {
       auto lb_idx = thrust::distance(
         offsets_minus_one,
         thrust::lower_bound(thrust::seq, offsets_minus_one, offsets_minus_one + offset_size, idx));
       position_array[idx] = idx - (offsets[lb_idx] - offsets[0]);
       return lb_idx;
-    });
+    }));
 
   return build_table(input_table,
                      explode_column_idx,
@@ -208,9 +215,10 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
 
   auto null_or_empty = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0),
-    [offsets, offsets_size = explode_col.size() - 1] __device__(int idx) {
-      return (idx > offsets_size || (offsets[idx + 1] != offsets[idx])) ? 0 : 1;
-    });
+    cuda::proclaim_return_type<size_type>(
+      [offsets, offsets_size = explode_col.size() - 1] __device__(int idx) {
+        return (idx > offsets_size || (offsets[idx + 1] != offsets[idx])) ? 0 : 1;
+      }));
   thrust::inclusive_scan(rmm::exec_policy(stream),
                          null_or_empty,
                          null_or_empty + explode_col.size(),
@@ -233,7 +241,9 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
 
   // offsets + 1 here to skip the 0th offset, which removes a - 1 operation later.
   auto offsets_minus_one = thrust::make_transform_iterator(
-    thrust::next(offsets), [offsets] __device__(auto i) { return (i - offsets[0]) - 1; });
+    thrust::next(offsets), cuda::proclaim_return_type<size_type>([offsets] __device__(auto i) {
+      return (i - offsets[0]) - 1;
+    }));
 
   auto fill_gather_maps = [offsets_minus_one,
                            gather_map_p             = gather_map.begin(),

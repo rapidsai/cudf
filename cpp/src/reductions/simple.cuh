@@ -19,6 +19,7 @@
 #include "nested_type_minmax_util.cuh"
 
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/utilities/cast_functor.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -314,11 +315,12 @@ struct same_element_type_dispatcher {
     // We will do reduction to find the ARGMIN/ARGMAX index, then return the element at that index.
     auto const binop_generator =
       cudf::reduction::detail::comparison_binop_generator::create<Op>(input, stream);
+    auto const binary_op  = cudf::detail::cast_functor<size_type>(binop_generator.binop());
     auto const minmax_idx = thrust::reduce(rmm::exec_policy(stream),
                                            thrust::make_counting_iterator(0),
                                            thrust::make_counting_iterator(input.size()),
                                            size_type{0},
-                                           binop_generator.binop());
+                                           binary_op);
 
     return cudf::detail::get_element(input, minmax_idx, stream, mr);
   }
