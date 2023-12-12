@@ -1080,15 +1080,25 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             result_index = index
 
         scalar_keys = []
+        tuple_key_count = 0
+        tuple_key_lengths = set()
         col_data = {}
         for key, value in data.items():
             if is_scalar(value):
                 scalar_keys.append(key)
                 col_data[key] = value
             else:
+                if isinstance(key, tuple):
+                    tuple_key_count += 1
+                    tuple_key_lengths.add(len(key))
                 column = as_column(value, nan_as_null=nan_as_null)
                 value_lengths.add(len(column))
                 col_data[key] = column
+
+        if tuple_key_count not in (0, len(data)):
+            raise ValueError(
+                "All dict keys must be tuples if a tuple key exists."
+            )
 
         if len(scalar_keys) != len(data) and len(value_lengths) > 1:
             raise ValueError(
@@ -1109,6 +1119,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             col_data[key] = as_column(
                 col_data[key], nan_as_null=nan_as_null, length=scalar_length
             )
+
+        if tuple_key_count and len(tuple_key_lengths) > 1:
+            # All tuple keys must be the same length
+            final_length = max(tuple_key_lengths)
+            col_data = {
+                old_key
+                if len(old_key) == final_length
+                else old_key
+                + (cudf.NA,) * (final_length - len(old_key)): column
+                for old_key, column in col_data.items()
+            }
 
         if result_index is None:
             result_index = cudf.RangeIndex(scalar_length)

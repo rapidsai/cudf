@@ -10230,16 +10230,22 @@ def test_dataframe_assign_scalar_to_empty_series():
     "data",
     [
         {0: [1, 2, 3], 2: [10, 11, 23]},
-        {("a", "b"): [1, 2, 3], ("2",): [10, 11, 23]},
+        {("a", "b"): [1, 2, 3], ("2", "3"): [10, 11, 23]},
     ],
 )
 def test_non_string_column_name_to_arrow(data):
     df = cudf.DataFrame(data)
-
     expected = df.to_arrow()
     actual = pa.Table.from_pandas(df.to_pandas())
 
     assert expected.equals(actual)
+
+
+def test_dict_uneven_tuple_keys_fill_with_NA():
+    data = ({("a", "b"): [1, 2, 3], ("2",): [10, 11, 23]},)
+    result = cudf.DataFrame(data)
+    expected = pd.DataFrame(data)
+    assert_eq(result, expected)
 
 
 def test_complex_types_from_arrow():
@@ -10822,6 +10828,11 @@ def test_dataframe_series_dot():
     expected = gser @ [12, 13]
 
     assert_eq(expected, actual)
+
+
+def test_dict_tuple_keys_must_all_be_tuple_keys():
+    with pytest.raises(ValueError):
+        cudf.DataFrame({(1, 2): [1], 3: [2]})
 
 
 def test_dataframe_reindex_keep_colname():
