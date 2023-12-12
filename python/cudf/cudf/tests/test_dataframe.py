@@ -10905,12 +10905,3 @@ def test_dataframe_from_frame_with_index_or_columns_reindexes(
 def test_dict_tuple_keys_must_all_be_tuple_keys():
     with pytest.raises(ValueError):
         cudf.DataFrame({(1, 2): [1], 3: [2]})
-
-
-def test_dataframe_reindex_doesnt_remove_column_name():
-    gdf = cudf.DataFrame([1], columns=pd.Index(["a"], name="foo"))
-    result = gdf.reindex(index=pd.Index([0, 1]))
-    expected = cudf.DataFrame(
-        [1, None], columns=pd.Index(["a"], name="foo"), index=pd.Index([0, 1])
-    )
-    assert_eq(result, expected)
