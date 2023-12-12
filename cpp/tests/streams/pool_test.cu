@@ -20,13 +20,13 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/default_stream.hpp>
 
-class PoolTest : public cudf::test::BaseFixture {};
+class StreamPoolTest : public cudf::test::BaseFixture {};
 
 __global__ void do_nothing_kernel() {}
 
-TEST_F(PoolTest, ForkStreams)
+TEST_F(StreamPoolTest, ForkStreams)
 {
-  auto streams = cudf::detail::fork_streams(cudf::test::get_default_stream(), 4);
-  do_nothing_kernel<<<1, 1, 0, streams[0].value()>>>();
-  do_nothing_kernel<<<1, 1, 0, streams[1].value()>>>();
+  auto streams = cudf::detail::fork_streams(cudf::test::get_default_stream(), 2);
+  do_nothing_kernel<<<1, 32, 0, streams[0].value()>>>();
+  do_nothing_kernel<<<1, 32, 0, streams[1].value()>>>();
 }
