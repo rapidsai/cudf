@@ -201,3 +201,30 @@ void try_drop_l3_cache()
                            [](auto& cmd) { return exec_cmd(cmd).empty(); }),
                "Failed to execute the drop cache command");
 }
+
+cudf::io::io_type retrieve_io_type_enum(std::string_view io_string)
+{
+  if (io_string == "FILEPATH") { return cudf::io::io_type::FILEPATH; }
+  if (io_string == "HOST_BUFFER") { return cudf::io::io_type::HOST_BUFFER; }
+  if (io_string == "DEVICE_BUFFER") { return cudf::io::io_type::DEVICE_BUFFER; }
+  if (io_string == "VOID") { return cudf::io::io_type::VOID; }
+  if (io_string == "USER_IMPLEMENTED") { return cudf::io::io_type::USER_IMPLEMENTED; }
+  CUDF_FAIL("Unsupported io_type.");
+}
+
+cudf::io::compression_type retrieve_compression_type_enum(std::string_view compression_string)
+{
+  if (compression_string == "NONE") { return cudf::io::compression_type::NONE; }
+  if (compression_string == "AUTO") { return cudf::io::compression_type::AUTO; }
+  if (compression_string == "SNAPPY") { return cudf::io::compression_type::SNAPPY; }
+  if (compression_string == "GZIP") { return cudf::io::compression_type::GZIP; }
+  if (compression_string == "BZIP2") { return cudf::io::compression_type::BZIP2; }
+  if (compression_string == "BROTLI") { return cudf::io::compression_type::BROTLI; }
+  if (compression_string == "ZIP") { return cudf::io::compression_type::ZIP; }
+  if (compression_string == "XZ") { return cudf::io::compression_type::XZ; }
+  if (compression_string == "ZLIB") { return cudf::io::compression_type::ZLIB; }
+  if (compression_string == "LZ4") { return cudf::io::compression_type::LZ4; }
+  if (compression_string == "LZO") { return cudf::io::compression_type::LZO; }
+  if (compression_string == "ZSTD") { return cudf::io::compression_type::ZSTD; }
+  CUDF_FAIL("Unsupported compression_type.");
+}

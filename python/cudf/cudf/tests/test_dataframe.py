@@ -10754,6 +10754,15 @@ def test_dataframe_series_dot():
     assert_eq(expected, actual)
 
 
+def test_dataframe_reindex_keep_colname():
+    gdf = cudf.DataFrame([1], columns=cudf.Index([1], name="foo"))
+    result = gdf.reindex(index=[0, 1])
+    expected = cudf.DataFrame(
+        [1, None], columns=cudf.Index([1], name="foo"), index=[0, 1]
+    )
+    assert_eq(result, expected)
+
+
 def test_dataframe_duplicate_index_reindex():
     gdf = cudf.DataFrame({"a": [0, 1, 2, 3]}, index=[0, 0, 1, 1])
     pdf = gdf.to_pandas()

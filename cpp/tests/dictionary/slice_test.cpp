@@ -30,7 +30,7 @@ struct DictionarySliceTest : public cudf::test::BaseFixture {};
 TEST_F(DictionarySliceTest, SliceColumn)
 {
   cudf::test::strings_column_wrapper strings{
-    {"eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa"}, {1, 1, 1, 1, 1, 0, 1, 1, 1}};
+    {"eee", "aaa", "ddd", "bbb", "ccc", "", "ccc", "eee", "aaa"}, {1, 1, 1, 1, 1, 0, 1, 1, 1}};
   auto dictionary = cudf::dictionary::encode(strings);
 
   std::vector<cudf::size_type> splits{1, 6};
