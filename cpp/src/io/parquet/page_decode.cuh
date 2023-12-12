@@ -361,8 +361,6 @@ inline __device__ int gpuDecodeRleBooleans(page_state_s* s, state_buf* sb, int t
   int64_t pos        = s->dict_pos;
 
   // ensure all threads read s->dict_pos before returning
-  // NOTE: Removing this does not trigger any race warnings, but is similar to access pattern
-  // in gpuDecodeDictionaryIndices which does.
   __syncwarp();
 
   while (pos < target_pos) {
@@ -433,11 +431,6 @@ gpuInitStringDescriptors(page_state_s* s, [[maybe_unused]] state_buf* sb, int ta
 {
   int pos       = s->dict_pos;
   int total_len = 0;
-
-  // ensure all threads read s->dict_pos before returning
-  // NOTE: Removing this does not trigger any race warnings, but is similar to access pattern
-  // in gpuDecodeDictionaryIndices which does.
-  __syncwarp();
 
   // This step is purely serial
   if (!t) {
@@ -697,6 +690,9 @@ __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value
                                                       level_t const* const def,
                                                       int t)
 {
+  // exit early if there's no work to do
+  if (s->input_value_count >= target_input_value_count) { return; }
+
   // max nesting depth of the column
   int const max_depth       = s->col.max_nesting_depth;
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
@@ -706,10 +702,6 @@ __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value
   int input_row_count = s->input_row_count;
 
   PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
-
-  // need this to ensure input_value_count is read by all threads before s->input_value_count
-  // is modified below (just in case input_value count >= target_input_value_count).
-  __syncwarp();
 
   // process until we've reached the target
   while (input_value_count < target_input_value_count) {
