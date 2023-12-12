@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -1029,11 +1030,17 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
       static_cast<bitmask_type*>(validity.data()),
       d_valid_count.data(),
       options);
-  return make_strings_column(col.size(),
-                             std::move(offsets),
-                             std::move(chars),
-                             col.size() - d_valid_count.value(stream),
-                             std::move(validity));
+
+  auto result = make_strings_column(col.size(),
+                                    std::move(offsets),
+                                    std::move(chars),
+                                    col.size() - d_valid_count.value(stream),
+                                    std::move(validity));
+  // unmatched array query may result in unsanitized '[' value in the result
+  if (cudf::detail::has_nonempty_nulls(result->view(), stream)) {
+    result = cudf::detail::purge_nonempty_nulls(result->view(), stream, mr);
+  }
+  return result;
 }
 
 }  // namespace

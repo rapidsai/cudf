@@ -95,6 +95,7 @@ cpp/thirdparty/googletest/
 
 ## Doxygen
 cpp/doxygen/html
+cpp/doxygen/xml
 
 #Java
 target

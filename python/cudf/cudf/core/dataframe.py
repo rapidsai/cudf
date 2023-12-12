@@ -47,7 +47,6 @@ from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
-    is_categorical_dtype,
     is_datetime_dtype,
     is_dict_like,
     is_dtype_equal,
@@ -319,7 +318,9 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     as_column(
                         tmp_arg[0],
                         dtype=self._frame.index.dtype
-                        if is_categorical_dtype(self._frame.index.dtype)
+                        if isinstance(
+                            self._frame.index.dtype, cudf.CategoricalDtype
+                        )
                         else None,
                     ),
                     tmp_arg[1],
@@ -1503,7 +1504,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         columns = [
             c
             for c, dt in self.dtypes.items()
-            if dt != object and not is_categorical_dtype(dt)
+            if dt != object and not isinstance(dt, cudf.CategoricalDtype)
         ]
         return self[columns]
 
@@ -1746,8 +1747,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 out._index._data,
                 indices[:first_data_column_position],
             )
-            if not isinstance(out._index, MultiIndex) and is_categorical_dtype(
-                out._index._values.dtype
+            if not isinstance(out._index, MultiIndex) and isinstance(
+                out._index._values.dtype, cudf.CategoricalDtype
             ):
                 out = out.set_index(
                     cudf.core.index.as_index(out.index._values)
@@ -3910,8 +3911,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # No column from index is transposed with libcudf.
         source_columns = [*self._columns]
         source_dtype = source_columns[0].dtype
-        if is_categorical_dtype(source_dtype):
-            if any(not is_categorical_dtype(c.dtype) for c in source_columns):
+        if isinstance(source_dtype, cudf.CategoricalDtype):
+            if any(
+                not isinstance(c.dtype, cudf.CategoricalDtype)
+                for c in source_columns
+            ):
                 raise ValueError("Columns must all have the same dtype")
             cats = list(c.categories for c in source_columns)
             cats = cudf.core.column.concat_columns(cats).unique()
@@ -3925,7 +3929,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         result_columns = libcudf.transpose.transpose(source_columns)
 
-        if is_categorical_dtype(source_dtype):
+        if isinstance(source_dtype, cudf.CategoricalDtype):
             result_columns = [
                 codes._with_type_metadata(
                     cudf.core.dtypes.CategoricalDtype(categories=cats)
@@ -4627,8 +4631,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         for col in incols:
             current_col_dtype = self._data[col].dtype
-            if is_string_dtype(current_col_dtype) or is_categorical_dtype(
-                current_col_dtype
+            if is_string_dtype(current_col_dtype) or isinstance(
+                current_col_dtype, cudf.CategoricalDtype
             ):
                 raise TypeError(
                     "User defined functions are currently not "
@@ -6446,7 +6450,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         for dtype in self.dtypes:
             for i_dtype in include:
                 # category handling
-                if is_categorical_dtype(i_dtype):
+                if i_dtype == cudf.CategoricalDtype:
+                    # Matches cudf & pandas dtype objects
                     include_subtypes.add(i_dtype)
                 elif inspect.isclass(dtype.type):
                     if issubclass(dtype.type, i_dtype):
@@ -6457,7 +6462,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         for dtype in self.dtypes:
             for e_dtype in exclude:
                 # category handling
-                if is_categorical_dtype(e_dtype):
+                if e_dtype == cudf.CategoricalDtype:
+                    # Matches cudf & pandas dtype objects
                     exclude_subtypes.add(e_dtype)
                 elif inspect.isclass(dtype.type):
                     if issubclass(dtype.type, e_dtype):
