@@ -885,8 +885,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             reindexed = self.reindex(index=index_from_data, copy=False)
             self._data = reindexed._data
             self._index = index_from_data
-        # TODO this one might not be needed
-        self._check_data_index_length_match()
 
         if dtype:
             self._data = self.astype(dtype)._data
