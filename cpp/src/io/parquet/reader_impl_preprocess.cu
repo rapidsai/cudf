@@ -38,6 +38,8 @@
 #include <thrust/transform.h>
 #include <thrust/unique.h>
 
+#include <cuda/functional>
+
 #include <numeric>
 
 namespace cudf::io::parquet::detail {
@@ -335,11 +337,11 @@ void decode_page_headers(pass_intermediate_data& pass,
 
   // compute max bytes needed for level data
   auto level_bit_size = cudf::detail::make_counting_transform_iterator(
-    0, [chunks = pass.chunks.d_begin()] __device__(int i) {
+    0, cuda::proclaim_return_type<int>([chunks = pass.chunks.d_begin()] __device__(int i) {
       auto c = chunks[i];
       return static_cast<int>(
         max(c.level_bits[level_type::REPETITION], c.level_bits[level_type::DEFINITION]));
-    });
+    }));
   // max level data bit size.
   int const max_level_bits = thrust::reduce(rmm::exec_policy(stream),
                                             level_bit_size,

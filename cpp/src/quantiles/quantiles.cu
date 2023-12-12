@@ -31,6 +31,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
+#include <cuda/functional>
+
 #include <memory>
 #include <vector>
 
@@ -44,10 +46,11 @@ std::unique_ptr<table> quantiles(table_view const& input,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  auto quantile_idx_lookup = [sortmap, interp, size = input.num_rows()] __device__(double q) {
-    auto selector = [sortmap] __device__(auto idx) { return sortmap[idx]; };
-    return detail::select_quantile<size_type>(selector, size, q, interp);
-  };
+  auto quantile_idx_lookup = cuda::proclaim_return_type<size_type>(
+    [sortmap, interp, size = input.num_rows()] __device__(double q) {
+      auto selector = [sortmap] __device__(auto idx) { return sortmap[idx]; };
+      return detail::select_quantile<size_type>(selector, size, q, interp);
+    });
 
   auto const q_device =
     cudf::detail::make_device_uvector_async(q, stream, rmm::mr::get_current_device_resource());
