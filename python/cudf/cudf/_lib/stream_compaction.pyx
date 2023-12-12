@@ -171,7 +171,7 @@ def distinct_indices(
     bool nans_equal=True,
 ):
     """
-    Return indices of the distinct rows in a table
+    Return indices of the distinct rows in a table.
 
     Parameters
     ----------
@@ -198,7 +198,7 @@ def distinct_indices(
     elif keep is False:
         cpp_keep_option = duplicate_keep_option.KEEP_NONE
     else:
-        raise ValueError('keep must be either "first", "last" or False')
+        raise ValueError('keep must be either "first", "last", or False')
 
     # shifting the index number by number of index columns
     cdef null_equality cpp_nulls_equal = (
