@@ -32,12 +32,12 @@
 #include <string>
 #include <unordered_map>
 
-// This file is compiled into a separate library that is dynamically loaded with LD_PRELOAD at runtime to libcudf 
-// to override some stream-related symbols in libcudf. The goal of such a library is to verify if the stream/stream pool 
-// is being correctly forwarded between API calls. 
+// This file is compiled into a separate library that is dynamically loaded with LD_PRELOAD at
+// runtime to libcudf to override some stream-related symbols in libcudf. The goal of such a library
+// is to verify if the stream/stream pool is being correctly forwarded between API calls.
 //
 // We control whether to override cudf::test::get_default_stream or
-// cudf::get_default_stream with a compile-time flag. The behaviour of tests 
+// cudf::get_default_stream with a compile-time flag. The behaviour of tests
 // depend on whether STREAM_MODE_TESTING is defined:
 // 1. If STREAM_MODE_TESTING is not defined, cudf::get_default_stream will
 //    return a custom stream and stream_is_invalid will return true if any CUDA
