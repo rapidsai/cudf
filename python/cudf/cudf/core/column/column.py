@@ -2171,33 +2171,23 @@ def as_column(
         if dtype is not None:
             data = data.astype(dtype)
 
-    elif isinstance(arbitrary, (pd.Timestamp, pd.Timedelta)):
-        # This will always treat NaTs as nulls since it's not technically a
-        # discrete value like NaN
-        length = length or 1
-        data = as_column(
-            pa.array(pd.Series([arbitrary] * length), from_pandas=True)
-        )
-        if dtype is not None:
-            data = data.astype(dtype)
-
-    elif np.isscalar(arbitrary) and not isinstance(arbitrary, memoryview):
+    elif is_scalar(arbitrary) and not isinstance(arbitrary, memoryview):
         length = length or 1
         if (
-            (nan_as_null is True)
+            nan_as_null is True
             and isinstance(arbitrary, (np.floating, float))
             and np.isnan(arbitrary)
         ):
             arbitrary = None
             if dtype is None:
                 dtype = cudf.dtype("float64")
+        elif arbitrary is None and dtype is None:
+            dtype = cudf.dtype("object")
+        arbitrary = cudf.Scalar(arbitrary, dtype=dtype)
+        data = ColumnBase.from_scalar(arbitrary, length)
 
-        data = as_column(full(length, arbitrary, dtype=dtype))
-        if not nan_as_null and not is_decimal_dtype(data.dtype):
-            if np.issubdtype(data.dtype, np.floating):
-                data = data.fillna(np.nan)
-            elif np.issubdtype(data.dtype, np.datetime64):
-                data = data.fillna(np.datetime64("NaT"))
+        if dtype is not None:
+            data = data.astype(dtype)
 
     elif hasattr(arbitrary, "__array_interface__"):
         # CUDF assumes values are always contiguous
@@ -2315,8 +2305,6 @@ def as_column(
         data = as_column(
             np.asarray(arbitrary), dtype=dtype, nan_as_null=nan_as_null
         )
-    elif isinstance(arbitrary, cudf.Scalar):
-        data = ColumnBase.from_scalar(arbitrary, length if length else 1)
     else:
         try:
             data = as_column(

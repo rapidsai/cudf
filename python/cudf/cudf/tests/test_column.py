@@ -552,3 +552,10 @@ def test_astype_with_aliases(alias, expect_dtype, data):
     gd_data = cudf.Series.from_pandas(pd_data)
 
     assert_eq(pd_data.astype(expect_dtype), gd_data.astype(alias))
+
+
+def test_as_column_None_as_object_type():
+    result = as_column(None, length=1)
+    assert isinstance(result, cudf.core.column.string.StringColumn)
+    assert len(result) == 1
+    assert result.null_count == 1
