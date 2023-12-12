@@ -393,7 +393,7 @@ __global__ void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chu
     }
     num_values    = bs->ck.num_values;
     page_info     = chunk_pages ? chunk_pages[chunk].pages : nullptr;
-    max_num_pages = (page_info) ? bs->ck.max_num_pages : 0;
+    max_num_pages = page_info ? bs->ck.max_num_pages : 0;
     values_found  = 0;
     __syncwarp();
     while (values_found < num_values && bs->cur < bs->end) {

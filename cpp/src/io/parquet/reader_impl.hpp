@@ -158,7 +158,7 @@ class reader::impl {
   /**
    * @brief Ratchet the pass/subpass/chunk process forward.
    *
-   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
+   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specified
    *        bounds
    */
   void handle_chunking(bool uses_custom_row_bounds);
@@ -337,12 +337,10 @@ class reader::impl {
    */
   void compute_output_chunks_for_subpass();
 
-  bool has_more_work()
+  [[nodiscard]] bool has_more_work() const
   {
-    // no work to do (this can happen on the first pass if we have no rows to read)
-    auto const num_passes = _file_itm_data.num_passes();
-    bool const more_work  = num_passes > 0 && _file_itm_data._current_input_pass < num_passes;
-    return more_work;
+    return _file_itm_data.num_passes() > 0 &&
+           _file_itm_data._current_input_pass < _file_itm_data.num_passes();
   }
 
  private:

@@ -1287,8 +1287,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
             s->dict_base = reinterpret_cast<uint8_t const*>(s->col.str_dict_index);
             s->dict_size = s->col.dict_page->num_input_values * sizeof(string_index_pair);
           } else {
-            s->dict_base =
-              s->col.dict_page->page_data;  // dictionary is always stored in the first page
+            s->dict_base = s->col.dict_page->page_data;
             s->dict_size = s->col.dict_page->uncompressed_page_size;
           }
           s->dict_run  = 0;

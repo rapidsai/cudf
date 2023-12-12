@@ -752,7 +752,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
           dict_base = reinterpret_cast<const uint8_t*>(col.str_dict_index);
           dict_size = col.dict_page->num_input_values * sizeof(string_index_pair);
         } else {
-          dict_base = col.dict_page->page_data;  // dictionary is always stored in the first page
+          dict_base = col.dict_page->page_data;
           dict_size = col.dict_page->uncompressed_page_size;
         }
 

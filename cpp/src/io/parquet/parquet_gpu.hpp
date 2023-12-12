@@ -341,11 +341,11 @@ struct get_page_key {
 };
 
 /**
- * @brief Return and iterator that returns they keys for a vector of pages.
+ * @brief Return an iterator that returns they keys for a vector of pages.
  */
-inline auto make_page_key_iterator(cudf::detail::hostdevice_vector<PageInfo> const& pages)
+inline auto make_page_key_iterator(device_span<const PageInfo> pages)
 {
-  return thrust::make_transform_iterator(pages.d_begin(), get_page_key{});
+  return thrust::make_transform_iterator(pages.begin(), get_page_key{});
 }
 
 /**

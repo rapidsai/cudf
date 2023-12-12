@@ -433,12 +433,6 @@ void decode_page_headers(pass_intermediate_data& pass,
   pass.pages.device_to_host_async(stream);
   pass.chunks.device_to_host_async(stream);
   stream.synchronize();
-
-  // validate page encodings
-  CUDF_EXPECTS(std::all_of(pass.pages.begin(),
-                           pass.pages.end(),
-                           [](auto const& page) { return is_supported_encoding(page.encoding); }),
-               "Unsupported page encoding detected");
 }
 
 struct set_str_dict_index_count {
@@ -791,7 +785,7 @@ void reader::impl::load_compressed_data()
   auto& pass = *_pass_itm_data;
 
   // This function should never be called if `num_rows == 0`.
-  // CUDF_EXPECTS(_pass_itm_data->num_rows > 0, "Number of reading rows must not be zero.");
+  CUDF_EXPECTS(_pass_itm_data->num_rows > 0, "Number of reading rows must not be zero.");
 
   auto& chunks = pass.chunks;
 
@@ -1171,7 +1165,7 @@ void reader::impl::preprocess_subpass_pages(bool uses_custom_row_bounds, size_t 
 
   // copy our now-correct row counts  back to the base pages stored in the pass.
   auto iter = thrust::make_counting_iterator(0);
-  thrust::for_each(rmm::exec_policy(_stream),
+  thrust::for_each(rmm::exec_policy_nosync(_stream),
                    iter,
                    iter + subpass.pages.size(),
                    update_pass_num_rows{pass.pages, subpass.pages, subpass.page_src_index});
@@ -1183,14 +1177,14 @@ void reader::impl::preprocess_subpass_pages(bool uses_custom_row_bounds, size_t 
   // gives us the absolute row index
   auto key_input  = thrust::make_transform_iterator(pass.pages.d_begin(), get_page_chunk_idx{});
   auto page_input = thrust::make_transform_iterator(pass.pages.d_begin(), get_page_num_rows{});
-  thrust::exclusive_scan_by_key(rmm::exec_policy(_stream),
+  thrust::exclusive_scan_by_key(rmm::exec_policy_nosync(_stream),
                                 key_input,
                                 key_input + pass.pages.size(),
                                 page_input,
                                 chunk_row_output_iter{pass.pages.device_ptr()});
 
   // copy chunk row into the subpass pages
-  thrust::for_each(rmm::exec_policy(_stream),
+  thrust::for_each(rmm::exec_policy_nosync(_stream),
                    iter,
                    iter + subpass.pages.size(),
                    update_subpass_chunk_row{pass.pages, subpass.pages, subpass.page_src_index});

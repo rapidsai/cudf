@@ -48,7 +48,7 @@ struct file_intermediate_data {
   size_t global_skip_rows;
   size_t global_num_rows;
 
-  size_t num_passes()
+  size_t num_passes() const
   {
     return input_pass_row_group_offsets.size() == 0 ? 0 : input_pass_row_group_offsets.size() - 1;
   }
