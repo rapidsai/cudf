@@ -182,7 +182,7 @@ class GroupOpBase(AbstractTemplate):
         sr_err = ", ".join(["Series" for _ in range(len(args))])
         return (
             f"{fname}({sr_err}) is not supported by JIT GroupBy "
-            f"apply. Supported features are listed at:\n{_UDF_DOC_URL}"
+            f"apply. Supported features are listed at: {_UDF_DOC_URL}"
         )
 
     def generic(self, args, kws):
@@ -195,8 +195,8 @@ class GroupOpBase(AbstractTemplate):
             if isinstance(arg.group_scalar_type, types.Poison):
                 raise UDFError(
                     f"Use of a column of {arg.group_scalar_type.ty} detected "
-                    "within UDF body. \nOnly columns of the following dtypes "
-                    "may be used through the \nGroupBy.apply() JIT engine: "
+                    "within UDF body. Only columns of the following dtypes "
+                    "may be used through the GroupBy.apply() JIT engine: "
                     f"{[str(x) for x in SUPPORTED_GROUPBY_NUMPY_TYPES]}"
                 )
         if funcs := call_cuda_functions.get(self.key.__name__):
@@ -215,8 +215,8 @@ class GroupAttrBase(AbstractTemplate):
         dtype_err = ", ".join([str(g.group_scalar_type) for g in args])
         sr_err = ", ".join(["Series" for _ in range(len(args) - 1)])
         return (
-            f"\nSeries.{fname}({sr_err}) is not supported for "
-            f"({dtype_err}) within JIT GroupBy apply.\nTo see "
+            f"Series.{fname}({sr_err}) is not supported for "
+            f"({dtype_err}) within JIT GroupBy apply. To see "
             f"what's available, visit {_UDF_DOC_URL}"
         )
 
@@ -230,8 +230,8 @@ class GroupAttrBase(AbstractTemplate):
             if isinstance(arg.group_scalar_type, types.Poison):
                 raise UDFError(
                     f"Use of a column of {arg.group_scalar_type.ty} detected "
-                    "within UDAF body. \nOnly columns of the following dtypes "
-                    "may be used through the \nGroupBy.apply() JIT engine: "
+                    "within UDAF body. Only columns of the following dtypes "
+                    "may be used through the GroupBy.apply() JIT engine: "
                     f"{[str(x) for x in SUPPORTED_GROUPBY_NUMPY_TYPES]}"
                 )
         fname = self.key.split(".")[-1]
