@@ -67,7 +67,7 @@ class cuda_stream_pool {
   virtual std::vector<rmm::cuda_stream_view> get_streams(std::size_t count) = 0;
 
   /**
-   * @brief Get the number of stream objects in the pool.
+   * @brief Get the number of unique stream objects in the pool.
    *
    * This function is thread safe with respect to other calls to the same function.
    *
