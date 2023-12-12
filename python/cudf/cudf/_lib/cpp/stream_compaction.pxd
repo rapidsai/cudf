@@ -53,4 +53,4 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" \
         duplicate_keep_option keep,
         null_equality nulls_equal,
         nan_equality nans_equal,
-    )
+    ) except +
