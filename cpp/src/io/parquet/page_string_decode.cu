@@ -82,7 +82,6 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
       s->page.num_valids = s->num_input_values;
       s->page.num_nulls  = 0;
     }
-    __syncthreads();
     return {0, s->num_input_values};
   }
 
@@ -137,7 +136,6 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
         pp->num_nulls  = 0;
         pp->num_valids = end_row - begin_row;
       }
-      __syncthreads();
       return {begin_row, end_row};
     }
 
@@ -272,7 +270,6 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
       pp->num_nulls               = num_nulls;
       pp->num_valids              = total_leaf_values;
     }
-    __syncthreads();
   }
   // already filtered out unwanted pages, so need to count all non-null values in this page
   else {
@@ -299,7 +296,6 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
       pp->num_nulls  = null_count;
       pp->num_valids = pp->num_input_values - null_count;
     }
-    __syncthreads();
 
     end_value -= pp->num_nulls;
   }
