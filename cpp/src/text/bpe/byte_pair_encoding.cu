@@ -43,6 +43,20 @@
 #include <thrust/unique.h>
 
 namespace nvtext {
+
+/**
+ * @brief Access the bpe_merge_pairs impl member
+ *
+ * This is used by the encoder to access the impl member functions.
+ *
+ * @param bpe The merge pairs struct
+ * @return The impl object with detailed, internal member data
+ */
+bpe_merge_pairs::bpe_merge_pairs_impl const* get_bpe_merge_pairs_impl(bpe_merge_pairs const& bpe)
+{
+  return bpe.impl;
+}
+
 namespace detail {
 namespace {
 
@@ -364,7 +378,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
     // this kernel locates unpairable sections of strings to create artificial string row
     // boundaries; the boundary values are recorded as offsets in d_up_offsets
     auto const d_up_offsets = d_working.data();  // store unpairable offsets here
-    auto const mp_map       = merge_pairs.impl->get_mp_table_ref();  // lookup table
+    auto const mp_map = get_bpe_merge_pairs_impl(merge_pairs)->get_mp_table_ref();  // lookup table
     auto const d_chars_span = cudf::device_span<char const>(d_input_chars, chars_size);
     auto up_fn = bpe_unpairable_offsets_fn<decltype(mp_map)>{d_chars_span, first_offset, mp_map};
     thrust::transform(rmm::exec_policy_nosync(stream), chars_begin, chars_end, d_up_offsets, up_fn);
@@ -398,7 +412,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
     // launch the byte-pair-encoding kernel on the temp column
     rmm::device_uvector<int8_t> d_rerank(chars_size, stream);  // more working memory;
     auto const d_ranks  = d_working.data();                    // store pair ranks here
-    auto const pair_map = merge_pairs.impl->get_merge_pairs_ref();
+    auto const pair_map = get_bpe_merge_pairs_impl(merge_pairs)->get_merge_pairs_ref();
     bpe_parallel_fn<decltype(pair_map)><<<tmp_size, block_size, 0, stream.value()>>>(
       *d_tmp_strings, pair_map, d_spaces.data(), d_ranks, d_rerank.data());
   }
