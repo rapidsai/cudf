@@ -113,7 +113,7 @@ struct sorted_intersect_fn {
   cudf::size_type* d_results;
 
   // warp per row
-  __device__ float operator()(cudf::size_type idx) const
+  __device__ void operator()(cudf::size_type idx) const
   {
     using warp_reduce = cub::WarpReduce<cudf::size_type>;
     __shared__ typename warp_reduce::TempStorage temp_storage;

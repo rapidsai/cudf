@@ -43,6 +43,8 @@
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace detail {
 namespace {
@@ -356,9 +358,11 @@ std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<scalar const>>
   // > (2^31)/2, but the end result after the final (% n_rows) will fit. so we'll do the computation
   // using a signed 64 bit value.
   auto scatter_iter = thrust::make_transform_iterator(
-    map_begin, [n_rows = static_cast<int64_t>(n_rows)] __device__(size_type in) -> size_type {
-      return ((static_cast<int64_t>(in) % n_rows) + n_rows) % n_rows;
-    });
+    map_begin,
+    cuda::proclaim_return_type<size_type>(
+      [n_rows = static_cast<int64_t>(n_rows)] __device__(size_type in) -> size_type {
+        return static_cast<size_type>(((static_cast<int64_t>(in) % n_rows) + n_rows) % n_rows);
+      }));
 
   // Dispatch over data type per column
   auto result          = std::vector<std::unique_ptr<column>>(target.num_columns());

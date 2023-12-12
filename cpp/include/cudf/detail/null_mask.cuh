@@ -37,6 +37,8 @@
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
+#include <cuda/functional>
+
 #include <algorithm>
 #include <iterator>
 #include <optional>
@@ -330,20 +332,21 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
     // set bits from the length of the segment.
     auto segments_begin =
       thrust::make_zip_iterator(first_bit_indices_begin, last_bit_indices_begin);
-    auto segment_length_iterator =
-      thrust::transform_iterator(segments_begin, [] __device__(auto const& segment) {
+    auto segment_length_iterator = thrust::transform_iterator(
+      segments_begin, cuda::proclaim_return_type<size_type>([] __device__(auto const& segment) {
         auto const begin = thrust::get<0>(segment);
         auto const end   = thrust::get<1>(segment);
         return end - begin;
-      });
+      }));
     thrust::transform(rmm::exec_policy(stream),
                       segment_length_iterator,
                       segment_length_iterator + num_ranges,
                       d_bit_counts.data(),
                       d_bit_counts.data(),
-                      [] __device__(auto segment_size, auto segment_bit_count) {
-                        return segment_size - segment_bit_count;
-                      });
+                      cuda::proclaim_return_type<size_type>(
+                        [] __device__(auto segment_size, auto segment_bit_count) {
+                          return segment_size - segment_bit_count;
+                        }));
   }
 
   CUDF_CHECK_CUDA(stream.value());
@@ -541,12 +544,12 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
 {
   auto const segments_begin =
     thrust::make_zip_iterator(first_bit_indices_begin, last_bit_indices_begin);
-  auto const segment_length_iterator =
-    thrust::make_transform_iterator(segments_begin, [] __device__(auto const& segment) {
+  auto const segment_length_iterator = thrust::make_transform_iterator(
+    segments_begin, cuda::proclaim_return_type<size_type>([] __device__(auto const& segment) {
       auto const begin = thrust::get<0>(segment);
       auto const end   = thrust::get<1>(segment);
       return end - begin;
-    });
+    }));
 
   auto const num_segments =
     static_cast<size_type>(std::distance(first_bit_indices_begin, first_bit_indices_end));

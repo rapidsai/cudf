@@ -32,10 +32,8 @@ from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
-    is_categorical_dtype,
     is_dtype_equal,
     is_integer,
-    is_interval_dtype,
     is_list_like,
     is_scalar,
     is_signed_integer_dtype,
@@ -330,17 +328,15 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @_cudf_nvtx_annotate
     def __contains__(self, item):
-        if not isinstance(
+        if isinstance(item, bool) or not isinstance(
             item, tuple(np.sctypes["int"] + np.sctypes["float"] + [int, float])
         ):
             return False
         try:
-            item = pd.core.dtypes.common.ensure_python_int(item)
-        except TypeError:
+            int_item = int(item)
+            return int_item == item and int_item in self._range
+        except (ValueError, OverflowError):
             return False
-        if not item % 1 == 0:
-            return False
-        return item in range(self._start, self._stop, self._step)
 
     @_cudf_nvtx_annotate
     def copy(self, name=None, deep=False, dtype=None, names=None):
@@ -503,7 +499,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return _maybe_convert_to_default_type(dtype)
 
     @_cudf_nvtx_annotate
-    def to_pandas(self, nullable=False):
+    def to_pandas(self, *, nullable: bool = False) -> pd.RangeIndex:
+        if nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
         return pd.RangeIndex(
             start=self._start,
             stop=self._stop,
@@ -1569,7 +1567,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     def any(self):
         return self._values.any()
 
-    def to_pandas(self, nullable=False):
+    def to_pandas(self, *, nullable: bool = False) -> pd.Index:
         return pd.Index(
             self._values.to_pandas(nullable=nullable), name=self.name
         )
@@ -2510,7 +2508,9 @@ class DatetimeIndex(GenericIndex):
         return cudf.core.tools.datetimes._to_iso_calendar(self)
 
     @_cudf_nvtx_annotate
-    def to_pandas(self, nullable=False):
+    def to_pandas(self, *, nullable: bool = False) -> pd.DatetimeIndex:
+        if nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
         # TODO: no need to convert to nanos with Pandas 2.x
         if isinstance(self.dtype, pd.DatetimeTZDtype):
             nanos = self._values.astype(
@@ -2834,11 +2834,12 @@ class TimedeltaIndex(GenericIndex):
         return value
 
     @_cudf_nvtx_annotate
-    def to_pandas(self, nullable=False):
+    def to_pandas(self, *, nullable: bool = False) -> pd.TimedeltaIndex:
+        if nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
         return pd.TimedeltaIndex(
             self._values.to_pandas(),
             name=self.name,
-            unit=self._values.time_unit,
         )
 
     @property  # type: ignore
@@ -2972,7 +2973,7 @@ class CategoricalIndex(GenericIndex):
         if isinstance(data, CategoricalColumn):
             data = data
         elif isinstance(data, pd.Series) and (
-            is_categorical_dtype(data.dtype)
+            isinstance(data.dtype, pd.CategoricalDtype)
         ):
             codes_data = column.as_column(data.cat.codes.values)
             data = column.build_categorical_column(
@@ -3190,7 +3191,9 @@ class IntervalIndex(GenericIndex):
 
         if isinstance(data, IntervalColumn):
             data = data
-        elif isinstance(data, pd.Series) and (is_interval_dtype(data.dtype)):
+        elif isinstance(data, pd.Series) and isinstance(
+            data.dtype, pd.IntervalDtype
+        ):
             data = column.as_column(data, data.dtype)
         elif isinstance(data, (pd.Interval, pd.IntervalIndex)):
             data = column.as_column(
@@ -3302,7 +3305,7 @@ class StringIndex(GenericIndex):
         super().__init__(values, **kwargs)
 
     @_cudf_nvtx_annotate
-    def to_pandas(self, nullable=False):
+    def to_pandas(self, *, nullable: bool = False) -> pd.Index:
         return pd.Index(
             self.to_numpy(na_value=None),
             name=self.name,
