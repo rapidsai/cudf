@@ -31,6 +31,8 @@
 #include <thrust/random/uniform_int_distribution.h>
 #include <thrust/shuffle.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace detail {
 
@@ -51,12 +53,12 @@ std::unique_ptr<table> sample(table_view const& input,
   if (n == 0) return cudf::empty_like(input);
 
   if (replacement == sample_with_replacement::TRUE) {
-    auto RandomGen = [seed, num_rows] __device__(auto i) {
+    auto RandomGen = cuda::proclaim_return_type<size_type>([seed, num_rows] __device__(auto i) {
       thrust::default_random_engine rng(seed);
       thrust::uniform_int_distribution<size_type> dist{0, num_rows - 1};
       rng.discard(i);
       return dist(rng);
-    };
+    });
 
     auto begin = cudf::detail::make_counting_transform_iterator(0, RandomGen);
 
