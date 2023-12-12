@@ -90,10 +90,8 @@ def test_leaves(data):
 
 def test_list_to_pandas_nullable_true():
     df = cudf.DataFrame({"a": cudf.Series([[1, 2, 3]])})
-    actual = df.to_pandas(nullable=True)
-    expected = pd.DataFrame({"a": pd.Series([[1, 2, 3]])})
-
-    assert_eq(actual, expected)
+    with pytest.raises(NotImplementedError):
+        df.to_pandas(nullable=True)
 
 
 def test_listdtype_hash():
@@ -919,3 +917,14 @@ def test_nested_list_extract_host_scalars(data, idx):
     series = cudf.Series(data)
 
     assert series[idx] == data[idx]
+
+
+def test_list_iterate_error():
+    s = cudf.Series([[[[1, 2]], [[2], [3]]], [[[2]]], [[[3]]]])
+    with pytest.raises(TypeError):
+        iter(s.list)
+
+
+def test_list_struct_list_memory_usage():
+    df = cudf.DataFrame({"a": [[{"b": [1]}]]})
+    assert df.memory_usage().sum() == 16

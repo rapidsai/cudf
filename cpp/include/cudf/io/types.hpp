@@ -45,6 +45,12 @@ namespace cudf {
 //! IO interfaces
 namespace io {
 /**
+ * @addtogroup io_types
+ * @{
+ * @file
+ */
+
+/**
  * @brief Compression algorithms
  */
 enum class compression_type {
@@ -195,9 +201,9 @@ class writer_compression_statistics {
  * @brief Control use of dictionary encoding for parquet writer
  */
 enum dictionary_policy {
-  NEVER,     ///< Never use dictionary encoding
-  ADAPTIVE,  ///< Use dictionary when it will not impact compression
-  ALWAYS     ///< Use dictionary reqardless of impact on compression
+  NEVER    = 0,  ///< Never use dictionary encoding
+  ADAPTIVE = 1,  ///< Use dictionary when it will not impact compression
+  ALWAYS   = 2   ///< Use dictionary regardless of impact on compression
 };
 
 /**
@@ -938,5 +944,6 @@ class reader_column_schema {
   [[nodiscard]] size_t get_num_children() const { return children.size(); }
 };
 
+/** @} */  // end of group
 }  // namespace io
 }  // namespace cudf

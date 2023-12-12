@@ -15,6 +15,7 @@ import pandas as pd
 from pandas.api import types as pd_types
 
 import cudf
+from cudf.core._compat import PANDAS_GE_150
 from cudf.core.dtypes import (  # noqa: F401
     _BaseDtype,
     dtype,
@@ -442,6 +443,34 @@ def is_any_real_numeric_dtype(arr_or_dtype) -> bool:
         and not is_complex_dtype(arr_or_dtype)
         and not is_bool_dtype(arr_or_dtype)
     )
+
+
+def _is_pandas_nullable_extension_dtype(dtype_to_check) -> bool:
+    if isinstance(
+        dtype_to_check,
+        (
+            pd.UInt8Dtype,
+            pd.UInt16Dtype,
+            pd.UInt32Dtype,
+            pd.UInt64Dtype,
+            pd.Int8Dtype,
+            pd.Int16Dtype,
+            pd.Int32Dtype,
+            pd.Int64Dtype,
+            pd.Float32Dtype,
+            pd.Float64Dtype,
+            pd.BooleanDtype,
+            pd.StringDtype,
+        ),
+    ) or (PANDAS_GE_150 and isinstance(dtype_to_check, pd.ArrowDtype)):
+        return True
+    elif isinstance(dtype_to_check, pd.CategoricalDtype):
+        return _is_pandas_nullable_extension_dtype(
+            dtype_to_check.categories.dtype
+        )
+    elif isinstance(dtype_to_check, pd.IntervalDtype):
+        return _is_pandas_nullable_extension_dtype(dtype_to_check.subtype)
+    return False
 
 
 # TODO: The below alias is removed for now since improving cudf categorical

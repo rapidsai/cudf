@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/offsets_iterator.cuh>
 #include <cudf/detail/utilities/alignment.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/list_view.hpp>
@@ -50,6 +51,8 @@ namespace cudf {
  *
  * If used at compile-time, this indicator can tell the optimizer
  * to include or exclude any null-checking clauses.
+ *
+ * @ingroup column_classes
  *
  */
 struct nullate {
@@ -442,10 +445,11 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   __device__ T element(size_type element_index) const noexcept
   {
     size_type index       = element_index + offset();  // account for this view's _offset
-    auto const* d_offsets = d_children[strings_column_view::offsets_column_index].data<int32_t>();
     char const* d_strings = d_children[strings_column_view::chars_column_index].data<char>();
-    size_type offset      = d_offsets[index];
-    return string_view{d_strings + offset, d_offsets[index + 1] - offset};
+    auto const offsets    = d_children[strings_column_view::offsets_column_index];
+    auto const itr        = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
+    auto const offset     = itr[index];
+    return string_view{d_strings + offset, static_cast<cudf::size_type>(itr[index + 1] - offset)};
   }
 
  private:

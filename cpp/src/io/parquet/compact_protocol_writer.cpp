@@ -182,6 +182,7 @@ size_t CompactProtocolWriter::write(ColumnChunkMetaData const& s)
   if (s.index_page_offset != 0) { c.field_int(10, s.index_page_offset); }
   if (s.dictionary_page_offset != 0) { c.field_int(11, s.dictionary_page_offset); }
   c.field_struct(12, s.statistics);
+  if (s.size_statistics.has_value()) { c.field_struct(16, s.size_statistics.value()); }
   return c.value();
 }
 
@@ -210,6 +211,24 @@ size_t CompactProtocolWriter::write(OffsetIndex const& s)
 {
   CompactProtocolFieldWriter c(*this);
   c.field_struct_list(1, s.page_locations);
+  if (s.unencoded_byte_array_data_bytes.has_value()) {
+    c.field_int_list(2, s.unencoded_byte_array_data_bytes.value());
+  }
+  return c.value();
+}
+
+size_t CompactProtocolWriter::write(SizeStatistics const& s)
+{
+  CompactProtocolFieldWriter c(*this);
+  if (s.unencoded_byte_array_data_bytes.has_value()) {
+    c.field_int(1, s.unencoded_byte_array_data_bytes.value());
+  }
+  if (s.repetition_level_histogram.has_value()) {
+    c.field_int_list(2, s.repetition_level_histogram.value());
+  }
+  if (s.definition_level_histogram.has_value()) {
+    c.field_int_list(3, s.definition_level_histogram.value());
+  }
   return c.value();
 }
 
@@ -286,13 +305,26 @@ inline void CompactProtocolFieldWriter::field_int(int field, int64_t val)
   current_field_value = field;
 }
 
+template <>
+inline void CompactProtocolFieldWriter::field_int_list<int64_t>(int field,
+                                                                std::vector<int64_t> const& val)
+{
+  put_field_header(field, current_field_value, ST_FLD_LIST);
+  put_byte(static_cast<uint8_t>((std::min(val.size(), 0xfUL) << 4) | ST_FLD_I64));
+  if (val.size() >= 0xfUL) { put_uint(val.size()); }
+  for (auto const v : val) {
+    put_int(v);
+  }
+  current_field_value = field;
+}
+
 template <typename Enum>
 inline void CompactProtocolFieldWriter::field_int_list(int field, std::vector<Enum> const& val)
 {
   put_field_header(field, current_field_value, ST_FLD_LIST);
-  put_byte((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_I32));
-  if (val.size() >= 0xf) put_uint(val.size());
-  for (auto& v : val) {
+  put_byte(static_cast<uint8_t>((std::min(val.size(), 0xfUL) << 4) | ST_FLD_I32));
+  if (val.size() >= 0xfUL) { put_uint(val.size()); }
+  for (auto const& v : val) {
     put_int(static_cast<int32_t>(v));
   }
   current_field_value = field;
