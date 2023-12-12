@@ -1666,6 +1666,8 @@ def get_reader_filepath_or_buffer(
     allow_raw_text_input=False,
     storage_options=None,
     bytes_per_thread=_BYTES_PER_THREAD_DEFAULT,
+    warn_on_raw_text_input=None,
+    warn_meta=None,
 ):
     """{docstring}"""
 
@@ -1679,6 +1681,15 @@ def get_reader_filepath_or_buffer(
                 path_or_data, storage_options
             )
             if fs is None:
+                if warn_on_raw_text_input:
+                    # Do not remove until pandas 3.0 support is added.
+                    warnings.warn(
+                        f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
+                        "deprecated and will be removed in a future version. "
+                        "To read from a literal string, wrap it in a "
+                        "'StringIO' object.",
+                        FutureWarning,
+                    )
                 return path_or_data, compression
 
         if _is_local_filesystem(fs):
@@ -1691,6 +1702,24 @@ def get_reader_filepath_or_buffer(
                     raise FileNotFoundError(
                         f"{path_or_data} could not be resolved to any files"
                     )
+                elif warn_on_raw_text_input:
+                    # Do not remove until pandas 3.0 support is added.
+                    warnings.warn(
+                        f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
+                        "deprecated and will be removed in a future version. "
+                        "To read from a literal string, wrap it in a "
+                        "'StringIO' object.",
+                        FutureWarning,
+                    )
+            elif warn_on_raw_text_input:
+                # Do not remove until pandas 3.0 support is added.
+                warnings.warn(
+                    f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
+                    "deprecated and will be removed in a future version. "
+                    "To read from a literal string, wrap it in a "
+                    "'StringIO' object.",
+                    FutureWarning,
+                )
 
         else:
             if len(paths) == 0:
