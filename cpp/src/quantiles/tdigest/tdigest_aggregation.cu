@@ -587,15 +587,16 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
   auto is_stub_weight = [weights = weights->view().begin<double>()] __device__(size_type i) {
     return weights[i] == 0;
   };
-  // whether or not this particular tdigest is a stub
-  auto is_stub_digest = cuda::proclaim_return_type<size_type>(
-    [offsets = offsets->view().begin<size_type>(), is_stub_weight] __device__(size_type i) {
-      return is_stub_weight(offsets[i]) ? 1 : 0;
-    });
+  // Whether or not this particular tdigest is a stub.
+  // This should not be wrapped in `proclaim_return_type` as it will be used inside another
+  // device lambda.
+  auto is_stub_digest = [offsets = offsets->view().begin<size_type>(), is_stub_weight] __device__(
+                          size_type i) { return is_stub_weight(offsets[i]) ? 1 : 0; };
 
   size_type const num_stubs = [&]() {
     if (!has_nulls) { return 0; }
-    auto iter = cudf::detail::make_counting_transform_iterator(0, is_stub_digest);
+    auto iter = cudf::detail::make_counting_transform_iterator(
+      0, cuda::proclaim_return_type<size_type>(is_stub_digest));
     return thrust::reduce(rmm::exec_policy(stream), iter, iter + num_rows);
   }();
 

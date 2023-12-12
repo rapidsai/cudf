@@ -36,7 +36,6 @@ namespace nvtext {
  */
 struct bpe_merge_pairs {
   struct bpe_merge_pairs_impl;
-  bpe_merge_pairs_impl* impl{};  ///< Implementation of the BPE merge pairs table.
 
   /**
    * @brief Construct a new bpe merge pairs object
@@ -62,6 +61,10 @@ struct bpe_merge_pairs {
 
   ~bpe_merge_pairs();
   bpe_merge_pairs();
+
+ private:
+  friend bpe_merge_pairs_impl const* get_bpe_merge_pairs_impl(bpe_merge_pairs const&);
+  bpe_merge_pairs_impl* impl{};  ///< Implementation of the BPE merge pairs table.
 };
 
 /**
@@ -97,12 +100,9 @@ std::unique_ptr<bpe_merge_pairs> load_merge_pairs(
 /**
  * @brief Byte pair encode the input strings.
  *
- * This will split each string on whitespace, perform the encoding,
- * and then build the output column using the given `separator`.
- *
  * The encoding algorithm rebuilds each string by matching substrings
  * in the `merge_pairs` table and iteratively removing the minimum ranked pair
- * until no pairs are left. Then, a space is inserted between the remaining
+ * until no pairs are left. Then, the separator is inserted between the remaining
  * pairs before the result is joined to make the output string.
  *
  * @code{.pseudo}
