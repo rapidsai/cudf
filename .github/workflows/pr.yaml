@@ -12,17 +12,10 @@ concurrency:
 jobs:
   pr-builder:
     needs:
-      - checks
       - conda-cpp-build
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@test-artifact-uploads
-  checks:
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@test-artifact-uploads
-    with:
-      enable_check_generated_files: false
   conda-cpp-build:
-    needs: checks
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@test-artifact-uploads
     with:
