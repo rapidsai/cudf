@@ -127,12 +127,24 @@ class parquet_field_int : public parquet_field {
 
   T& val;
 
+  std::string type_string()
+  {
+    if constexpr (EXPECTED_TYPE == ST_FLD_BYTE) {
+      return "byte";
+    } else if constexpr (EXPECTED_TYPE == ST_FLD_I32) {
+      return "int32";
+    } else if constexpr (EXPECTED_TYPE == ST_FLD_I64) {
+      return "int64";
+    }
+    return "unknown(EXPECTED_TYPE=" + std::to_string(EXPECTED_TYPE) + ")";
+  }
+
  public:
   parquet_field_int(int f, T& v) : parquet_field(f), val(v) {}
 
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    CUDF_EXPECTS(field_type == EXPECTED_TYPE, "unexpected int field type");
+    CUDF_EXPECTS(field_type != EXPECTED_TYPE, "expected " + type_string() + " field");
     if constexpr (is_byte) {
       val = cpr->getb();
     } else {
