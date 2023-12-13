@@ -27,6 +27,7 @@ __global__ void do_nothing_kernel() {}
 TEST_F(StreamPoolTest, ForkStreams)
 {
   auto streams = cudf::detail::fork_streams(cudf::test::get_default_stream(), 2);
-  do_nothing_kernel<<<1, 32, 0, streams[0].value()>>>();
-  do_nothing_kernel<<<1, 32, 0, streams[1].value()>>>();
+  for (auto& stream : streams){
+    do_nothing_kernel<<<1, 32, 0, stream.value()>>>();
+  }
 }
