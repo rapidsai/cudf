@@ -45,7 +45,9 @@ std::unique_ptr<column> to_booleans(strings_column_view const& input,
                                     rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = input.size();
-  if (strings_count == 0) return make_numeric_column(data_type{type_id::BOOL8}, 0);
+  if (strings_count == 0) {
+    return make_numeric_column(data_type{type_id::BOOL8}, 0, mask_state::UNALLOCATED, stream);
+  }
 
   CUDF_EXPECTS(true_string.is_valid(stream) && true_string.size() > 0,
                "Parameter true_string must not be empty.");
