@@ -98,8 +98,8 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
 
   if (_keys_pre_sorted == sorted::YES) {
     _key_sorted_order = cudf::detail::sequence(_keys.num_rows(),
-                                               numeric_scalar<size_type>(0),
-                                               numeric_scalar<size_type>(1),
+                                               numeric_scalar<size_type>(0, true, stream),
+                                               numeric_scalar<size_type>(1, true, stream),
                                                stream,
                                                rmm::mr::get_current_device_resource());
     return sliced_key_sorted_order();
@@ -238,7 +238,7 @@ column_view sort_groupby_helper::keys_bitmask_column(rmm::cuda_stream_view strea
   auto [row_bitmask, null_count] =
     cudf::detail::bitmask_and(_keys, stream, rmm::mr::get_current_device_resource());
 
-  auto const zero = numeric_scalar<int8_t>(0);
+  auto const zero = numeric_scalar<int8_t>(0, true, stream);
   // Create a temporary variable and only set _keys_bitmask_column right before the return.
   // This way, a 2nd (parallel) call to this will not be given a partially created object.
   auto keys_bitmask_column = cudf::detail::sequence(

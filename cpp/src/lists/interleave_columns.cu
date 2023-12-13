@@ -312,7 +312,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<cudf::is_fixed_width<T>(
     if (data_has_null_mask) {
       auto [null_mask, null_count] = cudf::detail::valid_if(
         validities.begin(), validities.end(), thrust::identity{}, stream, mr);
-      if (null_count > 0) { output->set_null_mask(null_mask, null_count); }
+      if (null_count > 0) { output->set_null_mask(std::move(null_mask), null_count); }
     }
 
     return output;

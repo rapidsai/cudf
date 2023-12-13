@@ -135,7 +135,17 @@ def is_scalar(val):
             cudf._lib.scalar.DeviceScalar,
             cudf.core.tools.datetimes.DateOffset,
         ),
-    ) or pd_types.is_scalar(val)
+    ) or (
+        pd_types.is_scalar(val)
+        # Pytorch tensors advertise that they support the number
+        # protocol, and therefore return True for PyNumber_Check even
+        # when they have a shape. So, if we get through this, let's
+        # additionally check that if they have a shape property that
+        # it is empty.
+        # See https://github.com/pytorch/pytorch/issues/99646
+        # and https://github.com/pandas-dev/pandas/issues/52701
+        and len(getattr(val, "shape", ())) == 0
+    )
 
 
 def _is_scalar_or_zero_d_array(val):
