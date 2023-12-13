@@ -3500,7 +3500,6 @@ def test_dataframe_mulitindex_sort_index(
             and ignore_index
             and not (level is None and not ascending),
             reason="https://github.com/pandas-dev/pandas/issues/56478",
-            strict=True,
         )
     )
     pdf = pd.DataFrame(
