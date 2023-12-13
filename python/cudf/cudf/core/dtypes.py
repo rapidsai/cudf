@@ -228,11 +228,11 @@ class CategoricalDtype(_BaseDtype):
         >>> import pandas as pd
         >>> pd_dtype = pd.CategoricalDtype(categories=['b', 'a'], ordered=True)
         >>> pd_dtype
-        CategoricalDtype(categories=['b', 'a'], ordered=True)
+        CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
         >>> cudf_dtype = cudf.CategoricalDtype.from_pandas(pd_dtype)
         >>> cudf_dtype
-        CategoricalDtype(categories=['b', 'a'], ordered=True)
-        """
+        CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
+        """  # noqa: E501
         return CategoricalDtype(
             categories=dtype.categories, ordered=dtype.ordered
         )
@@ -246,10 +246,10 @@ class CategoricalDtype(_BaseDtype):
         >>> import cudf
         >>> dtype = cudf.CategoricalDtype(categories=['b', 'a'], ordered=True)
         >>> dtype
-        CategoricalDtype(categories=['b', 'a'], ordered=True)
+        CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
         >>> dtype.to_pandas()
-        CategoricalDtype(categories=['b', 'a'], ordered=True)
-        """
+        CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
+        """  # noqa: E501
         if self._categories is None:
             categories = None
         else:
