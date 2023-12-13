@@ -131,7 +131,6 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
 
   std::vector<std::unique_ptr<column>> children;
   children.emplace_back(std::move(offsets_column));
-  // children.emplace_back(std::move(chars_column));
   return std::make_unique<column>(data_type{type_id::STRING},
                                   num_strings,
                                   std::move(*(chars_column->release().data.release())),
@@ -175,7 +174,6 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
   if (num_strings == 0) { return make_empty_column(type_id::STRING); }
 
   auto const offsets_size = static_cast<size_type>(offsets.size());
-  // auto const chars_size   = static_cast<size_type>(chars.size());
 
   if (null_count > 0) CUDF_EXPECTS(null_mask.size() > 0, "Column with nulls must be nullable.");
 
@@ -188,17 +186,10 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
     rmm::device_buffer(),
     0);
 
-  // auto chars_column = std::make_unique<column>(  //
-  //   data_type{type_id::INT8},
-  //   chars_size,
-  //   ,
-  //   rmm::device_buffer(),
-  //   0);
 
   auto children = std::vector<std::unique_ptr<column>>();
 
   children.emplace_back(std::move(offsets_column));
-  // children.emplace_back(std::move(chars_column));
 
   return std::make_unique<column>(data_type{type_id::STRING},
                                   num_strings,

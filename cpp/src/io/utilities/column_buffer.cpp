@@ -161,7 +161,6 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
       if (schema.value_or(reader_column_schema{}).is_enabled_convert_binary_to_strings()) {
         if (schema_info != nullptr) {
           schema_info->children.push_back(column_name_info{"offsets"});
-          // schema_info->children.push_back(column_name_info{"chars"});
         }
 
         // make_strings_column allocates new memory, it does not simply move
