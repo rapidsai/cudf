@@ -244,6 +244,8 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(page_state_s* s,
   int str_len        = 0;
 
   // NOTE: racecheck warns about a RAW involving s->dict_pos, which is likely a false positive
+  // because the only path that does not include a sync will lead to s->dict_pos being overwritten
+  // with the same value
 
   while (pos < target_pos) {
     int is_literal, batch_len;
@@ -360,6 +362,8 @@ inline __device__ int gpuDecodeRleBooleans(page_state_s* s, state_buf* sb, int t
   int64_t pos        = s->dict_pos;
 
   // NOTE: racecheck warns about a RAW involving s->dict_pos, which is likely a false positive
+  // because the only path that does not include a sync will lead to s->dict_pos being overwritten
+  // with the same value
 
   while (pos < target_pos) {
     int is_literal, batch_len;
