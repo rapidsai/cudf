@@ -3,7 +3,7 @@
 import os
 import socket
 from contextlib import contextmanager
-from io import BytesIO
+from io import BytesIO, StringIO
 
 import numpy as np
 import pandas as pd
@@ -433,7 +433,7 @@ def test_read_json(s3_base, s3so):
             storage_options=s3so,
         )
 
-    expect = pd.read_json(buffer, lines=True)
+    expect = pd.read_json(StringIO(buffer), lines=True)
     assert_eq(expect, got)
 
 

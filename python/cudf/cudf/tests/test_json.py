@@ -13,12 +13,13 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_200
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
     assert_eq,
+    expect_warning_if,
 )
 
 
@@ -94,6 +95,8 @@ def json_files(request, tmp_path_factory, pdf):
             "'table'"
         )
     if index is False and orient == "table":
+        pytest.skip("'index=False' isn't valid when 'orient' is 'table'")
+    if index is True and orient not in ("split", "table", "index", "columns"):
         pytest.skip("'index=False' isn't valid when 'orient' is 'table'")
     fname_df = tmp_path_factory.mktemp("json") / "test_df.json"
     fname_series = tmp_path_factory.mktemp("json") / "test_series.json"
@@ -338,8 +341,16 @@ def json_input(request, tmp_path_factory):
 @pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.parametrize("engine", ["auto", "cudf", "pandas"])
 def test_json_lines_basic(json_input, engine):
-    cu_df = cudf.read_json(json_input, engine=engine, lines=True)
-    pd_df = pd.read_json(json_input, lines=True)
+    with expect_warning_if(
+        isinstance(json_input, str) and not json_input.endswith(".json")
+    ):
+        cu_df = cudf.read_json(json_input, engine=engine, lines=True)
+    with expect_warning_if(
+        isinstance(json_input, str)
+        and PANDAS_GE_210
+        and not json_input.endswith(".json")
+    ):
+        pd_df = pd.read_json(json_input, lines=True)
 
     assert all(cu_df.dtypes == ["int64", "int64", "int64"])
     for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):
@@ -353,7 +364,12 @@ def test_json_lines_multiple(tmpdir, json_input, engine):
     tmp_file1 = tmpdir.join("MultiInputs1.json")
     tmp_file2 = tmpdir.join("MultiInputs2.json")
 
-    pdf = pd.read_json(json_input, lines=True)
+    with expect_warning_if(
+        isinstance(json_input, str)
+        and PANDAS_GE_210
+        and not json_input.endswith(".json")
+    ):
+        pdf = pd.read_json(json_input, lines=True)
     pdf.to_json(tmp_file1, compression="infer", lines=True, orient="records")
     pdf.to_json(tmp_file2, compression="infer", lines=True, orient="records")
 
@@ -368,7 +384,12 @@ def test_json_lines_multiple(tmpdir, json_input, engine):
 
 @pytest.mark.parametrize("engine", ["auto", "cudf"])
 def test_json_read_directory(tmpdir, json_input, engine):
-    pdf = pd.read_json(json_input, lines=True)
+    with expect_warning_if(
+        isinstance(json_input, str)
+        and PANDAS_GE_210
+        and not json_input.endswith(".json")
+    ):
+        pdf = pd.read_json(json_input, lines=True)
     pdf.to_json(
         tmpdir.join("MultiInputs1.json"),
         compression="infer",
@@ -400,37 +421,47 @@ def test_json_read_directory(tmpdir, json_input, engine):
 def test_json_lines_byte_range(json_input):
     # include the first row and half of the second row
     # should parse the first two rows
-    df = cudf.read_json(
-        copy.deepcopy(json_input), lines=True, byte_range=(0, 15)
+    will_warn = isinstance(json_input, str) and not json_input.endswith(
+        ".json"
     )
+    with expect_warning_if(will_warn):
+        df = cudf.read_json(
+            copy.deepcopy(json_input), lines=True, byte_range=(0, 15)
+        )
     assert df.shape == (2, 3)
 
     # include half of the second row and half of the third row
     # should parse only the third row
-    df = cudf.read_json(
-        copy.deepcopy(json_input), lines=True, byte_range=(15, 10)
-    )
+    with expect_warning_if(will_warn):
+        df = cudf.read_json(
+            copy.deepcopy(json_input), lines=True, byte_range=(15, 10)
+        )
     assert df.shape == (1, 3)
 
     # include half of the second row and entire third row
     # should parse only the third row
-    df = cudf.read_json(
-        copy.deepcopy(json_input), lines=True, byte_range=(15, 0)
-    )
+    with expect_warning_if(will_warn):
+        df = cudf.read_json(
+            copy.deepcopy(json_input), lines=True, byte_range=(15, 0)
+        )
     assert df.shape == (1, 3)
 
     # include half of the second row till past the end of the file
     # should parse only the third row
-    df = cudf.read_json(
-        copy.deepcopy(json_input), lines=True, byte_range=(10, 50)
-    )
+    with expect_warning_if(will_warn):
+        df = cudf.read_json(
+            copy.deepcopy(json_input), lines=True, byte_range=(10, 50)
+        )
     assert df.shape == (1, 3)
 
 
 def test_json_lines_dtypes(json_input):
-    df = cudf.read_json(
-        json_input, lines=True, dtype={1: "int", 2: "short", 0: "float"}
-    )
+    with expect_warning_if(
+        isinstance(json_input, str) and not json_input.endswith(".json")
+    ):
+        df = cudf.read_json(
+            json_input, lines=True, dtype={1: "int", 2: "short", 0: "float"}
+        )
     assert all(df.dtypes == ["float64", "int64", "int16"])
 
 
@@ -470,32 +501,32 @@ def test_json_engine_selection():
     json = "[1, 2, 3]"
 
     # should use the cudf engine
-    df = cudf.read_json(json, lines=True)
+    df = cudf.read_json(StringIO(json), lines=True)
     # column names are strings when parsing with cudf
     for col_name in df.columns:
         assert isinstance(col_name, str)
 
     # should use the pandas engine
-    df = cudf.read_json(json, lines=False, engine="pandas")
+    df = cudf.read_json(StringIO(json), lines=False, engine="pandas")
     # column names are ints when parsing with pandas
     for col_name in df.columns:
         assert isinstance(col_name, int)
 
     # should use the pandas engine
-    df = cudf.read_json(json, lines=True, engine="pandas")
+    df = cudf.read_json(StringIO(json), lines=True, engine="pandas")
     # column names are ints when parsing with pandas
     for col_name in df.columns:
         assert isinstance(col_name, int)
 
     # should raise an exception
     with pytest.raises(ValueError):
-        cudf.read_json(json, lines=False, engine="cudf_legacy")
+        cudf.read_json(StringIO(json), lines=False, engine="cudf_legacy")
 
 
 def test_json_bool_values():
     buffer = "[true,1]\n[false,false]\n[true,true]"
-    cu_df = cudf.read_json(buffer, lines=True)
-    pd_df = pd.read_json(buffer, lines=True)
+    cu_df = cudf.read_json(StringIO(buffer), lines=True)
+    pd_df = pd.read_json(StringIO(buffer), lines=True)
 
     # types should be ['bool', 'int64']
     np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
@@ -504,7 +535,7 @@ def test_json_bool_values():
     np.testing.assert_array_equal(pd_df[1], cu_df["1"].to_numpy())
 
     cu_df = cudf.read_json(
-        buffer, lines=True, dtype={"0": "bool", "1": "long"}
+        StringIO(buffer), lines=True, dtype={"0": "bool", "1": "long"}
     )
     np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
 
@@ -522,7 +553,7 @@ def test_json_bool_values():
     ],
 )
 def test_json_null_literal(buffer):
-    df = cudf.read_json(buffer, lines=True, engine="cudf_legacy")
+    df = cudf.read_json(StringIO(buffer), lines=True, engine="cudf_legacy")
 
     # first column contains a null field, type should be set to float
     # second column contains only empty fields, type should be set to int8
@@ -534,7 +565,7 @@ def test_json_null_literal(buffer):
 
 
 def test_json_bad_protocol_string():
-    test_string = '{"field": "s3://path"}'
+    test_string = StringIO('{"field": "s3://path"}')
 
     expect = pd.DataFrame([{"field": "s3://path"}])
     got = cudf.read_json(test_string, lines=True)
@@ -748,7 +779,7 @@ def test_default_integer_bitwidth_extremes(default_integer_bitwidth, engine):
 def test_default_float_bitwidth(default_float_bitwidth):
     # Test that float columns in json are _inferred_ as 32 bit columns.
     df = cudf.read_json(
-        '{"a": 1.0, "b": 2.5}\n{"a": 3.5, "b": 4.0}',
+        StringIO('{"a": 1.0, "b": 2.5}\n{"a": 3.5, "b": 4.0}'),
         engine="cudf",
         lines=True,
         orient="records",
@@ -1231,7 +1262,7 @@ def test_json_round_trip_gzip():
 @pytest.mark.parametrize("lines", [True, False])
 def test_json_array_of_arrays(data, lines):
     data = data if lines else "[" + data.replace("\n", ",") + "]"
-    pdf = pd.read_json(data, orient="values", lines=lines)
+    pdf = pd.read_json(StringIO(data), orient="values", lines=lines)
     df = cudf.read_json(
         StringIO(data),
         engine="cudf",
@@ -1325,8 +1356,8 @@ def test_json_nested_mixed_types_in_list(jsonl_string):
 
     # both json lines and json string tested.
     json_string = "[" + jsonl_string.replace("\n", ",") + "]"
-    pdf = pd.read_json(jsonl_string, orient="records", lines=True)
-    pdf2 = pd.read_json(json_string, orient="records", lines=False)
+    pdf = pd.read_json(StringIO(jsonl_string), orient="records", lines=True)
+    pdf2 = pd.read_json(StringIO(json_string), orient="records", lines=False)
     assert_eq(pdf, pdf2)
     # replace list elements with None if it has dict and non-dict
     # in above test cases, these items are mixed with dict/list items
