@@ -4249,6 +4249,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndex)
 
       ASSERT_TRUE(stats.min_value.has_value());
       ASSERT_TRUE(stats.max_value.has_value());
+      ASSERT_TRUE(ci.null_counts.has_value());
 
       // schema indexing starts at 1
       auto const ptype = fmd.schema[c + 1].type;
@@ -4257,7 +4258,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndex)
         // null_pages should always be false
         EXPECT_FALSE(ci.null_pages[p]);
         // null_counts should always be 0
-        EXPECT_EQ(ci.null_counts[p], 0);
+        EXPECT_EQ(ci.null_counts.value()[p], 0);
         EXPECT_TRUE(compare_binary(stats.min_value.value(), ci.min_values[p], ptype, ctype) <= 0);
       }
       for (size_t p = 0; p < ci.max_values.size(); p++)
@@ -4356,6 +4357,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNulls)
       ASSERT_TRUE(stats.max_value.has_value());
       ASSERT_TRUE(stats.null_count.has_value());
       EXPECT_EQ(stats.null_count.value(), c == 0 ? 0 : num_rows / 2);
+      ASSERT_TRUE(ci.null_counts.has_value());
 
       // schema indexing starts at 1
       auto const ptype = fmd.schema[c + 1].type;
@@ -4363,9 +4365,9 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNulls)
       for (size_t p = 0; p < ci.min_values.size(); p++) {
         EXPECT_FALSE(ci.null_pages[p]);
         if (c > 0) {  // first column has no nulls
-          EXPECT_GT(ci.null_counts[p], 0);
+          EXPECT_GT(ci.null_counts.value()[p], 0);
         } else {
-          EXPECT_EQ(ci.null_counts[p], 0);
+          EXPECT_EQ(ci.null_counts.value()[p], 0);
         }
         EXPECT_TRUE(compare_binary(stats.min_value.value(), ci.min_values[p], ptype, ctype) <= 0);
       }
@@ -4453,6 +4455,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNullColumn)
       }
       ASSERT_TRUE(stats.null_count.has_value());
       EXPECT_EQ(stats.null_count.value(), c == 1 ? num_rows : 0);
+      ASSERT_TRUE(ci.null_counts.has_value());
 
       // schema indexing starts at 1
       auto const ptype = fmd.schema[c + 1].type;
@@ -4461,10 +4464,10 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNullColumn)
         // check tnat null_pages is true for column 1
         if (c == 1) {
           EXPECT_TRUE(ci.null_pages[p]);
-          EXPECT_GT(ci.null_counts[p], 0);
+          EXPECT_GT(ci.null_counts.value()[p], 0);
         }
         if (not ci.null_pages[p]) {
-          EXPECT_EQ(ci.null_counts[p], 0);
+          EXPECT_EQ(ci.null_counts.value()[p], 0);
           EXPECT_TRUE(compare_binary(stats.min_value.value(), ci.min_values[p], ptype, ctype) <= 0);
         }
       }
@@ -4651,6 +4654,8 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStructNulls)
       }
 
       int64_t num_vals = 0;
+
+      if (is_v2) { ASSERT_TRUE(ci.null_counts.has_value()); }
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
         auto const& page_loc = oi.page_locations[o];
         auto const ph        = read_page_header(source, page_loc);
@@ -4658,7 +4663,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStructNulls)
         EXPECT_EQ(page_loc.first_row_index, num_vals);
         num_vals += is_v2 ? ph.data_page_header_v2.num_rows : ph.data_page_header.num_values;
         // check that null counts match
-        if (is_v2) { EXPECT_EQ(ci.null_counts[o], ph.data_page_header_v2.num_nulls); }
+        if (is_v2) { EXPECT_EQ(ci.null_counts.value()[o], ph.data_page_header_v2.num_nulls); }
       }
     }
   }
@@ -4863,7 +4868,8 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
 
       // should only be one page
       EXPECT_FALSE(ci.null_pages[0]);
-      EXPECT_EQ(ci.null_counts[0], expected_null_counts[c]);
+      ASSERT_TRUE(ci.null_counts.has_value());
+      EXPECT_EQ(ci.null_counts.value()[0], expected_null_counts[c]);
 
       ASSERT_TRUE(ci.definition_level_histogram.has_value());
       EXPECT_EQ(ci.definition_level_histogram.value(), expected_def_hists[c]);

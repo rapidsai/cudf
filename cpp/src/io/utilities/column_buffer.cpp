@@ -194,7 +194,8 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
           std::move(col_content.children[strings_column_view::offsets_column_index]),
           std::move(uint8_col),
           null_count,
-          std::move(*col_content.null_mask));
+          std::move(*col_content.null_mask),
+          stream);
       }
 
     case type_id::LIST: {
