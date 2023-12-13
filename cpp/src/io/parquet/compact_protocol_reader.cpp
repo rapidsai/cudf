@@ -144,7 +144,7 @@ class parquet_field_int : public parquet_field {
 
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    CUDF_EXPECTS(field_type != EXPECTED_TYPE, "expected " + type_string() + " field");
+    CUDF_EXPECTS(field_type == EXPECTED_TYPE, "expected " + type_string() + " field");
     if constexpr (is_byte) {
       val = cpr->getb();
     } else {
