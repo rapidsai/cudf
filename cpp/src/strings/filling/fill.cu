@@ -58,7 +58,7 @@ std::unique_ptr<column> fill(strings_column_view const& strings,
   auto d_strings      = *strings_column;
 
   // create resulting null mask
-  auto valid_mask = [begin, end, d_value, value, d_strings, stream, mr] {
+  auto valid_mask = [begin, end, d_value, &value, d_strings, stream, mr] {
     if (begin == 0 and end == d_strings.size() and value.is_valid(stream))
       return std::pair(rmm::device_buffer{}, 0);
     return cudf::detail::valid_if(
