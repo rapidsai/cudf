@@ -2360,6 +2360,11 @@ def as_column(
             ):
                 ser = pd.Series(arbitrary, dtype=dtype.to_pandas())
                 data = as_column(ser, nan_as_null=nan_as_null, dtype=dtype)
+            elif isinstance(dtype, cudf.StructDtype) and not isinstance(
+                dtype, cudf.IntervalDtype
+            ):
+                data = pa.array(arbitrary, type=dtype.to_arrow())
+                return as_column(data, nan_as_null=nan_as_null, dtype=dtype)
 
         pa_type = None
         np_type = None
@@ -2384,47 +2389,8 @@ def as_column(
                             "Cannot create list column from given data"
                         )
                     return as_column(data, nan_as_null=nan_as_null)
-                elif isinstance(dtype, cudf.StructDtype) and not isinstance(
-                    dtype, cudf.IntervalDtype
-                ):
-                    data = pa.array(arbitrary, type=dtype.to_arrow())
-                    return as_column(data, nan_as_null=nan_as_null)
-                elif isinstance(dtype, cudf.core.dtypes.Decimal128Dtype):
-                    data = pa.array(
-                        arbitrary,
-                        type=pa.decimal128(
-                            precision=dtype.precision, scale=dtype.scale
-                        ),
-                    )
-                    return cudf.core.column.Decimal128Column.from_arrow(data)
-                elif isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
-                    data = pa.array(
-                        arbitrary,
-                        type=pa.decimal128(
-                            precision=dtype.precision, scale=dtype.scale
-                        ),
-                    )
-                    return cudf.core.column.Decimal64Column.from_arrow(data)
-                elif isinstance(dtype, cudf.core.dtypes.Decimal32Dtype):
-                    data = pa.array(
-                        arbitrary,
-                        type=pa.decimal128(
-                            precision=dtype.precision, scale=dtype.scale
-                        ),
-                    )
-                    return cudf.core.column.Decimal32Column.from_arrow(data)
-                if is_bool_dtype(dtype):
-                    # Need this special case handling for bool dtypes,
-                    # since 'boolean' & 'pd.BooleanDtype' are not
-                    # understood by np.dtype below.
-                    dtype = "bool"
+
                 np_dtype = np.dtype(dtype)
-                if np_dtype.kind in {"m", "M"}:
-                    unit = np.datetime_data(np_dtype)[0]
-                    if unit not in {"ns", "us", "ms", "s", "D"}:
-                        raise NotImplementedError(
-                            f"{dtype=} is not supported."
-                        )
                 np_type = np_dtype.type
                 pa_type = np_to_pa_dtype(np_dtype)
             else:
