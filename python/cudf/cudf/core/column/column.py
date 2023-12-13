@@ -2173,6 +2173,14 @@ def as_column(
 
     elif is_scalar(arbitrary) and not isinstance(arbitrary, memoryview):
         length = length or 1
+        if isinstance(arbitrary, pd.Interval):
+            # No cudf.Scalar support yet
+            return as_column(
+                pd.Series([arbitrary] * length),
+                nan_as_null=nan_as_null,
+                dtype=dtype,
+                length=length,
+            )
         if (
             nan_as_null is True
             and isinstance(arbitrary, (np.floating, float))
