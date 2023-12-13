@@ -103,7 +103,7 @@ std::unique_ptr<column> scan_exclusive(column_view const& input,
 
   auto output = scan_agg_dispatch<scan_dispatcher>(
     input, agg, static_cast<bitmask_type*>(mask.data()), stream, mr);
-  output->set_null_mask(mask, null_count);
+  output->set_null_mask(std::move(mask), null_count);
 
   return output;
 }

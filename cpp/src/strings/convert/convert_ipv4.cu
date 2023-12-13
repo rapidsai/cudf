@@ -77,7 +77,9 @@ std::unique_ptr<column> ipv4_to_integers(strings_column_view const& input,
                                          rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = input.size();
-  if (strings_count == 0) return make_numeric_column(data_type{type_id::INT64}, 0);
+  if (strings_count == 0) {
+    return make_numeric_column(data_type{type_id::INT64}, 0, mask_state::UNALLOCATED, stream);
+  }
 
   auto strings_column = column_device_view::create(input.parent(), stream);
   // create output column copying the strings' null-mask

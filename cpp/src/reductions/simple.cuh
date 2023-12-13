@@ -67,7 +67,7 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
 
   // Cast initial value
   std::optional<ResultType> const initial_value = [&] {
-    if (init.has_value() && init.value().get().is_valid()) {
+    if (init.has_value() && init.value().get().is_valid(stream)) {
       using ScalarType = cudf::scalar_type_t<ElementType>;
       auto input_value = static_cast<ScalarType const*>(&init.value().get())->value(stream);
       return std::optional<ResultType>(static_cast<ResultType>(input_value));
@@ -90,7 +90,8 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
 
   // set scalar is valid
   result->set_valid_async(
-    col.null_count() < col.size() && (!init.has_value() || init.value().get().is_valid()), stream);
+    col.null_count() < col.size() && (!init.has_value() || init.value().get().is_valid(stream)),
+    stream);
   return result;
 }
 
@@ -131,7 +132,8 @@ std::unique_ptr<scalar> fixed_point_reduction(
   auto result_scalar =
     cudf::make_fixed_point_scalar<DecimalXX>(val->value(stream), scale, stream, mr);
   result_scalar->set_valid_async(
-    col.null_count() < col.size() && (!init.has_value() || init.value().get().is_valid()), stream);
+    col.null_count() < col.size() && (!init.has_value() || init.value().get().is_valid(stream)),
+    stream);
   return result_scalar;
 }
 
@@ -170,7 +172,8 @@ std::unique_ptr<scalar> dictionary_reduction(
 
   // set scalar is valid
   result->set_valid_async(
-    col.null_count() < col.size() && (!init.has_value() || init.value().get().is_valid()), stream);
+    col.null_count() < col.size() && (!init.has_value() || init.value().get().is_valid(stream)),
+    stream);
   return result;
 }
 
