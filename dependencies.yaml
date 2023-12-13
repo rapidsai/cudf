@@ -193,7 +193,7 @@ dependencies:
       - output_types: conda
         packages:
           - &cmake_ver cmake>=3.26.4
-          - ninja
+          - &ninja ninja
           - c-compiler
           - cxx-compiler
           - dlpack>=0.5,<0.6.0a0
@@ -252,7 +252,9 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
+          - *cmake_ver
           - cython>=3.0.3
+          - *ninja
           # TODO: Pin to numpy<1.25 until cudf requires pandas 2
           - &numpy numpy>=1.21,<1.25
           # Hard pin the patch version used during the build. This must be kept
