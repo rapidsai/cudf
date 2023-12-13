@@ -186,7 +186,6 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
     rmm::device_buffer(),
     0);
 
-
   auto children = std::vector<std::unique_ptr<column>>();
 
   children.emplace_back(std::move(offsets_column));
