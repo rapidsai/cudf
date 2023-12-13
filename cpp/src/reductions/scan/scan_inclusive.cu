@@ -181,7 +181,7 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
 
   auto output = scan_agg_dispatch<scan_dispatcher>(
     input, agg, static_cast<bitmask_type*>(mask.data()), stream, mr);
-  output->set_null_mask(mask, null_count);
+  output->set_null_mask(std::move(mask), null_count);
 
   // If the input is a structs column, we also need to push down nulls from the parent output column
   // into the children columns.

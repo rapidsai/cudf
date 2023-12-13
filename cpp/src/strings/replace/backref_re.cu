@@ -122,7 +122,7 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& input,
   rmm::device_uvector<backref_type> backrefs = cudf::detail::make_device_uvector_async(
     parse_result.second, stream, rmm::mr::get_current_device_resource());
   string_scalar repl_scalar(parse_result.first, true, stream);
-  string_view const d_repl_template = repl_scalar.value();
+  string_view const d_repl_template = repl_scalar.value(stream);
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
 
