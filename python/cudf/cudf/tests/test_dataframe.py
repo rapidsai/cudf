@@ -3492,8 +3492,16 @@ def test_dataframe_sort_index(
 @pytest.mark.parametrize("inplace", [True, False])
 @pytest.mark.parametrize("na_position", ["first", "last"])
 def test_dataframe_mulitindex_sort_index(
-    axis, level, ascending, inplace, ignore_index, na_position
+    request, axis, level, ascending, inplace, ignore_index, na_position
 ):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=axis in (1, "columns")
+            and ignore_index
+            and not (level is None and not ascending),
+            reason="https://github.com/pandas-dev/pandas/issues/56478",
+        )
+    )
     pdf = pd.DataFrame(
         {
             "b": [1.0, 3.0, np.nan],
@@ -3505,17 +3513,14 @@ def test_dataframe_mulitindex_sort_index(
     ).set_index(["b", "a", 1])
     gdf = cudf.DataFrame.from_pandas(pdf)
 
-    # ignore_index is supported in v.1.0
-
     expected = pdf.sort_index(
         axis=axis,
         level=level,
         ascending=ascending,
         inplace=inplace,
         na_position=na_position,
+        ignore_index=ignore_index,
     )
-    if ignore_index is True:
-        expected = expected
     got = gdf.sort_index(
         axis=axis,
         level=level,
@@ -3526,12 +3531,8 @@ def test_dataframe_mulitindex_sort_index(
     )
 
     if inplace is True:
-        if ignore_index is True:
-            pdf = pdf.reset_index(drop=True)
         assert_eq(pdf, gdf)
     else:
-        if ignore_index is True:
-            expected = expected.reset_index(drop=True)
         assert_eq(expected, got)
 
 

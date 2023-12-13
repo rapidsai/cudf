@@ -1611,8 +1611,6 @@ class IndexedFrame(Frame):
             idx = self.index
             if isinstance(idx, MultiIndex):
                 if level is not None:
-                    # Pandas doesn't handle na_position in case of MultiIndex.
-                    na_position = "first" if ascending is True else "last"
                     if not is_list_like(level):
                         level = [level]
                     by = list(map(idx._get_level_label, level))
