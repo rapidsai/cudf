@@ -729,7 +729,7 @@ bool CompactProtocolReader::read(ColumnIndex* c)
                             parquet_field_binary_list(2, c->min_values),
                             parquet_field_binary_list(3, c->max_values),
                             parquet_field_enum<BoundaryOrder>(4, c->boundary_order),
-                            parquet_field_int64_list(5, c->null_counts),
+                            optional_list_i64(5, c->null_counts),
                             optional_list_i64(6, c->repetition_level_histogram),
                             optional_list_i64(7, c->definition_level_histogram));
   return function_builder(this, op);
