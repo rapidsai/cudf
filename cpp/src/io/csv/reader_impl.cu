@@ -861,8 +861,8 @@ table_with_metadata read_csv(cudf::io::datasource* source,
       stream,
       mr);
 
-    string_scalar quotechar_scalar(std::string(1, parse_opts.quotechar), true, stream);
-    string_scalar dblquotechar_scalar(std::string(2, parse_opts.quotechar), true, stream);
+    cudf::string_scalar quotechar_scalar(std::string(1, parse_opts.quotechar), true, stream);
+    cudf::string_scalar dblquotechar_scalar(std::string(2, parse_opts.quotechar), true, stream);
     for (size_t i = 0; i < column_types.size(); ++i) {
       metadata.schema_info.emplace_back(out_buffers[i].name);
       if (column_types[i].id() == type_id::STRING && parse_opts.quotechar != '\0' &&
