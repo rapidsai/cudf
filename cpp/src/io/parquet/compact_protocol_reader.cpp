@@ -42,6 +42,31 @@ class parquet_field {
   int field() const { return _field_val; }
 };
 
+std::string field_type_string(FieldType type)
+{
+  switch (type) {
+    case ST_FLD_TRUE: return "bool(true)";
+    case ST_FLD_FALSE: return "bool(false)";
+    case ST_FLD_BYTE: return "int8";
+    case ST_FLD_I16: return "int16";
+    case ST_FLD_I32: return "int32";
+    case ST_FLD_I64: return "int64";
+    case ST_FLD_DOUBLE: return "double";
+    case ST_FLD_BINARY: return "binary";
+    case ST_FLD_STRUCT: return "struct";
+    case ST_FLD_LIST: return "list";
+    case ST_FLD_SET: return "set";
+    default: return "unknown(" + std::to_string(type) + ")";
+  }
+}
+
+void assert_field_type(int type, FieldType expected)
+{
+  CUDF_EXPECTS(type != expected,
+               "expected " + field_type_string(expected) + " field, got " +
+                 field_type_string(static_cast<FieldType>(200)) + " field instead");
+}
+
 /**
  * @brief Abstract base class for list functors.
  */
@@ -65,9 +90,9 @@ class parquet_field_list : public parquet_field {
  public:
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    CUDF_EXPECTS(field_type == ST_FLD_LIST, "expected list field");
+    assert_field_type(field_type, ST_FLD_LIST);
     auto const [t, n] = cpr->get_listh();
-    CUDF_EXPECTS(t == _expected_type, "list type mismatch");
+    assert_field_type(t, _expected_type);
     val.resize(n);
     for (uint32_t i = 0; i < n; i++) {
       _read_value(i, cpr);
@@ -121,30 +146,18 @@ struct parquet_field_bool_list : public parquet_field_list<bool> {
  *
  * @return True if there is a type mismatch
  */
-template <typename T, int EXPECTED_TYPE>
+template <typename T, FieldType EXPECTED_TYPE>
 class parquet_field_int : public parquet_field {
   static constexpr bool is_byte = std::is_same_v<T, int8_t>;
 
   T& val;
-
-  std::string type_string()
-  {
-    if constexpr (EXPECTED_TYPE == ST_FLD_BYTE) {
-      return "byte";
-    } else if constexpr (EXPECTED_TYPE == ST_FLD_I32) {
-      return "int32";
-    } else if constexpr (EXPECTED_TYPE == ST_FLD_I64) {
-      return "int64";
-    }
-    return "unknown(EXPECTED_TYPE=" + std::to_string(EXPECTED_TYPE) + ")";
-  }
 
  public:
   parquet_field_int(int f, T& v) : parquet_field(f), val(v) {}
 
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    CUDF_EXPECTS(field_type == EXPECTED_TYPE, "expected " + type_string() + " field");
+    assert_field_type(field_type, EXPECTED_TYPE);
     if constexpr (is_byte) {
       val = cpr->getb();
     } else {
@@ -190,7 +203,7 @@ class parquet_field_string : public parquet_field {
 
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    CUDF_EXPECTS(field_type == ST_FLD_BINARY, "expected binary field");
+    assert_field_type(field_type, ST_FLD_BINARY);
     auto const n = cpr->get_u32();
     CUDF_EXPECTS(n < static_cast<size_t>(cpr->m_end - cpr->m_cur), "string length mismatch");
 
@@ -233,7 +246,7 @@ class parquet_field_enum : public parquet_field {
   parquet_field_enum(int f, Enum& v) : parquet_field(f), val(v) {}
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    CUDF_EXPECTS(field_type == ST_FLD_I32, "unexpected enum field type");
+    assert_field_type(field_type, ST_FLD_I32);
     val = static_cast<Enum>(cpr->get_i32());
   }
 };
@@ -270,7 +283,7 @@ class parquet_field_struct : public parquet_field {
 
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    CUDF_EXPECTS(field_type == ST_FLD_STRUCT, "expected struct field");
+    assert_field_type(field_type, ST_FLD_STRUCT);
     cpr->read(&val);
   }
 };
@@ -316,7 +329,7 @@ class parquet_field_union_enumerator : public parquet_field {
 
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    CUDF_EXPECTS(field_type == ST_FLD_STRUCT, "expected struct field");
+    assert_field_type(field_type, ST_FLD_STRUCT);
     cpr->skip_struct_field(field_type);
     val = static_cast<E>(field());
   }
@@ -353,7 +366,7 @@ class parquet_field_binary : public parquet_field {
 
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    CUDF_EXPECTS(field_type == ST_FLD_BINARY, "expected binary field");
+    assert_field_type(field_type, ST_FLD_BINARY);
     auto const n = cpr->get_u32();
     CUDF_EXPECTS(n <= static_cast<size_t>(cpr->m_end - cpr->m_cur), "binary length mismatch");
 
@@ -397,7 +410,7 @@ class parquet_field_struct_blob : public parquet_field {
   parquet_field_struct_blob(int f, std::vector<uint8_t>& v) : parquet_field(f), val(v) {}
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    CUDF_EXPECTS(field_type == ST_FLD_STRUCT, "expected struct type");
+    assert_field_type(field_type, ST_FLD_STRUCT);
     uint8_t const* const start = cpr->m_cur;
     cpr->skip_struct_field(field_type);
     if (cpr->m_cur > start) { val.assign(start, cpr->m_cur - 1); }
