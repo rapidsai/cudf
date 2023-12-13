@@ -16,7 +16,6 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -61,8 +60,6 @@ struct chars_size_transform {
   __device__ size_t operator()(column_device_view const& col) const
   {
     if (col.size() > 0) {
-      // constexpr auto offsets_index = strings_column_view::offsets_column_index;
-      //  auto d_offsets               = col.child(offsets_index).data<int32_t>();
       auto const offsets   = col.child(strings_column_view::offsets_column_index);
       auto const d_offsets = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
       return d_offsets[col.size() + col.offset()] - d_offsets[col.offset()];
@@ -139,7 +136,6 @@ __global__ void fused_concatenate_string_offset_kernel(
     auto const offset_index  = output_index - *offset_it;
     auto const& input_view   = input_views[partition_index];
     auto const offsets_child = input_view.child(strings_column_view::offsets_column_index);
-    // auto const* input_data       = offsets_child.data<int32_t>();
     auto const input_data =
       cudf::detail::input_offsetalator(offsets_child.head(), offsets_child.type());
     output_data[output_index] =
@@ -193,7 +189,6 @@ __global__ void fused_concatenate_string_chars_kernel(column_device_view const* 
     auto const& input_view  = input_views[partition_index];
 
     auto const offsets_child = input_view.child(strings_column_view::offsets_column_index);
-    // auto const* input_offsets_data = offsets_child.data<int32_t>();
     auto const input_offsets_data =
       cudf::detail::input_offsetalator(offsets_child.head(), offsets_child.type());
 
@@ -233,16 +228,14 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   bool const has_nulls =
     std::any_of(columns.begin(), columns.end(), [](auto const& col) { return col.has_nulls(); });
 
-  // create chars column
+  // create output chars column
   auto chars_column = create_chars_child_column(total_bytes, stream, mr);
   auto d_new_chars  = chars_column->mutable_view().data<char>();
   chars_column->set_null_count(0);
 
-  // create offsets column
+  // create output offsets column
   auto offsets_column = make_numeric_column(
     data_type{type_id::INT32}, offsets_count, mask_state::UNALLOCATED, stream, mr);
-  // auto d_new_offsets = offsets_column->mutable_view().data<int32_t>();
-  // offsets_column->set_null_count(0);
   auto itr_new_offsets =
     cudf::detail::offsetalator_factory::make_output_iterator(offsets_column->mutable_view());
 
