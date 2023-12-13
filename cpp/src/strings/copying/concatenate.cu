@@ -296,20 +296,11 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
         column_view offsets_child = column->child(strings_column_view::offsets_column_index);
         column_view chars_child   = column->child(strings_column_view::chars_column_index);
 
-        int64_t const bytes_offset =
-          offsets_child.type().id() == type_id::INT64
-            ? cudf::detail::get_value<int64_t>(offsets_child, column_offset, stream)
-            : cudf::detail::get_value<int32_t>(offsets_child, column_offset, stream);
-        int64_t const bytes_end =
-          offsets_child.type().id() == type_id::INT64
-            ? cudf::detail::get_value<int64_t>(offsets_child, column_size + column_offset, stream)
-            : cudf::detail::get_value<int32_t>(offsets_child, column_size + column_offset, stream);
-
+        auto const bytes_offset = get_offset_value(offsets_child, column_offset, stream);
+        auto const bytes_end = get_offset_value(offsets_child, column_size + column_offset, stream);
         // copy the chars column data
         auto d_chars     = chars_child.data<char>() + bytes_offset;
         auto const bytes = bytes_end - bytes_offset;
-        // cudf::detail::get_value<size_type>(offsets_child, column_size + column_offset, stream) -
-        // bytes_offset;
 
         CUDF_CUDA_TRY(
           cudaMemcpyAsync(d_new_chars, d_chars, bytes, cudaMemcpyDefault, stream.value()));
