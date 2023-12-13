@@ -81,12 +81,12 @@ skip = [
 ]
 
 [tool.scikit-build]
+build-dir = "build/{wheel_tag}"
+cmake.build-type = "Release"
 cmake.minimum-version = "3.26.4"
 ninja.make-fallback = true
-cmake.build-type = "Release"
 sdist.reproducible = true
 wheel.packages = ["cudf_kafka"]
-build-dir = "build/{wheel_tag}"
 
 [tool.scikit-build.metadata.version]
 provider = "scikit_build_core.metadata.regex"
