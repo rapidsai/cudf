@@ -70,11 +70,10 @@ void assert_field_type(int type, FieldType expected)
 /**
  * @brief Abstract base class for list functors.
  */
-template <typename T>
+template <typename T, FieldType EXPECTED_ELEM_TYPE>
 class parquet_field_list : public parquet_field {
  private:
   using read_func_type = std::function<void(uint32_t, CompactProtocolReader*)>;
-  FieldType _expected_type;
   read_func_type _read_value;
 
  protected:
@@ -82,17 +81,14 @@ class parquet_field_list : public parquet_field {
 
   void bind_read_func(read_func_type fn) { _read_value = fn; }
 
-  parquet_field_list(int f, std::vector<T>& v, FieldType t)
-    : parquet_field(f), _expected_type(t), val(v)
-  {
-  }
+  parquet_field_list(int f, std::vector<T>& v) : parquet_field(f), val(v) {}
 
  public:
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
     assert_field_type(field_type, ST_FLD_LIST);
     auto const [t, n] = cpr->get_listh();
-    assert_field_type(t, _expected_type);
+    assert_field_type(t, EXPECTED_ELEM_TYPE);
     val.resize(n);
     for (uint32_t i = 0; i < n; i++) {
       _read_value(i, cpr);
@@ -126,8 +122,8 @@ class parquet_field_bool : public parquet_field {
  * @return True if field types mismatch or if the process of reading a
  * bool fails
  */
-struct parquet_field_bool_list : public parquet_field_list<bool> {
-  parquet_field_bool_list(int f, std::vector<bool>& v) : parquet_field_list(f, v, ST_FLD_TRUE)
+struct parquet_field_bool_list : public parquet_field_list<bool, ST_FLD_TRUE> {
+  parquet_field_bool_list(int f, std::vector<bool>& v) : parquet_field_list(f, v)
   {
     auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
       auto const current_byte = cpr->getb();
@@ -177,8 +173,8 @@ using parquet_field_int64 = parquet_field_int<int64_t, ST_FLD_I64>;
  * integer fails
  */
 template <typename T, FieldType EXPECTED_TYPE>
-struct parquet_field_int_list : public parquet_field_list<T> {
-  parquet_field_int_list(int f, std::vector<T>& v) : parquet_field_list<T>(f, v, EXPECTED_TYPE)
+struct parquet_field_int_list : public parquet_field_list<T, EXPECTED_TYPE> {
+  parquet_field_int_list(int f, std::vector<T>& v) : parquet_field_list<T, EXPECTED_TYPE>(f, v)
   {
     auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
       this->val[i] = cpr->get_zigzag<T>();
@@ -218,9 +214,8 @@ class parquet_field_string : public parquet_field {
  * @return True if field types mismatch or if the process of reading a
  * string fails
  */
-struct parquet_field_string_list : public parquet_field_list<std::string> {
-  parquet_field_string_list(int f, std::vector<std::string>& v)
-    : parquet_field_list(f, v, ST_FLD_BINARY)
+struct parquet_field_string_list : public parquet_field_list<std::string, ST_FLD_BINARY> {
+  parquet_field_string_list(int f, std::vector<std::string>& v) : parquet_field_list(f, v)
   {
     auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
       auto const l = cpr->get_u32();
@@ -258,8 +253,8 @@ class parquet_field_enum : public parquet_field {
  * enum fails
  */
 template <typename Enum>
-struct parquet_field_enum_list : public parquet_field_list<Enum> {
-  parquet_field_enum_list(int f, std::vector<Enum>& v) : parquet_field_list<Enum>(f, v, ST_FLD_I32)
+struct parquet_field_enum_list : public parquet_field_list<Enum, ST_FLD_I32> {
+  parquet_field_enum_list(int f, std::vector<Enum>& v) : parquet_field_list<Enum, ST_FLD_I32>(f, v)
   {
     auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
       this->val[i] = static_cast<Enum>(cpr->get_i32());
@@ -342,8 +337,8 @@ class parquet_field_union_enumerator : public parquet_field {
  * struct fails
  */
 template <typename T>
-struct parquet_field_struct_list : public parquet_field_list<T> {
-  parquet_field_struct_list(int f, std::vector<T>& v) : parquet_field_list<T>(f, v, ST_FLD_STRUCT)
+struct parquet_field_struct_list : public parquet_field_list<T, ST_FLD_STRUCT> {
+  parquet_field_struct_list(int f, std::vector<T>& v) : parquet_field_list<T, ST_FLD_STRUCT>(f, v)
   {
     auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
       cpr->read(&this->val[i]);
@@ -382,9 +377,8 @@ class parquet_field_binary : public parquet_field {
  * @return True if field types mismatch or if the process of reading a
  * binary fails
  */
-struct parquet_field_binary_list : public parquet_field_list<std::vector<uint8_t>> {
-  parquet_field_binary_list(int f, std::vector<std::vector<uint8_t>>& v)
-    : parquet_field_list(f, v, ST_FLD_BINARY)
+struct parquet_field_binary_list : public parquet_field_list<std::vector<uint8_t>, ST_FLD_BINARY> {
+  parquet_field_binary_list(int f, std::vector<std::vector<uint8_t>>& v) : parquet_field_list(f, v)
   {
     auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
       auto const l = cpr->get_u32();
