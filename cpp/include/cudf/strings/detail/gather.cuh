@@ -35,6 +35,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -301,11 +303,13 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
   auto const d_in_offsets = !strings.is_empty() ? strings.offsets_begin() : nullptr;
 
   auto offsets_itr = thrust::make_transform_iterator(
-    begin, [d_strings = *d_strings, d_in_offsets] __device__(size_type idx) {
-      if (NullifyOutOfBounds && (idx < 0 || idx >= d_strings.size())) { return 0; }
-      if (not d_strings.is_valid(idx)) { return 0; }
-      return d_in_offsets[idx + 1] - d_in_offsets[idx];
-    });
+    begin,
+    cuda::proclaim_return_type<size_type>(
+      [d_strings = *d_strings, d_in_offsets] __device__(size_type idx) {
+        if (NullifyOutOfBounds && (idx < 0 || idx >= d_strings.size())) { return 0; }
+        if (not d_strings.is_valid(idx)) { return 0; }
+        return d_in_offsets[idx + 1] - d_in_offsets[idx];
+      }));
   auto [out_offsets_column, total_bytes] =
     cudf::detail::make_offsets_child_column(offsets_itr, offsets_itr + output_count, stream, mr);
 

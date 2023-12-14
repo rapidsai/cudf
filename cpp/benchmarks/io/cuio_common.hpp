@@ -138,3 +138,27 @@ std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks,
  * @throw cudf::logic_error if the environment variable is set and the command fails
  */
 void try_drop_l3_cache();
+
+/**
+ * @brief Convert a string to the corresponding io_type enum value.
+ *
+ * This function takes a string and returns the matching io_type enum value. It allows you to
+ * convert a string representation of an io_type into its corresponding enum value.
+ *
+ * @param io_string The input string representing the io_type
+ *
+ * @return The io_type enum value
+ */
+cudf::io::io_type retrieve_io_type_enum(std::string_view io_string);
+
+/**
+ * @brief Convert a string to the corresponding compression_type enum value.
+ *
+ * This function takes a string and returns the matching compression_type enum value. It allows you
+ * to convert a string representation of a compression_type into its corresponding enum value.
+ *
+ * @param compression_string The input string representing the compression_type
+ *
+ * @return The compression_type enum value
+ */
+cudf::io::compression_type retrieve_compression_type_enum(std::string_view compression_string);
