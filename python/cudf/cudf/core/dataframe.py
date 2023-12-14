@@ -2744,11 +2744,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             if columns is None:
                 columns = labels
-        df = (
-            self
-            if columns is None
-            else self[list(set(self._column_names) & set(columns))]
-        )
+        if columns is None:
+            df = self
+        else:
+            columns = as_index(columns)
+            intersection = self._data.to_pandas_index().intersection(
+                columns.to_pandas()
+            )
+            df = self.loc[:, intersection]
 
         return df._reindex(
             column_names=columns,
@@ -6077,7 +6080,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     source = self._get_columns_by_label(numeric_cols)
                     if source.empty:
                         if axis == 2:
-                            return getattr(as_column([]), op)(**kwargs)
+                            return getattr(column_empty(0), op)(**kwargs)
                         else:
                             return Series(index=cudf.Index([], dtype="str"))
                     try:

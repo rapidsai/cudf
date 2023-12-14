@@ -225,9 +225,7 @@ void read_footer(std::unique_ptr<cudf::io::datasource> const& source,
     source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
   cudf::io::parquet::detail::CompactProtocolReader cp(footer_buffer->data(), ender->footer_len);
 
-  // returns true on success
-  bool res = cp.read(file_meta_data);
-  ASSERT_TRUE(res);
+  cp.read(file_meta_data);
 }
 
 // returns the number of bits used for dictionary encoding data at the given page location.
@@ -242,8 +240,7 @@ int read_dict_bits(std::unique_ptr<cudf::io::datasource> const& source,
   cudf::io::parquet::detail::PageHeader page_hdr;
   auto const page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
   cudf::io::parquet::detail::CompactProtocolReader cp(page_buf->data(), page_buf->size());
-  bool res = cp.read(&page_hdr);
-  CUDF_EXPECTS(res, "Cannot parse page header");
+  cp.read(&page_hdr);
 
   // cp should be pointing at the start of page data now. the first byte
   // should be the encoding bit size
@@ -263,8 +260,7 @@ cudf::io::parquet::detail::ColumnIndex read_column_index(
   cudf::io::parquet::detail::ColumnIndex colidx;
   auto const ci_buf = source->host_read(chunk.column_index_offset, chunk.column_index_length);
   cudf::io::parquet::detail::CompactProtocolReader cp(ci_buf->data(), ci_buf->size());
-  bool res = cp.read(&colidx);
-  CUDF_EXPECTS(res, "Cannot parse column index");
+  cp.read(&colidx);
   return colidx;
 }
 
@@ -281,8 +277,7 @@ cudf::io::parquet::detail::OffsetIndex read_offset_index(
   cudf::io::parquet::detail::OffsetIndex offidx;
   auto const oi_buf = source->host_read(chunk.offset_index_offset, chunk.offset_index_length);
   cudf::io::parquet::detail::CompactProtocolReader cp(oi_buf->data(), oi_buf->size());
-  bool res = cp.read(&offidx);
-  CUDF_EXPECTS(res, "Cannot parse offset index");
+  cp.read(&offidx);
   return offidx;
 }
 
@@ -306,8 +301,7 @@ cudf::io::parquet::detail::PageHeader read_page_header(
   cudf::io::parquet::detail::PageHeader page_hdr;
   auto const page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
   cudf::io::parquet::detail::CompactProtocolReader cp(page_buf->data(), page_buf->size());
-  bool res = cp.read(&page_hdr);
-  CUDF_EXPECTS(res, "Cannot parse page header");
+  cp.read(&page_hdr);
   return page_hdr;
 }
 
@@ -4249,6 +4243,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndex)
 
       ASSERT_TRUE(stats.min_value.has_value());
       ASSERT_TRUE(stats.max_value.has_value());
+      ASSERT_TRUE(ci.null_counts.has_value());
 
       // schema indexing starts at 1
       auto const ptype = fmd.schema[c + 1].type;
@@ -4257,7 +4252,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndex)
         // null_pages should always be false
         EXPECT_FALSE(ci.null_pages[p]);
         // null_counts should always be 0
-        EXPECT_EQ(ci.null_counts[p], 0);
+        EXPECT_EQ(ci.null_counts.value()[p], 0);
         EXPECT_TRUE(compare_binary(stats.min_value.value(), ci.min_values[p], ptype, ctype) <= 0);
       }
       for (size_t p = 0; p < ci.max_values.size(); p++)
@@ -4356,6 +4351,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNulls)
       ASSERT_TRUE(stats.max_value.has_value());
       ASSERT_TRUE(stats.null_count.has_value());
       EXPECT_EQ(stats.null_count.value(), c == 0 ? 0 : num_rows / 2);
+      ASSERT_TRUE(ci.null_counts.has_value());
 
       // schema indexing starts at 1
       auto const ptype = fmd.schema[c + 1].type;
@@ -4363,9 +4359,9 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNulls)
       for (size_t p = 0; p < ci.min_values.size(); p++) {
         EXPECT_FALSE(ci.null_pages[p]);
         if (c > 0) {  // first column has no nulls
-          EXPECT_GT(ci.null_counts[p], 0);
+          EXPECT_GT(ci.null_counts.value()[p], 0);
         } else {
-          EXPECT_EQ(ci.null_counts[p], 0);
+          EXPECT_EQ(ci.null_counts.value()[p], 0);
         }
         EXPECT_TRUE(compare_binary(stats.min_value.value(), ci.min_values[p], ptype, ctype) <= 0);
       }
@@ -4453,6 +4449,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNullColumn)
       }
       ASSERT_TRUE(stats.null_count.has_value());
       EXPECT_EQ(stats.null_count.value(), c == 1 ? num_rows : 0);
+      ASSERT_TRUE(ci.null_counts.has_value());
 
       // schema indexing starts at 1
       auto const ptype = fmd.schema[c + 1].type;
@@ -4461,10 +4458,10 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNullColumn)
         // check tnat null_pages is true for column 1
         if (c == 1) {
           EXPECT_TRUE(ci.null_pages[p]);
-          EXPECT_GT(ci.null_counts[p], 0);
+          EXPECT_GT(ci.null_counts.value()[p], 0);
         }
         if (not ci.null_pages[p]) {
-          EXPECT_EQ(ci.null_counts[p], 0);
+          EXPECT_EQ(ci.null_counts.value()[p], 0);
           EXPECT_TRUE(compare_binary(stats.min_value.value(), ci.min_values[p], ptype, ctype) <= 0);
         }
       }
@@ -4651,6 +4648,8 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStructNulls)
       }
 
       int64_t num_vals = 0;
+
+      if (is_v2) { ASSERT_TRUE(ci.null_counts.has_value()); }
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
         auto const& page_loc = oi.page_locations[o];
         auto const ph        = read_page_header(source, page_loc);
@@ -4658,7 +4657,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStructNulls)
         EXPECT_EQ(page_loc.first_row_index, num_vals);
         num_vals += is_v2 ? ph.data_page_header_v2.num_rows : ph.data_page_header.num_values;
         // check that null counts match
-        if (is_v2) { EXPECT_EQ(ci.null_counts[o], ph.data_page_header_v2.num_nulls); }
+        if (is_v2) { EXPECT_EQ(ci.null_counts.value()[o], ph.data_page_header_v2.num_nulls); }
       }
     }
   }
@@ -4863,7 +4862,8 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
 
       // should only be one page
       EXPECT_FALSE(ci.null_pages[0]);
-      EXPECT_EQ(ci.null_counts[0], expected_null_counts[c]);
+      ASSERT_TRUE(ci.null_counts.has_value());
+      EXPECT_EQ(ci.null_counts.value()[0], expected_null_counts[c]);
 
       ASSERT_TRUE(ci.definition_level_histogram.has_value());
       EXPECT_EQ(ci.definition_level_histogram.value(), expected_def_hists[c]);

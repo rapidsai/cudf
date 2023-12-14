@@ -23,11 +23,7 @@ rapids_cuda_init_architectures(cudf-python)
 project(
   cudf-python
   VERSION ${cudf_version}
-  LANGUAGES # TODO: Building Python extension modules via the python_extension_module requires the C
-            # language to be enabled here. The test project that is built in scikit-build to verify
-            # various linking options for the python library is hardcoded to build with C, so until
-            # that is fixed we need to keep C.
-            C CXX CUDA
+  LANGUAGES CXX CUDA
 )
 
 option(FIND_CUDF_CPP "Search for existing CUDF C++ installations before defaulting to local files"
@@ -68,7 +64,7 @@ else()
   set(cudf_FOUND OFF)
 endif()
 
-include(rapids-cython)
+include(rapids-cython-core)
 
 if(NOT cudf_FOUND)
   set(BUILD_TESTS OFF)
