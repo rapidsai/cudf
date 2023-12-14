@@ -41,7 +41,6 @@ from cudf.core.column import (
     as_column,
     build_column,
     column,
-    column_empty,
     full,
     string,
 )
@@ -349,7 +348,7 @@ class NumericalColumn(NumericalBaseColumn):
         else:
             return cast(
                 cudf.core.column.StringColumn,
-                column_empty(0, dtype="object"),
+                column.column_empty(0, dtype="object"),
             )
 
     def as_datetime_column(

@@ -2373,14 +2373,11 @@ def as_column(
                         _maybe_convert_to_default_type("float")
                     )
                     arbitrary = arbitrary.cast(typ)
-                # TODO: There may be a case where an empty null array needs
-                # to be cast to empty string array
             except (pa.ArrowInvalid, pa.ArrowTypeError):
                 if any(is_column_like(val) for val in arbitrary):
                     return cudf.core.column.ListColumn.from_sequences(
                         arbitrary
                     )
-                # TODO: Can we just use pd.Series to infer?
                 arbitrary = pd.Series(arbitrary)
                 if cudf.get_option(
                     "default_integer_bitwidth"
