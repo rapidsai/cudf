@@ -2,38 +2,12 @@
 
 from __future__ import annotations
 
-import weakref
-from typing import Any, Literal, Mapping, Optional
+from typing import Literal, Mapping, Optional
 
 from typing_extensions import Self
 
 import cudf
 from cudf.core.buffer.buffer import Buffer, BufferOwner
-
-
-class ExposureTrackedBufferOwner(BufferOwner):
-    """A Buffer that tracks its "expose" status.
-
-    In order to implement copy-on-write and spillable buffers, we need the
-    ability to detect external access to the underlying memory. We say that
-    the buffer has been exposed if the device pointer (integer or void*) has
-    been accessed outside of ExposureTrackedBufferOwner. In this case, we have
-    no control over knowing if the data is being modified by a third-party.
-    """
-
-    # The set of ExposureTrackedBuffer instances that point to this buffer.
-    _slices: weakref.WeakSet[ExposureTrackedBuffer]
-
-    @classmethod
-    def _from_device_memory(cls, data: Any, exposed: bool) -> Self:
-        ret = super()._from_device_memory(data, exposed=exposed)
-        ret._slices = weakref.WeakSet()
-        return ret
-
-    @property
-    def __cuda_array_interface__(self) -> Mapping:
-        self.mark_exposed()
-        return super().__cuda_array_interface__
 
 
 class ExposureTrackedBuffer(Buffer):
@@ -49,11 +23,11 @@ class ExposureTrackedBuffer(Buffer):
         The size of the slice (in bytes)
     """
 
-    _owner: ExposureTrackedBufferOwner
+    _owner: BufferOwner
 
     def __init__(
         self,
-        owner: ExposureTrackedBufferOwner,
+        owner: BufferOwner,
         offset: int = 0,
         size: Optional[int] = None,
     ) -> None:

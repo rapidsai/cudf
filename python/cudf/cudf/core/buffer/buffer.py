@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import pickle
+import weakref
 from types import SimpleNamespace
 from typing import Any, Dict, Literal, Mapping, Optional, Sequence, Tuple
 
@@ -123,6 +124,12 @@ class BufferOwner(Serializable):
     the ones used throughout cuDF, can then refer to the same
     `BufferOwner` instance.
 
+    In order to implement copy-on-write and spillable buffers, we need the
+    ability to detect external access to the underlying memory. We say that
+    the buffer has been exposed if the device pointer (integer or void*) has
+    been accessed outside of BufferOwner. In this case, we have no control
+    over knowing if the data is being modified by a third-party.
+
     Use `_from_device_memory` and `_from_host_memory` to create
     a new instance from either device or host memory respectively.
     """
@@ -131,6 +138,14 @@ class BufferOwner(Serializable):
     _size: int
     _owner: object
     _exposed: bool
+    # The set of buffers that point to this owner.
+    _slices: weakref.WeakSet[Buffer]
+
+    def __init__(self):
+        raise ValueError(
+            f"do not create a {self.__class__} directly, please "
+            "use the factory function `cudf.core.buffer.as_buffer`"
+        )
 
     @classmethod
     def _from_device_memory(cls, data: Any, exposed: bool) -> Self:
@@ -164,6 +179,7 @@ class BufferOwner(Serializable):
         ret = cls.__new__(cls)
         ret._owner = data
         ret._exposed = exposed
+        ret._slices = weakref.WeakSet()
         if isinstance(data, rmm.DeviceBuffer):  # Common case shortcut
             ret._ptr = data.ptr
             ret._size = data.size

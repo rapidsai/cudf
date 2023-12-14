@@ -13,10 +13,7 @@ from cudf.core.buffer.buffer import (
     get_buffer_owner,
     get_ptr_and_size,
 )
-from cudf.core.buffer.exposure_tracked_buffer import (
-    ExposureTrackedBuffer,
-    ExposureTrackedBufferOwner,
-)
+from cudf.core.buffer.exposure_tracked_buffer import ExposureTrackedBuffer
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.buffer.spillable_buffer import (
     SpillableBuffer,
@@ -45,8 +42,7 @@ def as_buffer(
 
     Raises ValueError if `data` isn't C-contiguous.
 
-    If copy-on-write is enabled, a ExposureTrackedBuffer that refers to a
-    ExposureTrackedBufferOwner is returned.
+    If copy-on-write is enabled, a ExposureTrackedBuffer is returned.
 
     If spilling is enabled, a SpillableBuffer that refers to a
     SpillableBufferOwner is returned. If `data` is owned by a spillable buffer,
@@ -104,7 +100,7 @@ def as_buffer(
         owner_class = SpillableBufferOwner
         buffer_class = SpillableBuffer
     elif get_option("copy_on_write"):
-        owner_class = ExposureTrackedBufferOwner
+        owner_class = BufferOwner
         buffer_class = ExposureTrackedBuffer
     else:
         owner_class = BufferOwner
