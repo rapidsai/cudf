@@ -756,7 +756,7 @@ add_dependencies(cudf jitify_preprocess_run)
 # Specify the target module library dependencies
 target_link_libraries(
   cudf
-  PUBLIC ${ARROW_LIBRARIES} libcudacxx::libcudacxx CCCL::Thrust rmm::rmm
+  PUBLIC ${ARROW_LIBRARIES} CCCL::CCCL rmm::rmm
   PRIVATE cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio
           $<TARGET_NAME_IF_EXISTS:cuFile_interface>
 )
@@ -1007,14 +1007,6 @@ following IMPORTED GLOBAL  targets:
     ]=]
 )
 
-set(common_code_string
-    [=[
-if(NOT TARGET CCCL::Thrust)
-  thrust_create_target(CCCL::Thrust FROM_OPTIONS)
-endif()
-]=]
-)
-
 if(CUDF_ENABLE_ARROW_PARQUET)
   string(
     APPEND
@@ -1038,7 +1030,6 @@ if(testing IN_LIST cudf_FIND_COMPONENTS)
 endif()
 ]=]
 )
-string(APPEND install_code_string "${common_code_string}")
 
 rapids_export(
   INSTALL cudf
@@ -1061,8 +1052,6 @@ if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
 endif()
 ]=]
 )
-
-string(APPEND build_code_string "${common_code_string}")
 
 rapids_export(
   BUILD cudf
