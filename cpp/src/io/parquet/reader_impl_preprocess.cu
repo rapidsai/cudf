@@ -609,11 +609,6 @@ void reader::impl::allocate_nesting_info()
     target_page_index += subpass.column_page_count[idx];
   }
 
-  // set type to invalid for all page_nesting_infos so we can verify we've initialized everything.
-  std::for_each(page_nesting_info.begin(), page_nesting_info.end(), [](PageNestingInfo& pni) {
-    pni.type = cudf::type_id::NUM_TYPE_IDS;
-  });
-
   // fill in
   int nesting_info_index = 0;
   std::map<int, std::pair<std::vector<int>, std::vector<int>>> depth_remapping;
@@ -629,15 +624,6 @@ void reader::impl::allocate_nesting_info()
     std::map<int, std::pair<std::vector<int>, std::vector<int>>> depth_remapping;
     if (schema.max_repetition_level > 0) {
       generate_depth_remappings(depth_remapping, src_col_schema, *_metadata);
-    }
-
-    // PageNestingInfo structs above max_output_depth are unused. set them to empty.
-    for (size_t p_idx = 0; p_idx < subpass.column_page_count[idx]; p_idx++) {
-      auto const nesting_size = per_page_nesting_info_size[idx];
-      for (int e_idx = max_output_depth - 1; e_idx < nesting_size; e_idx++) {
-        page_nesting_info[nesting_info_index + (p_idx * nesting_size) + e_idx].type =
-          cudf::type_id::EMPTY;
-      }
     }
 
     // fill in host-side nesting info
@@ -692,13 +678,6 @@ void reader::impl::allocate_nesting_info()
 
     nesting_info_index += (per_page_nesting_info_size[idx] * subpass.column_page_count[idx]);
   }
-
-  // verify all of the page_nesting_info structs have been initialized
-  CUDF_EXPECTS(
-    std::all_of(page_nesting_info.begin(),
-                page_nesting_info.end(),
-                [](PageNestingInfo const& pni) { return pni.type != cudf::type_id::NUM_TYPE_IDS; }),
-    "Encountered uninitialized PageNestingInfo structs");
 
   // copy nesting info to the device
   page_nesting_info.host_to_device_async(_stream);
