@@ -33,6 +33,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/atomic>
+#include <cuda/functional>
 
 namespace cudf {
 namespace strings {
@@ -230,7 +231,8 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
     thrust::count_if(rmm::exec_policy(stream),
                      input.chars_begin(),
                      input.chars_end(stream),
-                     [] __device__(auto chr) { return is_utf8_continuation_char(chr); }) > 0;
+                     cuda::proclaim_return_type<bool>(
+                       [] __device__(auto chr) { return is_utf8_continuation_char(chr); })) > 0;
   if (!multi_byte_chars) {
     // optimization for ASCII-only case: copy the input column and inplace replace each character
     auto result           = std::make_unique<column>(input.parent(), stream, mr);
