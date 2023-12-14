@@ -213,8 +213,6 @@ TEST_F(NvcompConfigTest, Decompression)
   EXPECT_TRUE(decomp_disabled(compression_type::ZSTD, {2, 2, 0, true, true, 7}));
   // stable integrations enabled required
   EXPECT_TRUE(decomp_disabled(compression_type::ZSTD, {2, 4, 0, false, false, 7}));
-  // 2.4.0 disabled on Pascal
-  EXPECT_TRUE(decomp_disabled(compression_type::ZSTD, {2, 4, 0, true, true, 6}));
 
   EXPECT_FALSE(decomp_disabled(compression_type::SNAPPY, {2, 4, 0, true, true, 7}));
   EXPECT_FALSE(decomp_disabled(compression_type::SNAPPY, {2, 3, 0, false, true, 7}));

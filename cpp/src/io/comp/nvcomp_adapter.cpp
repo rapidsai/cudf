@@ -48,11 +48,6 @@
 #define NVCOMP_ZSTD_DECOMP_IS_STABLE(MAJOR, MINOR, PATCH) \
   (MAJOR > 2 or (MAJOR == 2 and MINOR > 3) or (MAJOR == 2 and MINOR == 3 and PATCH >= 2))
 
-// Issue https://github.com/NVIDIA/spark-rapids/issues/6614 impacts nvCOMP 2.4.0 ZSTD decompression
-// on compute 6.x
-#define NVCOMP_ZSTD_IS_DISABLED_ON_PASCAL(MAJOR, MINOR, PATCH) \
-  (MAJOR == 2 and MINOR == 4 and PATCH == 0)
-
 namespace cudf::io::nvcomp {
 
 // Dispatcher for nvcompBatched<format>DecompressGetTempSizeEx
@@ -551,11 +546,6 @@ std::optional<std::string> is_zstd_decomp_disabled(feature_status_parameters con
            "`LIBCUDF_NVCOMP_POLICY` environment variable.";
   }
 
-  if (NVCOMP_ZSTD_IS_DISABLED_ON_PASCAL(
-        params.lib_major_version, params.lib_minor_version, params.lib_patch_version) and
-      params.compute_capability_major == 6) {
-    return "Zstandard decompression is disabled on Pascal GPUs";
-  }
   return std::nullopt;
 }
 
