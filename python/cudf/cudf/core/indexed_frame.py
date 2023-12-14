@@ -1863,11 +1863,17 @@ class IndexedFrame(Frame):
         start, stop, stride = arg.indices(num_rows)
         index = self.index
         has_range_index = isinstance(index, RangeIndex)
+        col_was_multiindex = self._data.multiindex
+        col_was_rangeindex = self._data.rangeindex
+        col_label_dtype = self._data.label_dtype
         if len(range(start, stop, stride)) == 0:
             # Avoid materialising the range index column
             result = self._empty_like(
                 keep_index=keep_index and not has_range_index
             )
+            result._data.rangeindex = col_was_rangeindex
+            result._data.multiindex = col_was_multiindex
+            result._data.label_dtype = col_label_dtype
             if keep_index and has_range_index:
                 lo = index.start + start * index.step
                 hi = index.start + stop * index.step
@@ -1896,7 +1902,7 @@ class IndexedFrame(Frame):
         stop = min(stop, num_rows)
 
         if stride != 1:
-            return self._gather(
+            result = self._gather(
                 GatherMap.from_column_unchecked(
                     cudf.core.column.arange(
                         start,
@@ -1909,6 +1915,10 @@ class IndexedFrame(Frame):
                 ),
                 keep_index=keep_index,
             )
+            result._data.rangeindex = col_was_rangeindex
+            result._data.multiindex = col_was_multiindex
+            result._data.label_dtype = col_label_dtype
+            return result
 
         columns_to_slice = [
             *(
@@ -1923,6 +1933,10 @@ class IndexedFrame(Frame):
             self._column_names,
             None if has_range_index or not keep_index else self._index.names,
         )
+
+        result._data.rangeindex = col_was_rangeindex
+        result._data.multiindex = col_was_multiindex
+        result._data.label_dtype = col_label_dtype
 
         if keep_index and has_range_index:
             result.index = self.index[start:stop]
