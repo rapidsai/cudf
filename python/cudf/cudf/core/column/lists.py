@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
+from __future__ import annotations
+
 from functools import cached_property
 from typing import List, Optional, Sequence, Tuple, Union
 

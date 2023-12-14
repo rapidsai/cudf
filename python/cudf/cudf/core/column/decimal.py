@@ -1,5 +1,7 @@
 # Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
+from __future__ import annotations
+
 import warnings
 from decimal import Decimal
 from typing import Any, Optional, Sequence, Union, cast
