@@ -57,7 +57,7 @@ requirements:
     - cuda-version ={{ cuda_version }}
     - cudf ={{ version }}
     - libcudf_kafka ={{ version }}
-    - scikit-build >=0.13.1
+    - scikit-build-core >=0.7.0
     - setuptools
     {% if cuda_major == "12" %}
     - cuda-cudart-dev
