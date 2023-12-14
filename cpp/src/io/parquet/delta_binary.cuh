@@ -298,7 +298,7 @@ struct delta_binary_decoder {
   }
 
   // Decodes and skips values until the block containing the value after `skip` is reached.
-  // Keeps a running sum of the values and returns that upon exit. called by all threads in a
+  // Keeps a running sum of the values and returns that upon exit. Called by all threads in a
   // thread block. Result is only valid on thread 0.
   // This is intended for use only by the DELTA_LENGTH_BYTE_ARRAY decoder.
   inline __device__ size_t skip_values_and_sum(int skip)
