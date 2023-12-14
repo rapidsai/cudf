@@ -81,7 +81,7 @@ cpdef Table gather(
     return Table.from_libcudf(move(c_result))
 
 
-cpdef Table table_scatter(Table source, Column scatter_map, Table target_table):
+cpdef Table scatter_table(Table source, Column scatter_map, Table target_table):
     cdef unique_ptr[table] c_result
 
     with nogil:
@@ -97,7 +97,7 @@ cpdef Table table_scatter(Table source, Column scatter_map, Table target_table):
 
 
 # TODO: Could generalize list to sequence
-cpdef Table scalar_scatter(list source, Column scatter_map, Table target_table):
+cpdef Table scatter_scalars(list source, Column scatter_map, Table target_table):
     cdef vector[reference_wrapper[const scalar]] source_scalars = \
         _as_vector(source)
 
@@ -114,7 +114,7 @@ cpdef Table scalar_scatter(list source, Column scatter_map, Table target_table):
     return Table.from_libcudf(move(c_result))
 
 
-cpdef object column_empty_like(Column input):
+cpdef object empty_column_like(Column input):
     cdef unique_ptr[column] c_column_result
     with nogil:
         c_column_result = move(
@@ -125,7 +125,7 @@ cpdef object column_empty_like(Column input):
     return Column.from_libcudf(move(c_column_result))
 
 
-cpdef object table_empty_like(Table input):
+cpdef object empty_table_like(Table input):
     cdef unique_ptr[table] c_table_result
     with nogil:
         c_table_result = move(
@@ -233,7 +233,7 @@ cpdef Column copy_if_else(object lhs, object rhs, Column boolean_mask):
     return Column.from_libcudf(move(result))
 
 
-cpdef Table table_boolean_mask_scatter(Table input, Table target, Column boolean_mask):
+cpdef Table boolean_mask_table_scatter(Table input, Table target, Column boolean_mask):
     cdef unique_ptr[table] result
 
     with nogil:
@@ -249,7 +249,7 @@ cpdef Table table_boolean_mask_scatter(Table input, Table target, Column boolean
 
 
 # TODO: Could generalize list to sequence
-cpdef Table scalar_boolean_mask_scatter(list input, Table target, Column boolean_mask):
+cpdef Table boolean_mask_scalars_scatter(list input, Table target, Column boolean_mask):
     cdef vector[reference_wrapper[const scalar]] source_scalars = _as_vector(input)
 
     cdef unique_ptr[table] result

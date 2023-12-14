@@ -199,13 +199,13 @@ def scatter(list sources, Column scatter_map, list target_columns,
             )
 
     if isinstance(sources[0], Column):
-        tbl = pylibcudf.copying.table_scatter(
+        tbl = pylibcudf.copying.scatter_table(
             pylibcudf.Table([col.to_pylibcudf(mode="read") for col in sources]),
             scatter_map.to_pylibcudf(mode="read"),
             pylibcudf.Table([col.to_pylibcudf(mode="read") for col in target_columns]),
         )
     else:
-        tbl = pylibcudf.copying.scalar_scatter(
+        tbl = pylibcudf.copying.scatter_scalars(
             [(<DeviceScalar> as_device_scalar(slr)).c_value for slr in sources],
             scatter_map.to_pylibcudf(mode="read"),
             pylibcudf.Table([col.to_pylibcudf(mode="read") for col in target_columns]),
@@ -217,7 +217,7 @@ def scatter(list sources, Column scatter_map, list target_columns,
 @acquire_spill_lock()
 def column_empty_like(Column input_column):
     return Column.from_pylibcudf(
-        pylibcudf.copying.column_empty_like(
+        pylibcudf.copying.empty_column_like(
             input_column.to_pylibcudf(mode="read")
         )
     )
@@ -236,7 +236,7 @@ def column_allocate_like(Column input_column, size=None):
 @acquire_spill_lock()
 def columns_empty_like(list input_columns):
     return columns_from_pylibcudf_table(
-        pylibcudf.copying.table_empty_like(
+        pylibcudf.copying.empty_table_like(
             pylibcudf.Table([col.to_pylibcudf(mode="read") for col in input_columns])
         )
     )
@@ -470,13 +470,13 @@ def boolean_mask_scatter(list input_, list target_columns,
         return []
 
     if isinstance(input_[0], Column):
-        tbl = pylibcudf.copying.table_boolean_mask_scatter(
+        tbl = pylibcudf.copying.boolean_mask_table_scatter(
             pylibcudf.Table([col.to_pylibcudf(mode="read") for col in input_]),
             pylibcudf.Table([col.to_pylibcudf(mode="read") for col in target_columns]),
             boolean_mask.to_pylibcudf(mode="read"),
         )
     else:
-        tbl = pylibcudf.copying.scalar_boolean_mask_scatter(
+        tbl = pylibcudf.copying.boolean_mask_scalars_scatter(
             [(<DeviceScalar> as_device_scalar(i)).c_value for i in input_],
             pylibcudf.Table([col.to_pylibcudf(mode="read") for col in target_columns]),
             boolean_mask.to_pylibcudf(mode="read"),
