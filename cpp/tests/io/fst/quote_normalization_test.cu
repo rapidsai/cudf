@@ -187,7 +187,7 @@ void run_test(std::string& input, std::string& output)
     cudf::io::fst::detail::make_translation_functor(TransduceToNormalizedQuotes{}),
     stream);
 
-  auto d_input_scalar = cudf::make_string_scalar(input);
+  auto d_input_scalar = cudf::make_string_scalar(input, stream_view);
   auto& d_input       = static_cast<cudf::scalar_type_t<std::string>&>(*d_input_scalar);
 
   // Prepare input & output buffers
@@ -202,11 +202,11 @@ void run_test(std::string& input, std::string& output)
                    thrust::make_discard_iterator(),
                    output_gpu_size.device_ptr(),
                    start_state,
-                   stream.value());
+                   stream_view);
 
   // Async copy results from device to host
-  output_gpu.device_to_host_async(stream.view());
-  output_gpu_size.device_to_host_async(stream.view());
+  output_gpu.device_to_host_async(stream_view);
+  output_gpu_size.device_to_host_async(stream_view);
 
   // Make sure results have been copied back to host
   stream.synchronize();
