@@ -220,8 +220,6 @@ TEST_F(StringsColumnTest, OffsetsBeginEnd)
   scv = cudf::strings_column_view(cudf::slice(input, {1, 5}).front());
   EXPECT_EQ(std::distance(scv.offsets_begin(), scv.offsets_end()),
             static_cast<std::ptrdiff_t>(scv.size() + 1));
-  // char data does not have size stored.
-  // EXPECT_EQ(std::distance(scv.chars_begin(), scv.chars_end(cudf::get_default_stream())), 16L);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
