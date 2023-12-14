@@ -184,6 +184,7 @@ files:
     includes:
       - test_python_common
 channels:
+  - numba/label/ci
   - rapidsai
   - rapidsai-nightly
   - dask/label/dev
