@@ -24,6 +24,7 @@ from typing import (
     Set,
     Tuple,
     Union,
+    cast,
 )
 
 import cupy
@@ -2335,7 +2336,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self.to_pandas().to_dict(orient=orient, into=into)
 
     @_cudf_nvtx_annotate
-    def scatter_by_map(self, map_index, map_size=None, keep_index=True):
+    def scatter_by_map(
+        self, map_index, map_size=None, keep_index=True, debug: bool = False
+    ):
         """Scatter to a list of dataframes.
 
         Uses map_index to determine the destination
@@ -2375,9 +2378,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # Convert string or categorical to integer
         if isinstance(map_index, cudf.core.column.StringColumn):
-            map_index = map_index.as_categorical_column(
-                "category"
-            ).as_numerical
+            cat_index = cast(
+                cudf.core.column.CategoricalColumn,
+                map_index.as_categorical_column("category"),
+            )
+            map_index = cat_index.as_numerical
             warnings.warn(
                 "Using StringColumn for map_index in scatter_by_map. "
                 "Use an integer array/column for better performance."
@@ -2389,6 +2394,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "Use an integer array/column for better performance."
             )
 
+        if debug and map_size is not None:
+            count = map_index.distinct_count()
+            if map_size < count:
+                raise ValueError(
+                    f"ERROR: map_size must be >= {count} (got {map_size})."
+                )
+
         partitioned_columns, output_offsets = libcudf.partitioning.partition(
             [*(self._index._columns if keep_index else ()), *self._columns],
             map_index,
@@ -2397,7 +2409,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         partitioned = self._from_columns_like_self(
             partitioned_columns,
             column_names=self._column_names,
-            index_names=self._index_names if keep_index else None,
+            index_names=list(self._index_names) if keep_index else None,
         )
 
         # due to the split limitation mentioned
