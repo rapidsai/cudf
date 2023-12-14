@@ -32,18 +32,14 @@ from .table cimport Table
 ctypedef const scalar constscalar
 
 
-cdef vector[reference_wrapper[const scalar]] _make_scalar_vector(list source):
+cdef vector[reference_wrapper[const scalar]] _as_vector(list source):
     """Make a vector of reference_wrapper[const scalar] from a list of scalars."""
-    if not isinstance(source, list) or not isinstance(source[0], Scalar):
-        raise ValueError("source must be a list[Scalar]")
-
     cdef vector[reference_wrapper[const scalar]] c_scalars
     c_scalars.reserve(len(source))
     cdef Scalar slr
     for slr in source:
         c_scalars.push_back(
-            reference_wrapper[constscalar](dereference(slr.c_obj))
-        )
+            reference_wrapper[constscalar](dereference((<Scalar?>slr).c_obj)))
     return c_scalars
 
 
@@ -102,8 +98,8 @@ cpdef Table table_scatter(Table source, Column scatter_map, Table target_table):
 
 # TODO: Could generalize list to sequence
 cpdef Table scalar_scatter(list source, Column scatter_map, Table target_table):
-    cdef vector[reference_wrapper[const scalar]] source_scalars
-    source_scalars = _make_scalar_vector(source)
+    cdef vector[reference_wrapper[const scalar]] source_scalars = \
+        _as_vector(source)
 
     cdef unique_ptr[table] c_result
     with nogil:
@@ -254,7 +250,7 @@ cpdef Table table_boolean_mask_scatter(Table input, Table target, Column boolean
 
 # TODO: Could generalize list to sequence
 cpdef Table scalar_boolean_mask_scatter(list input, Table target, Column boolean_mask):
-    source_scalars = _make_scalar_vector(input)
+    cdef vector[reference_wrapper[const scalar]] source_scalars = _as_vector(input)
 
     cdef unique_ptr[table] result
     with nogil:
