@@ -64,7 +64,7 @@ void assert_field_type(int type, FieldType expected)
 {
   CUDF_EXPECTS(type == expected,
                "expected " + field_type_string(expected) + " field, got " +
-                 field_type_string(static_cast<FieldType>(200)) + " field instead");
+                 field_type_string(static_cast<FieldType>(type)) + " field instead");
 }
 
 /**
