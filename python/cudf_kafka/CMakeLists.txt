@@ -21,11 +21,7 @@ include(../../fetch_rapids.cmake)
 project(
   cudf-kafka-python
   VERSION ${cudf_kafka_version}
-  LANGUAGES # TODO: Building Python extension modules via the python_extension_module requires the C
-            # language to be enabled here. The test project that is built in scikit-build to verify
-            # various linking options for the python library is hardcoded to build with C, so until
-            # that is fixed we need to keep C.
-            C CXX
+  LANGUAGES CXX
 )
 
 find_package(cudf_kafka ${cudf_kafka_version} REQUIRED)
@@ -37,7 +33,7 @@ if(NOT cudf_kafka_FOUND)
   )
 endif()
 
-include(rapids-cython)
+include(rapids-cython-core)
 rapids_cython_init()
 
 add_subdirectory(cudf_kafka/_lib)

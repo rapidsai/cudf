@@ -264,7 +264,7 @@ metadata::metadata(datasource* source)
 
   auto const buffer = source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
   CompactProtocolReader cp(buffer->data(), ender->footer_len);
-  CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
+  cp.read(this);
   CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
 
   // loop through the column chunks and read column and offset indexes
@@ -275,7 +275,7 @@ metadata::metadata(datasource* source)
           source->host_read(col.column_index_offset, col.column_index_length);
         cp.init(col_idx_buf->data(), col_idx_buf->size());
         ColumnIndex ci;
-        CUDF_EXPECTS(cp.read(&ci), "Cannot parse column index");
+        cp.read(&ci);
         col.column_index = std::move(ci);
       }
       if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
@@ -283,7 +283,7 @@ metadata::metadata(datasource* source)
           source->host_read(col.offset_index_offset, col.offset_index_length);
         cp.init(off_idx_buf->data(), off_idx_buf->size());
         OffsetIndex oi;
-        CUDF_EXPECTS(cp.read(&oi), "Cannot parse offset index");
+        cp.read(&oi);
         col.offset_index = std::move(oi);
       }
     }
