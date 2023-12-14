@@ -31,7 +31,6 @@ from typing_extensions import Self
 
 import cudf
 import cudf._lib as libcudf
-from cudf._lib.types import size_type_dtype
 from cudf._typing import (
     ColumnLike,
     DataFrameOrSeries,
@@ -1733,16 +1732,17 @@ class IndexedFrame(Frame):
 
         Parameters
         ----------
-        method : {'murmur3', 'md5'}, default 'murmur3'
+        method : {'murmur3', 'md5', 'xxhash64'}, default 'murmur3'
             Hash function to use:
-            * murmur3: MurmurHash3 hash function.
-            * md5: MD5 hash function.
+
+            * murmur3: MurmurHash3 hash function
+            * md5: MD5 hash function
+            * xxhash64: xxHash64 hash function
 
         seed : int, optional
-            Seed value to use for the hash function.
-            Note - This only has effect for the following supported
-            hash functions:
-            * murmur3: MurmurHash3 hash function.
+            Seed value to use for the hash function. This parameter is only
+            supported for 'murmur3' and 'xxhash64'.
+
 
         Returns
         -------
@@ -1796,14 +1796,13 @@ class IndexedFrame(Frame):
         2    fe061786ea286a515b772d91b0dfcd70
         dtype: object
         """
-        seed_hash_methods = {"murmur3"}
+        seed_hash_methods = {"murmur3", "xxhash64"}
         if seed is None:
             seed = 0
         elif method not in seed_hash_methods:
             warnings.warn(
-                "Provided seed value has no effect for hash method"
-                f" `{method}`. Refer to the docstring for information"
-                " on hash methods that support the `seed` param"
+                "Provided seed value has no effect for the hash method "
+                f"`{method}`. Only {seed_hash_methods} support seeds."
             )
         # Note that both Series and DataFrame return Series objects from this
         # calculation, necessitating the unfortunate circular reference to the
@@ -2089,26 +2088,19 @@ class IndexedFrame(Frame):
         subset = self._preprocess_subset(subset)
 
         if isinstance(self, cudf.Series):
-            df = self.to_frame(name="None")
-            subset = ["None"]
+            columns = [self._column]
         else:
-            df = self.copy(deep=False)
-        df._data["index"] = cudf.core.column.arange(
-            0, len(self), dtype=size_type_dtype
+            columns = [self._data[n] for n in subset]
+        distinct = libcudf.stream_compaction.distinct_indices(
+            columns, keep=keep
         )
-
-        new_df = df.drop_duplicates(subset=subset, keep=keep)
-        idx = df.merge(new_df, how="inner")["index"]
-        s = cudf.Series._from_data(
-            {
-                None: cudf.core.column.full(
-                    size=len(self), fill_value=True, dtype="bool"
-                )
-            },
-            index=self.index,
+        (result,) = libcudf.copying.scatter(
+            [cudf.Scalar(False, dtype=bool)],
+            distinct,
+            [full(len(self), True, dtype=bool)],
+            bounds_check=False,
         )
-        s.iloc[idx] = False
-        return s
+        return cudf.Series(result, index=self.index)
 
     @_cudf_nvtx_annotate
     def _empty_like(self, keep_index=True) -> Self:
@@ -2584,7 +2576,7 @@ class IndexedFrame(Frame):
         Parameters
         ----------
         columns_names : array-like
-            The list of columns to select from the Frame,
+            array-like of columns to select from the Frame,
             if ``columns`` is a superset of ``Frame.columns`` new
             columns are created.
         dtypes : dict
@@ -2646,9 +2638,35 @@ class IndexedFrame(Frame):
                 df = df.take(index.argsort(ascending=True).argsort())
 
         index = index if index is not None else df.index
-        names = (
-            column_names if column_names is not None else list(df._data.names)
-        )
+
+        if column_names is None:
+            names = list(df._data.names)
+            level_names = self._data.level_names
+            multiindex = self._data.multiindex
+            rangeindex = self._data.rangeindex
+        elif isinstance(column_names, (pd.Index, cudf.Index)):
+            if isinstance(column_names, (pd.MultiIndex, cudf.MultiIndex)):
+                multiindex = True
+                if isinstance(column_names, cudf.MultiIndex):
+                    names = list(iter(column_names.to_pandas()))
+                else:
+                    names = list(iter(column_names))
+                rangeindex = False
+            else:
+                multiindex = False
+                names = column_names
+                if isinstance(names, cudf.Index):
+                    names = names.to_pandas()
+                rangeindex = isinstance(
+                    column_names, (pd.RangeIndex, cudf.RangeIndex)
+                )
+            level_names = tuple(column_names.names)
+        else:
+            names = column_names
+            level_names = None
+            multiindex = False
+            rangeindex = False
+
         cols = {
             name: (
                 df._data[name].copy(deep=deep)
@@ -2661,17 +2679,13 @@ class IndexedFrame(Frame):
             )
             for name in names
         }
-        if column_names is None:
-            level_names = self._data.level_names
-        elif isinstance(column_names, pd.Index):
-            level_names = tuple(column_names.names)
-        else:
-            level_names = None
+
         result = self.__class__._from_data(
             data=cudf.core.column_accessor.ColumnAccessor(
                 cols,
-                multiindex=self._data.multiindex,
+                multiindex=multiindex,
                 level_names=level_names,
+                rangeindex=rangeindex,
             ),
             index=index,
         )
