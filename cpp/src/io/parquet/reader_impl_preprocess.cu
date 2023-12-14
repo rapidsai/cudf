@@ -333,7 +333,7 @@ std::string encoding_bitmask_to_str(int32_t encoding_bitmask)
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @returns Human readable string with unsupported encodings
  */
-std::string list_unsupported_encodings(const cudf::detail::hostdevice_vector<PageInfo>& pages,
+std::string list_unsupported_encodings(cudf::detail::hostdevice_vector<PageInfo> const& pages,
                                        rmm::cuda_stream_view stream)
 {
   auto to_mask = [] __device__(const PageInfo& page) {
