@@ -2575,7 +2575,7 @@ def test_series_arrow_list_types_roundtrip():
 @pytest.mark.parametrize("reso", ["M", "ps"])
 @pytest.mark.parametrize("typ", ["M", "m"])
 def test_series_invalid_reso_dtype(reso, typ):
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError):
         cudf.Series([], dtype=f"{typ}8[{reso}]")
 
 

@@ -1963,7 +1963,7 @@ def as_column(
         dtype = cudf.dtype(dtype)
         if isinstance(dtype, pd.DatetimeTZDtype):
             raise NotImplementedError(
-                "Use `tz_localize()` to construct " "timezone aware data."
+                "Use `tz_localize()` to construct timezone aware data."
             )
 
     if isinstance(arbitrary, ColumnBase):
@@ -2364,11 +2364,15 @@ def as_column(
                 if cudf.get_option(
                     "default_integer_bitwidth"
                 ) and pa.types.is_integer(arbitrary.type):
-                    dtype = _maybe_convert_to_default_type("int")
+                    typ = np_to_pa_dtype(_maybe_convert_to_default_type("int"))
+                    arbitrary = arbitrary.cast(typ)
                 elif cudf.get_option(
                     "default_float_bitwidth"
                 ) and pa.types.is_floating(arbitrary.type):
-                    dtype = _maybe_convert_to_default_type("float")
+                    typ = np_to_pa_dtype(
+                        _maybe_convert_to_default_type("float")
+                    )
+                    arbitrary = arbitrary.cast(typ)
                 # TODO: There may be a case where an empty null array needs
                 # to be cast to empty string array
             except (pa.ArrowInvalid, pa.ArrowTypeError):
