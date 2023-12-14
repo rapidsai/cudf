@@ -5495,7 +5495,7 @@ class StringColumn(column.ColumnBase):
             # all nulls-column:
             offsets = column.full(size + 1, 0, dtype=size_type_dtype)
 
-            chars = cudf.core.column.as_column([], dtype="int8")
+            chars = cudf.core.column.column_empty(0, dtype="int8")
             children = (offsets, chars)
 
         super().__init__(
@@ -5659,7 +5659,7 @@ class StringColumn(column.ColumnBase):
 
     def _as_datetime_or_timedelta_column(self, dtype, format):
         if len(self) == 0:
-            return cudf.core.column.as_column([], dtype=dtype)
+            return cudf.core.column.column_empty(0, dtype=dtype)
 
         # Check for None strings
         if (self == "None").any():

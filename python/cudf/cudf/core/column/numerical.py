@@ -347,7 +347,8 @@ class NumericalColumn(NumericalBaseColumn):
             ](self)
         else:
             return cast(
-                "cudf.core.column.StringColumn", as_column([], dtype="object")
+                cudf.core.column.StringColumn,
+                column.column_empty(0, dtype="object"),
             )
 
     def as_datetime_column(
