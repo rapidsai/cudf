@@ -86,22 +86,24 @@ struct TransduceToNormalizedQuotes {
                                                 SymbolT const read_symbol) const
   {
     // -------- TRANSLATION TABLE ------------
-    // state | read_symbol -> output_symbols
-    // DQS   | *           -> *
-    // DEC   | *           -> *
-    // OOS   | '           -> "
-    // OOS   | *           -> *
-    // SQS   | "           -> \"
-    // SQS   | '           -> "
-    // SQS   | *           -> *
-    // SEC   | *           -> *
-    // ---------- SPECIAL CASES: -------------- (anything else translates to input symbol)
-    // OOS   | '           -> "
-    // SQS   | "           -> \"
-    // SQS   | '           -> "
-    // SQS   | \\          -> <nop>
-    // SEC   | '           -> '
-    // SEC   | Sigma\{'}   -> \*
+    //      Let the alphabet set be Sigma
+    // ---------------------------------------
+    // ---------- NON-SPECIAL CASES: ----------
+    //      Output symbol same as input symbol <s>
+    // state | read_symbol <s> -> output_symbol <s>
+    // DQS   | Sigma           -> Sigma
+    // DEC   | Sigma           -> Sigma
+    // OOS   | Sigma\{'}       -> Sigma\{'}
+    // SQS   | Sigma\{', "}    -> Sigma\{', "}
+    // ---------- SPECIAL CASES: --------------
+    //    Input symbol translates to output symbol
+    // OOS   | {'}             -> {"}
+    // SQS   | {'}             -> {"}
+    // SQS   | {"}             -> {\"}
+    // SQS   | {\}             -> <nop>
+    // SEC   | {'}             -> {'}
+    // SEC   | Sigma\{'}       -> {\*}
+
     // Whether this transition translates to the escape sequence: \"
     const bool outputs_escape_sequence =
       (state_id == static_cast<StateT>(dfa_states::TT_SQS)) &&
