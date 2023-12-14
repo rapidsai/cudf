@@ -247,7 +247,7 @@ class ListColumn(ColumnBase):
         return res
 
     def as_string_column(
-        self, dtype: Dtype, format=None, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.StringColumn":
         """
         Create a strings column from a list column

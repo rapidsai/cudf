@@ -1006,7 +1006,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         else:
             dtype = pandas_dtypes_to_np_dtypes.get(dtype, dtype)
         if _is_non_decimal_numeric_dtype(dtype):
-            return self.as_numerical_column(dtype, **kwargs)
+            return self.as_numerical_column(dtype)
         elif is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype)
         elif cudf.dtype(dtype).type in {
@@ -1021,7 +1021,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                     f"Casting to {dtype} is not supported, use "
                     "`.astype('str')` instead."
                 )
-            return self.as_string_column(dtype, **kwargs)
+            return self.as_string_column(
+                dtype, format=kwargs.get("format", None)
+            )
         elif is_list_dtype(dtype):
             if not self.dtype == dtype:
                 raise NotImplementedError(
@@ -1035,15 +1037,19 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 )
             return self
         elif is_interval_dtype(self.dtype):
-            return self.as_interval_column(dtype, **kwargs)
+            return self.as_interval_column(dtype)
         elif is_decimal_dtype(dtype):
-            return self.as_decimal_column(dtype, **kwargs)
+            return self.as_decimal_column(dtype)
         elif np.issubdtype(cast(Any, dtype), np.datetime64):
-            return self.as_datetime_column(dtype, **kwargs)
+            return self.as_datetime_column(
+                dtype, format=kwargs.get("format", None)
+            )
         elif np.issubdtype(cast(Any, dtype), np.timedelta64):
-            return self.as_timedelta_column(dtype, **kwargs)
+            return self.as_timedelta_column(
+                dtype, format=kwargs.get("format", None)
+            )
         else:
-            return self.as_numerical_column(dtype, **kwargs)
+            return self.as_numerical_column(dtype)
 
     def as_categorical_column(self, dtype) -> ColumnBase:
         if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
@@ -1089,48 +1095,33 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         )
 
     def as_numerical_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype
     ) -> "cudf.core.column.NumericalColumn":
         raise NotImplementedError
 
     def as_datetime_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.DatetimeColumn":
         raise NotImplementedError
 
     def as_interval_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype
     ) -> "cudf.core.column.IntervalColumn":
         raise NotImplementedError
 
     def as_timedelta_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.TimeDeltaColumn":
         raise NotImplementedError
 
     def as_string_column(
-        self, dtype: Dtype, format=None, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.StringColumn":
         raise NotImplementedError
 
     def as_decimal_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype
     ) -> Union["cudf.core.column.decimal.DecimalBaseColumn"]:
-        raise NotImplementedError
-
-    def as_decimal128_column(
-        self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.Decimal128Column":
-        raise NotImplementedError
-
-    def as_decimal64_column(
-        self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.Decimal64Column":
-        raise NotImplementedError
-
-    def as_decimal32_column(
-        self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.Decimal32Column":
         raise NotImplementedError
 
     def apply_boolean_mask(self, mask) -> ColumnBase:

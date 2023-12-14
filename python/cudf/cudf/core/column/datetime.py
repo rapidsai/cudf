@@ -429,28 +429,30 @@ class DatetimeColumn(column.ColumnBase):
             )
         return output
 
-    def as_datetime_column(self, dtype: Dtype, **kwargs) -> DatetimeColumn:
+    def as_datetime_column(
+        self, dtype: Dtype, format: str | None = None
+    ) -> DatetimeColumn:
         dtype = cudf.dtype(dtype)
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype=dtype)
 
     def as_timedelta_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.TimeDeltaColumn":
         raise TypeError(
             f"cannot astype a datetimelike from {self.dtype} to {dtype}"
         )
 
     def as_numerical_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype
     ) -> "cudf.core.column.NumericalColumn":
         return cast(
             "cudf.core.column.NumericalColumn", self.as_numerical.astype(dtype)
         )
 
     def as_string_column(
-        self, dtype: Dtype, format=None, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.StringColumn":
         if format is None:
             format = _dtype_to_format_conversion.get(
@@ -726,9 +728,9 @@ class DatetimeTZColumn(DatetimeColumn):
         return utc_to_local(self, str(self.dtype.tz))
 
     def as_string_column(
-        self, dtype: Dtype, format=None, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.StringColumn":
-        return self._local_time.as_string_column(dtype, format, **kwargs)
+        return self._local_time.as_string_column(dtype, format)
 
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(

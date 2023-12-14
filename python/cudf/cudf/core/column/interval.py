@@ -100,7 +100,7 @@ class IntervalColumn(StructColumn):
             closed=closed,
         )
 
-    def as_interval_column(self, dtype, **kwargs):
+    def as_interval_column(self, dtype):
         if is_interval_dtype(dtype):
             if isinstance(self.dtype, CategoricalDtype):
                 new_struct = self._get_decategorized_column()

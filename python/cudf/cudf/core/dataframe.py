@@ -1986,8 +1986,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         fill_value: Any = None,
         reflect: bool = False,
         can_reindex: bool = False,
-        *args,
-        **kwargs,
     ) -> Tuple[
         Union[
             Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
@@ -2337,9 +2335,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self.to_pandas().to_dict(orient=orient, into=into)
 
     @_cudf_nvtx_annotate
-    def scatter_by_map(
-        self, map_index, map_size=None, keep_index=True, **kwargs
-    ):
+    def scatter_by_map(self, map_index, map_size=None, keep_index=True):
         """Scatter to a list of dataframes.
 
         Uses map_index to determine the destination
@@ -2392,13 +2388,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "Using CategoricalColumn for map_index in scatter_by_map. "
                 "Use an integer array/column for better performance."
             )
-
-        if kwargs.get("debug", False) == 1 and map_size is not None:
-            count = map_index.distinct_count()
-            if map_size < count:
-                raise ValueError(
-                    f"ERROR: map_size must be >= {count} (got {map_size})."
-                )
 
         partitioned_columns, output_offsets = libcudf.partitioning.partition(
             [*(self._index._columns if keep_index else ()), *self._columns],
@@ -2539,7 +2528,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             yield (k, self[k])
 
     @_cudf_nvtx_annotate
-    def equals(self, other, **kwargs):
+    def equals(self, other):
         ret = super().equals(other)
         # If all other checks matched, validate names.
         if ret:

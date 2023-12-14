@@ -301,21 +301,21 @@ class TimeDeltaColumn(ColumnBase):
             return super().fillna(method=method)
 
     def as_numerical_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype
     ) -> "cudf.core.column.NumericalColumn":
         return cast(
             "cudf.core.column.NumericalColumn", self.as_numerical.astype(dtype)
         )
 
     def as_datetime_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.DatetimeColumn":
         raise TypeError(
             f"cannot astype a timedelta from {self.dtype} to {dtype}"
         )
 
     def as_string_column(
-        self, dtype: Dtype, format=None, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.StringColumn":
         if format is None:
             format = _dtype_to_format_conversion.get(
@@ -331,7 +331,9 @@ class TimeDeltaColumn(ColumnBase):
                 column.column_empty(0, dtype="object", masked=False),
             )
 
-    def as_timedelta_column(self, dtype: Dtype, **kwargs) -> TimeDeltaColumn:
+    def as_timedelta_column(
+        self, dtype: Dtype, format: str | None = None
+    ) -> TimeDeltaColumn:
         dtype = cudf.dtype(dtype)
         if dtype == self.dtype:
             return self

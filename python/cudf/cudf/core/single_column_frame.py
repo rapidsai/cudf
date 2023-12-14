@@ -310,8 +310,6 @@ class SingleColumnFrame(Frame, NotIterable):
         other: Any,
         fill_value: Any = None,
         reflect: bool = False,
-        *args,
-        **kwargs,
     ) -> Union[
         Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
         NotImplementedType,
