@@ -2381,7 +2381,7 @@ def as_column(
                         arbitrary
                     )
                 # TODO: Can we just use pd.Series to infer?
-                arbitrary = _construct_array(arbitrary, None)
+                arbitrary = pd.Series(arbitrary)
                 if cudf.get_option(
                     "default_integer_bitwidth"
                 ) and is_integer_dtype(arbitrary.dtype):
@@ -2392,55 +2392,6 @@ def as_column(
                     dtype = _maybe_convert_to_default_type("float")
             data = as_column(arbitrary, nan_as_null=nan_as_null, dtype=dtype)
     return data
-
-
-def _construct_array(
-    arbitrary: Any, dtype: Optional[Dtype]
-) -> Union[np.ndarray, cupy.ndarray, pd.api.extensions.ExtensionArray]:
-    """
-    Construct a CuPy/NumPy/Pandas array from `arbitrary`
-    """
-    try:
-        dtype = dtype if dtype is None else cudf.dtype(dtype)
-        arbitrary = cupy.asarray(arbitrary, dtype=dtype)
-    except (TypeError, ValueError):
-        native_dtype = dtype
-        inferred_dtype = infer_dtype(arbitrary, skipna=False)
-        if (
-            dtype is None
-            and not cudf._lib.scalar._is_null_host_scalar(arbitrary)
-            and inferred_dtype
-            in (
-                "mixed",
-                "mixed-integer",
-            )
-        ):
-            native_dtype = "object"
-        if inferred_dtype == "interval":
-            # Only way to construct an Interval column.
-            return pd.array(arbitrary)
-        elif (
-            inferred_dtype == "string" and getattr(dtype, "kind", None) == "M"
-        ):
-            # We may have date-like strings with timezones
-            try:
-                pd_arbitrary = pd.to_datetime(arbitrary)
-                if isinstance(pd_arbitrary.dtype, pd.DatetimeTZDtype):
-                    raise NotImplementedError(
-                        "cuDF does not yet support timezone-aware datetimes"
-                    )
-                return pd_arbitrary.to_numpy()
-            except pd.errors.OutOfBoundsDatetime:
-                # https://github.com/pandas-dev/pandas/issues/55096
-                pass
-
-        arbitrary = np.asarray(
-            arbitrary,
-            dtype=native_dtype
-            if native_dtype is None
-            else np.dtype(native_dtype),
-        )
-    return arbitrary
 
 
 def _mask_from_cuda_array_interface_desc(obj) -> Union[Buffer, None]:
