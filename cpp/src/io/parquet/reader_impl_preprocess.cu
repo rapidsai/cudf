@@ -320,7 +320,7 @@ std::string encoding_bitmask_to_str(int32_t encoding_bitmask)
 
   for (size_t i = 0; i < bits.size(); ++i) {
     if (bits.test(i)) {
-      Encoding current = static_cast<Encoding>(i);
+      auto const current = static_cast<Encoding>(i);
       if (!is_supported_encoding(current)) { result.append(encoding_to_string(current) + " "); }
     }
   }
