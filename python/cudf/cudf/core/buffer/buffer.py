@@ -238,17 +238,6 @@ class BufferOwner(Serializable):
         return self._owner
 
     @property
-    def __cuda_array_interface__(self) -> Mapping:
-        """Implementation of the CUDA Array Interface."""
-        return {
-            "data": (self.get_ptr(mode="write"), False),
-            "shape": (self.size,),
-            "strides": None,
-            "typestr": "|u1",
-            "version": 0,
-        }
-
-    @property
     def exposed(self) -> bool:
         """The current exposure status of the buffer
 

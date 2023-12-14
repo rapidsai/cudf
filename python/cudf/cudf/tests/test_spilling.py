@@ -21,7 +21,7 @@ import cudf.core.buffer.spill_manager
 import cudf.options
 from cudf.core.abc import Serializable
 from cudf.core.buffer import (
-    BufferOwner,
+    Buffer,
     acquire_spill_lock,
     as_buffer,
     get_spill_lock,
@@ -439,7 +439,7 @@ def test_serialize_device(manager, target, view):
     header, frames = df1.device_serialize()
     assert len(frames) == 1
     if target == "gpu":
-        assert isinstance(frames[0], BufferOwner)
+        assert isinstance(frames[0], Buffer)
         assert not single_column_df_data(df1).is_spilled
         assert not single_column_df_data(df1).spillable
         frames[0] = cupy.array(frames[0], copy=True)
@@ -499,7 +499,7 @@ def test_serialize_cuda_dataframe(manager: SpillManager):
     buf: SpillableBuffer = single_column_df_data(df1)
     assert len(buf.owner._spill_locks) == 1
     assert len(frames) == 1
-    assert isinstance(frames[0], BufferOwner)
+    assert isinstance(frames[0], Buffer)
     assert frames[0].get_ptr(mode="read") == buf.get_ptr(mode="read")
 
     frames[0] = cupy.array(frames[0], copy=True)

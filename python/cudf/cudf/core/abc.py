@@ -92,7 +92,6 @@ class Serializable:
             isinstance(
                 f,
                 (
-                    cudf.core.buffer.BufferOwner,
                     cudf.core.buffer.Buffer,
                     memoryview,
                 ),

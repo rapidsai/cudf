@@ -436,7 +436,7 @@ class SpillableBuffer(Buffer):
         to memory already owned by an existing `SpillableBufferOwner`.
         """
         header: Dict[str, Any] = {}
-        frames: List[BufferOwner | memoryview]
+        frames: List[Buffer | memoryview]
         with self._owner.lock:
             header["type-serialized"] = pickle.dumps(self.__class__)
             header["owner-type-serialized"] = pickle.dumps(type(self._owner))
@@ -449,13 +449,15 @@ class SpillableBuffer(Buffer):
                 self.spill_lock(spill_lock)
                 ptr, size, _ = self.memory_info()
                 frames = [
-                    BufferOwner._from_device_memory(
-                        cuda_array_interface_wrapper(
-                            ptr=ptr,
-                            size=size,
-                            owner=(self._owner, spill_lock),
-                        ),
-                        exposed=False,
+                    Buffer(
+                        owner=BufferOwner._from_device_memory(
+                            cuda_array_interface_wrapper(
+                                ptr=ptr,
+                                size=size,
+                                owner=(self._owner, spill_lock),
+                            ),
+                            exposed=False,
+                        )
                     )
                 ]
             return header, frames
