@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/utilities/stream_pool.hpp>
-#include <rmm/cuda_stream_view.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/default_stream.hpp>
+
+#include <cudf/detail/utilities/stream_pool.hpp>
+#include <rmm/cuda_stream_view.hpp>
 
 class StreamPoolTest : public cudf::test::BaseFixture {};
 
@@ -27,7 +27,7 @@ __global__ void do_nothing_kernel() {}
 TEST_F(StreamPoolTest, ForkStreams)
 {
   auto streams = cudf::detail::fork_streams(cudf::test::get_default_stream(), 2);
-  for (auto& stream : streams){
+  for (auto& stream : streams) {
     do_nothing_kernel<<<1, 32, 0, stream.value()>>>();
   }
 }
