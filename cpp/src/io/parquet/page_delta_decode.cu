@@ -730,13 +730,13 @@ __global__ void __launch_bounds__(decode_block_size)
 /**
  * @copydoc cudf::io::parquet::detail::DecodeDeltaBinary
  */
-void __host__ DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                                cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
-                                size_t num_rows,
-                                size_t min_row,
-                                int level_type_size,
-                                kernel_error::pointer error_code,
-                                rmm::cuda_stream_view stream)
+void DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages,
+                       cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+                       size_t num_rows,
+                       size_t min_row,
+                       int level_type_size,
+                       kernel_error::pointer error_code,
+                       rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
 
@@ -755,13 +755,13 @@ void __host__ DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages
 /**
  * @copydoc cudf::io::parquet::gpu::DecodeDeltaByteArray
  */
-void __host__ DecodeDeltaByteArray(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                                   cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
-                                   size_t num_rows,
-                                   size_t min_row,
-                                   int level_type_size,
-                                   kernel_error::pointer error_code,
-                                   rmm::cuda_stream_view stream)
+void DecodeDeltaByteArray(cudf::detail::hostdevice_vector<PageInfo>& pages,
+                          cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+                          size_t num_rows,
+                          size_t min_row,
+                          int level_type_size,
+                          kernel_error::pointer error_code,
+                          rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
 
@@ -780,14 +780,13 @@ void __host__ DecodeDeltaByteArray(cudf::detail::hostdevice_vector<PageInfo>& pa
 /**
  * @copydoc cudf::io::parquet::gpu::DecodeDeltaByteArray
  */
-void __host__
-DecodeDeltaLengthByteArray(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                           cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
-                           size_t num_rows,
-                           size_t min_row,
-                           int level_type_size,
-                           kernel_error::pointer error_code,
-                           rmm::cuda_stream_view stream)
+void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_vector<PageInfo>& pages,
+                                cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+                                size_t num_rows,
+                                size_t min_row,
+                                int level_type_size,
+                                kernel_error::pointer error_code,
+                                rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
 
