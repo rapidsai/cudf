@@ -19,7 +19,14 @@
 #include <cudf/lists/lists_column_view.hpp>
 
 namespace cudf {
+//! Tdigest interfaces
 namespace tdigest {
+/**
+ * @addtogroup tdigest
+ * @{
+ * @file
+ * @brief tdigest data APIs
+ */
 
 /**
  * @brief Given a column_view containing tdigest data, an instance of this class
@@ -123,5 +130,6 @@ class tdigest_column_view : private column_view {
   [[nodiscard]] double const* max_begin() const;
 };
 
+/** @} */  // end of group
 }  // namespace tdigest
 }  // namespace cudf
