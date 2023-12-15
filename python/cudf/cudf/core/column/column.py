@@ -55,9 +55,6 @@ from cudf.api.types import (
     is_categorical_dtype,
     is_datetime64_dtype,
     is_datetime64tz_dtype,
-    is_decimal32_dtype,
-    is_decimal64_dtype,
-    is_decimal128_dtype,
     is_decimal_dtype,
     is_dtype_equal,
     is_integer_dtype,
@@ -1657,7 +1654,7 @@ def build_column(
             null_count=null_count,
             children=children,
         )
-    elif is_decimal64_dtype(dtype):
+    elif isinstance(dtype, cudf.Decimal64Dtype):
         if size is None:
             raise TypeError("Must specify size")
         return cudf.core.column.Decimal64Column(
@@ -1669,7 +1666,7 @@ def build_column(
             null_count=null_count,
             children=children,
         )
-    elif is_decimal32_dtype(dtype):
+    elif isinstance(dtype, cudf.Decimal32Dtype):
         if size is None:
             raise TypeError("Must specify size")
         return cudf.core.column.Decimal32Column(
@@ -1681,7 +1678,7 @@ def build_column(
             null_count=null_count,
             children=children,
         )
-    elif is_decimal128_dtype(dtype):
+    elif isinstance(dtype, cudf.Decimal128Dtype):
         if size is None:
             raise TypeError("Must specify size")
         return cudf.core.column.Decimal128Column(
