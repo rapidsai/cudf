@@ -2354,9 +2354,14 @@ def as_column(
                     typ = np_to_pa_dtype(dtype)
                 else:
                     typ = dtype.to_arrow()
-                arbitrary = pa.array(
-                    arbitrary, type=typ, from_pandas=from_pandas
-                )
+                try:
+                    arbitrary = pa.array(
+                        arbitrary, type=typ, from_pandas=from_pandas
+                    )
+                except (pa.ArrowInvalid, pa.ArrowTypeError):
+                    if not isinstance(dtype, np.dtype):
+                        dtype = dtype.to_pandas()
+                    arbitrary = pd.Series(arbitrary, dtype=dtype)
             data = as_column(arbitrary, nan_as_null=nan_as_null)
         else:
             try:
