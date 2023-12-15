@@ -468,7 +468,10 @@ __global__ void __launch_bounds__(128)
   }
 }
 
-__device__ size_t delta_data_len(Type physical_type, cudf::type_id type_id, uint32_t num_values)
+__device__ size_t delta_data_len(Type physical_type,
+                                 cudf::type_id type_id,
+                                 uint32_t num_values,
+                                 size_t page_size)
 {
   auto const dtype_len_out = physical_type_len(physical_type, type_id);
   auto const dtype_len     = [&]() -> uint32_t {
@@ -495,7 +498,15 @@ __device__ size_t delta_data_len(Type physical_type, cudf::type_id type_id, uint
   // modified.
   auto const header_size = 2 + 1 + 5 + dtype_len + 1;
 
-  return header_size + num_blocks * block_size;
+  // The above is just a size estimate for a DELTA_BINARY_PACKED data page. For BYTE_ARRAY
+  // data we also need to add size of the char data. `page_size` that is passed in is the
+  // plain encoded size (i.e. num_values * sizeof(size_type) + char_data_len), so the char
+  // data len is `page_size` minus the first term.
+  // TODO: this will need to change for DELTA_BYTE_ARRAY encoding
+  auto const char_data_len =
+    physical_type == BYTE_ARRAY ? page_size - num_values * sizeof(size_type) : 0;
+
+  return header_size + num_blocks * block_size + char_data_len;
 }
 
 // blockDim {128,1,1}
@@ -697,13 +708,8 @@ __global__ void __launch_bounds__(128)
           auto const rep_level_size = max_RLE_page_size(col_g.num_rep_level_bits(), values_in_page);
           // get a different bound if using delta encoding
           if (is_use_delta) {
-            auto delta_len = delta_data_len(physical_type, type_id, page_g.num_leaf_values);
-            // for byte array, delta_len will be just the length data. page_size is the plain
-            // encoded size (i.e. num_values * sizeof(size_type) + char_data_len), so add that
-            // to delta_len but subtract the first term.
-            if (physical_type == BYTE_ARRAY) {
-              delta_len += page_size - page_g.num_leaf_values * sizeof(size_type);
-            }
+            auto const delta_len =
+              delta_data_len(physical_type, type_id, page_g.num_leaf_values, page_size);
             page_size = max(page_size, delta_len);
           }
           auto const max_data_size = page_size + def_level_size + rep_level_size + rle_pad;
