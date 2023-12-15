@@ -2067,7 +2067,7 @@ __global__ void __launch_bounds__(block_size, 8)
   __syncthreads();
 
   // finish off the delta block and get the pointer to the end of the delta block
-  uint8_t* const output_ptr = reinterpret_cast<uint8_t*>(packer.flush());
+  auto const output_ptr = packer.flush();
 
   // now copy the char data
   memcpy_block<block_size, true>(output_ptr, first_string, string_data_len, t);
