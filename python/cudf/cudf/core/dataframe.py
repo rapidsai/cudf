@@ -6080,7 +6080,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     source = self._get_columns_by_label(numeric_cols)
                     if source.empty:
                         if axis == 2:
-                            return getattr(as_column([]), op)(**kwargs)
+                            return getattr(column_empty(0), op)(**kwargs)
                         else:
                             return Series(index=cudf.Index([], dtype="str"))
                     try:

@@ -225,9 +225,7 @@ void read_footer(std::unique_ptr<cudf::io::datasource> const& source,
     source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
   cudf::io::parquet::detail::CompactProtocolReader cp(footer_buffer->data(), ender->footer_len);
 
-  // returns true on success
-  bool res = cp.read(file_meta_data);
-  ASSERT_TRUE(res);
+  cp.read(file_meta_data);
 }
 
 // returns the number of bits used for dictionary encoding data at the given page location.
@@ -242,8 +240,7 @@ int read_dict_bits(std::unique_ptr<cudf::io::datasource> const& source,
   cudf::io::parquet::detail::PageHeader page_hdr;
   auto const page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
   cudf::io::parquet::detail::CompactProtocolReader cp(page_buf->data(), page_buf->size());
-  bool res = cp.read(&page_hdr);
-  CUDF_EXPECTS(res, "Cannot parse page header");
+  cp.read(&page_hdr);
 
   // cp should be pointing at the start of page data now. the first byte
   // should be the encoding bit size
@@ -263,8 +260,7 @@ cudf::io::parquet::detail::ColumnIndex read_column_index(
   cudf::io::parquet::detail::ColumnIndex colidx;
   auto const ci_buf = source->host_read(chunk.column_index_offset, chunk.column_index_length);
   cudf::io::parquet::detail::CompactProtocolReader cp(ci_buf->data(), ci_buf->size());
-  bool res = cp.read(&colidx);
-  CUDF_EXPECTS(res, "Cannot parse column index");
+  cp.read(&colidx);
   return colidx;
 }
 
@@ -281,8 +277,7 @@ cudf::io::parquet::detail::OffsetIndex read_offset_index(
   cudf::io::parquet::detail::OffsetIndex offidx;
   auto const oi_buf = source->host_read(chunk.offset_index_offset, chunk.offset_index_length);
   cudf::io::parquet::detail::CompactProtocolReader cp(oi_buf->data(), oi_buf->size());
-  bool res = cp.read(&offidx);
-  CUDF_EXPECTS(res, "Cannot parse offset index");
+  cp.read(&offidx);
   return offidx;
 }
 
@@ -306,8 +301,7 @@ cudf::io::parquet::detail::PageHeader read_page_header(
   cudf::io::parquet::detail::PageHeader page_hdr;
   auto const page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
   cudf::io::parquet::detail::CompactProtocolReader cp(page_buf->data(), page_buf->size());
-  bool res = cp.read(&page_hdr);
-  CUDF_EXPECTS(res, "Cannot parse page header");
+  cp.read(&page_hdr);
   return page_hdr;
 }
 
