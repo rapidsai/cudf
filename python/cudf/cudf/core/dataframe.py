@@ -702,7 +702,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 data = self.from_pandas(data, nan_as_null=nan_as_null)
             col_dict = data._data
             index, index_from_data = data.index, index
-            columns, columns_from_data = data.columns, columns
+            columns, columns_from_data = data._data.to_pandas_index(), columns
         elif isinstance(data, (cudf.Series, pd.Series)):
             if isinstance(data, pd.Series):
                 data = cudf.Series.from_pandas(data, nan_as_null=nan_as_null)
@@ -6518,7 +6518,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 if infered_type in inclusion:
                     df._insert(len(df._data), k, col)
         else:
-            df.columns = df.columns[:0]
+            df._data.rangeindex = self._data.rangeindex
+            df._data.multiindex = self._data.multiindex
+            df._data.label_dtype = self._data.label_dtype
 
         return df
 

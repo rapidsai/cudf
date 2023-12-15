@@ -8,7 +8,7 @@ import pytest
 
 import cudf as gd
 from cudf.api.types import is_categorical_dtype
-from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140
+from cudf.core._compat import PANDAS_GE_150, PANDAS_GE_200, PANDAS_LT_140
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
@@ -596,7 +596,12 @@ def test_concat_empty_dataframes(df, other, ignore_index):
                 actual[key] = col.fillna(-1)
         assert_eq(expected, actual, check_dtype=False, check_index_type=True)
     else:
-        assert_eq(expected, actual, check_index_type=not gdf.empty)
+        assert_eq(
+            expected,
+            actual,
+            check_index_type=not gdf.empty,
+            check_column_type=PANDAS_GE_200,
+        )
 
 
 @pytest.mark.parametrize("ignore_index", [True, False])
