@@ -71,10 +71,8 @@ files:
     extras:
       table: build-system
     includes:
-      - build_all
       - build_python_common
       - build_python_cudf
-      - build_wheels
   py_run_cudf:
     output: pyproject
     pyproject_dir: python/cudf
@@ -99,7 +97,7 @@ files:
     pyproject_dir: python/cudf
     extras:
       table: project.optional-dependencies
-      key: pandas_tests
+      key: pandas-tests
     includes:
       - test_python_pandas_cudf
   py_test_cudf_pandas:
@@ -107,7 +105,7 @@ files:
     pyproject_dir: python/cudf
     extras:
       table: project.optional-dependencies
-      key: cudf_pandas_tests
+      key: cudf-pandas-tests
     includes:
       - test_python_cudf_pandas
   py_build_dask_cudf:
@@ -143,7 +141,6 @@ files:
       table: build-system
     includes:
       - build_python_common
-      - build_wheels
   py_run_cudf_kafka:
     output: pyproject
     pyproject_dir: python/cudf_kafka
@@ -193,12 +190,10 @@ channels:
 dependencies:
   build_all:
     common:
-      - output_types: [conda, requirements, pyproject]
-        packages:
-          - &cmake_ver cmake>=3.26.4
-          - ninja
       - output_types: conda
         packages:
+          - &cmake_ver cmake>=3.26.4
+          - &ninja ninja
           - c-compiler
           - cxx-compiler
           - dlpack>=0.5,<0.6.0a0
@@ -257,15 +252,20 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
+          - *cmake_ver
           - cython>=3.0.3
+          - *ninja
           # TODO: Pin to numpy<1.25 until cudf requires pandas 2
           - &numpy numpy>=1.21,<1.25
-          - scikit-build>=0.13.1
-      - output_types: [conda, requirements, pyproject]
-        packages:
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
           - pyarrow==14.0.1.*
+      - output_types: conda
+        packages:
+          - scikit-build-core>=0.7.0
+      - output_types: [requirements, pyproject]
+        packages:
+          - scikit-build-core[pyproject]>=0.7.0
   build_python_cudf:
     common:
       - output_types: conda
