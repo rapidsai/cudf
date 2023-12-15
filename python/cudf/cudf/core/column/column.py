@@ -77,6 +77,7 @@ from cudf.core.buffer import (
 )
 from cudf.core.dtypes import (
     CategoricalDtype,
+    DecimalDtype,
     IntervalDtype,
     ListDtype,
     StructDtype,
@@ -1486,19 +1487,19 @@ def column_empty(
     dtype = cudf.dtype(dtype)
     children = ()  # type: Tuple[ColumnBase, ...]
 
-    if is_struct_dtype(dtype):
+    if isinstance(dtype, StructDtype):
         data = None
         children = tuple(
             column_empty(row_count, field_dtype)
             for field_dtype in dtype.fields.values()
         )
-    elif is_list_dtype(dtype):
+    elif isinstance(dtype, ListDtype):
         data = None
         children = (
             full(row_count + 1, 0, dtype=libcudf.types.size_type_dtype),
             column_empty(row_count, dtype=dtype.element_type),
         )
-    elif is_categorical_dtype(dtype):
+    elif isinstance(dtype, CategoricalDtype):
         data = None
         children = (
             build_column(
@@ -1511,7 +1512,7 @@ def column_empty(
                 dtype=libcudf.types.size_type_dtype,
             ),
         )
-    elif dtype.kind in "OU" and not is_decimal_dtype(dtype):
+    elif dtype.kind in "OU" and not isinstance(dtype, DecimalDtype):
         data = None
         children = (
             full(row_count + 1, 0, dtype=libcudf.types.size_type_dtype),
@@ -2715,7 +2716,11 @@ def arange(
 
     size = len(range(int(start), int(stop), int(step)))
     if size == 0:
-        return as_column([], dtype=dtype)
+        if dtype is None:
+            dtype = cudf.dtype("int64")
+        return cast(
+            cudf.core.column.NumericalColumn, column_empty(0, dtype=dtype)
+        )
 
     return libcudf.filling.sequence(
         size,
