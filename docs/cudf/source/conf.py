@@ -365,6 +365,7 @@ def on_missing_reference(app, env, node, contnode):
         "id_to_type_impl",
         "type_to_scalar_type_impl",
         "type_to_scalar_type_impl",
+        "detail",
         # kafka objects
         "python_callable_type",
         "kafka_oauth_callback_wrapper_type",
