@@ -34,6 +34,3 @@ rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
   --channel "${PYTHON_CHANNEL}" \
   cudf libcudf
-
-rapids-mamba-retry remove numba --force
-rapids-mamba-retry install --channel "numba/label/ci" numba
