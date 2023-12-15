@@ -27,7 +27,6 @@ from cudf.core.abc import Serializable
 from libcpp.memory cimport make_unique
 
 cimport cudf._lib.cpp.contiguous_split as cpp_contiguous_split
-cimport cudf._lib.cpp.copying as cpp_copying
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.lists.gather cimport (
@@ -271,92 +270,6 @@ def columns_split(list input_columns, object splits):
             list(splits),
         )
     ]
-
-
-def _copy_if_else_column_column(Column lhs, Column rhs, Column boolean_mask):
-
-    cdef column_view lhs_view = lhs.view()
-    cdef column_view rhs_view = rhs.view()
-    cdef column_view boolean_mask_view = boolean_mask.view()
-
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_copying.copy_if_else(
-                lhs_view,
-                rhs_view,
-                boolean_mask_view
-            )
-        )
-
-    return Column.from_unique_ptr(move(c_result))
-
-
-def _copy_if_else_scalar_column(DeviceScalar lhs,
-                                Column rhs,
-                                Column boolean_mask):
-
-    cdef const scalar* lhs_scalar = lhs.get_raw_ptr()
-    cdef column_view rhs_view = rhs.view()
-    cdef column_view boolean_mask_view = boolean_mask.view()
-
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_copying.copy_if_else(
-                lhs_scalar[0],
-                rhs_view,
-                boolean_mask_view
-            )
-        )
-
-    return Column.from_unique_ptr(move(c_result))
-
-
-def _copy_if_else_column_scalar(Column lhs,
-                                DeviceScalar rhs,
-                                Column boolean_mask):
-
-    cdef column_view lhs_view = lhs.view()
-    cdef const scalar* rhs_scalar = rhs.get_raw_ptr()
-    cdef column_view boolean_mask_view = boolean_mask.view()
-
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_copying.copy_if_else(
-                lhs_view,
-                rhs_scalar[0],
-                boolean_mask_view
-            )
-        )
-
-    return Column.from_unique_ptr(move(c_result))
-
-
-def _copy_if_else_scalar_scalar(DeviceScalar lhs,
-                                DeviceScalar rhs,
-                                Column boolean_mask):
-
-    cdef const scalar* lhs_scalar = lhs.get_raw_ptr()
-    cdef const scalar* rhs_scalar = rhs.get_raw_ptr()
-    cdef column_view boolean_mask_view = boolean_mask.view()
-
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_copying.copy_if_else(
-                lhs_scalar[0],
-                rhs_scalar[0],
-                boolean_mask_view
-            )
-        )
-
-    return Column.from_unique_ptr(move(c_result))
 
 
 @acquire_spill_lock()
