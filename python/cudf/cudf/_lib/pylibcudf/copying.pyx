@@ -13,9 +13,11 @@ from libcpp.vector cimport vector
 # cimport libcudf... libcudf.copying.algo(...)
 from cudf._lib.cpp cimport copying as cpp_copying
 from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
 from cudf._lib.cpp.copying cimport mask_allocation_policy, out_of_bounds_policy
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 
 from cudf._lib.cpp.copying import \
@@ -154,6 +156,27 @@ cpdef Column allocate_like(
     return Column.from_libcudf(move(c_result))
 
 
+cpdef Column copy_range_in_place(
+    Column input_column,
+    Column target_column,
+    size_type input_begin,
+    size_type input_end,
+    size_type target_begin,
+):
+    # Need to initialize this outside the function call so that Cython doesn't
+    # try and pass a temporary that decays to an rvalue reference in where the
+    # function requires an lvalue reference.
+    cdef mutable_column_view target_view = target_column.mutable_view()
+    with nogil:
+        cpp_copying.copy_range_in_place(
+            input_column.view(),
+            target_view,
+            input_begin,
+            input_end,
+            target_begin
+        )
+
+
 cpdef Column copy_range(
     Column input_column,
     Column target_column,
@@ -186,6 +209,82 @@ cpdef Column shift(Column input, size_type offset, Scalar fill_values):
             )
         )
     return Column.from_libcudf(move(c_result))
+
+
+cpdef list column_split(Column input_column, list splits):
+    cdef vector[size_type] c_splits
+    cdef int split
+    for split in splits:
+        c_splits.push_back(split)
+
+    cdef vector[column_view] c_result
+    with nogil:
+        c_result = move(
+            cpp_copying.split(
+                input_column.view(),
+                c_splits
+            )
+        )
+
+    cdef int i
+    return [
+        Column.from_column_view(c_result[i], input_column)
+        for i in range(c_result.size())
+    ]
+
+
+cpdef list table_split(Table input_table, list splits):
+    cdef vector[size_type] c_splits = splits
+    cdef vector[table_view] c_result
+    with nogil:
+        c_result = move(
+            cpp_copying.split(
+                input_table.view(),
+                c_splits
+            )
+        )
+
+    cdef int i
+    return [
+        Table.from_table_view(c_result[i], input_table)
+        for i in range(c_result.size())
+    ]
+
+
+cpdef list column_slice(Column input_column, list indices):
+    cdef vector[size_type] c_indices = indices
+    cdef vector[column_view] c_result
+    with nogil:
+        c_result = move(
+            cpp_copying.slice(
+                input_column.view(),
+                c_indices
+            )
+        )
+
+    cdef int i
+    return [
+        Column.from_column_view(c_result[i], input_column)
+        for i in range(c_result.size())
+    ]
+
+
+cpdef list table_slice(Table input_table, list indices):
+    cdef vector[size_type] c_indices = indices
+    cdef vector[table_view] c_result
+    with nogil:
+        c_result = move(
+            cpp_copying.slice(
+                input_table.view(),
+                c_indices
+            )
+        )
+
+    cdef int i
+    return [
+        Table.from_table_view(c_result[i], input_table)
+        for i in range(c_result.size())
+    ]
 
 
 cpdef Column copy_if_else(object lhs, object rhs, Column boolean_mask):
@@ -263,3 +362,12 @@ cpdef Table boolean_mask_scalars_scatter(list input, Table target, Column boolea
         )
 
     return Table.from_libcudf(move(result))
+
+cpdef Scalar get_element(Column input_column, size_type index):
+    cdef unique_ptr[scalar] c_output
+    with nogil:
+        c_output = move(
+            cpp_copying.get_element(input_column.view(), index)
+        )
+
+    return Scalar.from_libcudf(move(c_output))
