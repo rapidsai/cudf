@@ -16,14 +16,13 @@
 
 #pragma once
 
+#include <cudf/utilities/error.hpp>
+
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
-#include <string>
-
 #include <ftw.h>
-
-#include <cudf/utilities/error.hpp>
+#include <string>
 
 /**
  * @brief RAII class for creating a temporary directory.
@@ -41,7 +40,6 @@ class temp_directory {
   temp_directory(std::string const& base_name)
   {
     std::string dir_template{std::filesystem::temp_directory_path().string()};
-    if (auto env_p = std::getenv("WORKSPACE")) dir_template = env_p;
 
     dir_template += "/" + base_name + ".XXXXXX";
     auto const tmpdirptr = mkdtemp(const_cast<char*>(dir_template.data()));

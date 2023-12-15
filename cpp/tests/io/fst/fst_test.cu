@@ -140,7 +140,7 @@ TEST_F(FstTest, GroundTruth)
                       R"("author": "Nigel Rees",)"
                       R"("title": "Sayings of the Century",)"
                       R"("price": 8.95)"
-                      R"(}  )"
+                      R"(~  )"
                       R"({)"
                       R"("category": "reference",)"
                       R"("index:" [4,{},null,{"a":[]}],)"

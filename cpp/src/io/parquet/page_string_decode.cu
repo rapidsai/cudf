@@ -15,6 +15,7 @@
  */
 
 #include "delta_binary.cuh"
+#include "error.hpp"
 #include "page_decode.cuh"
 #include "page_string_utils.cuh"
 
@@ -77,8 +78,10 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
 
   // can skip all this if we know there are no nulls
   if (max_def == 0 && !is_bounds_pg) {
-    s->page.num_valids = s->num_input_values;
-    s->page.num_nulls  = 0;
+    if (t == 0) {
+      s->page.num_valids = s->num_input_values;
+      s->page.num_nulls  = 0;
+    }
     return {0, s->num_input_values};
   }
 
@@ -141,6 +144,25 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
     bool skipped_values_set = false;
     bool end_value_set      = false;
 
+    // If page_start_row >= min_row, then skipped_values is 0 and we don't have to search for
+    // start_value. If there's repetition then we've already calculated
+    // skipped_values/skipped_leaf_values.
+    // TODO(ets): If we hit this condition, and end_row > last row in page, then we can skip
+    // more of the processing below.
+    if (has_repetition or page_start_row >= min_row) {
+      if (t == 0) {
+        if (has_repetition) {
+          skipped_values      = pp->skipped_values;
+          skipped_leaf_values = pp->skipped_leaf_values;
+        } else {
+          skipped_values      = 0;
+          skipped_leaf_values = 0;
+        }
+      }
+      skipped_values_set = true;
+      __syncthreads();
+    }
+
     while (processed < s->page.num_input_values) {
       thread_index_type start_val = processed;
 
@@ -150,11 +172,6 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
 
         // special case where page does not begin at a row boundary
         if (processed == 0 && rep_decode[0] != 0) {
-          if (t == 0) {
-            skipped_values      = 0;
-            skipped_leaf_values = 0;
-          }
-          skipped_values_set = true;
           end_row++;  // need to finish off the previous row
           row_fudge = 0;
         }
@@ -279,7 +296,6 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
       pp->num_nulls  = null_count;
       pp->num_valids = pp->num_input_values - null_count;
     }
-    __syncthreads();
 
     end_value -= pp->num_nulls;
   }
@@ -784,7 +800,7 @@ __global__ void __launch_bounds__(decode_block_size)
                           device_span<ColumnChunkDesc const> chunks,
                           size_t min_row,
                           size_t num_rows,
-                          int32_t* error_code)
+                          kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
   __shared__ __align__(16) page_state_s state_g;
@@ -833,7 +849,7 @@ __global__ void __launch_bounds__(decode_block_size)
       target_pos = min(s->nz_count, src_pos + decode_block_size - out_thread0);
       if (out_thread0 > 32) { target_pos = min(target_pos, s->dict_pos); }
     }
-    // TODO(ets): see if this sync can be removed
+    // this needs to be here to prevent warp 1/2 modifying src_pos before all threads have read it
     __syncthreads();
     if (t < 32) {
       // decode repetition and definition levels.
@@ -1057,7 +1073,7 @@ void __host__ DecodeStringPageData(cudf::detail::hostdevice_vector<PageInfo>& pa
                                    size_t num_rows,
                                    size_t min_row,
                                    int level_type_size,
-                                   int32_t* error_code,
+                                   kernel_error::pointer error_code,
                                    rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");

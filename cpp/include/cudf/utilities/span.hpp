@@ -185,6 +185,13 @@ class span_base {
 
 }  // namespace detail
 
+/**
+ * @addtogroup utility_span
+ * @{
+ * @file
+ * @brief APIs for labeling values by bin.
+ */
+
 // ===== host_span =================================================================================
 
 template <typename T>
@@ -318,6 +325,7 @@ struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Ex
   {
   }
 };
+/** @} */  // end of group
 
 namespace detail {
 

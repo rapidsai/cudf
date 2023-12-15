@@ -2038,7 +2038,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return super().any(axis, skipna, level, **kwargs)
 
     @_cudf_nvtx_annotate
-    def to_pandas(self, index=True, nullable=False, **kwargs):
+    def to_pandas(
+        self, *, index: bool = True, nullable: bool = False
+    ) -> pd.Series:
         """
         Convert to a Pandas Series.
 
@@ -2100,6 +2102,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         if index is True:
             index = self.index.to_pandas()
+        else:
+            index = None  # type: ignore[assignment]
         s = self._column.to_pandas(index=index, nullable=nullable)
         s.name = self.name
         return s
@@ -3344,7 +3348,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             data=data.values(),
             index=data.keys(),
             dtype=dtype,
-            nan_as_null=False,
             name=self.name,
         )
 

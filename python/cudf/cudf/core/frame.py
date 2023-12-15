@@ -280,6 +280,8 @@ class Frame(BinaryOperand, Scannable):
             data=result_data,
             multiindex=self._data.multiindex,
             level_names=self._data.level_names,
+            rangeindex=self._data.rangeindex,
+            label_dtype=self._data.label_dtype,
         )
 
     @_cudf_nvtx_annotate
@@ -876,6 +878,8 @@ class Frame(BinaryOperand, Scannable):
                     data=filled_data,
                     multiindex=self._data.multiindex,
                     level_names=self._data.level_names,
+                    rangeindex=self._data.rangeindex,
+                    label_dtype=self._data.label_dtype,
                 )
             ),
             inplace=inplace,

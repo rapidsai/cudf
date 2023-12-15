@@ -34,20 +34,35 @@ function(find_libarrow_in_python_wheel PYARROW_VERSION)
   # version number soname, just `${MAJOR_VERSION}00`
   set(PYARROW_LIB "libarrow.so.${PYARROW_SO_VER}00")
 
-  find_package(Python REQUIRED)
-  execute_process(
+  string(
+    APPEND
+    initial_code_block
+    [=[
+find_package(Python 3.9 REQUIRED COMPONENTS Interpreter)
+execute_process(
     COMMAND "${Python_EXECUTABLE}" -c "import pyarrow; print(pyarrow.get_library_dirs()[0])"
     OUTPUT_VARIABLE CUDF_PYARROW_WHEEL_DIR
     OUTPUT_STRIP_TRAILING_WHITESPACE
+    COMMAND_ERROR_IS_FATAL ANY
+)
+list(APPEND CMAKE_PREFIX_PATH "${CUDF_PYARROW_WHEEL_DIR}")
+]=]
   )
-  list(APPEND CMAKE_PREFIX_PATH "${CUDF_PYARROW_WHEEL_DIR}")
+  string(
+    APPEND
+    final_code_block
+    [=[
+list(POP_BACK CMAKE_PREFIX_PATH)
+]=]
+  )
   rapids_find_generate_module(
     Arrow NO_CONFIG
     VERSION "${PYARROW_VERSION}"
     LIBRARY_NAMES "${PYARROW_LIB}"
     BUILD_EXPORT_SET cudf-exports
     INSTALL_EXPORT_SET cudf-exports
-    HEADER_NAMES arrow/python/arrow_to_pandas.h
+    HEADER_NAMES arrow/python/arrow_to_pandas.h INITIAL_CODE_BLOCK initial_code_block
+                 FINAL_CODE_BLOCK final_code_block
   )
 
   find_package(Arrow ${PYARROW_VERSION} MODULE REQUIRED GLOBAL)
@@ -62,20 +77,21 @@ function(find_libarrow_in_python_wheel PYARROW_VERSION)
   # benchmarks will not work without updating GBench (and possibly NVBench) builds. We are currently
   # ignoring these limitations since we don't anticipate using this feature except for building
   # wheels.
-  EXECUTE_PROCESS(
+  enable_language(C)
+  execute_process(
     COMMAND ${CMAKE_C_COMPILER} -print-file-name=libc.so.6
     OUTPUT_VARIABLE GLIBC_EXECUTABLE
     OUTPUT_STRIP_TRAILING_WHITESPACE
   )
-  EXECUTE_PROCESS(
+  execute_process(
     COMMAND ${GLIBC_EXECUTABLE}
     OUTPUT_VARIABLE GLIBC_OUTPUT
     OUTPUT_STRIP_TRAILING_WHITESPACE
   )
-  STRING(REGEX MATCH "stable release version ([0-9]+\\.[0-9]+)" GLIBC_VERSION ${GLIBC_OUTPUT})
-  STRING(REPLACE "stable release version " "" GLIBC_VERSION ${GLIBC_VERSION})
-  STRING(REPLACE "." ";" GLIBC_VERSION_LIST ${GLIBC_VERSION})
-  LIST(GET GLIBC_VERSION_LIST 1 GLIBC_VERSION_MINOR)
+  string(REGEX MATCH "stable release version ([0-9]+\\.[0-9]+)" GLIBC_VERSION ${GLIBC_OUTPUT})
+  string(REPLACE "stable release version " "" GLIBC_VERSION ${GLIBC_VERSION})
+  string(REPLACE "." ";" GLIBC_VERSION_LIST ${GLIBC_VERSION})
+  list(GET GLIBC_VERSION_LIST 1 GLIBC_VERSION_MINOR)
   if(GLIBC_VERSION_MINOR LESS 28)
     target_compile_options(
       Arrow::Arrow INTERFACE "$<$<COMPILE_LANGUAGE:CXX>:-D_GLIBCXX_USE_CXX11_ABI=0>"
@@ -85,16 +101,14 @@ function(find_libarrow_in_python_wheel PYARROW_VERSION)
 
   rapids_export_package(BUILD Arrow cudf-exports)
   rapids_export_package(INSTALL Arrow cudf-exports)
-
-  list(POP_BACK CMAKE_PREFIX_PATH)
 endfunction()
 
 # This function finds arrow and sets any additional necessary environment variables.
 function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENABLE_PYTHON
-         ENABLE_PARQUET
+         ENABLE_PARQUET PYARROW_LIBARROW
 )
 
-  if(USE_LIBARROW_FROM_PYARROW)
+  if(PYARROW_LIBARROW)
     # Generate a FindArrow.cmake to find pyarrow's libarrow.so
     find_libarrow_in_python_wheel(${VERSION})
     set(ARROW_FOUND
@@ -434,5 +448,5 @@ endif()
 
 find_and_configure_arrow(
   ${CUDF_VERSION_Arrow} ${CUDF_USE_ARROW_STATIC} ${CUDF_ENABLE_ARROW_S3} ${CUDF_ENABLE_ARROW_ORC}
-  ${CUDF_ENABLE_ARROW_PYTHON} ${CUDF_ENABLE_ARROW_PARQUET}
+  ${CUDF_ENABLE_ARROW_PYTHON} ${CUDF_ENABLE_ARROW_PARQUET} ${USE_LIBARROW_FROM_PYARROW}
 )
