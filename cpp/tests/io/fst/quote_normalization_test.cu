@@ -38,8 +38,11 @@
 namespace {
 
 // Type used to represent the atomic symbol type used within the finite-state machine
+// TODO: type aliasing to be declared in a common header for better maintainability and
+//        pre-empt future bugs
 using SymbolT = char;
 using StateT  = char;
+
 // Type sufficiently large to index symbols within the input and output (may be unsigned)
 using SymbolOffsetT = uint32_t;
 enum class dfa_states : char { TT_OOS = 0U, TT_DQS, TT_SQS, TT_DEC, TT_SEC, TT_NUM_STATES };
@@ -51,6 +54,7 @@ enum class dfa_symbol_group_id : uint32_t {
   OTHER_SYMBOLS,      ///< SG implicitly matching all other characters
   NUM_SYMBOL_GROUPS   ///< Total number of symbol groups
 };
+
 // Aliases for readability of the transition table
 constexpr auto TT_OOS            = dfa_states::TT_OOS;
 constexpr auto TT_DQS            = dfa_states::TT_DQS;
@@ -73,8 +77,10 @@ std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const qna_s
   /* TT_DEC */ {{TT_DQS, TT_DQS, TT_DQS, TT_OOS, TT_DQS}},
   /* TT_SEC */ {{TT_SQS, TT_SQS, TT_SQS, TT_OOS, TT_SQS}},
 }};
+
 // The DFA's starting state
 constexpr char start_state = static_cast<char>(TT_OOS);
+
 struct TransduceToNormalizedQuotes {
   /**
    * @brief Returns the <relative_offset>-th output symbol on the transition (state_id, match_id).
@@ -109,36 +115,34 @@ struct TransduceToNormalizedQuotes {
       (state_id == static_cast<StateT>(dfa_states::TT_SQS)) &&
       (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DOUBLE_QUOTE_CHAR));
     // Case when a double quote needs to be replaced by the escape sequence: \"
-    if (outputs_escape_sequence) {
-      return (relative_offset == 0) ? '\\' : '"';
-    }
+    if (outputs_escape_sequence) { return (relative_offset == 0) ? '\\' : '"'; }
     // Case when a single quote needs to be replaced by a double quote
-    else if ((match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::SINGLE_QUOTE_CHAR)) &&
-             ((state_id == static_cast<StateT>(dfa_states::TT_SQS)) ||
-              (state_id == static_cast<StateT>(dfa_states::TT_OOS)))) {
+    if ((match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::SINGLE_QUOTE_CHAR)) &&
+        ((state_id == static_cast<StateT>(dfa_states::TT_SQS)) ||
+         (state_id == static_cast<StateT>(dfa_states::TT_OOS)))) {
       return '"';
     }
     // Case when the read symbol is an escape character - the actual translation for \<s> for some
     // symbol <s> is handled by transitions from SEC. For now, there is no output for this
     // transition
-    else if ((match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::ESCAPE_CHAR)) &&
-             ((state_id == static_cast<StateT>(dfa_states::TT_SQS)))) {
+    if ((match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::ESCAPE_CHAR)) &&
+        ((state_id == static_cast<StateT>(dfa_states::TT_SQS)))) {
       return 0;
     }
     // Case when an escaped single quote in an input single-quoted string needs to be replaced by an
     // unescaped single quote
-    else if ((match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::SINGLE_QUOTE_CHAR)) &&
-             ((state_id == static_cast<StateT>(dfa_states::TT_SEC)))) {
+    if ((match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::SINGLE_QUOTE_CHAR)) &&
+        ((state_id == static_cast<StateT>(dfa_states::TT_SEC)))) {
       return '\'';
     }
     // Case when an escaped symbol <s> that is not a single-quote needs to be replaced with \<s>
-    else if (state_id == static_cast<StateT>(dfa_states::TT_SEC)) {
+    if (state_id == static_cast<StateT>(dfa_states::TT_SEC)) {
       return (relative_offset == 0) ? '\\' : read_symbol;
     }
     // In all other cases we simply output the input symbol
-    else
-      return read_symbol;
+    return read_symbol;
   }
+
   /**
    * @brief Returns the number of output characters for a given transition. During quote
    * normalization, we always emit one output character (i.e., either the input character or the
@@ -155,19 +159,19 @@ struct TransduceToNormalizedQuotes {
       (state_id == static_cast<StateT>(dfa_states::TT_SQS)) &&
       (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DOUBLE_QUOTE_CHAR));
     // Number of characters to output on this transition
-    if (sqs_outputs_escape_sequence) return 2;
+    if (sqs_outputs_escape_sequence) { return 2; }
     // Whether this transition translates to the escape sequence \<s> or unescaped '
     const bool sec_outputs_escape_sequence =
       (state_id == static_cast<StateT>(dfa_states::TT_SEC)) &&
       (match_id != static_cast<SymbolGroupT>(dfa_symbol_group_id::SINGLE_QUOTE_CHAR));
     // Number of characters to output on this transition
-    if (sec_outputs_escape_sequence) return 2;
+    if (sec_outputs_escape_sequence) { return 2; }
     // Whether this transition translates to no output <nop>
     const bool sqs_outputs_nop =
       (state_id == static_cast<StateT>(dfa_states::TT_SQS)) &&
       (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::ESCAPE_CHAR));
     // Number of characters to output on this transition
-    if (sqs_outputs_nop) return 0;
+    if (sqs_outputs_nop) { return 0; }
     return 1;
   }
 };
@@ -228,18 +232,21 @@ TEST_F(FstTest, GroundTruth_QuoteNormalization1)
   std::string output = R"({"A":"TEST\""})";
   run_test(input, output);
 }
+
 TEST_F(FstTest, GroundTruth_QuoteNormalization2)
 {
   std::string input  = R"({'A':"TEST'"} ['OTHER STUFF'])";
   std::string output = R"({"A":"TEST'"} ["OTHER STUFF"])";
   run_test(input, output);
 }
+
 TEST_F(FstTest, GroundTruth_QuoteNormalization3)
 {
   std::string input  = R"(['{"A": "B"}',"{'A': 'B'}"])";
   std::string output = R"(["{\"A\": \"B\"}","{'A': 'B'}"])";
   run_test(input, output);
 }
+
 TEST_F(FstTest, GroundTruth_QuoteNormalization4)
 {
   std::string input = R"({"ain't ain't a word and you ain't supposed to say it":'"""""""""""'})";
@@ -247,66 +254,77 @@ TEST_F(FstTest, GroundTruth_QuoteNormalization4)
     R"({"ain't ain't a word and you ain't supposed to say it":"\"\"\"\"\"\"\"\"\"\"\""})";
   run_test(input, output);
 }
+
 TEST_F(FstTest, GroundTruth_QuoteNormalization5)
 {
   std::string input  = R"({"\"'\"'\"'\"'":'"\'"\'"\'"\'"'})";
   std::string output = R"({"\"'\"'\"'\"'":"\"'\"'\"'\"'\""})";
   run_test(input, output);
 }
+
 TEST_F(FstTest, GroundTruth_QuoteNormalization6)
 {
   std::string input  = R"([{"ABC':'CBA":'XYZ":"ZXY'}])";
   std::string output = R"([{"ABC':'CBA":"XYZ\":\"ZXY"}])";
   run_test(input, output);
 }
+
 TEST_F(FstTest, GroundTruth_QuoteNormalization7)
 {
   std::string input  = R"(["\t","\\t","\\","\\\'\"\\\\","\n","\b"])";
   std::string output = R"(["\t","\\t","\\","\\\'\"\\\\","\n","\b"])";
   run_test(input, output);
 }
+
 TEST_F(FstTest, GroundTruth_QuoteNormalization8)
 {
   std::string input  = R"(['\t','\\t','\\','\\\"\'\\\\','\n','\b','\u0012'])";
   std::string output = R"(["\t","\\t","\\","\\\"'\\\\","\n","\b","\u0012"])";
   run_test(input, output);
 }
+
 TEST_F(FstTest, GroundTruth_QuoteNormalization_Invalid1)
 {
   std::string input  = R"(["THIS IS A TEST'])";
   std::string output = R"(["THIS IS A TEST'])";
   run_test(input, output);
 }
+
 TEST_F(FstTest, GroundTruth_QuoteNormalization_Invalid2)
 {
   std::string input  = R"(['THIS IS A TEST"])";
   std::string output = R"(["THIS IS A TEST\"])";
   run_test(input, output);
 }
+
 TEST_F(FstTest, GroundTruth_QuoteNormalization_Invalid3)
 {
   std::string input  = R"({"MORE TEST'N":'RESUL})";
   std::string output = R"({"MORE TEST'N":"RESUL})";
   run_test(input, output);
 }
+
 TEST_F(FstTest, GroundTruth_QuoteNormalization_Invalid4)
 {
   std::string input  = R"({"NUMBER":100'0,'STRING':'SOMETHING'})";
   std::string output = R"({"NUMBER":100"0,"STRING":"SOMETHING"})";
   run_test(input, output);
 }
+
 TEST_F(FstTest, GroundTruth_QuoteNormalization_Invalid5)
 {
   std::string input  = R"({'NUMBER':100"0,"STRING":"SOMETHING"})";
   std::string output = R"({"NUMBER":100"0,"STRING":"SOMETHING"})";
   run_test(input, output);
 }
+
 TEST_F(FstTest, GroundTruth_QuoteNormalization_Invalid6)
 {
   std::string input  = R"({'a':'\\''})";
   std::string output = R"({"a":"\\""})";
   run_test(input, output);
 }
+
 TEST_F(FstTest, GroundTruth_QuoteNormalization_Invalid7)
 {
   std::string input  = R"(}'a': 'b'{)";
