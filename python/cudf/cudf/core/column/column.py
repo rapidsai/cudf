@@ -55,9 +55,6 @@ from cudf.api.types import (
     is_categorical_dtype,
     is_datetime64_dtype,
     is_datetime64tz_dtype,
-    is_decimal32_dtype,
-    is_decimal64_dtype,
-    is_decimal128_dtype,
     is_decimal_dtype,
     is_dtype_equal,
     is_integer_dtype,
@@ -65,7 +62,6 @@ from cudf.api.types import (
     is_list_dtype,
     is_scalar,
     is_string_dtype,
-    is_struct_dtype,
 )
 from cudf.core._compat import PANDAS_GE_150
 from cudf.core.abc import Serializable
@@ -1023,21 +1019,15 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                     "`.astype('str')` instead."
                 )
             return self.as_string_column(dtype, **kwargs)
-        elif is_list_dtype(dtype):
+        elif isinstance(dtype, (ListDtype, StructDtype)):
             if not self.dtype == dtype:
                 raise NotImplementedError(
-                    "Casting list columns not currently supported"
+                    f"Casting {self.dtype} columns not currently supported"
                 )
             return self
-        elif is_struct_dtype(dtype):
-            if not self.dtype == dtype:
-                raise NotImplementedError(
-                    "Casting struct columns not currently supported"
-                )
-            return self
-        elif is_interval_dtype(self.dtype):
+        elif isinstance(dtype, IntervalDtype):
             return self.as_interval_column(dtype, **kwargs)
-        elif is_decimal_dtype(dtype):
+        elif isinstance(dtype, cudf.core.dtypes.DecimalDtype):
             return self.as_decimal_column(dtype, **kwargs)
         elif np.issubdtype(cast(Any, dtype), np.datetime64):
             return self.as_datetime_column(dtype, **kwargs)
@@ -1578,7 +1568,7 @@ def build_column(
         )
         return col
 
-    if is_categorical_dtype(dtype):
+    if isinstance(dtype, CategoricalDtype):
         if not len(children) == 1:
             raise ValueError(
                 "Must specify exactly one child column for CategoricalColumn"
@@ -1604,7 +1594,7 @@ def build_column(
             offset=offset,
             null_count=null_count,
         )
-    elif is_datetime64tz_dtype(dtype):
+    elif isinstance(dtype, pd.DatetimeTZDtype):
         if data is None:
             raise TypeError("Must specify data buffer")
         return cudf.core.column.datetime.DatetimeTZColumn(
@@ -1634,7 +1624,7 @@ def build_column(
             children=children,
             null_count=null_count,
         )
-    elif is_list_dtype(dtype):
+    elif isinstance(dtype, ListDtype):
         return cudf.core.column.ListColumn(
             size=size,
             dtype=dtype,
@@ -1643,7 +1633,7 @@ def build_column(
             null_count=null_count,
             children=children,
         )
-    elif is_interval_dtype(dtype):
+    elif isinstance(dtype, IntervalDtype):
         return cudf.core.column.IntervalColumn(
             dtype=dtype,
             mask=mask,
@@ -1652,7 +1642,7 @@ def build_column(
             children=children,
             null_count=null_count,
         )
-    elif is_struct_dtype(dtype):
+    elif isinstance(dtype, StructDtype):
         if size is None:
             raise TypeError("Must specify size")
         return cudf.core.column.StructColumn(
@@ -1664,7 +1654,7 @@ def build_column(
             null_count=null_count,
             children=children,
         )
-    elif is_decimal64_dtype(dtype):
+    elif isinstance(dtype, cudf.Decimal64Dtype):
         if size is None:
             raise TypeError("Must specify size")
         return cudf.core.column.Decimal64Column(
@@ -1676,7 +1666,7 @@ def build_column(
             null_count=null_count,
             children=children,
         )
-    elif is_decimal32_dtype(dtype):
+    elif isinstance(dtype, cudf.Decimal32Dtype):
         if size is None:
             raise TypeError("Must specify size")
         return cudf.core.column.Decimal32Column(
@@ -1688,7 +1678,7 @@ def build_column(
             null_count=null_count,
             children=children,
         )
-    elif is_decimal128_dtype(dtype):
+    elif isinstance(dtype, cudf.Decimal128Dtype):
         if size is None:
             raise TypeError("Must specify size")
         return cudf.core.column.Decimal128Column(
@@ -1697,15 +1687,6 @@ def build_column(
             offset=offset,
             dtype=dtype,
             mask=mask,
-            null_count=null_count,
-            children=children,
-        )
-    elif is_interval_dtype(dtype):
-        return cudf.core.column.IntervalColumn(
-            dtype=dtype,
-            mask=mask,
-            size=size,
-            offset=offset,
             null_count=null_count,
             children=children,
         )
