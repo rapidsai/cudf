@@ -1693,15 +1693,6 @@ def build_column(
             null_count=null_count,
             children=children,
         )
-    elif is_interval_dtype(dtype):
-        return cudf.core.column.IntervalColumn(
-            dtype=dtype,
-            mask=mask,
-            size=size,
-            offset=offset,
-            null_count=null_count,
-            children=children,
-        )
     else:
         raise TypeError(f"Unrecognized dtype: {dtype}")
 
