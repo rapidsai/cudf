@@ -25,6 +25,9 @@ namespace cudf::io::orc {
  * @file
  */
 
+/**
+ * @brief Identifies a compression algorithm
+ */
 enum CompressionKind : uint8_t {
   NONE   = 0,
   ZLIB   = 1,
@@ -34,6 +37,9 @@ enum CompressionKind : uint8_t {
   ZSTD   = 5,
 };
 
+/**
+ * @brief Identifies a data type in an orc file
+ */
 enum TypeKind : int8_t {
   INVALID_TYPE_KIND = -1,
   BOOLEAN           = 0,
@@ -56,6 +62,9 @@ enum TypeKind : int8_t {
   CHAR              = 17,
 };
 
+/**
+ * @brief Identifies the type of data stream
+ */
 enum StreamKind : int8_t {
   INVALID_STREAM_KIND = -1,
   PRESENT             = 0,  // boolean stream of whether the next value is non-null
@@ -69,6 +78,9 @@ enum StreamKind : int8_t {
   BLOOM_FILTER_UTF8   = 8,  // bloom filters that consistently use utf8
 };
 
+/**
+ * @brief Identifies the encoding of columns
+ */
 enum ColumnEncodingKind : int8_t {
   INVALID_ENCODING_KIND = -1,
   DIRECT                = 0,  // the encoding is mapped directly to the stream using RLE v1
@@ -77,6 +89,9 @@ enum ColumnEncodingKind : int8_t {
   DICTIONARY_V2         = 3,  // the encoding is dictionary-based using RLE v2
 };
 
+/**
+ * @brief Identifies the type of encoding in a protocol buffer
+ */
 enum ProtofType : uint8_t {
   VARINT      = 0,
   FIXED64     = 1,
