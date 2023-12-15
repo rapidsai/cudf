@@ -49,15 +49,17 @@ namespace nvtext {
  *
  * All null row entries are ignored and the output contains all valid rows.
  *
- * @param strings Strings column tokenize.
+ * @param input Strings column to tokenize
  * @param delimiter UTF-8 characters used to separate each string into tokens.
  *                  The default of empty string will separate tokens using whitespace.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings columns of tokens.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings columns of tokens
  */
 std::unique_ptr<cudf::column> tokenize(
-  cudf::strings_column_view const& strings,
+  cudf::strings_column_view const& input,
   cudf::string_scalar const& delimiter = cudf::string_scalar{""},
+  rmm::cuda_stream_view stream         = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
 
 /**
@@ -84,14 +86,16 @@ std::unique_ptr<cudf::column> tokenize(
  *
  * @throw cudf::logic_error if the delimiters column is empty or contains nulls.
  *
- * @param strings Strings column to tokenize.
- * @param delimiters Strings used to separate individual strings into tokens.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings columns of tokens.
+ * @param input Strings column to tokenize
+ * @param delimiters Strings used to separate individual strings into tokens
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings columns of tokens
  */
 std::unique_ptr<cudf::column> tokenize(
-  cudf::strings_column_view const& strings,
+  cudf::strings_column_view const& input,
   cudf::strings_column_view const& delimiters,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -112,15 +116,17 @@ std::unique_ptr<cudf::column> tokenize(
  * All null row entries are ignored and the output contains all valid rows.
  * The number of tokens for a null element is set to 0 in the output column.
  *
- * @param strings Strings column to use for this operation
- * @param delimiter Strings used to separate each string into tokens;
+ * @param input Strings column to count tokens
+ * @param delimiter Strings used to separate each string into tokens.
  *                  The default of empty string will separate tokens using whitespace.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column of token counts
  */
 std::unique_ptr<cudf::column> count_tokens(
-  cudf::strings_column_view const& strings,
+  cudf::strings_column_view const& input,
   cudf::string_scalar const& delimiter = cudf::string_scalar{""},
+  rmm::cuda_stream_view stream         = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
 
 /**
@@ -143,14 +149,16 @@ std::unique_ptr<cudf::column> count_tokens(
  *
  * @throw cudf::logic_error if the delimiters column is empty or contains nulls
  *
- * @param strings Strings column to use for this operation
+ * @param input Strings column to count tokens
  * @param delimiters Strings used to separate each string into tokens
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column of token counts
  */
 std::unique_ptr<cudf::column> count_tokens(
-  cudf::strings_column_view const& strings,
+  cudf::strings_column_view const& input,
   cudf::strings_column_view const& delimiters,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -168,12 +176,14 @@ std::unique_ptr<cudf::column> count_tokens(
  *
  * All null row entries are ignored and the output contains all valid rows.
  *
- * @param strings Strings column to tokenize.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings columns of tokens.
+ * @param input Strings column to tokenize
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings columns of tokens
  */
 std::unique_ptr<cudf::column> character_tokenize(
-  cudf::strings_column_view const& strings,
+  cudf::strings_column_view const& input,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -203,16 +213,18 @@ std::unique_ptr<cudf::column> character_tokenize(
  * @throw cudf::logic_error if `row_indices.size() != strings.size()`
  * @throw cudf::logic_error if `row_indices` contains nulls
  *
- * @param strings Strings column to detokenize.
- * @param row_indices The relative output row index assigned for each token in the input column.
- * @param separator String to append after concatenating each token to the proper output row.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings columns of tokens.
+ * @param input Strings column to detokenize
+ * @param row_indices The relative output row index assigned for each token in the input column
+ * @param separator String to append after concatenating each token to the proper output row
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings columns of tokens
  */
 std::unique_ptr<cudf::column> detokenize(
-  cudf::strings_column_view const& strings,
+  cudf::strings_column_view const& input,
   cudf::column_view const& row_indices,
   cudf::string_scalar const& separator = cudf::string_scalar(" "),
+  rmm::cuda_stream_view stream         = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
 
 /**

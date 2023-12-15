@@ -343,27 +343,35 @@ constexpr auto NUM_SYMBOL_GROUPS = static_cast<uint32_t>(dfa_symbol_group_id::NU
 std::array<std::string, NUM_SYMBOL_GROUPS - 1> const symbol_groups{
   {{"{"}, {"["}, {"}"}, {"]"}, {"\""}, {"\\"}, {"\n"}}};
 
-// Transition table
+// Transition table for the default JSON and JSON lines formats
 std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const transition_table{
   {/* IN_STATE          {       [       }       ]       "       \      \n    OTHER */
    /* TT_OOS    */ {{TT_OOS, TT_OOS, TT_OOS, TT_OOS, TT_STR, TT_OOS, TT_OOS, TT_OOS}},
    /* TT_STR    */ {{TT_STR, TT_STR, TT_STR, TT_STR, TT_OOS, TT_ESC, TT_STR, TT_STR}},
    /* TT_ESC    */ {{TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR}}}};
 
-// Translation table (i.e., for each transition, what are the symbols that we output)
+// Transition table for the JSON lines format that recovers from invalid JSON lines
+std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const
+  resetting_transition_table{
+    {/* IN_STATE          {       [       }       ]       "       \      \n    OTHER */
+     /* TT_OOS    */ {{TT_OOS, TT_OOS, TT_OOS, TT_OOS, TT_STR, TT_OOS, TT_OOS, TT_OOS}},
+     /* TT_STR    */ {{TT_STR, TT_STR, TT_STR, TT_STR, TT_OOS, TT_ESC, TT_OOS, TT_STR}},
+     /* TT_ESC    */ {{TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_OOS, TT_STR}}}};
+
+// Translation table for the default JSON and JSON lines formats
 std::array<std::array<std::vector<char>, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const translation_table{
   {/* IN_STATE         {      [      }      ]      "      \     \n    OTHER */
    /* TT_OOS    */ {{{'{'}, {'['}, {'}'}, {']'}, {}, {}, {}, {}}},
    /* TT_STR    */ {{{}, {}, {}, {}, {}, {}, {}, {}}},
    /* TT_ESC    */ {{{}, {}, {}, {}, {}, {}, {}, {}}}}};
 
-// Translation table
+// Translation table for the JSON lines format that recovers from invalid JSON lines
 std::array<std::array<std::vector<char>, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const
   resetting_translation_table{
     {/* IN_STATE         {      [      }      ]      "      \     \n    OTHER */
      /* TT_OOS    */ {{{'{'}, {'['}, {'}'}, {']'}, {}, {}, {'\n'}, {}}},
-     /* TT_STR    */ {{{}, {}, {}, {}, {}, {}, {}, {}}},
-     /* TT_ESC    */ {{{}, {}, {}, {}, {}, {}, {}, {}}}}};
+     /* TT_STR    */ {{{}, {}, {}, {}, {}, {}, {'\n'}, {}}},
+     /* TT_ESC    */ {{{}, {}, {}, {}, {}, {}, {'\n'}, {}}}}};
 
 // The DFA's starting state
 constexpr auto start_state = static_cast<StateT>(TT_OOS);
@@ -1415,14 +1423,19 @@ void get_stack_context(device_span<SymbolT const> json_in,
   constexpr auto max_translation_table_size =
     to_stack_op::NUM_SYMBOL_GROUPS * to_stack_op::TT_NUM_STATES;
 
-  // Translation table specialized on the choice of whether to reset on newlines outside of strings
+  // Transition table specialized on the choice of whether to reset on newlines
+  const auto transition_table = (stack_behavior == stack_behavior_t::ResetOnDelimiter)
+                                  ? to_stack_op::resetting_transition_table
+                                  : to_stack_op::transition_table;
+
+  // Translation table specialized on the choice of whether to reset on newlines
   const auto translation_table = (stack_behavior == stack_behavior_t::ResetOnDelimiter)
                                    ? to_stack_op::resetting_translation_table
                                    : to_stack_op::translation_table;
 
   auto json_to_stack_ops_fst = fst::detail::make_fst(
     fst::detail::make_symbol_group_lut(to_stack_op::symbol_groups),
-    fst::detail::make_transition_table(to_stack_op::transition_table),
+    fst::detail::make_transition_table(transition_table),
     fst::detail::make_translation_table<max_translation_table_size>(translation_table),
     stream);
 
@@ -1441,7 +1454,7 @@ void get_stack_context(device_span<SymbolT const> json_in,
 
   // Stack operations with indices are converted to top of the stack for each character in the input
   if (stack_behavior == stack_behavior_t::ResetOnDelimiter) {
-    fst::sparse_stack_op_to_top_of_stack<StackLevelT>(
+    fst::sparse_stack_op_to_top_of_stack<fst::stack_op_support::WITH_RESET_SUPPORT, StackLevelT>(
       stack_ops.data(),
       device_span<SymbolOffsetT>{stack_op_indices.data(), num_stack_ops},
       JSONWithRecoveryToStackOp{},
@@ -1451,7 +1464,7 @@ void get_stack_context(device_span<SymbolT const> json_in,
       json_in.size(),
       stream);
   } else {
-    fst::sparse_stack_op_to_top_of_stack<StackLevelT>(
+    fst::sparse_stack_op_to_top_of_stack<fst::stack_op_support::NO_RESET_SUPPORT, StackLevelT>(
       stack_ops.data(),
       device_span<SymbolOffsetT>{stack_op_indices.data(), num_stack_ops},
       JSONToStackOp{},
@@ -2055,11 +2068,13 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
 
   auto make_validity =
     [stream, mr](json_column const& json_col) -> std::pair<rmm::device_buffer, size_type> {
+    auto const null_count = json_col.current_offset - json_col.valid_count;
+    if (null_count == 0) { return {rmm::device_buffer{}, null_count}; }
     return {rmm::device_buffer{json_col.validity.data(),
                                bitmask_allocation_size_bytes(json_col.current_offset),
                                stream,
                                mr},
-            json_col.current_offset - json_col.valid_count};
+            null_count};
   };
 
   auto get_child_schema = [schema](auto child_name) -> std::optional<schema_element> {
@@ -2125,9 +2140,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       // This is to match the existing JSON reader's behaviour:
       // - Non-string columns will always be returned as nullable
       // - String columns will be returned as nullable, iff there's at least one null entry
-      if (target_type.id() == type_id::STRING and col->null_count() == 0) {
-        col->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
-      }
+      if (col->null_count() == 0) { col->set_null_mask(rmm::device_buffer{0, stream, mr}, 0); }
 
       // For string columns return ["offsets", "char"] schema
       if (target_type.id() == type_id::STRING) {

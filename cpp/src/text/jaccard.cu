@@ -113,7 +113,7 @@ struct sorted_intersect_fn {
   cudf::size_type* d_results;
 
   // warp per row
-  __device__ float operator()(cudf::size_type idx) const
+  __device__ void operator()(cudf::size_type idx) const
   {
     using warp_reduce = cub::WarpReduce<cudf::size_type>;
     __shared__ typename warp_reduce::TempStorage temp_storage;
@@ -286,7 +286,7 @@ std::unique_ptr<cudf::column> jaccard_index(cudf::strings_column_view const& inp
   if (input1.null_count() || input2.null_count()) {
     auto [null_mask, null_count] =
       cudf::detail::bitmask_and(cudf::table_view({input1.parent(), input2.parent()}), stream, mr);
-    results->set_null_mask(null_mask, null_count);
+    results->set_null_mask(std::move(null_mask), null_count);
   }
 
   return results;

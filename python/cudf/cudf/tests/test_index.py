@@ -3,8 +3,10 @@
 """
 Test related to Index
 """
+import operator
 import re
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -681,7 +683,7 @@ def test_index_where(data, condition, other, error):
         gs_other = other
 
     if error is None:
-        if pd.api.types.is_categorical_dtype(ps):
+        if isinstance(ps.dtype, pd.CategoricalDtype):
             expect = ps.where(ps_condition, other=ps_other)
             got = gs.where(gs_condition, other=gs_other)
             np.testing.assert_array_equal(
@@ -1074,6 +1076,18 @@ def test_index_append(data, other):
         assert_eq(expected, actual)
 
 
+def test_index_empty_append_name_conflict():
+    empty = cudf.Index([], name="foo")
+    non_empty = cudf.Index([1], name="bar")
+    expected = cudf.Index([1])
+
+    result = non_empty.append(empty)
+    assert_eq(result, expected)
+
+    result = empty.append(non_empty)
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -1457,6 +1471,11 @@ def test_index_drop_duplicates(data, dtype):
     assert_eq(pdi.drop_duplicates(), gdi.drop_duplicates())
 
 
+def test_dropna_bad_how():
+    with pytest.raises(ValueError):
+        cudf.Index([1]).dropna(how="foo")
+
+
 @pytest.mark.parametrize("data", [[1, 2, 3, 1, 2, 3, 4], []])
 @pytest.mark.parametrize(
     "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
@@ -1584,7 +1603,7 @@ def test_multiindex_to_arrow():
     )
     pdf["a"] = pdf["a"].astype("category")
     df = cudf.from_pandas(pdf)
-    gdi = cudf.Index(df)
+    gdi = cudf.MultiIndex.from_frame(df)
 
     expected = pa.Table.from_pandas(pdf)
     got = gdi.to_arrow()
@@ -1621,6 +1640,31 @@ def test_index_equals_categories():
     expect = lhs.to_pandas().equals(rhs.to_pandas())
 
     assert_eq(expect, got)
+
+
+def test_rangeindex_arg_validation():
+    with pytest.raises(TypeError):
+        RangeIndex("1")
+
+    with pytest.raises(TypeError):
+        RangeIndex(1, "2")
+
+    with pytest.raises(TypeError):
+        RangeIndex(1, 3, "1")
+
+    with pytest.raises(ValueError):
+        RangeIndex(1, dtype="float64")
+
+    with pytest.raises(ValueError):
+        RangeIndex(1, dtype="uint64")
+
+
+def test_rangeindex_name_not_hashable():
+    with pytest.raises(ValueError):
+        RangeIndex(range(2), name=["foo"])
+
+    with pytest.raises(ValueError):
+        RangeIndex(range(2)).copy(name=["foo"])
 
 
 def test_index_rangeindex_search_range():
@@ -2084,6 +2128,18 @@ def test_range_index_concat(objs):
             pd.IntervalIndex.from_tuples([(0, 2), (0, 2), (2, 4)]),
             pd.IntervalIndex.from_tuples([(0, 2), (2, 4)]),
         ),
+        (pd.RangeIndex(0, 10), pd.Index([8, 1, 2, 4])),
+        (pd.Index([8, 1, 2, 4], name="a"), pd.Index([8, 1, 2, 4], name="b")),
+        (
+            pd.Index([8, 1, 2, 4], name="a"),
+            pd.Index([], name="b", dtype="int64"),
+        ),
+        (pd.Index([], dtype="int64", name="a"), pd.Index([10, 12], name="b")),
+        (pd.Index([True, True, True], name="a"), pd.Index([], dtype="bool")),
+        (
+            pd.Index([True, True, True]),
+            pd.Index([False, True], dtype="bool", name="b"),
+        ),
     ],
 )
 @pytest.mark.parametrize("sort", [None, False])
@@ -2096,6 +2152,24 @@ def test_union_index(idx1, idx2, sort):
     actual = idx1.union(idx2, sort=sort)
 
     assert_eq(expected, actual)
+
+
+def test_union_bool_with_other():
+    idx1 = cudf.Index([True, True, True])
+    idx2 = cudf.Index([0, 1], name="b")
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(cudf.errors.MixedTypeError):
+            idx1.union(idx2)
+
+
+@pytest.mark.parametrize("dtype1", ["int8", "int32", "int32"])
+@pytest.mark.parametrize("dtype2", ["uint32", "uint64"])
+def test_union_unsigned_vs_signed(dtype1, dtype2):
+    idx1 = cudf.Index([10, 20, 30], dtype=dtype1)
+    idx2 = cudf.Index([0, 1], dtype=dtype2)
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(cudf.errors.MixedTypeError):
+            idx1.union(idx2)
 
 
 @pytest.mark.parametrize(
@@ -2272,7 +2346,7 @@ def test_index_nan_as_null(data, nan_idx, NA_idx, nan_as_null):
         [],
         ["this", "is"],
         [0, 19, 13],
-        ["2019-01-01 04:00:00", "2019-01-01 06:00:00", "2018-03-02"],
+        ["2019-01-01 04:00:00", "2019-01-01 06:00:00", "2018-03-02 10:00:00"],
     ],
 )
 def test_isin_index(data, values):
@@ -2498,6 +2572,18 @@ def test_rangeindex_binops_user_option(
     )
 
 
+@pytest.mark.parametrize(
+    "op", [operator.add, operator.sub, operator.mul, operator.truediv]
+)
+def test_rangeindex_binop_diff_names_none(op):
+    idx1 = cudf.RangeIndex(10, 13, name="foo")
+    idx2 = cudf.RangeIndex(13, 16, name="bar")
+    result = op(idx1, idx2)
+    expected = op(idx1.to_pandas(), idx2.to_pandas())
+    assert_eq(result, expected)
+    assert result.name is None
+
+
 def test_rangeindex_join_user_option(default_integer_bitwidth):
     # Test that RangeIndex is materialized into 32 bit index under user
     # configuration for join.
@@ -2521,6 +2607,16 @@ def test_rangeindex_where_user_option(default_integer_bitwidth):
         dtype=f"int{default_integer_bitwidth}",
     )
     assert_eq(expected, actual)
+
+
+def test_rangeindex_append_return_rangeindex():
+    idx = cudf.RangeIndex(0, 10)
+    result = idx.append([])
+    assert_eq(idx, result)
+
+    result = idx.append(cudf.Index([10]))
+    expected = cudf.RangeIndex(0, 11)
+    assert_eq(result, expected)
 
 
 index_data = [
@@ -2655,9 +2751,14 @@ def test_index_error_list_index():
 )
 def test_index_hasnans(data):
     gs = cudf.Index(data, nan_as_null=False)
-    ps = gs.to_pandas(nullable=True)
-
-    assert_eq(gs.hasnans, ps.hasnans)
+    if isinstance(gs, cudf.RangeIndex):
+        with pytest.raises(NotImplementedError):
+            gs.to_pandas(nullable=True)
+    else:
+        ps = gs.to_pandas(nullable=True)
+        # Check type to avoid mixing Python bool and NumPy bool
+        assert isinstance(gs.hasnans, bool)
+        assert gs.hasnans == ps.hasnans
 
 
 @pytest.mark.parametrize(
@@ -2804,3 +2905,90 @@ def test_index_to_frame(data, data_name, index, name):
         actual = gidx.to_frame(index=index, name=name)
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3], range(0, 10)])
+@pytest.mark.parametrize("dtype", ["str", "int64", "float64"])
+def test_index_with_index_dtype(data, dtype):
+    pidx = pd.Index(data)
+    gidx = cudf.Index(data)
+
+    expected = pd.Index(pidx, dtype=dtype)
+    actual = cudf.Index(gidx, dtype=dtype)
+
+    assert_eq(expected, actual)
+
+
+def test_period_index_error():
+    pidx = pd.PeriodIndex(year=[2000, 2002], quarter=[1, 3])
+    with pytest.raises(NotImplementedError):
+        cudf.from_pandas(pidx)
+    with pytest.raises(NotImplementedError):
+        cudf.Index(pidx)
+    with pytest.raises(NotImplementedError):
+        cudf.Series(pidx)
+    with pytest.raises(NotImplementedError):
+        cudf.Series(pd.Series(pidx))
+    with pytest.raises(NotImplementedError):
+        cudf.Series(pd.array(pidx))
+
+
+def test_index_from_dataframe_valueerror():
+    with pytest.raises(ValueError):
+        cudf.Index(cudf.DataFrame(range(1)))
+
+
+def test_index_from_scalar_valueerror():
+    with pytest.raises(ValueError):
+        cudf.Index(11)
+
+
+@pytest.mark.parametrize("idx", [0, np.int64(0)])
+def test_index_getitem_from_int(idx):
+    result = cudf.Index([1, 2])[idx]
+    assert result == 1
+
+
+@pytest.mark.parametrize("idx", [1.5, True, "foo"])
+def test_index_getitem_from_nonint_raises(idx):
+    with pytest.raises(ValueError):
+        cudf.Index([1, 2])[idx]
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        cp.ones(5, dtype=cp.float16),
+        np.ones(5, dtype="float16"),
+        pd.Series([0.1, 1.2, 3.3], dtype="float16"),
+        pytest.param(
+            pa.array(np.ones(5, dtype="float16")),
+            marks=pytest.mark.xfail(
+                reason="https://issues.apache.org/jira/browse/ARROW-13762"
+            ),
+        ),
+    ],
+)
+def test_index_raises_float16(data):
+    with pytest.raises(TypeError):
+        cudf.Index(data)
+
+
+def test_from_pandas_rangeindex_return_rangeindex():
+    pidx = pd.RangeIndex(start=3, stop=9, step=3, name="a")
+    result = cudf.Index.from_pandas(pidx)
+    expected = cudf.RangeIndex(start=3, stop=9, step=3, name="a")
+    assert_eq(result, expected, exact=True)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        cudf.RangeIndex(1),
+        cudf.DatetimeIndex(np.array([1, 2], dtype="datetime64[ns]")),
+        cudf.TimedeltaIndex(np.array([1, 2], dtype="timedelta64[ns]")),
+    ],
+)
+def test_index_to_pandas_nullable_notimplemented(idx):
+    with pytest.raises(NotImplementedError):
+        idx.to_pandas(nullable=True)

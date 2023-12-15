@@ -31,6 +31,7 @@
 #include <io/utilities/config_utils.hpp>
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/copying.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/linked_column.hpp>
@@ -228,7 +229,7 @@ size_t column_size(column_view const& column, rmm::cuda_stream_view stream)
     auto const scol = structs_column_view(column);
     size_t ret      = 0;
     for (int i = 0; i < scol.num_children(); i++) {
-      ret += column_size(scol.get_sliced_child(i), stream);
+      ret += column_size(scol.get_sliced_child(i, stream), stream);
     }
     return ret;
   } else if (column.type().id() == type_id::LIST) {
@@ -278,6 +279,7 @@ struct leaf_schema_fn {
   cudf::detail::LinkedColPtr const& col;
   column_in_metadata const& col_meta;
   bool timestamp_is_int96;
+  bool timestamp_is_utc;
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, bool>, void> operator()()
@@ -404,7 +406,7 @@ struct leaf_schema_fn {
     col_schema.ts_scale    = 1000;
     if (not timestamp_is_int96) {
       col_schema.converted_type = ConvertedType::TIMESTAMP_MILLIS;
-      col_schema.logical_type   = LogicalType{TimestampType{false, TimeUnit::MILLIS}};
+      col_schema.logical_type   = LogicalType{TimestampType{timestamp_is_utc, TimeUnit::MILLIS}};
     }
   }
 
@@ -415,7 +417,7 @@ struct leaf_schema_fn {
     col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
     if (not timestamp_is_int96) {
       col_schema.converted_type = ConvertedType::TIMESTAMP_MILLIS;
-      col_schema.logical_type   = LogicalType{TimestampType{false, TimeUnit::MILLIS}};
+      col_schema.logical_type   = LogicalType{TimestampType{timestamp_is_utc, TimeUnit::MILLIS}};
     }
   }
 
@@ -426,7 +428,7 @@ struct leaf_schema_fn {
     col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
     if (not timestamp_is_int96) {
       col_schema.converted_type = ConvertedType::TIMESTAMP_MICROS;
-      col_schema.logical_type   = LogicalType{TimestampType{false, TimeUnit::MICROS}};
+      col_schema.logical_type   = LogicalType{TimestampType{timestamp_is_utc, TimeUnit::MICROS}};
     }
   }
 
@@ -441,7 +443,7 @@ struct leaf_schema_fn {
     }
     // set logical type if it's not int96
     else {
-      col_schema.logical_type = LogicalType{TimestampType{false, TimeUnit::NANOS}};
+      col_schema.logical_type = LogicalType{TimestampType{timestamp_is_utc, TimeUnit::NANOS}};
     }
   }
 
@@ -453,7 +455,7 @@ struct leaf_schema_fn {
     col_schema.converted_type = ConvertedType::TIME_MILLIS;
     col_schema.stats_dtype    = statistics_dtype::dtype_int32;
     col_schema.ts_scale       = 24 * 60 * 60 * 1000;
-    col_schema.logical_type   = LogicalType{TimeType{false, TimeUnit::MILLIS}};
+    col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MILLIS}};
   }
 
   template <typename T>
@@ -463,7 +465,7 @@ struct leaf_schema_fn {
     col_schema.converted_type = ConvertedType::TIME_MILLIS;
     col_schema.stats_dtype    = statistics_dtype::dtype_int32;
     col_schema.ts_scale       = 1000;
-    col_schema.logical_type   = LogicalType{TimeType{false, TimeUnit::MILLIS}};
+    col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MILLIS}};
   }
 
   template <typename T>
@@ -472,7 +474,7 @@ struct leaf_schema_fn {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::TIME_MILLIS;
     col_schema.stats_dtype    = statistics_dtype::dtype_int32;
-    col_schema.logical_type   = LogicalType{TimeType{false, TimeUnit::MILLIS}};
+    col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MILLIS}};
   }
 
   template <typename T>
@@ -481,7 +483,7 @@ struct leaf_schema_fn {
     col_schema.type           = Type::INT64;
     col_schema.converted_type = ConvertedType::TIME_MICROS;
     col_schema.stats_dtype    = statistics_dtype::dtype_int64;
-    col_schema.logical_type   = LogicalType{TimeType{false, TimeUnit::MICROS}};
+    col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MICROS}};
   }
 
   //  unsupported outside cudf for parquet 1.0.
@@ -490,7 +492,7 @@ struct leaf_schema_fn {
   {
     col_schema.type         = Type::INT64;
     col_schema.stats_dtype  = statistics_dtype::dtype_int64;
-    col_schema.logical_type = LogicalType{TimeType{false, TimeUnit::NANOS}};
+    col_schema.logical_type = LogicalType{TimeType{timestamp_is_utc, TimeUnit::NANOS}};
   }
 
   template <typename T>
@@ -567,7 +569,8 @@ std::vector<schema_tree_node> construct_schema_tree(
   cudf::detail::LinkedColVector const& linked_columns,
   table_input_metadata& metadata,
   single_write_mode write_mode,
-  bool int96_timestamps)
+  bool int96_timestamps,
+  bool utc_timestamps)
 {
   std::vector<schema_tree_node> schema;
   schema_tree_node root{};
@@ -739,8 +742,9 @@ std::vector<schema_tree_node> construct_schema_tree(
 
         bool timestamp_is_int96 = int96_timestamps or col_meta.is_enabled_int96_timestamps();
 
-        cudf::type_dispatcher(col->type(),
-                              leaf_schema_fn{col_schema, col, col_meta, timestamp_is_int96});
+        cudf::type_dispatcher(
+          col->type(),
+          leaf_schema_fn{col_schema, col, col_meta, timestamp_is_int96, utc_timestamps});
 
         col_schema.repetition_type = col_nullable ? OPTIONAL : REQUIRED;
         col_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
@@ -933,7 +937,9 @@ parquet_column_device_view parquet_column_view::get_device_view(rmm::cuda_stream
 
   desc.level_bits = CompactProtocolReader::NumRequiredBits(max_rep_level()) << 4 |
                     CompactProtocolReader::NumRequiredBits(max_def_level());
-  desc.nullability = _d_nullability.data();
+  desc.nullability   = _d_nullability.data();
+  desc.max_def_level = _max_def_level;
+  desc.max_rep_level = _max_rep_level;
   return desc;
 }
 
@@ -1367,6 +1373,9 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
   EncodePageHeaders(batch_pages, comp_res, batch_pages_stats, chunk_stats, stream);
   GatherPages(d_chunks_in_batch.flat_view(), pages, stream);
 
+  // By now, the var_bytes has been calculated in InitPages, and the histograms in EncodePages.
+  // EncodeColumnIndexes can encode the histograms in the ColumnIndex, and also sum up var_bytes
+  // and the histograms for inclusion in the chunk's SizeStats.
   if (column_stats != nullptr) {
     EncodeColumnIndexes(d_chunks_in_batch.flat_view(),
                         {column_stats, pages.size()},
@@ -1392,10 +1401,13 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
  * column chunk.
  *
  * @param ck pointer to column chunk
+ * @param col `parquet_column_device_view` for the column
  * @param column_index_truncate_length maximum length of min or max values in column index, in bytes
  * @return Computed buffer size needed to encode the column index
  */
-size_t column_index_buffer_size(EncColumnChunk* ck, int32_t column_index_truncate_length)
+size_t column_index_buffer_size(EncColumnChunk* ck,
+                                parquet_column_device_view const& col,
+                                int32_t column_index_truncate_length)
 {
   // encoding the column index for a given chunk requires:
   //   each list (4 of them) requires 6 bytes of overhead
@@ -1418,10 +1430,29 @@ size_t column_index_buffer_size(EncColumnChunk* ck, int32_t column_index_truncat
   //
   // add on some extra padding at the end (plus extra 7 bytes of alignment padding)
   // for scratch space to do stats truncation.
-  //
+
+  // additional storage needed for SizeStatistics
+  // don't need stats for dictionary pages
+  auto const num_pages = ck->num_data_pages();
+
+  // only need variable length size info for BYTE_ARRAY
+  // 1 byte for marker, 1 byte vec type, 4 bytes length, 5 bytes per page for values
+  // (5 bytes is needed because the varint encoder only encodes 7 bits per byte)
+  auto const var_bytes_size = col.physical_type == BYTE_ARRAY ? 6 + 5 * num_pages : 0;
+
+  // for the histograms, need 1 byte for marker, 1 byte vec type, 4 bytes length,
+  // (max_level + 1) * 5 bytes per page
+  auto const has_def       = col.max_def_level > DEF_LVL_HIST_CUTOFF;
+  auto const has_rep       = col.max_def_level > REP_LVL_HIST_CUTOFF;
+  auto const def_hist_size = has_def ? 6 + 5 * num_pages * (col.max_def_level + 1) : 0;
+  auto const rep_hist_size = has_rep ? 6 + 5 * num_pages * (col.max_rep_level + 1) : 0;
+
+  // total size of SizeStruct is 1 byte marker, 1 byte end-of-struct, plus sizes for components
+  auto const size_struct_size = 2 + def_hist_size + rep_hist_size + var_bytes_size;
+
   // calculating this per-chunk because the sizes can be wildly different.
   constexpr size_t padding = 7;
-  return ck->ck_stat_size * ck->num_pages + column_index_truncate_length + padding;
+  return ck->ck_stat_size * num_pages + column_index_truncate_length + padding + size_struct_size;
 }
 
 /**
@@ -1467,6 +1498,7 @@ void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta)
  * @param max_dictionary_size Maximum dictionary size, in bytes
  * @param single_write_mode Flag to indicate that we are guaranteeing a single table write
  * @param int96_timestamps Flag to indicate if timestamps will be written as INT96
+ * @param utc_timestamps Flag to indicate if timestamps are UTC
  * @param write_v2_headers True if V2 page headers are to be written
  * @param out_sink Sink for checking if device write is supported, should not be used to write any
  *        data in this function
@@ -1491,12 +1523,14 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                                    size_t max_dictionary_size,
                                    single_write_mode write_mode,
                                    bool int96_timestamps,
+                                   bool utc_timestamps,
                                    bool write_v2_headers,
                                    host_span<std::unique_ptr<data_sink> const> out_sink,
                                    rmm::cuda_stream_view stream)
 {
-  auto vec         = table_to_linked_columns(input);
-  auto schema_tree = construct_schema_tree(vec, table_meta, write_mode, int96_timestamps);
+  auto vec = table_to_linked_columns(input);
+  auto schema_tree =
+    construct_schema_tree(vec, table_meta, write_mode, int96_timestamps, utc_timestamps);
   // Construct parquet_column_views from the schema tree leaf nodes.
   std::vector<parquet_column_view> parquet_columns;
 
@@ -1821,14 +1855,16 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
   // Initialize batches of rowgroups to encode (mainly to limit peak memory usage)
   std::vector<size_type> batch_list;
-  size_type num_pages          = 0;
-  size_t max_uncomp_bfr_size   = 0;
-  size_t max_comp_bfr_size     = 0;
-  size_t max_chunk_bfr_size    = 0;
-  size_type max_pages_in_batch = 0;
-  size_t bytes_in_batch        = 0;
-  size_t comp_bytes_in_batch   = 0;
-  size_t column_index_bfr_size = 0;
+  size_type num_pages           = 0;
+  size_t max_uncomp_bfr_size    = 0;
+  size_t max_comp_bfr_size      = 0;
+  size_t max_chunk_bfr_size     = 0;
+  size_type max_pages_in_batch  = 0;
+  size_t bytes_in_batch         = 0;
+  size_t comp_bytes_in_batch    = 0;
+  size_t column_index_bfr_size  = 0;
+  size_t def_histogram_bfr_size = 0;
+  size_t rep_histogram_bfr_size = 0;
   for (size_type r = 0, groups_in_batch = 0, pages_in_batch = 0; r <= num_rowgroups; r++) {
     size_t rowgroup_size      = 0;
     size_t comp_rowgroup_size = 0;
@@ -1843,7 +1879,19 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         max_chunk_bfr_size =
           std::max(max_chunk_bfr_size, (size_t)std::max(ck->bfr_size, ck->compressed_size));
         if (stats_granularity == statistics_freq::STATISTICS_COLUMN) {
-          column_index_bfr_size += column_index_buffer_size(ck, column_index_truncate_length);
+          auto const& col = col_desc[ck->col_desc_id];
+          column_index_bfr_size += column_index_buffer_size(ck, col, column_index_truncate_length);
+
+          // SizeStatistics are on the ColumnIndex, so only need to allocate the histograms data
+          // if we're doing page-level indexes. add 1 to num_pages for per-chunk histograms.
+          auto const num_histograms = ck->num_data_pages() + 1;
+
+          if (col.max_def_level > DEF_LVL_HIST_CUTOFF) {
+            def_histogram_bfr_size += (col.max_def_level + 1) * num_histograms;
+          }
+          if (col.max_rep_level > REP_LVL_HIST_CUTOFF) {
+            rep_histogram_bfr_size += (col.max_rep_level + 1) * num_histograms;
+          }
         }
       }
     }
@@ -1882,10 +1930,19 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
   rmm::device_buffer col_idx_bfr(column_index_bfr_size, stream);
   rmm::device_uvector<EncPage> pages(num_pages, stream);
+  rmm::device_uvector<uint32_t> def_level_histogram(def_histogram_bfr_size, stream);
+  rmm::device_uvector<uint32_t> rep_level_histogram(rep_histogram_bfr_size, stream);
+
+  thrust::uninitialized_fill(
+    rmm::exec_policy_nosync(stream), def_level_histogram.begin(), def_level_histogram.end(), 0);
+  thrust::uninitialized_fill(
+    rmm::exec_policy_nosync(stream), rep_level_histogram.begin(), rep_level_histogram.end(), 0);
 
   // This contains stats for both the pages and the rowgroups. TODO: make them separate.
   rmm::device_uvector<statistics_chunk> page_stats(num_stats_bfr, stream);
   auto bfr_i = static_cast<uint8_t*>(col_idx_bfr.data());
+  auto bfr_r = rep_level_histogram.data();
+  auto bfr_d = def_level_histogram.data();
   for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
     auto bfr   = static_cast<uint8_t*>(uncomp_bfr.data());
     auto bfr_c = static_cast<uint8_t*>(comp_bfr.data());
@@ -1898,8 +1955,19 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         bfr += ck.bfr_size;
         bfr_c += ck.compressed_size;
         if (stats_granularity == statistics_freq::STATISTICS_COLUMN) {
-          ck.column_index_size = column_index_buffer_size(&ck, column_index_truncate_length);
+          auto const& col      = col_desc[ck.col_desc_id];
+          ck.column_index_size = column_index_buffer_size(&ck, col, column_index_truncate_length);
           bfr_i += ck.column_index_size;
+
+          auto const num_histograms = ck.num_data_pages() + 1;
+          if (col.max_def_level > DEF_LVL_HIST_CUTOFF) {
+            ck.def_histogram_data = bfr_d;
+            bfr_d += num_histograms * (col.max_def_level + 1);
+          }
+          if (col.max_rep_level > REP_LVL_HIST_CUTOFF) {
+            ck.rep_histogram_data = bfr_r;
+            bfr_r += num_histograms * (col.max_rep_level + 1);
+          }
         }
       }
     }
@@ -1929,10 +1997,10 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   if (collect_compression_statistics) { comp_stats = writer_compression_statistics{}; }
 
   // Encode row groups in batches
-  for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
+  for (auto b = 0, batch_r_start = 0; b < static_cast<size_type>(batch_list.size()); b++) {
     // Count pages in this batch
-    auto const rnext               = r + batch_list[b];
-    auto const first_page_in_batch = chunks[r][0].first_page;
+    auto const rnext               = batch_r_start + batch_list[b];
+    auto const first_page_in_batch = chunks[batch_r_start][0].first_page;
     auto const first_page_in_next_batch =
       (rnext < num_rowgroups) ? chunks[rnext][0].first_page : num_pages;
     auto const pages_in_batch = first_page_in_next_batch - first_page_in_batch;
@@ -1943,7 +2011,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
       pages_in_batch,
       first_page_in_batch,
       batch_list[b],
-      r,
+      batch_r_start,
       (stats_granularity == statistics_freq::STATISTICS_PAGE) ? page_stats.data() : nullptr,
       (stats_granularity != statistics_freq::STATISTICS_NONE) ? page_stats.data() + num_pages
                                                               : nullptr,
@@ -1956,7 +2024,23 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
     bool need_sync{false};
 
-    for (; r < rnext; r++) {
+    // need to fetch the histogram data from the device
+    std::vector<uint32_t> h_def_histogram;
+    std::vector<uint32_t> h_rep_histogram;
+    if (stats_granularity == statistics_freq::STATISTICS_COLUMN) {
+      if (def_histogram_bfr_size > 0) {
+        h_def_histogram =
+          std::move(cudf::detail::make_std_vector_async(def_level_histogram, stream));
+        need_sync = true;
+      }
+      if (rep_histogram_bfr_size > 0) {
+        h_rep_histogram =
+          std::move(cudf::detail::make_std_vector_async(rep_level_histogram, stream));
+        need_sync = true;
+      }
+    }
+
+    for (int r = batch_r_start; r < rnext; r++) {
       int p           = rg_to_part[r];
       int global_r    = global_rowgroup_base[p] + r - first_rg_in_part[p];
       auto& row_group = agg_meta->file(p).row_groups[global_r];
@@ -1990,6 +2074,61 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
     // Sync before calling the next `encode_pages` which may alter the stats data.
     if (need_sync) { stream.synchronize(); }
+
+    // now add to the column chunk SizeStatistics if necessary
+    if (stats_granularity == statistics_freq::STATISTICS_COLUMN) {
+      auto h_def_ptr = h_def_histogram.data();
+      auto h_rep_ptr = h_rep_histogram.data();
+
+      for (int r = batch_r_start; r < rnext; r++) {
+        int const p        = rg_to_part[r];
+        int const global_r = global_rowgroup_base[p] + r - first_rg_in_part[p];
+        auto& row_group    = agg_meta->file(p).row_groups[global_r];
+
+        for (auto i = 0; i < num_columns; i++) {
+          auto const& ck          = chunks[r][i];
+          auto const& col         = col_desc[ck.col_desc_id];
+          auto& column_chunk_meta = row_group.columns[i].meta_data;
+
+          // Add SizeStatistics for the chunk. For now we're only going to do the column chunk
+          // stats if we're also doing them at the page level. There really isn't much value for
+          // us in per-chunk stats since everything we do processing wise is at the page level.
+          SizeStatistics chunk_stats;
+
+          // var_byte_size will only be non-zero for byte array columns.
+          if (ck.var_bytes_size > 0) {
+            chunk_stats.unencoded_byte_array_data_bytes = ck.var_bytes_size;
+          }
+
+          auto const num_data_pages = ck.num_data_pages();
+          if (col.max_def_level > DEF_LVL_HIST_CUTOFF) {
+            size_t const hist_size        = col.max_def_level + 1;
+            uint32_t const* const ck_hist = h_def_ptr + hist_size * num_data_pages;
+            host_span<uint32_t const> ck_def_hist{ck_hist, hist_size};
+
+            chunk_stats.definition_level_histogram = {ck_def_hist.begin(), ck_def_hist.end()};
+            h_def_ptr += hist_size * (num_data_pages + 1);
+          }
+
+          if (col.max_rep_level > REP_LVL_HIST_CUTOFF) {
+            size_t const hist_size        = col.max_rep_level + 1;
+            uint32_t const* const ck_hist = h_rep_ptr + hist_size * num_data_pages;
+            host_span<uint32_t const> ck_rep_hist{ck_hist, hist_size};
+
+            chunk_stats.repetition_level_histogram = {ck_rep_hist.begin(), ck_rep_hist.end()};
+            h_rep_ptr += hist_size * (num_data_pages + 1);
+          }
+
+          if (chunk_stats.unencoded_byte_array_data_bytes.has_value() ||
+              chunk_stats.definition_level_histogram.has_value() ||
+              chunk_stats.repetition_level_histogram.has_value()) {
+            column_chunk_meta.size_statistics = std::move(chunk_stats);
+          }
+        }
+      }
+    }
+
+    batch_r_start = rnext;
   }
 
   auto bounce_buffer =
@@ -2026,6 +2165,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _max_dictionary_size(options.get_max_dictionary_size()),
     _max_page_fragment_size(options.get_max_page_fragment_size()),
     _int96_timestamps(options.is_enabled_int96_timestamps()),
+    _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
@@ -2054,6 +2194,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _max_dictionary_size(options.get_max_dictionary_size()),
     _max_page_fragment_size(options.get_max_page_fragment_size()),
     _int96_timestamps(options.is_enabled_int96_timestamps()),
+    _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
@@ -2131,6 +2272,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                                            _max_dictionary_size,
                                            _single_write_mode,
                                            _int96_timestamps,
+                                           _utc_timestamps,
                                            _write_v2_headers,
                                            _out_sink,
                                            _stream);
@@ -2242,6 +2384,9 @@ void writer::impl::write_parquet_data_to_sink(
           int64_t curr_pg_offset = column_chunk_meta.data_page_offset;
 
           OffsetIndex offset_idx;
+          std::vector<int64_t> var_bytes;
+          auto const is_byte_arr = column_chunk_meta.type == BYTE_ARRAY;
+
           for (uint32_t pg = 0; pg < ck.num_pages; pg++) {
             auto const& enc_page = h_pages[curr_page_idx++];
 
@@ -2251,9 +2396,12 @@ void writer::impl::write_parquet_data_to_sink(
             int32_t this_page_size = enc_page.hdr_size + enc_page.max_data_size;
             // first_row_idx is relative to start of row group
             PageLocation loc{curr_pg_offset, this_page_size, enc_page.start_row - ck.start_row};
+            if (is_byte_arr) { var_bytes.push_back(enc_page.var_bytes_size); }
             offset_idx.page_locations.push_back(loc);
             curr_pg_offset += this_page_size;
           }
+
+          if (is_byte_arr) { offset_idx.unencoded_byte_array_data_bytes = std::move(var_bytes); }
 
           _stream.synchronize();
           _agg_meta->file(p).offset_indexes.emplace_back(std::move(offset_idx));
@@ -2391,6 +2539,15 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_row_group_metadata(
                            std::make_move_iterator(tmp.row_groups.begin()),
                            std::make_move_iterator(tmp.row_groups.end()));
       md.num_rows += tmp.num_rows;
+    }
+  }
+
+  // Remove any LogicalType::UNKNOWN annotations that were passed in as they can confuse
+  // column type inferencing.
+  // See https://github.com/rapidsai/cudf/pull/14264#issuecomment-1778311615
+  for (auto& se : md.schema) {
+    if (se.logical_type.has_value() && se.logical_type.value().type == LogicalType::UNKNOWN) {
+      se.logical_type = thrust::nullopt;
     }
   }
 

@@ -194,7 +194,7 @@ std::unique_ptr<column> rescale(column_view input,
       auto const scalar  = make_fixed_point_scalar<T>(0, scale_type{scale}, stream);
       auto output_column = make_column_from_scalar(*scalar, input.size(), stream, mr);
       if (input.nullable()) {
-        auto const null_mask = detail::copy_bitmask(input, stream, mr);
+        auto null_mask = detail::copy_bitmask(input, stream, mr);
         output_column->set_null_mask(std::move(null_mask), input.null_count());
       }
       return output_column;
@@ -415,10 +415,11 @@ std::unique_ptr<column> cast(column_view const& input,
 
 std::unique_ptr<column> cast(column_view const& input,
                              data_type type,
+                             rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::cast(input, type, cudf::get_default_stream(), mr);
+  return detail::cast(input, type, stream, mr);
 }
 
 }  // namespace cudf

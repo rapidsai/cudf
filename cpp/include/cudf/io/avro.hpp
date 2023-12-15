@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ class avro_reader_options {
    *
    * @param src source information used to read avro file
    */
-  explicit avro_reader_options(source_info const& src) : _source(src) {}
+  explicit avro_reader_options(source_info src) : _source{std::move(src)} {}
 
   friend avro_reader_options_builder;
 
@@ -123,7 +123,7 @@ class avro_reader_options {
    * @param src source information used to read avro file
    * @returns builder to build reader options
    */
-  static avro_reader_options_builder builder(source_info const& src);
+  static avro_reader_options_builder builder(source_info src);
 };
 
 /**
@@ -145,7 +145,7 @@ class avro_reader_options_builder {
    *
    * @param src The source information used to read avro file
    */
-  explicit avro_reader_options_builder(source_info const& src) : options(src) {}
+  explicit avro_reader_options_builder(source_info src) : options{std::move(src)} {}
 
   /**
    * @brief Set names of the column to be read.

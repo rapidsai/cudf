@@ -211,7 +211,7 @@ std::unique_ptr<table> scatter(
 /**
  * @brief Indicates when to allocate a mask, based on an existing mask.
  */
-enum class mask_allocation_policy {
+enum class mask_allocation_policy : int32_t {
   NEVER,   ///< Do not allocate a null mask, regardless of input
   RETAIN,  ///< Allocate a null mask if the input contains one
   ALWAYS   ///< Allocate a null mask, regardless of input

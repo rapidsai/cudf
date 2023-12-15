@@ -212,7 +212,8 @@ __global__ void url_decode_char_counter(column_device_view const in_strings,
   char* in_chars_shared = temporary_buffer[local_warp_id];
 
   // Loop through strings, and assign each string to a warp.
-  for (size_type row_idx = global_warp_id; row_idx < in_strings.size(); row_idx += nwarps) {
+  for (thread_index_type tidx = global_warp_id; tidx < in_strings.size(); tidx += nwarps) {
+    auto const row_idx = static_cast<size_type>(tidx);
     if (in_strings.is_null(row_idx)) {
       out_counts[row_idx] = 0;
       continue;
@@ -296,7 +297,8 @@ __global__ void url_decode_char_replacer(column_device_view const in_strings,
   char* in_chars_shared = temporary_buffer[local_warp_id];
 
   // Loop through strings, and assign each string to a warp
-  for (size_type row_idx = global_warp_id; row_idx < in_strings.size(); row_idx += nwarps) {
+  for (thread_index_type tidx = global_warp_id; tidx < in_strings.size(); tidx += nwarps) {
+    auto const row_idx = static_cast<size_type>(tidx);
     if (in_strings.is_null(row_idx)) continue;
 
     auto const in_string     = in_strings.element<string_view>(row_idx);

@@ -12,6 +12,7 @@ from pandas.core.tools.datetimes import is_datetime64tz_dtype
 
 import dask.dataframe as dd
 from dask import config
+from dask.array.dispatch import percentile_lookup
 from dask.dataframe.backends import (
     DataFrameBackendEntrypoint,
     PandasBackendEntrypoint,
@@ -320,56 +321,45 @@ def get_grouper_cudf(obj):
     return cudf.core.groupby.Grouper
 
 
-try:
-    try:
-        from dask.array.dispatch import percentile_lookup
-    except ImportError:
-        from dask.dataframe.dispatch import (
-            percentile_dispatch as percentile_lookup,
-        )
+@percentile_lookup.register((cudf.Series, cp.ndarray, cudf.BaseIndex))
+@_dask_cudf_nvtx_annotate
+def percentile_cudf(a, q, interpolation="linear"):
+    # Cudf dispatch to the equivalent of `np.percentile`:
+    # https://numpy.org/doc/stable/reference/generated/numpy.percentile.html
+    a = cudf.Series(a)
+    # a is series.
+    n = len(a)
+    if not len(a):
+        return None, n
+    if isinstance(q, Iterator):
+        q = list(q)
 
-    @percentile_lookup.register((cudf.Series, cp.ndarray, cudf.BaseIndex))
-    @_dask_cudf_nvtx_annotate
-    def percentile_cudf(a, q, interpolation="linear"):
-        # Cudf dispatch to the equivalent of `np.percentile`:
-        # https://numpy.org/doc/stable/reference/generated/numpy.percentile.html
-        a = cudf.Series(a)
-        # a is series.
-        n = len(a)
-        if not len(a):
-            return None, n
-        if isinstance(q, Iterator):
-            q = list(q)
+    if cudf.api.types.is_categorical_dtype(a.dtype):
+        result = cp.percentile(a.cat.codes, q, interpolation=interpolation)
 
-        if cudf.api.types.is_categorical_dtype(a.dtype):
-            result = cp.percentile(a.cat.codes, q, interpolation=interpolation)
-
-            return (
-                pd.Categorical.from_codes(
-                    result, a.dtype.categories, a.dtype.ordered
-                ),
-                n,
-            )
-        if np.issubdtype(a.dtype, np.datetime64):
-            result = a.quantile(
-                [i / 100.0 for i in q], interpolation=interpolation
-            )
-
-            if q[0] == 0:
-                # https://github.com/dask/dask/issues/6864
-                result[0] = min(result[0], a.min())
-            return result.to_pandas(), n
-        if not np.issubdtype(a.dtype, np.number):
-            interpolation = "nearest"
         return (
-            a.quantile(
-                [i / 100.0 for i in q], interpolation=interpolation
-            ).to_pandas(),
+            pd.Categorical.from_codes(
+                result, a.dtype.categories, a.dtype.ordered
+            ),
             n,
         )
+    if np.issubdtype(a.dtype, np.datetime64):
+        result = a.quantile(
+            [i / 100.0 for i in q], interpolation=interpolation
+        )
 
-except ImportError:
-    pass
+        if q[0] == 0:
+            # https://github.com/dask/dask/issues/6864
+            result[0] = min(result[0], a.min())
+        return result.to_pandas(), n
+    if not np.issubdtype(a.dtype, np.number):
+        interpolation = "nearest"
+    return (
+        a.quantile(
+            [i / 100.0 for i in q], interpolation=interpolation
+        ).to_pandas(),
+        n,
+    )
 
 
 @pyarrow_schema_dispatch.register((cudf.DataFrame,))
@@ -437,17 +427,12 @@ def union_categoricals_cudf(
     )
 
 
-@_dask_cudf_nvtx_annotate
-def safe_hash(frame):
-    return cudf.Series(frame.hash_values(), index=frame.index)
-
-
 @hash_object_dispatch.register((cudf.DataFrame, cudf.Series))
 @_dask_cudf_nvtx_annotate
 def hash_object_cudf(frame, index=True):
     if index:
-        return safe_hash(frame.reset_index())
-    return safe_hash(frame)
+        frame = frame.reset_index()
+    return frame.hash_values()
 
 
 @hash_object_dispatch.register(cudf.BaseIndex)
@@ -455,10 +440,10 @@ def hash_object_cudf(frame, index=True):
 def hash_object_cudf_index(ind, index=None):
 
     if isinstance(ind, cudf.MultiIndex):
-        return safe_hash(ind.to_frame(index=False))
+        return ind.to_frame(index=False).hash_values()
 
     col = cudf.core.column.as_column(ind)
-    return safe_hash(cudf.Series(col))
+    return cudf.Series(col).hash_values()
 
 
 @group_split_dispatch.register((cudf.Series, cudf.DataFrame))
@@ -489,6 +474,31 @@ def sizeof_cudf_dataframe(df):
 @_dask_cudf_nvtx_annotate
 def sizeof_cudf_series_index(obj):
     return obj.memory_usage()
+
+
+# TODO: Remove try/except when cudf is pinned to dask>=2023.10.0
+try:
+    from dask.dataframe.dispatch import partd_encode_dispatch
+
+    @partd_encode_dispatch.register(cudf.DataFrame)
+    def _simple_cudf_encode(_):
+        # Basic pickle-based encoding for a partd k-v store
+        import pickle
+        from functools import partial
+
+        import partd
+
+        def join(dfs):
+            if not dfs:
+                return cudf.DataFrame()
+            else:
+                return cudf.concat(dfs)
+
+        dumps = partial(pickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
+        return partial(partd.Encode, dumps, pickle.loads, join)
+
+except ImportError:
+    pass
 
 
 def _default_backend(func, *args, **kwargs):

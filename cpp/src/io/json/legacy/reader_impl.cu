@@ -530,21 +530,31 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
   auto repl_chars   = std::vector<char>{'"', '\\', '\t', '\r', '\b'};
   auto repl_offsets = std::vector<size_type>{0, 1, 2, 3, 4, 5};
 
-  auto target =
-    make_strings_column(cudf::detail::make_device_uvector_async(
-                          target_chars, stream, rmm::mr::get_current_device_resource()),
-                        cudf::detail::make_device_uvector_async(
-                          target_offsets, stream, rmm::mr::get_current_device_resource()),
-                        {},
-                        0,
-                        stream);
-  auto repl = make_strings_column(cudf::detail::make_device_uvector_async(
-                                    repl_chars, stream, rmm::mr::get_current_device_resource()),
-                                  cudf::detail::make_device_uvector_async(
-                                    repl_offsets, stream, rmm::mr::get_current_device_resource()),
-                                  {},
-                                  0,
-                                  stream);
+  auto target = make_strings_column(
+    static_cast<size_type>(target_offsets.size() - 1),
+    std::make_unique<cudf::column>(
+      cudf::detail::make_device_uvector_async(
+        target_offsets, stream, rmm::mr::get_current_device_resource()),
+      rmm::device_buffer{},
+      0),
+    std::make_unique<cudf::column>(cudf::detail::make_device_uvector_async(
+                                     target_chars, stream, rmm::mr::get_current_device_resource()),
+                                   rmm::device_buffer{},
+                                   0),
+    0,
+    {});
+  auto repl = make_strings_column(
+    static_cast<size_type>(repl_offsets.size() - 1),
+    std::make_unique<cudf::column>(cudf::detail::make_device_uvector_async(
+                                     repl_offsets, stream, rmm::mr::get_current_device_resource()),
+                                   rmm::device_buffer{},
+                                   0),
+    std::make_unique<cudf::column>(cudf::detail::make_device_uvector_async(
+                                     repl_chars, stream, rmm::mr::get_current_device_resource()),
+                                   rmm::device_buffer{},
+                                   0),
+    0,
+    {});
 
   auto const h_valid_counts = cudf::detail::make_std_vector_sync(d_valid_counts, stream);
   std::vector<std::unique_ptr<column>> out_columns;
@@ -558,6 +568,9 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
         out_column->view(), target->view(), repl->view(), stream, mr));
     } else {
       out_columns.emplace_back(std::move(out_column));
+    }
+    if (out_columns.back()->null_count() == 0) {
+      out_columns.back()->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
     }
   }
 
