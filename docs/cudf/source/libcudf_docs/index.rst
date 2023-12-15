@@ -70,7 +70,6 @@ libcudf documentation
    strings_replace
    strings_split
    strings_extract
-   strings_json
    strings_regex
    dictionary_apis
    dictionary_encode
