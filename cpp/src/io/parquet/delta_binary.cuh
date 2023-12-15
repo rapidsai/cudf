@@ -219,6 +219,8 @@ struct delta_binary_decoder {
 
     // need to account for the first value from header on first pass
     if (current_value_idx == 0) {
+      // make sure all threads access current_value_idx above before incrementing
+      __syncwarp();
       if (lane_id == 0) { current_value_idx++; }
       __syncwarp();
       if (current_value_idx >= value_count) { return; }

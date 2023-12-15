@@ -63,7 +63,7 @@ rapids_cython_create_modules(
   LINKED_LIBRARIES "${linked_libraries}" ASSOCIATED_TARGETS cudf
 )
 
-target_link_libraries(strings_udf cudf_strings_udf)
+target_link_libraries(strings_udf PUBLIC cudf_strings_udf)
 
 link_to_pyarrow_headers("${RAPIDS_CYTHON_CREATED_TARGETS}")
 

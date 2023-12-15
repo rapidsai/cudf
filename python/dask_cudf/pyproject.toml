@@ -9,7 +9,7 @@ requires = [
 
 [project]
 name = "dask_cudf"
-dynamic = ["version", "entry-points"]
+dynamic = ["version"]
 description = "Utilities for Dask and cuDF interactions"
 readme = { file = "README.md", content-type = "text/markdown" }
 authors = [
@@ -34,6 +34,10 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
 ]
+
+[project.entry-points."dask.dataframe.backends"]
+cudf = "dask_cudf.backends:CudfBackendEntrypoint"
+
 
 [project.optional-dependencies]
 test = [

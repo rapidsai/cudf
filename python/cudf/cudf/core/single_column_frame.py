@@ -398,7 +398,7 @@ class SingleColumnFrame(Frame, NotIterable):
         else:
             arg = as_column(arg)
             if len(arg) == 0:
-                arg = as_column([], dtype="int32")
+                arg = cudf.core.column.column_empty(0, dtype="int32")
             if is_integer_dtype(arg.dtype):
                 return self._column.take(arg)
             if is_bool_dtype(arg.dtype):
