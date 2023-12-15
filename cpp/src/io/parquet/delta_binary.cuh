@@ -299,7 +299,7 @@ struct delta_binary_decoder {
 
   // Decodes and skips values until the block containing the value after `skip` is reached.
   // Keeps a running sum of the values and returns that upon exit. Called by all threads in a
-  // thread block. Result is only valid on thread 0.
+  // warp 0. Result is only valid on thread 0.
   // This is intended for use only by the DELTA_LENGTH_BYTE_ARRAY decoder.
   inline __device__ size_t skip_values_and_sum(int skip)
   {
@@ -323,20 +323,18 @@ struct delta_binary_decoder {
     uint32_t const num_pass = values_per_mb / warp_size;
 
     while (current_value_idx < skip && current_value_idx < num_encoded_values(true)) {
-      if (t < warp_size) {
-        calc_mini_block_values(t);
+      calc_mini_block_values(t);
 
-        int const idx = current_value_idx + t;
+      int const idx = current_value_idx + t;
 
-        for (uint32_t p = 0; p < num_pass; p++) {
-          auto const pidx     = idx + p * warp_size;
-          size_t const val    = pidx < skip ? static_cast<delta_length_type>(value_at(pidx)) : 0;
-          auto const warp_sum = warp_reduce(temp_storage).Sum(val);
-          if (t == 0) { sum += warp_sum; }
-        }
-        if (t == 0) { setup_next_mini_block(true); }
+      for (uint32_t p = 0; p < num_pass; p++) {
+        auto const pidx     = idx + p * warp_size;
+        size_t const val    = pidx < skip ? static_cast<delta_length_type>(value_at(pidx)) : 0;
+        auto const warp_sum = warp_reduce(temp_storage).Sum(val);
+        if (t == 0) { sum += warp_sum; }
       }
-      __syncthreads();
+      if (t == 0) { setup_next_mini_block(true); }
+      __syncwarp();
     }
 
     return sum;

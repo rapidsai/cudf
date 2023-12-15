@@ -639,14 +639,16 @@ __global__ void __launch_bounds__(decode_block_size)
   // string data block.
   auto const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
   if (is_bounds_pg && s->page.start_val > 0) {
-    // string_off is only valid on lane_id 0
-    auto const string_off = db->skip_values_and_sum(s->page.start_val);
-    if (t == 0) {
-      string_offset = string_off;
+    if (t < warp_size) {
+      // string_off is only valid on thread 0
+      auto const string_off = db->skip_values_and_sum(s->page.start_val);
+      if (t == 0) {
+        string_offset = string_off;
 
-      // if there is no repetition, then we need to work through the whole page, so reset the
-      // delta decoder to the beginning of the page
-      if (not has_repetition) { db->init_binary_block(s->data_start, s->data_end); }
+        // if there is no repetition, then we need to work through the whole page, so reset the
+        // delta decoder to the beginning of the page
+        if (not has_repetition) { db->init_binary_block(s->data_start, s->data_end); }
+      }
     }
     __syncthreads();
   }
