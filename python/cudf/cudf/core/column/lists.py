@@ -294,7 +294,7 @@ class ListMethods(ColumnMethods):
     _column: ListColumn
 
     def __init__(self, parent: ParentType):
-        if isinstance(parent.dtype, ListDtype):
+        if not isinstance(parent.dtype, ListDtype):
             raise AttributeError(
                 "Can only use .list accessor with a 'list' dtype"
             )
