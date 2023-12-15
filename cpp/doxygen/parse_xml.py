@@ -4,58 +4,51 @@ import xml.etree.ElementTree as ET
 import glob
 
 
-def remove_param_with_cudf_enable_if(root):
-    types_to_remove = ("CUDF_ENABLE_IF", "std::enable_if")
-    defvals_to_remove = ("nullptr")
-
-
+def clean_definitions(root):
+    # Breathe can't handle SFINAE properly:
+    # https://github.com/breathe-doc/breathe/issues/624
     seen_ids = set()
     for sectiondef in root.findall(".//sectiondef"):
         for memberdef in sectiondef.findall("./memberdef"):
-            for parent in memberdef.findall("./templateparamlist"):
-                for param in parent.findall("./param"):
+            id_ = memberdef.get("id")
+            for tparamlist in memberdef.findall("./templateparamlist"):
+                for param in tparamlist.findall("./param"):
                     for type_ in param.findall("./type"):
-                        if any(r in ET.tostring(type_).decode() for r in types_to_remove):
-                            id_ = memberdef.get("id")
-                            assert id_ is not None
-                            # If this is the first time we're seeing this function, just
-                            # remove the template parameter. Otherwise, remove the
-                            # overload altogether and just rely on documenting one of
-                            # the SFINAE overloads.
-                            if id_ in seen_ids:
-                                sectiondef.remove(memberdef)
-                            else:
+                        if "enable_if" in ET.tostring(type_).decode().lower():
+                            if id_ not in seen_ids:
+                                # If this is the first time we're seeing this function,
+                                # just remove the template parameter.
                                 seen_ids.add(id_)
-                                parent.remove(param)
-                            break
-            for parent in memberdef.findall("./templateparamlist"):
-                for param in parent.findall("./param"):
-                    for type_ in param.findall("./defval"):
-                        if any(r in ET.tostring(type_).decode() for r in defvals_to_remove):
-                            parent.remove(param)
+                                tparamlist.remove(param)
+                            else:
+                                # Otherwise, remove the overload altogether and just
+                                # rely on documenting one of the SFINAE overloads.
+                                sectiondef.remove(memberdef)
                             break
 
-    strings_to_remove = ("__forceinline__", "CUDF_HOST_DEVICE", "decltype(auto)")
+                    # If the id is in seen_ids we've already either removed the param or
+                    # the entire memberdef.
+                    if id_ not in seen_ids:
+                        # In addition to enable_if, check for overloads set up by
+                        # ...*=nullptr.
+                        for type_ in param.findall("./defval"):
+                            if "nullptr" in ET.tostring(type_).decode():
+                                tparamlist.remove(param)
+                                break
+
+
+    # All of these in type declarations cause Breathe to choke.
+    # For friend, see https://github.com/breathe-doc/breathe/issues/916
+    strings_to_remove = ("__forceinline__", "CUDF_HOST_DEVICE", "decltype(auto)", "friend")
     for field in (".//type", ".//definition"):
         for type_ in root.findall(field):
             if type_.text is not None:
                 for string in strings_to_remove:
                     type_.text = type_.text.replace(string, "")
-                if field == ".//type":
-                    # Due to https://github.com/breathe-doc/breathe/issues/916
-                    # friend is inserted twice, once in the type and once in the
-                    # definition. We choose to remove from the definition.
-                    type_.text = type_.text.replace("friend", "")
 
 
 
-# Parse the XML file using xml.etree.ElementTree
 for fn in glob.glob("xml/*.xml"):
     tree = ET.parse(fn)
-    root = tree.getroot()
-
-    # Remove <param> nodes with <type> containing 'CUDF_ENABLE_IF'
-    remove_param_with_cudf_enable_if(root)
-
-    # Save the modified XML to a new file
+    clean_definitions(tree.getroot())
     tree.write(fn)
