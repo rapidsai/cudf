@@ -28,12 +28,7 @@ from cudf import _lib as libcudf
 from cudf._lib import string_casting as str_cast, strings as libstrings
 from cudf._lib.column import Column
 from cudf._lib.types import size_type_dtype
-from cudf.api.types import (
-    is_integer,
-    is_list_dtype,
-    is_scalar,
-    is_string_dtype,
-)
+from cudf.api.types import is_integer, is_scalar, is_string_dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
 from cudf.core.column.column import ColumnBase
@@ -126,7 +121,7 @@ class StringMethods(ColumnMethods):
     def __init__(self, parent):
         value_type = (
             parent.dtype.leaf_type
-            if is_list_dtype(parent.dtype)
+            if isinstance(parent.dtype, cudf.ListDtype)
             else parent.dtype
         )
         if not is_string_dtype(value_type):
