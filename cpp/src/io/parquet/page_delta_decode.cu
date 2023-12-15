@@ -792,8 +792,8 @@ void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_vector<PageInfo>& pages
 {
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
 
-  dim3 dim_block(decode_block_size, 1);
-  dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
+  dim3 const dim_block(decode_block_size, 1);
+  dim3 const dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   if (level_type_size == 1) {
     gpuDecodeDeltaLengthByteArray<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
