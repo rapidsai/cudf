@@ -361,12 +361,9 @@ def on_missing_reference(app, env, node, contnode):
         "uint32_t",
         "uint64_t",
         # Internal objects
-        "CUDF_ENABLE_IF",
-        "CUDF_HOST_DEVICE",
         "id_to_type_impl",
         "type_to_scalar_type_impl",
         "type_to_scalar_type_impl",
-        "detail", # TODO: Look into why so many public APIs link to things in detail
         # kafka objects
         "python_callable_type",
         "kafka_oauth_callback_wrapper_type",
@@ -382,8 +379,6 @@ def on_missing_reference(app, env, node, contnode):
         # the public namespace. However, it's used in the detail header, so it
         # needs to be put into a public header that can be shared.
         "char_utf8",
-        # TODO: This type should probably be made private in C++
-        "bpe_merge_pairs_impl",
         # TODO: This is currently in a src file but perhaps should be public
         "orc::column_statistics",
         # Sphinx doesn't know how to distinguish between the ORC and Parquet
