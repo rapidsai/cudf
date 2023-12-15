@@ -8,7 +8,7 @@ import pytest
 
 import cudf
 from cudf._lib.transform import mask_to_bools
-from cudf.core.column.column import as_column
+from cudf.core.column.column import arange, as_column
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 from cudf.utils import dtypes as dtypeutils
 
@@ -193,12 +193,15 @@ def test_column_mixed_dtype(data, error):
 
 
 @pytest.mark.parametrize("nan_as_null", [True, False])
-def test_as_column_scalar_with_nan(nan_as_null):
-    size = 10
-    scalar = np.nan
-
+@pytest.mark.parametrize(
+    "scalar",
+    [np.nan, pd.Timedelta(days=1), pd.Timestamp(2020, 1, 1)],
+    ids=repr,
+)
+@pytest.mark.parametrize("size", [1, 10])
+def test_as_column_scalar_with_nan(nan_as_null, scalar, size):
     expected = (
-        cudf.Series([np.nan] * size, nan_as_null=nan_as_null)
+        cudf.Series([scalar] * size, nan_as_null=nan_as_null)
         .dropna()
         .to_numpy()
     )
@@ -395,7 +398,7 @@ def test_column_view_string_slice(slc):
         ),
         (
             cp.array([], dtype="uint8"),
-            cudf.core.column.as_column([], dtype="uint8"),
+            cudf.core.column.column_empty(0, dtype="uint8"),
         ),
         (
             cp.array([255], dtype="uint8"),
@@ -549,3 +552,9 @@ def test_astype_with_aliases(alias, expect_dtype, data):
     gd_data = cudf.Series.from_pandas(pd_data)
 
     assert_eq(pd_data.astype(expect_dtype), gd_data.astype(alias))
+
+
+def test_arange_empty():
+    result = arange(0)
+    assert len(result) == 0
+    assert result.dtype == np.dtype(np.int64)

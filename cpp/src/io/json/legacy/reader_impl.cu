@@ -438,7 +438,7 @@ std::vector<data_type> get_data_types(json_reader_options const& reader_opts,
         }},
       reader_opts.get_dtypes());
   } else {
-    CUDF_EXPECTS(rec_starts.size() != 0, "No data available for data type inference.\n");
+    CUDF_EXPECTS(not rec_starts.empty(), "No data available for data type inference.\n");
     auto const num_columns       = column_names.size();
     auto const do_set_null_count = column_map->capacity() > 0;
 
@@ -530,21 +530,31 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
   auto repl_chars   = std::vector<char>{'"', '\\', '\t', '\r', '\b'};
   auto repl_offsets = std::vector<size_type>{0, 1, 2, 3, 4, 5};
 
-  auto target =
-    make_strings_column(cudf::detail::make_device_uvector_async(
-                          target_chars, stream, rmm::mr::get_current_device_resource()),
-                        cudf::detail::make_device_uvector_async(
-                          target_offsets, stream, rmm::mr::get_current_device_resource()),
-                        {},
-                        0,
-                        stream);
-  auto repl = make_strings_column(cudf::detail::make_device_uvector_async(
-                                    repl_chars, stream, rmm::mr::get_current_device_resource()),
-                                  cudf::detail::make_device_uvector_async(
-                                    repl_offsets, stream, rmm::mr::get_current_device_resource()),
-                                  {},
-                                  0,
-                                  stream);
+  auto target = make_strings_column(
+    static_cast<size_type>(target_offsets.size() - 1),
+    std::make_unique<cudf::column>(
+      cudf::detail::make_device_uvector_async(
+        target_offsets, stream, rmm::mr::get_current_device_resource()),
+      rmm::device_buffer{},
+      0),
+    std::make_unique<cudf::column>(cudf::detail::make_device_uvector_async(
+                                     target_chars, stream, rmm::mr::get_current_device_resource()),
+                                   rmm::device_buffer{},
+                                   0),
+    0,
+    {});
+  auto repl = make_strings_column(
+    static_cast<size_type>(repl_offsets.size() - 1),
+    std::make_unique<cudf::column>(cudf::detail::make_device_uvector_async(
+                                     repl_offsets, stream, rmm::mr::get_current_device_resource()),
+                                   rmm::device_buffer{},
+                                   0),
+    std::make_unique<cudf::column>(cudf::detail::make_device_uvector_async(
+                                     repl_chars, stream, rmm::mr::get_current_device_resource()),
+                                   rmm::device_buffer{},
+                                   0),
+    0,
+    {});
 
   auto const h_valid_counts = cudf::detail::make_std_vector_sync(d_valid_counts, stream);
   std::vector<std::unique_ptr<column>> out_columns;
@@ -558,6 +568,9 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
         out_column->view(), target->view(), repl->view(), stream, mr));
     } else {
       out_columns.emplace_back(std::move(out_column));
+    }
+    if (out_columns.back()->null_count() == 0) {
+      out_columns.back()->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
     }
   }
 
@@ -612,7 +625,7 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
     sources, reader_opts.get_compression(), range_offset, range_size, range_size_padded);
   host_span<char const> h_data{reinterpret_cast<char const*>(h_raw_data.data()), h_raw_data.size()};
 
-  CUDF_EXPECTS(h_data.size() != 0, "Ingest failed: uncompressed input data has zero size.\n");
+  CUDF_EXPECTS(not h_data.empty(), "Ingest failed: uncompressed input data has zero size.\n");
 
   auto d_data = rmm::device_uvector<char>(0, stream);
 
@@ -629,7 +642,7 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
     d_data = upload_data_to_device(reader_opts, h_data, rec_starts, stream);
   }
 
-  CUDF_EXPECTS(d_data.size() != 0, "Error uploading input data to the GPU.\n");
+  CUDF_EXPECTS(not d_data.is_empty(), "Error uploading input data to the GPU.\n");
 
   auto column_names_and_map =
     get_column_names_and_map(parse_opts.view(), h_data, rec_starts, d_data, stream);

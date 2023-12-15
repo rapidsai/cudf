@@ -24,6 +24,8 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class GatherMapTest {
+  private static final HostMemoryAllocator hostMemoryAllocator = DefaultHostMemoryAllocator.get();
+
   @Test
   void testInvalidBuffer() {
     try (DeviceMemoryBuffer buffer = DeviceMemoryBuffer.allocate(707)) {
@@ -68,7 +70,7 @@ public class GatherMapTest {
 
   @Test
   void testToColumnView() {
-    try (HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(8 * 4)) {
+    try (HostMemoryBuffer hostBuffer = hostMemoryAllocator.allocate(8 * 4)) {
       hostBuffer.setInts(0, new int[]{10, 11, 12, 13, 14, 15, 16, 17}, 0, 8);
       try (DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(8*4)) {
         devBuffer.copyFromHostBuffer(hostBuffer);
@@ -78,7 +80,7 @@ public class GatherMapTest {
           assertEquals(DType.INT32, view.getType());
           assertEquals(0, view.getNullCount());
           assertEquals(8, view.getRowCount());
-          try (HostMemoryBuffer viewHostBuffer = HostMemoryBuffer.allocate(8 * 4)) {
+          try (HostMemoryBuffer viewHostBuffer = hostMemoryAllocator.allocate(8 * 4)) {
             viewHostBuffer.copyFromDeviceBuffer(view.getData());
             for (int i = 0; i < 8; i++) {
               assertEquals(i + 10, viewHostBuffer.getInt(4*i));
@@ -88,7 +90,7 @@ public class GatherMapTest {
           assertEquals(DType.INT32, view.getType());
           assertEquals(0, view.getNullCount());
           assertEquals(2, view.getRowCount());
-          try (HostMemoryBuffer viewHostBuffer = HostMemoryBuffer.allocate(8)) {
+          try (HostMemoryBuffer viewHostBuffer = hostMemoryAllocator.allocate(8)) {
             viewHostBuffer.copyFromDeviceBuffer(view.getData());
             assertEquals(13, viewHostBuffer.getInt(0));
             assertEquals(14, viewHostBuffer.getInt(4));

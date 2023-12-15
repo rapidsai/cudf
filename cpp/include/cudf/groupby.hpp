@@ -386,8 +386,8 @@ class groupby {
                                                          ///< indicates null order
                                                          ///< of each column
   std::unique_ptr<detail::sort::sort_groupby_helper>
-    _helper;                                             ///< Helper object
-                                                         ///< used by sort based implementation
+    _helper;  ///< Helper object
+              ///< used by sort based implementation
 
   /**
    * @brief Get the sort helper object

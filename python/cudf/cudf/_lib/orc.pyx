@@ -21,6 +21,7 @@ except ImportError:
 
 cimport cudf._lib.cpp.io.types as cudf_io_types
 from cudf._lib.column cimport Column
+from cudf._lib.cpp.io.data_sink cimport data_sink
 from cudf._lib.cpp.io.orc cimport (
     chunked_orc_writer_options,
     orc_chunked_writer,
@@ -36,7 +37,6 @@ from cudf._lib.cpp.io.orc_metadata cimport (
 from cudf._lib.cpp.io.types cimport (
     column_in_metadata,
     compression_type,
-    data_sink,
     sink_info,
     source_info,
     table_input_metadata,

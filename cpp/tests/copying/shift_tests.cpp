@@ -206,22 +206,48 @@ TEST_F(ShiftTests, StringsShiftTest)
   auto results = cudf::shift(input, 2, fill);
   auto expected_right =
     cudf::test::strings_column_wrapper({"xx", "xx", "", "bb", "ccc"}, {1, 1, 0, 1, 1});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_right, *results);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_right, *results);
 
   results = cudf::shift(input, -2, fill);
   auto expected_left =
     cudf::test::strings_column_wrapper({"ccc", "ddddddé", "", "xx", "xx"}, {1, 1, 0, 1, 1});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_left, *results);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_left, *results);
 
   auto sliced = cudf::slice(input, {1, 4}).front();
 
   results           = cudf::shift(sliced, 1, fill);
-  auto sliced_right = cudf::test::strings_column_wrapper({"xx", "bb", "ccc"});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(sliced_right, *results);
+  auto sliced_right = cudf::test::strings_column_wrapper({"xx", "bb", "ccc"}, {1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(sliced_right, *results);
 
   results          = cudf::shift(sliced, -1, fill);
-  auto sliced_left = cudf::test::strings_column_wrapper({"ccc", "ddddddé", "xx"});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(sliced_left, *results);
+  auto sliced_left = cudf::test::strings_column_wrapper({"ccc", "ddddddé", "xx"}, {1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(sliced_left, *results);
+}
+
+TEST_F(ShiftTests, StringsShiftNullFillTest)
+{
+  auto input = cudf::test::strings_column_wrapper(
+    {"a", "b", "c", "d", "e", "ff", "ggg", "hhhh", "iii", "jjjjj"});
+  auto phil = cudf::string_scalar("", false);
+
+  auto results  = cudf::shift(input, -1, phil);
+  auto expected = cudf::test::strings_column_wrapper(
+    {"b", "c", "d", "e", "ff", "ggg", "hhhh", "iii", "jjjjj", ""}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  results  = cudf::shift(input, 1, phil);
+  expected = cudf::test::strings_column_wrapper(
+    {"", "a", "b", "c", "d", "e", "ff", "ggg", "hhhh", "iii"}, {0, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  auto sliced = cudf::slice(input, {5, 10}).front();
+  results     = cudf::shift(sliced, -2, phil);
+  expected = cudf::test::strings_column_wrapper({"hhhh", "iii", "jjjjj", "", ""}, {1, 1, 1, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  results  = cudf::shift(sliced, 2, phil);
+  expected = cudf::test::strings_column_wrapper({"", "", "ff", "ggg", "hhhh"}, {0, 0, 1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(ShiftTests, OffsetGreaterThanSize)

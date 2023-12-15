@@ -150,18 +150,20 @@ std::unique_ptr<column> sequence(size_type size,
 std::unique_ptr<column> sequence(size_type size,
                                  scalar const& init,
                                  scalar const& step,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sequence(size, init, step, cudf::get_default_stream(), mr);
+  return detail::sequence(size, init, step, stream, mr);
 }
 
 std::unique_ptr<column> sequence(size_type size,
                                  scalar const& init,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sequence(size, init, cudf::get_default_stream(), mr);
+  return detail::sequence(size, init, stream, mr);
 }
 
 }  // namespace cudf

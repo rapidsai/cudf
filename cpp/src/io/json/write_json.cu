@@ -20,6 +20,7 @@
  */
 
 #include <io/csv/durations.hpp>
+#include <io/utilities/parsing_utils.cuh>
 #include <lists/utilities.hpp>
 
 #include <cudf/column/column_device_view.cuh>
@@ -27,9 +28,9 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/data_sink.hpp>
-#include <cudf/io/detail/data_casting.cuh>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -54,6 +55,8 @@
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
+
+#include <cuda/functional>
 
 #include <algorithm>
 #include <memory>
@@ -299,9 +302,9 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
     // if previous column was null, then we skip the value separator
     rmm::device_uvector<bool> d_str_separator(total_rows, stream);
     auto row_num = cudf::detail::make_counting_transform_iterator(
-      0, [tbl = *tbl_device_view] __device__(auto idx) -> size_type {
-        return idx / tbl.num_columns();
-      });
+      0,
+      cuda::proclaim_return_type<size_type>([tbl = *tbl_device_view] __device__(auto idx)
+                                              -> size_type { return idx / tbl.num_columns(); }));
     auto validity_iterator =
       cudf::detail::make_counting_transform_iterator(0, validity_fn{*tbl_device_view});
     thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
@@ -336,7 +339,9 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
   auto old_offsets = strings_column_view(joined_col->view()).offsets();
   rmm::device_uvector<size_type> row_string_offsets(strings_columns.num_rows() + 1, stream, mr);
   auto const d_strview_offsets = cudf::detail::make_counting_transform_iterator(
-    0, [num_strviews_per_row] __device__(size_type const i) { return i * num_strviews_per_row; });
+    0, cuda::proclaim_return_type<size_type>([num_strviews_per_row] __device__(size_type const i) {
+      return i * num_strviews_per_row;
+    }));
   thrust::gather(rmm::exec_policy(stream),
                  d_strview_offsets,
                  d_strview_offsets + row_string_offsets.size(),
@@ -394,11 +399,13 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
 
   rmm::device_uvector<size_type> d_strview_offsets(num_offsets, stream);
   auto num_strings_per_list = cudf::detail::make_counting_transform_iterator(
-    0, [offsets = offsets.begin<size_type>(), num_offsets] __device__(size_type idx) {
-      if (idx + 1 >= num_offsets) return 0;
-      auto const length = offsets[idx + 1] - offsets[idx];
-      return length == 0 ? 2 : (2 + length + length - 1);
-    });
+    0,
+    cuda::proclaim_return_type<size_type>(
+      [offsets = offsets.begin<size_type>(), num_offsets] __device__(size_type idx) {
+        if (idx + 1 >= num_offsets) return 0;
+        auto const length = offsets[idx + 1] - offsets[idx];
+        return length == 0 ? 2 : (2 + length + length - 1);
+      }));
   thrust::exclusive_scan(rmm::exec_policy(stream),
                          num_strings_per_list,
                          num_strings_per_list + num_offsets,
@@ -499,9 +506,17 @@ struct column_to_strings_fn {
       struct_row_end_wrap("}", true, stream),
       list_value_separator(",", true, stream),
       list_row_begin_wrap("[", true, stream),
-      list_row_end_wrap("]", true, stream)
+      list_row_end_wrap("]", true, stream),
+      true_value(options_.get_true_value(), true, stream),
+      false_value(options_.get_false_value(), true, stream)
   {
   }
+
+  ~column_to_strings_fn()                                      = default;
+  column_to_strings_fn(column_to_strings_fn const&)            = delete;
+  column_to_strings_fn& operator=(column_to_strings_fn const&) = delete;
+  column_to_strings_fn(column_to_strings_fn&&)                 = delete;
+  column_to_strings_fn& operator=(column_to_strings_fn&&)      = delete;
 
   // unsupported type of column:
   template <typename column_type>
@@ -519,8 +534,7 @@ struct column_to_strings_fn {
   std::enable_if_t<std::is_same_v<column_type, bool>, std::unique_ptr<column>> operator()(
     column_view const& column) const
   {
-    return cudf::strings::detail::from_booleans(
-      column, options_.get_true_value(), options_.get_false_value(), stream_, mr_);
+    return cudf::strings::detail::from_booleans(column, true_value, false_value, stream_, mr_);
   }
 
   // strings:
@@ -582,7 +596,7 @@ struct column_to_strings_fn {
     return cudf::strings::detail::from_timestamps(
       column,
       format,
-      strings_column_view(column_view{data_type{type_id::STRING}, 0, nullptr, nullptr, 0}),
+      strings_column_view(make_empty_column(type_id::STRING)->view()),
       stream_,
       mr_);
   }
@@ -613,17 +627,18 @@ struct column_to_strings_fn {
 
     auto child_string_with_null = [&]() {
       if (child_view.type().id() == type_id::STRUCT) {
-        return (*this).template operator()<cudf::struct_view>(
-          child_view,
-          children_names.size() > child_index ? children_names[child_index].children
-                                              : std::vector<column_name_info>{});
-      } else if (child_view.type().id() == type_id::LIST) {
-        return (*this).template operator()<cudf::list_view>(child_view,
+        return this->template operator()<cudf::struct_view>(child_view,
                                                             children_names.size() > child_index
                                                               ? children_names[child_index].children
                                                               : std::vector<column_name_info>{});
+      } else if (child_view.type().id() == type_id::LIST) {
+        return this->template operator()<cudf::list_view>(child_view,
+                                                          children_names.size() > child_index
+                                                            ? children_names[child_index].children
+                                                            : std::vector<column_name_info>{});
       } else {
-        return cudf::type_dispatcher(child_view.type(), *this, child_view);
+        return cudf::type_dispatcher<cudf::id_to_type_impl, column_to_strings_fn const&>(
+          child_view.type(), *this, child_view);
       }
     };
     auto new_offsets = cudf::lists::detail::get_normalized_offsets(
@@ -678,27 +693,29 @@ struct column_to_strings_fn {
     //
     auto i_col_begin =
       thrust::make_zip_iterator(thrust::counting_iterator<size_t>(0), column_begin);
-    std::transform(i_col_begin,
-                   i_col_begin + num_columns,
-                   std::back_inserter(str_column_vec),
-                   [this, &children_names](auto const& i_current_col) {
-                     auto const i            = thrust::get<0>(i_current_col);
-                     auto const& current_col = thrust::get<1>(i_current_col);
-                     // Struct needs children's column names
-                     if (current_col.type().id() == type_id::STRUCT) {
-                       return (*this).template operator()<cudf::struct_view>(
-                         current_col,
-                         children_names.size() > i ? children_names[i].children
-                                                   : std::vector<column_name_info>{});
-                     } else if (current_col.type().id() == type_id::LIST) {
-                       return (*this).template operator()<cudf::list_view>(
-                         current_col,
-                         children_names.size() > i ? children_names[i].children
-                                                   : std::vector<column_name_info>{});
-                     } else {
-                       return cudf::type_dispatcher(current_col.type(), *this, current_col);
-                     }
-                   });
+    std::transform(
+      i_col_begin,
+      i_col_begin + num_columns,
+      std::back_inserter(str_column_vec),
+      [this, &children_names](auto const& i_current_col) {
+        auto const i            = thrust::get<0>(i_current_col);
+        auto const& current_col = thrust::get<1>(i_current_col);
+        // Struct needs children's column names
+        if (current_col.type().id() == type_id::STRUCT) {
+          return this->template operator()<cudf::struct_view>(current_col,
+                                                              children_names.size() > i
+                                                                ? children_names[i].children
+                                                                : std::vector<column_name_info>{});
+        } else if (current_col.type().id() == type_id::LIST) {
+          return this->template operator()<cudf::list_view>(current_col,
+                                                            children_names.size() > i
+                                                              ? children_names[i].children
+                                                              : std::vector<column_name_info>{});
+        } else {
+          return cudf::type_dispatcher<cudf::id_to_type_impl, column_to_strings_fn const&>(
+            current_col.type(), *this, current_col);
+        }
+      });
 
     // create string table view from str_column_vec:
     //
@@ -732,6 +749,9 @@ struct column_to_strings_fn {
   string_scalar const list_value_separator;  // ","
   string_scalar const list_row_begin_wrap;   // "["
   string_scalar const list_row_end_wrap;     // "]"
+  // bool converter constants
+  string_scalar const true_value;
+  string_scalar const false_value;
 };
 
 }  // namespace
@@ -749,10 +769,16 @@ std::unique_ptr<column> make_strings_column_from_host(host_span<std::string cons
                                 offsets.begin() + 1,
                                 std::plus<cudf::size_type>{},
                                 [](auto& str) { return str.size(); });
-  auto d_offsets =
-    cudf::detail::make_device_uvector_sync(offsets, stream, rmm::mr::get_current_device_resource());
+  auto d_offsets = std::make_unique<cudf::column>(
+    cudf::detail::make_device_uvector_sync(offsets, stream, rmm::mr::get_current_device_resource()),
+    rmm::device_buffer{},
+    0);
   return cudf::make_strings_column(
-    host_strings.size(), std::move(d_offsets), std::move(d_chars), {}, 0);
+    host_strings.size(),
+    std::move(d_offsets),
+    std::make_unique<cudf::column>(std::move(d_chars), rmm::device_buffer{}, 0),
+    0,
+    {});
 }
 
 std::unique_ptr<column> make_column_names_column(host_span<column_name_info const> column_names,

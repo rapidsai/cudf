@@ -2,6 +2,7 @@
 
 from libc.stdint cimport int32_t, int64_t, uint8_t
 from libcpp cimport bool
+from libcpp.functional cimport reference_wrapper
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
@@ -9,7 +10,6 @@ from rmm._lib.device_buffer cimport device_buffer
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
-from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
@@ -19,9 +19,9 @@ from cudf._lib.exception_handler cimport cudf_exception_handler
 ctypedef const scalar constscalar
 
 cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
-    ctypedef enum out_of_bounds_policy:
-        NULLIFY 'cudf::out_of_bounds_policy::NULLIFY'
-        DONT_CHECK 'cudf::out_of_bounds_policy::DONT_CHECK'
+    cpdef enum class out_of_bounds_policy(bool):
+        NULLIFY
+        DONT_CHECK
 
     cdef unique_ptr[table] gather (
         const table_view& source_table,

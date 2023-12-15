@@ -162,26 +162,41 @@ TEST_F(StringColumnTest, ConcatenateColumnView)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-TEST_F(StringColumnTest, ConcatenateTooManyColumns)
+TEST_F(StringColumnTest, ConcatenateColumnViewLarge)
 {
-  std::vector<char const*> h_strings{"aaa",
-                                     "bb",
-                                     "",
-                                     "cccc",
-                                     "d",
-                                     "ééé",
-                                     "ff",
-                                     "gggg",
-                                     "",
-                                     "h",
-                                     "iiii",
-                                     "jjj",
-                                     "k",
-                                     "lllllll",
-                                     "mmmmm",
-                                     "n",
-                                     "oo",
-                                     "ppp"};
+  // Test large concatenate, causes out of bound device memory errors if kernel
+  // indexing is not int64_t.
+  // 1.5GB bytes, 5k columns
+  constexpr size_t num_strings        = 10000;
+  constexpr size_t string_length      = 150000;
+  constexpr size_t strings_per_column = 2;
+  constexpr size_t num_columns        = num_strings / strings_per_column;
+
+  std::vector<std::string> strings;
+  std::vector<char const*> h_strings;
+  std::vector<cudf::test::strings_column_wrapper> strings_column_wrappers;
+  std::vector<cudf::column_view> strings_columns;
+
+  std::string s(string_length, 'a');
+  for (size_t i = 0; i < num_strings; ++i)
+    h_strings.push_back(s.data());
+
+  for (size_t i = 0; i < num_columns; ++i)
+    strings_column_wrappers.push_back(cudf::test::strings_column_wrapper(
+      h_strings.data() + i * strings_per_column, h_strings.data() + (i + 1) * strings_per_column));
+  for (auto& wrapper : strings_column_wrappers)
+    strings_columns.push_back(wrapper);
+
+  auto results = cudf::concatenate(strings_columns);
+
+  cudf::test::strings_column_wrapper expected(h_strings.begin(), h_strings.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringColumnTest, ConcatenateManyColumns)
+{
+  std::vector<char const*> h_strings{
+    "aaa", "bb", "", "cccc", "d", "ééé", "ff", "gggg", "", "h", "iiii", "jjj"};
 
   std::vector<char const*> expected_strings;
   std::vector<cudf::test::strings_column_wrapper> wrappers;
@@ -195,6 +210,18 @@ TEST_F(StringColumnTest, ConcatenateTooManyColumns)
                                               expected_strings.data() + expected_strings.size());
   auto results = cudf::concatenate(strings_columns);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringColumnTest, ConcatenateTooLarge)
+{
+  std::string big_str(1000000, 'a');  // 1 million bytes x 5 = 5 million bytes
+  cudf::test::strings_column_wrapper input{big_str, big_str, big_str, big_str, big_str};
+  std::vector<cudf::column_view> input_cols;
+  // 5 millions bytes x 500 = 2.5GB > std::numeric_limits<size_type>::max()
+  for (int i = 0; i < 500; ++i) {
+    input_cols.push_back(input);
+  }
+  EXPECT_THROW(cudf::concatenate(input_cols), std::overflow_error);
 }
 
 struct TableTest : public cudf::test::BaseFixture {};

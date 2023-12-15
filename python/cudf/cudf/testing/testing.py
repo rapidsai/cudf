@@ -13,13 +13,12 @@ from cudf._lib.unary import is_nan
 from cudf.api.types import (
     is_categorical_dtype,
     is_decimal_dtype,
-    is_interval_dtype,
     is_list_dtype,
     is_numeric_dtype,
     is_string_dtype,
     is_struct_dtype,
 )
-from cudf.core.missing import NA
+from cudf.core.missing import NA, NaT
 
 
 def dtype_can_compare_equal_to_other(dtype):
@@ -30,7 +29,7 @@ def dtype_can_compare_equal_to_other(dtype):
         or is_list_dtype(dtype)
         or is_struct_dtype(dtype)
         or is_decimal_dtype(dtype)
-        or is_interval_dtype(dtype)
+        or isinstance(dtype, cudf.IntervalDtype)
     )
 
 
@@ -235,7 +234,7 @@ def assert_column_equal(
         )
         or (
             is_numeric_dtype(left)
-            and not dtype_can_compare_equal_to_other(right)
+            and not dtype_can_compare_equal_to_other(right.dtype)
         )
     ):
         try:
@@ -271,8 +270,12 @@ def assert_column_equal(
                 left = left.astype(left.categories.dtype)
                 right = right.astype(right.categories.dtype)
     if not columns_equal:
-        ldata = str([val for val in left.to_pandas(nullable=True)])
-        rdata = str([val for val in right.to_pandas(nullable=True)])
+        try:
+            ldata = str([val for val in left.to_pandas(nullable=True)])
+            rdata = str([val for val in right.to_pandas(nullable=True)])
+        except NotImplementedError:
+            ldata = str([val for val in left.to_pandas(nullable=False)])
+            rdata = str([val for val in right.to_pandas(nullable=False)])
         try:
             diff = 0
             for i in range(left.size):
@@ -290,7 +293,7 @@ def assert_column_equal(
 
 
 def null_safe_scalar_equals(left, right):
-    if left in {NA, np.nan} or right in {NA, np.nan}:
+    if left in {NA, NaT, np.nan} or right in {NA, NaT, np.nan}:
         return left is right
     return left == right
 

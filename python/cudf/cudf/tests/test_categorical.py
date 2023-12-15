@@ -227,7 +227,7 @@ def test_df_cat_set_index():
     df["b"] = np.arange(len(df))
     got = df.set_index("a")
 
-    pddf = df.to_pandas(nullable_pd_dtype=False)
+    pddf = df.to_pandas()
     expect = pddf.set_index("a")
 
     assert_eq(got, expect)
@@ -239,7 +239,7 @@ def test_df_cat_sort_index():
     df["b"] = np.arange(len(df))
 
     got = df.set_index("a").sort_index()
-    expect = df.to_pandas(nullable_pd_dtype=False).set_index("a").sort_index()
+    expect = df.to_pandas().set_index("a").sort_index()
 
     assert_eq(got, expect)
 
@@ -926,3 +926,32 @@ def test_categorical_string_index_contains(data, value):
     pidx = idx.to_pandas()
 
     assert_eq(value in idx, value in pidx)
+
+
+def test_categorical_index_with_dtype():
+    dtype = cudf.CategoricalDtype(categories=["a", "z", "c"])
+    gi = cudf.Index(["z", "c", "a"], dtype=dtype)
+    pi = pd.Index(["z", "c", "a"], dtype=dtype.to_pandas())
+
+    assert_eq(gi, pi)
+    assert_eq(gi.dtype, pi.dtype)
+    assert_eq(gi.dtype.categories, pi.dtype.categories)
+
+
+def test_cat_iterate_error():
+    s = cudf.Series([1, 2, 3], dtype="category")
+    with pytest.raises(TypeError):
+        iter(s.cat)
+
+
+@pytest.mark.parametrize("ordered", [True, False])
+def test_empty_series_category_cast(ordered):
+    dtype = cudf.CategoricalDtype(ordered=ordered)
+    ps = pd.Series([], dtype="str")
+    gs = cudf.from_pandas(ps)
+
+    expected = ps.astype(dtype.to_pandas())
+    actual = gs.astype(dtype)
+
+    assert_eq(expected, actual)
+    assert_eq(expected.dtype.ordered, actual.dtype.ordered)

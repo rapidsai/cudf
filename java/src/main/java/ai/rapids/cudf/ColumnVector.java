@@ -50,8 +50,8 @@ public final class ColumnVector extends ColumnView {
      *
      * @note the callback is invoked with this `ColumnVector`'s lock held.
      *
-     * @param cv - a reference to the ColumnVector we are closing
-     * @param refCount - the updated ref count for this ColumnVector at the time
+     * @param cv reference to the ColumnVector we are closing
+     * @param refCount the updated ref count for this ColumnVector at the time
      *                 of invocation
      */
     void onClosed(ColumnVector cv, int refCount);

@@ -11,9 +11,9 @@ from libcpp.vector cimport vector
 from rmm._lib.device_buffer cimport DeviceBuffer
 
 import cudf
+from cudf._lib import pylibcudf
 from cudf.core.buffer import Buffer, acquire_spill_lock, as_buffer
 
-from cudf._lib cimport pylibcudf
 from cudf._lib.column cimport Column
 
 from cudf._lib.scalar import as_device_scalar
@@ -24,12 +24,13 @@ from cudf._lib.utils cimport table_view_from_columns, table_view_from_table
 from cudf._lib.reduce import minmax
 from cudf.core.abc import Serializable
 
+from libcpp.functional cimport reference_wrapper
+from libcpp.memory cimport make_unique
+
 cimport cudf._lib.cpp.contiguous_split as cpp_contiguous_split
 cimport cudf._lib.cpp.copying as cpp_copying
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
-from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
-from cudf._lib.cpp.libcpp.memory cimport make_unique
 from cudf._lib.cpp.lists.gather cimport (
     segmented_gather as cpp_segmented_gather,
 )
@@ -174,7 +175,7 @@ def gather(
     Column gather_map,
     bool nullify=False
 ):
-    cdef pylibcudf.Table tbl = pylibcudf.copying.gather(
+    tbl = pylibcudf.copying.gather(
         pylibcudf.Table([col.to_pylibcudf(mode="read") for col in columns]),
         gather_map.to_pylibcudf(mode="read"),
         pylibcudf.copying.OutOfBoundsPolicy.NULLIFY if nullify

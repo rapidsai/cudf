@@ -59,13 +59,13 @@ void calculate_bandwidth(benchmark::State& state, cudf::size_type num_columns)
   int64_t const column_bytes_in    = column_bytes_out;  // we only read unmasked inputs
 
   int64_t const bytes_read =
-    (column_bytes_in + validity_bytes_in) * num_columns +   // reading columns
-    mask_size;                                              // reading boolean mask
+    (column_bytes_in + validity_bytes_in) * num_columns +  // reading columns
+    mask_size;                                             // reading boolean mask
   int64_t const bytes_written =
     (column_bytes_out + validity_bytes_out) * num_columns;  // writing columns
 
   state.SetItemsProcessed(state.iterations() * column_size * num_columns);
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * bytes_read + bytes_written);
+  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * (bytes_read + bytes_written));
 }
 
 }  // namespace

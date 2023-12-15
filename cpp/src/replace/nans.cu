@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -111,18 +111,20 @@ std::unique_ptr<column> replace_nans(column_view const& input,
 
 std::unique_ptr<column> replace_nans(column_view const& input,
                                      column_view const& replacement,
+                                     rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_nans(input, replacement, cudf::get_default_stream(), mr);
+  return detail::replace_nans(input, replacement, stream, mr);
 }
 
 std::unique_ptr<column> replace_nans(column_view const& input,
                                      scalar const& replacement,
+                                     rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_nans(input, replacement, cudf::get_default_stream(), mr);
+  return detail::replace_nans(input, replacement, stream, mr);
 }
 
 }  // namespace cudf
@@ -202,7 +204,7 @@ std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
 
   // from device. unique_ptr which gets automatically cleaned up when we leave.
   auto out_view = out->mutable_view();
-  normalize_nans_and_zeros(out_view, stream);
+  detail::normalize_nans_and_zeros(out_view, stream);
   out->set_null_count(input.null_count());
 
   return out;
@@ -221,10 +223,11 @@ std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
  * @param mr Device memory resource used to allocate the returned column's device memory.
  */
 std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
+                                                 rmm::cuda_stream_view stream,
                                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::normalize_nans_and_zeros(input, cudf::get_default_stream(), mr);
+  return detail::normalize_nans_and_zeros(input, stream, mr);
 }
 
 /**
@@ -237,7 +240,7 @@ std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
  * @throws cudf::logic_error if column does not have floating point data type.
  * @param[in, out] in_out mutable_column_view representing input data. data is processed in-place
  */
-void normalize_nans_and_zeros(mutable_column_view& in_out)
+void normalize_nans_and_zeros(mutable_column_view& in_out, rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
   detail::normalize_nans_and_zeros(in_out, cudf::get_default_stream());

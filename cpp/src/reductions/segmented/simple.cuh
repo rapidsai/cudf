@@ -23,8 +23,8 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/unary.hpp>
+#include <cudf/detail/utilities/cast_functor.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/element_argminmax.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/reduction/detail/segmented_reduction.cuh>
 #include <cudf/types.hpp>
@@ -38,6 +38,8 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
+
+#include <cuda/functional>
 
 #include <optional>
 #include <type_traits>
@@ -76,11 +78,11 @@ std::unique_ptr<column> simple_segmented_reduction(
   auto simple_op          = Op{};
   auto const num_segments = offsets.size() - 1;
 
-  auto const binary_op = simple_op.get_binary_op();
+  auto const binary_op = cudf::detail::cast_functor<ResultType>(simple_op.get_binary_op());
 
   // Cast initial value
   ResultType initial_value = [&] {
-    if (init.has_value() && init.value().get().is_valid()) {
+    if (init.has_value() && init.value().get().is_valid(stream)) {
       using ScalarType = cudf::scalar_type_t<InputType>;
       auto input_value = static_cast<ScalarType const*>(&init.value().get())->value(stream);
       return static_cast<ResultType>(input_value);
@@ -114,6 +116,24 @@ std::unique_ptr<column> simple_segmented_reduction(
   return result;
 }
 
+template <typename T>
+struct reduce_argminmax_fn {
+  column_device_view const d_col;  // column data
+  bool const arg_min;              // true if argmin, otherwise argmax
+  null_policy null_handler;        // include or exclude nulls
+
+  __device__ inline auto operator()(size_type const& lhs_idx, size_type const& rhs_idx) const
+  {
+    // CUB segmented reduce calls with OOB indices
+    if (lhs_idx < 0 || lhs_idx >= d_col.size()) { return rhs_idx; }
+    if (rhs_idx < 0 || rhs_idx >= d_col.size()) { return lhs_idx; }
+    if (d_col.is_null(lhs_idx)) { return null_handler == null_policy::INCLUDE ? lhs_idx : rhs_idx; }
+    if (d_col.is_null(rhs_idx)) { return null_handler == null_policy::INCLUDE ? rhs_idx : lhs_idx; }
+    auto const less = d_col.element<T>(lhs_idx) < d_col.element<T>(rhs_idx);
+    return less == arg_min ? lhs_idx : rhs_idx;
+  }
+};
+
 /**
  * @brief String segmented reduction for 'min', 'max'.
  *
@@ -130,7 +150,6 @@ std::unique_ptr<column> simple_segmented_reduction(
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Output column in device memory
  */
-
 template <typename InputType,
           typename Op,
           CUDF_ENABLE_IF(std::is_same_v<Op, cudf::reduction::detail::op::min> ||
@@ -148,8 +167,7 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
   auto const num_segments = static_cast<size_type>(offsets.size()) - 1;
 
   bool constexpr is_argmin = std::is_same_v<Op, cudf::reduction::detail::op::min>;
-  auto string_comparator =
-    cudf::detail::element_argminmax_fn<InputType>{*device_col, col.has_nulls(), is_argmin};
+  auto string_comparator   = reduce_argminmax_fn<InputType>{*device_col, is_argmin, null_handling};
   auto constexpr identity =
     is_argmin ? cudf::detail::ARGMIN_SENTINEL : cudf::detail::ARGMAX_SENTINEL;
 
@@ -241,7 +259,8 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
                         d_col->begin<InputType>(),
                         d_col->end<InputType>(),
                         d_col->begin<InputType>(),
-                        [new_scale] __device__(auto fp) { return fp.rescaled(new_scale); });
+                        cuda::proclaim_return_type<InputType>(
+                          [new_scale] __device__(auto fp) { return fp.rescaled(new_scale); }));
       return new_scale;
     }
 

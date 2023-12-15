@@ -36,6 +36,8 @@
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/pair.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -110,12 +112,12 @@ std::unique_ptr<table> extract(strings_column_view const& input,
   std::vector<std::unique_ptr<column>> results(groups);
   auto make_strings_lambda = [&](size_type column_index) {
     // this iterator transposes the extract results into column order
-    auto indices_itr =
-      thrust::make_permutation_iterator(indices.begin(),
-                                        cudf::detail::make_counting_transform_iterator(
-                                          0, [column_index, groups] __device__(size_type idx) {
-                                            return (idx * groups) + column_index;
-                                          }));
+    auto indices_itr = thrust::make_permutation_iterator(
+      indices.begin(),
+      cudf::detail::make_counting_transform_iterator(
+        0, cuda::proclaim_return_type<size_type>([column_index, groups] __device__(size_type idx) {
+          return (idx * groups) + column_index;
+        })));
     return make_strings_column(indices_itr, indices_itr + input.size(), stream, mr);
   };
 
@@ -131,12 +133,13 @@ std::unique_ptr<table> extract(strings_column_view const& input,
 
 // external API
 
-std::unique_ptr<table> extract(strings_column_view const& strings,
+std::unique_ptr<table> extract(strings_column_view const& input,
                                regex_program const& prog,
+                               rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract(strings, prog, cudf::get_default_stream(), mr);
+  return detail::extract(input, prog, stream, mr);
 }
 
 }  // namespace strings

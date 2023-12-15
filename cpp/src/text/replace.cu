@@ -47,7 +47,7 @@ using replace_result = thrust::pair<bool, cudf::string_view>;
 struct base_token_replacer_fn {
   cudf::column_device_view const d_strings;  ///< strings to tokenize
   cudf::string_view const d_delimiter;       ///< delimiter characters for tokenizing
-  int32_t* d_offsets{};                      ///< for locating output string in d_chars
+  cudf::size_type* d_offsets{};              ///< for locating output string in d_chars
   char* d_chars{};                           ///< output buffer
 
   /**
@@ -114,7 +114,7 @@ using strings_iterator = cudf::column_device_view::const_iterator<cudf::string_v
  * time to fill in the allocated output buffer for each string.
  */
 struct replace_tokens_fn : base_token_replacer_fn {
-  strings_iterator d_targets_begin;               ///< strings to search for
+  strings_iterator d_targets_begin;  ///< strings to search for
   strings_iterator d_targets_end;
   cudf::column_device_view const d_replacements;  ///< replacement strings
 
@@ -274,26 +274,26 @@ std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& str
 
 // external APIs
 
-std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& input,
                                              cudf::strings_column_view const& targets,
                                              cudf::strings_column_view const& replacements,
                                              cudf::string_scalar const& delimiter,
+                                             rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_tokens(
-    strings, targets, replacements, delimiter, cudf::get_default_stream(), mr);
+  return detail::replace_tokens(input, targets, replacements, delimiter, stream, mr);
 }
 
-std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& input,
                                             cudf::size_type min_token_length,
                                             cudf::string_scalar const& replacement,
                                             cudf::string_scalar const& delimiter,
+                                            rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::filter_tokens(
-    strings, min_token_length, replacement, delimiter, cudf::get_default_stream(), mr);
+  return detail::filter_tokens(input, min_token_length, replacement, delimiter, stream, mr);
 }
 
 }  // namespace nvtext

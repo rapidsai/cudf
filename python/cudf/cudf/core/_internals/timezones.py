@@ -186,7 +186,7 @@ def localize(
         DatetimeColumn,
         data._scatter_by_column(
             data.isnull() | (ambiguous | nonexistent),
-            cudf.Scalar(cudf.NA, dtype=data.dtype),
+            cudf.Scalar(cudf.NaT, dtype=data.dtype),
         ),
     )
     gmt_data = local_to_utc(localized, zone_name)

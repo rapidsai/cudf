@@ -32,6 +32,7 @@ constexpr jint MINIMUM_JNI_VERSION = JNI_VERSION_1_6;
 constexpr char const *CUDA_ERROR_CLASS = "ai/rapids/cudf/CudaException";
 constexpr char const *CUDA_FATAL_ERROR_CLASS = "ai/rapids/cudf/CudaFatalException";
 constexpr char const *CUDF_ERROR_CLASS = "ai/rapids/cudf/CudfException";
+constexpr char const *CUDF_OVERFLOW_ERROR_CLASS = "ai/rapids/cudf/CudfColumnSizeOverflowException";
 constexpr char const *CUDF_DTYPE_ERROR_CLASS = "ai/rapids/cudf/CudfException";
 constexpr char const *INDEX_OOB_CLASS = "java/lang/ArrayIndexOutOfBoundsException";
 constexpr char const *ILLEGAL_ARG_CLASS = "java/lang/IllegalArgumentException";
@@ -785,6 +786,21 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
   }
 }
 
+inline auto add_global_ref(JNIEnv *env, jobject jobj) {
+  auto new_global_ref = env->NewGlobalRef(jobj);
+  if (new_global_ref == nullptr) {
+    throw cudf::jni::jni_exception("global ref");
+  }
+  return new_global_ref;
+}
+
+inline nullptr_t del_global_ref(JNIEnv *env, jobject jobj) {
+  if (jobj != nullptr) {
+    env->DeleteGlobalRef(jobj);
+  }
+  return nullptr;
+}
+
 } // namespace jni
 } // namespace cudf
 
@@ -900,6 +916,10 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
   catch (const cudf::data_type_error &e) {                                                         \
     JNI_CHECK_THROW_CUDF_EXCEPTION(env, cudf::jni::CUDF_DTYPE_ERROR_CLASS, e.what(),               \
                                    e.stacktrace(), ret_val);                                       \
+  }                                                                                                \
+  catch (std::overflow_error const &e) {                                                           \
+    JNI_CHECK_THROW_CUDF_EXCEPTION(env, cudf::jni::CUDF_OVERFLOW_ERROR_CLASS, e.what(),            \
+                                   "No native stacktrace is available.", ret_val);                 \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \
     char const *stacktrace = "No native stacktrace is available.";                                 \

@@ -45,6 +45,8 @@
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -304,7 +306,9 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
     auto string_indices = rmm::device_uvector<size_type>(target_count, stream);
 
     auto const pos_itr = cudf::detail::make_counting_transform_iterator(
-      0, [d_positions] __device__(auto idx) -> size_type { return d_positions[idx].first; });
+      0, cuda::proclaim_return_type<size_type>([d_positions] __device__(auto idx) -> size_type {
+        return d_positions[idx].first;
+      }));
     auto pos_count = std::distance(d_positions, copy_end);
 
     thrust::upper_bound(rmm::exec_policy(stream),
@@ -346,9 +350,10 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     counts.begin(),
-                    [fn, d_positions, d_targets_offsets] __device__(size_type idx) -> size_type {
-                      return fn.count_strings(idx, d_positions, d_targets_offsets);
-                    });
+                    cuda::proclaim_return_type<size_type>(
+                      [fn, d_positions, d_targets_offsets] __device__(size_type idx) -> size_type {
+                        return fn.count_strings(idx, d_positions, d_targets_offsets);
+                      }));
 
   // create offsets from the counts
   auto offsets =
@@ -383,7 +388,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
                              std::move(offsets),
                              std::move(chars->release().children.back()),
                              input.null_count(),
-                             copy_bitmask(input.parent(), stream, mr));
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 /**
@@ -490,10 +495,11 @@ std::unique_ptr<column> replace(strings_column_view const& input,
 std::unique_ptr<column> replace(strings_column_view const& strings,
                                 strings_column_view const& targets,
                                 strings_column_view const& repls,
+                                rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace(strings, targets, repls, cudf::get_default_stream(), mr);
+  return detail::replace(strings, targets, repls, stream, mr);
 }
 
 }  // namespace strings

@@ -27,13 +27,17 @@ from cudf.api.types import (
     is_scalar,
     is_timedelta64_dtype,
 )
+from cudf.core._compat import PANDAS_GE_220
 from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.dtypes import _get_base_dtype
-from cudf.utils.utils import _fillna_natwise
+from cudf.utils.utils import _all_bools_with_nulls
 
-_guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
+if PANDAS_GE_220:
+    _guess_datetime_format = pd.tseries.api.guess_datetime_format
+else:
+    _guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
 
 # nanoseconds per time_unit
 _dtype_to_format_conversion = {
@@ -92,6 +96,107 @@ _DATETIME_NAMES = [
     nl_langinfo(locale.ABMON_11),
     nl_langinfo(locale.ABMON_12),
 ]
+
+
+def infer_format(element: str, **kwargs) -> str:
+    """
+    Infers datetime format from a string, also takes cares for `ms` and `ns`
+    """
+    fmt = _guess_datetime_format(element, **kwargs)
+
+    if fmt is not None:
+        if "%z" in fmt or "%Z" in fmt:
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
+        return fmt
+
+    element_parts = element.split(".")
+    if len(element_parts) != 2:
+        raise ValueError("Given date string not likely a datetime.")
+
+    # There is possibility that the element is of following format
+    # '00:00:03.333333 2016-01-01'
+    second_parts = re.split(r"(\D+)", element_parts[1], maxsplit=1)
+    subsecond_fmt = ".%" + str(len(second_parts[0])) + "f"
+
+    first_part = _guess_datetime_format(element_parts[0], **kwargs)
+    # For the case where first_part is '00:00:03'
+    if first_part is None:
+        tmp = "1970-01-01 " + element_parts[0]
+        first_part = _guess_datetime_format(tmp, **kwargs).split(" ", 1)[1]
+    if first_part is None:
+        raise ValueError("Unable to infer the timestamp format from the data")
+
+    if len(second_parts) > 1:
+        # We may have a non-digit, timezone-like component
+        # like Z, UTC-3, +01:00
+        if any(re.search(r"\D", part) for part in second_parts):
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
+        second_part = "".join(second_parts[1:])
+
+        if len(second_part) > 1:
+            # Only infer if second_parts is not an empty string.
+            second_part = _guess_datetime_format(second_part, **kwargs)
+    else:
+        second_part = ""
+
+    try:
+        fmt = first_part + subsecond_fmt + second_part
+    except Exception:
+        raise ValueError("Unable to infer the timestamp format from the data")
+
+    return fmt
+
+
+def _resolve_mixed_dtypes(
+    lhs: ColumnBinaryOperand, rhs: ColumnBinaryOperand, base_type: str
+) -> Dtype:
+    units = ["s", "ms", "us", "ns"]
+    lhs_time_unit = cudf.utils.dtypes.get_time_unit(lhs)
+    lhs_unit = units.index(lhs_time_unit)
+    rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
+    rhs_unit = units.index(rhs_time_unit)
+    return cudf.dtype(f"{base_type}[{units[max(lhs_unit, rhs_unit)]}]")
+
+
+def _get_datetime_format(col, dtype, time_unit):
+    format = _dtype_to_format_conversion.get(dtype.name, "%Y-%m-%d %H:%M:%S")
+    if format.endswith("f"):
+        sub_second_res_len = 3
+    else:
+        sub_second_res_len = 0
+
+    has_nanos = time_unit in {"ns"} and col.get_dt_field("nanosecond").any()
+    has_micros = (
+        time_unit in {"ns", "us"} and col.get_dt_field("microsecond").any()
+    )
+    has_millis = (
+        time_unit in {"ns", "us", "ms"}
+        and col.get_dt_field("millisecond").any()
+    )
+    has_seconds = col.get_dt_field("second").any()
+    has_minutes = col.get_dt_field("minute").any()
+    has_hours = col.get_dt_field("hour").any()
+    if sub_second_res_len:
+        if has_nanos:
+            # format should be intact and rest of the
+            # following conditions shouldn't execute.
+            pass
+        elif has_micros:
+            format = format[:-sub_second_res_len] + "%6f"
+        elif has_millis:
+            format = format[:-sub_second_res_len] + "%3f"
+        elif has_seconds or has_minutes or has_hours:
+            format = format[:-4]
+        else:
+            format = format.split(" ")[0]
+    else:
+        if not (has_seconds or has_minutes or has_hours):
+            format = format.split(" ")[0]
+    return format
 
 
 class DatetimeColumn(column.ColumnBase):
@@ -203,17 +308,22 @@ class DatetimeColumn(column.ColumnBase):
 
     def to_pandas(
         self,
+        *,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
-        **kwargs,
-    ) -> "cudf.Series":
-        # Workaround until following issue is fixed:
+    ) -> pd.Series:
+        if nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
+        # `copy=True` workaround until following issue is fixed:
         # https://issues.apache.org/jira/browse/ARROW-9772
 
-        # Pandas supports only `datetime64[ns]`, hence the cast.
+        # Pandas only supports `datetime64[ns]` dtype
+        # and conversion to this type is necessary to make
+        # arrow to pandas conversion happen for large values.
         return pd.Series(
-            self.astype("datetime64[ns]").fillna("NaT").values_host,
-            copy=False,
+            self.astype("datetime64[ns]").to_arrow(),
+            copy=True,
+            dtype=self.dtype,
             index=index,
         )
 
@@ -346,6 +456,10 @@ class DatetimeColumn(column.ColumnBase):
             format = _dtype_to_format_conversion.get(
                 self.dtype.name, "%Y-%m-%d %H:%M:%S"
             )
+            if cudf.get_option("mode.pandas_compatible"):
+                format = _get_datetime_format(
+                    self, dtype=self.dtype, time_unit=self.time_unit
+                )
         if format in _DATETIME_SPECIAL_FORMATS:
             names = as_column(_DATETIME_NAMES)
         else:
@@ -424,12 +538,8 @@ class DatetimeColumn(column.ColumnBase):
         )
         lhs, rhs = (other, self) if reflect else (self, other)
         out_dtype = None
-        if op in {
-            "__eq__",
-            "NULL_EQUALS",
-        }:
-            out_dtype = cudf.dtype(np.bool_)
-        elif (
+
+        if (
             op
             in {
                 "__ne__",
@@ -455,11 +565,31 @@ class DatetimeColumn(column.ColumnBase):
             # well-defined if this operation was not invoked via reflection.
             elif other_is_timedelta and not reflect:
                 out_dtype = _resolve_mixed_dtypes(lhs, rhs, "datetime64")
+        elif op in {
+            "__eq__",
+            "NULL_EQUALS",
+            "__ne__",
+        }:
+            out_dtype = cudf.dtype(np.bool_)
+            if isinstance(other, ColumnBase) and not isinstance(
+                other, DatetimeColumn
+            ):
+                result = _all_bools_with_nulls(
+                    self, other, bool_fill_value=op == "__ne__"
+                )
+                if cudf.get_option("mode.pandas_compatible"):
+                    result = result.fillna(op == "__ne__")
+                return result
 
         if out_dtype is None:
             return NotImplemented
 
-        return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
+        result = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
+        if cudf.get_option(
+            "mode.pandas_compatible"
+        ) and out_dtype == cudf.dtype(np.bool_):
+            result = result.fillna(op == "__ne__")
+        return result
 
     def fillna(
         self,
@@ -469,7 +599,7 @@ class DatetimeColumn(column.ColumnBase):
     ) -> DatetimeColumn:
         if fill_value is not None:
             if cudf.utils.utils._isnat(fill_value):
-                return _fillna_natwise(self)
+                return self.copy(deep=True)
             if is_scalar(fill_value):
                 if not isinstance(fill_value, cudf.Scalar):
                     fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
@@ -558,13 +688,18 @@ class DatetimeTZColumn(DatetimeColumn):
 
     def to_pandas(
         self,
+        *,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
-        **kwargs,
-    ) -> "cudf.Series":
-        return self._local_time.to_pandas().dt.tz_localize(
+    ) -> pd.Series:
+        if nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
+        series = self._local_time.to_pandas().dt.tz_localize(
             self.dtype.tz, ambiguous="NaT", nonexistent="NaT"
         )
+        if index is not None:
+            series.index = index
+        return series
 
     def to_arrow(self):
         return pa.compute.assume_timezone(
@@ -595,6 +730,11 @@ class DatetimeTZColumn(DatetimeColumn):
     ) -> "cudf.core.column.StringColumn":
         return self._local_time.as_string_column(dtype, format, **kwargs)
 
+    def get_dt_field(self, field: str) -> ColumnBase:
+        return libcudf.datetime.extract_datetime_component(
+            self._local_time, field
+        )
+
     def __repr__(self):
         # Arrow prints the UTC timestamps, but we want to print the
         # local timestamps:
@@ -606,62 +746,3 @@ class DatetimeTZColumn(DatetimeColumn):
             f"{arr.to_string()}\n"
             f"dtype: {self.dtype}"
         )
-
-
-def infer_format(element: str, **kwargs) -> str:
-    """
-    Infers datetime format from a string, also takes cares for `ms` and `ns`
-    """
-    fmt = _guess_datetime_format(element, **kwargs)
-
-    if fmt is not None:
-        return fmt
-
-    element_parts = element.split(".")
-    if len(element_parts) != 2:
-        raise ValueError("Given date string not likely a datetime.")
-
-    # There is possibility that the element is of following format
-    # '00:00:03.333333 2016-01-01'
-    second_parts = re.split(r"(\D+)", element_parts[1], maxsplit=1)
-    subsecond_fmt = ".%" + str(len(second_parts[0])) + "f"
-
-    first_part = _guess_datetime_format(element_parts[0], **kwargs)
-    # For the case where first_part is '00:00:03'
-    if first_part is None:
-        tmp = "1970-01-01 " + element_parts[0]
-        first_part = _guess_datetime_format(tmp, **kwargs).split(" ", 1)[1]
-    if first_part is None:
-        raise ValueError("Unable to infer the timestamp format from the data")
-
-    if len(second_parts) > 1:
-        # "Z" indicates Zulu time(widely used in aviation) - Which is
-        # UTC timezone that currently cudf only supports. Having any other
-        # unsupported timezone will let the code fail below
-        # with a ValueError.
-        second_parts.remove("Z")
-        second_part = "".join(second_parts[1:])
-
-        if len(second_part) > 1:
-            # Only infer if second_parts is not an empty string.
-            second_part = _guess_datetime_format(second_part, **kwargs)
-    else:
-        second_part = ""
-
-    try:
-        fmt = first_part + subsecond_fmt + second_part
-    except Exception:
-        raise ValueError("Unable to infer the timestamp format from the data")
-
-    return fmt
-
-
-def _resolve_mixed_dtypes(
-    lhs: ColumnBinaryOperand, rhs: ColumnBinaryOperand, base_type: str
-) -> Dtype:
-    units = ["s", "ms", "us", "ns"]
-    lhs_time_unit = cudf.utils.dtypes.get_time_unit(lhs)
-    lhs_unit = units.index(lhs_time_unit)
-    rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
-    rhs_unit = units.index(rhs_time_unit)
-    return cudf.dtype(f"{base_type}[{units[max(lhs_unit, rhs_unit)]}]")

@@ -28,7 +28,7 @@
 
 #include <cstring>  // memset
 
-#include <zlib.h>   // uncompress
+#include <zlib.h>  // uncompress
 
 using cudf::host_span;
 
@@ -47,7 +47,7 @@ struct gz_file_header_s {
   uint8_t os;         // OS id
 };
 
-struct zip_eocd_s          // end of central directory
+struct zip_eocd_s  // end of central directory
 {
   uint32_t sig;            // 0x0605'4b50
   uint16_t disk_id;        // number of this disk
@@ -59,7 +59,7 @@ struct zip_eocd_s          // end of central directory
                          // number uint16_t comment_len;   // comment length (excluded from struct)
 };
 
-struct zip64_eocdl      // end of central dir locator
+struct zip64_eocdl  // end of central dir locator
 {
   uint32_t sig;         // 0x0706'4b50
   uint32_t disk_start;  // number of the disk with the start of the zip64 end of central directory
@@ -67,7 +67,7 @@ struct zip64_eocdl      // end of central dir locator
   uint32_t num_disks;   // total number of disks
 };
 
-struct zip_cdfh_s        // central directory file header
+struct zip_cdfh_s  // central directory file header
 {
   uint32_t sig;          // 0x0201'4b50
   uint16_t ver;          // version made by
@@ -111,7 +111,7 @@ struct bz2_file_header_s {
 
 struct gz_archive_s {
   gz_file_header_s const* fhdr;
-  uint16_t hcrc16;           // header crc16 if present
+  uint16_t hcrc16;  // header crc16 if present
   uint16_t xlen;
   uint8_t const* fxtra;      // xlen bytes (optional)
   uint8_t const* fname;      // zero-terminated original filename if present

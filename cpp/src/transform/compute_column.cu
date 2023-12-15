@@ -69,9 +69,8 @@ __launch_bounds__(max_block_size) __global__
 
   auto thread_intermediate_storage =
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
-  auto const start_idx =
-    static_cast<cudf::thread_index_type>(threadIdx.x + blockIdx.x * blockDim.x);
-  auto const stride = static_cast<cudf::thread_index_type>(blockDim.x * gridDim.x);
+  auto start_idx    = cudf::detail::grid_1d::global_thread_id();
+  auto const stride = cudf::detail::grid_1d::grid_stride();
   auto evaluator =
     cudf::ast::detail::expression_evaluator<has_nulls>(table, device_expression_data);
 

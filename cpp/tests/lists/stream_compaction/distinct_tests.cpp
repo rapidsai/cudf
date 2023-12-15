@@ -529,7 +529,7 @@ TEST_F(ListDistinctTest, InputListsOfStructsHaveNull)
                               2,
                               3,
                               3,
-                              3},     // end list3
+                              3},  // end list3
                              nulls_at({1, 6, 12, 13})};
     auto child2 = strings_col{{       // begin list1
                                "XXX", /*NULL*/
@@ -551,7 +551,7 @@ TEST_F(ListDistinctTest, InputListsOfStructsHaveNull)
                                "ÁBC",
                                "ÁÁÁ",
                                "ÍÍÍÍÍ",
-                               "",      /*NULL*/
+                               "", /*NULL*/
                                "XYZ",
                                "ÁBC"},  // end list3
                               nulls_at({6, 17})};
@@ -670,7 +670,7 @@ TEST_F(ListDistinctTest, InputListsOfNestedStructsHaveNull)
                                      "ÁBC",
                                      "ÁÁÁ",
                                      "ÍÍÍÍÍ",
-                                     "",    /*NULL*/
+                                     "", /*NULL*/
                                      "XYZ",
                                      "ÁBC"  // end list3
                                    },
@@ -729,8 +729,8 @@ TEST_F(ListDistinctTest, InputListsOfStructsOfLists)
                                  floats_lists{3, 4, 5},  // end list2
                                                          // begin list3
                                  floats_lists{},
-                                 floats_lists{},         // end list3
-                                                         // begin list4
+                                 floats_lists{},  // end list3
+                                                  // begin list4
                                  floats_lists{6, 7},
                                  floats_lists{6, 7},
                                  floats_lists{6, 7}};

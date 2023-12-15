@@ -49,15 +49,15 @@ enum class is_int96_timestamp { YES, NO };
 template <io_file_format IO, is_int96_timestamp INT96>
 struct conversion_map;
 
-// Every timestamp or duration type is converted to milliseconds in ORC statistics
+// Every timestamp or duration type is converted to nanoseconds in ORC statistics
 template <is_int96_timestamp INT96>
 struct conversion_map<io_file_format::ORC, INT96> {
-  using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ms>,
-                           std::pair<cudf::timestamp_us, cudf::timestamp_ms>,
-                           std::pair<cudf::timestamp_ns, cudf::timestamp_ms>,
-                           std::pair<cudf::duration_s, cudf::duration_ms>,
-                           std::pair<cudf::duration_us, cudf::duration_ms>,
-                           std::pair<cudf::duration_ns, cudf::duration_ms>>;
+  using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ns>,
+                           std::pair<cudf::timestamp_us, cudf::timestamp_ns>,
+                           std::pair<cudf::timestamp_ns, cudf::timestamp_ns>,
+                           std::pair<cudf::duration_s, cudf::duration_ns>,
+                           std::pair<cudf::duration_us, cudf::duration_ns>,
+                           std::pair<cudf::duration_ns, cudf::duration_ns>>;
 };
 
 // In Parquet timestamps and durations with second resolution are converted to
@@ -125,7 +125,7 @@ class extrema_type {
 
   using non_arithmetic_extrema_type = typename std::conditional_t<
     cudf::is_fixed_point<T>() or cudf::is_duration<T>() or cudf::is_timestamp<T>(),
-    typename std::conditional_t<std::is_same_v<T, numeric::decimal128>, __int128_t, int64_t>,
+    typename std::conditional_t<cudf::is_fixed_point<T>(), __int128_t, int64_t>,
     typename std::conditional_t<
       std::is_same_v<T, string_view>,
       string_view,
@@ -134,8 +134,7 @@ class extrema_type {
   // unsigned int/bool -> uint64_t
   // signed int        -> int64_t
   // float/double      -> double
-  // decimal32/64      -> int64_t
-  // decimal128        -> __int128_t
+  // decimal32/64/128  -> __int128_t
   // duration_[T]      -> int64_t
   // string_view       -> string_view
   // byte_array_view   -> byte_array_view

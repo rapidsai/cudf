@@ -226,10 +226,10 @@ TEST_F(StringsConvertTest, UrlDecodeLargeStrings)
 
 TEST_F(StringsConvertTest, ZeroSizeUrlStringsColumn)
 {
-  cudf::column_view zero_size_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  auto results = cudf::strings::url_encode(zero_size_column);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
+
+  auto results = cudf::strings::url_encode(zero_size_strings_column);
   cudf::test::expect_column_empty(results->view());
-  results = cudf::strings::url_decode(zero_size_column);
+  results = cudf::strings::url_decode(zero_size_strings_column);
   cudf::test::expect_column_empty(results->view());
 }

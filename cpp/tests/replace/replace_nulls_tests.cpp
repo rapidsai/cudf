@@ -46,8 +46,7 @@ TEST_F(ReplaceErrorTest, SizeMismatch)
                                                                {0, 0, 1, 1, 1, 1, 1, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> values_to_replace_column{{10, 11, 12, 13}};
 
-  ASSERT_THROW(cudf::replace_nulls(input_column, values_to_replace_column, mr()),
-               cudf::logic_error);
+  ASSERT_THROW(cudf::replace_nulls(input_column, values_to_replace_column), cudf::logic_error);
 }
 
 // Error: column type mismatch
@@ -58,8 +57,7 @@ TEST_F(ReplaceErrorTest, TypeMismatch)
   cudf::test::fixed_width_column_wrapper<float> values_to_replace_column{
     {10, 11, 12, 13, 14, 15, 16, 17}};
 
-  EXPECT_THROW(cudf::replace_nulls(input_column, values_to_replace_column, mr()),
-               cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nulls(input_column, values_to_replace_column), cudf::logic_error);
 }
 
 // Error: column type mismatch
@@ -69,7 +67,7 @@ TEST_F(ReplaceErrorTest, TypeMismatchScalar)
                                                                {0, 0, 1, 1, 1, 1, 1, 1}};
   cudf::numeric_scalar<float> replacement(1);
 
-  EXPECT_THROW(cudf::replace_nulls(input_column, replacement, mr()), cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nulls(input_column, replacement), cudf::logic_error);
 }
 
 struct ReplaceNullsStringsTest : public cudf::test::BaseFixture {};
@@ -88,7 +86,7 @@ TEST_F(ReplaceNullsStringsTest, SimpleReplace)
     replacement.begin(), replacement.end(), replacement_v.begin()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
@@ -107,7 +105,7 @@ TEST_F(ReplaceNullsStringsTest, ReplaceWithNulls)
     replacement.begin(), replacement.end(), replacement_v.begin()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
@@ -125,7 +123,7 @@ TEST_F(ReplaceNullsStringsTest, ReplaceWithAllNulls)
   cudf::test::strings_column_wrapper expected_w{input.begin(), input.end(), input_v.begin()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
@@ -143,7 +141,7 @@ TEST_F(ReplaceNullsStringsTest, ReplaceWithAllEmpty)
   cudf::test::strings_column_wrapper expected_w{input.begin(), input.end(), replacement_v.begin()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
@@ -161,7 +159,7 @@ TEST_F(ReplaceNullsStringsTest, ReplaceNone)
   cudf::test::strings_column_wrapper expected_w{input.begin(), input.end()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected_w);
 }
@@ -170,8 +168,7 @@ TEST_F(ReplaceNullsStringsTest, SimpleReplaceScalar)
 {
   std::vector<std::string> input{"", "", "", "", "", "", "", ""};
   std::vector<cudf::valid_type> input_v{0, 0, 0, 0, 0, 0, 0, 0};
-  std::unique_ptr<cudf::scalar> repl =
-    cudf::make_string_scalar("rep", cudf::get_default_stream(), mr());
+  std::unique_ptr<cudf::scalar> repl = cudf::make_string_scalar("rep");
   repl->set_valid_async(true, cudf::get_default_stream());
   std::vector<std::string> expected{"rep", "rep", "rep", "rep", "rep", "rep", "rep", "rep"};
 
@@ -179,7 +176,7 @@ TEST_F(ReplaceNullsStringsTest, SimpleReplaceScalar)
   cudf::test::strings_column_wrapper expected_w{expected.begin(), expected.end()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, *repl, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, *repl));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
