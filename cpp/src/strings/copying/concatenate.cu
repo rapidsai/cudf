@@ -259,7 +259,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
       d_partition_offsets.data(),
       static_cast<size_type>(columns.size()),
       strings_count,
-      itr_new_offsets,  // d_new_offsets,
+      itr_new_offsets,
       reinterpret_cast<bitmask_type*>(null_mask.data()),
       d_valid_count.data());
 
