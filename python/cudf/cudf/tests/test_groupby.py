@@ -446,6 +446,7 @@ def groupby_jit_data_nans(groupby_jit_data_small):
     """
 
     df = groupby_jit_data_small.sort_values(["key1", "key2"])
+    df["val1"] = df["val1"].astype("float64")
     df["val1"][::2] = np.nan
     df = df.sample(frac=1).reset_index(drop=True)
     return df
@@ -510,14 +511,7 @@ def test_groupby_apply_jit_unary_reductions(
 ):
     dataset = groupby_jit_datasets[dataset]
 
-    if func in {"sum", "mean", "var", "std"} and dtype == "int32":
-        with pytest.xfail(
-            reason="https://github.com/rapidsai/cudf/issues/13873"
-        ):
-            groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
-        return
-    else:
-        groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
+    groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
 
 
 # test unary reductions for special values
@@ -634,12 +628,7 @@ def test_groupby_apply_jit_sum_integer_overflow(dtype):
                 ),
             ],
         ),
-        pytest.param(
-            "large",
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/13875"
-            ),
-        ),
+        "large",
     ],
 )
 def test_groupby_apply_jit_correlation(dataset, groupby_jit_datasets, dtype):
@@ -654,7 +643,7 @@ def test_groupby_apply_jit_correlation(dataset, groupby_jit_datasets, dtype):
     def func(group):
         return group["val1"].corr(group["val2"])
 
-    if dtype.kind == "f":
+    if np.dtype(dtype).kind == "f":
         # Feature Request:
         # https://github.com/rapidsai/cudf/issues/13839
         m = (
@@ -697,7 +686,9 @@ def test_groupby_apply_jit_invalid_unary_ops_error(groupby_jit_data_small, op):
 
 
 @pytest.mark.parametrize("op", arith_ops + comparison_ops)
-def test_groupby_apply_jit_invalid_binary_ops_error(groupby_jit_data_small, op):
+def test_groupby_apply_jit_invalid_binary_ops_error(
+    groupby_jit_data_small, op
+):
     keys = ["key1"]
 
     def func(group):
