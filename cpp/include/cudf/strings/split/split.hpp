@@ -143,7 +143,7 @@ std::unique_ptr<table> rsplit(
  *
  * A null string element will result in a null list item for that row.
  *
- * @throw cudf:logic_error if `delimiter` is invalid.
+ * @throw cudf::logic_error if `delimiter` is invalid.
  *
  * @param strings A column of string elements to be split
  * @param delimiter The string to identify split points in each string;
@@ -222,7 +222,7 @@ std::unique_ptr<column> split_record(
  *
  * A null string element will result in a null list item for that row.
  *
- * @throw cudf:logic_error if `delimiter` is invalid.
+ * @throw cudf::logic_error if `delimiter` is invalid.
  *
  * @param strings A column of string elements to be split
  * @param delimiter The string to identify split points in each string;

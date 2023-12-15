@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,11 @@
 #include <cstdint>
 
 namespace cudf::io::orc {
+/**
+ * @addtogroup io_types
+ * @{
+ * @file
+ */
 
 enum CompressionKind : uint8_t {
   NONE   = 0,
@@ -83,4 +88,5 @@ enum ProtofType : uint8_t {
   INVALID_7   = 7,
 };
 
+/** @} */  // end of group
 }  // namespace cudf::io::orc
