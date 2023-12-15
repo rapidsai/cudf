@@ -279,13 +279,14 @@ texinfo_documents = [
 
 # Example configuration for intersphinx: refer to the Python standard library.
 intersphinx_mapping = {
-    "python": ("https://docs.python.org/3", None),
     "cupy": ("https://docs.cupy.dev/en/stable/", None),
+    "dlpack": ("https://dmlc.github.io/dlpack/latest/", None),
     "numpy": ("https://numpy.org/doc/stable", None),
-    "pyarrow": ("https://arrow.apache.org/docs/", None),
     "pandas": ("https://pandas.pydata.org/docs/", None),
-    "typing_extensions": ("https://typing-extensions.readthedocs.io/en/stable/", None),
+    "pyarrow": ("https://arrow.apache.org/docs/", None),
+    "python": ("https://docs.python.org/3", None),
     "rmm": ("https://docs.rapids.ai/api/rmm/nightly/", None),
+    "typing_extensions": ("https://typing-extensions.readthedocs.io/en/stable/", None),
 }
 
 # Config numpydoc
@@ -372,9 +373,6 @@ def on_missing_reference(app, env, node, contnode):
         # Unsupported by Breathe
         # https://github.com/breathe-doc/breathe/issues/355
         "deprecated",
-        # TODO: This should be possible to crosslink by adding the dlpack
-        # Sphinx docs to the inventory.
-        "DLManagedTensor",
         # TODO: This type is currently defined in a detail header but it's in
         # the public namespace. However, it's used in the detail header, so it
         # needs to be put into a public header that can be shared.
