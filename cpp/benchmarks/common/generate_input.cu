@@ -53,6 +53,8 @@
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
+#include <cuda/functional>
+
 #include <algorithm>
 #include <cstdint>
 #include <memory>
@@ -118,13 +120,27 @@ size_t non_fixed_width_size<cudf::string_view>(data_profile const& profile)
   return get_distribution_mean(dist);
 }
 
+double geometric_sum(size_t n, double p)
+{
+  if (p == 1) { return n; }
+  return (1 - std::pow(p, n)) / (1 - p);
+}
+
 template <>
 size_t non_fixed_width_size<cudf::list_view>(data_profile const& profile)
 {
   auto const dist_params       = profile.get_distribution_params<cudf::list_view>();
   auto const single_level_mean = get_distribution_mean(dist_params.length_params);
-  auto const element_size = avg_element_size(profile, cudf::data_type{dist_params.element_type});
-  return element_size * pow(single_level_mean, dist_params.max_depth);
+
+  auto const element_size  = avg_element_size(profile, cudf::data_type{dist_params.element_type});
+  auto const element_count = std::pow(single_level_mean, dist_params.max_depth);
+
+  // Each nesting level includes offsets, this is the sum of all levels
+  // Also include an additional offset per level for the size of the last element
+  auto const total_offset_count =
+    geometric_sum(dist_params.max_depth, single_level_mean) + dist_params.max_depth;
+
+  return sizeof(cudf::size_type) * total_offset_count + element_size * element_count;
 }
 
 template <>
@@ -233,12 +249,12 @@ struct random_value_fn<T, std::enable_if_t<cudf::is_chrono<T>()>> {
       sec.end(),
       ns.begin(),
       result.begin(),
-      [] __device__(int64_t sec_value, int64_t nanoseconds_value) {
+      cuda::proclaim_return_type<T>([] __device__(int64_t sec_value, int64_t nanoseconds_value) {
         auto const timestamp_ns =
           cudf::duration_s{sec_value} + cudf::duration_ns{nanoseconds_value};
         // Return value in the type's precision
         return T(cuda::std::chrono::duration_cast<typename T::duration>(timestamp_ns));
-      });
+      }));
     return result;
   }
 };
@@ -353,12 +369,13 @@ rmm::device_uvector<cudf::size_type> sample_indices_with_run_length(cudf::size_t
     // This is gather.
     auto avg_repeated_sample_indices_iterator = thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
-      [rb              = run_lens.begin(),
-       re              = run_lens.end(),
-       samples_indices = samples_indices.begin()] __device__(cudf::size_type i) {
-        auto sample_idx = thrust::upper_bound(thrust::seq, rb, re, i) - rb;
-        return samples_indices[sample_idx];
-      });
+      cuda::proclaim_return_type<cudf::size_type>(
+        [rb              = run_lens.begin(),
+         re              = run_lens.end(),
+         samples_indices = samples_indices.begin()] __device__(cudf::size_type i) {
+          auto sample_idx = thrust::upper_bound(thrust::seq, rb, re, i) - rb;
+          return samples_indices[sample_idx];
+        }));
     rmm::device_uvector<cudf::size_type> repeated_sample_indices(num_rows,
                                                                  cudf::get_default_stream());
     thrust::copy(thrust::device,
@@ -499,7 +516,7 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
     lengths.end(),
     null_mask.begin(),
     lengths.begin(),
-    [] __device__(auto) { return 0; },
+    cuda::proclaim_return_type<cudf::size_type>([] __device__(auto) { return 0; }),
     thrust::logical_not<bool>{});
   auto valid_lengths = thrust::make_transform_iterator(
     thrust::make_zip_iterator(thrust::make_tuple(lengths.begin(), null_mask.begin())),
@@ -522,10 +539,10 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
                            rmm::mr::get_current_device_resource());
   return cudf::make_strings_column(
     num_rows,
-    std::move(offsets),
-    std::move(chars),
-    profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{},
-    null_count);
+    std::make_unique<cudf::column>(std::move(offsets), rmm::device_buffer{}, 0),
+    std::make_unique<cudf::column>(std::move(chars), rmm::device_buffer{}, 0),
+    null_count,
+    profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{});
 }
 
 /**

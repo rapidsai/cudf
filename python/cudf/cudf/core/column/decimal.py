@@ -10,14 +10,13 @@ import pyarrow as pa
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
 from cudf._typing import ColumnBinaryOperand, Dtype
 from cudf.api.types import is_integer_dtype, is_scalar
 from cudf.core.buffer import as_buffer
-from cudf.core.column import ColumnBase, as_column
+from cudf.core.column import ColumnBase
 from cudf.core.dtypes import (
     Decimal32Dtype,
     Decimal64Dtype,
@@ -59,7 +58,29 @@ class DecimalBaseColumn(NumericalBaseColumn):
             return cpp_from_decimal(self)
         else:
             return cast(
-                "cudf.core.column.StringColumn", as_column([], dtype="object")
+                cudf.core.column.StringColumn,
+                cudf.core.column.column_empty(0, dtype="object"),
+            )
+
+    def __pow__(self, other):
+        if isinstance(other, int):
+            if other == 0:
+                res = cudf.core.column.full(
+                    size=len(self), fill_value=1, dtype=self.dtype
+                )
+                if self.nullable:
+                    res = res.set_mask(self.mask)
+                return res
+            elif other < 0:
+                raise TypeError("Power of negative integers not supported.")
+            res = self
+            for _ in range(other - 1):
+                res = self * res
+            return res
+        else:
+            raise NotImplementedError(
+                f"__pow__ of types {self.dtype} and {type(other)} is "
+                "not yet implemented."
             )
 
     # Decimals in libcudf don't support truediv, see
@@ -126,10 +147,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 "integer values"
             )
 
-        result = libcudf.replace.replace_nulls(
-            input_col=self, replacement=value, method=method, dtype=dtype
-        )
-        return result._with_type_metadata(self.dtype)
+        return super().fillna(value=value, method=method)
 
     def normalize_binop_value(self, other):
         if isinstance(other, ColumnBase):
@@ -174,15 +192,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
     ) -> ColumnBase:
         quant = [float(q)] if not isinstance(q, (Sequence, np.ndarray)) else q
         # get sorted indices and exclude nulls
-        sorted_indices = self.as_frame()._get_sorted_inds(
-            ascending=True, na_position="first"
+        indices = libcudf.sort.order_by(
+            [self], [True], "first", stable=True
+        ).slice(self.null_count, len(self))
+        result = libcudf.quantiles.quantile(
+            self, quant, interpolation, indices, exact
         )
-        sorted_indices = sorted_indices[self.null_count :]
-
-        result = cpp_quantile(
-            self, quant, interpolation, sorted_indices, exact
-        )
-
         return result._with_type_metadata(self.dtype)
 
     def as_numerical_column(

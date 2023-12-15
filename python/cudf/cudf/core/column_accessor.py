@@ -17,6 +17,7 @@ from typing import (
     Union,
 )
 
+import numpy as np
 import pandas as pd
 from packaging.version import Version
 from pandas.api.types import is_bool
@@ -26,6 +27,7 @@ import cudf
 from cudf.core import column
 
 if TYPE_CHECKING:
+    from cudf._typing import Dtype
     from cudf.core.column import ColumnBase
 
 
@@ -95,6 +97,12 @@ class ColumnAccessor(abc.MutableMapping):
         Tuple containing names for each of the levels.
         For a non-hierarchical index, a tuple of size 1
         may be passe.
+    rangeindex : bool, optional
+        Whether the keys should be returned as a RangeIndex
+        in `to_pandas_index` (default=False).
+    label_dtype : Dtype, optional
+        What dtype should be returned in `to_pandas_index`
+        (default=None).
     """
 
     _data: "Dict[Any, ColumnBase]"
@@ -106,7 +114,11 @@ class ColumnAccessor(abc.MutableMapping):
         data: Union[abc.MutableMapping, ColumnAccessor, None] = None,
         multiindex: bool = False,
         level_names=None,
+        rangeindex: bool = False,
+        label_dtype: Dtype | None = None,
     ):
+        self.rangeindex = rangeindex
+        self.label_dtype = label_dtype
         if data is None:
             data = {}
         # TODO: we should validate the keys of `data`
@@ -116,6 +128,8 @@ class ColumnAccessor(abc.MutableMapping):
             self._data = data._data
             self.multiindex = multiindex
             self._level_names = level_names
+            self.rangeindex = data.rangeindex
+            self.label_dtype = data.label_dtype
         else:
             # This code path is performance-critical for copies and should be
             # modified with care.
@@ -143,6 +157,8 @@ class ColumnAccessor(abc.MutableMapping):
         data: Dict[Any, ColumnBase],
         multiindex: bool = False,
         level_names=None,
+        rangeindex: bool = False,
+        label_dtype: Dtype | None = None,
     ) -> ColumnAccessor:
         # create a ColumnAccessor without verifying column
         # type or size
@@ -150,6 +166,8 @@ class ColumnAccessor(abc.MutableMapping):
         obj._data = data
         obj.multiindex = multiindex
         obj._level_names = level_names
+        obj.rangeindex = rangeindex
+        obj.label_dtype = label_dtype
         return obj
 
     def __iter__(self):
@@ -197,8 +215,6 @@ class ColumnAccessor(abc.MutableMapping):
 
     @property
     def name(self) -> Any:
-        if len(self._data) == 0:
-            return None
         return self.level_names[-1]
 
     @property
@@ -268,7 +284,31 @@ class ColumnAccessor(abc.MutableMapping):
                     ),
                 )
         else:
-            result = pd.Index(self.names, name=self.name, tupleize_cols=False)
+            # Determine if we can return a RangeIndex
+            if self.rangeindex:
+                if not self.names:
+                    return pd.RangeIndex(
+                        start=0, stop=0, step=1, name=self.name
+                    )
+                elif cudf.api.types.infer_dtype(self.names) == "integer":
+                    if len(self.names) == 1:
+                        start = self.names[0]
+                        return pd.RangeIndex(
+                            start=start, stop=start + 1, step=1, name=self.name
+                        )
+                    uniques = np.unique(np.diff(np.array(self.names)))
+                    if len(uniques) == 1 and uniques[0] != 0:
+                        diff = uniques[0]
+                        new_range = range(
+                            self.names[0], self.names[-1] + diff, diff
+                        )
+                        return pd.RangeIndex(new_range, name=self.name)
+            result = pd.Index(
+                self.names,
+                name=self.name,
+                tupleize_cols=False,
+                dtype=self.label_dtype,
+            )
         return result
 
     def insert(
@@ -511,7 +551,7 @@ class ColumnAccessor(abc.MutableMapping):
     def _select_by_label_grouped(self, key: Any) -> ColumnAccessor:
         result = self._grouped_data[key]
         if isinstance(result, cudf.core.column.ColumnBase):
-            return self.__class__({key: result})
+            return self.__class__({key: result}, multiindex=self.multiindex)
         else:
             if self.multiindex:
                 result = _to_flat_dict(result)

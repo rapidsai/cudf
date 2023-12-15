@@ -110,6 +110,8 @@ enum token_t : PdaTokenT {
   ValueEnd,
   /// Beginning-of-error token (on first encounter of a parsing error)
   ErrorBegin,
+  /// Delimiting a JSON line for error recovery
+  LineEnd,
   /// Total number of tokens
   NUM_TOKENS
 };

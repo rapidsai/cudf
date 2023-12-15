@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ struct concat_strings_base {
   table_device_view const d_table;
   string_scalar_device_view const d_narep;
   separator_on_nulls separate_nulls;
-  offset_type* d_offsets{};
+  size_type* d_offsets{};
   char* d_chars{};
 
   /**
@@ -72,7 +72,7 @@ struct concat_strings_base {
     }
 
     char* d_buffer       = d_chars ? d_chars + d_offsets[idx] : nullptr;
-    offset_type bytes    = 0;
+    size_type bytes      = 0;
     bool write_separator = false;
 
     for (auto itr = d_table.begin(); itr < d_table.end(); ++itr) {
@@ -267,11 +267,11 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     string_scalar const& separator,
                                     string_scalar const& narep,
                                     separator_on_nulls separate_nulls,
+                                    rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(
-    strings_columns, separator, narep, separate_nulls, cudf::get_default_stream(), mr);
+  return detail::concatenate(strings_columns, separator, narep, separate_nulls, stream, mr);
 }
 
 std::unique_ptr<column> concatenate(table_view const& strings_columns,
@@ -279,16 +279,12 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     string_scalar const& separator_narep,
                                     string_scalar const& col_narep,
                                     separator_on_nulls separate_nulls,
+                                    rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(strings_columns,
-                             separators,
-                             separator_narep,
-                             col_narep,
-                             separate_nulls,
-                             cudf::get_default_stream(),
-                             mr);
+  return detail::concatenate(
+    strings_columns, separators, separator_narep, col_narep, separate_nulls, stream, mr);
 }
 
 }  // namespace strings

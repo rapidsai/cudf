@@ -173,7 +173,7 @@ ConfigureBench(ITERATOR_BENCH iterator/iterator.cu)
 # ##################################################################################################
 # * search benchmark ------------------------------------------------------------------------------
 ConfigureBench(SEARCH_BENCH search/search.cpp)
-ConfigureNVBench(SEARCH_NVBENCH search/contains.cpp)
+ConfigureNVBench(SEARCH_NVBENCH search/contains_scalar.cpp search/contains_table.cpp)
 
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
@@ -224,11 +224,13 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * hashing benchmark -----------------------------------------------------------------------------
-ConfigureBench(HASHING_BENCH hashing/hash.cpp hashing/partition.cpp)
+ConfigureBench(HASHING_BENCH hashing/partition.cpp)
+ConfigureNVBench(HASHING_NVBENCH hashing/hash.cpp)
 
 # ##################################################################################################
 # * merge benchmark -------------------------------------------------------------------------------
 ConfigureBench(MERGE_BENCH merge/merge.cpp)
+ConfigureNVBench(MERGE_NVBENCH merge/merge_structs.cpp merge/merge_lists.cpp)
 
 # ##################################################################################################
 # * null_mask benchmark ---------------------------------------------------------------------------
@@ -275,8 +277,8 @@ ConfigureBench(BINARYOP_BENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.c
 ConfigureBench(TEXT_BENCH text/ngrams.cpp text/subword.cpp)
 
 ConfigureNVBench(
-  TEXT_NVBENCH text/hash_ngrams.cpp text/minhash.cpp text/normalize.cpp text/replace.cpp
-  text/tokenize.cpp
+  TEXT_NVBENCH text/edit_distance.cpp text/hash_ngrams.cpp text/jaccard.cpp text/minhash.cpp
+  text/normalize.cpp text/replace.cpp text/tokenize.cpp text/vocab.cpp
 )
 
 # ##################################################################################################
@@ -295,7 +297,6 @@ ConfigureBench(
   string/repeat_strings.cpp
   string/replace.cpp
   string/slice.cpp
-  string/split.cpp
   string/translate.cpp
   string/url_decode.cu
 )
@@ -313,12 +314,13 @@ ConfigureNVBench(
   string/like.cpp
   string/replace_re.cpp
   string/reverse.cpp
+  string/split.cpp
   string/split_re.cpp
 )
 
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
-ConfigureBench(JSON_BENCH string/json.cu)
+ConfigureBench(JSON_BENCH json/json.cu)
 ConfigureNVBench(FST_NVBENCH io/fst.cu)
 ConfigureNVBench(JSON_READER_NVBENCH io/json/nested_json.cpp io/json/json_reader_input.cpp)
 ConfigureNVBench(JSON_WRITER_NVBENCH io/json/json_writer.cpp)

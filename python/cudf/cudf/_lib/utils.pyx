@@ -11,7 +11,6 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from cudf._lib cimport pylibcudf
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column, column_view
 from cudf._lib.cpp.table.table cimport table
@@ -68,17 +67,17 @@ cdef vector[column_view] make_column_views(object columns):
     return views
 
 
-cdef vector[string] get_column_names(object table, object index):
+cdef vector[string] get_column_names(object tbl, object index):
     cdef vector[string] column_names
     if index is not False:
-        if isinstance(table._index, cudf.core.multiindex.MultiIndex):
-            for idx_name in table._index.names:
+        if isinstance(tbl._index, cudf.core.multiindex.MultiIndex):
+            for idx_name in tbl._index.names:
                 column_names.push_back(str.encode(idx_name))
         else:
-            if table._index.name is not None:
-                column_names.push_back(str.encode(table._index.name))
+            if tbl._index.name is not None:
+                column_names.push_back(str.encode(tbl._index.name))
 
-    for col_name in table._column_names:
+    for col_name in tbl._column_names:
         column_names.push_back(str.encode(col_name))
 
     return column_names
@@ -247,7 +246,7 @@ cdef columns_from_unique_ptr(
     return columns
 
 
-cdef columns_from_pylibcudf_table(pylibcudf.Table table):
+cdef columns_from_pylibcudf_table(tbl):
     """Convert a pylibcudf table into list of columns.
 
     Parameters
@@ -260,8 +259,7 @@ cdef columns_from_pylibcudf_table(pylibcudf.Table table):
     list[Column]
         A list of columns.
     """
-    cdef pylibcudf.Column plc
-    return [Column.from_pylibcudf(plc) for plc in table.columns]
+    return [Column.from_pylibcudf(plc) for plc in tbl.columns()]
 
 
 cdef data_from_unique_ptr(

@@ -68,7 +68,7 @@ struct replace_regex_fn {
       if (!match) { break; }  // no more matches
 
       auto const [start_pos, end_pos] = match_positions_to_bytes(*match, d_str, last_pos);
-      nbytes += d_repl.size_bytes() - (end_pos - start_pos);               // add new size
+      nbytes += d_repl.size_bytes() - (end_pos - start_pos);  // add new size
 
       if (out_ptr) {                                                       // replace:
                                                                            // i:bbbbsssseeee
@@ -134,11 +134,11 @@ std::unique_ptr<column> replace_re(strings_column_view const& strings,
                                    regex_program const& prog,
                                    string_scalar const& replacement,
                                    std::optional<size_type> max_replace_count,
+                                   rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_re(
-    strings, prog, replacement, max_replace_count, cudf::get_default_stream(), mr);
+  return detail::replace_re(strings, prog, replacement, max_replace_count, stream, mr);
 }
 
 }  // namespace strings

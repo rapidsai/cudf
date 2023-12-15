@@ -158,11 +158,12 @@ def read_json(
     if dtype is True or isinstance(dtype, abc.Mapping):
         # There exists some dtypes in the result columns that is inferred.
         # Find them and map them to the default dtypes.
-        dtype = {} if dtype is True else dtype
+        specified_dtypes = {} if dtype is True else dtype
+        df_dtypes = df._dtypes
         unspecified_dtypes = {
-            name: df._dtypes[name]
+            name: df_dtypes[name]
             for name in df._column_names
-            if name not in dtype
+            if name not in specified_dtypes
         }
         default_dtypes = {}
 
@@ -176,6 +177,13 @@ def read_json(
         df = df.astype(default_dtypes)
 
     return df
+
+
+def maybe_return_nullable_pd_obj(cudf_obj):
+    try:
+        return cudf_obj.to_pandas(nullable=True)
+    except NotImplementedError:
+        return cudf_obj.to_pandas(nullable=False)
 
 
 @ioutils.doc_to_json()
@@ -227,7 +235,14 @@ def to_json(
             return path_or_buf.read()
     elif engine == "pandas":
         warnings.warn("Using CPU via Pandas to write JSON dataset")
-        pd_value = cudf_val.to_pandas(nullable=True)
+        if isinstance(cudf_val, cudf.DataFrame):
+            pd_data = {
+                col: maybe_return_nullable_pd_obj(series)
+                for col, series in cudf_val.items()
+            }
+            pd_value = pd.DataFrame(pd_data)
+        else:
+            pd_value = maybe_return_nullable_pd_obj(cudf_val)
         return pd.io.json.to_json(
             path_or_buf,
             pd_value,

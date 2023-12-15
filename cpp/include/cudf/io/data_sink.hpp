@@ -30,6 +30,13 @@
 namespace cudf {
 //! IO interfaces
 namespace io {
+
+/**
+ * @addtogroup io_datasinks
+ * @{
+ * @file
+ */
+
 /**
  * @brief Interface class for storing the output data from the writers
  */
@@ -200,5 +207,6 @@ class data_sink {
   virtual size_t bytes_written() = 0;
 };
 
+/** @} */  // end of group
 }  // namespace io
 }  // namespace cudf

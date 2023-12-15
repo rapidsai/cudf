@@ -67,10 +67,9 @@ auto make_test_json_data(nvbench::state& state)
 // Type used to represent the atomic symbol type used within the finite-state machine
 using SymbolT = char;
 // Type sufficiently large to index symbols within the input and output (may be unsigned)
-using SymbolOffsetT = uint32_t;
-// Helper class to set up transition table, symbol group lookup table, and translation table
-using DfaFstT = cudf::io::fst::detail::Dfa<char, NUM_SYMBOL_GROUPS, TT_NUM_STATES>;
-constexpr std::size_t single_item = 1;
+using SymbolOffsetT                       = uint32_t;
+constexpr std::size_t single_item         = 1;
+constexpr auto max_translation_table_size = TT_NUM_STATES * NUM_SYMBOL_GROUPS;
 
 }  // namespace
 
@@ -94,7 +93,11 @@ void BM_FST_JSON(nvbench::state& state)
   cudf::detail::hostdevice_vector<SymbolOffsetT> out_indexes_gpu(d_input.size(), stream_view);
 
   // Run algorithm
-  DfaFstT parser{pda_sgs, pda_state_tt, pda_out_tt, stream.value()};
+  auto parser = cudf::io::fst::detail::make_fst(
+    cudf::io::fst::detail::make_symbol_group_lut(pda_sgs),
+    cudf::io::fst::detail::make_transition_table(pda_state_tt),
+    cudf::io::fst::detail::make_translation_table<max_translation_table_size>(pda_out_tt),
+    stream);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
@@ -129,7 +132,11 @@ void BM_FST_JSON_no_outidx(nvbench::state& state)
   cudf::detail::hostdevice_vector<SymbolOffsetT> out_indexes_gpu(d_input.size(), stream_view);
 
   // Run algorithm
-  DfaFstT parser{pda_sgs, pda_state_tt, pda_out_tt, stream.value()};
+  auto parser = cudf::io::fst::detail::make_fst(
+    cudf::io::fst::detail::make_symbol_group_lut(pda_sgs),
+    cudf::io::fst::detail::make_transition_table(pda_state_tt),
+    cudf::io::fst::detail::make_translation_table<max_translation_table_size>(pda_out_tt),
+    stream);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
@@ -162,7 +169,11 @@ void BM_FST_JSON_no_out(nvbench::state& state)
   cudf::detail::hostdevice_vector<SymbolOffsetT> output_gpu_size(single_item, stream_view);
 
   // Run algorithm
-  DfaFstT parser{pda_sgs, pda_state_tt, pda_out_tt, stream.value()};
+  auto parser = cudf::io::fst::detail::make_fst(
+    cudf::io::fst::detail::make_symbol_group_lut(pda_sgs),
+    cudf::io::fst::detail::make_transition_table(pda_state_tt),
+    cudf::io::fst::detail::make_translation_table<max_translation_table_size>(pda_out_tt),
+    stream);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
@@ -196,7 +207,11 @@ void BM_FST_JSON_no_str(nvbench::state& state)
   cudf::detail::hostdevice_vector<SymbolOffsetT> out_indexes_gpu(d_input.size(), stream_view);
 
   // Run algorithm
-  DfaFstT parser{pda_sgs, pda_state_tt, pda_out_tt, stream.value()};
+  auto parser = cudf::io::fst::detail::make_fst(
+    cudf::io::fst::detail::make_symbol_group_lut(pda_sgs),
+    cudf::io::fst::detail::make_transition_table(pda_state_tt),
+    cudf::io::fst::detail::make_translation_table<max_translation_table_size>(pda_out_tt),
+    stream);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {

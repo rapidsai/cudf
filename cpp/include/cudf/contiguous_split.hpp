@@ -28,7 +28,7 @@ namespace cudf {
  * @addtogroup column_copy
  * @{
  * @file
- * @brief Table APIs for contiguous_split, pack, unpack, and metadadata
+ * @brief Table APIs for contiguous_split, pack, unpack, and metadata
  */
 
 /**

@@ -149,8 +149,7 @@ TEST_F(StringsCombineTest, ConcatenateSkipNulls)
 
 TEST_F(StringsCombineTest, ConcatZeroSizeStringsColumns)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
   std::vector<cudf::column_view> strings_columns;
   strings_columns.push_back(zero_size_strings_column);
   strings_columns.push_back(zero_size_strings_column);
@@ -161,8 +160,8 @@ TEST_F(StringsCombineTest, ConcatZeroSizeStringsColumns)
 
 TEST_F(StringsCombineTest, SingleColumnErrorCheck)
 {
-  cudf::column_view col0(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  EXPECT_THROW(cudf::strings::concatenate(cudf::table_view{{col0}}), cudf::logic_error);
+  auto const col0 = cudf::make_empty_column(cudf::type_id::STRING);
+  EXPECT_THROW(cudf::strings::concatenate(cudf::table_view{{col0->view()}}), cudf::logic_error);
 }
 
 struct StringsConcatenateWithColSeparatorTest : public cudf::test::BaseFixture {};
@@ -180,7 +179,7 @@ TEST_F(StringsConcatenateWithColSeparatorTest, ExceptionTests)
   }
 
   {
-    cudf::column_view col0(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+    auto const col0 = cudf::make_empty_column(cudf::type_id::STRING)->view();
     cudf::test::fixed_width_column_wrapper<int64_t> col1{{1}};
 
     EXPECT_THROW(
@@ -200,8 +199,7 @@ TEST_F(StringsConcatenateWithColSeparatorTest, ExceptionTests)
 
 TEST_F(StringsConcatenateWithColSeparatorTest, ZeroSizedColumns)
 {
-  cudf::column_view col0(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-
+  auto const col0 = cudf::make_empty_column(cudf::type_id::STRING)->view();
   auto results =
     cudf::strings::concatenate(cudf::table_view{{col0}}, cudf::strings_column_view(col0));
   cudf::test::expect_column_empty(results->view());

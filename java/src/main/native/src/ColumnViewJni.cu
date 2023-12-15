@@ -208,10 +208,10 @@ std::unique_ptr<cudf::column> lists_distinct_by_key(cudf::lists_column_view cons
       cudf::make_structs_column(out_labels.size(), std::move(out_structs_members), 0, {});
 
   // Assemble a lists column of structs<out_keys, out_vals>.
-  auto out_offsets = make_numeric_column(data_type{type_to_id<offset_type>()}, input.size() + 1,
+  auto out_offsets = make_numeric_column(data_type{type_to_id<size_type>()}, input.size() + 1,
                                          mask_state::UNALLOCATED, stream);
-  auto const offsets_begin = out_offsets->mutable_view().template begin<offset_type>();
-  auto const labels_begin = out_labels.template begin<offset_type>();
+  auto const offsets_begin = out_offsets->mutable_view().template begin<size_type>();
+  auto const labels_begin = out_labels.template begin<size_type>();
   cudf::detail::labels_to_offsets(labels_begin, labels_begin + out_labels.size(), offsets_begin,
                                   offsets_begin + out_offsets->size(), stream);
 

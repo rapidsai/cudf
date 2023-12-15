@@ -31,7 +31,6 @@ from cudf.testing._utils import (
     TIMEDELTA_TYPES,
     assert_eq,
     assert_exceptions_equal,
-    expect_warning_if,
     set_random_null_mask_inplace,
 )
 
@@ -266,11 +265,6 @@ def large_int64_gdf():
 def test_parquet_reader_basic(parquet_file, columns, engine):
     expect = pd.read_parquet(parquet_file, columns=columns)
     got = cudf.read_parquet(parquet_file, engine=engine, columns=columns)
-    if len(expect) == 0:
-        expect = expect.reset_index(drop=True)
-        got = got.reset_index(drop=True)
-        if "col_category" in expect.columns:
-            expect["col_category"] = expect["col_category"].astype("category")
 
     # PANDAS returns category objects whereas cuDF returns hashes
     if engine == "cudf":
@@ -279,7 +273,7 @@ def test_parquet_reader_basic(parquet_file, columns, engine):
         if "col_category" in got.columns:
             got = got.drop(columns=["col_category"])
 
-    assert_eq(expect, got, check_categorical=False)
+    assert_eq(expect, got)
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
@@ -298,8 +292,7 @@ def test_parquet_reader_empty_pandas_dataframe(tmpdir, engine):
 
 
 @pytest.mark.parametrize("has_null", [False, True])
-@pytest.mark.parametrize("strings_to_categorical", [False, True, None])
-def test_parquet_reader_strings(tmpdir, strings_to_categorical, has_null):
+def test_parquet_reader_strings(tmpdir, has_null):
     df = pd.DataFrame(
         [(1, "aaa", 9.0), (2, "bbb", 8.0), (3, "ccc", 7.0)],
         columns=pd.Index(list("abc")),
@@ -310,28 +303,10 @@ def test_parquet_reader_strings(tmpdir, strings_to_categorical, has_null):
     df.to_parquet(fname)
     assert os.path.exists(fname)
 
-    if strings_to_categorical is not None:
-        with expect_warning_if(strings_to_categorical is not False):
-            gdf = cudf.read_parquet(
-                fname,
-                engine="cudf",
-                strings_to_categorical=strings_to_categorical,
-            )
-    else:
-        gdf = cudf.read_parquet(fname, engine="cudf")
+    gdf = cudf.read_parquet(fname, engine="cudf")
 
-    if strings_to_categorical:
-        if has_null:
-            hash_ref = [989983842, None, 1169108191]
-        else:
-            hash_ref = [989983842, 429364346, 1169108191]
-        assert gdf["b"].dtype == np.dtype("int32")
-        assert_eq(
-            gdf["b"], cudf.Series(hash_ref, dtype=np.dtype("int32"), name="b")
-        )
-    else:
-        assert gdf["b"].dtype == np.dtype("object")
-        assert_eq(gdf["b"], df["b"])
+    assert gdf["b"].dtype == np.dtype("object")
+    assert_eq(gdf["b"], df["b"])
 
 
 @pytest.mark.parametrize("columns", [None, ["b"]])
@@ -1305,6 +1280,169 @@ def test_parquet_reader_v2(tmpdir, simple_pdf):
     simple_pdf.to_parquet(pdf_fname, data_page_version="2.0")
     assert_eq(cudf.read_parquet(pdf_fname), simple_pdf)
 
+    cudf.from_pandas(simple_pdf).to_parquet(pdf_fname, header_version="2.0")
+    assert_eq(cudf.read_parquet(pdf_fname), simple_pdf)
+
+
+def test_parquet_delta_byte_array(datadir):
+    fname = datadir / "delta_byte_arr.parquet"
+    assert_eq(cudf.read_parquet(fname), pd.read_parquet(fname))
+
+
+def delta_num_rows():
+    return [1, 2, 23, 32, 33, 34, 64, 65, 66, 128, 129, 130, 20000, 50000]
+
+
+@pytest.mark.parametrize("nrows", delta_num_rows())
+@pytest.mark.parametrize("add_nulls", [True, False])
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+    ],
+)
+def test_delta_binary(nrows, add_nulls, dtype, tmpdir):
+    null_frequency = 0.25 if add_nulls else 0
+
+    # Create a pandas dataframe with random data of mixed types
+    arrow_table = dg.rand_dataframe(
+        dtypes_meta=[
+            {
+                "dtype": dtype,
+                "null_frequency": null_frequency,
+                "cardinality": nrows,
+            },
+        ],
+        rows=nrows,
+        seed=0,
+        use_threads=False,
+    )
+    # Roundabout conversion to pandas to preserve nulls/data types
+    cudf_table = cudf.DataFrame.from_arrow(arrow_table)
+    test_pdf = cudf_table.to_pandas(nullable=True)
+    pdf_fname = tmpdir.join("pdfv2.parquet")
+    test_pdf.to_parquet(
+        pdf_fname,
+        version="2.6",
+        column_encoding="DELTA_BINARY_PACKED",
+        data_page_version="2.0",
+        data_page_size=64 * 1024,
+        engine="pyarrow",
+        use_dictionary=False,
+    )
+    cdf = cudf.read_parquet(pdf_fname)
+    pcdf = cudf.from_pandas(test_pdf)
+    assert_eq(cdf, pcdf)
+
+    # Write back out with cudf and make sure pyarrow can read it
+    cudf_fname = tmpdir.join("cudfv2.parquet")
+    pcdf.to_parquet(
+        cudf_fname,
+        compression=None,
+        header_version="2.0",
+        use_dictionary=False,
+    )
+
+    cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
+    assert_eq(cdf2, cdf)
+
+
+@pytest.mark.parametrize("nrows", delta_num_rows())
+@pytest.mark.parametrize("add_nulls", [True, False])
+@pytest.mark.parametrize("str_encoding", ["DELTA_BYTE_ARRAY"])
+def test_delta_byte_array_roundtrip(nrows, add_nulls, str_encoding, tmpdir):
+    null_frequency = 0.25 if add_nulls else 0
+
+    # Create a pandas dataframe with random data of mixed lengths
+    test_pdf = dg.rand_dataframe(
+        dtypes_meta=[
+            {
+                "dtype": "str",
+                "null_frequency": null_frequency,
+                "cardinality": nrows,
+                "max_string_length": 10,
+            },
+            {
+                "dtype": "str",
+                "null_frequency": null_frequency,
+                "cardinality": nrows,
+                "max_string_length": 100,
+            },
+        ],
+        rows=nrows,
+        seed=0,
+        use_threads=False,
+    ).to_pandas()
+
+    pdf_fname = tmpdir.join("pdfdeltaba.parquet")
+    test_pdf.to_parquet(
+        pdf_fname,
+        version="2.6",
+        column_encoding=str_encoding,
+        data_page_version="2.0",
+        data_page_size=64 * 1024,
+        engine="pyarrow",
+        use_dictionary=False,
+    )
+    cdf = cudf.read_parquet(pdf_fname)
+    pcdf = cudf.from_pandas(test_pdf)
+    assert_eq(cdf, pcdf)
+
+
+@pytest.mark.parametrize("nrows", delta_num_rows())
+@pytest.mark.parametrize("add_nulls", [True, False])
+@pytest.mark.parametrize("str_encoding", ["DELTA_BYTE_ARRAY"])
+def test_delta_struct_list(tmpdir, nrows, add_nulls, str_encoding):
+    # Struct<List<List>>
+    lists_per_row = 3
+    list_size = 4
+    num_rows = nrows
+    include_validity = add_nulls
+
+    def list_gen_wrapped(x, y):
+        return list_row_gen(
+            int_gen, x * list_size * lists_per_row, list_size, lists_per_row
+        )
+
+    def string_list_gen_wrapped(x, y):
+        return list_row_gen(
+            string_gen,
+            x * list_size * lists_per_row,
+            list_size,
+            lists_per_row,
+            include_validity,
+        )
+
+    data = struct_gen(
+        [int_gen, string_gen, list_gen_wrapped, string_list_gen_wrapped],
+        0,
+        num_rows,
+        include_validity,
+    )
+    test_pdf = pa.Table.from_pydict({"sol": data}).to_pandas()
+    pdf_fname = tmpdir.join("pdfdeltaba.parquet")
+    test_pdf.to_parquet(
+        pdf_fname,
+        version="2.6",
+        column_encoding={
+            "sol.col0": "DELTA_BINARY_PACKED",
+            "sol.col1": str_encoding,
+            "sol.col2.list.element.list.element": "DELTA_BINARY_PACKED",
+            "sol.col3.list.element.list.element": str_encoding,
+        },
+        data_page_version="2.0",
+        data_page_size=64 * 1024,
+        engine="pyarrow",
+        use_dictionary=False,
+    )
+    # sanity check to verify file is written properly
+    assert_eq(test_pdf, pd.read_parquet(pdf_fname))
+    cdf = cudf.read_parquet(pdf_fname)
+    assert_eq(cdf, cudf.from_pandas(test_pdf))
+
 
 @pytest.mark.parametrize(
     "data",
@@ -1439,7 +1577,6 @@ def test_parquet_writer_int96_timestamps(tmpdir, pdf, gdf):
 
 
 def test_multifile_parquet_folder(tmpdir):
-
     test_pdf1 = make_pdf(nrows=10, nvalids=10 // 2)
     test_pdf2 = make_pdf(nrows=20)
     expect = pd.concat([test_pdf1, test_pdf2])
@@ -2284,7 +2421,7 @@ def test_parquet_writer_statistics(tmpdir, pdf, add_nulls):
         pdf = pdf.drop(columns=["col_category", "col_bool"])
 
     if not add_nulls:
-        # Timedelta types convert NA to None when reading from parquet into
+        # Timedelta types convert NaT to None when reading from parquet into
         # pandas which interferes with series.max()/min()
         for t in TIMEDELTA_TYPES:
             pdf["col_" + t] = pd.Series(np.arange(len(pdf.index))).astype(t)
@@ -2344,11 +2481,11 @@ def test_parquet_writer_list_statistics(tmpdir):
         for i, col in enumerate(pd_slice):
             stats = pq_file.metadata.row_group(rg).column(i).statistics
 
-            actual_min = cudf.Series(pd_slice[col].explode().explode()).min()
+            actual_min = pd_slice[col].explode().explode().dropna().min()
             stats_min = stats.min
             assert normalized_equals(actual_min, stats_min)
 
-            actual_max = cudf.Series(pd_slice[col].explode().explode()).max()
+            actual_max = pd_slice[col].explode().explode().dropna().max()
             stats_max = stats.max
             assert normalized_equals(actual_max, stats_max)
 
@@ -2446,7 +2583,8 @@ def test_parquet_writer_decimal(decimal_type, data):
     gdf.to_parquet(buff)
 
     got = pd.read_parquet(buff, use_nullable_dtypes=True)
-    assert_eq(gdf.to_pandas(nullable=True), got)
+    assert_eq(gdf["val"].to_pandas(nullable=True), got["val"])
+    assert_eq(gdf["dec_val"].to_pandas(), got["dec_val"])
 
 
 def test_parquet_writer_column_validation():
@@ -2480,6 +2618,11 @@ def test_parquet_writer_nulls_pandas_read(tmpdir, pdf):
 
     got = pd.read_parquet(fname)
     nullable = num_rows > 0
+    if nullable:
+        gdf = gdf.drop(columns="col_datetime64[ms]")
+        gdf = gdf.drop(columns="col_datetime64[us]")
+        got = got.drop(columns="col_datetime64[ms]")
+        got = got.drop(columns="col_datetime64[us]")
     assert_eq(gdf.to_pandas(nullable=nullable), got)
 
 
@@ -2524,7 +2667,7 @@ def test_parquet_reader_one_level_list(datadir):
     fname = datadir / "one_level_list.parquet"
 
     expect = pd.read_parquet(fname)
-    got = cudf.read_parquet(fname).to_pandas(nullable=True)
+    got = cudf.read_parquet(fname)
 
     assert_eq(expect, got)
 
@@ -2534,6 +2677,24 @@ def test_parquet_reader_binary_decimal(datadir):
 
     expect = pd.read_parquet(fname)
     got = cudf.read_parquet(fname).to_pandas()
+
+    assert_eq(expect, got)
+
+
+def test_parquet_reader_fixed_bin(datadir):
+    fname = datadir / "fixed_len_byte_array.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname)
+
+    assert_eq(expect, got)
+
+
+def test_parquet_reader_rle_boolean(datadir):
+    fname = datadir / "rle_boolean_encoding.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname)
 
     assert_eq(expect, got)
 
@@ -2782,6 +2943,14 @@ def test_parquet_reader_unsupported_page_encoding(datadir):
         cudf.read_parquet(fname)
 
 
+def test_parquet_reader_detect_bad_dictionary(datadir):
+    fname = datadir / "bad_dict.parquet"
+
+    # expect a failure when reading the whole file
+    with pytest.raises(RuntimeError):
+        cudf.read_parquet(fname)
+
+
 @pytest.mark.parametrize("data", [{"a": [1, 2, 3, 4]}, {"b": [1, None, 2, 3]}])
 @pytest.mark.parametrize("force_nullable_schema", [True, False])
 def test_parquet_writer_schema_nullability(data, force_nullable_schema):
@@ -2820,3 +2989,20 @@ def test_parquet_read_filter_and_project():
     # Check result
     expected = df[(df.a == 5) & (df.c > 20)][columns].reset_index(drop=True)
     assert_eq(got, expected)
+
+
+def test_parquet_reader_multiindex():
+    expected = pd.DataFrame(
+        {"A": [1, 2, 3]},
+        index=pd.MultiIndex.from_tuples([("a", 1), ("a", 2), ("b", 1)]),
+    )
+    file_obj = BytesIO()
+    expected.to_parquet(file_obj, engine="pyarrow")
+    with pytest.warns(UserWarning):
+        actual = cudf.read_parquet(file_obj, engine="pyarrow")
+    assert_eq(actual, expected)
+
+
+def test_parquet_reader_engine_error():
+    with pytest.raises(ValueError):
+        cudf.read_parquet(BytesIO(), engine="abc")

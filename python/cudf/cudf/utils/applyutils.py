@@ -340,7 +340,7 @@ def chunk_wise_kernel(nrows, chunks, {args}):
     return kernel
 
 
-_cache = dict()  # type: Dict[Any, Any]
+_cache: Dict[Any, Any] = dict()
 
 
 @functools.wraps(_make_row_wise_kernel)

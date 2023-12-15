@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 23.08.00
+  VERSION 24.02.00
   LANGUAGES C CXX CUDA
 )
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
@@ -78,6 +78,8 @@ option(CUDA_ENABLE_LINEINFO
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
+option(USE_LIBARROW_FROM_PYARROW "Only use the libarrow contained in pyarrow" OFF)
+mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
 
 set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
 if(CUDA_STATIC_RUNTIME OR NOT BUILD_SHARED_LIBS)
@@ -89,9 +91,6 @@ option(
   ${DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL}
 )
 mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
-
-option(USE_LIBARROW_FROM_PYARROW "Use the libarrow contained within pyarrow." OFF)
-mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
 
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
@@ -323,6 +322,7 @@ add_library(
   src/groupby/sort/group_collect.cu
   src/groupby/sort/group_correlation.cu
   src/groupby/sort/group_count.cu
+  src/groupby/sort/group_histogram.cu
   src/groupby/sort/group_m2.cu
   src/groupby/sort/group_max.cu
   src/groupby/sort/group_min.cu
@@ -344,8 +344,10 @@ add_library(
   src/groupby/sort/sort_helper.cu
   src/hash/hashing.cu
   src/hash/md5_hash.cu
-  src/hash/murmur_hash.cu
-  src/hash/spark_murmur_hash.cu
+  src/hash/murmurhash3_x86_32.cu
+  src/hash/murmurhash3_x64_128.cu
+  src/hash/spark_murmurhash3_x86_32.cu
+  src/hash/xxhash_64.cu
   src/interop/dlpack.cpp
   src/interop/from_arrow.cu
   src/interop/to_arrow.cu
@@ -368,13 +370,13 @@ add_library(
   src/io/csv/reader_impl.cu
   src/io/csv/writer_impl.cu
   src/io/functions.cpp
+  src/io/json/byte_range_info.cu
   src/io/json/json_column.cu
-  src/io/json/json_gpu.cu
   src/io/json/json_tree.cu
   src/io/json/nested_json_gpu.cu
-  src/io/json/reader_impl.cu
-  src/io/json/experimental/byte_range_info.cu
-  src/io/json/experimental/read_json.cpp
+  src/io/json/read_json.cu
+  src/io/json/legacy/json_gpu.cu
+  src/io/json/legacy/reader_impl.cu
   src/io/json/write_json.cu
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
@@ -388,13 +390,17 @@ add_library(
   src/io/orc/writer_impl.cu
   src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
+  src/io/parquet/decode_preprocess.cu
   src/io/parquet/page_data.cu
   src/io/parquet/chunk_dict.cu
   src/io/parquet/page_enc.cu
   src/io/parquet/page_hdr.cu
+  src/io/parquet/page_delta_decode.cu
   src/io/parquet/page_string_decode.cu
+  src/io/parquet/predicate_pushdown.cpp
   src/io/parquet/reader.cpp
   src/io/parquet/reader_impl.cpp
+  src/io/parquet/reader_impl_chunking.cu
   src/io/parquet/reader_impl_helpers.cpp
   src/io/parquet/reader_impl_preprocess.cu
   src/io/parquet/writer_impl.cu
@@ -405,13 +411,16 @@ add_library(
   src/io/text/bgzip_data_chunk_source.cu
   src/io/text/bgzip_utils.cpp
   src/io/text/multibyte_split.cu
+  src/io/utilities/arrow_io_source.cpp
   src/io/utilities/column_buffer.cpp
   src/io/utilities/config_utils.cpp
+  src/io/utilities/data_casting.cu
   src/io/utilities/data_sink.cpp
   src/io/utilities/datasource.cpp
   src/io/utilities/file_io_utilities.cpp
   src/io/utilities/parsing_utils.cu
   src/io/utilities/row_selection.cpp
+  src/io/utilities/type_inference.cu
   src/io/utilities/trie.cu
   src/jit/cache.cpp
   src/jit/parser.cpp
@@ -430,6 +439,7 @@ add_library(
   src/join/mixed_join_size_kernel_nulls.cu
   src/join/mixed_join_size_kernels_semi.cu
   src/join/semi_join.cu
+  src/json/json_path.cu
   src/lists/contains.cu
   src/lists/combine/concatenate_list_elements.cu
   src/lists/combine/concatenate_rows.cu
@@ -463,6 +473,7 @@ add_library(
   src/reductions/all.cu
   src/reductions/any.cu
   src/reductions/collect_ops.cu
+  src/reductions/histogram.cu
   src/reductions/max.cu
   src/reductions/mean.cu
   src/reductions/min.cu
@@ -499,6 +510,7 @@ add_library(
   src/reshape/byte_cast.cu
   src/reshape/interleave_columns.cu
   src/reshape/tile.cu
+  src/rolling/detail/optimized_unbounded_window.cpp
   src/rolling/detail/rolling_collect_list.cu
   src/rolling/detail/rolling_fixed_window.cu
   src/rolling/detail/rolling_variable_window.cu
@@ -523,7 +535,7 @@ add_library(
   src/stream_compaction/apply_boolean_mask.cu
   src/stream_compaction/distinct.cu
   src/stream_compaction/distinct_count.cu
-  src/stream_compaction/distinct_reduce.cu
+  src/stream_compaction/distinct_helpers.cu
   src/stream_compaction/drop_nans.cu
   src/stream_compaction/drop_nulls.cu
   src/stream_compaction/stable_distinct.cu
@@ -559,7 +571,6 @@ add_library(
   src/strings/filter_chars.cu
   src/strings/like.cu
   src/strings/padding.cu
-  src/strings/json/json_path.cu
   src/strings/regex/regcomp.cpp
   src/strings/regex/regexec.cpp
   src/strings/regex/regex_program.cpp
@@ -570,6 +581,7 @@ add_library(
   src/strings/replace/replace.cu
   src/strings/replace/replace_re.cu
   src/strings/reverse.cu
+  src/strings/scan/scan_inclusive.cu
   src/strings/search/findall.cu
   src/strings/search/find.cu
   src/strings/search/find_multiple.cu
@@ -586,6 +598,7 @@ add_library(
   src/strings/utilities.cu
   src/strings/wrap.cu
   src/structs/copying/concatenate.cu
+  src/structs/scan/scan_inclusive.cu
   src/structs/structs_column_factories.cu
   src/structs/structs_column_view.cpp
   src/structs/utilities.cpp
@@ -596,18 +609,20 @@ add_library(
   src/text/detokenize.cu
   src/text/edit_distance.cu
   src/text/generate_ngrams.cu
+  src/text/jaccard.cu
   src/text/minhash.cu
   src/text/ngrams_tokenize.cu
   src/text/normalize.cu
   src/text/replace.cu
   src/text/stemmer.cu
-  src/text/subword/bpe_tokenizer.cu
+  src/text/bpe/byte_pair_encoding.cu
+  src/text/bpe/load_merge_pairs.cu
   src/text/subword/data_normalizer.cu
   src/text/subword/load_hash_file.cu
-  src/text/subword/load_merges_file.cu
   src/text/subword/subword_tokenize.cu
   src/text/subword/wordpiece_tokenizer.cu
   src/text/tokenize.cu
+  src/text/vocabulary_tokenize.cu
   src/transform/bools_to_mask.cu
   src/transform/compute_column.cu
   src/transform/encode.cu
@@ -625,6 +640,7 @@ add_library(
   src/utilities/linked_column.cpp
   src/utilities/logger.cpp
   src/utilities/stacktrace.cpp
+  src/utilities/stream_pool.cpp
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
   src/utilities/type_dispatcher.cpp
@@ -820,6 +836,7 @@ if(CUDF_BUILD_TESTUTIL)
     tests/io/metadata_utilities.cpp
     tests/utilities/base_fixture.cpp
     tests/utilities/column_utilities.cu
+    tests/utilities/debug_utilities.cu
     tests/utilities/table_utilities.cu
     tests/utilities/tdigest_utilities.cu
   )

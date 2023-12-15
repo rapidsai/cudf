@@ -216,7 +216,7 @@ int32_t bz2_decompress_block(unbz_state_s* s)
 
   s->currBlockNo++;
 
-  skipbits(s, 32);                          // block CRC
+  skipbits(s, 32);  // block CRC
 
   if (getbits(s, 1)) return BZ_DATA_ERROR;  // blockRandomized not supported (old bzip versions)
 

@@ -15,6 +15,7 @@ import pandas as pd
 from pandas.api import types as pd_types
 
 import cudf
+from cudf.core._compat import PANDAS_GE_150
 from cudf.core.dtypes import (  # noqa: F401
     _BaseDtype,
     dtype,
@@ -134,7 +135,17 @@ def is_scalar(val):
             cudf._lib.scalar.DeviceScalar,
             cudf.core.tools.datetimes.DateOffset,
         ),
-    ) or pd_types.is_scalar(val)
+    ) or (
+        pd_types.is_scalar(val)
+        # Pytorch tensors advertise that they support the number
+        # protocol, and therefore return True for PyNumber_Check even
+        # when they have a shape. So, if we get through this, let's
+        # additionally check that if they have a shape property that
+        # it is empty.
+        # See https://github.com/pytorch/pytorch/issues/99646
+        # and https://github.com/pandas-dev/pandas/issues/52701
+        and len(getattr(val, "shape", ())) == 0
+    )
 
 
 def _is_scalar_or_zero_d_array(val):
@@ -444,6 +455,34 @@ def is_any_real_numeric_dtype(arr_or_dtype) -> bool:
     )
 
 
+def _is_pandas_nullable_extension_dtype(dtype_to_check) -> bool:
+    if isinstance(
+        dtype_to_check,
+        (
+            pd.UInt8Dtype,
+            pd.UInt16Dtype,
+            pd.UInt32Dtype,
+            pd.UInt64Dtype,
+            pd.Int8Dtype,
+            pd.Int16Dtype,
+            pd.Int32Dtype,
+            pd.Int64Dtype,
+            pd.Float32Dtype,
+            pd.Float64Dtype,
+            pd.BooleanDtype,
+            pd.StringDtype,
+        ),
+    ) or (PANDAS_GE_150 and isinstance(dtype_to_check, pd.ArrowDtype)):
+        return True
+    elif isinstance(dtype_to_check, pd.CategoricalDtype):
+        return _is_pandas_nullable_extension_dtype(
+            dtype_to_check.categories.dtype
+        )
+    elif isinstance(dtype_to_check, pd.IntervalDtype):
+        return _is_pandas_nullable_extension_dtype(dtype_to_check.subtype)
+    return False
+
+
 # TODO: The below alias is removed for now since improving cudf categorical
 # support is ongoing and we don't want to introduce any ambiguities. The above
 # method _union_categoricals will take its place once exposed.
@@ -454,17 +493,23 @@ is_complex_dtype = pd_types.is_complex_dtype
 # TODO: Evaluate which of the datetime types need special handling for cudf.
 is_datetime_dtype = _wrap_pandas_is_dtype_api(pd_types.is_datetime64_dtype)
 is_datetime64_any_dtype = pd_types.is_datetime64_any_dtype
-is_datetime64_dtype = pd_types.is_datetime64_dtype
-is_datetime64_ns_dtype = pd_types.is_datetime64_ns_dtype
-is_datetime64tz_dtype = pd_types.is_datetime64tz_dtype
+is_datetime64_dtype = _wrap_pandas_is_dtype_api(pd_types.is_datetime64_dtype)
+is_datetime64_ns_dtype = _wrap_pandas_is_dtype_api(
+    pd_types.is_datetime64_ns_dtype
+)
+is_datetime64tz_dtype = _wrap_pandas_is_dtype_api(
+    pd_types.is_datetime64tz_dtype
+)
 is_extension_type = pd_types.is_extension_type
 is_extension_array_dtype = pd_types.is_extension_array_dtype
 is_int64_dtype = pd_types.is_int64_dtype
 is_period_dtype = pd_types.is_period_dtype
 is_signed_integer_dtype = pd_types.is_signed_integer_dtype
 is_timedelta_dtype = _wrap_pandas_is_dtype_api(pd_types.is_timedelta64_dtype)
-is_timedelta64_dtype = pd_types.is_timedelta64_dtype
-is_timedelta64_ns_dtype = pd_types.is_timedelta64_ns_dtype
+is_timedelta64_dtype = _wrap_pandas_is_dtype_api(pd_types.is_timedelta64_dtype)
+is_timedelta64_ns_dtype = _wrap_pandas_is_dtype_api(
+    pd_types.is_timedelta64_ns_dtype
+)
 is_unsigned_integer_dtype = pd_types.is_unsigned_integer_dtype
 is_sparse = pd_types.is_sparse
 # is_list_like = pd_types.is_list_like

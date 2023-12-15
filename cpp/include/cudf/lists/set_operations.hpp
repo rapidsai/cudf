@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,6 +53,7 @@ namespace cudf::lists {
  *        to be `UNEQUAL` which means only non-null elements are checked for overlapping
  * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
  * @param mr Device memory resource used to allocate the returned object
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A column of type BOOL containing the check results
  */
 std::unique_ptr<column> have_overlap(
@@ -60,6 +61,7 @@ std::unique_ptr<column> have_overlap(
   lists_column_view const& rhs,
   null_equality nulls_equal           = null_equality::EQUAL,
   nan_equality nans_equal             = nan_equality::ALL_EQUAL,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -87,6 +89,7 @@ std::unique_ptr<column> have_overlap(
  * @param rhs The input lists column for the other side
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned object
  * @return A lists column containing the intersection results
  */
@@ -95,6 +98,7 @@ std::unique_ptr<column> intersect_distinct(
   lists_column_view const& rhs,
   null_equality nulls_equal           = null_equality::EQUAL,
   nan_equality nans_equal             = nan_equality::ALL_EQUAL,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -122,6 +126,7 @@ std::unique_ptr<column> intersect_distinct(
  * @param rhs The input lists column for the other side
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned object
  * @return A lists column containing the union results
  */
@@ -130,6 +135,7 @@ std::unique_ptr<column> union_distinct(
   lists_column_view const& rhs,
   null_equality nulls_equal           = null_equality::EQUAL,
   nan_equality nans_equal             = nan_equality::ALL_EQUAL,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -157,6 +163,7 @@ std::unique_ptr<column> union_distinct(
  * @param rhs The input lists column of elements to exclude
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned object
  * @return A lists column containing the difference results
  */
@@ -165,6 +172,7 @@ std::unique_ptr<column> difference_distinct(
   lists_column_view const& rhs,
   null_equality nulls_equal           = null_equality::EQUAL,
   nan_equality nans_equal             = nan_equality::ALL_EQUAL,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

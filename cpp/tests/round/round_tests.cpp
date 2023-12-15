@@ -703,4 +703,83 @@ TEST_F(RoundTests, BoolTestHalfUp)
   EXPECT_THROW(cudf::round(input, -2, cudf::rounding_method::HALF_UP), cudf::logic_error);
 }
 
+// Use __uint128_t for demonstration.
+constexpr __uint128_t operator""_uint128_t(const char* s)
+{
+  __uint128_t ret = 0;
+  for (int i = 0; s[i] != '\0'; ++i) {
+    ret *= 10;
+    if ('0' <= s[i] && s[i] <= '9') { ret += s[i] - '0'; }
+  }
+  return ret;
+}
+
+TEST_F(RoundTests, HalfEvenErrorsA)
+{
+  using namespace numeric;
+  using RepType    = cudf::device_storage_type_t<decimal128>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  {
+    // 0.5 at scale -37 should round HALF_EVEN to 0, because 0 is an even number
+    auto const input =
+      fp_wrapper{{5000000000000000000000000000000000000_uint128_t}, scale_type{-37}};
+    auto const expected = fp_wrapper{{0}, scale_type{0}};
+    auto const result   = cudf::round(input, 0, cudf::rounding_method::HALF_EVEN);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
+}
+
+TEST_F(RoundTests, HalfEvenErrorsB)
+{
+  using namespace numeric;
+  using RepType    = cudf::device_storage_type_t<decimal128>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  {
+    // 0.125 at scale -37 should round HALF_EVEN to 0.12, because 2 is an even number
+    auto const input =
+      fp_wrapper{{1250000000000000000000000000000000000_uint128_t}, scale_type{-37}};
+    auto const expected = fp_wrapper{{12}, scale_type{-2}};
+    auto const result   = cudf::round(input, 2, cudf::rounding_method::HALF_EVEN);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
+}
+
+TEST_F(RoundTests, HalfEvenErrorsC)
+{
+  using namespace numeric;
+  using RepType    = cudf::device_storage_type_t<decimal128>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  {
+    // 0.0625 at scale -37 should round HALF_EVEN to 0.062, because 2 is an even number
+    auto const input =
+      fp_wrapper{{0625000000000000000000000000000000000_uint128_t}, scale_type{-37}};
+    auto const expected = fp_wrapper{{62}, scale_type{-3}};
+    auto const result   = cudf::round(input, 3, cudf::rounding_method::HALF_EVEN);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
+}
+
+TEST_F(RoundTests, HalfUpErrorsA)
+{
+  using namespace numeric;
+  using RepType    = cudf::device_storage_type_t<decimal128>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  {
+    // 0.25 at scale -37 should round HALF_UP to 0.3
+    auto const input =
+      fp_wrapper{{2500000000000000000000000000000000000_uint128_t}, scale_type{-37}};
+    auto const expected = fp_wrapper{{3}, scale_type{-1}};
+    auto const result   = cudf::round(input, 1, cudf::rounding_method::HALF_UP);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
+}
+
 CUDF_TEST_PROGRAM_MAIN()

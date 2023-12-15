@@ -121,7 +121,7 @@ __inline__ __device__ int brotli_context(int p1, int p2, int lut)
 struct huff_scratch_s {
   uint16_t code_length_histo[16];
   uint8_t code_length_code_lengths[brotli_code_length_codes];
-  int8_t offset[6];                           // offsets in sorted table for each length
+  int8_t offset[6];  // offsets in sorted table for each length
   uint16_t lenvlctab[32];
   uint16_t sorted[brotli_code_length_codes];  // symbols sorted by code length
   int16_t next_symbol[32];
@@ -1298,7 +1298,7 @@ static __device__ void InverseMoveToFrontTransform(debrotli_state_s* s, uint8_t*
   // Reinitialize elements that could have been changed.
   uint32_t i           = 1;
   uint32_t upper_bound = s->mtf_upper_bound;
-  uint32_t* mtf        = &s->mtf[1];   // Make mtf[-1] addressable.
+  uint32_t* mtf        = &s->mtf[1];  // Make mtf[-1] addressable.
   auto* mtf_u8         = reinterpret_cast<uint8_t*>(mtf);
   uint32_t pattern     = 0x0302'0100;  // Little-endian
 

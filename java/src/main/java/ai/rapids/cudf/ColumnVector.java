@@ -50,8 +50,8 @@ public final class ColumnVector extends ColumnView {
      *
      * @note the callback is invoked with this `ColumnVector`'s lock held.
      *
-     * @param cv - a reference to the ColumnVector we are closing
-     * @param refCount - the updated ref count for this ColumnVector at the time
+     * @param cv reference to the ColumnVector we are closing
+     * @param refCount the updated ref count for this ColumnVector at the time
      *                 of invocation
      */
     void onClosed(ColumnVector cv, int refCount);
@@ -264,6 +264,7 @@ public final class ColumnVector extends ColumnView {
       eventHandler.onClosed(this, refCount);
     }
     if (refCount == 0) {
+      super.close();
       offHeap.clean(false);
     } else if (refCount < 0) {
       offHeap.logRefCountDebug("double free " + this);

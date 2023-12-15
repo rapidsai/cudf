@@ -541,7 +541,7 @@ def melt(
 
     # Error for unimplemented support for datatype
     dtypes = [frame[col].dtype for col in id_vars + value_vars]
-    if any(cudf.api.types.is_categorical_dtype(t) for t in dtypes):
+    if any(isinstance(typ, cudf.CategoricalDtype) for typ in dtypes):
         raise NotImplementedError(
             "Categorical columns are not yet supported for function"
         )
@@ -704,6 +704,7 @@ def get_dummies(
         raise NotImplementedError("drop_first is not supported yet")
 
     if dtype is no_default:
+        # Do not remove until pandas 2.0 support is added.
         warnings.warn(
             "Default `dtype` value will be changed to 'bool' in a future "
             "release, please update `dtype='bool'` to adapt for "

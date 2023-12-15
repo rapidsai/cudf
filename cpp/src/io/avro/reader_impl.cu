@@ -499,7 +499,7 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
 
   // Select only columns required by the options
   auto selected_columns = meta.select_columns(options.get_columns());
-  if (selected_columns.size() != 0) {
+  if (not selected_columns.empty()) {
     // Get a list of column data types
     std::vector<data_type> column_types;
     for (auto const& col : selected_columns) {

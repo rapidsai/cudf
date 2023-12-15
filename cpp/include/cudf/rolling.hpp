@@ -114,19 +114,29 @@ struct window_bounds {
     return window_bounds(true, std::numeric_limits<cudf::size_type>::max());
   }
 
-  // TODO: In the future, add units for bounds.
-  //       E.g. {value=1, unit=DAYS, unbounded=false}
-  //       For the present, assume units from context:
-  //         1. For time-based window functions, assume DAYS as before
-  //         2. For all else, assume ROWS as before.
-  bool const is_unbounded;  ///< Whether the window boundary is unbounded
-  size_type const value;    ///< Finite window boundary value (in days or rows)
+  /**
+   * Whether the window_bounds is unbounded.
+   *
+   * @return true if the window bounds is unbounded.
+   * @return false if the window bounds has a finite row boundary.
+   */
+  [[nodiscard]] bool is_unbounded() const { return _is_unbounded; }
+
+  /**
+   * @brief Gets the row-boundary for this window_bounds.
+   *
+   * @return the row boundary value (in days or rows)
+   */
+  [[nodiscard]] size_type value() const { return _value; }
 
  private:
   explicit window_bounds(bool is_unbounded_, size_type value_ = 0)
-    : is_unbounded{is_unbounded_}, value{value_}
+    : _is_unbounded{is_unbounded_}, _value{value_}
   {
   }
+
+  bool const _is_unbounded;  ///< Whether the window boundary is unbounded
+  size_type const _value;    ///< Finite window boundary value (in days or rows)
 };
 
 /**
@@ -189,10 +199,30 @@ struct window_bounds {
  * column of the same type as the input. Therefore it is suggested to convert integer column types
  * (especially low-precision integers) to `FLOAT32` or `FLOAT64` before doing a rolling `MEAN`.
  *
+ * Note: `preceding_window` and `following_window` could well have negative values. This yields
+ * windows where the current row might not be included at all. For instance, consider a window
+ * defined as (preceding=3, following=-1). This produces a window from 2 (i.e. 3-1) rows preceding
+ * the current row, and 1 row *preceding* the current row. For the example above, the window for
+ * row#3 is:
+ *
+ *    [ 10,  20,  10,  50,  60,  20,  30,  80,  40 ]
+ *      <--window-->   ^
+ *                     |
+ *               current_row
+ *
+ * Similarly, `preceding` could have a negative value, indicating that the window begins at a
+ * position after the current row.  It differs slightly from the semantics for `following`, because
+ * `preceding` includes the current row. Therefore:
+ *   1. preceding=1  => Window starts at the current row.
+ *   2. preceding=0  => Window starts at 1 past the current row.
+ *   3. preceding=-1 => Window starts at 2 past the current row. Etc.
+ *
  * @param[in] group_keys The (pre-sorted) grouping columns
  * @param[in] input The input column (to be aggregated)
- * @param[in] preceding_window The static rolling window size in the backward direction
- * @param[in] following_window The static rolling window size in the forward direction
+ * @param[in] preceding_window The static rolling window size in the backward direction (for
+ * positive values), or forward direction (for negative values)
+ * @param[in] following_window The static rolling window size in the forward direction (for positive
+ * values), or backward direction (for negative values)
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise element `i` is null.
  * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc.)

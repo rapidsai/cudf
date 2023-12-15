@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package ai.rapids.cudf;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -187,6 +188,7 @@ public class RmmTest {
     }
   }
 
+  @Tag("noSanitizer")
   @ParameterizedTest
   @ValueSource(ints = {
       RmmAllocationMode.CUDA_DEFAULT,
@@ -257,6 +259,7 @@ public class RmmTest {
     assertEquals(1024, totalDeallocated.get());
   }
 
+  @Tag("noSanitizer")
   @Test
   public void testSetEventHandlerTwice() {
     Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, Rmm.logToStderr(), 0L);
@@ -278,6 +281,7 @@ public class RmmTest {
     assertThrows(RmmException.class, () -> Rmm.setEventHandler(otherHandler));
   }
 
+  @Tag("noSanitizer")
   @Test
   public void testClearEventHandler() {
     Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, Rmm.logToStderr(), 0L);
@@ -304,6 +308,7 @@ public class RmmTest {
     }
   }
 
+  @Tag("noSanitizer")
   @Test
   public void testAllocOnlyThresholds() {
     final AtomicInteger allocInvocations = new AtomicInteger(0);
@@ -367,6 +372,7 @@ public class RmmTest {
     assertEquals(0, deallocInvocations.get());
   }
 
+  @Tag("noSanitizer")
   @Test
   public void testThresholds() {
     final AtomicInteger allocInvocations = new AtomicInteger(0);
@@ -451,6 +457,7 @@ public class RmmTest {
     assertEquals(2, deallocInvocations.get());
   }
 
+  @Tag("noSanitizer")
   @Test
   public void testExceptionHandling() {
     Rmm.initialize(RmmAllocationMode.POOL, Rmm.logToStderr(), 1024 * 1024L);
@@ -511,6 +518,7 @@ public class RmmTest {
     }
   }
 
+  @Tag("noSanitizer")
   @ParameterizedTest
   @ValueSource(ints = {
       RmmAllocationMode.CUDA_DEFAULT,
@@ -523,6 +531,7 @@ public class RmmTest {
     Cuda.autoSetDevice();
   }
 
+  @Tag("noSanitizer")
   @Test
   public void testPoolSize() {
     Rmm.initialize(RmmAllocationMode.POOL, Rmm.logToStderr(), 1024);
@@ -535,6 +544,7 @@ public class RmmTest {
     }
   }
 
+  @Tag("noSanitizer")
   @Test
   public void testCudaAsyncMemoryResourceSize() {
     try {
@@ -553,6 +563,7 @@ public class RmmTest {
     }
   }
 
+  @Tag("noSanitizer")
   @Test
   public void testCudaAsyncIsIncompatibleWithManaged() {
     assertThrows(IllegalArgumentException.class,

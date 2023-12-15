@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Optional, Tuple, TypeVar
+from typing import Dict, Optional, Tuple
 
 from typing_extensions import Self
 

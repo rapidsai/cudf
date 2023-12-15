@@ -123,3 +123,9 @@ def test_scalar_no_negative_bools():
         ),
     ):
         -x
+
+
+def test_series_bool_neg():
+    sr = Series([True, False, True, None, False, None, True, True])
+    psr = sr.to_pandas(nullable=True)
+    utils.assert_eq((-sr).to_pandas(nullable=True), -psr, check_dtype=True)

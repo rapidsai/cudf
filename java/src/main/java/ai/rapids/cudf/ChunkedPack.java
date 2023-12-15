@@ -88,7 +88,11 @@ public class ChunkedPack implements AutoCloseable {
 
   @Override
   public void close() {
-    chunkedPackDelete(nativePtr);
+    try {
+      chunkedPackDelete(nativePtr);
+    } finally {
+      nativePtr = 0;
+    }
   }
 
   private static native long chunkedPackGetTotalContiguousSize(long nativePtr);

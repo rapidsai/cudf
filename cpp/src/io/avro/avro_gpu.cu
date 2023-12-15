@@ -303,7 +303,7 @@ avro_decode_row(schemadesc_s const* schema,
     // If within an array, check if we reached the last item
     if (array_repeat_count != 0 && array_children <= 0 && cur < end) {
       if (!--array_repeat_count) {
-        i = array_start;                   // Restart at the array parent
+        i = array_start;  // Restart at the array parent
       } else {
         i              = array_start + 1;  // Restart after the array parent
         array_children = schema[array_start].count;
@@ -419,7 +419,7 @@ __global__ void __launch_bounds__(num_warps * 32, 2)
  * @param[in] avro_data Raw block data
  * @param[in] schema_len Number of entries in schema
  * @param[in] min_row_size Minimum size in bytes of a row
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use
  */
 void DecodeAvroColumnData(device_span<block_desc_s const> blocks,
                           schemadesc_s* schema,

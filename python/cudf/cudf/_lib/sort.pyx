@@ -30,7 +30,7 @@ from cudf._lib.cpp.sorting cimport (
 )
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport null_order, null_policy, order
+from cudf._lib.cpp.types cimport null_order, null_policy, order as cpp_order
 from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 
@@ -63,23 +63,25 @@ def is_sorted(
         ``null_position``, False otherwise.
     """
 
-    cdef vector[order] column_order
+    cdef vector[cpp_order] column_order
     cdef vector[null_order] null_precedence
 
     if ascending is None:
-        column_order = vector[order](len(source_columns), order.ASCENDING)
+        column_order = vector[cpp_order](
+            len(source_columns), cpp_order.ASCENDING
+        )
     else:
         if len(ascending) != len(source_columns):
             raise ValueError(
                 f"Expected a list-like of length {len(source_columns)}, "
                 f"got length {len(ascending)} for `ascending`"
             )
-        column_order = vector[order](
-            len(source_columns), order.DESCENDING
+        column_order = vector[cpp_order](
+            len(source_columns), cpp_order.DESCENDING
         )
         for idx, val in enumerate(ascending):
             if val:
-                column_order[idx] = order.ASCENDING
+                column_order[idx] = cpp_order.ASCENDING
 
     if null_position is None:
         null_precedence = vector[null_order](
@@ -110,7 +112,7 @@ def is_sorted(
     return c_result
 
 
-cdef pair[vector[order], vector[null_order]] ordering(
+cdef pair[vector[cpp_order], vector[null_order]] ordering(
     column_order, null_precedence
 ):
     """
@@ -129,17 +131,19 @@ cdef pair[vector[order], vector[null_order]] ordering(
     -------
     pair of vectors (order, and null_order)
     """
-    cdef vector[order] c_column_order
+    cdef vector[cpp_order] c_column_order
     cdef vector[null_order] c_null_precedence
     for asc, null in zip(column_order, null_precedence):
-        c_column_order.push_back(order.ASCENDING if asc else order.DESCENDING)
+        c_column_order.push_back(
+            cpp_order.ASCENDING if asc else cpp_order.DESCENDING
+        )
         if asc ^ (null == "first"):
             c_null_precedence.push_back(null_order.AFTER)
         elif asc ^ (null == "last"):
             c_null_precedence.push_back(null_order.BEFORE)
         else:
             raise ValueError(f"Invalid null precedence {null}")
-    return pair[vector[order], vector[null_order]](
+    return pair[vector[cpp_order], vector[null_order]](
         c_column_order, c_null_precedence
     )
 
@@ -176,7 +180,7 @@ def order_by(
     cdef table_view source_table_view = table_view_from_columns(
         columns_from_table
     )
-    cdef pair[vector[order], vector[null_order]] order = ordering(
+    cdef pair[vector[cpp_order], vector[null_order]] order = ordering(
         ascending, repeat(na_position)
     )
     cdef unique_ptr[column] c_result
@@ -218,7 +222,7 @@ def sort(
     cdef table_view values_view = table_view_from_columns(values)
     cdef unique_ptr[table] result
     ncol = len(values)
-    cdef pair[vector[order], vector[null_order]] order = ordering(
+    cdef pair[vector[cpp_order], vector[null_order]] order = ordering(
         column_order or repeat(True, ncol),
         null_precedence or repeat("first", ncol),
     )
@@ -268,7 +272,7 @@ def sort_by_key(
     """
     cdef table_view value_view = table_view_from_columns(values)
     cdef table_view key_view = table_view_from_columns(keys)
-    cdef pair[vector[order], vector[null_order]] order = ordering(
+    cdef pair[vector[cpp_order], vector[null_order]] order = ordering(
         ascending, na_position
     )
     cdef unique_ptr[table] c_result
@@ -329,7 +333,7 @@ def segmented_sort_by_key(
     cdef column_view offsets_view = segment_offsets.view()
     cdef unique_ptr[table] result
     ncol = len(values)
-    cdef pair[vector[order], vector[null_order]] order = ordering(
+    cdef pair[vector[cpp_order], vector[null_order]] order = ordering(
         column_order or repeat(True, ncol),
         null_precedence or repeat("first", ncol),
     )
@@ -375,10 +379,10 @@ def digitize(list source_columns, list bins, bool right=False):
     cdef table_view source_table_view = table_view_from_columns(
         source_columns
     )
-    cdef vector[order] column_order = (
-        vector[order](
+    cdef vector[cpp_order] column_order = (
+        vector[cpp_order](
             bins_view.num_columns(),
-            order.ASCENDING
+            cpp_order.ASCENDING
         )
     )
     cdef vector[null_order] null_precedence = (
@@ -420,10 +424,10 @@ def rank_columns(list source_columns, object method, str na_option,
         < underlying_type_t_rank_method > method
     )
 
-    cdef order column_order = (
-        order.ASCENDING
+    cdef cpp_order column_order = (
+        cpp_order.ASCENDING
         if ascending
-        else order.DESCENDING
+        else cpp_order.DESCENDING
     )
     # ascending
     #    #top    = na_is_smallest

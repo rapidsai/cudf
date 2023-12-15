@@ -27,6 +27,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/hashing.hpp>
+#include <cudf/json/json.hpp>
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/contains.hpp>
 #include <cudf/lists/count_elements.hpp>
@@ -62,7 +63,6 @@
 #include <cudf/strings/extract.hpp>
 #include <cudf/strings/find.hpp>
 #include <cudf/strings/findall.hpp>
-#include <cudf/strings/json.hpp>
 #include <cudf/strings/padding.hpp>
 #include <cudf/strings/regex/regex_program.hpp>
 #include <cudf/strings/repeat_strings.hpp>
@@ -91,22 +91,32 @@ using cudf::jni::release_as_jlong;
 
 namespace {
 
-std::size_t calc_device_memory_size(cudf::column_view const &view) {
+std::size_t pad_size(std::size_t size, bool const should_pad_for_cpu) {
+  if (should_pad_for_cpu) {
+    constexpr std::size_t ALIGN = sizeof(std::max_align_t);
+    return (size + (ALIGN - 1)) & ~(ALIGN - 1);
+  } else {
+    return size;
+  }
+}
+
+std::size_t calc_device_memory_size(cudf::column_view const &view, bool const pad_for_cpu) {
   std::size_t total = 0;
   auto row_count = view.size();
 
   if (view.nullable()) {
-    total += cudf::bitmask_allocation_size_bytes(row_count);
+    total += pad_size(cudf::bitmask_allocation_size_bytes(row_count), pad_for_cpu);
   }
 
   auto dtype = view.type();
   if (cudf::is_fixed_width(dtype)) {
-    total += cudf::size_of(dtype) * view.size();
+    total += pad_size(cudf::size_of(dtype) * view.size(), pad_for_cpu);
   }
 
-  return std::accumulate(
-      view.child_begin(), view.child_end(), total,
-      [](std::size_t t, cudf::column_view const &v) { return t + calc_device_memory_size(v); });
+  return std::accumulate(view.child_begin(), view.child_end(), total,
+                         [pad_for_cpu](std::size_t t, cudf::column_view const &v) {
+                           return t + calc_device_memory_size(v, pad_for_cpu);
+                         });
 }
 
 } // anonymous namespace
@@ -885,6 +895,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_byteCount(JNIEnv *env, jc
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_codePoints(JNIEnv *env, jclass clazz,
+                                                                  jlong view_handle) {
+  JNI_NULL_CHECK(env, view_handle, "input column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const input = reinterpret_cast<cudf::column_view const *>(view_handle);
+    return release_as_jlong(cudf::strings::code_points(cudf::strings_column_view{*input}));
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_findAndReplaceAll(JNIEnv *env, jclass clazz,
                                                                          jlong old_values_handle,
                                                                          jlong new_values_handle,
@@ -1120,7 +1141,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
     }
     if (n_data_type.id() == cudf::type_id::STRING) {
       switch (column->type().id()) {
-        case cudf::type_id::BOOL8: return release_as_jlong(cudf::strings::from_booleans(*column));
+        case cudf::type_id::BOOL8: {
+          auto const true_scalar = cudf::string_scalar("true");
+          auto const false_scalar = cudf::string_scalar("false");
+          return release_as_jlong(cudf::strings::from_booleans(*column, true_scalar, false_scalar));
+        }
         case cudf::type_id::FLOAT32:
         case cudf::type_id::FLOAT64: return release_as_jlong(cudf::strings::from_floats(*column));
         case cudf::type_id::INT8:
@@ -1139,7 +1164,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
       }
     } else if (column->type().id() == cudf::type_id::STRING) {
       switch (n_data_type.id()) {
-        case cudf::type_id::BOOL8: return release_as_jlong(cudf::strings::to_booleans(*column));
+        case cudf::type_id::BOOL8: {
+          auto const true_scalar = cudf::string_scalar("true");
+          return release_as_jlong(cudf::strings::to_booleans(*column, true_scalar));
+        }
         case cudf::type_id::FLOAT32:
         case cudf::type_id::FLOAT64:
           return release_as_jlong(cudf::strings::to_floats(*column, n_data_type));
@@ -2217,14 +2245,19 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeValidityLength(J
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getDeviceMemorySize(JNIEnv *env, jclass,
-                                                                           jlong handle) {
+                                                                           jlong handle,
+                                                                           jboolean pad_for_cpu) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     auto view = reinterpret_cast<cudf::column_view const *>(handle);
-    return calc_device_memory_size(*view);
+    return calc_device_memory_size(*view, pad_for_cpu);
   }
   CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_hostPaddingSizeInBytes(JNIEnv *env, jclass) {
+  return sizeof(std::max_align_t);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_clamper(JNIEnv *env, jobject j_object,
@@ -2421,7 +2454,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getJSONObject(JNIEnv *env
     cudf::column_view *n_column_view = reinterpret_cast<cudf::column_view *>(j_view_handle);
     cudf::strings_column_view n_strings_col_view(*n_column_view);
     cudf::string_scalar *n_scalar_path = reinterpret_cast<cudf::string_scalar *>(j_scalar_handle);
-    return release_as_jlong(cudf::strings::get_json_object(n_strings_col_view, *n_scalar_path));
+    return release_as_jlong(cudf::get_json_object(n_strings_col_view, *n_scalar_path));
   }
   CATCH_STD(env, 0)
 }
@@ -2548,4 +2581,13 @@ Java_ai_rapids_cudf_ColumnView_purgeNonEmptyNulls(JNIEnv *env, jclass, jlong col
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_toHex(JNIEnv *env, jclass, jlong input_ptr) {
+  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    const cudf::column_view *input = reinterpret_cast<cudf::column_view *>(input_ptr);
+    return release_as_jlong(cudf::strings::integers_to_hex(*input));
+  }
+  CATCH_STD(env, 0);
+}
 } // extern "C"

@@ -3,31 +3,37 @@
 """
 Test related to Index
 """
+import operator
 import re
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.api.extensions import no_default
+from cudf.api.types import is_bool_dtype
 from cudf.core._compat import PANDAS_GE_133, PANDAS_GE_200
 from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
     GenericIndex,
-    IntervalIndex,
     RangeIndex,
     as_index,
 )
 from cudf.testing._utils import (
+    ALL_TYPES,
     FLOAT_TYPES,
     NUMERIC_TYPES,
     OTHER_TYPES,
+    SERIES_OR_INDEX_NAMES,
     SIGNED_INTEGER_TYPES,
     SIGNED_TYPES,
     UNSIGNED_TYPES,
-    _create_pandas_series,
+    _create_cudf_series_float64_default,
+    _create_pandas_series_float64_default,
     assert_column_memory_eq,
     assert_column_memory_ne,
     assert_eq,
@@ -227,12 +233,16 @@ def test_pandas_as_index():
     )
 
 
-def test_index_rename():
-    pds = pd.Index([1, 2, 3], name="asdf")
+@pytest.mark.parametrize("initial_name", SERIES_OR_INDEX_NAMES)
+@pytest.mark.parametrize("name", SERIES_OR_INDEX_NAMES)
+def test_index_rename(initial_name, name):
+    pds = pd.Index([1, 2, 3], name=initial_name)
     gds = as_index(pds)
 
-    expect = pds.rename("new_name")
-    got = gds.rename("new_name")
+    assert_eq(pds, gds)
+
+    expect = pds.rename(name)
+    got = gds.rename(name)
 
     assert_eq(expect, got)
     """
@@ -673,7 +683,7 @@ def test_index_where(data, condition, other, error):
         gs_other = other
 
     if error is None:
-        if pd.api.types.is_categorical_dtype(ps):
+        if isinstance(ps.dtype, pd.CategoricalDtype):
             expect = ps.where(ps_condition, other=ps_other)
             got = gs.where(gs_condition, other=gs_other)
             np.testing.assert_array_equal(
@@ -789,6 +799,10 @@ def test_index_to_series(data):
         ["5", "6", "2", "a", "b", "c"],
         [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
         [1.0, 5.0, 6.0, 0.0, 1.3],
+        ["ab", "cd", "ef"],
+        pd.Series(["1", "2", "a", "3", None], dtype="category"),
+        range(0, 10),
+        [],
     ],
 )
 @pytest.mark.parametrize(
@@ -799,22 +813,43 @@ def test_index_to_series(data):
         [10, 20, 30, 40, 50, 60],
         ["1", "2", "3", "4", "5", "6"],
         ["5", "6", "2", "a", "b", "c"],
+        ["ab", "ef", None],
         [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
         [1.0, 5.0, 6.0, 0.0, 1.3],
+        range(2, 4),
+        pd.Series(["1", "a", "3", None], dtype="category"),
         [],
     ],
 )
 @pytest.mark.parametrize("sort", [None, False])
-def test_index_difference(data, other, sort):
-    pd_data = pd.Index(data)
-    pd_other = pd.Index(other)
+@pytest.mark.parametrize(
+    "name_data,name_other",
+    [("abc", "c"), (None, "abc"), ("abc", pd.NA), ("abc", "abc")],
+)
+def test_index_difference(data, other, sort, name_data, name_other):
+    pd_data = pd.Index(data, name=name_data)
+    pd_other = pd.Index(other, name=name_other)
 
-    gd_data = cudf.core.index.as_index(data)
-    gd_other = cudf.core.index.as_index(other)
+    gd_data = cudf.from_pandas(pd_data)
+    gd_other = cudf.from_pandas(pd_other)
 
     expected = pd_data.difference(pd_other, sort=sort)
     actual = gd_data.difference(gd_other, sort=sort)
+
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("other", ["a", 1, None])
+def test_index_difference_invalid_inputs(other):
+    pdi = pd.Index([1, 2, 3])
+    gdi = cudf.Index([1, 2, 3])
+
+    assert_exceptions_equal(
+        pdi.difference,
+        gdi.difference,
+        ([other], {}),
+        ([other], {}),
+    )
 
 
 def test_index_difference_sort_error():
@@ -974,8 +1009,8 @@ def test_index_equal_misc(data, other):
     actual = gd_data.equals(np.array(gd_other))
     assert_eq(expected, actual)
 
-    expected = pd_data.equals(_create_pandas_series(pd_other))
-    actual = gd_data.equals(cudf.Series(gd_other))
+    expected = pd_data.equals(_create_pandas_series_float64_default(pd_other))
+    actual = gd_data.equals(_create_cudf_series_float64_default(gd_other))
     assert_eq(expected, actual)
 
     expected = pd_data.astype("category").equals(pd_other)
@@ -1039,6 +1074,18 @@ def test_index_append(data, other):
         assert_eq(expected.astype("str"), actual)
     else:
         assert_eq(expected, actual)
+
+
+def test_index_empty_append_name_conflict():
+    empty = cudf.Index([], name="foo")
+    non_empty = cudf.Index([1], name="bar")
+    expected = cudf.Index([1])
+
+    result = non_empty.append(empty)
+    assert_eq(result, expected)
+
+    result = empty.append(non_empty)
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize(
@@ -1352,255 +1399,6 @@ def test_categorical_index_basic(data, categories, dtype, ordered, name):
     assert_eq(pindex, gindex)
 
 
-INTERVAL_BOUNDARY_TYPES = [
-    int,
-    np.int8,
-    np.int16,
-    np.int32,
-    np.int64,
-    np.float32,
-    np.float64,
-    cudf.Scalar,
-]
-
-
-@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
-@pytest.mark.parametrize("start", [0, 1, 2, 3])
-@pytest.mark.parametrize("end", [4, 5, 6, 7])
-def test_interval_range_basic(start, end, closed):
-    pindex = pd.interval_range(start=start, end=end, closed=closed)
-    gindex = cudf.interval_range(start=start, end=end, closed=closed)
-
-    assert_eq(pindex, gindex)
-
-
-@pytest.mark.parametrize("start_t", INTERVAL_BOUNDARY_TYPES)
-@pytest.mark.parametrize("end_t", INTERVAL_BOUNDARY_TYPES)
-def test_interval_range_dtype_basic(start_t, end_t):
-    start, end = start_t(24), end_t(42)
-    start_val = start.value if isinstance(start, cudf.Scalar) else start
-    end_val = end.value if isinstance(end, cudf.Scalar) else end
-    pindex = pd.interval_range(start=start_val, end=end_val, closed="left")
-    gindex = cudf.interval_range(start=start, end=end, closed="left")
-
-    assert_eq(pindex, gindex)
-
-
-@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
-@pytest.mark.parametrize("start", [0])
-@pytest.mark.parametrize("end", [0])
-def test_interval_range_empty(start, end, closed):
-    pindex = pd.interval_range(start=start, end=end, closed=closed)
-    gindex = cudf.interval_range(start=start, end=end, closed=closed)
-
-    assert_eq(pindex, gindex)
-
-
-@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
-@pytest.mark.parametrize("freq", [1, 2, 3])
-@pytest.mark.parametrize("start", [0, 1, 2, 3, 5])
-@pytest.mark.parametrize("end", [6, 8, 10, 43, 70])
-def test_interval_range_freq_basic(start, end, freq, closed):
-    pindex = pd.interval_range(start=start, end=end, freq=freq, closed=closed)
-    gindex = cudf.interval_range(
-        start=start, end=end, freq=freq, closed=closed
-    )
-
-    assert_eq(pindex, gindex)
-
-
-@pytest.mark.parametrize("start_t", INTERVAL_BOUNDARY_TYPES)
-@pytest.mark.parametrize("end_t", INTERVAL_BOUNDARY_TYPES)
-@pytest.mark.parametrize("freq_t", INTERVAL_BOUNDARY_TYPES)
-def test_interval_range_freq_basic_dtype(start_t, end_t, freq_t):
-    start, end, freq = start_t(5), end_t(70), freq_t(3)
-    start_val = start.value if isinstance(start, cudf.Scalar) else start
-    end_val = end.value if isinstance(end, cudf.Scalar) else end
-    freq_val = freq.value if isinstance(freq, cudf.Scalar) else freq
-    pindex = pd.interval_range(
-        start=start_val, end=end_val, freq=freq_val, closed="left"
-    )
-    gindex = cudf.interval_range(
-        start=start, end=end, freq=freq, closed="left"
-    )
-
-    assert_eq(pindex, gindex)
-
-
-@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
-@pytest.mark.parametrize("periods", [1, 1.0, 2, 2.0, 3.0, 3])
-@pytest.mark.parametrize("start", [0, 0.0, 1.0, 1, 2, 2.0, 3.0, 3])
-@pytest.mark.parametrize("end", [4, 4.0, 5.0, 5, 6, 6.0, 7.0, 7])
-def test_interval_range_periods_basic(start, end, periods, closed):
-    pindex = pd.interval_range(
-        start=start, end=end, periods=periods, closed=closed
-    )
-    gindex = cudf.interval_range(
-        start=start, end=end, periods=periods, closed=closed
-    )
-
-    assert_eq(pindex, gindex)
-
-
-@pytest.mark.parametrize("start_t", INTERVAL_BOUNDARY_TYPES)
-@pytest.mark.parametrize("end_t", INTERVAL_BOUNDARY_TYPES)
-@pytest.mark.parametrize("periods_t", INTERVAL_BOUNDARY_TYPES)
-def test_interval_range_periods_basic_dtype(start_t, end_t, periods_t):
-    start, end, periods = start_t(0), end_t(4), periods_t(1.0)
-    start_val = start.value if isinstance(start, cudf.Scalar) else start
-    end_val = end.value if isinstance(end, cudf.Scalar) else end
-    periods_val = (
-        periods.value if isinstance(periods, cudf.Scalar) else periods
-    )
-    pindex = pd.interval_range(
-        start=start_val, end=end_val, periods=periods_val, closed="left"
-    )
-    gindex = cudf.interval_range(
-        start=start, end=end, periods=periods, closed="left"
-    )
-
-    assert_eq(pindex, gindex)
-
-
-@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
-@pytest.mark.parametrize("periods", [1, 2, 3])
-@pytest.mark.parametrize("freq", [1, 2, 3, 4])
-@pytest.mark.parametrize("end", [4, 8, 9, 10])
-def test_interval_range_periods_freq_end(end, freq, periods, closed):
-    pindex = pd.interval_range(
-        end=end, freq=freq, periods=periods, closed=closed
-    )
-    gindex = cudf.interval_range(
-        end=end, freq=freq, periods=periods, closed=closed
-    )
-
-    assert_eq(pindex, gindex)
-
-
-@pytest.mark.parametrize("periods_t", INTERVAL_BOUNDARY_TYPES)
-@pytest.mark.parametrize("freq_t", INTERVAL_BOUNDARY_TYPES)
-@pytest.mark.parametrize("end_t", INTERVAL_BOUNDARY_TYPES)
-def test_interval_range_periods_freq_end_dtype(periods_t, freq_t, end_t):
-    periods, freq, end = periods_t(2), freq_t(3), end_t(10)
-    freq_val = freq.value if isinstance(freq, cudf.Scalar) else freq
-    end_val = end.value if isinstance(end, cudf.Scalar) else end
-    periods_val = (
-        periods.value if isinstance(periods, cudf.Scalar) else periods
-    )
-    pindex = pd.interval_range(
-        end=end_val, freq=freq_val, periods=periods_val, closed="left"
-    )
-    gindex = cudf.interval_range(
-        end=end, freq=freq, periods=periods, closed="left"
-    )
-
-    assert_eq(pindex, gindex)
-
-
-@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
-@pytest.mark.parametrize("periods", [1, 2, 3])
-@pytest.mark.parametrize("freq", [1, 2, 3, 4])
-@pytest.mark.parametrize("start", [1, 4, 9, 12])
-def test_interval_range_periods_freq_start(start, freq, periods, closed):
-    pindex = pd.interval_range(
-        start=start, freq=freq, periods=periods, closed=closed
-    )
-    gindex = cudf.interval_range(
-        start=start, freq=freq, periods=periods, closed=closed
-    )
-
-    assert_eq(pindex, gindex)
-
-
-@pytest.mark.parametrize("periods_t", INTERVAL_BOUNDARY_TYPES)
-@pytest.mark.parametrize("freq_t", INTERVAL_BOUNDARY_TYPES)
-@pytest.mark.parametrize("start_t", INTERVAL_BOUNDARY_TYPES)
-def test_interval_range_periods_freq_start_dtype(periods_t, freq_t, start_t):
-    periods, freq, start = periods_t(2), freq_t(3), start_t(9)
-    freq_val = freq.value if isinstance(freq, cudf.Scalar) else freq
-    start_val = start.value if isinstance(start, cudf.Scalar) else start
-    periods_val = (
-        periods.value if isinstance(periods, cudf.Scalar) else periods
-    )
-    pindex = pd.interval_range(
-        start=start_val, freq=freq_val, periods=periods_val, closed="left"
-    )
-    gindex = cudf.interval_range(
-        start=start, freq=freq, periods=periods, closed="left"
-    )
-
-    assert_eq(pindex, gindex)
-
-
-@pytest.mark.parametrize("closed", ["right", "left", "both", "neither"])
-@pytest.mark.parametrize(
-    "data",
-    [
-        ([pd.Interval(30, 50)]),
-        ([pd.Interval(0, 3), pd.Interval(1, 7)]),
-        ([pd.Interval(0.2, 60.3), pd.Interval(1, 7), pd.Interval(0, 0)]),
-        ([]),
-    ],
-)
-def test_interval_index_basic(data, closed):
-    pindex = pd.IntervalIndex(data, closed=closed)
-    gindex = IntervalIndex(data, closed=closed)
-
-    assert_eq(pindex, gindex)
-
-
-@pytest.mark.parametrize("closed", ["right", "left", "both", "neither"])
-def test_interval_index_empty(closed):
-    pindex = pd.IntervalIndex([], closed=closed)
-    gindex = IntervalIndex([], closed=closed)
-
-    assert_eq(pindex, gindex)
-
-
-@pytest.mark.parametrize("closed", ["right", "left", "both", "neither"])
-@pytest.mark.parametrize(
-    "data",
-    [
-        ([pd.Interval(1, 6), pd.Interval(1, 10), pd.Interval(1, 3)]),
-        (
-            [
-                pd.Interval(3.5, 6.0),
-                pd.Interval(1.0, 7.0),
-                pd.Interval(0.0, 10.0),
-            ]
-        ),
-        (
-            [
-                pd.Interval(50, 100, closed="left"),
-                pd.Interval(1.0, 7.0, closed="left"),
-                pd.Interval(16, 322, closed="left"),
-            ]
-        ),
-        (
-            [
-                pd.Interval(50, 100, closed="right"),
-                pd.Interval(1.0, 7.0, closed="right"),
-                pd.Interval(16, 322, closed="right"),
-            ]
-        ),
-    ],
-)
-def test_interval_index_many_params(data, closed):
-    pindex = pd.IntervalIndex(data, closed=closed)
-    gindex = IntervalIndex(data, closed=closed)
-
-    assert_eq(pindex, gindex)
-
-
-@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
-def test_interval_index_from_breaks(closed):
-    breaks = [0, 3, 6, 10]
-    pindex = pd.IntervalIndex.from_breaks(breaks, closed=closed)
-    gindex = IntervalIndex.from_breaks(breaks, closed=closed)
-
-    assert_eq(pindex, gindex)
-
-
 @pytest.mark.parametrize(
     "data",
     [
@@ -1671,6 +1469,11 @@ def test_index_drop_duplicates(data, dtype):
     gdi = cudf.Index(data, dtype=dtype)
 
     assert_eq(pdi.drop_duplicates(), gdi.drop_duplicates())
+
+
+def test_dropna_bad_how():
+    with pytest.raises(ValueError):
+        cudf.Index([1]).dropna(how="foo")
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 1, 2, 3, 4], []])
@@ -1800,7 +1603,7 @@ def test_multiindex_to_arrow():
     )
     pdf["a"] = pdf["a"].astype("category")
     df = cudf.from_pandas(pdf)
-    gdi = cudf.Index(df)
+    gdi = cudf.MultiIndex.from_frame(df)
 
     expected = pa.Table.from_pandas(pdf)
     got = gdi.to_arrow()
@@ -1837,6 +1640,31 @@ def test_index_equals_categories():
     expect = lhs.to_pandas().equals(rhs.to_pandas())
 
     assert_eq(expect, got)
+
+
+def test_rangeindex_arg_validation():
+    with pytest.raises(TypeError):
+        RangeIndex("1")
+
+    with pytest.raises(TypeError):
+        RangeIndex(1, "2")
+
+    with pytest.raises(TypeError):
+        RangeIndex(1, 3, "1")
+
+    with pytest.raises(ValueError):
+        RangeIndex(1, dtype="float64")
+
+    with pytest.raises(ValueError):
+        RangeIndex(1, dtype="uint64")
+
+
+def test_rangeindex_name_not_hashable():
+    with pytest.raises(ValueError):
+        RangeIndex(range(2), name=["foo"])
+
+    with pytest.raises(ValueError):
+        RangeIndex(range(2)).copy(name=["foo"])
 
 
 def test_index_rangeindex_search_range():
@@ -2296,6 +2124,22 @@ def test_range_index_concat(objs):
         (pd.Index([0, 1, 2, 30], name="a"), [90, 100]),
         (pd.Index([0, 1, 2, 30]), pd.Index([0, 10, 1.0, 11])),
         (pd.Index(["a", "b", "c", "d", "c"]), pd.Index(["a", "c", "z"])),
+        (
+            pd.IntervalIndex.from_tuples([(0, 2), (0, 2), (2, 4)]),
+            pd.IntervalIndex.from_tuples([(0, 2), (2, 4)]),
+        ),
+        (pd.RangeIndex(0, 10), pd.Index([8, 1, 2, 4])),
+        (pd.Index([8, 1, 2, 4], name="a"), pd.Index([8, 1, 2, 4], name="b")),
+        (
+            pd.Index([8, 1, 2, 4], name="a"),
+            pd.Index([], name="b", dtype="int64"),
+        ),
+        (pd.Index([], dtype="int64", name="a"), pd.Index([10, 12], name="b")),
+        (pd.Index([True, True, True], name="a"), pd.Index([], dtype="bool")),
+        (
+            pd.Index([True, True, True]),
+            pd.Index([False, True], dtype="bool", name="b"),
+        ),
     ],
 )
 @pytest.mark.parametrize("sort", [None, False])
@@ -2310,34 +2154,75 @@ def test_union_index(idx1, idx2, sort):
     assert_eq(expected, actual)
 
 
+def test_union_bool_with_other():
+    idx1 = cudf.Index([True, True, True])
+    idx2 = cudf.Index([0, 1], name="b")
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(cudf.errors.MixedTypeError):
+            idx1.union(idx2)
+
+
+@pytest.mark.parametrize("dtype1", ["int8", "int32", "int32"])
+@pytest.mark.parametrize("dtype2", ["uint32", "uint64"])
+def test_union_unsigned_vs_signed(dtype1, dtype2):
+    idx1 = cudf.Index([10, 20, 30], dtype=dtype1)
+    idx2 = cudf.Index([0, 1], dtype=dtype2)
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(cudf.errors.MixedTypeError):
+            idx1.union(idx2)
+
+
 @pytest.mark.parametrize(
     "idx1, idx2",
     [
         (pd.RangeIndex(0, 10), pd.RangeIndex(3, 7)),
         (pd.RangeIndex(0, 10), pd.RangeIndex(-10, 20)),
         (pd.RangeIndex(0, 10, name="a"), pd.RangeIndex(90, 100, name="b")),
-        (pd.Index([0, 1, 2, 30], name="a"), pd.Index([30, 0, 90, 100])),
+        (pd.Index([0, 1, 2, 30], name=pd.NA), pd.Index([30, 0, 90, 100])),
         (pd.Index([0, 1, 2, 30], name="a"), [90, 100]),
         (pd.Index([0, 1, 2, 30]), pd.Index([0, 10, 1.0, 11])),
-        (pd.Index(["a", "b", "c", "d", "c"]), pd.Index(["a", "c", "z"])),
+        (
+            pd.Index(["a", "b", "c", "d", "c"]),
+            pd.Index(["a", "c", "z"], name="abc"),
+        ),
         (
             pd.Index(["a", "b", "c", "d", "c"]),
             pd.Index(["a", "b", "c", "d", "c"]),
         ),
         (pd.Index([True, False, True, True]), pd.Index([10, 11, 12, 0, 1, 2])),
         (pd.Index([True, False, True, True]), pd.Index([True, True])),
+        (pd.RangeIndex(0, 10, name="a"), pd.Index([5, 6, 7], name="b")),
+        (pd.Index(["a", "b", "c"], dtype="category"), pd.Index(["a", "b"])),
+        (pd.Index(["a", "b", "c"], dtype="category"), pd.Index([1, 2, 3])),
+        (pd.Index([0, 1, 2], dtype="category"), pd.RangeIndex(0, 10)),
+        (pd.Index(["a", "b", "c"], name="abc"), []),
+        (pd.Index([], name="abc"), pd.RangeIndex(0, 4)),
+        (pd.Index([1, 2, 3]), pd.Index([1, 2], dtype="category")),
+        (pd.Index([]), pd.Index([1, 2], dtype="category")),
     ],
 )
 @pytest.mark.parametrize("sort", [None, False])
-def test_intersection_index(idx1, idx2, sort):
+@pytest.mark.parametrize("pandas_compatible", [True, False])
+def test_intersection_index(idx1, idx2, sort, pandas_compatible):
     expected = idx1.intersection(idx2, sort=sort)
 
-    idx1 = cudf.from_pandas(idx1) if isinstance(idx1, pd.Index) else idx1
-    idx2 = cudf.from_pandas(idx2) if isinstance(idx2, pd.Index) else idx2
+    with cudf.option_context("mode.pandas_compatible", pandas_compatible):
+        idx1 = cudf.from_pandas(idx1) if isinstance(idx1, pd.Index) else idx1
+        idx2 = cudf.from_pandas(idx2) if isinstance(idx2, pd.Index) else idx2
 
-    actual = idx1.intersection(idx2, sort=sort)
+        actual = idx1.intersection(idx2, sort=sort)
 
-    assert_eq(expected, actual, exact=False)
+        # TODO: Resolve the bool vs ints mixed issue
+        # once pandas has a direction on this issue
+        # https://github.com/pandas-dev/pandas/issues/44000
+        assert_eq(
+            expected,
+            actual,
+            exact=False
+            if (is_bool_dtype(idx1.dtype) and not is_bool_dtype(idx2.dtype))
+            or (not is_bool_dtype(idx1.dtype) or is_bool_dtype(idx2.dtype))
+            else True,
+        )
 
 
 @pytest.mark.parametrize(
@@ -2461,11 +2346,11 @@ def test_index_nan_as_null(data, nan_idx, NA_idx, nan_as_null):
         [],
         ["this", "is"],
         [0, 19, 13],
-        ["2019-01-01 04:00:00", "2019-01-01 06:00:00", "2018-03-02"],
+        ["2019-01-01 04:00:00", "2019-01-01 06:00:00", "2018-03-02 10:00:00"],
     ],
 )
 def test_isin_index(data, values):
-    psr = _create_pandas_series(data)
+    psr = _create_pandas_series_float64_default(data)
     gsr = cudf.Series.from_pandas(psr)
 
     got = gsr.index.isin(values)
@@ -2485,11 +2370,15 @@ def test_isin_index(data, values):
             [[1, 2, 3, 10, 100], ["red", "blue", "green", "pink", "white"]],
             names=("number", "color"),
         ),
+        pd.MultiIndex.from_product(
+            [[0, 1], ["red", "blue", "green"]], names=("number", "color")
+        ),
     ],
 )
 @pytest.mark.parametrize(
     "values,level,err",
     [
+        ([(1, "red"), (2, "blue"), (0, "green")], None, None),
         (["red", "orange", "yellow"], "color", None),
         (["red", "white", "yellow"], "color", None),
         ([0, 1, 2, 10, 11, 15], "number", None),
@@ -2683,6 +2572,18 @@ def test_rangeindex_binops_user_option(
     )
 
 
+@pytest.mark.parametrize(
+    "op", [operator.add, operator.sub, operator.mul, operator.truediv]
+)
+def test_rangeindex_binop_diff_names_none(op):
+    idx1 = cudf.RangeIndex(10, 13, name="foo")
+    idx2 = cudf.RangeIndex(13, 16, name="bar")
+    result = op(idx1, idx2)
+    expected = op(idx1.to_pandas(), idx2.to_pandas())
+    assert_eq(result, expected)
+    assert result.name is None
+
+
 def test_rangeindex_join_user_option(default_integer_bitwidth):
     # Test that RangeIndex is materialized into 32 bit index under user
     # configuration for join.
@@ -2706,6 +2607,16 @@ def test_rangeindex_where_user_option(default_integer_bitwidth):
         dtype=f"int{default_integer_bitwidth}",
     )
     assert_eq(expected, actual)
+
+
+def test_rangeindex_append_return_rangeindex():
+    idx = cudf.RangeIndex(0, 10)
+    result = idx.append([])
+    assert_eq(idx, result)
+
+    result = idx.append(cudf.Index([10]))
+    expected = cudf.RangeIndex(0, 11)
+    assert_eq(result, expected)
 
 
 index_data = [
@@ -2840,9 +2751,14 @@ def test_index_error_list_index():
 )
 def test_index_hasnans(data):
     gs = cudf.Index(data, nan_as_null=False)
-    ps = gs.to_pandas(nullable=True)
-
-    assert_eq(gs.hasnans, ps.hasnans)
+    if isinstance(gs, cudf.RangeIndex):
+        with pytest.raises(NotImplementedError):
+            gs.to_pandas(nullable=True)
+    else:
+        ps = gs.to_pandas(nullable=True)
+        # Check type to avoid mixing Python bool and NumPy bool
+        assert isinstance(gs.hasnans, bool)
+        assert gs.hasnans == ps.hasnans
 
 
 @pytest.mark.parametrize(
@@ -2897,3 +2813,182 @@ class TestIndexScalarGetItem:
         assert not isinstance(index[i], cudf.Index)
         assert index[i] == index_values[i]
         assert_eq(index, index.to_pandas())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            pd.Timestamp("1970-01-01 00:00:00.000000001"),
+            pd.Timestamp("1970-01-01 00:00:00.000000002"),
+            12,
+            20,
+        ],
+        [
+            pd.Timedelta(10),
+            pd.Timedelta(20),
+            12,
+            20,
+        ],
+        [1, 2, 3, 4],
+    ],
+)
+def test_index_mixed_dtype_error(data):
+    pi = pd.Index(data, dtype="object")
+    with pytest.raises(TypeError):
+        cudf.Index(pi)
+
+
+@pytest.mark.parametrize("cls", [pd.DatetimeIndex, pd.TimedeltaIndex])
+def test_index_date_duration_freq_error(cls):
+    s = cls([1, 2, 3], freq="infer")
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.Index(s)
+
+
+@pytest.mark.parametrize("dtype", ["datetime64[ns]", "timedelta64[ns]"])
+def test_index_getitem_time_duration(dtype):
+    gidx = cudf.Index([1, 2, 3, 4, None], dtype=dtype)
+    pidx = gidx.to_pandas()
+    with cudf.option_context("mode.pandas_compatible", True):
+        for i in range(len(gidx)):
+            if i == 4:
+                assert gidx[i] is pidx[i]
+            else:
+                assert_eq(gidx[i], pidx[i])
+
+
+@pytest.mark.parametrize("dtype", ALL_TYPES)
+def test_index_empty_from_pandas(request, dtype):
+    request.node.add_marker(
+        pytest.mark.xfail(
+            condition=not PANDAS_GE_200
+            and dtype
+            in {
+                "datetime64[ms]",
+                "datetime64[s]",
+                "datetime64[us]",
+                "timedelta64[ms]",
+                "timedelta64[s]",
+                "timedelta64[us]",
+            },
+            reason="Fixed in pandas-2.0",
+        )
+    )
+    pidx = pd.Index([], dtype=dtype)
+    gidx = cudf.from_pandas(pidx)
+
+    assert_eq(pidx, gidx)
+
+
+def test_empty_index_init():
+    pidx = pd.Index([])
+    gidx = cudf.Index([])
+
+    assert_eq(pidx, gidx)
+
+
+@pytest.mark.parametrize(
+    "data", [[1, 2, 3], ["ab", "cd", "e", None], range(0, 10)]
+)
+@pytest.mark.parametrize("data_name", [None, 1, "abc"])
+@pytest.mark.parametrize("index", [True, False])
+@pytest.mark.parametrize("name", [None, no_default, 1, "abc"])
+def test_index_to_frame(data, data_name, index, name):
+    pidx = pd.Index(data, name=data_name)
+    gidx = cudf.from_pandas(pidx)
+
+    with expect_warning_if(name is None):
+        expected = pidx.to_frame(index=index, name=name)
+    with expect_warning_if(name is None):
+        actual = gidx.to_frame(index=index, name=name)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3], range(0, 10)])
+@pytest.mark.parametrize("dtype", ["str", "int64", "float64"])
+def test_index_with_index_dtype(data, dtype):
+    pidx = pd.Index(data)
+    gidx = cudf.Index(data)
+
+    expected = pd.Index(pidx, dtype=dtype)
+    actual = cudf.Index(gidx, dtype=dtype)
+
+    assert_eq(expected, actual)
+
+
+def test_period_index_error():
+    pidx = pd.PeriodIndex(year=[2000, 2002], quarter=[1, 3])
+    with pytest.raises(NotImplementedError):
+        cudf.from_pandas(pidx)
+    with pytest.raises(NotImplementedError):
+        cudf.Index(pidx)
+    with pytest.raises(NotImplementedError):
+        cudf.Series(pidx)
+    with pytest.raises(NotImplementedError):
+        cudf.Series(pd.Series(pidx))
+    with pytest.raises(NotImplementedError):
+        cudf.Series(pd.array(pidx))
+
+
+def test_index_from_dataframe_valueerror():
+    with pytest.raises(ValueError):
+        cudf.Index(cudf.DataFrame(range(1)))
+
+
+def test_index_from_scalar_valueerror():
+    with pytest.raises(ValueError):
+        cudf.Index(11)
+
+
+@pytest.mark.parametrize("idx", [0, np.int64(0)])
+def test_index_getitem_from_int(idx):
+    result = cudf.Index([1, 2])[idx]
+    assert result == 1
+
+
+@pytest.mark.parametrize("idx", [1.5, True, "foo"])
+def test_index_getitem_from_nonint_raises(idx):
+    with pytest.raises(ValueError):
+        cudf.Index([1, 2])[idx]
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        cp.ones(5, dtype=cp.float16),
+        np.ones(5, dtype="float16"),
+        pd.Series([0.1, 1.2, 3.3], dtype="float16"),
+        pytest.param(
+            pa.array(np.ones(5, dtype="float16")),
+            marks=pytest.mark.xfail(
+                reason="https://issues.apache.org/jira/browse/ARROW-13762"
+            ),
+        ),
+    ],
+)
+def test_index_raises_float16(data):
+    with pytest.raises(TypeError):
+        cudf.Index(data)
+
+
+def test_from_pandas_rangeindex_return_rangeindex():
+    pidx = pd.RangeIndex(start=3, stop=9, step=3, name="a")
+    result = cudf.Index.from_pandas(pidx)
+    expected = cudf.RangeIndex(start=3, stop=9, step=3, name="a")
+    assert_eq(result, expected, exact=True)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        cudf.RangeIndex(1),
+        cudf.DatetimeIndex(np.array([1, 2], dtype="datetime64[ns]")),
+        cudf.TimedeltaIndex(np.array([1, 2], dtype="timedelta64[ns]")),
+    ],
+)
+def test_index_to_pandas_nullable_notimplemented(idx):
+    with pytest.raises(NotImplementedError):
+        idx.to_pandas(nullable=True)

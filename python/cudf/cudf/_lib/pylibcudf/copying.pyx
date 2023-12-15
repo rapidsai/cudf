@@ -8,19 +8,15 @@ from libcpp.utility cimport move
 # we really want here would be
 # cimport libcudf... libcudf.copying.algo(...)
 from cudf._lib.cpp cimport copying as cpp_copying
+from cudf._lib.cpp.copying cimport out_of_bounds_policy
+
+from cudf._lib.cpp.copying import \
+    out_of_bounds_policy as OutOfBoundsPolicy  # no-cython-lint
+
 from cudf._lib.cpp.table.table cimport table
 
 from .column cimport Column
 from .table cimport Table
-
-
-cdef inline cpp_copying.out_of_bounds_policy py_policy_to_c_policy(
-    OutOfBoundsPolicy py_policy
-) nogil:
-    """Convert a Cython policy the corresponding libcudf policy type."""
-    return <cpp_copying.out_of_bounds_policy> (
-        <underlying_type_t_out_of_bounds_policy> py_policy
-    )
 
 
 # TODO: Is it OK to reference the corresponding libcudf algorithm in the
@@ -28,7 +24,7 @@ cdef inline cpp_copying.out_of_bounds_policy py_policy_to_c_policy(
 cpdef Table gather(
     Table source_table,
     Column gather_map,
-    OutOfBoundsPolicy bounds_policy
+    out_of_bounds_policy bounds_policy
 ):
     """Select rows from source_table according to the provided gather_map.
 
@@ -40,7 +36,7 @@ cpdef Table gather(
         The table object from which to pull data.
     gather_map : Column
         The list of row indices to pull out of the source table.
-    bounds_policy : OutOfBoundsPolicy
+    bounds_policy : out_of_bounds_policy
         Controls whether out of bounds indices are checked and nullified in the
         output or if indices are assumed to be in bounds.
 
@@ -55,7 +51,7 @@ cpdef Table gather(
             cpp_copying.gather(
                 source_table.view(),
                 gather_map.view(),
-                py_policy_to_c_policy(bounds_policy)
+                bounds_policy
             )
         )
     return Table.from_libcudf(move(c_result))

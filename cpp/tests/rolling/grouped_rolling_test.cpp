@@ -33,9 +33,6 @@
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 
-#include <algorithm>
-#include <vector>
-
 const std::string cuda_func{
   R"***(
     template <typename OutType, typename InType>
@@ -637,7 +634,7 @@ TYPED_TEST(GroupedRollingTest, ZeroWindow)
                                                                          key_1_vec.end());
   const cudf::table_view grouping_keys{std::vector<cudf::column_view>{key_0, key_1}};
 
-  cudf::size_type preceding_window = 0;
+  cudf::size_type preceding_window = 1;
   cudf::size_type following_window = 0;
   std::vector<cudf::size_type> expected_group_offsets{0, 4, 8, DATA_SIZE};
 
@@ -1663,9 +1660,9 @@ TYPED_TEST(TypedUnboundedWindowTest,
     min_periods,
     *cudf::make_count_aggregation<cudf::rolling_aggregation>());
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
-                                 cudf::test::fixed_width_column_wrapper<cudf::size_type>{
-                                   {9, 9, 9, 9, 9, 9, 9, 9, 9, 9}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    output->view(),
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{9, 9, 9, 9, 9, 9, 9, 9, 9, 9});
 }
 
 TYPED_TEST(TypedUnboundedWindowTest, UnboundedPrecedingWindowSingleGroupTimestampASCNullsLast)
@@ -1754,9 +1751,9 @@ TYPED_TEST(TypedUnboundedWindowTest,
     min_periods,
     *cudf::make_count_aggregation<cudf::rolling_aggregation>());
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
-                                 cudf::test::fixed_width_column_wrapper<cudf::size_type>{
-                                   {9, 9, 9, 9, 9, 9, 9, 9, 9, 9}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    output->view(),
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{9, 9, 9, 9, 9, 9, 9, 9, 9, 9});
 }
 
 TYPED_TEST(TypedUnboundedWindowTest, UnboundedPrecedingWindowSingleGroupTimestampDESCNullsFirst)
@@ -1845,9 +1842,9 @@ TYPED_TEST(TypedUnboundedWindowTest,
     min_periods,
     *cudf::make_count_aggregation<cudf::rolling_aggregation>());
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
-                                 cudf::test::fixed_width_column_wrapper<cudf::size_type>{
-                                   {9, 9, 9, 9, 9, 9, 9, 9, 9, 9}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    output->view(),
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{9, 9, 9, 9, 9, 9, 9, 9, 9, 9});
 }
 
 TYPED_TEST(TypedUnboundedWindowTest, UnboundedPrecedingWindowSingleGroupTimestampDESCNullsLast)
@@ -1936,9 +1933,9 @@ TYPED_TEST(TypedUnboundedWindowTest,
     min_periods,
     *cudf::make_count_aggregation<cudf::rolling_aggregation>());
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
-                                 cudf::test::fixed_width_column_wrapper<cudf::size_type>{
-                                   {9, 9, 9, 9, 9, 9, 9, 9, 9, 9}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    output->view(),
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{9, 9, 9, 9, 9, 9, 9, 9, 9, 9});
 }
 
 TYPED_TEST(TypedUnboundedWindowTest, UnboundedPrecedingCountMultiGroupTimestampASCNullsFirst)
@@ -2024,9 +2021,9 @@ TYPED_TEST(TypedUnboundedWindowTest,
     min_periods,
     *cudf::make_count_aggregation<cudf::rolling_aggregation>());
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
-                                 cudf::test::fixed_width_column_wrapper<cudf::size_type>{
-                                   {5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    output->view(),
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{5, 5, 5, 5, 5, 5, 5, 5, 5, 5});
 }
 
 TYPED_TEST(TypedUnboundedWindowTest, UnboundedPrecedingCountMultiGroupTimestampASCNullsLast)
@@ -2112,9 +2109,9 @@ TYPED_TEST(TypedUnboundedWindowTest,
     min_periods,
     *cudf::make_count_aggregation<cudf::rolling_aggregation>());
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
-                                 cudf::test::fixed_width_column_wrapper<cudf::size_type>{
-                                   {5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    output->view(),
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{5, 5, 5, 5, 5, 5, 5, 5, 5, 5});
 }
 
 TYPED_TEST(TypedUnboundedWindowTest, UnboundedPrecedingCountMultiGroupTimestampDESCNullsFirst)
@@ -2200,9 +2197,9 @@ TYPED_TEST(TypedUnboundedWindowTest,
     min_periods,
     *cudf::make_count_aggregation<cudf::rolling_aggregation>());
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
-                                 cudf::test::fixed_width_column_wrapper<cudf::size_type>{
-                                   {5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    output->view(),
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{5, 5, 5, 5, 5, 5, 5, 5, 5, 5});
 }
 
 TYPED_TEST(TypedUnboundedWindowTest, UnboundedPrecedingCountMultiGroupTimestampDESCNullsLast)
@@ -2288,9 +2285,9 @@ TYPED_TEST(TypedUnboundedWindowTest,
     min_periods,
     *cudf::make_count_aggregation<cudf::rolling_aggregation>());
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
-                                 cudf::test::fixed_width_column_wrapper<cudf::size_type>{
-                                   {5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    output->view(),
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{5, 5, 5, 5, 5, 5, 5, 5, 5, 5});
 }
 
 TYPED_TEST(TypedUnboundedWindowTest, UnboundedPrecedingWindowSingleGroup)
@@ -2363,9 +2360,9 @@ TYPED_TEST(TypedUnboundedWindowTest, UnboundedPrecedingAndFollowingWindowSingleG
                                  min_periods,
                                  *cudf::make_count_aggregation<cudf::rolling_aggregation>());
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
-                                 cudf::test::fixed_width_column_wrapper<cudf::size_type>{
-                                   {9, 9, 9, 9, 9, 9, 9, 9, 9, 9}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    output->view(),
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{9, 9, 9, 9, 9, 9, 9, 9, 9, 9});
 }
 
 TYPED_TEST(TypedUnboundedWindowTest, UnboundedPrecedingWindowMultiGroup)
@@ -2438,9 +2435,9 @@ TYPED_TEST(TypedUnboundedWindowTest, UnboundedPrecedingAndFollowingWindowMultiGr
                                  min_periods,
                                  *cudf::make_count_aggregation<cudf::rolling_aggregation>());
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
-                                 cudf::test::fixed_width_column_wrapper<cudf::size_type>{
-                                   {3, 3, 3, 3, 3, 4, 4, 4, 4, 4}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    output->view(),
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{3, 3, 3, 3, 3, 4, 4, 4, 4, 4});
 }
 
 TYPED_TEST(TypedUnboundedWindowTest, UnboundedPrecedingAndFollowingStructGroup)
@@ -2471,6 +2468,5 @@ TYPED_TEST(TypedUnboundedWindowTest, UnboundedPrecedingAndFollowingStructGroup)
                                  min_periods,
                                  *cudf::make_count_aggregation<cudf::rolling_aggregation>());
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
-    output->view(), result_t{{3, 3, 3, 3, 3, 4, 4, 4, 4, 4}, cudf::test::iterators::no_nulls()});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(), result_t{3, 3, 3, 3, 3, 4, 4, 4, 4, 4});
 }

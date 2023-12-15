@@ -1,5 +1,6 @@
 # Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
+import codecs
 import gzip
 import os
 import re
@@ -1332,6 +1333,20 @@ def test_csv_reader_index_col():
     assert_eq(cu_df.index, pd_df.index)
 
 
+@pytest.mark.parametrize("index_name", [None, "custom name", 124])
+@pytest.mark.parametrize("index_col", [None, 0, "a"])
+def test_csv_reader_index_names(index_name, index_col):
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3], "b": [10, 11, 12]}, index=["AB", "CD", "EF"]
+    )
+    pdf.index.name = index_name
+
+    buffer = pdf.to_csv()
+    actual = cudf.read_csv(StringIO(buffer), index_col=index_col)
+    expected = pd.read_csv(StringIO(buffer), index_col=index_col)
+    assert_eq(actual, expected)
+
+
 @pytest.mark.parametrize(
     "names", [["a", "b", "c"], [416, 905, 647], range(3), None]
 )
@@ -2222,3 +2237,14 @@ def test_column_selection_plus_column_names(usecols, names):
         pd.read_csv(StringIO(buffer), usecols=usecols, names=names),
         cudf.read_csv(StringIO(buffer), usecols=usecols, names=names),
     )
+
+
+def test_read_compressed_BOM(tmpdir):
+    buffer = 'int, string\n1, "a"\n2, "b"\n3, "c"\n'
+
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file20.gz")
+    with gzip.open(fname, "wt", encoding="utf-8") as f:
+        f.write(codecs.BOM_UTF8.decode("utf-8"))
+        f.write(buffer)
+
+    assert_eq(pd.read_csv(fname), cudf.read_csv(fname))

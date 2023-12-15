@@ -121,8 +121,8 @@ __global__ void fused_concatenate_string_offset_kernel(column_device_view const*
                                                        bitmask_type* output_mask,
                                                        size_type* out_valid_count)
 {
-  size_type output_index     = threadIdx.x + blockIdx.x * blockDim.x;
-  size_type warp_valid_count = 0;
+  cudf::thread_index_type output_index = threadIdx.x + blockIdx.x * blockDim.x;
+  size_type warp_valid_count           = 0;
 
   unsigned active_mask;
   if (Nullable) { active_mask = __ballot_sync(0xFFFF'FFFFu, output_index < output_size); }
@@ -175,7 +175,7 @@ __global__ void fused_concatenate_string_chars_kernel(column_device_view const* 
                                                       size_type const output_size,
                                                       char* output_data)
 {
-  size_type output_index = threadIdx.x + blockIdx.x * blockDim.x;
+  cudf::thread_index_type output_index = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (output_index < output_size) {
     // Lookup input index by searching for output index in offsets
@@ -287,12 +287,12 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
         column_view chars_child   = column->child(strings_column_view::chars_column_index);
 
         auto bytes_offset =
-          cudf::detail::get_value<offset_type>(offsets_child, column_offset, stream);
+          cudf::detail::get_value<size_type>(offsets_child, column_offset, stream);
 
         // copy the chars column data
         auto d_chars = chars_child.data<char>() + bytes_offset;
         auto const bytes =
-          cudf::detail::get_value<offset_type>(offsets_child, column_size + column_offset, stream) -
+          cudf::detail::get_value<size_type>(offsets_child, column_size + column_offset, stream) -
           bytes_offset;
 
         CUDF_CUDA_TRY(
