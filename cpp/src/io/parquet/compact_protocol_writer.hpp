@@ -78,7 +78,14 @@ class CompactProtocolFieldWriter {
 
   uint32_t put_int(int64_t v);
 
-  void put_field_header(int f, int cur, int t);
+  template <typename T>
+  void put_packed_type_byte(T high_bits, FieldType t)
+  {
+    uint8_t const clamped_high_bits = std::min(std::max(high_bits, t{0}), T{0xf});
+    put_byte((clamped_high_bits << 4) | static_cast<uint8_t>(t));
+  }
+
+  void put_field_header(int f, int cur, FieldType t);
 
   inline void field_bool(int field, bool b);
 
