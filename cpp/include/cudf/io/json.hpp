@@ -72,8 +72,10 @@ enum class json_recovery_mode_t {
  *
  * Parameters in PANDAS that are unavailable or in cudf:
  *
+ *
+ * +----------------------+--------------------------------------------------+
  * | Name                 | Description                                      |
- * | -------------------- | ------------------------------------------------ |
+ * +======================+==================================================+
  * | `orient`             | currently fixed-format                           |
  * | `typ`                | data is always returned as a cudf::table         |
  * | `convert_axes`       | use column functions for axes operations instead |
@@ -84,6 +86,7 @@ enum class json_recovery_mode_t {
  * | `date_unit`          | only millisecond units are supported             |
  * | `encoding`           | only ASCII-encoded data is supported             |
  * | `chunksize`          | use `byte_range_xxx` for chunking instead        |
+ * +----------------------+--------------------------------------------------+
  */
 class json_reader_options {
   source_info _source;

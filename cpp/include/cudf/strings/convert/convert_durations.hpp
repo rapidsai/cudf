@@ -28,6 +28,7 @@ namespace strings {
  * @file
  */
 
+// clang-format off
 /**
  * @brief Returns a new duration column converting a strings column into
  * durations using the provided format pattern.
@@ -35,24 +36,26 @@ namespace strings {
  * The format pattern can include the following specifiers:
  * "%%,%n,%t,%D,%H,%I,%M,%S,%p,%R,%T,%r,%OH,%OI,%OM,%OS"
  *
- * | Specifier | Description | Range |
- * | :-------: | ----------- | ---------------- |
- * | %% | A literal % character | % |
- * | \%n | A newline character | \\n |
- * | \%t | A horizontal tab character | \\t |
- * | \%D | Days | -2,147,483,648 to 2,147,483,647 |
- * | \%H | 24-hour of the day | 00 to 23 |
- * | \%I | 12-hour of the day | 00 to 11 |
- * | \%M | Minute of the hour | 00 to 59 |
- * | \%S | Second of the minute | 00 to 59.999999999 |
- * | \%OH | same as %H but without sign | 00 to 23 |
- * | \%OI | same as %I but without sign | 00 to 11 |
- * | \%OM | same as %M but without sign | 00 to 59 |
- * | \%OS | same as %S but without sign | 00 to 59 |
- * | \%p | AM/PM designations associated with a 12-hour clock | 'AM' or 'PM' |
- * | \%R | Equivalent to "%H:%M" |  |
- * | \%T | Equivalent to "%H:%M:%S" |  |
- * | \%r | Equivalent to "%OI:%OM:%OS %p" |  |
+ * +-----------+------------------------------------------------------+---------------------------------+
+ * | Specifier | Description                                          | Range                           |
+ * +===========+======================================================+=================================+
+ * | %%        | A literal % character                                | %                               |
+ * | \%n       | A newline character                                  | \\n                             |
+ * | \%t       | A horizontal tab character                           | \\t                             |
+ * | \%D       | Days                                                 | -2,147,483,648 to 2,147,483,647 |
+ * | \%H       | 24-hour of the day                                   | 00 to 23                        |
+ * | \%I       | 12-hour of the day                                   | 00 to 11                        |
+ * | \%M       | Minute of the hour                                   | 00 to 59                        |
+ * | \%S       | Second of the minute                                 | 00 to 59.999999999              |
+ * | \%OH      | same as %H but without sign                          | 00 to 23                        |
+ * | \%OI      | same as %I but without sign                          | 00 to 11                        |
+ * | \%OM      | same as %M but without sign                          | 00 to 59                        |
+ * | \%OS      | same as %S but without sign                          | 00 to 59                        |
+ * | \%p       | AM/PM designations associated with a 12-hour clock   | 'AM' or 'PM'                    |
+ * | \%R       | Equivalent to "%H:%M"                                |                                 |
+ * | \%T       | Equivalent to "%H:%M:%S"                             |                                 |
+ * | \%r       | Equivalent to "%OI:%OM:%OS %p"                       |                                 |
+ * +-----------+------------------------------------------------------+---------------------------------+
  *
  * Other specifiers are not currently supported.
  *
@@ -72,6 +75,7 @@ namespace strings {
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New duration column
  */
+// clang-format on
 std::unique_ptr<column> to_durations(
   strings_column_view const& input,
   data_type duration_type,
@@ -79,6 +83,7 @@ std::unique_ptr<column> to_durations(
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+// clang-format off
 /**
  * @brief Returns a new strings column converting a duration column into
  * strings using the provided format pattern.
@@ -86,24 +91,28 @@ std::unique_ptr<column> to_durations(
  * The format pattern can include the following specifiers:
  * "%%,%n,%t,%D,%H,%I,%M,%S,%p,%R,%T,%r,%OH,%OI,%OM,%OS"
  *
- * | Specifier | Description | Range |
- * | :-------: | ----------- | ---------------- |
- * | %% | A literal % character | % |
- * | \%n | A newline character | \\n |
- * | \%t | A horizontal tab character | \\t |
- * | \%D | Days | -2,147,483,648 to 2,147,483,647 |
- * | \%H | 24-hour of the day | 00 to 23 |
- * | \%I | 12-hour of the day | 00 to 11 |
- * | \%M | Minute of the hour | 00 to 59 |
- * | \%S | Second of the minute | 00 to 59.999999999 |
- * | \%OH | same as %H but without sign | 00 to 23 |
- * | \%OI | same as %I but without sign | 00 to 11 |
- * | \%OM | same as %M but without sign | 00 to 59 |
- * | \%OS | same as %S but without sign | 00 to 59 |
- * | \%p | AM/PM designations associated with a 12-hour clock | 'AM' or 'PM' |
- * | \%R | Equivalent to "%H:%M" |  |
- * | \%T | Equivalent to "%H:%M:%S" |  |
- * | \%r | Equivalent to "%OI:%OM:%OS %p" |  |
+ * +-----------+------------------------------------------------------+---------------------------------+
+ * | Specifier | Description                                          | Range                           |
+ * +===========+======================================================+=================================+
+ * | %%        | A literal % character                                | %                               |
+ * | \%n       | A newline character                                  | \\n                             |
+ * | \%t       | A horizontal tab character                           | \\t                             |
+ * | \%D       | Days                                                 | -2,147,483,648 to 2,147,483,647 |
+ * | \%H       | 24-hour of the day                                   | 00 to 23                        |
+ * | \%I       | 12-hour of the day                                   | 00 to 11                        |
+ * | \%M       | Minute of the hour                                   | 00 to 59                        |
+ * | \%S       | Second of the minute                                 | 00 to 59.999999999              |
+ * | \%OH      | same as %H but without sign                          | 00 to 23                        |
+ * | \%OI      | same as %I but without sign                          | 00 to 11                        |
+ * | \%OM      | same as %M but without sign                          | 00 to 59                        |
+ * | \%OS      | same as %S but without sign                          | 00 to 59                        |
+ * | \%p       | AM/PM designations associated with a 12-hour clock   | 'AM' or 'PM'                    |
+ * | \%R       | Equivalent to "%H:%M"                                |                                 |
+ * | \%T       | Equivalent to "%H:%M:%S"                             |                                 |
+ * | \%r       | Equivalent to "%OI:%OM:%OS %p"                       |                                 |
+ * +-----------+------------------------------------------------------+---------------------------------+
+ *
+ * # Rewrite the above table in reStructuredText
  *
  * No checking is done for invalid formats or invalid duration values. Formatting sticks to
  * specifications of `std::formatter<std::chrono::duration>` as much as possible.
@@ -124,6 +133,7 @@ std::unique_ptr<column> to_durations(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return New strings column with formatted durations
  */
+// clang-format on
 std::unique_ptr<column> from_durations(
   column_view const& durations,
   std::string_view format             = "%D days %H:%M:%S",

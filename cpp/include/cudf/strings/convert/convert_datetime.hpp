@@ -31,30 +31,33 @@ namespace strings {
  * @file
  */
 
+// clang-format off
 /**
  * @brief Returns a new timestamp column converting a strings column into
  * timestamps using the provided format pattern.
  *
  * The format pattern can include the following specifiers: "%Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z"
  *
- * | Specifier | Description |
- * | :-------: | ----------- |
- * | \%d | Day of the month: 01-31 |
- * | \%m | Month of the year: 01-12 |
- * | \%y | Year without century: 00-99. [0,68] maps to [2000,2068] and [69,99] maps to [1969,1999] |
- * | \%Y | Year with century: 0001-9999 |
- * | \%H | 24-hour of the day: 00-23 |
- * | \%I | 12-hour of the day: 01-12 |
- * | \%M | Minute of the hour: 00-59 |
- * | \%S | Second of the minute: 00-59. Leap second is not supported. |
- * | \%f | 6-digit microsecond: 000000-999999 |
- * | \%z | UTC offset with format ±HHMM Example +0500 |
- * | \%j | Day of the year: 001-366 |
- * | \%p | Only 'AM', 'PM' or 'am', 'pm' are recognized |
- * | \%W | Week of the year with Monday as the first day of the week: 00-53 |
- * | \%w | Day of week: 0-6 = Sunday-Saturday |
- * | \%U | Week of the year with Sunday as the first day of the week: 00-53 |
- * | \%u | Day of week: 1-7 = Monday-Sunday |
+ * +-----------+-----------------------------------------------------------------------------------------+
+ * | Specifier | Description                                                                             |
+ * +===========+=========================================================================================+
+ * | ``%d``    | Day of the month: 01-31                                                                 |
+ * | ``%m``    | Month of the year: 01-12                                                                |
+ * | ``%y``    | Year without century: 00-99. [0,68] maps to [2000,2068] and [69,99] maps to [1969,1999] |
+ * | ``%Y``    | Year with century: 0001-9999                                                            |
+ * | ``%H``    | 24-hour of the day: 00-23                                                               |
+ * | ``%I``    | 12-hour of the day: 01-12                                                               |
+ * | ``%M``    | Minute of the hour: 00-59                                                               |
+ * | ``%S``    | Second of the minute: 00-59. Leap second is not supported.                              |
+ * | ``%f``    | 6-digit microsecond: 000000-999999                                                      |
+ * | ``%z``    | UTC offset with format ±HHMM Example +0500                                              |
+ * | ``%j``    | Day of the year: 001-366                                                                |
+ * | ``%p``    | Only 'AM', 'PM' or 'am', 'pm' are recognized                                            |
+ * | ``%W``    | Week of the year with Monday as the first day of the week: 00-53                        |
+ * | ``%w``    | Day of week: 0-6 = Sunday-Saturday                                                      |
+ * | ``%U``    | Week of the year with Sunday as the first day of the week: 00-53                        |
+ * | ``%u``    | Day of week: 1-7 = Monday-Sunday                                                        |
+ * +-----------+-----------------------------------------------------------------------------------------+
  *
  * Other specifiers are not currently supported.
  *
@@ -84,6 +87,7 @@ namespace strings {
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New datetime column
  */
+// clang-format on
 std::unique_ptr<column> to_timestamps(
   strings_column_view const& input,
   data_type timestamp_type,
@@ -91,30 +95,33 @@ std::unique_ptr<column> to_timestamps(
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+// clang-format off
 /**
  * @brief Verifies the given strings column can be parsed to timestamps using the provided format
  * pattern.
  *
  * The format pattern can include the following specifiers: "%Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z"
  *
- * | Specifier | Description |
- * | :-------: | ----------- |
- * | \%d | Day of the month: 01-31 |
- * | \%m | Month of the year: 01-12 |
- * | \%y | Year without century: 00-99. [0,68] maps to [2000,2068] and [69,99] maps to [1969,1999] |
- * | \%Y | Year with century: 0001-9999 |
- * | \%H | 24-hour of the day: 00-23 |
- * | \%I | 12-hour of the day: 01-12 |
- * | \%M | Minute of the hour: 00-59|
- * | \%S | Second of the minute: 00-59. Leap second is not supported. |
- * | \%f | 6-digit microsecond: 000000-999999 |
- * | \%z | UTC offset with format ±HHMM Example +0500 |
- * | \%j | Day of the year: 001-366 |
- * | \%p | Only 'AM', 'PM' or 'am', 'pm' are recognized |
- * | \%W | Week of the year with Monday as the first day of the week: 00-53 |
- * | \%w | Day of week: 0-6 = Sunday-Saturday |
- * | \%U | Week of the year with Sunday as the first day of the week: 00-53 |
- * | \%u | Day of week: 1-7 = Monday-Sunday |
+ * +-----------+-----------------------------------------------------------------------------------------+
+ * | Specifier | Description                                                                             |
+ * +===========+=========================================================================================+
+ * | ``%d``    | Day of the month: 01-31                                                                 |
+ * | ``%m``    | Month of the year: 01-12                                                                |
+ * | ``%y``    | Year without century: 00-99. [0,68] maps to [2000,2068] and [69,99] maps to [1969,1999] |
+ * | ``%Y``    | Year with century: 0001-9999                                                            |
+ * | ``%H``    | 24-hour of the day: 00-23                                                               |
+ * | ``%I``    | 12-hour of the day: 01-12                                                               |
+ * | ``%M``    | Minute of the hour: 00-59                                                               |
+ * | ``%S``    | Second of the minute: 00-59. Leap second is not supported.                              |
+ * | ``%f``    | 6-digit microsecond: 000000-999999                                                      |
+ * | ``%z``    | UTC offset with format ±HHMM Example +0500                                              |
+ * | ``%j``    | Day of the year: 001-366                                                                |
+ * | ``%p``    | Only 'AM', 'PM' or 'am', 'pm' are recognized                                            |
+ * | ``%W``    | Week of the year with Monday as the first day of the week: 00-53                        |
+ * | ``%w``    | Day of week: 0-6 = Sunday-Saturday                                                      |
+ * | ``%U``    | Week of the year with Sunday as the first day of the week: 00-53                        |
+ * | ``%u``    | Day of week: 1-7 = Monday-Sunday                                                        |
+ * +-----------+-----------------------------------------------------------------------------------------+
  *
  * Other specifiers are not currently supported.
  * The "%f" supports a precision value to read the numeric digits. Specify the
@@ -132,43 +139,47 @@ std::unique_ptr<column> to_timestamps(
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New BOOL8 column
  */
+// clang-format on
 std::unique_ptr<column> is_timestamp(
   strings_column_view const& input,
   std::string_view format,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+// clang-format off
 /**
  * @brief Returns a new strings column converting a timestamp column into
  * strings using the provided format pattern.
  *
  * The format pattern can include the following specifiers: "%Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z,%Z"
  *
- * | Specifier | Description |
- * | :-------: | ----------- |
- * | \%d | Day of the month: 01-31 |
- * | \%m | Month of the year: 01-12 |
- * | \%y | Year without century: 00-99 |
- * | \%Y | Year with century: 0001-9999 |
- * | \%H | 24-hour of the day: 00-23 |
- * | \%I | 12-hour of the day: 01-12 |
- * | \%M | Minute of the hour: 00-59|
- * | \%S | Second of the minute: 00-59 |
- * | \%f | 6-digit microsecond: 000000-999999 |
- * | \%z | Always outputs "+0000" |
- * | \%Z | Always outputs "UTC" |
- * | \%j | Day of the year: 001-366 |
- * | \%u | ISO weekday where Monday is 1 and Sunday is 7 |
- * | \%w | Weekday where Sunday is 0 and Saturday is 6 |
- * | \%U | Week of the year with Sunday as the first day: 00-53 |
- * | \%W | Week of the year with Monday as the first day: 00-53 |
- * | \%V | Week of the year per ISO-8601 format: 01-53 |
- * | \%G | Year based on the ISO-8601 weeks: 0000-9999 |
- * | \%p | AM/PM from `timestamp_names::am_str/pm_str` |
- * | \%a | Weekday abbreviation from the `names` parameter |
- * | \%A | Weekday from the `names` parameter |
- * | \%b | Month name abbreviation from the `names` parameter |
- * | \%B | Month name from the `names` parameter |
+ * +-----------+-----------------------------------------------------------------------------------------+
+ * | Specifier | Description                                                                             |
+ * +===========+=========================================================================================+
+ * | ``%d``    | Day of the month: 01-31                                                                 |
+ * | ``%m``    | Month of the year: 01-12                                                                |
+ * | ``%y``    | Year without century: 00-99. [0,68] maps to [2000,2068] and [69,99] maps to [1969,1999] |
+ * | ``%Y``    | Year with century: 0001-9999                                                            |
+ * | ``%H``    | 24-hour of the day: 00-23                                                               |
+ * | ``%I``    | 12-hour of the day: 01-12                                                               |
+ * | ``%M``    | Minute of the hour: 00-59                                                               |
+ * | ``%S``    | Second of the minute: 00-59. Leap second is not supported.                              |
+ * | ``%f``    | 6-digit microsecond: 000000-999999                                                      |
+ * | ``%z``    | Always outputs "+0000"                                                                  |
+ * | ``%Z``    | Always outputs "UTC"                                                                    |
+ * | ``%j``    | Day of the year: 001-366                                                                |
+ * | ``%u``    | ISO weekday where Monday is 1 and Sunday is 7                                           |
+ * | ``%w``    | Weekday where Sunday is 0 and Saturday is 6                                             |
+ * | ``%U``    | Week of the year with Sunday as the first day: 00-53                                    |
+ * | ``%W``    | Week of the year with Monday as the first day: 00-53                                    |
+ * | ``%V``    | Week of the year per ISO-8601 format: 01-53                                             |
+ * | ``%G``    | Year based on the ISO-8601 weeks: 0000-9999                                             |
+ * | ``%p``    | AM/PM from `timestamp_names::am_str/pm_str`                                             |
+ * | ``%a``    | Weekday abbreviation from the `names` parameter                                         |
+ * | ``%A``    | Weekday from the `names` parameter                                                      |
+ * | ``%b``    | Month name abbreviation from the `names` parameter                                      |
+ * | ``%B``    | Month name from the `names` parameter                                                   |
+ * +-----------+-----------------------------------------------------------------------------------------+
  *
  * Additional descriptions can be found here:
  * https://en.cppreference.com/w/cpp/chrono/system_clock/formatter
@@ -244,6 +255,7 @@ std::unique_ptr<column> is_timestamp(
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column with formatted timestamps
  */
+// clang-format on
 std::unique_ptr<column> from_timestamps(
   column_view const& timestamps,
   std::string_view format             = "%Y-%m-%dT%H:%M:%SZ",
