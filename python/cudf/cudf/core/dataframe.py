@@ -6749,11 +6749,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         cat    1.0    2.0
         dog    3.0    4.0
         >>> df_multi_level_cols2.stack()
-            height weight
-        cat kg   <NA>    1.0
-            m     2.0   <NA>
-        dog kg   <NA>    3.0
-            m     4.0   <NA>
+               weight height
+        cat kg    1.0   <NA>
+            m    <NA>    2.0
+        dog kg    3.0   <NA>
+            m    <NA>    4.0
 
         **Prescribing the level(s) to be stacked**
 
@@ -6925,10 +6925,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             if unnamed_level_values.nlevels == 1:
                 unnamed_level_values = unnamed_level_values.get_level_values(0)
-            unnamed_level_values = unnamed_level_values.unique().sort_values()
+            unnamed_level_values = unnamed_level_values.unique()
 
             data = ColumnAccessor(
-                dict(zip(unnamed_level_values, stacked)),
+                dict(
+                    zip(
+                        unnamed_level_values,
+                        [
+                            stacked[i]
+                            for i in unnamed_level_values.argsort().argsort()
+                        ],
+                    )
+                ),
                 isinstance(unnamed_level_values, pd.MultiIndex),
                 unnamed_level_values.names,
             )
