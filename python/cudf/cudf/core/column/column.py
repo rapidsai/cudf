@@ -1892,10 +1892,9 @@ def _make_copy_replacing_NaT_with_null(column):
     return out_col
 
 
-def can_memoryview(arbitrary: Any) -> bool:
+def as_memoryview(arbitrary: Any) -> memoryview | None:
     try:
-        memoryview(arbitrary)
-        return True
+        return memoryview(arbitrary)
     except TypeError:
         return False
 
@@ -2307,73 +2306,89 @@ def as_column(
 
         if delayed_cast:
             data = data.astype(cudf.dtype(dtype))
-
-    elif isinstance(arbitrary, memoryview):
-        data = as_column(
-            np.asarray(arbitrary), dtype=dtype, nan_as_null=nan_as_null
-        )
     elif isinstance(arbitrary, cudf.Scalar):
         data = ColumnBase.from_scalar(arbitrary, length if length else 1)
-    elif can_memoryview(arbitrary):
+    elif isinstance((view := as_memoryview(arbitrary)), memoryview):
         data = as_column(
-            memoryview(arbitrary), dtype=dtype, nan_as_null=nan_as_null
+            np.asarray(view), dtype=dtype, nan_as_null=nan_as_null
         )
     else:
-        from_pandas = True if nan_as_null is None else nan_as_null
-        if dtype is not None:
-            if (
-                isinstance(dtype, (cudf.CategoricalDtype, cudf.IntervalDtype))
-                or dtype == object
-            ):
-                if dtype == object:
-                    pd_dtype = "str"
-                else:
-                    pd_dtype = dtype.to_pandas()
-                arbitrary = pd.Series(arbitrary, dtype=pd_dtype)
-            else:
-                if isinstance(dtype, np.dtype):
-                    typ = np_to_pa_dtype(dtype)
-                else:
-                    typ = dtype.to_arrow()
-                try:
-                    arbitrary = pa.array(
-                        arbitrary, type=typ, from_pandas=from_pandas
-                    )
-                except (pa.ArrowInvalid, pa.ArrowTypeError):
-                    if not isinstance(dtype, np.dtype):
-                        dtype = dtype.to_pandas()
-                    arbitrary = pd.Series(arbitrary, dtype=dtype)
-            data = as_column(arbitrary, nan_as_null=nan_as_null)
+        from_pandas = nan_as_null is None or nan_as_null
+        arbitrary = list(arbitrary)
+        if any(is_column_like(val) for val in arbitrary):
+            # TODO: OK to ignore dtype and nan_as_null here?
+            return cudf.core.column.ListColumn.from_sequences(arbitrary)
+        elif any(isinstance(value, dict) for value in arbitrary):
+            return as_column(
+                pa.array(arbitrary), dtype=dtype, nan_as_null=nan_as_null
+            )
+        elif pd.isna(arbitrary).any():
+            return as_column(
+                pa.array(arbitrary, from_pandas=from_pandas),
+                dtype=dtype,
+                nan_as_null=nan_as_null,
+            )
         else:
-            try:
-                arbitrary = pa.array(arbitrary, from_pandas=from_pandas)
-                if cudf.get_option(
-                    "default_integer_bitwidth"
-                ) and pa.types.is_integer(arbitrary.type):
-                    typ = np_to_pa_dtype(_maybe_convert_to_default_type("int"))
-                    arbitrary = arbitrary.cast(typ)
-                elif cudf.get_option(
-                    "default_float_bitwidth"
-                ) and pa.types.is_floating(arbitrary.type):
-                    typ = np_to_pa_dtype(
-                        _maybe_convert_to_default_type("float")
-                    )
-                    arbitrary = arbitrary.cast(typ)
-            except (pa.ArrowInvalid, pa.ArrowTypeError):
-                if any(is_column_like(val) for val in arbitrary):
-                    return cudf.core.column.ListColumn.from_sequences(
-                        arbitrary
-                    )
-                arbitrary = pd.Series(arbitrary)
-                if cudf.get_option(
-                    "default_integer_bitwidth"
-                ) and is_integer_dtype(arbitrary.dtype):
-                    dtype = _maybe_convert_to_default_type("int")
-                elif cudf.get_option(
-                    "default_float_bitwidth"
-                ) and is_float_dtype(arbitrary.dtype):
-                    dtype = _maybe_convert_to_default_type("float")
-            data = as_column(arbitrary, nan_as_null=nan_as_null, dtype=dtype)
+            if dtype == object:
+                ser = pd.Series(arbitrary, dtype="str")
+            else:
+                ser = pd.Series(arbitrary)
+            return as_column(ser, dtype=dtype, nan_as_null=nan_as_null)
+
+        # if dtype is not None:
+        #     if (
+        #         isinstance(dtype, (cudf.CategoricalDtype, cudf.IntervalDtype))
+        #         or dtype == object
+        #     ):
+        #         if dtype == object:
+        #             pd_dtype = "str"
+        #         else:
+        #             pd_dtype = dtype.to_pandas()
+        #         arbitrary = pd.Series(arbitrary, dtype=pd_dtype)
+        #     else:
+        #         if isinstance(dtype, np.dtype):
+        #             typ = np_to_pa_dtype(dtype)
+        #         else:
+        #             typ = dtype.to_arrow()
+        #         try:
+        #             arbitrary = pa.array(
+        #                 arbitrary, type=typ, from_pandas=from_pandas
+        #             )
+        #         except (pa.ArrowInvalid, pa.ArrowTypeError):
+        #             if not isinstance(dtype, np.dtype):
+        #                 dtype = dtype.to_pandas()
+        #             arbitrary = pd.Series(arbitrary, dtype=dtype)
+        #     data = as_column(arbitrary, nan_as_null=nan_as_null)
+        # else:
+        #     try:
+        #         arbitrary = pa.array(arbitrary, from_pandas=from_pandas)
+        #         if cudf.get_option(
+        #             "default_integer_bitwidth"
+        #         ) and pa.types.is_integer(arbitrary.type):
+        #             typ = np_to_pa_dtype(_maybe_convert_to_default_type("int"))
+        #             arbitrary = arbitrary.cast(typ)
+        #         elif cudf.get_option(
+        #             "default_float_bitwidth"
+        #         ) and pa.types.is_floating(arbitrary.type):
+        #             typ = np_to_pa_dtype(
+        #                 _maybe_convert_to_default_type("float")
+        #             )
+        #             arbitrary = arbitrary.cast(typ)
+        #     except (pa.ArrowInvalid, pa.ArrowTypeError):
+        #         if any(is_column_like(val) for val in arbitrary):
+        #             return cudf.core.column.ListColumn.from_sequences(
+        #                 arbitrary
+        #             )
+        #         arbitrary = pd.Series(arbitrary)
+        #         if cudf.get_option(
+        #             "default_integer_bitwidth"
+        #         ) and is_integer_dtype(arbitrary.dtype):
+        #             dtype = _maybe_convert_to_default_type("int")
+        #         elif cudf.get_option(
+        #             "default_float_bitwidth"
+        #         ) and is_float_dtype(arbitrary.dtype):
+        #             dtype = _maybe_convert_to_default_type("float")
+        #     data = as_column(arbitrary, nan_as_null=nan_as_null, dtype=dtype)
     return data
 
 
