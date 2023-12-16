@@ -780,8 +780,9 @@ TEST_P(ParquetV2Test, Strings)
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
-TEST_F(ParquetWriterTest, StringsAsBinary)
+TEST_P(ParquetV2Test, StringsAsBinary)
 {
+  auto const is_v2 = GetParam();
   std::vector<char const*> unicode_strings{
     "Monday", "Wȅdnȅsday", "Friday", "Monday", "Friday", "Friday", "Friday", "Funday"};
   std::vector<char const*> ascii_strings{
@@ -820,6 +821,8 @@ TEST_F(ParquetWriterTest, StringsAsBinary)
   auto filepath = temp_env->get_temp_filepath("BinaryStrings.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, write_tbl)
+      .write_v2_headers(is_v2)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER)
       .metadata(expected_metadata);
   cudf::io::write_parquet(out_opts);
 

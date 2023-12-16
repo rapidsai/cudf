@@ -2026,6 +2026,8 @@ __global__ void __launch_bounds__(block_size, 8)
   }
   __syncthreads();
 
+  auto const type_id = s->col.leaf_column->type().id();
+
   // encode the lengths as DELTA_BINARY_PACKED
   if (t == 0) {
     first_string = nullptr;
@@ -2036,9 +2038,13 @@ __global__ void __launch_bounds__(block_size, 8)
       for (uint32_t idx = 0; idx < s->page.num_leaf_values; idx++) {
         size_type const idx_in_col = s->page_start_val + idx;
         if (s->col.leaf_column->is_valid(idx_in_col)) {
-          // TODO: do we need to account for list(uint8) vs string?
-          first_string = reinterpret_cast<uint8_t const*>(
-            s->col.leaf_column->element<string_view>(idx_in_col).data());
+          if (type_id == type_id::STRING) {
+            first_string = reinterpret_cast<uint8_t const*>(
+              s->col.leaf_column->element<string_view>(idx_in_col).data());
+          } else if (s->col.output_as_byte_array && type_id == type_id::LIST) {
+            first_string = reinterpret_cast<uint8_t const*>(
+              get_element<statistics::byte_array_view>(*s->col.leaf_column, idx_in_col).data());
+          }
           break;
         }
       }
@@ -2060,8 +2066,21 @@ __global__ void __launch_bounds__(block_size, 8)
 
     cur_val_idx += nvals;
 
-    int32_t v = is_valid ? s->col.leaf_column->element<string_view>(val_idx).size_bytes() : 0;
-    len += v;
+    int32_t v = 0;
+    if (is_valid) {
+      if (type_id == type_id::STRING) {
+        v = s->col.leaf_column->element<string_view>(val_idx).size_bytes();
+      } else if (s->col.output_as_byte_array && type_id == type_id::LIST) {
+        auto const arr_size =
+          get_element<statistics::byte_array_view>(*s->col.leaf_column, val_idx).size_bytes();
+        // the lengths are assumed to be INT32, check for overflow
+        if (arr_size > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
+          CUDF_UNREACHABLE("byte array size exceeds 2GB");
+        }
+        v = static_cast<int32_t>(arr_size);
+      }
+      len += v;
+    }
 
     packer.add_value(v, is_valid);
   }
