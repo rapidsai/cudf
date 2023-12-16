@@ -2066,7 +2066,6 @@ __global__ void __launch_bounds__(block_size, 8)
     packer.add_value(v, is_valid);
   }
 
-  // TODO: test for overflow (string_len > 2GB)
   // string_len is only valid on thread 0
   auto const string_len = block_reduce(temp_storage.reduce_storage).Sum(len);
   if (t == 0) { string_data_len = string_len; }
@@ -2079,7 +2078,7 @@ __global__ void __launch_bounds__(block_size, 8)
   memcpy_block<block_size, true>(output_ptr, first_string, string_data_len, t);
 
   finish_page_encode<block_size>(
-    s, output_ptr + string_len, pages, comp_in, comp_out, comp_results, true);
+    s, output_ptr + string_data_len, pages, comp_in, comp_out, comp_results, true);
 }
 
 constexpr int decide_compression_warps_in_block = 4;
