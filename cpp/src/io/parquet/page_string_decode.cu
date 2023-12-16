@@ -690,7 +690,6 @@ __global__ void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageS
     auto const [len, temp_bytes] = totalDeltaByteArraySize(data, end, start_value, end_value);
 
     if (t == 0) {
-      // TODO check for overflow
       pp->str_bytes = len;
 
       // only need temp space if we're skipping values
@@ -745,9 +744,7 @@ __global__ void __launch_bounds__(delta_length_block_size) gpuComputeDeltaLength
     if (t == 0) {
       auto const* string_start = string_lengths.find_end_of_block(s->data_start, s->data_end);
       size_t len               = static_cast<size_t>(s->data_end - string_start);
-      // TODO check for overflow
-      pp->str_bytes = len;
-      __threadfence_block();
+      pp->str_bytes            = len;
     }
   } else {
     // now process string info in the range [start_value, end_value)
@@ -788,7 +785,6 @@ __global__ void __launch_bounds__(delta_length_block_size) gpuComputeDeltaLength
     if (t == 0) {
       total_bytes += warp_sum;
       pp->str_bytes = total_bytes;
-      __threadfence_block();
     }
   }
 }
