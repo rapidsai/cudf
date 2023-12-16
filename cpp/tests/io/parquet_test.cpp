@@ -816,7 +816,7 @@ TEST_P(ParquetV2Test, StringsAsBinary)
   expected_metadata.column_metadata[1].set_name("col_string").set_output_as_binary(true);
   expected_metadata.column_metadata[2].set_name("col_another").set_output_as_binary(true);
   expected_metadata.column_metadata[3].set_name("col_binary");
-  expected_metadata.column_metadata[4].set_name("col_binary");
+  expected_metadata.column_metadata[4].set_name("col_binary2");
 
   auto filepath = temp_env->get_temp_filepath("BinaryStrings.parquet");
   cudf::io::parquet_writer_options out_opts =
