@@ -8,7 +8,7 @@ import pytest
 
 import cudf
 from cudf._lib.transform import mask_to_bools
-from cudf.core.column.column import as_column
+from cudf.core.column.column import arange, as_column
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 from cudf.utils import dtypes as dtypeutils
 
@@ -398,7 +398,7 @@ def test_column_view_string_slice(slc):
         ),
         (
             cp.array([], dtype="uint8"),
-            cudf.core.column.as_column([], dtype="uint8"),
+            cudf.core.column.column_empty(0, dtype="uint8"),
         ),
         (
             cp.array([255], dtype="uint8"),
@@ -559,3 +559,9 @@ def test_as_column_None_as_object_type():
     assert isinstance(result, cudf.core.column.string.StringColumn)
     assert len(result) == 1
     assert result.null_count == 1
+
+
+def test_arange_empty():
+    result = arange(0)
+    assert len(result) == 0
+    assert result.dtype == np.dtype(np.int64)
