@@ -714,5 +714,5 @@ cdef _set_col_metadata(
             col_meta.child(1),
             force_nullable_schema
         )
-    elif isinstance(df._data[col].dtype, cudf.core.dtypes.DecimalDtype):
+    elif isinstance(col.dtype, cudf.core.dtypes.DecimalDtype):
         col_meta.set_decimal_precision(col.dtype.precision)
