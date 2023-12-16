@@ -78,8 +78,10 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
 
   // can skip all this if we know there are no nulls
   if (max_def == 0 && !is_bounds_pg) {
-    s->page.num_valids = s->num_input_values;
-    s->page.num_nulls  = 0;
+    if (t == 0) {
+      s->page.num_valids = s->num_input_values;
+      s->page.num_nulls  = 0;
+    }
     return {0, s->num_input_values};
   }
 
@@ -294,7 +296,6 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
       pp->num_nulls  = null_count;
       pp->num_valids = pp->num_input_values - null_count;
     }
-    __syncthreads();
 
     end_value -= pp->num_nulls;
   }
@@ -848,7 +849,7 @@ __global__ void __launch_bounds__(decode_block_size)
       target_pos = min(s->nz_count, src_pos + decode_block_size - out_thread0);
       if (out_thread0 > 32) { target_pos = min(target_pos, s->dict_pos); }
     }
-    // TODO(ets): see if this sync can be removed
+    // this needs to be here to prevent warp 1/2 modifying src_pos before all threads have read it
     __syncthreads();
     if (t < 32) {
       // decode repetition and definition levels.
