@@ -41,10 +41,10 @@ popd
 rapids-logger "Build Python docs"
 pushd docs/cudf
 make dirhtml
-make text
+#make text
 mkdir -p "${RAPIDS_DOCS_DIR}/cudf/"{html,txt}
 mv build/dirhtml/* "${RAPIDS_DOCS_DIR}/cudf/html"
-mv build/text/* "${RAPIDS_DOCS_DIR}/cudf/txt"
+#mv build/text/* "${RAPIDS_DOCS_DIR}/cudf/txt"
 popd
 
 rapids-logger "Build dask-cuDF Sphinx docs"
