@@ -324,7 +324,82 @@ def resolve_aliases(app, doctree):
             text_node.parent.replace(text_node, Text(text_to_render, ""))
 
 
+def _generate_namespaces(namespaces):
+    all_namespaces = []
+    for base_namespace, other_namespaces in namespaces.items():
+        all_namespaces.append(base_namespace + "::")
+        for other_namespace in other_namespaces:
+            all_namespaces.append(f"{other_namespace}::")
+            all_namespaces.append(f"{base_namespace}::{other_namespace}::")
+    return all_namespaces
+
+_all_namespaces = _generate_namespaces({
+    # Note that io::datasource is actually a nested class
+    "cudf": {"io", "io::datasource", "strings", "ast", "ast::expression"},
+    "numeric": {},
+    "nvtext": {},
+})
+
+_names_to_skip = {
+    # External names
+    "thrust",
+    "cuda",
+    "arrow",
+    # Unknown types
+    "int8_t",
+    "int16_t",
+    "int32_t",
+    "int64_t",
+    "__int128_t",
+    "size_t",
+    "uint8_t",
+    "uint16_t",
+    "uint32_t",
+    "uint64_t",
+    # Internal objects
+    "id_to_type_impl",
+    "type_to_scalar_type_impl",
+    "type_to_scalar_type_impl",
+    "detail",
+    # kafka objects
+    "python_callable_type",
+    "kafka_oauth_callback_wrapper_type",
+    # Template types
+    "Radix",
+    # Unsupported by Breathe
+    # https://github.com/breathe-doc/breathe/issues/355
+    "deprecated",
+    # TODO: This type is currently defined in a detail header but it's in
+    # the public namespace. However, it's used in the detail header, so it
+    # needs to be put into a public header that can be shared.
+    "char_utf8",
+    # TODO: This is currently in a src file but perhaps should be public
+    "orc::column_statistics",
+    # Sphinx doesn't know how to distinguish between the ORC and Parquet
+    # definitions because Breathe doesn't to preserve namespaces for enums.
+    "TypeKind",
+}
+
+_domain_objects = None
+_prefixed_domain_objects = None
+_intersphinx_cache = {}
+
+_intersphinx_extra_prefixes = ("rmm::", "rmm::mr::", "mr::", "")
+
+
 def on_missing_reference(app, env, node, contnode):
+    # These variables are defined outside the function to speed up the build.
+    global _all_namespaces, _names_to_skip, _domain_objects, _intersphinx_extra_prefixes, _prefixed_domain_objects, _intersphinx_cache
+
+    # Precompute and cache domains for faster lookups
+    if _domain_objects is None:
+        _domain_objects = {}
+        _prefixed_domain_objects = {}
+        for (name, _, _, docname, _, _) in env.domains["cpp"].get_objects():
+            _domain_objects[name] = docname
+            for prefix in _all_namespaces:
+                _prefixed_domain_objects[f"{prefix}{name}"] = name
+
     name = node.get("reftarget", None)
     if name == "cudf.core.index.GenericIndex":
         # We don't exposed docs for `cudf.core.index.GenericIndex`
@@ -345,51 +420,11 @@ def on_missing_reference(app, env, node, contnode):
         # generates. Adding those would clutter the Sphinx output.
         return contnode
 
-    names_to_skip = [
-        # External names
-        "thrust",
-        "cuda",
-        "arrow",
-        # Unknown types
-        "int8_t",
-        "int16_t",
-        "int32_t",
-        "int64_t",
-        "__int128_t",
-        "size_t",
-        "uint8_t",
-        "uint16_t",
-        "uint32_t",
-        "uint64_t",
-        # Internal objects
-        "id_to_type_impl",
-        "type_to_scalar_type_impl",
-        "type_to_scalar_type_impl",
-        "detail",
-        # kafka objects
-        "python_callable_type",
-        "kafka_oauth_callback_wrapper_type",
-        # Template types
-        "Radix",
-        # Unsupported by Breathe
-        # https://github.com/breathe-doc/breathe/issues/355
-        "deprecated",
-        # TODO: This type is currently defined in a detail header but it's in
-        # the public namespace. However, it's used in the detail header, so it
-        # needs to be put into a public header that can be shared.
-        "char_utf8",
-        # TODO: This is currently in a src file but perhaps should be public
-        "orc::column_statistics",
-        # Sphinx doesn't know how to distinguish between the ORC and Parquet
-        # definitions because Breathe doesn't to preserve namespaces for enums.
-        "TypeKind",
-    ]
-
     if (
         node["refdomain"] in ("std", "cpp")
         and (reftarget := node.get("reftarget")) is not None
     ):
-        if any(toskip in reftarget for toskip in names_to_skip):
+        if any(toskip in reftarget for toskip in _names_to_skip):
             return contnode
 
         # Strip template parameters and just use the base type.
@@ -399,50 +434,42 @@ def on_missing_reference(app, env, node, contnode):
         # Try to find the target prefixed with e.g. namespaces in case that's
         # all that's missing. Include the empty prefix in case we're searching
         # for a stripped template.
-        namespaces = {
-            # Note that io::datasource is actually a nested class
-            "cudf": {"io", "io::datasource", "strings", "ast", "ast::expression"},
-            "numeric": {},
-            "nvtext": {},
-        }
+        name = None
+        if reftarget in _prefixed_domain_objects:
+            name = _prefixed_domain_objects[reftarget]
+        else:
+            for prefix in _all_namespaces:
+                if f"{prefix}{reftarget}" in _domain_objects:
+                    name = f"{prefix}{reftarget}"
+                    break
+        if name is not None:
+            return env.domains["cpp"].resolve_xref(
+                env,
+                _domain_objects[name],
+                app.builder,
+                node["reftype"],
+                name,
+                node,
+                contnode,
+            )
 
-        def generate_namespaces(namespaces):
-            for base_namespace, other_namespaces in namespaces.items():
-                yield base_namespace + "::"
-                for other_namespace in other_namespaces:
-                    yield f"{other_namespace}::"
-                    yield f"{base_namespace}::{other_namespace}::"
-
-        for (name, _, _, docname, _, _) in env.domains[
-            "cpp"
-        ].get_objects():
-
-            for prefix in generate_namespaces(namespaces):
-                if (
-                    name == f"{prefix}{reftarget}"
-                    or f"{prefix}{name}" == reftarget
-                ):
-                    return env.domains["cpp"].resolve_xref(
-                        env,
-                        docname,
-                        app.builder,
-                        node["reftype"],
-                        name,
-                        node,
-                        contnode,
-                    )
-
-        intersphinx_extra_prefixes = ["rmm::", "rmm::mr::", "mr::", ""]
-
-        for prefix in intersphinx_extra_prefixes:
+        # Have to manually manage the intersphinx cache because lru_cache
+        # doesn't handle the env object properly.
+        for prefix in _intersphinx_extra_prefixes:
             # First try adding the prefix.
             node["reftarget"] = f"{prefix}{reftarget}"
+            if (node, contnode) in _intersphinx_cache:
+                return _intersphinx_cache[(node, contnode)]
             if (ref := intersphinx.resolve_reference_detect_inventory(env, node, contnode)) is not None:
+                _intersphinx_cache[(node, contnode)] = ref
                 return ref
 
             # Then try removing the prefix.
             node["reftarget"] = reftarget.replace(prefix, "")
+            if (node, contnode) in _intersphinx_cache:
+                return _intersphinx_cache[(node, contnode)]
             if (ref := intersphinx.resolve_reference_detect_inventory(env, node, contnode)) is not None:
+                _intersphinx_cache[(node, contnode)] = ref
                 return ref
 
     return None
