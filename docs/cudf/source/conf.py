@@ -132,7 +132,7 @@ breathe_default_project = "libcudf"
 
 nb_execution_excludepatterns = ['performance-comparisons.ipynb']
 
-nb_execution_mode = "off"
+nb_execution_mode = "force"
 nb_execution_timeout = 300
 
 copybutton_prompt_text = ">>> "
