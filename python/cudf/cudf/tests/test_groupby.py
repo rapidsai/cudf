@@ -20,8 +20,9 @@ import rmm
 import cudf
 from cudf import DataFrame, Series
 from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140
+from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
 from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
-from cudf.core.udf.utils import precompiled
+from cudf.core.udf.utils import UDFError, precompiled
 from cudf.testing._utils import (
     DATETIME_TYPES,
     SIGNED_TYPES,
@@ -445,7 +446,7 @@ def test_groupby_apply_jit_reductions(func, groupby_jit_data, dtype):
     run_groupby_apply_jit_test(groupby_jit_data, func, ["key1"])
 
 
-@pytest.mark.parametrize("dtype", ["int32", "int64"])
+@pytest.mark.parametrize("dtype", SUPPORTED_GROUPBY_NUMPY_TYPES)
 def test_groupby_apply_jit_correlation(groupby_jit_data, dtype):
 
     groupby_jit_data["val3"] = groupby_jit_data["val3"].astype(dtype)
@@ -456,7 +457,76 @@ def test_groupby_apply_jit_correlation(groupby_jit_data, dtype):
     def func(group):
         return group["val3"].corr(group["val4"])
 
+    if dtype.kind == "f":
+        m = (
+            f"Series.corr\\(Series\\) is not "
+            f"supported for \\({dtype}, {dtype}\\)"
+        )
+        with pytest.raises(UDFError, match=m):
+            run_groupby_apply_jit_test(groupby_jit_data, func, keys)
+        return
     run_groupby_apply_jit_test(groupby_jit_data, func, keys)
+
+
+@pytest.mark.parametrize("op", unary_ops)
+def test_groupby_apply_jit_invalid_unary_ops_error(groupby_jit_data, op):
+    keys = ["key1"]
+
+    def func(group):
+        return op(group["val1"])
+
+    with pytest.raises(
+        UDFError,
+        match=f"{op.__name__}\\(Series\\) is not supported by JIT GroupBy",
+    ):
+        run_groupby_apply_jit_test(groupby_jit_data, func, keys)
+
+
+@pytest.mark.parametrize("op", arith_ops + comparison_ops)
+def test_groupby_apply_jit_invalid_binary_ops_error(groupby_jit_data, op):
+    keys = ["key1"]
+
+    def func(group):
+        return op(group["val1"], group["val2"])
+
+    with pytest.raises(
+        UDFError,
+        match=f"{op.__name__}\\(Series, Series\\) is not supported",
+    ):
+        run_groupby_apply_jit_test(groupby_jit_data, func, keys)
+
+
+def test_groupby_apply_jit_no_df_ops(groupby_jit_data):
+    # DataFrame level operations are not yet supported.
+    def func(group):
+        return group.sum()
+
+    with pytest.raises(
+        UDFError,
+        match="JIT GroupBy.apply\\(\\) does not support DataFrame.sum\\(\\)",
+    ):
+        run_groupby_apply_jit_test(groupby_jit_data, func, ["key1"])
+
+
+@pytest.mark.parametrize("dtype", ["uint8", "str"])
+def test_groupby_apply_unsupported_dtype(dtype):
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+    df["b"] = df["b"].astype(dtype)
+
+    # a UDAF that doesn't actually use the input column
+    # with the unsupported dtype should still succeed
+    def func(group):
+        return group["c"].sum()
+
+    run_groupby_apply_jit_test(df, func, ["a"])
+
+    # however a UDAF that does use the unsupported dtype
+    # should fail
+    def func(group):
+        return group["b"].sum()
+
+    with pytest.raises(UDFError, match="Only columns of the following dtypes"):
+        run_groupby_apply_jit_test(df, func, ["a"])
 
 
 @pytest.mark.parametrize("dtype", ["int32", "int64"])

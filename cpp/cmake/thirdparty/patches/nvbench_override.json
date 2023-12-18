@@ -7,11 +7,6 @@
           "file" : "${current_json_dir}/nvbench_global_setup.diff",
           "issue" : "Fix add support for global setup to initialize RMM in nvbench [https://github.com/NVIDIA/nvbench/pull/123]",
           "fixed_in" : ""
-        },
-        {
-          "file" : "nvbench/nvml_with_static_builds.diff",
-          "issue" : "Add support for nvml with static nvbench [https://github.com/NVIDIA/nvbench/pull/148]",
-          "fixed_in" : ""
         }
       ]
     }

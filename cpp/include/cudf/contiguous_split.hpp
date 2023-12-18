@@ -25,7 +25,7 @@
 namespace cudf {
 
 /**
- * @addtogroup column_copy
+ * @addtogroup copy_split
  * @{
  * @file
  * @brief Table APIs for contiguous_split, pack, unpack, and metadata
@@ -33,8 +33,6 @@ namespace cudf {
 
 /**
  * @brief Column data in a serialized format
- *
- * @ingroup copy_split
  *
  * Contains data from an array of columns in two contiguous buffers: one on host, which contains
  * table metadata and one on device which contains the table data.
@@ -65,8 +63,6 @@ struct packed_columns {
 /**
  * @brief The result(s) of a cudf::contiguous_split
  *
- * @ingroup copy_split
- *
  * Each table_view resulting from a split operation performed by contiguous_split,
  * will be returned wrapped in a `packed_table`. The table_view and internal
  * column_views in this struct are not owned by a top level cudf::table or cudf::column.
@@ -84,8 +80,6 @@ struct packed_table {
 /**
  * @brief Performs a deep-copy split of a `table_view` into a vector of `packed_table` where each
  * `packed_table` is using a single contiguous block of memory for all of the split's column data.
- *
- * @ingroup copy_split
  *
  * The memory for the output views is allocated in a single contiguous `rmm::device_buffer` returned
  * in the `packed_table`. There is no top-level owning table.
