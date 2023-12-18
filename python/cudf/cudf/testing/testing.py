@@ -12,11 +12,8 @@ import cudf
 from cudf._lib.unary import is_nan
 from cudf.api.types import (
     is_categorical_dtype,
-    is_decimal_dtype,
-    is_list_dtype,
     is_numeric_dtype,
     is_string_dtype,
-    is_struct_dtype,
 )
 from cudf.core.missing import NA, NaT
 
@@ -26,10 +23,15 @@ def dtype_can_compare_equal_to_other(dtype):
     # as equal to equal values of a different dtype
     return not (
         is_string_dtype(dtype)
-        or is_list_dtype(dtype)
-        or is_struct_dtype(dtype)
-        or is_decimal_dtype(dtype)
-        or isinstance(dtype, cudf.IntervalDtype)
+        or isinstance(
+            dtype,
+            (
+                cudf.IntervalDtype,
+                cudf.ListDtype,
+                cudf.StructDtype,
+                cudf.core.dtypes.DecimalDtype,
+            ),
+        )
     )
 
 
