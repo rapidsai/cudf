@@ -53,6 +53,7 @@ files:
     includes:
       - notebooks
       - py_version
+      - notebook_cuda_version
   checks:
     output: none
     includes:
@@ -767,3 +768,8 @@ dependencies:
         packages:
           - ipython
           - openpyxl
+  notebook_cuda_version:
+    common:
+      - output_types: conda
+        packages:
+          - cuda-version=12.0
