@@ -19,7 +19,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_device_scalar
 
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.utils cimport table_view_from_columns, table_view_from_table
+from cudf._lib.utils cimport table_view_from_table
 
 from cudf._lib.reduce import minmax
 from cudf.core.abc import Serializable
@@ -27,22 +27,15 @@ from cudf.core.abc import Serializable
 from libcpp.memory cimport make_unique
 
 cimport cudf._lib.cpp.contiguous_split as cpp_contiguous_split
-cimport cudf._lib.cpp.copying as cpp_copying
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
+from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.lists.gather cimport (
     segmented_gather as cpp_segmented_gather,
 )
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
-from cudf._lib.utils cimport (
-    columns_from_pylibcudf_table,
-    columns_from_table_view,
-    data_from_table_view,
-    table_view_from_columns,
-)
+from cudf._lib.utils cimport columns_from_pylibcudf_table, data_from_table_view
 
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef const scalar constscalar
@@ -92,20 +85,13 @@ def _copy_range_in_place(Column input_column,
                          size_type input_begin,
                          size_type input_end,
                          size_type target_begin):
-
-    cdef column_view input_column_view = input_column.view()
-    cdef mutable_column_view target_column_view = target_column.mutable_view()
-    cdef size_type c_input_begin = input_begin
-    cdef size_type c_input_end = input_end
-    cdef size_type c_target_begin = target_begin
-
-    with nogil:
-        cpp_copying.copy_range_in_place(
-            input_column_view,
-            target_column_view,
-            c_input_begin,
-            c_input_end,
-            c_target_begin)
+    pylibcudf.copying.copy_range(
+        input_column.to_pylibcudf(mode="write"),
+        target_column.to_pylibcudf(mode="write"),
+        input_begin,
+        input_end,
+        target_begin
+    )
 
 
 def _copy_range(Column input_column,
@@ -244,198 +230,46 @@ def columns_empty_like(list input_columns):
 
 @acquire_spill_lock()
 def column_slice(Column input_column, object indices):
-
-    cdef column_view input_column_view = input_column.view()
-    cdef vector[size_type] c_indices
-    c_indices.reserve(len(indices))
-
-    cdef vector[column_view] c_result
-
-    cdef int index
-
-    for index in indices:
-        c_indices.push_back(index)
-
-    with nogil:
-        c_result = move(
-            cpp_copying.slice(
-                input_column_view,
-                c_indices)
+    return [
+        Column.from_pylibcudf(c)
+        for c in pylibcudf.copying.column_slice(
+            input_column.to_pylibcudf(mode="read"),
+            list(indices),
         )
-
-    num_of_result_cols = c_result.size()
-    result = [
-        Column.from_column_view(
-            c_result[i],
-            input_column) for i in range(num_of_result_cols)]
-
-    return result
+    ]
 
 
 @acquire_spill_lock()
-def columns_slice(list input_columns, list indices):
-    """
-    Given a list of input columns, return columns sliced by ``indices``.
-
-    Returns a list of list of columns. The length of return is
-    `len(indices) / 2`. The `i`th item in return is a list of columns sliced
-    from ``input_columns`` with `slice(indices[i*2], indices[i*2 + 1])`.
-    """
-    cdef table_view input_table_view = table_view_from_columns(input_columns)
-    cdef vector[size_type] c_indices = indices
-    cdef vector[table_view] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_copying.slice(
-                input_table_view,
-                c_indices)
-        )
-
+def columns_slice(list input_columns, object indices):
     return [
-        columns_from_table_view(
-            c_result[i], input_columns
-        ) for i in range(c_result.size())
+        columns_from_pylibcudf_table(tbl)
+        for tbl in pylibcudf.copying.table_slice(
+            pylibcudf.Table([col.to_pylibcudf(mode="read") for col in input_columns]),
+            list(indices),
+        )
     ]
 
 
 @acquire_spill_lock()
 def column_split(Column input_column, object splits):
-
-    cdef column_view input_column_view = input_column.view()
-    cdef vector[size_type] c_splits
-    c_splits.reserve(len(splits))
-
-    cdef vector[column_view] c_result
-
-    cdef int split
-
-    for split in splits:
-        c_splits.push_back(split)
-
-    with nogil:
-        c_result = move(
-            cpp_copying.split(
-                input_column_view,
-                c_splits)
+    return [
+        Column.from_pylibcudf(c)
+        for c in pylibcudf.copying.column_split(
+            input_column.to_pylibcudf(mode="read"),
+            list(splits),
         )
-
-    num_of_result_cols = c_result.size()
-    result = [
-        Column.from_column_view(
-            c_result[i],
-            input_column
-        ) for i in range(num_of_result_cols)
     ]
-
-    return result
 
 
 @acquire_spill_lock()
 def columns_split(list input_columns, object splits):
-
-    cdef table_view input_table_view = table_view_from_columns(input_columns)
-    cdef vector[size_type] c_splits = splits
-    cdef vector[table_view] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_copying.split(
-                input_table_view,
-                c_splits)
-        )
-
     return [
-        columns_from_table_view(
-            c_result[i], input_columns
-        ) for i in range(c_result.size())
+        columns_from_pylibcudf_table(tbl)
+        for tbl in pylibcudf.copying.table_split(
+            pylibcudf.Table([col.to_pylibcudf(mode="read") for col in input_columns]),
+            list(splits),
+        )
     ]
-
-
-def _copy_if_else_column_column(Column lhs, Column rhs, Column boolean_mask):
-
-    cdef column_view lhs_view = lhs.view()
-    cdef column_view rhs_view = rhs.view()
-    cdef column_view boolean_mask_view = boolean_mask.view()
-
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_copying.copy_if_else(
-                lhs_view,
-                rhs_view,
-                boolean_mask_view
-            )
-        )
-
-    return Column.from_unique_ptr(move(c_result))
-
-
-def _copy_if_else_scalar_column(DeviceScalar lhs,
-                                Column rhs,
-                                Column boolean_mask):
-
-    cdef const scalar* lhs_scalar = lhs.get_raw_ptr()
-    cdef column_view rhs_view = rhs.view()
-    cdef column_view boolean_mask_view = boolean_mask.view()
-
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_copying.copy_if_else(
-                lhs_scalar[0],
-                rhs_view,
-                boolean_mask_view
-            )
-        )
-
-    return Column.from_unique_ptr(move(c_result))
-
-
-def _copy_if_else_column_scalar(Column lhs,
-                                DeviceScalar rhs,
-                                Column boolean_mask):
-
-    cdef column_view lhs_view = lhs.view()
-    cdef const scalar* rhs_scalar = rhs.get_raw_ptr()
-    cdef column_view boolean_mask_view = boolean_mask.view()
-
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_copying.copy_if_else(
-                lhs_view,
-                rhs_scalar[0],
-                boolean_mask_view
-            )
-        )
-
-    return Column.from_unique_ptr(move(c_result))
-
-
-def _copy_if_else_scalar_scalar(DeviceScalar lhs,
-                                DeviceScalar rhs,
-                                Column boolean_mask):
-
-    cdef const scalar* lhs_scalar = lhs.get_raw_ptr()
-    cdef const scalar* rhs_scalar = rhs.get_raw_ptr()
-    cdef column_view boolean_mask_view = boolean_mask.view()
-
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_copying.copy_if_else(
-                lhs_scalar[0],
-                rhs_scalar[0],
-                boolean_mask_view
-            )
-        )
-
-    return Column.from_unique_ptr(move(c_result))
 
 
 @acquire_spill_lock()
@@ -504,16 +338,12 @@ def shift(Column input, int offset, object fill_value=None):
 
 @acquire_spill_lock()
 def get_element(Column input_column, size_type index):
-    cdef column_view col_view = input_column.view()
-
-    cdef unique_ptr[scalar] c_output
-    with nogil:
-        c_output = move(
-            cpp_copying.get_element(col_view, index)
-        )
-
-    return DeviceScalar.from_unique_ptr(
-        move(c_output), dtype=input_column.dtype
+    return DeviceScalar.from_pylibcudf(
+        pylibcudf.copying.get_element(
+            input_column.to_pylibcudf(mode="read"),
+            index,
+        ),
+        dtype=input_column.dtype,
     )
 
 

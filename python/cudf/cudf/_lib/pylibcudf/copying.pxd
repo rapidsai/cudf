@@ -26,6 +26,14 @@ cpdef object empty_table_like(Table input)
 
 cpdef Column allocate_like(Column input_column, mask_allocation_policy policy, size=*)
 
+cpdef Column copy_range_in_place(
+    Column input_column,
+    Column target_column,
+    size_type input_begin,
+    size_type input_end,
+    size_type target_begin,
+)
+
 cpdef Column copy_range(
     Column input_column,
     Column target_column,
@@ -36,8 +44,18 @@ cpdef Column copy_range(
 
 cpdef Column shift(Column input, size_type offset, Scalar fill_values)
 
+cpdef list column_split(Column input_column, list splits)
+
+cpdef list table_split(Table input_table, list splits)
+
+cpdef list column_slice(Column input_column, list indices)
+
+cpdef list table_slice(Table input_table, list indices)
+
 cpdef Column copy_if_else(object lhs, object rhs, Column boolean_mask)
 
 cpdef Table boolean_mask_table_scatter(Table input, Table target, Column boolean_mask)
 
 cpdef Table boolean_mask_scalars_scatter(list input, Table target, Column boolean_mask)
+
+cpdef Scalar get_element(Column input_column, size_type index)
