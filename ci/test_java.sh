@@ -25,11 +25,14 @@ set -u
 
 rapids-print-env
 
+LIBRMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1404 cpp)
+
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 
 rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
+  --channel "${LIBRMM_CHANNEL}" \
   libcudf
 
 rapids-logger "Check GPU usage"
