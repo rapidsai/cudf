@@ -584,7 +584,7 @@ __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* d
  */
 template <typename level_t>
 __global__ void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBounds(
-  PageInfo* pages, device_span<ColumnChunkDesc> chunks, size_t min_row, size_t num_rows)
+  PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
   __shared__ __align__(16) page_state_s state_g;
 
@@ -599,11 +599,6 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBou
     // reset str_bytes to 0 in case it's already been calculated (esp needed for chunked reads).
     // TODO: need to rethink this once str_bytes is in the statistics
     pp->str_bytes = 0;
-
-    // clean up potential leftovers from earlier passes
-    chunks[pp->chunk_idx].column_data_base   = nullptr;
-    chunks[pp->chunk_idx].column_string_base = nullptr;
-    chunks[pp->chunk_idx].valid_map_base     = nullptr;
   }
 
   // whether or not we have repetition levels (lists)
@@ -667,7 +662,9 @@ __global__ void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageS
 
   // setup page info
   auto const mask = decode_kernel_mask::DELTA_BYTE_ARRAY;
-  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, mask_filter{mask}, false, true)) { return; }
+  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, mask_filter{mask}, false, true)) {
+    return;
+  }
 
   auto const start_value = pp->start_val;
 
@@ -994,7 +991,7 @@ struct page_tform_functor {
  * @copydoc cudf::io::parquet::detail::ComputePageStringSizes
  */
 void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                            cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks,
+                            cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
                             rmm::device_uvector<uint8_t>& temp_string_buf,
                             size_t min_row,
                             size_t num_rows,
