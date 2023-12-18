@@ -204,6 +204,8 @@ class hostdevice_vector {
 template <typename T>
 class hostdevice_2dvector {
  public:
+  hostdevice_2dvector() : hostdevice_2dvector(0, 0, cudf::get_default_stream()) {}
+
   hostdevice_2dvector(size_t rows, size_t columns, rmm::cuda_stream_view stream)
     : _size{rows, columns}, _data{rows * columns, stream}
   {
