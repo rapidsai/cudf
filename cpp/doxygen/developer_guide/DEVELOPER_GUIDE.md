@@ -1,11 +1,6 @@
 # libcudf C++ Developer Guide {#DEVELOPER_GUIDE}
 
-This document serves as a guide for contributors to libcudf C++ code. Developers should also refer
-to these additional files for further documentation of libcudf best practices.
-
-* [Documentation Guide](DOCUMENTATION.md) for guidelines on documenting libcudf code.
-* [Testing Guide](TESTING.md) for guidelines on writing unit tests.
-* [Benchmarking Guide](BENCHMARKING.md) for guidelines on writing unit benchmarks.
+This document serves as a guide for contributors to libcudf C++ code.
 
 # Overview
 

@@ -5,22 +5,10 @@ libcudf documentation
    :maxdepth: 2
    :caption: Contents:
 
-   cudf_namespace
-   default_stream
-   cudf_classes
-   column_apis
-   datetime_apis
-   strings_apis
-   dictionary_apis
-   io_apis
-   json_apis
-   lists_apis
-   nvtext_apis
-   utility_apis
-   labeling_apis
-   expressions
+   api_docs/index.rst
    md_regex
-   tdigest
+   unicode_limitations
+   developer_guide/index.rst
 
 
 Indices and tables
