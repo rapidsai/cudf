@@ -25,7 +25,7 @@
 
 #include <nvbench/nvbench.cuh>
 
-constexpr size_t data_size = 257 << 20;
+constexpr size_t data_size = 256 << 20;
 
 template <column_selection ColSelection, row_selection RowSelection>
 void BM_csv_read_varying_options(
