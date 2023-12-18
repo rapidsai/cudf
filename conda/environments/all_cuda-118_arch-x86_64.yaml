@@ -58,7 +58,7 @@ dependencies:
 - nbsphinx
 - ninja
 - notebook
-- numba>=0.57,<0.58
+- numba>=0.57
 - numpy>=1.21,<1.25
 - numpydoc
 - nvcc_linux-64=11.8
