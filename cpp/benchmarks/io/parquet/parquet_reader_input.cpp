@@ -30,6 +30,7 @@ constexpr size_t data_size         = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
 
 void parquet_read_common(cudf::size_type num_rows_to_read,
+                         cudf::size_type num_cols_to_read,
                          cuio_source_sink_pair& source_sink,
                          nvbench::state& state)
 {
@@ -46,7 +47,7 @@ void parquet_read_common(cudf::size_type num_rows_to_read,
       auto const result = cudf::io::read_parquet(read_opts);
       timer.stop();
 
-      CUDF_EXPECTS(result.tbl->num_columns() == num_cols, "Unexpected number of columns");
+      CUDF_EXPECTS(result.tbl->num_columns() == num_cols_to_read, "Unexpected number of columns");
       CUDF_EXPECTS(result.tbl->num_rows() == num_rows_to_read, "Unexpected number of rows");
     });
 
@@ -81,7 +82,7 @@ void BM_parquet_read_data(nvbench::state& state, nvbench::type_list<nvbench::enu
     return view.num_rows();
   }();
 
-  parquet_read_common(num_rows, source_sink, state);
+  parquet_read_common(num_rows, num_cols, source_sink, state);
 }
 
 void BM_parquet_read_io_compression(nvbench::state& state)
@@ -115,7 +116,7 @@ void BM_parquet_read_io_compression(nvbench::state& state)
     return view.num_rows();
   }();
 
-  parquet_read_common(num_rows, source_sink, state);
+  parquet_read_common(num_rows, num_cols, source_sink, state);
 }
 
 void BM_parquet_read_io_small_mixed(nvbench::state& state)
@@ -148,7 +149,7 @@ void BM_parquet_read_io_small_mixed(nvbench::state& state)
     cudf::io::write_parquet(write_opts);
   }
 
-  parquet_read_common(num_rows, source_sink, state);
+  parquet_read_common(num_rows, n_col, source_sink, state);
 }
 
 template <data_type DataType>
@@ -160,36 +161,44 @@ void BM_parquet_read_chunks(nvbench::state& state, nvbench::type_list<nvbench::e
   auto const byte_limit  = static_cast<cudf::size_type>(state.get_int64("byte_limit"));
   auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
   auto const compression = cudf::io::compression_type::SNAPPY;
-
-  auto const tbl =
-    create_random_table(cycle_dtypes(d_type, num_cols),
-                        table_size_bytes{data_size},
-                        data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
-  auto const view = tbl->view();
-
   cuio_source_sink_pair source_sink(source_type);
-  cudf::io::parquet_writer_options write_opts =
-    cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
-      .compression(compression);
 
-  cudf::io::write_parquet(write_opts);
+  auto num_rows = [&]() {
+    auto const tbl = create_random_table(
+      cycle_dtypes(d_type, num_cols),
+      table_size_bytes{data_size},
+      data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
+    auto const view = tbl->view();
+
+    cudf::io::parquet_writer_options write_opts =
+      cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
+        .compression(compression);
+
+    cudf::io::write_parquet(write_opts);
+    return view.num_rows();
+  }();
 
   cudf::io::parquet_reader_options read_opts =
     cudf::io::parquet_reader_options::builder(source_sink.make_source_info());
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
-             [&](nvbench::launch& launch, auto& timer) {
-               try_drop_l3_cache();
+  state.exec(
+    nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
+      try_drop_l3_cache();
 
-               timer.start();
-               auto reader = cudf::io::chunked_parquet_reader(byte_limit, read_opts);
-               do {
-                 [[maybe_unused]] auto const chunk = reader.read_chunk();
-               } while (reader.has_next());
-               timer.stop();
-             });
+      timer.start();
+      auto reader                   = cudf::io::chunked_parquet_reader(byte_limit, read_opts);
+      cudf::size_type num_rows_read = 0;
+      do {
+        auto const result = reader.read_chunk();
+        num_rows_read += result.tbl->num_rows();
+        CUDF_EXPECTS(result.tbl->num_columns() == num_cols, "Unexpected number of columns");
+      } while (reader.has_next());
+      timer.stop();
+
+      CUDF_EXPECTS(num_rows_read == num_rows, "Benchmark did not read the entire table");
+    });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");
