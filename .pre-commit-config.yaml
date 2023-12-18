@@ -91,6 +91,10 @@ repos:
                 entry: '(category=|\s)DeprecationWarning[,)]'
                 language: pygrep
                 types_or: [python, cython]
+                exclude: |
+                  (?x)^(
+                    ^python/cudf/cudf/core/dtypes.py
+                  )
               - id: no-programmatic-xfail
                 name: no-programmatic-xfail
                 description: 'Enforce that pytest.xfail is not introduced (see dev docs for details)'

@@ -1043,7 +1043,7 @@ def is_categorical_dtype(obj):
     warnings.warn(
         "is_categorical_dtype is deprecated and will be removed in a future "
         "version. Use isinstance(dtype, cudf.CategoricalDtype) instead",
-        FutureWarning,
+        DeprecationWarning,
     )
     return _is_categorical_dtype(obj)
 
@@ -1151,7 +1151,7 @@ def is_interval_dtype(obj):
     warnings.warn(
         "is_interval_dtype is deprecated and will be removed in a "
         "future version. Use `isinstance(dtype, cudf.IntervalDtype)` instead",
-        FutureWarning,
+        DeprecationWarning,
     )
     return _is_interval_dtype(obj)
 
