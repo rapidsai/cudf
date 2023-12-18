@@ -1128,7 +1128,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
   //
   // NOTE: this check needs to be done after the null counts have been zeroed out
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
-  if ((is_decode_step or is_bounds_step) && s->num_rows == 0 &&
+  if ((is_decode_step || is_bounds_step) && s->num_rows == 0 &&
       !(has_repetition && (is_bounds_page(s, min_row, num_rows, has_repetition) ||
                            is_page_contained(s, min_row, num_rows)))) {
     return false;
@@ -1389,7 +1389,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
 
       // if we're in the decoding step, jump directly to the first
       // value we care about
-      if (is_decode_step or is_bounds_step) {
+      if (is_decode_step || is_bounds_step) {
         s->input_value_count = s->page.skipped_values > -1 ? s->page.skipped_values : 0;
       } else {
         s->input_value_count = 0;
