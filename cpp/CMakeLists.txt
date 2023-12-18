@@ -183,7 +183,7 @@ rapids_cpm_init()
 include(cmake/thirdparty/get_jitify.cmake)
 # find nvCOMP
 include(cmake/thirdparty/get_nvcomp.cmake)
-# find CCCL
+# find CCCL before rmm so that we get cudf's patched version of CCCL
 include(cmake/thirdparty/get_cccl.cmake)
 # find rmm
 include(cmake/thirdparty/get_rmm.cmake)
