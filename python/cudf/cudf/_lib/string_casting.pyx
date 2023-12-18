@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from cudf._lib.column cimport Column
 
@@ -569,10 +569,7 @@ def timestamp2int(Column input_col, dtype, format):
     return Column.from_unique_ptr(move(c_result))
 
 
-def istimestamp(
-        Column input_col,
-        object format,
-        **kwargs):
+def istimestamp(Column input_col, str format):
     """
     Check input string column matches the specified timestamp format
 
@@ -588,7 +585,7 @@ def istimestamp(
 
     """
     if input_col.size == 0:
-        return cudf.core.column.as_column([], dtype=kwargs.get('dtype'))
+        return cudf.core.column.column_empty(0, dtype=cudf.dtype("bool"))
     cdef column_view input_column_view = input_col.view()
     cdef string c_timestamp_format = <string>str(format).encode('UTF-8')
     cdef unique_ptr[column] c_result

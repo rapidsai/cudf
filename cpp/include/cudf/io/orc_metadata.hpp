@@ -30,6 +30,11 @@
 
 namespace cudf {
 namespace io {
+/**
+ * @addtogroup io_types
+ * @{
+ * @file
+ */
 
 /**
  * @brief Holds column names and buffers containing raw file-level and stripe-level statistics.
@@ -147,6 +152,7 @@ struct timestamp_statistics : minmax_statistics<int64_t> {
   std::optional<uint32_t> maximum_nanos;  ///< nanoseconds part of the maximum
 };
 
+//! Orc I/O interfaces
 namespace orc {
 // forward declare the type that ProtobufReader uses. The `cudf::io::column_statistics` objects,
 // returned from `read_parsed_orc_statistics`, are constructed from
@@ -367,5 +373,6 @@ class orc_metadata {
  */
 orc_metadata read_orc_metadata(source_info const& src_info);
 
+/** @} */  // end of group
 }  // namespace io
 }  // namespace cudf
