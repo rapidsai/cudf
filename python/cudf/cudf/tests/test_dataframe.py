@@ -27,6 +27,7 @@ from cudf.core._compat import (
     PANDAS_GE_200,
     PANDAS_GE_210,
     PANDAS_LT_140,
+    PANDAS_LT_203,
 )
 from cudf.api.extensions import no_default
 from cudf.core.buffer.spill_manager import get_global_manager
@@ -8593,6 +8594,7 @@ def test_dataframe_mode(request, df, numeric_only, dropna):
     request.applymarker(
         pytest.mark.xfail(
             condition=PANDAS_GE_200
+            and PANDAS_LT_203
             and numeric_only is False
             and "b" in df.columns
             and df["b"].dtype == np.dtype("timedelta64[s]"),
