@@ -434,6 +434,12 @@ def on_missing_reference(app, env, node, contnode):
         # Try to find the target prefixed with e.g. namespaces in case that's
         # all that's missing. Include the empty prefix in case we're searching
         # for a stripped template.
+        # We need to do this search because the call sites may not have used
+        # the namespaces and we don't want to force them to, and we have to
+        # consider both directions because of issues like
+        # https://github.com/breathe-doc/breathe/issues/860
+        # (there may be other related issues, I haven't investigated all
+        # possible combinations of failures in depth).
         name = None
         if reftarget in _prefixed_domain_objects:
             name = _prefixed_domain_objects[reftarget]
