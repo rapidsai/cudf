@@ -143,7 +143,7 @@ enum BoundaryOrder {
 enum class FieldType : uint8_t {
   BOOLEAN_TRUE  = 1,
   BOOLEAN_FALSE = 2,
-  BYTE          = 3,
+  I8            = 3,
   I16           = 4,
   I32           = 5,
   I64           = 6,

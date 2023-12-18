@@ -287,7 +287,7 @@ inline void CompactProtocolFieldWriter::field_bool(int field, bool b)
 
 inline void CompactProtocolFieldWriter::field_int8(int field, int8_t val)
 {
-  put_field_header(field, current_field_value, FieldType::BYTE);
+  put_field_header(field, current_field_value, FieldType::I8);
   put_byte(val);
   current_field_value = field;
 }

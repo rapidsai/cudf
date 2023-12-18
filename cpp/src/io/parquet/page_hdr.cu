@@ -120,7 +120,7 @@ __device__ void skip_struct_field(byte_stream_s* bs, int field_type)
       case FieldType::I16:
       case FieldType::I32:
       case FieldType::I64: get_u32(bs); break;
-      case FieldType::BYTE: skip_bytes(bs, 1); break;
+      case FieldType::I8: skip_bytes(bs, 1); break;
       case FieldType::DOUBLE: skip_bytes(bs, 8); break;
       case FieldType::BINARY: skip_bytes(bs, get_u32(bs)); break;
       case FieldType::LIST:

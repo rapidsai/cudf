@@ -47,7 +47,7 @@ std::string field_type_string(FieldType type)
   switch (type) {
     case FieldType::BOOLEAN_TRUE: return "bool(true)";
     case FieldType::BOOLEAN_FALSE: return "bool(false)";
-    case FieldType::BYTE: return "int8";
+    case FieldType::I8: return "int8";
     case FieldType::I16: return "int16";
     case FieldType::I32: return "int32";
     case FieldType::I64: return "int64";
@@ -169,7 +169,7 @@ class parquet_field_int : public parquet_field {
   }
 };
 
-using parquet_field_int8  = parquet_field_int<int8_t, FieldType::BYTE>;
+using parquet_field_int8  = parquet_field_int<int8_t, FieldType::I8>;
 using parquet_field_int32 = parquet_field_int<int32_t, FieldType::I32>;
 using parquet_field_int64 = parquet_field_int<int64_t, FieldType::I64>;
 
@@ -456,7 +456,7 @@ void CompactProtocolReader::skip_struct_field(int t, int depth)
     case FieldType::I16:
     case FieldType::I32:
     case FieldType::I64: get_u64(); break;
-    case FieldType::BYTE: skip_bytes(1); break;
+    case FieldType::I8: skip_bytes(1); break;
     case FieldType::DOUBLE: skip_bytes(8); break;
     case FieldType::BINARY: skip_bytes(get_u32()); break;
     case FieldType::LIST: [[fallthrough]];

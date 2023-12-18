@@ -81,7 +81,7 @@ class CompactProtocolFieldWriter {
   template <typename T>
   void put_packed_type_byte(T high_bits, FieldType t)
   {
-    uint8_t const clamped_high_bits = std::min(std::max(high_bits, t{0}), T{0xf});
+    uint8_t const clamped_high_bits = std::min(std::max(high_bits, T{0}), T{0xf});
     put_byte((clamped_high_bits << 4) | static_cast<uint8_t>(t));
   }
 
