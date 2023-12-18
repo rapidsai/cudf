@@ -45,8 +45,13 @@ void orc_read_common(cudf::io::orc_writer_options const& opts,
                try_drop_l3_cache();
 
                timer.start();
-               cudf::io::read_orc(read_opts);
+               auto const result = cudf::io::read_orc(read_opts);
                timer.stop();
+
+               CUDF_EXPECTS(result.tbl->num_columns() == opts.get_table().num_columns(),
+                            "Unexpected number of columns");
+               CUDF_EXPECTS(result.tbl->num_rows() == opts.get_table().num_rows(),
+                            "Unexpected number of rows");
              });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
