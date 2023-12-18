@@ -38,7 +38,6 @@
 
 template <typename T>
 struct ChronoColumnTest : public cudf::test::BaseFixture {
-  rmm::cuda_stream_view stream() { return cudf::get_default_stream(); }
   cudf::size_type size() { return cudf::size_type(100); }
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
@@ -188,9 +187,7 @@ TYPED_TEST(ChronoColumnTest, ChronoFactoryNullMaskAsParm)
   auto column = make_fixed_width_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                         this->size(),
                                         std::move(null_mask),
-                                        this->size(),
-                                        this->stream(),
-                                        this->mr());
+                                        this->size());
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());
   EXPECT_EQ(this->size(), column->null_count());
@@ -202,12 +199,8 @@ TYPED_TEST(ChronoColumnTest, ChronoFactoryNullMaskAsParm)
 TYPED_TEST(ChronoColumnTest, ChronoFactoryNullMaskAsEmptyParm)
 {
   rmm::device_buffer null_mask{};
-  auto column = make_fixed_width_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
-                                        this->size(),
-                                        std::move(null_mask),
-                                        0,
-                                        this->stream(),
-                                        this->mr());
+  auto column = make_fixed_width_column(
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, this->size(), std::move(null_mask), 0);
 
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());

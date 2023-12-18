@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,14 +48,16 @@ namespace strings {
  *
  * @throw cudf::logic_error if `targets` is empty or contains nulls
  *
- * @param input Strings instance for this operation.
- * @param targets Strings to search for in each string.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return Lists column with character position values.
+ * @param input Strings instance for this operation
+ * @param targets Strings to search for in each string
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Lists column with character position values
  */
 std::unique_ptr<column> find_multiple(
   strings_column_view const& input,
   strings_column_view const& targets,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group

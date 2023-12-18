@@ -32,12 +32,13 @@ from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
 from libcpp.map cimport map
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 from libcpp.unordered_map cimport unordered_map
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
+cimport cudf._lib.cpp.io.data_sink as cudf_io_data_sink
 cimport cudf._lib.cpp.io.types as cudf_io_types
 cimport cudf._lib.cpp.types as cudf_types
 from cudf._lib.column cimport Column
@@ -51,7 +52,6 @@ from cudf._lib.cpp.io.parquet cimport (
     write_parquet as parquet_writer,
 )
 from cudf._lib.cpp.io.types cimport column_in_metadata, table_input_metadata
-from cudf._lib.cpp.libcpp.memory cimport make_unique
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type, size_type
 from cudf._lib.io.datasource cimport NativeFileDatasource
@@ -320,6 +320,8 @@ def write_parquet(
     object max_page_size_rows=None,
     object partitions_info=None,
     object force_nullable_schema=False,
+    header_version="1.0",
+    use_dictionary=True,
 ):
     """
     Cython function to call into libcudf API, see `write_parquet`.
@@ -334,7 +336,7 @@ def write_parquet(
 
     cdef vector[map[string, string]] user_data
     cdef table_view tv
-    cdef vector[unique_ptr[cudf_io_types.data_sink]] _data_sinks
+    cdef vector[unique_ptr[cudf_io_data_sink.data_sink]] _data_sinks
     cdef cudf_io_types.sink_info sink = make_sinks_info(
         filepaths_or_buffers, _data_sinks
     )
@@ -382,6 +384,18 @@ def write_parquet(
         tmp_user_data[str.encode("pandas")] = str.encode(pandas_metadata)
         user_data.push_back(tmp_user_data)
 
+    if header_version not in ("1.0", "2.0"):
+        raise ValueError(
+            f"Invalid parquet header version: {header_version}. "
+            "Valid values are '1.0' and '2.0'"
+        )
+
+    dict_policy = (
+        cudf_io_types.dictionary_policy.ALWAYS
+        if use_dictionary
+        else cudf_io_types.dictionary_policy.NEVER
+    )
+
     cdef cudf_io_types.compression_type comp_type = _get_comp_type(compression)
     cdef cudf_io_types.statistics_freq stat_freq = _get_stat_freq(statistics)
 
@@ -398,6 +412,9 @@ def write_parquet(
         .compression(comp_type)
         .stats_level(stat_freq)
         .int96_timestamps(_int96_timestamps)
+        .write_v2_headers(header_version == "2.0")
+        .dictionary_policy(dict_policy)
+        .utc_timestamps(False)
         .build()
     )
     if partitions_info is not None:
@@ -476,7 +493,7 @@ cdef class ParquetWriter:
     cdef unique_ptr[cpp_parquet_chunked_writer] writer
     cdef table_input_metadata tbl_meta
     cdef cudf_io_types.sink_info sink
-    cdef vector[unique_ptr[cudf_io_types.data_sink]] _data_sink
+    cdef vector[unique_ptr[cudf_io_data_sink.data_sink]] _data_sink
     cdef cudf_io_types.statistics_freq stat_freq
     cdef cudf_io_types.compression_type comp_type
     cdef object index

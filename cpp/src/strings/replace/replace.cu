@@ -45,6 +45,8 @@
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -97,7 +99,7 @@ struct replace_row_parallel_fn {
       } else {
         bytes += d_repl.size_bytes() - d_target.size_bytes();
       }
-      position = d_str.find(d_target, position + d_target.size_bytes());
+      position = d_str.find(d_target, position + d_target.length());
       --max_n;
     }
     if (out_ptr)  // copy whats left (or right depending on your point of view)
@@ -353,11 +355,12 @@ size_type filter_maxrepl_target_positions(size_type* d_target_positions,
                                           size_type max_repl_per_row,
                                           rmm::cuda_stream_view stream)
 {
-  auto pos_to_row_fn = [d_offsets_span] __device__(size_type target_pos) -> size_type {
-    auto upper_bound =
-      thrust::upper_bound(thrust::seq, d_offsets_span.begin(), d_offsets_span.end(), target_pos);
-    return thrust::distance(d_offsets_span.begin(), upper_bound);
-  };
+  auto pos_to_row_fn = cuda::proclaim_return_type<size_type>(
+    [d_offsets_span] __device__(size_type target_pos) -> size_type {
+      auto upper_bound =
+        thrust::upper_bound(thrust::seq, d_offsets_span.begin(), d_offsets_span.end(), target_pos);
+      return thrust::distance(d_offsets_span.begin(), upper_bound);
+    });
 
   // compute the match count per row for each target position
   rmm::device_uvector<size_type> match_counts(target_count, stream);
@@ -467,15 +470,15 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
   auto offsets_view     = offsets_column->mutable_view();
   auto delta_per_target = d_repl.size_bytes() - target_size;
   device_span<size_type const> d_target_positions_span(d_target_positions, target_count);
-  auto offsets_update_fn =
+  auto offsets_update_fn = cuda::proclaim_return_type<int32_t>(
     [d_target_positions_span, delta_per_target, chars_start] __device__(int32_t offset) -> int32_t {
-    // determine the number of target positions occurring before this offset
-    size_type const* next_target_pos_ptr = thrust::lower_bound(
-      thrust::seq, d_target_positions_span.begin(), d_target_positions_span.end(), offset);
-    size_type num_prev_targets =
-      thrust::distance(d_target_positions_span.data(), next_target_pos_ptr);
-    return offset - chars_start + delta_per_target * num_prev_targets;
-  };
+      // determine the number of target positions occurring before this offset
+      size_type const* next_target_pos_ptr = thrust::lower_bound(
+        thrust::seq, d_target_positions_span.begin(), d_target_positions_span.end(), offset);
+      size_type num_prev_targets =
+        thrust::distance(d_target_positions_span.data(), next_target_pos_ptr);
+      return offset - chars_start + delta_per_target * num_prev_targets;
+    });
   thrust::transform(rmm::exec_policy(stream),
                     d_offsets_span.begin(),
                     d_offsets_span.end(),
@@ -720,10 +723,11 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
 
   // build offsets column
   auto offsets_transformer_itr = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<int32_t>(0), [d_strings, d_repl] __device__(size_type idx) {
+    thrust::make_counting_iterator<int32_t>(0),
+    cuda::proclaim_return_type<size_type>([d_strings, d_repl] __device__(size_type idx) {
       return d_strings.is_null(idx) ? d_repl.size_bytes()
                                     : d_strings.element<string_view>(idx).size_bytes();
-    });
+    }));
   auto [offsets_column, bytes] = cudf::detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto d_offsets = offsets_column->view().data<int32_t>();
@@ -751,21 +755,23 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
 std::unique_ptr<column> replace(strings_column_view const& strings,
                                 string_scalar const& target,
                                 string_scalar const& repl,
-                                int32_t maxrepl,
+                                cudf::size_type maxrepl,
+                                rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace(strings, target, repl, maxrepl, cudf::get_default_stream(), mr);
+  return detail::replace(strings, target, repl, maxrepl, stream, mr);
 }
 
 std::unique_ptr<column> replace_slice(strings_column_view const& strings,
                                       string_scalar const& repl,
                                       size_type start,
                                       size_type stop,
+                                      rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_slice(strings, repl, start, stop, cudf::get_default_stream(), mr);
+  return detail::replace_slice(strings, repl, start, stop, stream, mr);
 }
 
 }  // namespace strings

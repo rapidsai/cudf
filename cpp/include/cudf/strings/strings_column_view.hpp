@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,8 +67,8 @@ class strings_column_view : private column_view {
   using column_view::offset;
   using column_view::size;
 
-  using offset_iterator = offset_type const*;  ///< offsets iterator type
-  using chars_iterator  = char const*;         ///< character iterator type
+  using offset_iterator = size_type const*;  ///< offsets iterator type
+  using chars_iterator  = char const*;       ///< character iterator type
 
   /**
    * @brief Returns the parent column.
@@ -80,7 +80,7 @@ class strings_column_view : private column_view {
   /**
    * @brief Returns the internal column of offsets
    *
-   * @throw cudf::logic error if this is an empty column
+   * @throw cudf::logic_error if this is an empty column
    * @return The offsets column
    */
   [[nodiscard]] column_view offsets() const;
@@ -106,7 +106,7 @@ class strings_column_view : private column_view {
   /**
    * @brief Returns the internal column of chars
    *
-   * @throw cudf::logic error if this is an empty column
+   * @throw cudf::logic_error if this is an empty column
    * @return The chars column
    */
   [[nodiscard]] column_view chars() const;

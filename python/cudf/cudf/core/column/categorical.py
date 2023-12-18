@@ -17,11 +17,10 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
-from cudf.api.types import is_categorical_dtype, is_interval_dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
-from cudf.core.dtypes import CategoricalDtype
+from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     min_signed_type,
@@ -99,7 +98,7 @@ class CategoricalAccessor(ColumnMethods):
     _column: CategoricalColumn
 
     def __init__(self, parent: SeriesOrSingleColumnIndex):
-        if not is_categorical_dtype(parent.dtype):
+        if not isinstance(parent.dtype, CategoricalDtype):
             raise AttributeError(
                 "Can only use .cat accessor with a 'category' dtype"
             )
@@ -845,10 +844,12 @@ class CategoricalColumn(column.ColumnBase):
         ) and cudf._lib.scalar._is_null_host_scalar(value):
             to_add_categories = 0
         else:
+            if cudf.api.types.is_scalar(value):
+                arr = [value]
+            else:
+                arr = value
             to_add_categories = len(
-                cudf.Index(value, nan_as_null=False).difference(
-                    self.categories
-                )
+                cudf.Index(arr, nan_as_null=False).difference(self.categories)
             )
 
         if to_add_categories > 0:
@@ -972,8 +973,11 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def to_pandas(
-        self, index: Optional[pd.Index] = None, **kwargs
+        self, *, index: Optional[pd.Index] = None, nullable: bool = False
     ) -> pd.Series:
+        if nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
+
         if self.categories.dtype.kind == "f":
             new_mask = bools_to_mask(self.notnull())
             col = column.build_categorical_column(
@@ -992,7 +996,7 @@ class CategoricalColumn(column.ColumnBase):
             .fillna(_DEFAULT_CATEGORICAL_VALUE)
             .values_host
         )
-        if is_interval_dtype(col.categories.dtype):
+        if isinstance(col.categories.dtype, IntervalDtype):
             # leaving out dropna because it temporarily changes an interval
             # index into a struct and throws off results.
             # TODO: work on interval index dropna
@@ -1272,18 +1276,7 @@ class CategoricalColumn(column.ColumnBase):
                     self.codes.dtype
                 )
 
-        result = super().fillna(value=fill_value, method=method)
-
-        result = column.build_categorical_column(
-            categories=self.dtype.categories._values,
-            codes=column.build_column(result.base_data, dtype=result.dtype),
-            offset=result.offset,
-            size=result.size,
-            mask=result.base_mask,
-            ordered=self.dtype.ordered,
-        )
-
-        return result
+        return super().fillna(value=fill_value, method=method)
 
     def indices_of(
         self, value: ScalarLike
@@ -1298,9 +1291,7 @@ class CategoricalColumn(column.ColumnBase):
     def is_monotonic_decreasing(self) -> bool:
         return bool(self.ordered) and self.as_numerical.is_monotonic_decreasing
 
-    def as_categorical_column(
-        self, dtype: Dtype, **kwargs
-    ) -> CategoricalColumn:
+    def as_categorical_column(self, dtype: Dtype) -> CategoricalColumn:
         if isinstance(dtype, str) and dtype == "category":
             return self
         if (
@@ -1483,7 +1474,7 @@ class CategoricalColumn(column.ColumnBase):
                     ),
                 )
             elif (
-                not out_col._categories_equal(new_categories, ordered=ordered)
+                not out_col._categories_equal(new_categories, ordered=True)
                 or not self.ordered == ordered
             ):
                 out_col = out_col._set_categories(

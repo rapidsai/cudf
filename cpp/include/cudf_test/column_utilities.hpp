@@ -141,39 +141,6 @@ void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_byt
 void expect_column_empty(cudf::column_view const& col);
 
 /**
- * @brief Formats a column view as a string
- *
- * @param col The column view
- * @param delimiter The delimiter to put between strings
- */
-std::string to_string(cudf::column_view const& col, std::string const& delimiter);
-
-/**
- * @brief Formats a null mask as a string
- *
- * @param null_mask The null mask buffer
- * @param null_mask_size Size of the null mask (in rows)
- */
-std::string to_string(std::vector<bitmask_type> const& null_mask, size_type null_mask_size);
-
-/**
- * @brief Convert column values to a host vector of strings
- *
- * @param col The column view
- */
-std::vector<std::string> to_strings(cudf::column_view const& col);
-
-/**
- * @brief Print a column view to an ostream
- *
- * @param os        The output stream
- * @param col       The column view
- */
-void print(cudf::column_view const& col,
-           std::ostream& os             = std::cout,
-           std::string const& delimiter = ",");
-
-/**
  * @brief Copy the null bitmask from a column view to a host vector
  *
  * @param c      The column view
@@ -187,7 +154,7 @@ std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c);
  * This takes care of padded bits
  *
  * @param        expected_mask A vector representing expected mask
- * @param        got_mask A vector representing mask obtained from column
+ * @param        got_mask_begin A vector representing mask obtained from column
  * @param        number_of_elements number of elements the mask represent
  *
  * @returns      true if both vector match till the `number_of_elements`
@@ -212,6 +179,9 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
   return {host_data, bitmask_to_host(c)};
 }
 
+// This signature is identical to the above overload apart from SFINAE so
+// doxygen sees it as a duplicate.
+//! @cond Doxygen_Suppress
 /**
  * @brief Copies the data and bitmask of a `column_view` to the host.
  *
@@ -240,6 +210,7 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
 
   return {host_fixed_points, bitmask_to_host(c)};
 }
+//! @endcond
 
 /**
  * @brief Copies the data and bitmask of a `column_view` of strings
@@ -261,8 +232,8 @@ inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to
       cudf::device_span<char const>(scv.chars().data<char>(), scv.chars().size()),
       cudf::get_default_stream());
     auto const h_offsets = cudf::detail::make_std_vector_sync(
-      cudf::device_span<cudf::offset_type const>(
-        scv.offsets().data<cudf::offset_type>() + scv.offset(), scv.size() + 1),
+      cudf::device_span<cudf::size_type const>(scv.offsets().data<cudf::size_type>() + scv.offset(),
+                                               scv.size() + 1),
       cudf::get_default_stream());
 
     // build std::string vector from chars and offsets

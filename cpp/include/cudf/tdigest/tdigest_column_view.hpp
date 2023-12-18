@@ -19,7 +19,14 @@
 #include <cudf/lists/lists_column_view.hpp>
 
 namespace cudf {
+//! Tdigest interfaces
 namespace tdigest {
+/**
+ * @addtogroup tdigest
+ * @{
+ * @file
+ * @brief tdigest data APIs
+ */
 
 /**
  * @brief Given a column_view containing tdigest data, an instance of this class
@@ -67,9 +74,7 @@ class tdigest_column_view : private column_view {
   tdigest_column_view& operator=(tdigest_column_view&&) = default;
 
   using column_view::size;
-  static_assert(std::is_same_v<offset_type, size_type>,
-                "offset_type is expected to be the same as size_type.");
-  using offset_iterator = offset_type const*;  ///< Iterator over offsets
+  using offset_iterator = size_type const*;  ///< Iterator over offsets
 
   // mean and weight column indices within tdigest inner struct columns
   static constexpr size_type mean_column_index{0};    ///< Mean column index
@@ -125,5 +130,6 @@ class tdigest_column_view : private column_view {
   [[nodiscard]] double const* max_begin() const;
 };
 
+/** @} */  // end of group
 }  // namespace tdigest
 }  // namespace cudf

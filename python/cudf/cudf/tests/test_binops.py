@@ -3,6 +3,7 @@
 import decimal
 import operator
 import random
+import warnings
 from itertools import combinations_with_replacement, product
 
 import cupy as cp
@@ -148,6 +149,7 @@ _cudf_scalar_reflected_ops = [
     lambda x: cudf.Scalar(0) // x,
     lambda x: cudf.Scalar(0) / x,
 ]
+
 
 pytest_xfail = pytest.mark.xfail
 pytestmark = pytest.mark.spilling
@@ -1672,7 +1674,12 @@ def test_scalar_null_binops(op, dtype_l, dtype_r):
     rhs = cudf.Scalar(cudf.NA, dtype=dtype_r)
 
     result = op(lhs, rhs)
-    assert result.value is cudf.NA
+    assert result.value is (
+        cudf.NaT
+        if cudf.api.types.is_datetime64_dtype(result.dtype)
+        or cudf.api.types.is_timedelta64_dtype(result.dtype)
+        else cudf.NA
+    )
 
     # make sure dtype is the same as had there been a valid scalar
     valid_lhs = cudf.Scalar(1, dtype=dtype_l)
@@ -3141,14 +3148,23 @@ def test_empty_column(binop, data, scalar):
 @pytest.mark.parametrize(
     "df",
     [
-        cudf.DataFrame([[1, 2, 3, 4], [5, 6, 7, 8]]),
+        cudf.DataFrame(
+            [[1, 2, 3, 4], [5, 6, 7, 8], [10, 11, 12, 13], [14, 15, 16, 17]]
+        ),
         pytest.param(
             cudf.DataFrame([[1, None, None, 4], [5, 6, 7, None]]),
             marks=pytest_xfail(
                 reason="Cannot access Frame.values if frame contains nulls"
             ),
         ),
-        cudf.DataFrame([[1.2, 2.3, 3.4, 4.5], [5.6, 6.7, 7.8, 8.9]]),
+        cudf.DataFrame(
+            [
+                [1.2, 2.3, 3.4, 4.5],
+                [5.6, 6.7, 7.8, 8.9],
+                [7.43, 4.2, 23.2, 23.2],
+                [9.1, 2.4, 4.5, 65.34],
+            ]
+        ),
         cudf.Series([14, 15, 16, 17]),
         cudf.Series([14.15, 15.16, 16.17, 17.18]),
     ],
@@ -3162,8 +3178,6 @@ def test_empty_column(binop, data, scalar):
         ),
         cudf.Series([5, 6, 7, 8]),
         cudf.Series([5.6, 6.7, 7.8, 8.9]),
-        pd.DataFrame([[9, 10], [11, 12], [13, 14], [15, 16]]),
-        pd.Series([5, 6, 7, 8]),
         np.array([5, 6, 7, 8]),
         [25.5, 26.6, 27.7, 28.8],
     ],
@@ -3176,6 +3190,14 @@ def test_binops_dot(df, other):
     got = df @ other
 
     utils.assert_eq(expected, got)
+
+
+def test_binop_dot_preserve_index():
+    ser = cudf.Series(range(2), index=["A", "B"])
+    df = cudf.DataFrame(np.eye(2), columns=["A", "B"], index=["A", "B"])
+    result = ser @ df
+    expected = ser.to_pandas() @ df.to_pandas()
+    utils.assert_eq(result, expected)
 
 
 def test_binop_series_with_repeated_index():
@@ -3265,3 +3287,51 @@ def test_binop_integer_power_int_scalar():
     expected = base**exponent.value
     got = base**exponent
     utils.assert_eq(expected, got)
+
+
+def test_numpy_int_scalar_binop():
+    assert (np.float32(1.0) - cudf.Scalar(1)) == 0.0
+
+
+@pytest.mark.parametrize("op", _binops)
+def test_binop_index_series(op):
+    gi = cudf.Index([10, 11, 12])
+    gs = cudf.Series([1, 2, 3])
+
+    actual = op(gi, gs)
+    expected = op(gi.to_pandas(), gs.to_pandas())
+
+    utils.assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("name1", utils.SERIES_OR_INDEX_NAMES)
+@pytest.mark.parametrize("name2", utils.SERIES_OR_INDEX_NAMES)
+def test_binop_index_dt_td_series_with_names(name1, name2):
+    gi = cudf.Index([1, 2, 3], dtype="datetime64[ns]", name=name1)
+    gs = cudf.Series([10, 11, 12], dtype="timedelta64[ns]", name=name2)
+    with warnings.catch_warnings():
+        # Numpy raises a deprecation warning:
+        # "elementwise comparison failed; this will raise an error "
+        warnings.simplefilter("ignore", (DeprecationWarning,))
+
+        expected = gi.to_pandas() + gs.to_pandas()
+    actual = gi + gs
+
+    utils.assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("data1", [[1, 2, 3], [10, 11, None]])
+@pytest.mark.parametrize("data2", [[1, 2, 3], [10, 11, None]])
+def test_binop_eq_ne_index_series(data1, data2):
+    gi = cudf.Index(data1, dtype="datetime64[ns]", name=np.nan)
+    gs = cudf.Series(data2, dtype="timedelta64[ns]", name="abc")
+
+    actual = gi == gs
+    expected = gi.to_pandas() == gs.to_pandas()
+
+    utils.assert_eq(expected, actual)
+
+    actual = gi != gs
+    expected = gi.to_pandas() != gs.to_pandas()
+
+    utils.assert_eq(expected, actual)

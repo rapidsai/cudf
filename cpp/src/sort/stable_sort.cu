@@ -62,22 +62,22 @@ std::unique_ptr<table> stable_sort_by_key(table_view const& values,
 std::unique_ptr<column> stable_sorted_order(table_view const& input,
                                             std::vector<order> const& column_order,
                                             std::vector<null_order> const& null_precedence,
+                                            rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::stable_sorted_order(
-    input, column_order, null_precedence, cudf::get_default_stream(), mr);
+  return detail::stable_sorted_order(input, column_order, null_precedence, stream, mr);
 }
 
 std::unique_ptr<table> stable_sort_by_key(table_view const& values,
                                           table_view const& keys,
                                           std::vector<order> const& column_order,
                                           std::vector<null_order> const& null_precedence,
+                                          rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::stable_sort_by_key(
-    values, keys, column_order, null_precedence, cudf::get_default_stream(), mr);
+  return detail::stable_sort_by_key(values, keys, column_order, null_precedence, stream, mr);
 }
 
 }  // namespace cudf

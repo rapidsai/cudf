@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 import datetime
 import re
@@ -212,7 +212,12 @@ def test_scalar_roundtrip(value):
 )
 def test_null_scalar(dtype):
     s = cudf.Scalar(None, dtype=dtype)
-    assert s.value is cudf.NA
+    if cudf.api.types.is_datetime64_dtype(
+        dtype
+    ) or cudf.api.types.is_timedelta64_dtype(dtype):
+        assert s.value is cudf.NaT
+    else:
+        assert s.value is cudf.NA
     assert s.dtype == (
         cudf.dtype(dtype)
         if not isinstance(dtype, cudf.core.dtypes.DecimalDtype)
@@ -236,7 +241,7 @@ def test_null_scalar(dtype):
 )
 def test_nat_to_null_scalar_succeeds(value):
     s = cudf.Scalar(value)
-    assert s.value is cudf.NA
+    assert s.value is cudf.NaT
     assert not s.is_valid()
     assert s.dtype == value.dtype
 
@@ -349,7 +354,12 @@ def test_scalar_implicit_int_conversion(value):
 def test_scalar_invalid_implicit_conversion(cls, dtype):
 
     try:
-        cls(pd.NA)
+        cls(
+            pd.NaT
+            if cudf.api.types.is_datetime64_dtype(dtype)
+            or cudf.api.types.is_timedelta64_dtype(dtype)
+            else pd.NA
+        )
     except TypeError as e:
         with pytest.raises(TypeError, match=re.escape(str(e))):
             slr = cudf.Scalar(None, dtype=dtype)
@@ -450,3 +460,13 @@ def test_scalar_numpy_casting():
     s1 = cudf.Scalar(1, dtype=np.int32)
     s2 = np.int64(2)
     assert s1 < s2
+
+
+def test_construct_timezone_scalar_error():
+    pd_scalar = pd.Timestamp("1970-01-01 00:00:00.000000001", tz="utc")
+    with pytest.raises(NotImplementedError):
+        cudf.utils.dtypes.to_cudf_compatible_scalar(pd_scalar)
+
+    date_scalar = datetime.datetime.now(datetime.timezone.utc)
+    with pytest.raises(NotImplementedError):
+        cudf.utils.dtypes.to_cudf_compatible_scalar(date_scalar)

@@ -140,8 +140,8 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
   thrust::tabulate(rmm::exec_policy(stream),
                    new_sizes->mutable_view().template begin<size_type>(),
                    new_sizes->mutable_view().template end<size_type>(),
-                   [d_gather_map  = gather_map.template begin<offset_type>(),
-                    d_old_offsets = offsets.template begin<offset_type>(),
+                   [d_gather_map  = gather_map.template begin<size_type>(),
+                    d_old_offsets = offsets.template begin<size_type>(),
                     input_row_not_null] __device__(auto i) {
                      return thrust::count_if(thrust::seq,
                                              d_gather_map + d_old_offsets[i],

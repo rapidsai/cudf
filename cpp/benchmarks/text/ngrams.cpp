@@ -36,11 +36,12 @@ static void BM_ngrams(benchmark::State& state, ngrams_type nt)
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
   auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
   cudf::strings_column_view input(column->view());
+  auto const separator = cudf::string_scalar("_");
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);
     switch (nt) {
-      case ngrams_type::tokens: nvtext::generate_ngrams(input); break;
+      case ngrams_type::tokens: nvtext::generate_ngrams(input, 2, separator); break;
       case ngrams_type::characters: nvtext::generate_character_ngrams(input); break;
     }
   }

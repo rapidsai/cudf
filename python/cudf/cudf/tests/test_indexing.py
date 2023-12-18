@@ -1987,6 +1987,13 @@ def test_loc_repeated_label_ordering_issue_13658(series):
     assert_eq(actual, expect)
 
 
+@pytest.mark.parametrize("index", [None, [2, 1, 3, 5, 4]])
+def test_loc_bool_key_numeric_index_raises(index):
+    ser = cudf.Series(range(5), index=index)
+    with pytest.raises(KeyError):
+        ser.loc[True]
+
+
 class TestLocIndexWithOrder:
     # https://github.com/rapidsai/cudf/issues/12833
     @pytest.fixture(params=["increasing", "decreasing", "neither"])
@@ -2067,3 +2074,124 @@ class TestLocIndexWithOrder:
             expect = pdf.loc[lo:hi:take_order]
             actual = df.loc[lo:hi:take_order]
             assert_eq(expect, actual)
+
+
+@pytest.mark.parametrize(
+    "arg",
+    [
+        (2, ("one", "second")),
+        (slice(None, None, None), ("two", "first")),
+        (1, ("one", "first")),
+        (slice(None, None, None), ("two", "second")),
+        (slice(None, None, None), ("two", "first", "three")),
+        (3, ("two", "first", "three")),
+        (slice(None, None, None), ("two",)),
+        (0, ("two",)),
+    ],
+)
+def test_loc_dataframe_column_multiindex(arg):
+    gdf = cudf.DataFrame(
+        [list("abcd"), list("efgh"), list("ijkl"), list("mnop")],
+        columns=cudf.MultiIndex.from_product(
+            [["one", "two"], ["first", "second"], ["three"]]
+        ),
+    )
+    pdf = gdf.to_pandas()
+
+    assert_eq(gdf.loc[arg], pdf.loc[arg])
+
+
+@pytest.mark.parametrize(
+    "arg", [slice(2, 4), slice(2, 5), slice(2.3, 5), slice(4.6, 6)]
+)
+def test_series_iloc_float_int(arg):
+    gs = cudf.Series(range(4), index=[2.0, 3.0, 4.5, 5.5])
+    ps = gs.to_pandas()
+
+    actual = gs.loc[arg]
+    expected = ps.loc[arg]
+
+    assert_eq(actual, expected)
+
+
+def test_iloc_loc_mixed_dtype():
+    df = cudf.DataFrame({"a": ["a", "b"], "b": [0, 1]})
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(TypeError):
+            df.iloc[0]
+        with pytest.raises(TypeError):
+            df.loc[0]
+    df = df.astype("str")
+    pdf = df.to_pandas()
+
+    assert_eq(df.iloc[0], pdf.iloc[0])
+    assert_eq(df.loc[0], pdf.loc[0])
+
+
+def test_loc_setitem_categorical_integer_not_position_based():
+    gdf = cudf.DataFrame(range(3), index=cudf.CategoricalIndex([1, 2, 3]))
+    pdf = gdf.to_pandas()
+    gdf.loc[1] = 10
+    pdf.loc[1] = 10
+    assert_eq(gdf, pdf)
+
+
+@pytest.mark.parametrize("typ", ["datetime64[ns]", "timedelta64[ns]"])
+@pytest.mark.parametrize("idx_method, key", [["iloc", 0], ["loc", "a"]])
+def test_series_iloc_scalar_datetimelike_return_pd_scalar(
+    typ, idx_method, key
+):
+    obj = cudf.Series([1, 2, 3], index=list("abc"), dtype=typ)
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = getattr(obj, idx_method)[key]
+    expected = getattr(obj.to_pandas(), idx_method)[key]
+    assert result == expected
+
+
+@pytest.mark.parametrize("typ", ["datetime64[ns]", "timedelta64[ns]"])
+@pytest.mark.parametrize(
+    "idx_method, row_key, col_key", [["iloc", 0, 0], ["loc", "a", "a"]]
+)
+def test_dataframe_iloc_scalar_datetimelike_return_pd_scalar(
+    typ, idx_method, row_key, col_key
+):
+    obj = cudf.DataFrame(
+        [1, 2, 3], index=list("abc"), columns=["a"], dtype=typ
+    )
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = getattr(obj, idx_method)[row_key, col_key]
+    expected = getattr(obj.to_pandas(), idx_method)[row_key, col_key]
+    assert result == expected
+
+
+@pytest.mark.parametrize("idx_method, key", [["iloc", 0], ["loc", "a"]])
+def test_series_iloc_scalar_interval_return_pd_scalar(idx_method, key):
+    iidx = cudf.IntervalIndex.from_breaks([1, 2, 3])
+    obj = cudf.Series(iidx, index=list("ab"))
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = getattr(obj, idx_method)[key]
+    expected = getattr(obj.to_pandas(), idx_method)[key]
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "idx_method, row_key, col_key", [["iloc", 0, 0], ["loc", "a", "a"]]
+)
+def test_dataframe_iloc_scalar_interval_return_pd_scalar(
+    idx_method, row_key, col_key
+):
+    iidx = cudf.IntervalIndex.from_breaks([1, 2, 3])
+    obj = cudf.DataFrame({"a": iidx}, index=list("ab"))
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = getattr(obj, idx_method)[row_key, col_key]
+    expected = getattr(obj.to_pandas(), idx_method)[row_key, col_key]
+    assert result == expected
+
+
+def test_scalar_loc_row_categoricalindex():
+    df = cudf.DataFrame(
+        range(4), index=cudf.CategoricalIndex(["a", "a", "b", "c"])
+    )
+    result = df.loc["a"]
+    expected = df.to_pandas().loc["a"]
+    assert_eq(result, expected)

@@ -25,7 +25,8 @@ namespace cudf {
 namespace io {
 namespace avro {
 struct block_desc_s {
-  block_desc_s() {}
+  block_desc_s() = default;  // required to compile on ctk-12.2 + aarch64
+
   explicit constexpr block_desc_s(
     size_t offset_, uint32_t size_, uint32_t row_offset_, uint32_t first_row_, uint32_t num_rows_)
     : offset(offset_),

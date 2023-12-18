@@ -3,6 +3,7 @@
 from enum import IntEnum
 
 import numpy as np
+import pandas as pd
 
 from libcpp.memory cimport make_shared, shared_ptr
 
@@ -17,7 +18,6 @@ from cudf._lib.types cimport (
 
 import cudf
 from cudf._lib import pylibcudf
-from cudf._lib cimport pylibcudf
 
 size_type_dtype = np.dtype("int32")
 
@@ -129,6 +129,11 @@ LIBCUDF_TO_SUPPORTED_NUMPY_TYPES = {
     TypeId.STRUCT: np.dtype("object"),
 }
 
+PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES = {
+    pylibcudf.TypeId(k).value: v
+    for k, v in LIBCUDF_TO_SUPPORTED_NUMPY_TYPES.items()
+}
+
 duration_unit_map = {
     TypeId.DURATION_SECONDS: "s",
     TypeId.DURATION_MILLISECONDS: "ms",
@@ -232,6 +237,7 @@ cdef dtype_from_column_view(column_view cv):
         ]
 
 cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
+    cdef libcudf_types.type_id tid
     if cudf.api.types.is_list_dtype(dtype):
         tid = libcudf_types.type_id.LIST
     elif cudf.api.types.is_struct_dtype(dtype):
@@ -252,7 +258,7 @@ cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
     else:
         return libcudf_types.data_type(tid)
 
-cpdef pylibcudf.DataType dtype_to_pylibcudf_type(dtype):
+cpdef dtype_to_pylibcudf_type(dtype):
     if cudf.api.types.is_list_dtype(dtype):
         return pylibcudf.DataType(pylibcudf.TypeId.LIST)
     elif cudf.api.types.is_struct_dtype(dtype):
@@ -265,9 +271,13 @@ cpdef pylibcudf.DataType dtype_to_pylibcudf_type(dtype):
         else:
             tid = pylibcudf.TypeId.DECIMAL32
         return pylibcudf.DataType(tid, -dtype.scale)
-    return pylibcudf.DataType(
-        SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[np.dtype(dtype)]
-    )
+
+    # libcudf types don't support localization so convert to the base type
+    if isinstance(dtype, pd.DatetimeTZDtype):
+        dtype = np.dtype(f"<M8[{dtype.unit}]")
+    else:
+        dtype = np.dtype(dtype)
+    return pylibcudf.DataType(SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[dtype])
 
 cdef bool is_decimal_type_id(libcudf_types.type_id tid) except *:
     return tid in (
@@ -275,3 +285,54 @@ cdef bool is_decimal_type_id(libcudf_types.type_id tid) except *:
         libcudf_types.type_id.DECIMAL64,
         libcudf_types.type_id.DECIMAL32,
     )
+
+
+def dtype_from_pylibcudf_lists_column(col):
+    child = col.list_view().child()
+    tid = child.type().id()
+
+    if tid == pylibcudf.TypeId.LIST:
+        return cudf.ListDtype(dtype_from_pylibcudf_lists_column(child))
+    elif tid == pylibcudf.TypeId.EMPTY:
+        return cudf.ListDtype("int8")
+    else:
+        return cudf.ListDtype(
+            dtype_from_pylibcudf_column(child)
+        )
+
+
+def dtype_from_pylibcudf_structs_column(col):
+    fields = {
+        str(i): dtype_from_pylibcudf_column(col.child(i))
+        for i in range(col.num_children())
+    }
+    return cudf.StructDtype(fields)
+
+
+def dtype_from_pylibcudf_column(col):
+    type_ = col.type()
+    tid = type_.id()
+
+    if tid == pylibcudf.TypeId.LIST:
+        return dtype_from_pylibcudf_lists_column(col)
+    elif tid == pylibcudf.TypeId.STRUCT:
+        return dtype_from_pylibcudf_structs_column(col)
+    elif tid == pylibcudf.TypeId.DECIMAL64:
+        return cudf.Decimal64Dtype(
+            precision=cudf.Decimal64Dtype.MAX_PRECISION,
+            scale=-type_.scale()
+        )
+    elif tid == pylibcudf.TypeId.DECIMAL32:
+        return cudf.Decimal32Dtype(
+            precision=cudf.Decimal32Dtype.MAX_PRECISION,
+            scale=-type_.scale()
+        )
+    elif tid == pylibcudf.TypeId.DECIMAL128:
+        return cudf.Decimal128Dtype(
+            precision=cudf.Decimal128Dtype.MAX_PRECISION,
+            scale=-type_.scale()
+        )
+    else:
+        return PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[
+            <underlying_type_t_type_id>(tid)
+        ]

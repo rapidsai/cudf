@@ -352,10 +352,10 @@ __device__ size_type row_size_functor::operator()<string_view>(column_device_vie
     return 0;
   }
 
-  auto const offsets_size  = sizeof(offset_type) * CHAR_BIT;
+  auto const offsets_size  = sizeof(size_type) * CHAR_BIT;
   auto const validity_size = col.nullable() ? 1 : 0;
   auto const chars_size =
-    (offsets.data<offset_type>()[row_end] - offsets.data<offset_type>()[row_start]) * CHAR_BIT;
+    (offsets.data<size_type>()[row_end] - offsets.data<size_type>()[row_start]) * CHAR_BIT;
   return ((offsets_size + validity_size) * num_rows) + chars_size;
 }
 
@@ -372,7 +372,7 @@ __device__ size_type row_size_functor::operator()<list_view>(column_device_view 
 {
   auto const num_rows{span.row_end - span.row_start};
 
-  auto const offsets_size  = sizeof(offset_type) * CHAR_BIT;
+  auto const offsets_size  = sizeof(size_type) * CHAR_BIT;
   auto const validity_size = col.nullable() ? 1 : 0;
   return (offsets_size + validity_size) * num_rows;
 }
@@ -451,10 +451,10 @@ __global__ void compute_row_sizes(device_span<column_device_view const> cols,
     // if this is a list column, update the working span from our offsets
     if (col.type().id() == type_id::LIST && col.size() > 0) {
       column_device_view const& offsets = col.child(lists_column_view::offsets_column_index);
-      auto const base_offset            = offsets.data<offset_type>()[col.offset()];
+      auto const base_offset            = offsets.data<size_type>()[col.offset()];
       cur_span.row_start =
-        offsets.data<offset_type>()[cur_span.row_start + col.offset()] - base_offset;
-      cur_span.row_end = offsets.data<offset_type>()[cur_span.row_end + col.offset()] - base_offset;
+        offsets.data<size_type>()[cur_span.row_start + col.offset()] - base_offset;
+      cur_span.row_end = offsets.data<size_type>()[cur_span.row_end + col.offset()] - base_offset;
     }
 
     last_branch_depth = info[idx].branch_depth_end;

@@ -78,8 +78,8 @@ struct hash_join {
   cudf::null_equality const _nulls_equal;  ///< whether to consider nulls as equal
   cudf::table_view _build;                 ///< input table to build the hash map
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
-    _preprocessed_build;                   ///< input table preprocssed for row operators
-  map_type _hash_table;                    ///< hash table built on `_build`
+    _preprocessed_build;  ///< input table preprocssed for row operators
+  map_type _hash_table;   ///< hash table built on `_build`
 
  public:
   /**

@@ -26,6 +26,8 @@ import java.util.Arrays;
 import java.util.Optional;
 
 public class NvcompTest {
+  private static final HostMemoryAllocator hostMemoryAllocator = DefaultHostMemoryAllocator.get();
+
   private static final Logger log = LoggerFactory.getLogger(ColumnVector.class);
 
   @Test
@@ -68,9 +70,9 @@ public class NvcompTest {
         // check the decompressed results against the original
         for (int i = 0; i < numBuffers; ++i) {
           try (HostMemoryBuffer expected =
-                   HostMemoryBuffer.allocate(originalBuffers.get(i).getLength());
+                   hostMemoryAllocator.allocate(originalBuffers.get(i).getLength());
                HostMemoryBuffer actual =
-                   HostMemoryBuffer.allocate(uncompressedBuffers.get(i).getLength())) {
+                   hostMemoryAllocator.allocate(uncompressedBuffers.get(i).getLength())) {
             Assertions.assertTrue(expected.getLength() <= Integer.MAX_VALUE);
             Assertions.assertTrue(actual.getLength() <= Integer.MAX_VALUE);
             Assertions.assertEquals(expected.getLength(), actual.getLength(),
@@ -114,7 +116,7 @@ public class NvcompTest {
     }
     long[] bufferData = Arrays.copyOfRange(data, dataStart, dataStart + dataLength + 1);
     DeviceMemoryBuffer devBuffer = null;
-    try (HostMemoryBuffer hmb = HostMemoryBuffer.allocate(bufferData.length * 8)) {
+    try (HostMemoryBuffer hmb = hostMemoryAllocator.allocate(bufferData.length * 8)) {
       hmb.setLongs(0, bufferData, 0, bufferData.length);
       devBuffer = DeviceMemoryBuffer.allocate(hmb.getLength());
       devBuffer.copyFromHostBuffer(hmb);

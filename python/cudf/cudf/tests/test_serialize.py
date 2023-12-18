@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_200
 from cudf.testing import _utils as utils
 from cudf.testing._utils import assert_eq
 
@@ -301,7 +302,12 @@ def test_serialize_string():
     "frames",
     [
         (cudf.Series([], dtype="str"), pd.Series([], dtype="str")),
-        (cudf.DataFrame([]), pd.DataFrame([])),
+        pytest.param(
+            (cudf.DataFrame([]), pd.DataFrame([])),
+            marks=pytest.mark.xfail(
+                not PANDAS_GE_200, reason=".column returns Index[object]"
+            ),
+        ),
         (cudf.DataFrame([1]).head(0), pd.DataFrame([1]).head(0)),
         (cudf.DataFrame({"a": []}), pd.DataFrame({"a": []})),
         (
@@ -345,6 +351,17 @@ def test_serialize_seriesgroupby():
     gb = gdf.groupby(["a"]).b
     recreated = gb.__class__.deserialize(*gb.serialize())
     assert_eq(recreated.sum(), gb.sum())
+
+
+def test_serialize_seriesresampler():
+    index = cudf.date_range(start="2001-01-01", periods=10, freq="1T")
+    sr = cudf.Series(range(10), index=index)
+    re_sampler = sr.resample("3T")
+    actual = re_sampler.sum()
+    recreated = re_sampler.__class__.deserialize(*re_sampler.serialize())
+    expected = recreated.sum()
+
+    assert_eq(actual, expected)
 
 
 def test_serialize_string_check_buffer_sizes():

@@ -149,7 +149,7 @@ std::size_t gather_stream_info(std::size_t stripe_index,
       // for each of its fields. There is only a PRESENT stream, which
       // needs to be included for the reader.
       auto const schema_type = types[column_id];
-      if (schema_type.subtypes.size() != 0) {
+      if (not schema_type.subtypes.empty()) {
         if (schema_type.kind == orc::STRUCT && stream.kind == orc::PRESENT) {
           for (auto const& idx : schema_type.subtypes) {
             auto child_idx = (idx < orc2gdf.size()) ? orc2gdf[idx] : -1;
@@ -249,7 +249,7 @@ rmm::device_buffer decompress_stripe_data(
   // Required by `gpuDecodeOrcColumnData`.
   rmm::device_buffer decomp_data(
     cudf::util::round_up_safe(total_decomp_size, BUFFER_PADDING_MULTIPLE), stream);
-  if (decomp_data.size() == 0) { return decomp_data; }
+  if (decomp_data.is_empty()) { return decomp_data; }
 
   rmm::device_uvector<device_span<uint8_t const>> inflate_in(
     num_compressed_blocks + num_uncompressed_blocks, stream);
@@ -1232,7 +1232,7 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
       CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
     }
 
-    if (stripe_data.size() == 0) { continue; }
+    if (stripe_data.empty()) { continue; }
 
     // Process dataset chunk pages into output columns
     auto row_groups =

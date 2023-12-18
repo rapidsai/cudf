@@ -244,9 +244,9 @@ get_untyped_chunk(typed_statistics_chunk<T, include_aggregate> const& chunk)
   stat.null_count = chunk.null_count;
   stat.has_minmax = chunk.has_minmax;
   stat.has_sum    = [&]() {
-    if (!chunk.has_minmax) return false;
     // invalidate the sum if overflow or underflow is possible
     if constexpr (std::is_floating_point_v<E> or std::is_integral_v<E>) {
+      if (!chunk.has_minmax) { return true; }
       return std::numeric_limits<E>::max() / chunk.non_nulls >=
                static_cast<E>(chunk.maximum_value) and
              std::numeric_limits<E>::lowest() / chunk.non_nulls <=

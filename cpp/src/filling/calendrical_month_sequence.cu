@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,10 +40,11 @@ std::unique_ptr<cudf::column> calendrical_month_sequence(size_type size,
 std::unique_ptr<cudf::column> calendrical_month_sequence(size_type size,
                                                          scalar const& init,
                                                          size_type months,
+                                                         rmm::cuda_stream_view stream,
                                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::calendrical_month_sequence(size, init, months, cudf::get_default_stream(), mr);
+  return detail::calendrical_month_sequence(size, init, months, stream, mr);
 }
 
 }  // namespace cudf

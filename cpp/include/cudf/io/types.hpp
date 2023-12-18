@@ -32,13 +32,6 @@
 #include <unordered_map>
 #include <vector>
 
-// Forward declarations
-namespace arrow {
-namespace io {
-class RandomAccessFile;
-}
-}  // namespace arrow
-
 namespace cudf {
 //! IO interfaces
 namespace io {
@@ -51,6 +44,12 @@ class datasource;
 namespace cudf {
 //! IO interfaces
 namespace io {
+/**
+ * @addtogroup io_types
+ * @{
+ * @file
+ */
+
 /**
  * @brief Compression algorithms
  */
@@ -202,26 +201,33 @@ class writer_compression_statistics {
  * @brief Control use of dictionary encoding for parquet writer
  */
 enum dictionary_policy {
-  NEVER,     ///< Never use dictionary encoding
-  ADAPTIVE,  ///< Use dictionary when it will not impact compression
-  ALWAYS     ///< Use dictionary reqardless of impact on compression
+  NEVER    = 0,  ///< Never use dictionary encoding
+  ADAPTIVE = 1,  ///< Use dictionary when it will not impact compression
+  ALWAYS   = 2   ///< Use dictionary regardless of impact on compression
 };
 
 /**
- * @brief Detailed name information for output columns.
+ * @brief Detailed name (and optionally nullability) information for output columns.
  *
  * The hierarchy of children matches the hierarchy of children in the output
  * cudf columns.
  */
 struct column_name_info {
   std::string name;                        ///< Column name
+  std::optional<bool> is_nullable;         ///< Column nullability
   std::vector<column_name_info> children;  ///< Child column names
+
   /**
-   * @brief Construct a column name info with a name and no children
+   * @brief Construct a column name info with a name, optional nullabilty, and no children
    *
    * @param _name Column name
+   * @param _is_nullable True if column is nullable
    */
-  column_name_info(std::string const& _name) : name(_name) {}
+  column_name_info(std::string const& _name, std::optional<bool> _is_nullable = std::nullopt)
+    : name(_name), is_nullable(_is_nullable)
+  {
+  }
+
   column_name_info() = default;
 };
 
@@ -286,8 +292,6 @@ constexpr inline auto is_byte_like_type()
  * @brief Source information for read interfaces
  */
 struct source_info {
-  std::vector<std::shared_ptr<arrow::io::RandomAccessFile>> _files;  //!< Input files
-
   source_info() = default;
 
   /**
@@ -295,14 +299,20 @@ struct source_info {
    *
    * @param file_paths Input files paths
    */
-  explicit source_info(std::vector<std::string> const& file_paths) : _filepaths(file_paths) {}
+  explicit source_info(std::vector<std::string> const& file_paths)
+    : _type(io_type::FILEPATH), _filepaths(file_paths)
+  {
+  }
 
   /**
    * @brief Construct a new source info object for a single file
    *
    * @param file_path Single input file
    */
-  explicit source_info(std::string const& file_path) : _filepaths({file_path}) {}
+  explicit source_info(std::string const& file_path)
+    : _type(io_type::FILEPATH), _filepaths({file_path})
+  {
+  }
 
   /**
    * @brief Construct a new source info object for multiple buffers in host memory
@@ -439,12 +449,6 @@ struct source_info {
    */
   [[nodiscard]] auto const& device_buffers() const { return _device_buffers; }
   /**
-   * @brief Get the input files
-   *
-   * @return The input files
-   */
-  [[nodiscard]] auto const& files() const { return _files; }
-  /**
    * @brief Get the user sources of the input
    *
    * @return The user sources of the input
@@ -452,7 +456,7 @@ struct source_info {
   [[nodiscard]] auto const& user_sources() const { return _user_sources; }
 
  private:
-  io_type _type = io_type::FILEPATH;
+  io_type _type = io_type::VOID;
   std::vector<std::string> _filepaths;
   std::vector<cudf::host_span<std::byte const>> _host_buffers;
   std::vector<cudf::device_span<std::byte const>> _device_buffers;
@@ -725,8 +729,8 @@ class column_in_metadata {
   /**
    * @brief Gets the explicitly set nullability for this column.
    *
-   * @throws If nullability is not explicitly defined for this column.
-   *         Check using `is_nullability_defined()` first.
+   * @throws std::bad_optional_access If nullability is not explicitly defined
+   *         for this column. Check using `is_nullability_defined()` first.
    * @return Boolean indicating whether this column is nullable
    */
   [[nodiscard]] bool nullable() const { return _nullable.value(); }
@@ -759,8 +763,8 @@ class column_in_metadata {
   /**
    * @brief Get the decimal precision that was set for this column.
    *
-   * @throws If decimal precision was not set for this column.
-   *         Check using `is_decimal_precision_set()` first.
+   * @throws std::bad_optional_access If decimal precision was not set for this
+   *         column. Check using `is_decimal_precision_set()` first.
    * @return The decimal precision that was set for this column
    */
   [[nodiscard]] uint8_t get_decimal_precision() const { return _decimal_precision.value(); }
@@ -778,8 +782,8 @@ class column_in_metadata {
   /**
    * @brief Get the parquet field id that was set for this column.
    *
-   * @throws If parquet field id was not set for this column.
-   *         Check using `is_parquet_field_id_set()` first.
+   * @throws std::bad_optional_access If parquet field id was not set for this
+   *         column. Check using `is_parquet_field_id_set()` first.
    * @return The parquet field id that was set for this column
    */
   [[nodiscard]] int32_t get_parquet_field_id() const { return _parquet_field_id.value(); }
@@ -813,7 +817,17 @@ class table_input_metadata {
    *
    * @param table The table_view to construct metadata for
    */
-  table_input_metadata(table_view const& table);
+  explicit table_input_metadata(table_view const& table);
+
+  /**
+   * @brief Construct a new table_input_metadata from a table_metadata object.
+   *
+   * The constructed table_input_metadata has the same structure, column names and nullability as
+   * the passed table_metadata.
+   *
+   * @param metadata The table_metadata to construct table_intput_metadata for
+   */
+  explicit table_input_metadata(table_metadata const& metadata);
 
   std::vector<column_in_metadata> column_metadata;  //!< List of column metadata
 };
@@ -930,5 +944,6 @@ class reader_column_schema {
   [[nodiscard]] size_t get_num_children() const { return children.size(); }
 };
 
+/** @} */  // end of group
 }  // namespace io
 }  // namespace cudf

@@ -605,13 +605,11 @@ TEST_F(StringsDatetimeTest, FromTimestampAllSpecifiers)
 
 TEST_F(StringsDatetimeTest, ZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_column(
-    cudf::data_type{cudf::type_id::TIMESTAMP_SECONDS}, 0, nullptr, nullptr, 0);
-  auto results = cudf::strings::from_timestamps(zero_size_column);
+  auto const zero_size_column = cudf::make_empty_column(cudf::type_id::TIMESTAMP_SECONDS)->view();
+  auto results                = cudf::strings::from_timestamps(zero_size_column);
   cudf::test::expect_column_empty(results->view());
 
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
   results = cudf::strings::to_timestamps(cudf::strings_column_view(zero_size_strings_column),
                                          cudf::data_type{cudf::type_id::TIMESTAMP_SECONDS},
                                          "%Y");
