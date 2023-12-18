@@ -29,30 +29,26 @@
 constexpr size_t data_size         = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
 
-void parquet_read_common(cudf::io::parquet_writer_options const& write_opts,
+void parquet_read_common(cudf::size_type num_rows_to_read,
                          cuio_source_sink_pair& source_sink,
                          nvbench::state& state)
 {
-  cudf::io::write_parquet(write_opts);
-
   cudf::io::parquet_reader_options read_opts =
     cudf::io::parquet_reader_options::builder(source_sink.make_source_info());
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
-             [&](nvbench::launch& launch, auto& timer) {
-               try_drop_l3_cache();
+  state.exec(
+    nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
+      try_drop_l3_cache();
 
-               timer.start();
-               auto const result = cudf::io::read_parquet(read_opts);
-               timer.stop();
+      timer.start();
+      auto const result = cudf::io::read_parquet(read_opts);
+      timer.stop();
 
-               CUDF_EXPECTS(result.tbl->num_columns() == write_opts.get_table().num_columns(),
-                            "Unexpected number of columns");
-               CUDF_EXPECTS(result.tbl->num_rows() == write_opts.get_table().num_rows(),
-                            "Unexpected number of rows");
-             });
+      CUDF_EXPECTS(result.tbl->num_columns() == num_cols, "Unexpected number of columns");
+      CUDF_EXPECTS(result.tbl->num_rows() == num_rows_to_read, "Unexpected number of rows");
+    });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");
@@ -69,19 +65,23 @@ void BM_parquet_read_data(nvbench::state& state, nvbench::type_list<nvbench::enu
   auto const run_length  = static_cast<cudf::size_type>(state.get_int64("run_length"));
   auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
   auto const compression = cudf::io::compression_type::SNAPPY;
-
-  auto const tbl =
-    create_random_table(cycle_dtypes(d_type, num_cols),
-                        table_size_bytes{data_size},
-                        data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
-  auto const view = tbl->view();
-
   cuio_source_sink_pair source_sink(source_type);
-  cudf::io::parquet_writer_options write_opts =
-    cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
-      .compression(compression);
 
-  parquet_read_common(write_opts, source_sink, state);
+  auto num_rows = [&]() {
+    auto const tbl = create_random_table(
+      cycle_dtypes(d_type, num_cols),
+      table_size_bytes{data_size},
+      data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
+    auto const view = tbl->view();
+
+    cudf::io::parquet_writer_options write_opts =
+      cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
+        .compression(compression);
+    cudf::io::write_parquet(write_opts);
+    return view.num_rows();
+  }();
+
+  parquet_read_common(num_rows, source_sink, state);
 }
 
 void BM_parquet_read_io_compression(nvbench::state& state)
@@ -99,19 +99,23 @@ void BM_parquet_read_io_compression(nvbench::state& state)
   auto const run_length  = static_cast<cudf::size_type>(state.get_int64("run_length"));
   auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
   auto const compression = retrieve_compression_type_enum(state.get_string("compression_type"));
-
-  auto const tbl =
-    create_random_table(cycle_dtypes(d_type, num_cols),
-                        table_size_bytes{data_size},
-                        data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
-  auto const view = tbl->view();
-
   cuio_source_sink_pair source_sink(source_type);
-  cudf::io::parquet_writer_options write_opts =
-    cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
-      .compression(compression);
 
-  parquet_read_common(write_opts, source_sink, state);
+  auto num_rows = [&]() {
+    auto const tbl = create_random_table(
+      cycle_dtypes(d_type, num_cols),
+      table_size_bytes{data_size},
+      data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
+    auto const view = tbl->view();
+
+    cudf::io::parquet_writer_options write_opts =
+      cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
+        .compression(compression);
+    cudf::io::write_parquet(write_opts);
+    return view.num_rows();
+  }();
+
+  parquet_read_common(num_rows, source_sink, state);
 }
 
 void BM_parquet_read_io_small_mixed(nvbench::state& state)
@@ -123,25 +127,28 @@ void BM_parquet_read_io_small_mixed(nvbench::state& state)
   auto const run_length  = static_cast<cudf::size_type>(state.get_int64("run_length"));
   auto const num_strings = static_cast<cudf::size_type>(state.get_int64("num_string_cols"));
   auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
+  cuio_source_sink_pair source_sink(source_type);
 
   // want 80 pages total, across 4 columns, so 20 pages per column
   cudf::size_type constexpr n_col          = 4;
   cudf::size_type constexpr page_size_rows = 10'000;
   cudf::size_type constexpr num_rows       = page_size_rows * (80 / n_col);
 
-  auto const tbl =
-    create_random_table(mix_dtypes(d_type, n_col, num_strings),
-                        row_count{num_rows},
-                        data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
-  auto const view = tbl->view();
+  {
+    auto const tbl = create_random_table(
+      mix_dtypes(d_type, n_col, num_strings),
+      row_count{num_rows},
+      data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
+    auto const view = tbl->view();
 
-  cuio_source_sink_pair source_sink(source_type);
-  cudf::io::parquet_writer_options write_opts =
-    cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
-      .max_page_size_rows(10'000)
-      .compression(cudf::io::compression_type::NONE);
+    cudf::io::parquet_writer_options write_opts =
+      cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
+        .max_page_size_rows(10'000)
+        .compression(cudf::io::compression_type::NONE);
+    cudf::io::write_parquet(write_opts);
+  }
 
-  parquet_read_common(write_opts, source_sink, state);
+  parquet_read_common(num_rows, source_sink, state);
 }
 
 template <data_type DataType>
