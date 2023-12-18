@@ -45,8 +45,13 @@ void parquet_read_common(cudf::io::parquet_writer_options const& write_opts,
                try_drop_l3_cache();
 
                timer.start();
-               cudf::io::read_parquet(read_opts);
+               auto const result = cudf::io::read_parquet(read_opts);
                timer.stop();
+
+               CUDF_EXPECTS(result.tbl->num_columns() == write_opts.get_table().num_columns(),
+                            "Unexpected number of columns");
+               CUDF_EXPECTS(result.tbl->num_rows() == write_opts.get_table().num_rows(),
+                            "Unexpected number of rows");
              });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
