@@ -276,16 +276,6 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
     }
   }
 
-#if 0
-  // clear out leftover cruft for next pass
-  std::for_each(chunks.begin(), chunks.end(), [](auto& chunk) {
-    chunk.valid_map_base     = 0;
-    chunk.column_data_base   = 0;
-    chunk.column_string_base = 0;
-  });
-  chunks.host_to_device_async(_stream);
-#endif
-
   _stream.synchronize();
 }
 
