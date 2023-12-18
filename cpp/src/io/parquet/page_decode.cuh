@@ -1024,6 +1024,7 @@ struct mask_filter {
  * @param[in] num_rows Maximum number of rows to read
  * @param[in] filter Filtering function used to decide which pages to operate on
  * @param[in] is_decode_step If we are setting up for the decode step (instead of the preprocess)
+ * @param[in] is_bounds_step If we are in the string bounds checking step
  * @tparam Filter Function that takes a PageInfo reference and returns true if the given page should
  * be operated on Currently only used by gpuComputePageSizes step)
  * @return True if this page should be processed further
@@ -1035,7 +1036,8 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
                                           size_t min_row,
                                           size_t num_rows,
                                           Filter filter,
-                                          bool is_decode_step)
+                                          bool is_decode_step,
+                                          bool is_bounds_step)
 {
   int t = threadIdx.x;
 
@@ -1126,7 +1128,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
   //
   // NOTE: this check needs to be done after the null counts have been zeroed out
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
-  if (is_decode_step && s->num_rows == 0 &&
+  if ((is_decode_step or is_bounds_step) && s->num_rows == 0 &&
       !(has_repetition && (is_bounds_page(s, min_row, num_rows, has_repetition) ||
                            is_page_contained(s, min_row, num_rows)))) {
     return false;
@@ -1387,7 +1389,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
 
       // if we're in the decoding step, jump directly to the first
       // value we care about
-      if (is_decode_step) {
+      if (is_decode_step or is_bounds_step) {
         s->input_value_count = s->page.skipped_values > -1 ? s->page.skipped_values : 0;
       } else {
         s->input_value_count = 0;

@@ -325,7 +325,7 @@ __global__ void __launch_bounds__(96)
 
   auto const mask = decode_kernel_mask::DELTA_BINARY;
   if (!setupLocalPageInfo(
-        s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{mask}, true)) {
+        s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{mask}, true, false)) {
     return;
   }
 
@@ -448,7 +448,7 @@ __global__ void __launch_bounds__(decode_block_size)
 
   auto const mask = decode_kernel_mask::DELTA_BYTE_ARRAY;
   if (!setupLocalPageInfo(
-        s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{mask}, true)) {
+        s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{mask}, true, false)) {
     return;
   }
 

@@ -621,7 +621,9 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBou
 
   // setup page info
   auto const mask = BitOr(decode_kernel_mask::STRING, decode_kernel_mask::DELTA_BYTE_ARRAY);
-  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, mask_filter{mask}, true)) { return; }
+  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, mask_filter{mask}, false, true)) {
+    return;
+  }
 
   bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
 
@@ -665,7 +667,7 @@ __global__ void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageS
 
   // setup page info
   auto const mask = decode_kernel_mask::DELTA_BYTE_ARRAY;
-  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, mask_filter{mask}, true)) { return; }
+  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, mask_filter{mask}, false, true)) { return; }
 
   auto const start_value = pp->start_val;
 
@@ -728,7 +730,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
 
   // setup page info
   if (!setupLocalPageInfo(
-        s, pp, chunks, min_row, num_rows, mask_filter{decode_kernel_mask::STRING}, true)) {
+        s, pp, chunks, min_row, num_rows, mask_filter{decode_kernel_mask::STRING}, false, true)) {
     return;
   }
 
@@ -823,7 +825,7 @@ __global__ void __launch_bounds__(decode_block_size)
 
   auto const mask = decode_kernel_mask::STRING;
   if (!setupLocalPageInfo(
-        s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{mask}, true)) {
+        s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{mask}, true, false)) {
     return;
   }
 
