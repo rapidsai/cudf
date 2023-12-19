@@ -384,12 +384,27 @@ _domain_objects = None
 _prefixed_domain_objects = None
 _intersphinx_cache = {}
 
-_intersphinx_extra_prefixes = ("rmm::", "rmm::mr::", "mr::", "")
+_intersphinx_extra_prefixes = ("rmm", "rmm::mr", "mr")
+
+
+def _cached_intersphinx_lookup(env, node, contnode):
+    """Perform an intersphinx lookup and cache the result.
+
+    Have to manually manage the intersphinx cache because lru_cache doesn't
+    handle the env object properly.
+    """
+    key = (node, contnode)
+    if key in _intersphinx_cache:
+        return _intersphinx_cache[key]
+    if (ref := intersphinx.resolve_reference_detect_inventory(env, node, contnode)) is not None:
+        _intersphinx_cache[key] = ref
+    return ref
 
 
 def on_missing_reference(app, env, node, contnode):
     # These variables are defined outside the function to speed up the build.
-    global _all_namespaces, _names_to_skip, _domain_objects, _intersphinx_extra_prefixes, _prefixed_domain_objects, _intersphinx_cache
+    global _all_namespaces, _names_to_skip, _intersphinx_extra_prefixes, \
+        _domain_objects, _prefixed_domain_objects, _intersphinx_cache
 
     # Precompute and cache domains for faster lookups
     if _domain_objects is None:
@@ -400,17 +415,17 @@ def on_missing_reference(app, env, node, contnode):
             for prefix in _all_namespaces:
                 _prefixed_domain_objects[f"{prefix}{name}"] = name
 
-    name = node.get("reftarget", None)
-    if name == "cudf.core.index.GenericIndex":
+    reftarget = node.get("reftarget")
+    if reftarget == "cudf.core.index.GenericIndex":
         # We don't exposed docs for `cudf.core.index.GenericIndex`
         # hence we would want the docstring & mypy references to
         # use `cudf.Index`
         node["reftarget"] = "cudf.Index"
         return contnode
-    if "namespacecudf" in name:
+    if "namespacecudf" in reftarget:
         node["reftarget"] = "cudf"
         return contnode
-    if "classcudf_1_1column__device__view_" in name:
+    if "classcudf_1_1column__device__view_" in reftarget:
         node["reftarget"] = "cudf::column_device_view"
         return contnode
 
@@ -420,10 +435,7 @@ def on_missing_reference(app, env, node, contnode):
         # generates. Adding those would clutter the Sphinx output.
         return contnode
 
-    if (
-        node["refdomain"] in ("std", "cpp")
-        and (reftarget := node.get("reftarget")) is not None
-    ):
+    if node["refdomain"] in ("std", "cpp") and reftarget is not None:
         if any(toskip in reftarget for toskip in _names_to_skip):
             return contnode
 
@@ -432,18 +444,14 @@ def on_missing_reference(app, env, node, contnode):
             reftarget = match.group(1)
 
         # Try to find the target prefixed with e.g. namespaces in case that's
-        # all that's missing. Include the empty prefix in case we're searching
-        # for a stripped template.
+        # all that's missing.
         # We need to do this search because the call sites may not have used
         # the namespaces and we don't want to force them to, and we have to
         # consider both directions because of issues like
         # https://github.com/breathe-doc/breathe/issues/860
         # (there may be other related issues, I haven't investigated all
         # possible combinations of failures in depth).
-        name = None
-        if reftarget in _prefixed_domain_objects:
-            name = _prefixed_domain_objects[reftarget]
-        else:
+        if (name := _prefixed_domain_objects.get(reftarget)) is None:
             for prefix in _all_namespaces:
                 if f"{prefix}{reftarget}" in _domain_objects:
                     name = f"{prefix}{reftarget}"
@@ -459,24 +467,26 @@ def on_missing_reference(app, env, node, contnode):
                 contnode,
             )
 
-        # Have to manually manage the intersphinx cache because lru_cache
-        # doesn't handle the env object properly.
-        for prefix in _intersphinx_extra_prefixes:
-            # First try adding the prefix.
-            node["reftarget"] = f"{prefix}{reftarget}"
-            if (node, contnode) in _intersphinx_cache:
-                return _intersphinx_cache[(node, contnode)]
-            if (ref := intersphinx.resolve_reference_detect_inventory(env, node, contnode)) is not None:
-                _intersphinx_cache[(node, contnode)] = ref
+        # Final possibility is an intersphinx lookup to see if the symbol
+        # exists in one of the other inventories. First we check the symbol
+        # itself in case it was originally templated and that caused the lookup
+        # to fail.
+        if reftarget != node["reftarget"]:
+            node["reftarget"] = reftarget
+            if (ref := _cached_intersphinx_lookup(env, node, contnode)) is not None:
                 return ref
 
-            # Then try removing the prefix.
-            node["reftarget"] = reftarget.replace(prefix, "")
-            if (node, contnode) in _intersphinx_cache:
-                return _intersphinx_cache[(node, contnode)]
-            if (ref := intersphinx.resolve_reference_detect_inventory(env, node, contnode)) is not None:
-                _intersphinx_cache[(node, contnode)] = ref
-                return ref
+        # If the template wasn't the (only) issue, we check the various
+        # namespace prefixes that may need to be added or removed.
+        for prefix in _intersphinx_extra_prefixes:
+            if prefix not in reftarget:
+                node["reftarget"] = f"{prefix}::{reftarget}"
+                if (ref := _cached_intersphinx_lookup(env, node, contnode)) is not None:
+                    return ref
+            else:
+                node["reftarget"] = reftarget.replace(f"{prefix}::", "")
+                if (ref := _cached_intersphinx_lookup(env, node, contnode)) is not None:
+                    return ref
 
     return None
 
