@@ -2184,6 +2184,7 @@ def as_column(
 
         if dtype is not None:
             data = data.astype(dtype)
+        return data
 
     elif hasattr(arbitrary, "__array_interface__"):
         # CUDF assumes values are always contiguous
