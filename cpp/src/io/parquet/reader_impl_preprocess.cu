@@ -272,6 +272,10 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
   DecodePageHeaders(chunks.device_ptr(), chunks.size(), error_code.data(), stream);
   chunks.device_to_host_sync(stream);
 
+  // It's required to ignore unsupported encodings in this function
+  // so that we can actually compile a list of all the unsupported encodings found
+  // in the pages. That cannot be done here since we do not have the pages vector here.
+  // see https://github.com/rapidsai/cudf/pull/14453#pullrequestreview-1778346688
   if (error_code.value() != 0 and
       error_code.value() != static_cast<uint32_t>(decode_error::UNSUPPORTED_ENCODING)) {
     CUDF_FAIL("Parquet header parsing failed with code(s) while counting page headers " +
