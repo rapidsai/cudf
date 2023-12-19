@@ -1,29 +1,25 @@
-diff --git a/thrust/system/cuda/detail/dispatch.h b/thrust/system/cuda/detail/dispatch.h
-index d0e3f94..76774b0 100644
---- a/thrust/system/cuda/detail/dispatch.h
-+++ b/thrust/system/cuda/detail/dispatch.h
-@@ -32,9 +32,8 @@
+diff --git a/thrust/thrust/system/cuda/detail/dispatch.h b/thrust/thrust/system/cuda/detail/dispatch.h
+index d0e3f94ec..5c32a9c60 100644
+--- a/thrust/thrust/system/cuda/detail/dispatch.h
++++ b/thrust/thrust/system/cuda/detail/dispatch.h
+@@ -32,8 +32,7 @@
          status = call arguments; \
      } \
      else { \
 -        auto THRUST_PP_CAT2(count, _fixed) = static_cast<thrust::detail::int64_t>(count); \
 -        status = call arguments; \
--    }
-+       throw std::runtime_error("THRUST_INDEX_TYPE_DISPATCH 64-bit count is unsupported in libcudf"); \
-+    }
++        throw std::runtime_error("THRUST_INDEX_TYPE_DISPATCH 64-bit count is unsupported in libcudf"); \
+     }
 
  /**
-  * Dispatch between 32-bit and 64-bit index based versions of the same algorithm
-@@ -52,10 +51,8 @@
+@@ -52,9 +51,7 @@
          status = call arguments; \
      } \
      else { \
 -        auto THRUST_PP_CAT2(count1, _fixed) = static_cast<thrust::detail::int64_t>(count1); \
 -        auto THRUST_PP_CAT2(count2, _fixed) = static_cast<thrust::detail::int64_t>(count2); \
 -        status = call arguments; \
--    }
-+       throw std::runtime_error("THRUST_DOUBLE_INDEX_TYPE_DISPATCH 64-bit count is unsupported in libcudf"); \
-+    }
++        throw std::runtime_error("THRUST_DOUBLE_INDEX_TYPE_DISPATCH 64-bit count is unsupported in libcudf"); \
+     }
  /**
   * Dispatch between 32-bit and 64-bit index based versions of the same algorithm
-  * implementation. This version allows using different token sequences for callables
