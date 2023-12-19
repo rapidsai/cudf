@@ -16,6 +16,8 @@
 
 #include "compact_protocol_reader.hpp"
 
+#include <cudf/utilities/error.hpp>
+
 #include <algorithm>
 #include <cstddef>
 #include <functional>
@@ -40,14 +42,38 @@ class parquet_field {
   int field() const { return _field_val; }
 };
 
+std::string field_type_string(FieldType type)
+{
+  switch (type) {
+    case ST_FLD_TRUE: return "bool(true)";
+    case ST_FLD_FALSE: return "bool(false)";
+    case ST_FLD_BYTE: return "int8";
+    case ST_FLD_I16: return "int16";
+    case ST_FLD_I32: return "int32";
+    case ST_FLD_I64: return "int64";
+    case ST_FLD_DOUBLE: return "double";
+    case ST_FLD_BINARY: return "binary";
+    case ST_FLD_STRUCT: return "struct";
+    case ST_FLD_LIST: return "list";
+    case ST_FLD_SET: return "set";
+    default: return "unknown(" + std::to_string(type) + ")";
+  }
+}
+
+void assert_field_type(int type, FieldType expected)
+{
+  CUDF_EXPECTS(type == expected,
+               "expected " + field_type_string(expected) + " field, got " +
+                 field_type_string(static_cast<FieldType>(type)) + " field instead");
+}
+
 /**
  * @brief Abstract base class for list functors.
  */
-template <typename T>
+template <typename T, FieldType EXPECTED_ELEM_TYPE>
 class parquet_field_list : public parquet_field {
  private:
-  using read_func_type = std::function<bool(uint32_t, CompactProtocolReader*)>;
-  FieldType _expected_type;
+  using read_func_type = std::function<void(uint32_t, CompactProtocolReader*)>;
   read_func_type _read_value;
 
  protected:
@@ -55,22 +81,18 @@ class parquet_field_list : public parquet_field {
 
   void bind_read_func(read_func_type fn) { _read_value = fn; }
 
-  parquet_field_list(int f, std::vector<T>& v, FieldType t)
-    : parquet_field(f), _expected_type(t), val(v)
-  {
-  }
+  parquet_field_list(int f, std::vector<T>& v) : parquet_field(f), val(v) {}
 
  public:
-  inline bool operator()(CompactProtocolReader* cpr, int field_type)
+  inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    if (field_type != ST_FLD_LIST) { return true; }
+    assert_field_type(field_type, ST_FLD_LIST);
     auto const [t, n] = cpr->get_listh();
-    if (t != _expected_type) { return true; }
+    assert_field_type(t, EXPECTED_ELEM_TYPE);
     val.resize(n);
     for (uint32_t i = 0; i < n; i++) {
-      if (_read_value(i, cpr)) { return true; }
+      _read_value(i, cpr);
     }
-    return false;
   }
 };
 
@@ -87,11 +109,10 @@ class parquet_field_bool : public parquet_field {
  public:
   parquet_field_bool(int f, bool& v) : parquet_field(f), val(v) {}
 
-  inline bool operator()(CompactProtocolReader* cpr, int field_type)
+  inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    if (field_type != ST_FLD_TRUE && field_type != ST_FLD_FALSE) { return true; }
+    CUDF_EXPECTS(field_type == ST_FLD_TRUE || field_type == ST_FLD_FALSE, "expected bool field");
     val = field_type == ST_FLD_TRUE;
-    return false;
   }
 };
 
@@ -101,14 +122,14 @@ class parquet_field_bool : public parquet_field {
  * @return True if field types mismatch or if the process of reading a
  * bool fails
  */
-struct parquet_field_bool_list : public parquet_field_list<bool> {
-  parquet_field_bool_list(int f, std::vector<bool>& v) : parquet_field_list(f, v, ST_FLD_TRUE)
+struct parquet_field_bool_list : public parquet_field_list<bool, ST_FLD_TRUE> {
+  parquet_field_bool_list(int f, std::vector<bool>& v) : parquet_field_list(f, v)
   {
     auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
       auto const current_byte = cpr->getb();
-      if (current_byte != ST_FLD_TRUE && current_byte != ST_FLD_FALSE) { return true; }
+      CUDF_EXPECTS(current_byte == ST_FLD_TRUE || current_byte == ST_FLD_FALSE,
+                   "expected bool field");
       this->val[i] = current_byte == ST_FLD_TRUE;
-      return false;
     };
     bind_read_func(read_value);
   }
@@ -121,7 +142,7 @@ struct parquet_field_bool_list : public parquet_field_list<bool> {
  *
  * @return True if there is a type mismatch
  */
-template <typename T, int EXPECTED_TYPE>
+template <typename T, FieldType EXPECTED_TYPE>
 class parquet_field_int : public parquet_field {
   static constexpr bool is_byte = std::is_same_v<T, int8_t>;
 
@@ -130,14 +151,14 @@ class parquet_field_int : public parquet_field {
  public:
   parquet_field_int(int f, T& v) : parquet_field(f), val(v) {}
 
-  inline bool operator()(CompactProtocolReader* cpr, int field_type)
+  inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
+    assert_field_type(field_type, EXPECTED_TYPE);
     if constexpr (is_byte) {
       val = cpr->getb();
     } else {
       val = cpr->get_zigzag<T>();
     }
-    return (field_type != EXPECTED_TYPE);
   }
 };
 
@@ -152,12 +173,11 @@ using parquet_field_int64 = parquet_field_int<int64_t, ST_FLD_I64>;
  * integer fails
  */
 template <typename T, FieldType EXPECTED_TYPE>
-struct parquet_field_int_list : public parquet_field_list<T> {
-  parquet_field_int_list(int f, std::vector<T>& v) : parquet_field_list<T>(f, v, EXPECTED_TYPE)
+struct parquet_field_int_list : public parquet_field_list<T, EXPECTED_TYPE> {
+  parquet_field_int_list(int f, std::vector<T>& v) : parquet_field_list<T, EXPECTED_TYPE>(f, v)
   {
     auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
       this->val[i] = cpr->get_zigzag<T>();
-      return false;
     };
     this->bind_read_func(read_value);
   }
@@ -177,17 +197,14 @@ class parquet_field_string : public parquet_field {
  public:
   parquet_field_string(int f, std::string& v) : parquet_field(f), val(v) {}
 
-  inline bool operator()(CompactProtocolReader* cpr, int field_type)
+  inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    if (field_type != ST_FLD_BINARY) { return true; }
+    assert_field_type(field_type, ST_FLD_BINARY);
     auto const n = cpr->get_u32();
-    if (n < static_cast<size_t>(cpr->m_end - cpr->m_cur)) {
-      val.assign(reinterpret_cast<char const*>(cpr->m_cur), n);
-      cpr->m_cur += n;
-      return false;
-    } else {
-      return true;
-    }
+    CUDF_EXPECTS(n < static_cast<size_t>(cpr->m_end - cpr->m_cur), "string length mismatch");
+
+    val.assign(reinterpret_cast<char const*>(cpr->m_cur), n);
+    cpr->m_cur += n;
   }
 };
 
@@ -197,19 +214,15 @@ class parquet_field_string : public parquet_field {
  * @return True if field types mismatch or if the process of reading a
  * string fails
  */
-struct parquet_field_string_list : public parquet_field_list<std::string> {
-  parquet_field_string_list(int f, std::vector<std::string>& v)
-    : parquet_field_list(f, v, ST_FLD_BINARY)
+struct parquet_field_string_list : public parquet_field_list<std::string, ST_FLD_BINARY> {
+  parquet_field_string_list(int f, std::vector<std::string>& v) : parquet_field_list(f, v)
   {
     auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
       auto const l = cpr->get_u32();
-      if (l < static_cast<size_t>(cpr->m_end - cpr->m_cur)) {
-        this->val[i].assign(reinterpret_cast<char const*>(cpr->m_cur), l);
-        cpr->m_cur += l;
-      } else {
-        return true;
-      }
-      return false;
+      CUDF_EXPECTS(l < static_cast<size_t>(cpr->m_end - cpr->m_cur), "string length mismatch");
+
+      this->val[i].assign(reinterpret_cast<char const*>(cpr->m_cur), l);
+      cpr->m_cur += l;
     };
     bind_read_func(read_value);
   }
@@ -226,10 +239,10 @@ class parquet_field_enum : public parquet_field {
 
  public:
   parquet_field_enum(int f, Enum& v) : parquet_field(f), val(v) {}
-  inline bool operator()(CompactProtocolReader* cpr, int field_type)
+  inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
+    assert_field_type(field_type, ST_FLD_I32);
     val = static_cast<Enum>(cpr->get_i32());
-    return (field_type != ST_FLD_I32);
   }
 };
 
@@ -240,12 +253,11 @@ class parquet_field_enum : public parquet_field {
  * enum fails
  */
 template <typename Enum>
-struct parquet_field_enum_list : public parquet_field_list<Enum> {
-  parquet_field_enum_list(int f, std::vector<Enum>& v) : parquet_field_list<Enum>(f, v, ST_FLD_I32)
+struct parquet_field_enum_list : public parquet_field_list<Enum, ST_FLD_I32> {
+  parquet_field_enum_list(int f, std::vector<Enum>& v) : parquet_field_list<Enum, ST_FLD_I32>(f, v)
   {
     auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
       this->val[i] = static_cast<Enum>(cpr->get_i32());
-      return false;
     };
     this->bind_read_func(read_value);
   }
@@ -264,9 +276,10 @@ class parquet_field_struct : public parquet_field {
  public:
   parquet_field_struct(int f, T& v) : parquet_field(f), val(v) {}
 
-  inline bool operator()(CompactProtocolReader* cpr, int field_type)
+  inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    return (field_type != ST_FLD_STRUCT || !(cpr->read(&val)));
+    assert_field_type(field_type, ST_FLD_STRUCT);
+    cpr->read(&val);
   }
 };
 
@@ -286,15 +299,12 @@ class parquet_field_union_struct : public parquet_field {
   {
   }
 
-  inline bool operator()(CompactProtocolReader* cpr, int field_type)
+  inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
     T v;
-    bool const res = parquet_field_struct<T>{field(), v}(cpr, field_type);
-    if (!res) {
-      val      = v;
-      enum_val = static_cast<E>(field());
-    }
-    return res;
+    parquet_field_struct<T>{field(), v}(cpr, field_type);
+    val      = v;
+    enum_val = static_cast<E>(field());
   }
 };
 
@@ -312,12 +322,11 @@ class parquet_field_union_enumerator : public parquet_field {
  public:
   parquet_field_union_enumerator(int f, E& v) : parquet_field(f), val(v) {}
 
-  inline bool operator()(CompactProtocolReader* cpr, int field_type)
+  inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    if (field_type != ST_FLD_STRUCT) { return true; }
+    assert_field_type(field_type, ST_FLD_STRUCT);
     cpr->skip_struct_field(field_type);
     val = static_cast<E>(field());
-    return false;
   }
 };
 
@@ -328,12 +337,11 @@ class parquet_field_union_enumerator : public parquet_field {
  * struct fails
  */
 template <typename T>
-struct parquet_field_struct_list : public parquet_field_list<T> {
-  parquet_field_struct_list(int f, std::vector<T>& v) : parquet_field_list<T>(f, v, ST_FLD_STRUCT)
+struct parquet_field_struct_list : public parquet_field_list<T, ST_FLD_STRUCT> {
+  parquet_field_struct_list(int f, std::vector<T>& v) : parquet_field_list<T, ST_FLD_STRUCT>(f, v)
   {
     auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
-      if (not cpr->read(&this->val[i])) { return true; }
-      return false;
+      cpr->read(&this->val[i]);
     };
     this->bind_read_func(read_value);
   }
@@ -351,18 +359,15 @@ class parquet_field_binary : public parquet_field {
  public:
   parquet_field_binary(int f, std::vector<uint8_t>& v) : parquet_field(f), val(v) {}
 
-  inline bool operator()(CompactProtocolReader* cpr, int field_type)
+  inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    if (field_type != ST_FLD_BINARY) { return true; }
+    assert_field_type(field_type, ST_FLD_BINARY);
     auto const n = cpr->get_u32();
-    if (n <= static_cast<size_t>(cpr->m_end - cpr->m_cur)) {
-      val.resize(n);
-      val.assign(cpr->m_cur, cpr->m_cur + n);
-      cpr->m_cur += n;
-      return false;
-    } else {
-      return true;
-    }
+    CUDF_EXPECTS(n <= static_cast<size_t>(cpr->m_end - cpr->m_cur), "binary length mismatch");
+
+    val.resize(n);
+    val.assign(cpr->m_cur, cpr->m_cur + n);
+    cpr->m_cur += n;
   }
 };
 
@@ -372,20 +377,16 @@ class parquet_field_binary : public parquet_field {
  * @return True if field types mismatch or if the process of reading a
  * binary fails
  */
-struct parquet_field_binary_list : public parquet_field_list<std::vector<uint8_t>> {
-  parquet_field_binary_list(int f, std::vector<std::vector<uint8_t>>& v)
-    : parquet_field_list(f, v, ST_FLD_BINARY)
+struct parquet_field_binary_list : public parquet_field_list<std::vector<uint8_t>, ST_FLD_BINARY> {
+  parquet_field_binary_list(int f, std::vector<std::vector<uint8_t>>& v) : parquet_field_list(f, v)
   {
     auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
       auto const l = cpr->get_u32();
-      if (l <= static_cast<size_t>(cpr->m_end - cpr->m_cur)) {
-        val[i].resize(l);
-        val[i].assign(cpr->m_cur, cpr->m_cur + l);
-        cpr->m_cur += l;
-      } else {
-        return true;
-      }
-      return false;
+      CUDF_EXPECTS(l <= static_cast<size_t>(cpr->m_end - cpr->m_cur), "binary length mismatch");
+
+      val[i].resize(l);
+      val[i].assign(cpr->m_cur, cpr->m_cur + l);
+      cpr->m_cur += l;
     };
     bind_read_func(read_value);
   }
@@ -401,13 +402,12 @@ class parquet_field_struct_blob : public parquet_field {
 
  public:
   parquet_field_struct_blob(int f, std::vector<uint8_t>& v) : parquet_field(f), val(v) {}
-  inline bool operator()(CompactProtocolReader* cpr, int field_type)
+  inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    if (field_type != ST_FLD_STRUCT) { return true; }
+    assert_field_type(field_type, ST_FLD_STRUCT);
     uint8_t const* const start = cpr->m_cur;
     cpr->skip_struct_field(field_type);
     if (cpr->m_cur > start) { val.assign(start, cpr->m_cur - 1); }
-    return false;
   }
 };
 
@@ -421,12 +421,11 @@ class parquet_field_optional : public parquet_field {
  public:
   parquet_field_optional(int f, thrust::optional<T>& v) : parquet_field(f), val(v) {}
 
-  inline bool operator()(CompactProtocolReader* cpr, int field_type)
+  inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
     T v;
-    bool const res = FieldFunctor{field(), v}(cpr, field_type);
-    if (!res) { val = v; }
-    return res;
+    FieldFunctor{field(), v}(cpr, field_type);
+    val = v;
   }
 };
 
@@ -438,7 +437,7 @@ class parquet_field_optional : public parquet_field {
  *
  * @return True if the struct type is recognized, false otherwise
  */
-bool CompactProtocolReader::skip_struct_field(int t, int depth)
+void CompactProtocolReader::skip_struct_field(int t, int depth)
 {
   switch (t) {
     case ST_FLD_TRUE:
@@ -452,7 +451,7 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
     case ST_FLD_LIST: [[fallthrough]];
     case ST_FLD_SET: {
       auto const [t, n] = get_listh();
-      if (depth > 10) { return false; }
+      CUDF_EXPECTS(depth <= 10, "struct nesting too deep");
       for (uint32_t i = 0; i < n; i++) {
         skip_struct_field(t, depth + 1);
       }
@@ -463,7 +462,7 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
         t           = c & 0xf;
         if (c == 0) { break; }               // end of struct
         if ((c & 0xf0) == 0) { get_i16(); }  // field id is not a delta
-        if (depth > 10) { return false; }
+        CUDF_EXPECTS(depth <= 10, "struct nesting too deep");
         skip_struct_field(t, depth + 1);
       }
       break;
@@ -471,21 +470,20 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
       // printf("unsupported skip for type %d\n", t);
       break;
   }
-  return true;
 }
 
 template <int index>
 struct FunctionSwitchImpl {
   template <typename... Operator>
-  static inline bool run(CompactProtocolReader* cpr,
+  static inline void run(CompactProtocolReader* cpr,
                          int field_type,
                          int const& field,
                          std::tuple<Operator...>& ops)
   {
     if (field == std::get<index>(ops).field()) {
-      return std::get<index>(ops)(cpr, field_type);
+      std::get<index>(ops)(cpr, field_type);
     } else {
-      return FunctionSwitchImpl<index - 1>::run(cpr, field_type, field, ops);
+      FunctionSwitchImpl<index - 1>::run(cpr, field_type, field, ops);
     }
   }
 };
@@ -493,38 +491,35 @@ struct FunctionSwitchImpl {
 template <>
 struct FunctionSwitchImpl<0> {
   template <typename... Operator>
-  static inline bool run(CompactProtocolReader* cpr,
+  static inline void run(CompactProtocolReader* cpr,
                          int field_type,
                          int const& field,
                          std::tuple<Operator...>& ops)
   {
     if (field == std::get<0>(ops).field()) {
-      return std::get<0>(ops)(cpr, field_type);
+      std::get<0>(ops)(cpr, field_type);
     } else {
       cpr->skip_struct_field(field_type);
-      return false;
     }
   }
 };
 
 template <typename... Operator>
-inline bool function_builder(CompactProtocolReader* cpr, std::tuple<Operator...>& op)
+inline void function_builder(CompactProtocolReader* cpr, std::tuple<Operator...>& op)
 {
   constexpr int index = std::tuple_size<std::tuple<Operator...>>::value - 1;
   int field           = 0;
   while (true) {
     int const current_byte = cpr->getb();
     if (!current_byte) { break; }
-    int const field_delta    = current_byte >> 4;
-    int const field_type     = current_byte & 0xf;
-    field                    = field_delta ? field + field_delta : cpr->get_i16();
-    bool const exit_function = FunctionSwitchImpl<index>::run(cpr, field_type, field, op);
-    if (exit_function) { return false; }
+    int const field_delta = current_byte >> 4;
+    int const field_type  = current_byte & 0xf;
+    field                 = field_delta ? field + field_delta : cpr->get_i16();
+    FunctionSwitchImpl<index>::run(cpr, field_type, field, op);
   }
-  return true;
 }
 
-bool CompactProtocolReader::read(FileMetaData* f)
+void CompactProtocolReader::read(FileMetaData* f)
 {
   using optional_list_column_order =
     parquet_field_optional<std::vector<ColumnOrder>, parquet_field_struct_list<ColumnOrder>>;
@@ -535,10 +530,10 @@ bool CompactProtocolReader::read(FileMetaData* f)
                             parquet_field_struct_list(5, f->key_value_metadata),
                             parquet_field_string(6, f->created_by),
                             optional_list_column_order(7, f->column_orders));
-  return function_builder(this, op);
+  function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(SchemaElement* s)
+void CompactProtocolReader::read(SchemaElement* s)
 {
   using optional_converted_type =
     parquet_field_optional<ConvertedType, parquet_field_enum<ConvertedType>>;
@@ -554,10 +549,10 @@ bool CompactProtocolReader::read(SchemaElement* s)
                             parquet_field_int32(8, s->decimal_precision),
                             parquet_field_optional<int32_t, parquet_field_int32>(9, s->field_id),
                             optional_logical_type(10, s->logical_type));
-  return function_builder(this, op);
+  function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(LogicalType* l)
+void CompactProtocolReader::read(LogicalType* l)
 {
   auto op = std::make_tuple(
     parquet_field_union_enumerator(1, l->type),
@@ -572,52 +567,52 @@ bool CompactProtocolReader::read(LogicalType* l)
     parquet_field_union_enumerator(11, l->type),
     parquet_field_union_enumerator(12, l->type),
     parquet_field_union_enumerator(13, l->type));
-  return function_builder(this, op);
+  function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(DecimalType* d)
+void CompactProtocolReader::read(DecimalType* d)
 {
   auto op = std::make_tuple(parquet_field_int32(1, d->scale), parquet_field_int32(2, d->precision));
-  return function_builder(this, op);
+  function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(TimeType* t)
+void CompactProtocolReader::read(TimeType* t)
 {
   auto op =
     std::make_tuple(parquet_field_bool(1, t->isAdjustedToUTC), parquet_field_struct(2, t->unit));
-  return function_builder(this, op);
+  function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(TimestampType* t)
+void CompactProtocolReader::read(TimestampType* t)
 {
   auto op =
     std::make_tuple(parquet_field_bool(1, t->isAdjustedToUTC), parquet_field_struct(2, t->unit));
-  return function_builder(this, op);
+  function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(TimeUnit* u)
+void CompactProtocolReader::read(TimeUnit* u)
 {
   auto op = std::make_tuple(parquet_field_union_enumerator(1, u->type),
                             parquet_field_union_enumerator(2, u->type),
                             parquet_field_union_enumerator(3, u->type));
-  return function_builder(this, op);
+  function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(IntType* i)
+void CompactProtocolReader::read(IntType* i)
 {
   auto op = std::make_tuple(parquet_field_int8(1, i->bitWidth), parquet_field_bool(2, i->isSigned));
-  return function_builder(this, op);
+  function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(RowGroup* r)
+void CompactProtocolReader::read(RowGroup* r)
 {
   auto op = std::make_tuple(parquet_field_struct_list(1, r->columns),
                             parquet_field_int64(2, r->total_byte_size),
                             parquet_field_int64(3, r->num_rows));
-  return function_builder(this, op);
+  function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(ColumnChunk* c)
+void CompactProtocolReader::read(ColumnChunk* c)
 {
   auto op = std::make_tuple(parquet_field_string(1, c->file_path),
                             parquet_field_int64(2, c->file_offset),
@@ -626,10 +621,10 @@ bool CompactProtocolReader::read(ColumnChunk* c)
                             parquet_field_int32(5, c->offset_index_length),
                             parquet_field_int64(6, c->column_index_offset),
                             parquet_field_int32(7, c->column_index_length));
-  return function_builder(this, op);
+  function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(ColumnChunkMetaData* c)
+void CompactProtocolReader::read(ColumnChunkMetaData* c)
 {
   using optional_size_statistics =
     parquet_field_optional<SizeStatistics, parquet_field_struct<SizeStatistics>>;
@@ -645,10 +640,10 @@ bool CompactProtocolReader::read(ColumnChunkMetaData* c)
                             parquet_field_int64(11, c->dictionary_page_offset),
                             parquet_field_struct(12, c->statistics),
                             optional_size_statistics(16, c->size_statistics));
-  return function_builder(this, op);
+  function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(PageHeader* p)
+void CompactProtocolReader::read(PageHeader* p)
 {
   auto op = std::make_tuple(parquet_field_enum<PageType>(1, p->type),
                             parquet_field_int32(2, p->uncompressed_page_size),
@@ -656,26 +651,26 @@ bool CompactProtocolReader::read(PageHeader* p)
                             parquet_field_struct(5, p->data_page_header),
                             parquet_field_struct(7, p->dictionary_page_header),
                             parquet_field_struct(8, p->data_page_header_v2));
-  return function_builder(this, op);
+  function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(DataPageHeader* d)
+void CompactProtocolReader::read(DataPageHeader* d)
 {
   auto op = std::make_tuple(parquet_field_int32(1, d->num_values),
                             parquet_field_enum<Encoding>(2, d->encoding),
                             parquet_field_enum<Encoding>(3, d->definition_level_encoding),
                             parquet_field_enum<Encoding>(4, d->repetition_level_encoding));
-  return function_builder(this, op);
+  function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(DictionaryPageHeader* d)
+void CompactProtocolReader::read(DictionaryPageHeader* d)
 {
   auto op = std::make_tuple(parquet_field_int32(1, d->num_values),
                             parquet_field_enum<Encoding>(2, d->encoding));
-  return function_builder(this, op);
+  function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(DataPageHeaderV2* d)
+void CompactProtocolReader::read(DataPageHeaderV2* d)
 {
   auto op = std::make_tuple(parquet_field_int32(1, d->num_values),
                             parquet_field_int32(2, d->num_nulls),
@@ -684,33 +679,33 @@ bool CompactProtocolReader::read(DataPageHeaderV2* d)
                             parquet_field_int32(5, d->definition_levels_byte_length),
                             parquet_field_int32(6, d->repetition_levels_byte_length),
                             parquet_field_bool(7, d->is_compressed));
-  return function_builder(this, op);
+  function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(KeyValue* k)
+void CompactProtocolReader::read(KeyValue* k)
 {
   auto op = std::make_tuple(parquet_field_string(1, k->key), parquet_field_string(2, k->value));
-  return function_builder(this, op);
+  function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(PageLocation* p)
+void CompactProtocolReader::read(PageLocation* p)
 {
   auto op = std::make_tuple(parquet_field_int64(1, p->offset),
                             parquet_field_int32(2, p->compressed_page_size),
                             parquet_field_int64(3, p->first_row_index));
-  return function_builder(this, op);
+  function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(OffsetIndex* o)
+void CompactProtocolReader::read(OffsetIndex* o)
 {
   using optional_list_i64 = parquet_field_optional<std::vector<int64_t>, parquet_field_int64_list>;
 
   auto op = std::make_tuple(parquet_field_struct_list(1, o->page_locations),
                             optional_list_i64(2, o->unencoded_byte_array_data_bytes));
-  return function_builder(this, op);
+  function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(SizeStatistics* s)
+void CompactProtocolReader::read(SizeStatistics* s)
 {
   using optional_i64      = parquet_field_optional<int64_t, parquet_field_int64>;
   using optional_list_i64 = parquet_field_optional<std::vector<int64_t>, parquet_field_int64_list>;
@@ -718,10 +713,10 @@ bool CompactProtocolReader::read(SizeStatistics* s)
   auto op = std::make_tuple(optional_i64(1, s->unencoded_byte_array_data_bytes),
                             optional_list_i64(2, s->repetition_level_histogram),
                             optional_list_i64(3, s->definition_level_histogram));
-  return function_builder(this, op);
+  function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(ColumnIndex* c)
+void CompactProtocolReader::read(ColumnIndex* c)
 {
   using optional_list_i64 = parquet_field_optional<std::vector<int64_t>, parquet_field_int64_list>;
 
@@ -732,10 +727,10 @@ bool CompactProtocolReader::read(ColumnIndex* c)
                             optional_list_i64(5, c->null_counts),
                             optional_list_i64(6, c->repetition_level_histogram),
                             optional_list_i64(7, c->definition_level_histogram));
-  return function_builder(this, op);
+  function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(Statistics* s)
+void CompactProtocolReader::read(Statistics* s)
 {
   using optional_binary = parquet_field_optional<std::vector<uint8_t>, parquet_field_binary>;
   using optional_int64  = parquet_field_optional<int64_t, parquet_field_int64>;
@@ -746,13 +741,13 @@ bool CompactProtocolReader::read(Statistics* s)
                             optional_int64(4, s->distinct_count),
                             optional_binary(5, s->max_value),
                             optional_binary(6, s->min_value));
-  return function_builder(this, op);
+  function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(ColumnOrder* c)
+void CompactProtocolReader::read(ColumnOrder* c)
 {
   auto op = std::make_tuple(parquet_field_union_enumerator<ColumnOrder::Type>(1, c->type));
-  return function_builder(this, op);
+  function_builder(this, op);
 }
 
 /**

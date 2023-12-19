@@ -11,9 +11,7 @@ from cudf._lib import strings as libstrings
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_datetime_dtype,
-    is_list_dtype,
     is_string_dtype,
-    is_struct_dtype,
     is_timedelta_dtype,
 )
 from cudf.core.column import as_column
@@ -132,7 +130,7 @@ def to_numeric(arg, errors="raise", downcast=None):
                 return arg
             else:
                 raise e
-    elif is_list_dtype(dtype) or is_struct_dtype(dtype):
+    elif isinstance(dtype, (cudf.ListDtype, cudf.StructDtype)):
         raise ValueError("Input does not support nested datatypes")
     elif _is_non_decimal_numeric_dtype(dtype):
         pass

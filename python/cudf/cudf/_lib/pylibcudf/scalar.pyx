@@ -108,7 +108,7 @@ cdef class Scalar:
 
         return pa.pyarrow_wrap_scalar(c_result)
 
-    cdef const scalar* get(self) except *:
+    cdef const scalar* get(self) noexcept nogil:
         return self.c_obj.get()
 
     cpdef DataType type(self):

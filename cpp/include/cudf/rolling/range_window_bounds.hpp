@@ -19,6 +19,11 @@
 #include <cudf/scalar/scalar.hpp>
 
 namespace cudf {
+/**
+ * @addtogroup aggregation_rolling
+ * @{
+ * @file
+ */
 
 /**
  * @brief Abstraction for window boundary sizes, to be used with
@@ -105,4 +110,5 @@ struct range_window_bounds {
   range_window_bounds(extent_type extent_, std::unique_ptr<scalar> range_scalar_);
 };
 
+/** @} */  // end of group
 }  // namespace cudf
