@@ -186,6 +186,7 @@ class delta_binary_packer {
     _bitpack_tmp      = _buffer + delta::buffer_size;
     _current_idx      = 0;
     _values_in_buffer = 0;
+    _buffer[0]        = 0;
   }
 
   // Each thread calls this to add its current value.
