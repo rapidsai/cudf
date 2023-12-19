@@ -1029,8 +1029,7 @@ enum class page_processing_stage {
  * @param[in] min_row Crop all rows below min_row
  * @param[in] num_rows Maximum number of rows to read
  * @param[in] filter Filtering function used to decide which pages to operate on
- * @param[in] is_decode_step If we are setting up for the decode step (instead of the preprocess)
- * @param[in] is_bounds_step If we are in the string bounds checking step
+ * @param[in] stage What stage of the decoding process is this being called from
  * @tparam Filter Function that takes a PageInfo reference and returns true if the given page should
  * be operated on Currently only used by gpuComputePageSizes step)
  * @return True if this page should be processed further
