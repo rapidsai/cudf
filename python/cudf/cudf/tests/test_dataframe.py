@@ -9,6 +9,8 @@ import random
 import re
 import string
 import textwrap
+import warnings
+from contextlib import contextmanager
 from collections import OrderedDict, defaultdict, namedtuple
 from copy import copy
 
@@ -63,6 +65,32 @@ if get_global_manager() is not None:
     NUMERIC_TYPES = ["float32"]  # noqa: F811
     # To save time, we skip tests marked "xfail"
     pytest_xfail = pytest.mark.skipif
+
+
+@contextmanager
+def _hide_ufunc_warnings(eval_str):
+    # pandas raises warnings for some inputs to the following ufuncs:
+    if any(
+        x in eval_str
+        for x in {
+            "arctanh",
+            "log",
+        }
+    ):
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                "invalid value encountered in",
+                category=RuntimeWarning,
+            )
+            warnings.filterwarnings(
+                "ignore",
+                "divide by zero encountered in",
+                category=RuntimeWarning,
+            )
+            yield
+    else:
+        yield
 
 
 def test_init_via_list_of_tuples():
@@ -10071,7 +10099,8 @@ def df_eval(request):
 )
 def test_dataframe_eval(df_eval, expr, dtype):
     df_eval = df_eval.astype(dtype)
-    expect = df_eval.to_pandas().eval(expr)
+    with _hide_ufunc_warnings(expr):
+        expect = df_eval.to_pandas().eval(expr)
     got = df_eval.eval(expr)
     # In the specific case where the evaluated expression is a unary function
     # of a single column with no nesting, pandas will retain the name. This
@@ -10081,7 +10110,8 @@ def test_dataframe_eval(df_eval, expr, dtype):
     # Test inplace
     if re.search("[^=><]=[^=]", expr) is not None:
         pdf_eval = df_eval.to_pandas()
-        pdf_eval.eval(expr, inplace=True)
+        with _hide_ufunc_warnings(expr):
+            pdf_eval.eval(expr, inplace=True)
         df_eval.eval(expr, inplace=True)
         assert_eq(pdf_eval, df_eval)
 
