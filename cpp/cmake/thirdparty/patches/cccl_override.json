@@ -1,17 +1,17 @@
 
 {
   "packages" : {
-    "Thrust" : {
+    "CCCL" : {
       "patches" : [
         {
-          "file" : "Thrust/install_rules.diff",
-          "issue" : "Thrust 1.X installs incorrect files [https://github.com/NVIDIA/thrust/issues/1790]",
-          "fixed_in" : "2.0.0"
+          "file" : "cccl/bug_fixes.diff",
+          "issue" : "CCCL installs header-search.cmake files in nondeterministic order and has a typo in checking target creation that leads to duplicates",
+          "fixed_in" : "2.3"
         },
         {
-          "file" : "${current_json_dir}/thrust_transform_iter_with_reduce_by_key.diff",
-          "issue" : "Support transform_output_iterator as output of reduce by key [https://github.com/NVIDIA/thrust/pull/1805]",
-          "fixed_in" : "2.1"
+          "file" : "cccl/revert_pr_211.diff",
+          "issue" : "thrust::copy introduced a change in behavior that causes failures with cudaErrorInvalidValue.",
+          "fixed_in" : ""
         },
         {
           "file" : "${current_json_dir}/thrust_disable_64bit_dispatching.diff",
@@ -27,11 +27,6 @@
           "file" : "${current_json_dir}/thrust_faster_scan_compile_times.diff",
           "issue" : "Improve Thrust scan compile times by reducing the number of kernels generated [https://github.com/rapidsai/cudf/pull/8183]",
           "fixed_in" : ""
-        },
-        {
-          "file" : "${current_json_dir}/cub_segmented_sort_with_bool_key.diff",
-          "issue" : "Fix an error in CUB DeviceSegmentedSort when the keys are bool type [https://github.com/NVIDIA/cub/issues/594]",
-          "fixed_in" : "2.1"
         }
       ]
     }

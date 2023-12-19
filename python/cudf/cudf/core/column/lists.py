@@ -24,11 +24,7 @@ from cudf._lib.lists import (
 from cudf._lib.strings.convert.convert_lists import format_list_column
 from cudf._lib.types import size_type_dtype
 from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
-from cudf.api.types import (
-    _is_non_decimal_numeric_dtype,
-    is_list_dtype,
-    is_scalar,
-)
+from cudf.api.types import _is_non_decimal_numeric_dtype, is_scalar
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethods, ParentType
 from cudf.core.dtypes import ListDtype
@@ -298,7 +294,7 @@ class ListMethods(ColumnMethods):
     _column: ListColumn
 
     def __init__(self, parent: ParentType):
-        if not is_list_dtype(parent.dtype):
+        if not isinstance(parent.dtype, ListDtype):
             raise AttributeError(
                 "Can only use .list accessor with a 'list' dtype"
             )
@@ -589,7 +585,7 @@ class ListMethods(ColumnMethods):
         dtype: list
         """
 
-        if is_list_dtype(self._column.children[1].dtype):
+        if isinstance(self._column.children[1].dtype, ListDtype):
             raise NotImplementedError("Nested lists unique is not supported.")
 
         return self._return_or_inplace(
@@ -642,7 +638,7 @@ class ListMethods(ColumnMethods):
             raise NotImplementedError("`kind` not currently implemented.")
         if na_position not in {"first", "last"}:
             raise ValueError(f"Unknown `na_position` value {na_position}")
-        if is_list_dtype(self._column.children[1].dtype):
+        if isinstance(self._column.children[1].dtype, ListDtype):
             raise NotImplementedError("Nested lists sort is not supported.")
 
         return self._return_or_inplace(

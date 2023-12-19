@@ -43,7 +43,6 @@ from cudf.api.types import (
     is_bool_dtype,
     is_decimal_dtype,
     is_dict_like,
-    is_list_dtype,
     is_list_like,
     is_scalar,
 )
@@ -4101,7 +4100,7 @@ class IndexedFrame(Frame):
         # specified nested column. Other columns' corresponding rows are
         # duplicated. If ignore_index is set, the original index is not
         # exploded and will be replaced with a `RangeIndex`.
-        if not is_list_dtype(self._data[explode_column].dtype):
+        if not isinstance(self._data[explode_column].dtype, ListDtype):
             data = self._data.copy(deep=True)
             idx = None if ignore_index else self._index.copy(deep=True)
             return self.__class__._from_data(data, index=idx)
