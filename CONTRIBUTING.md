@@ -184,8 +184,7 @@ make test
 - To build and install in edit/develop `cudf` Python package:
 ```bash
 cd $CUDF_HOME/python/cudf
-python setup.py build_ext --inplace
-python setup.py develop
+SKBUILD_CMAKE_ARGS="-DFIND_CUDF_CPP=ON" python -m pip install --no-build-isolation --no-deps -e .
 ```
 
 - To run `cudf` tests:
@@ -201,8 +200,7 @@ pytest -v cudf/cudf/tests
 - To install the `dask-cudf` Python package in editable/develop mode:
 ```bash
 cd $CUDF_HOME/python/dask_cudf
-python setup.py build_ext --inplace
-python setup.py develop
+python -m pip install --no-build-isolation --no-deps -e .
 ```
 
 - To run `dask_cudf` tests:
@@ -240,8 +238,7 @@ make test
 
 ```bash
 cd $CUDF_HOME/python/cudf_kafka
-python setup.py build_ext --inplace
-python setup.py develop
+python -m pip install --no-build-isolation --no-deps -e .
 ```
 
 #### `custreamz` (Python)
@@ -252,8 +249,7 @@ python setup.py develop
 
 ```bash
 cd $CUDF_HOME/python/custreamz
-python setup.py build_ext --inplace
-python setup.py develop
+python -m pip install --no-build-isolation --no-deps -e .
 ```
 
 - To run `custreamz` tests :
