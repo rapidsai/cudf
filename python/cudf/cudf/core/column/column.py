@@ -83,6 +83,7 @@ from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
+    get_time_unit,
     is_mixed_with_object_dtype,
     min_scalar_type,
     min_unsigned_type,
@@ -1896,7 +1897,6 @@ def check_invalid_array(shape: tuple, dtype):
     if len(shape) > 1:
         raise ValueError("Data must be 1-dimensional")
     elif dtype == "float16":
-        # TODO: Ignore kind in "cUV"?
         raise TypeError("Unsupported type float16")
 
 
@@ -2215,18 +2215,42 @@ def as_column(
             return as_column(
                 pd.Series(arbitrary), dtype=dtype, nan_as_null=nan_as_null
             )
-        elif arbitrary.dtype.kind == "biuf":
+        elif arbitrary.dtype.kind in "biuf":
             from_pandas = nan_as_null is None or nan_as_null
             return as_column(
                 pa.array(arbitrary, from_pandas=from_pandas),
                 dtype=dtype,
                 nan_as_null=nan_as_null,
             )
+        elif arbitrary.dtype.kind in "mM":
+            time_unit = get_time_unit(arbitrary)
+            if time_unit in ("D", "W", "M", "Y"):
+                # TODO: Raise in these cases instead of downcasting to s?
+                new_type = f"{arbitrary.dtype.type.__name__}[s]"
+                arbitrary = arbitrary.astype(new_type)
+
+            is_nat = np.isnat(arbitrary)
+            if (nan_as_null is None or nan_as_null) and np.isnat(
+                arbitrary
+            ).any():
+                return as_column(
+                    pa.array(arbitrary),
+                    dtype=dtype,
+                    nan_as_null=nan_as_null,
+                )
+            else:
+                buffer = as_buffer(arbitrary.view("|u1"))
+                bool_mask = as_column(~is_nat)
+                mask = as_buffer(bools_to_mask(bool_mask))
+                col = build_column(
+                    data=buffer, mask=mask, dtype=arbitrary.dtype
+                )
+
+                if dtype:
+                    col = col.astype(dtype)
+                return col
         else:
-            # Align datetime resolution behavior between cudf and pandas
-            return as_column(
-                pd.array(arbitrary), dtype=dtype, nan_as_null=nan_as_null
-            )
+            raise NotImplementedError(f"{arbitrary.dtype} not supported")
 
     elif (view := as_memoryview(arbitrary)) is not None:
         return as_column(
