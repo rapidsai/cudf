@@ -757,8 +757,10 @@ __global__ void __launch_bounds__(delta_length_block_size) gpuComputeDeltaLength
 
     size_t total_bytes = 0;
 
-    // initialize with first value
-    if (t == 0 && start_value == 0) { total_bytes = string_lengths.value_at(0); }
+    // initialize with first value (unless there are no values)
+    if (t == 0 && start_value == 0 && start_value < end_value) {
+      total_bytes = string_lengths.value_at(0);
+    }
 
     uleb128_t lane_sum = 0;
     while (string_lengths.current_value_idx < end_value &&
