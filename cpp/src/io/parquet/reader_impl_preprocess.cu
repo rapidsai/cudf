@@ -319,7 +319,7 @@ std::string encoding_to_string(Encoding encoding)
  * @param bitmask Bitmask of found unsupported encodings
  * @returns Human readable string with unsupported encodings
  */
-std::string encoding_bitmask_to_str(int32_t encoding_bitmask)
+[[nodiscard]] std::string encoding_bitmask_to_str(uint32_t encoding_bitmask)
 {
   std::bitset<32> bits(encoding_bitmask);
   std::string result;
@@ -339,8 +339,8 @@ std::string encoding_bitmask_to_str(int32_t encoding_bitmask)
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @returns Human readable string with unsupported encodings
  */
-std::string list_unsupported_encodings(cudf::detail::hostdevice_vector<PageInfo> const& pages,
-                                       rmm::cuda_stream_view stream)
+[[nodiscard]] std::string list_unsupported_encodings(device_span<PageInfo const> pages,
+                                                     rmm::cuda_stream_view stream)
 {
   auto const to_mask = [] __device__(auto const& page) {
     return is_supported_encoding(page.encoding) ? 0U : encoding_to_mask(page.encoding);
@@ -379,7 +379,7 @@ int decode_page_headers(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks
   DecodePageHeaders(chunks.device_ptr(), chunks.size(), error_code.data(), stream);
 
   if (error_code.value() != 0) {
-    if (BitAnd(error_code.value(), decode_error::UNSUPPORTED_ENCODING) == 0x4) {
+    if (BitAnd(error_code.value(), decode_error::UNSUPPORTED_ENCODING) != 0) {
       auto const unsupported_str =
         ". With unsupported encodings found: " + list_unsupported_encodings(pages, stream);
       CUDF_FAIL("Parquet header parsing failed with code(s) " + error_code.str() + unsupported_str);
