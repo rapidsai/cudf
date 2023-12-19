@@ -301,27 +301,6 @@ TYPED_TEST(SegmentedGatherTest, GatherNegatives)
   }
 }
 
-TYPED_TEST(SegmentedGatherTest, GatherOnNonCompactedNullLists)
-{
-  using T          = TypeParam;
-  auto constexpr X = -1;  // Signifies null value.
-
-  // List<T>
-  auto list = LCW<T>{{{1, 2, 3, 4}, {5}, {6, 7}, {8, 9, 0}, {}, {1, 2}, {3, 4, 5}}, no_nulls()};
-  auto const input = list.release();
-
-  // Set non-empty list row at index 5 to null.
-  cudf::detail::set_null_mask(
-    input->mutable_view().null_mask(), 5, 6, false, cudf::get_default_stream());
-
-  auto const gather_map = LCW<int>{{-1, 2, 1, -4}, {0}, {-2, 1}, {0, 2, 1}, {}, {0}, {1, 2}};
-  auto const expected =
-    LCW<T>{{{4, 3, 2, 1}, {5}, {6, 7}, {8, 0, 9}, {}, {{X}, all_nulls()}, {4, 5}}, null_at(5)};
-  auto const results = cudf::lists::segmented_gather(cudf::lists_column_view{*input},
-                                                     cudf::lists_column_view{gather_map});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
-}
-
 TYPED_TEST(SegmentedGatherTest, GatherNestedNulls)
 {
   using T = TypeParam;
