@@ -12,24 +12,30 @@
 # the License.
 # =============================================================================
 
-# This function finds thrust and sets any additional necessary environment variables.
-function(find_and_configure_libcudacxx)
-  # Make sure we install libcudacxx beside our patched version of thrust
+# This function finds cccl and sets any additional necessary environment variables.
+function(find_and_configure_cccl)
+
+  include(${rapids-cmake-dir}/cpm/cccl.cmake)
+  include(${rapids-cmake-dir}/cpm/package_override.cmake)
+
+  set(cudf_patch_dir "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/patches")
+  rapids_cpm_package_override("${cudf_patch_dir}/cccl_override.json")
+
+  # Make sure we install cccl into the `include/libcudf` subdirectory instead of the default
   include(GNUInstallDirs)
   set(CMAKE_INSTALL_INCLUDEDIR "${CMAKE_INSTALL_INCLUDEDIR}/libcudf")
   set(CMAKE_INSTALL_LIBDIR "${CMAKE_INSTALL_INCLUDEDIR}/lib")
 
-  include(${rapids-cmake-dir}/cpm/libcudacxx.cmake)
-  rapids_cpm_libcudacxx(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
+  # Find or install CCCL with our custom set of patches
+  rapids_cpm_cccl(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
 
-  # Store where CMake can find our custom Thrust install
+  # Store where CMake can find our custom CCCL install
   include("${rapids-cmake-dir}/export/find_package_root.cmake")
   rapids_export_find_package_root(
-    INSTALL libcudacxx
-    [=[${CMAKE_CURRENT_LIST_DIR}/../../../include/libcudf/lib/rapids/cmake/libcudacxx]=]
+    INSTALL CCCL [=[${CMAKE_CURRENT_LIST_DIR}/../../../include/libcudf/lib/rapids/cmake/cccl]=]
     EXPORT_SET cudf-exports
-    CONDITION libcudacxx_SOURCE_DIR
+    CONDITION CCCL_SOURCE_DIR
   )
 endfunction()
 
-find_and_configure_libcudacxx()
+find_and_configure_cccl()
