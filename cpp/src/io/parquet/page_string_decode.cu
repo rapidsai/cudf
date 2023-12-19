@@ -78,8 +78,10 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
 
   // can skip all this if we know there are no nulls
   if (max_def == 0 && !is_bounds_pg) {
-    s->page.num_valids = s->num_input_values;
-    s->page.num_nulls  = 0;
+    if (t == 0) {
+      s->page.num_valids = s->num_input_values;
+      s->page.num_nulls  = 0;
+    }
     return {0, s->num_input_values};
   }
 
@@ -294,7 +296,6 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
       pp->num_nulls  = null_count;
       pp->num_valids = pp->num_input_values - null_count;
     }
-    __syncthreads();
 
     end_value -= pp->num_nulls;
   }
@@ -615,7 +616,15 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBou
 
   // setup page info
   auto const mask = BitOr(decode_kernel_mask::STRING, decode_kernel_mask::DELTA_BYTE_ARRAY);
-  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, mask_filter{mask}, true)) { return; }
+  if (!setupLocalPageInfo(s,
+                          pp,
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{mask},
+                          page_processing_stage::STRING_BOUNDS)) {
+    return;
+  }
 
   bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
 
@@ -658,8 +667,15 @@ __global__ void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageS
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
 
   // setup page info
-  auto const mask = decode_kernel_mask::DELTA_BYTE_ARRAY;
-  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, mask_filter{mask}, true)) { return; }
+  if (!setupLocalPageInfo(s,
+                          pp,
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{decode_kernel_mask::DELTA_BYTE_ARRAY},
+                          page_processing_stage::STRING_BOUNDS)) {
+    return;
+  }
 
   auto const start_value = pp->start_val;
 
@@ -721,8 +737,13 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
 
   // setup page info
-  if (!setupLocalPageInfo(
-        s, pp, chunks, min_row, num_rows, mask_filter{decode_kernel_mask::STRING}, true)) {
+  if (!setupLocalPageInfo(s,
+                          pp,
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{decode_kernel_mask::STRING},
+                          page_processing_stage::STRING_BOUNDS)) {
     return;
   }
 
@@ -817,9 +838,13 @@ __global__ void __launch_bounds__(decode_block_size)
   int const lane_id     = t % warp_size;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  auto const mask = decode_kernel_mask::STRING;
-  if (!setupLocalPageInfo(
-        s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{mask}, true)) {
+  if (!setupLocalPageInfo(s,
+                          &pages[page_idx],
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{decode_kernel_mask::STRING},
+                          page_processing_stage::DECODE)) {
     return;
   }
 
@@ -850,7 +875,7 @@ __global__ void __launch_bounds__(decode_block_size)
       target_pos = min(s->nz_count, src_pos + decode_block_size - out_thread0);
       if (out_thread0 > 32) { target_pos = min(target_pos, s->dict_pos); }
     }
-    // TODO(ets): see if this sync can be removed
+    // this needs to be here to prevent warp 1/2 modifying src_pos before all threads have read it
     __syncthreads();
     if (t < 32) {
       // decode repetition and definition levels.

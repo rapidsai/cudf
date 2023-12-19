@@ -323,9 +323,13 @@ __global__ void __launch_bounds__(96)
   auto* const db        = &db_state;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  auto const mask = decode_kernel_mask::DELTA_BINARY;
-  if (!setupLocalPageInfo(
-        s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{mask}, true)) {
+  if (!setupLocalPageInfo(s,
+                          &pages[page_idx],
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{decode_kernel_mask::DELTA_BINARY},
+                          page_processing_stage::DECODE)) {
     return;
   }
 
@@ -365,7 +369,7 @@ __global__ void __launch_bounds__(96)
     } else {  // warp2
       target_pos = min(s->nz_count, src_pos + batch_size);
     }
-    // TODO(ets): see if this sync can be removed
+    // this needs to be here to prevent warp 2 modifying src_pos before all threads have read it
     __syncthreads();
 
     // warp0 will decode the rep/def levels, warp1 will unpack a mini-batch of deltas.
@@ -446,9 +450,13 @@ __global__ void __launch_bounds__(decode_block_size)
   auto* const dba       = &db_state;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  auto const mask = decode_kernel_mask::DELTA_BYTE_ARRAY;
-  if (!setupLocalPageInfo(
-        s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{mask}, true)) {
+  if (!setupLocalPageInfo(s,
+                          &pages[page_idx],
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{decode_kernel_mask::DELTA_BYTE_ARRAY},
+                          page_processing_stage::DECODE)) {
     return;
   }
 
@@ -507,7 +515,7 @@ __global__ void __launch_bounds__(decode_block_size)
     } else {  // warp 3
       target_pos = min(s->nz_count, src_pos + batch_size);
     }
-    // TODO(ets): see if this sync can be removed
+    // this needs to be here to prevent warp 3 modifying src_pos before all threads have read it
     __syncthreads();
 
     // warp0 will decode the rep/def levels, warp1 will unpack a mini-batch of prefixes, warp 2 will
