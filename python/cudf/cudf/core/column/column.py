@@ -2311,7 +2311,7 @@ def as_column(
     elif isinstance(arbitrary, cudf.Scalar):
         data = ColumnBase.from_scalar(arbitrary, length if length else 1)
     else:
-        from_pandas = True if nan_as_null is None else nan_as_null
+        from_pandas = nan_as_null is None or nan_as_null
         if dtype is not None:
             if (
                 isinstance(dtype, (cudf.CategoricalDtype, cudf.IntervalDtype))
