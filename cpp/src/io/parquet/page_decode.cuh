@@ -1014,6 +1014,12 @@ struct mask_filter {
   }
 };
 
+enum class page_processing_stage {
+  PREPROCESS,
+  STRING_BOUNDS,
+  DECODE,
+};
+
 /**
  * @brief Sets up block-local page state information from the global pages.
  *
@@ -1036,8 +1042,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
                                           size_t min_row,
                                           size_t num_rows,
                                           Filter filter,
-                                          bool is_decode_step,
-                                          bool is_bounds_step)
+                                          page_processing_stage stage)
 {
   int t = threadIdx.x;
 
@@ -1128,7 +1133,8 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
   //
   // NOTE: this check needs to be done after the null counts have been zeroed out
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
-  if ((is_decode_step || is_bounds_step) && s->num_rows == 0 &&
+  if ((stage == page_processing_stage::STRING_BOUNDS || stage == page_processing_stage::DECODE) &&
+      s->num_rows == 0 &&
       !(has_repetition && (is_bounds_page(s, min_row, num_rows, has_repetition) ||
                            is_page_contained(s, min_row, num_rows)))) {
     return false;
@@ -1239,7 +1245,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
       // NOTE: in a chunked read situation, s->col.column_data_base and s->col.valid_map_base
       // will be aliased to memory that has been freed when we get here in the non-decode step, so
       // we cannot check against nullptr.  we'll just check a flag directly.
-      if (is_decode_step) {
+      if (stage == page_processing_stage::DECODE) {
         int max_depth = s->col.max_nesting_depth;
         for (int idx = 0; idx < max_depth; idx++) {
           PageNestingDecodeInfo* nesting_info = &s->nesting_info[idx];
@@ -1389,13 +1395,13 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
 
       // if we're in the decoding step, jump directly to the first
       // value we care about
-      if (is_decode_step || is_bounds_step) {
+      if (stage == page_processing_stage::DECODE) {
         s->input_value_count = s->page.skipped_values > -1 ? s->page.skipped_values : 0;
-      } else {
+      } else if (stage == page_processing_stage::PREPROCESS) {
         s->input_value_count = 0;
         s->input_leaf_count  = 0;
-        s->page.skipped_values =
-          -1;  // magic number to indicate it hasn't been set for use inside UpdatePageSizes
+        // magic number to indicate it hasn't been set for use inside UpdatePageSizes
+        s->page.skipped_values      = -1;
         s->page.skipped_leaf_values = 0;
       }
     }

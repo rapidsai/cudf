@@ -616,7 +616,13 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBou
 
   // setup page info
   auto const mask = BitOr(decode_kernel_mask::STRING, decode_kernel_mask::DELTA_BYTE_ARRAY);
-  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, mask_filter{mask}, false, true)) {
+  if (!setupLocalPageInfo(s,
+                          pp,
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{mask},
+                          page_processing_stage::STRING_BOUNDS)) {
     return;
   }
 
@@ -661,8 +667,13 @@ __global__ void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageS
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
 
   // setup page info
-  auto const mask = decode_kernel_mask::DELTA_BYTE_ARRAY;
-  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, mask_filter{mask}, false, true)) {
+  if (!setupLocalPageInfo(s,
+                          pp,
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{decode_kernel_mask::DELTA_BYTE_ARRAY},
+                          page_processing_stage::STRING_BOUNDS)) {
     return;
   }
 
@@ -726,8 +737,13 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
 
   // setup page info
-  if (!setupLocalPageInfo(
-        s, pp, chunks, min_row, num_rows, mask_filter{decode_kernel_mask::STRING}, false, true)) {
+  if (!setupLocalPageInfo(s,
+                          pp,
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{decode_kernel_mask::STRING},
+                          page_processing_stage::STRING_BOUNDS)) {
     return;
   }
 
@@ -820,9 +836,13 @@ __global__ void __launch_bounds__(decode_block_size)
   int const lane_id     = t % warp_size;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  auto const mask = decode_kernel_mask::STRING;
-  if (!setupLocalPageInfo(
-        s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{mask}, true, false)) {
+  if (!setupLocalPageInfo(s,
+                          &pages[page_idx],
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{decode_kernel_mask::STRING},
+                          page_processing_stage::DECODE)) {
     return;
   }
 
