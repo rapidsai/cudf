@@ -22,6 +22,7 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -801,6 +802,18 @@ struct column_comparator {
   }
 };
 
+void check_non_empty_nulls(column_view const& lhs, column_view const& rhs)
+{
+  auto check_column_nulls = [](column_view const& col, const char* col_name) {
+    if (cudf::detail::has_nonempty_nulls(col, cudf::get_default_stream())) {
+      throw std::invalid_argument(col_name + std::string(" column has non-empty nulls"));
+    }
+  };
+
+  check_column_nulls(lhs, "lhs");
+  check_column_nulls(rhs, "rhs");
+}
+
 }  // namespace
 
 namespace detail {
@@ -811,6 +824,7 @@ bool expect_column_properties_equal(column_view const& lhs,
                                     column_view const& rhs,
                                     debug_output_level verbosity)
 {
+  check_non_empty_nulls(lhs, rhs);
   auto lhs_indices = generate_all_row_indices(lhs.size());
   auto rhs_indices = generate_all_row_indices(rhs.size());
   return cudf::type_dispatcher(lhs.type(),
@@ -829,6 +843,7 @@ bool expect_column_properties_equivalent(column_view const& lhs,
                                          column_view const& rhs,
                                          debug_output_level verbosity)
 {
+  check_non_empty_nulls(lhs, rhs);
   auto lhs_indices = generate_all_row_indices(lhs.size());
   auto rhs_indices = generate_all_row_indices(rhs.size());
   return cudf::type_dispatcher(lhs.type(),
@@ -847,6 +862,7 @@ bool expect_columns_equal(cudf::column_view const& lhs,
                           cudf::column_view const& rhs,
                           debug_output_level verbosity)
 {
+  check_non_empty_nulls(lhs, rhs);
   auto lhs_indices = generate_all_row_indices(lhs.size());
   auto rhs_indices = generate_all_row_indices(rhs.size());
   return cudf::type_dispatcher(lhs.type(),
@@ -867,6 +883,7 @@ bool expect_columns_equivalent(cudf::column_view const& lhs,
                                debug_output_level verbosity,
                                size_type fp_ulps)
 {
+  check_non_empty_nulls(lhs, rhs);
   auto lhs_indices = generate_all_row_indices(lhs.size());
   auto rhs_indices = generate_all_row_indices(rhs.size());
   return cudf::type_dispatcher(lhs.type(),
