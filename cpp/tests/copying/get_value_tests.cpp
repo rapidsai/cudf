@@ -756,7 +756,7 @@ TYPED_TEST(ListGetStructValueTest, NestedGetNonNullEmpty)
     this->make_test_lists_column(3, {0, 1, 1, 2}, std::move(list_column), {1, 1, 1});
 
   auto expected_data =
-    this->make_test_lists_column(0, {0}, this->zero_length_struct().release(), {1});
+    this->make_test_lists_column(0, {0}, this->zero_length_struct().release(), {});
 
   cudf::size_type index = 1;
   auto s                = cudf::get_element(list_column_nested->view(), index);
