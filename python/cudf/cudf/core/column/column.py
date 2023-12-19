@@ -982,11 +982,17 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
         raise NotImplementedError()
 
-    def astype(self, dtype: Dtype, **kwargs) -> ColumnBase:
+    def astype(
+        self, dtype: Dtype, copy: bool = False, format: str | None = None
+    ) -> ColumnBase:
+        if copy:
+            col = self.copy()
+        else:
+            col = self
         if self.dtype == dtype:
-            return self
+            return col
         if is_categorical_dtype(dtype):
-            return self.as_categorical_column(dtype)
+            return col.as_categorical_column(dtype)
 
         if (
             isinstance(dtype, str)
@@ -1003,9 +1009,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         else:
             dtype = pandas_dtypes_to_np_dtypes.get(dtype, dtype)
         if _is_non_decimal_numeric_dtype(dtype):
-            return self.as_numerical_column(dtype)
+            return col.as_numerical_column(dtype)
         elif is_categorical_dtype(dtype):
-            return self.as_categorical_column(dtype)
+            return col.as_categorical_column(dtype)
         elif cudf.dtype(dtype).type in {
             np.str_,
             np.object_,
@@ -1018,29 +1024,23 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                     f"Casting to {dtype} is not supported, use "
                     "`.astype('str')` instead."
                 )
-            return self.as_string_column(
-                dtype, format=kwargs.get("format", None)
-            )
+            return col.as_string_column(dtype, format=format)
         elif isinstance(dtype, (ListDtype, StructDtype)):
-            if not self.dtype == dtype:
+            if not col.dtype == dtype:
                 raise NotImplementedError(
                     f"Casting {self.dtype} columns not currently supported"
                 )
-            return self
+            return col
         elif isinstance(dtype, IntervalDtype):
-            return self.as_interval_column(dtype, **kwargs)
+            return col.as_interval_column(dtype)
         elif isinstance(dtype, cudf.core.dtypes.DecimalDtype):
-            return self.as_decimal_column(dtype, **kwargs)
+            return col.as_decimal_column(dtype)
         elif np.issubdtype(cast(Any, dtype), np.datetime64):
-            return self.as_datetime_column(
-                dtype, format=kwargs.get("format", None)
-            )
+            return col.as_datetime_column(dtype, format=format)
         elif np.issubdtype(cast(Any, dtype), np.timedelta64):
-            return self.as_timedelta_column(
-                dtype, format=kwargs.get("format", None)
-            )
+            return col.as_timedelta_column(dtype, format=format)
         else:
-            return self.as_numerical_column(dtype)
+            return col.as_numerical_column(dtype)
 
     def as_categorical_column(self, dtype) -> ColumnBase:
         if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
