@@ -209,7 +209,7 @@ def test_can_parse_no_schema():
     schema_root = None
     records = []
     actual = cudf_from_avro_util(schema_root, records)
-    expected = cudf.DataFrame()
+    expected = cudf.DataFrame(columns=cudf.Index([], dtype="object"))
     assert_eq(expected, actual)
 
 

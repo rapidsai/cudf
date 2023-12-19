@@ -3406,8 +3406,8 @@ def test_head_tail_empty():
     # GH #13397
 
     values = [1, 2, 3]
-    pdf = pd.DataFrame({}, index=values)
-    df = cudf.DataFrame({}, index=values)
+    pdf = pd.DataFrame(index=values)
+    df = cudf.DataFrame(index=values)
 
     expected = pdf.groupby(pd.Series(values)).head()
     got = df.groupby(cudf.Series(values)).head()
