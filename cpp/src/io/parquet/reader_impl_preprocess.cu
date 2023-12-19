@@ -272,8 +272,10 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
   DecodePageHeaders(chunks.device_ptr(), chunks.size(), error_code.data(), stream);
   chunks.device_to_host_sync(stream);
 
-  if (error_code.value() != 0) {
-    CUDF_FAIL("Parquet header parsing failed with code(s) " + error_code.str());
+  if (error_code.value() != 0 and
+      error_code.value() != static_cast<uint32_t>(decode_error::UNSUPPORTED_ENCODING)) {
+    CUDF_FAIL("Parquet header parsing failed with code(s) while counting page headers " +
+              error_code.str());
   }
 
   for (size_t c = 0; c < chunks.size(); c++) {
@@ -339,8 +341,12 @@ std::string list_unsupported_encodings(cudf::detail::hostdevice_vector<PageInfo>
   auto const to_mask = [] __device__(auto const& page) {
     return is_supported_encoding(page.encoding) ? 0U : encoding_to_mask(page.encoding);
   };
-  uint32_t const unsupported = thrust::transform_reduce(
-    rmm::exec_policy(stream), pages.d_begin(), pages.d_end(), to_mask, 0U, thrust::bit_or<uint32_t>());
+  uint32_t const unsupported = thrust::transform_reduce(rmm::exec_policy(stream),
+                                                        pages.d_begin(),
+                                                        pages.d_end(),
+                                                        to_mask,
+                                                        0U,
+                                                        thrust::bit_or<uint32_t>());
   return encoding_bitmask_to_str(unsupported);
 }
 
@@ -369,10 +375,10 @@ int decode_page_headers(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks
   DecodePageHeaders(chunks.device_ptr(), chunks.size(), error_code.data(), stream);
 
   if (error_code.value() != 0) {
-    if (BitAnd(error_code.value(), decode_error::UNSUPPORTED_ENCODING) != 0) {
+    if (error_code.value() == static_cast<uint32_t>(decode_error::UNSUPPORTED_ENCODING)) {
       auto const unsupported_str =
-        ". With unsupported encodings found: " + list_unsupported_encodings(pages, stream);
-      CUDF_FAIL("Parquet header parsing failed with code(s) " + error_code.str() + unsupported);
+        "Unsupported encodings found: " + list_unsupported_encodings(pages, stream);
+      CUDF_FAIL("Parquet header parsing failed with code(s) " + unsupported_str);
     } else {
       CUDF_FAIL("Parquet header parsing failed with code(s) " + error_code.str());
     }
