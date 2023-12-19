@@ -83,7 +83,6 @@ from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
-    get_time_unit,
     is_mixed_with_object_dtype,
     min_scalar_type,
     min_unsigned_type,
@@ -1892,6 +1891,15 @@ def _make_copy_replacing_NaT_with_null(column):
     return out_col
 
 
+def check_invalid_array(shape: tuple, dtype):
+    """Invalid ndarrays properties that are not supported"""
+    if len(shape) > 1:
+        raise ValueError("Data must be 1-dimensional")
+    elif dtype == "float16":
+        # TODO: Ignore kind in "cUV"?
+        raise TypeError("Unsupported type float16")
+
+
 def as_column(
     arbitrary: Any,
     nan_as_null: Optional[bool] = None,
@@ -1950,12 +1958,9 @@ def as_column(
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         desc = arbitrary.__cuda_array_interface__
         shape = desc["shape"]
-        if len(shape) > 1:
-            raise ValueError("Data must be 1-dimensional")
         current_dtype = np.dtype(desc["typestr"])
 
-        if current_dtype == "float16":
-            raise TypeError("Unsupported type float16")
+        check_invalid_array(shape, current_dtype)
 
         arb_dtype = cudf.dtype(current_dtype)
 
@@ -2182,116 +2187,39 @@ def as_column(
                 data = data.fillna(np.datetime64("NaT"))
 
     elif hasattr(arbitrary, "__array_interface__"):
-        # CUDF assumes values are always contiguous
         desc = arbitrary.__array_interface__
-        shape = desc["shape"]
-        arb_dtype = np.dtype(desc["typestr"])
+        check_invalid_array(desc["shape"], np.dtype(desc["typestr"]))
+
         # CUDF assumes values are always contiguous
-        if len(shape) > 1:
-            raise ValueError("Data must be 1-dimensional")
+        arbitrary = np.asarray(arbitrary, order="C")
 
-        arbitrary = np.asarray(arbitrary)
-
-        # Handle case that `arbitrary` elements are cupy arrays
-        if (
-            shape
-            and shape[0]
-            and hasattr(arbitrary[0], "__cuda_array_interface__")
-        ):
+        if arbitrary.dtype.kind == "OSU":
+            # Handle case that `arbitrary` elements are cupy arrays
+            if len(arbitrary) > 0 and hasattr(
+                arbitrary[0], "__cuda_array_interface__"
+            ):
+                return as_column(
+                    cupy.asarray(arbitrary, dtype=arbitrary[0].dtype),
+                    nan_as_null=nan_as_null,
+                    dtype=dtype,
+                    length=length,
+                )
+            # Let pandas potentially infer object type
             return as_column(
-                cupy.asarray(arbitrary, dtype=arbitrary[0].dtype),
-                nan_as_null=nan_as_null,
+                pd.Series(arbitrary), dtype=dtype, nan_as_null=nan_as_null
+            )
+        elif arbitrary.dtype.kind == "f":
+            from_pandas = nan_as_null is None or nan_as_null
+            return as_column(
+                pa.array(arbitrary, from_pandas=from_pandas),
                 dtype=dtype,
-                length=length,
-            )
-
-        if not arbitrary.flags["C_CONTIGUOUS"]:
-            arbitrary = np.ascontiguousarray(arbitrary)
-
-        delayed_cast = False
-        if dtype is not None:
-            try:
-                dtype = np.dtype(dtype)
-            except TypeError:
-                # Some `dtype`'s can't be parsed by `np.dtype`
-                # for which we will have to cast after the column
-                # has been constructed.
-                delayed_cast = True
-            else:
-                arbitrary = arbitrary.astype(dtype)
-
-        if arb_dtype.kind == "M":
-            time_unit = get_time_unit(arbitrary)
-            cast_dtype = time_unit in ("D", "W", "M", "Y")
-
-            if cast_dtype:
-                arbitrary = arbitrary.astype(cudf.dtype("datetime64[s]"))
-
-            buffer = as_buffer(arbitrary.view("|u1"))
-            if nan_as_null is None or nan_as_null is True:
-                data = build_column(buffer, dtype=arbitrary.dtype)
-                data = _make_copy_replacing_NaT_with_null(data)
-                mask = data.mask
-            else:
-                bool_mask = as_column(~np.isnat(arbitrary))
-                mask = as_buffer(bools_to_mask(bool_mask))
-
-            data = build_column(data=buffer, mask=mask, dtype=arbitrary.dtype)
-        elif arb_dtype.kind == "m":
-            time_unit = get_time_unit(arbitrary)
-            cast_dtype = time_unit in ("D", "W", "M", "Y")
-
-            if cast_dtype:
-                arbitrary = arbitrary.astype(cudf.dtype("timedelta64[s]"))
-
-            buffer = as_buffer(arbitrary.view("|u1"))
-            if nan_as_null is None or nan_as_null is True:
-                data = build_column(buffer, dtype=arbitrary.dtype)
-                data = _make_copy_replacing_NaT_with_null(data)
-                mask = data.mask
-            else:
-                bool_mask = as_column(~np.isnat(arbitrary))
-                mask = as_buffer(bools_to_mask(bool_mask))
-
-            data = cudf.core.column.timedelta.TimeDeltaColumn(
-                data=buffer,
-                size=len(arbitrary),
-                mask=mask,
-                dtype=arbitrary.dtype,
-            )
-        elif (
-            arbitrary.size != 0
-            and arb_dtype.kind in ("O")
-            and isinstance(arbitrary[0], pd._libs.interval.Interval)
-        ):
-            # changing from pd array to series,possible arrow bug
-            interval_series = pd.Series(arbitrary)
-            data = as_column(
-                pa.Array.from_pandas(interval_series),
-                dtype=arbitrary.dtype,
-            )
-            if dtype is not None:
-                data = data.astype(dtype)
-        elif arb_dtype.kind in ("O", "U"):
-            data = as_column(pa.array(arbitrary), dtype=arbitrary.dtype)
-            # There is no cast operation available for pa.Array from int to
-            # str, Hence instead of handling in pa.Array block, we
-            # will have to type-cast here.
-            if dtype is not None:
-                data = data.astype(dtype)
-        elif arb_dtype.kind in ("f"):
-            if arb_dtype == np.dtype("float16"):
-                raise TypeError("Unsupported type float16")
-            arb_dtype = cudf.dtype(arb_dtype if dtype is None else dtype)
-            data = as_column(
-                cupy.asarray(arbitrary, dtype=arb_dtype),
                 nan_as_null=nan_as_null,
             )
         else:
-            data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null)
-
-        if delayed_cast:
-            data = data.astype(cudf.dtype(dtype))
+            # Align numpy array inputs behavior between cudf and pandas
+            return as_column(
+                pd.array(arbitrary), dtype=dtype, nan_as_null=nan_as_null
+            )
 
     elif isinstance(arbitrary, memoryview):
         data = as_column(
