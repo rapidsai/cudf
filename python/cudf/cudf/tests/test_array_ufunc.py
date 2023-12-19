@@ -10,8 +10,12 @@ import numpy as np
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_150, PANDAS_GE_200
-from cudf.testing._utils import assert_eq, set_random_null_mask_inplace
+from cudf.core._compat import PANDAS_GE_150, PANDAS_GE_200, PANDAS_GE_210
+from cudf.testing._utils import (
+    assert_eq,
+    set_random_null_mask_inplace,
+    expect_warning_if,
+)
 
 _UFUNCS = [
     obj
@@ -45,6 +49,21 @@ def _hide_ufunc_warnings(ufunc):
                 "ignore",
                 f"divide by zero encountered in {name}",
                 category=RuntimeWarning,
+            )
+            yield
+    elif name in {
+        "bitwise_and",
+        "bitwise_or",
+        "bitwise_xor",
+    }:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                "Operation between non boolean Series with different "
+                "indexes will no longer return a boolean result in "
+                "a future version. Cast both Series to object type "
+                "to maintain the prior behavior.",
+                category=FutureWarning,
             )
             yield
     else:
@@ -217,7 +236,27 @@ def test_ufunc_series(request, ufunc, has_nulls, indexed):
             assert_eq(g, e, check_exact=False)
     else:
         if has_nulls:
-            expect[mask] = np.nan
+            with expect_warning_if(
+                PANDAS_GE_210
+                and fname
+                in (
+                    "isfinite",
+                    "isinf",
+                    "isnan",
+                    "logical_and",
+                    "logical_not",
+                    "logical_or",
+                    "logical_xor",
+                    "signbit",
+                    "equal",
+                    "greater",
+                    "greater_equal",
+                    "less",
+                    "less_equal",
+                    "not_equal",
+                )
+            ):
+                expect[mask] = np.nan
             assert_eq(got, expect, check_exact=False)
 
 
@@ -443,5 +482,25 @@ def test_ufunc_dataframe(request, ufunc, has_nulls, indexed):
             assert_eq(g, e, check_exact=False)
     else:
         if has_nulls:
-            expect[mask] = np.nan
+            with expect_warning_if(
+                PANDAS_GE_210
+                and fname
+                in (
+                    "isfinite",
+                    "isinf",
+                    "isnan",
+                    "logical_and",
+                    "logical_not",
+                    "logical_or",
+                    "logical_xor",
+                    "signbit",
+                    "equal",
+                    "greater",
+                    "greater_equal",
+                    "less",
+                    "less_equal",
+                    "not_equal",
+                )
+            ):
+                expect[mask] = np.nan
         assert_eq(got, expect, check_exact=False)
