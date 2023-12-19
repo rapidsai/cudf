@@ -4,10 +4,10 @@
 cdef class gpumemoryview:
     """Minimal representation of a memory buffer.
 
-    This class aspires to be a GPU equivalent of the [Python memoryview
-    type](https://docs.python.org/3/library/stdtypes.html#memoryview) for any
-    objects exposing a [CUDA Array
-    Interface](https://numba.readthedocs.io/en/stable/cuda/cuda_array_interface.html).
+    This class aspires to be a GPU equivalent of the `Python memoryview type
+    <https://docs.python.org/3/library/stdtypes.html#memoryview>`__ for any
+    objects exposing a `CUDA Array Interface
+    <https://numba.readthedocs.io/en/stable/cuda/cuda_array_interface.html>`__.
     It will be expanded to encompass more memoryview functionality over time.
     """
     # TODO: dlpack support

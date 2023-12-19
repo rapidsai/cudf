@@ -44,7 +44,7 @@ cdef class Column:
     cpdef gpumemoryview null_mask(self)
     cpdef list children(self)
 
-    cpdef list_view(self)
+    cpdef ListColumnView list_view(self)
 
 
 cdef class ListColumnView:

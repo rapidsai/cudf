@@ -340,7 +340,18 @@ _all_namespaces = _generate_namespaces({
     "nvtext": {},
 })
 
-_names_to_skip = {
+
+_names_to_skip_in_pylibcudf = {
+    # Cython types that don't alias cleanly because of
+    # https://github.com/cython/cython/issues/5609
+    "size_type",
+    "type_id",
+    # Unknown base types
+    "int32_t",
+}
+
+
+_names_to_skip_in_cpp = {
     # External names
     "thrust",
     "cuda",
@@ -403,7 +414,8 @@ def _cached_intersphinx_lookup(env, node, contnode):
 
 def on_missing_reference(app, env, node, contnode):
     # These variables are defined outside the function to speed up the build.
-    global _all_namespaces, _names_to_skip, _intersphinx_extra_prefixes, \
+    global _all_namespaces, _names_to_skip_in_cpp, \
+        _names_to_skip_in_pylibcudf,_intersphinx_extra_prefixes, \
         _domain_objects, _prefixed_domain_objects, _intersphinx_cache
 
     # Precompute and cache domains for faster lookups
@@ -429,6 +441,9 @@ def on_missing_reference(app, env, node, contnode):
         node["reftarget"] = "cudf::column_device_view"
         return contnode
 
+    if any(toskip in reftarget for toskip in _names_to_skip_in_pylibcudf):
+        return contnode
+
     if (refid := node.get("refid")) is not None and "hpp" in refid:
         # We don't want to link to C++ header files directly from the
         # Sphinx docs, those are pages that doxygen automatically
@@ -436,7 +451,7 @@ def on_missing_reference(app, env, node, contnode):
         return contnode
 
     if node["refdomain"] in ("std", "cpp") and reftarget is not None:
-        if any(toskip in reftarget for toskip in _names_to_skip):
+        if any(toskip in reftarget for toskip in _names_to_skip_in_cpp):
             return contnode
 
         # Strip template parameters and just use the base type.
