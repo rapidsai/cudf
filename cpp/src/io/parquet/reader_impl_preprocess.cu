@@ -372,7 +372,7 @@ int decode_page_headers(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks
     if (BitAnd(error_code.value(), decode_error::UNSUPPORTED_ENCODING) != 0) {
       auto const unsupported_str =
         ". With unsupported encodings found: " + list_unsupported_encodings(pages, stream);
-      CUDF_FAIL("Parquet header parsing failed with code(s) " + error_code.str() + unsupported);
+      CUDF_FAIL("Parquet header parsing failed with code(s) " + error_code.str() + unsupported_str);
     } else {
       CUDF_FAIL("Parquet header parsing failed with code(s) " + error_code.str());
     }
