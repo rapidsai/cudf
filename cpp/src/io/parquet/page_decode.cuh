@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "error.hpp"
 #include "parquet_gpu.hpp"
 #include "rle_stream.cuh"
 
@@ -44,7 +45,7 @@ struct page_state_s {
   int32_t dict_val{};
   uint32_t initial_rle_run[NUM_LEVEL_TYPES]{};   // [def,rep]
   int32_t initial_rle_value[NUM_LEVEL_TYPES]{};  // [def,rep]
-  int32_t error{};
+  kernel_error::value_type error{};
   PageInfo page{};
   ColumnChunkDesc col{};
 
@@ -73,13 +74,13 @@ struct page_state_s {
 
   inline __device__ void set_error_code(decode_error err)
   {
-    cuda::atomic_ref<int32_t, cuda::thread_scope_block> ref{error};
-    ref.fetch_or(static_cast<int32_t>(err), cuda::std::memory_order_relaxed);
+    cuda::atomic_ref<kernel_error::value_type, cuda::thread_scope_block> ref{error};
+    ref.fetch_or(static_cast<kernel_error::value_type>(err), cuda::std::memory_order_relaxed);
   }
 
   inline __device__ void reset_error_code()
   {
-    cuda::atomic_ref<int32_t, cuda::thread_scope_block> ref{error};
+    cuda::atomic_ref<kernel_error::value_type, cuda::thread_scope_block> ref{error};
     ref.store(0, cuda::std::memory_order_release);
   }
 };
@@ -242,6 +243,10 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(page_state_s* s,
   int pos            = s->dict_pos;
   int str_len        = 0;
 
+  // NOTE: racecheck warns about a RAW involving s->dict_pos, which is likely a false positive
+  // because the only path that does not include a sync will lead to s->dict_pos being overwritten
+  // with the same value
+
   while (pos < target_pos) {
     int is_literal, batch_len;
     if (!t) {
@@ -355,6 +360,10 @@ inline __device__ int gpuDecodeRleBooleans(page_state_s* s, state_buf* sb, int t
 {
   uint8_t const* end = s->data_end;
   int64_t pos        = s->dict_pos;
+
+  // NOTE: racecheck warns about a RAW involving s->dict_pos, which is likely a false positive
+  // because the only path that does not include a sync will lead to s->dict_pos being overwritten
+  // with the same value
 
   while (pos < target_pos) {
     int is_literal, batch_len;
@@ -548,6 +557,9 @@ __device__ void gpuDecodeStream(
     batch_coded_count += batch_len;
     value_count += batch_len;
   }
+  // issue #14597
+  // racecheck reported race between reads at the start of this function and the writes below
+  __syncwarp();
 
   // update the stream info
   if (!t) {
@@ -680,6 +692,9 @@ __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value
                                                       level_t const* const def,
                                                       int t)
 {
+  // exit early if there's no work to do
+  if (s->input_value_count >= target_input_value_count) { return; }
+
   // max nesting depth of the column
   int const max_depth       = s->col.max_nesting_depth;
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;

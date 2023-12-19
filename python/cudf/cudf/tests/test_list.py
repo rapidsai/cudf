@@ -90,10 +90,8 @@ def test_leaves(data):
 
 def test_list_to_pandas_nullable_true():
     df = cudf.DataFrame({"a": cudf.Series([[1, 2, 3]])})
-    actual = df.to_pandas(nullable=True)
-    expected = pd.DataFrame({"a": pd.Series([[1, 2, 3]])})
-
-    assert_eq(actual, expected)
+    with pytest.raises(NotImplementedError):
+        df.to_pandas(nullable=True)
 
 
 def test_listdtype_hash():

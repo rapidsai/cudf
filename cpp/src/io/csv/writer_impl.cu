@@ -154,11 +154,6 @@ struct column_to_strings_fn {
 
   // Note: `null` replacement with `na_rep` deferred to `concatenate()`
   // instead of column-wise; might be faster
-  //
-  // Note: Cannot pass `stream` to detail::<fname> version of <fname> calls below, because they are
-  // not exposed in header (see, for example, detail::concatenate(tbl_view, separator, na_rep,
-  // stream, mr) is declared and defined in combine.cu); Possible solution: declare `extern`, or
-  // just declare a prototype inside `namespace cudf::strings::detail`;
 
   // bools:
   //

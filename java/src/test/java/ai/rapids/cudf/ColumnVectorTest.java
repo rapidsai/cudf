@@ -2170,6 +2170,15 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testCodePoints() {
+    try (ColumnVector cv = ColumnVector.fromStrings("eee", "bb", null, "", "aa", "bbb", "ééé");
+         ColumnVector codePoints = cv.codePoints();
+         ColumnVector expected = ColumnVector.fromBoxedInts(101, 101, 101, 98, 98, 97, 97, 98, 98, 98, 50089, 50089, 50089)) {
+      assertColumnsAreEqual(expected, codePoints);
+    }
+  }
+
+  @Test
   void testEmptyStringColumnOpts() {
     try (ColumnVector cv = ColumnVector.fromStrings()) {
       try (ColumnVector len = cv.getCharLengths()) {

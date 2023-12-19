@@ -97,7 +97,9 @@ std::unique_ptr<column> to_floats(strings_column_view const& input,
                                   rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = input.size();
-  if (strings_count == 0) return make_numeric_column(output_type, 0);
+  if (strings_count == 0) {
+    return make_numeric_column(output_type, 0, mask_state::UNALLOCATED, stream);
+  }
   auto strings_column = column_device_view::create(input.parent(), stream);
   auto d_strings      = *strings_column;
   // create float output column copying the strings null-mask

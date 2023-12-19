@@ -40,15 +40,12 @@ from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
-    is_decimal_dtype,
     is_dict_like,
     is_float_dtype,
     is_integer,
     is_integer_dtype,
-    is_list_dtype,
     is_scalar,
     is_string_dtype,
-    is_struct_dtype,
 )
 from cudf.core import indexing_utils
 from cudf.core.abc import Serializable
@@ -1502,12 +1499,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if (
             preprocess.nullable
             and not isinstance(
-                preprocess._column, cudf.core.column.CategoricalColumn
+                preprocess.dtype,
+                (
+                    cudf.CategoricalDtype,
+                    cudf.ListDtype,
+                    cudf.StructDtype,
+                    cudf.core.dtypes.DecimalDtype,
+                ),
             )
-            and not is_list_dtype(preprocess.dtype)
-            and not is_struct_dtype(preprocess.dtype)
-            and not is_decimal_dtype(preprocess.dtype)
-            and not is_struct_dtype(preprocess.dtype)
         ) or isinstance(
             preprocess._column,
             cudf.core.column.timedelta.TimeDeltaColumn,
@@ -2064,7 +2063,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return super().any(axis, skipna, level, **kwargs)
 
     @_cudf_nvtx_annotate
-    def to_pandas(self, index=True, nullable=False, **kwargs):
+    def to_pandas(
+        self, *, index: bool = True, nullable: bool = False
+    ) -> pd.Series:
         """
         Convert to a Pandas Series.
 
@@ -2126,6 +2127,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         if index is True:
             index = self.index.to_pandas()
+        else:
+            index = None  # type: ignore[assignment]
         s = self._column.to_pandas(index=index, nullable=nullable)
         s.name = self.name
         return s
@@ -3370,7 +3373,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             data=data.values(),
             index=data.keys(),
             dtype=dtype,
-            nan_as_null=False,
             name=self.name,
         )
 
