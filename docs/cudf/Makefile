@@ -2,7 +2,7 @@
 #
 
 # You can set these variables from the command line.
-SPHINXOPTS    = -n -v -W --keep-going
+SPHINXOPTS    = -n -v -W --keep-going -j 4
 SPHINXBUILD   = sphinx-build
 SPHINXPROJ    = cudf
 SOURCEDIR     = source
