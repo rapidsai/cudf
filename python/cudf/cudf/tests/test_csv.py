@@ -595,12 +595,12 @@ def test_csv_reader_NaN_values():
         header=None,
         na_values=custom_na_values,
     )
-    assert gdf.dtypes[0] == "int8"
+    assert gdf.dtypes.iloc[0] == "int8"
     assert all(gdf["0"][idx] is cudf.NA for idx in range(len(gdf["0"])))
 
     # data type detection should evaluate the column to object if some nulls
     gdf = read_csv(StringIO(all_cells), header=None)
-    assert gdf.dtypes[0] == np.dtype("object")
+    assert gdf.dtypes.iloc[0] == np.dtype("object")
 
 
 def test_csv_reader_thousands(tmpdir):
