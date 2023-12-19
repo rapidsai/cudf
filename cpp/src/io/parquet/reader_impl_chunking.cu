@@ -53,19 +53,18 @@ struct split_info {
 constexpr size_t minimum_subpass_expected_size = 200 * 1024 * 1024;
 
 #if defined(CHUNKING_DEBUG)
-void print_cumulative_page_info(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                                cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks,
-                                rmm::device_uvector<cumulative_page_info> const& c_info,
+void print_cumulative_page_info(device_span<const PageInfo> d_pages,
+                                device_span<const ColumnChunkDesc> d_chunks,
+                                device_span<const cumulative_page_info> d_c_info,
                                 rmm::cuda_stream_view stream)
 {
-  pages.device_to_host_sync(stream);
+  std::vector<PageInfo> pages              = cudf::detail::make_std_vector_sync(d_pages, stream);
+  std::vector<ColumnChunkDesc> chunks      = cudf::detail::make_std_vector_sync(d_chunks, stream);
+  std::vector<cumulative_page_info> c_info = cudf::detail::make_std_vector_sync(d_c_info, stream);
 
   printf("------------\nCumulative sizes by page\n");
 
   std::vector<int> schemas(pages.size());
-  std::vector<cumulative_page_info> h_cinfo(pages.size());
-  CUDF_CUDA_TRY(cudaMemcpy(
-    h_cinfo.data(), c_info.data(), sizeof(cumulative_page_info) * pages.size(), cudaMemcpyDefault));
   auto schema_iter = cudf::detail::make_counting_transform_iterator(
     0, [&](size_type i) { return pages[i].src_col_schema; });
   thrust::copy(thrust::seq, schema_iter, schema_iter + pages.size(), schemas.begin());
@@ -84,8 +83,8 @@ void print_cumulative_page_info(cudf::detail::hostdevice_vector<PageInfo>& pages
       printf("\tP %s: {%lu, %lu, %lu}\n",
              is_list ? "(L)" : "",
              pidx,
-             h_cinfo[pidx].row_index,
-             h_cinfo[pidx].size_bytes);
+             c_info[pidx].row_index,
+             c_info[pidx].size_bytes);
     }
   }
 }
@@ -915,6 +914,126 @@ void detect_malformed_pages(cudf::detail::hostdevice_vector<PageInfo> const& pag
   }
 }
 
+struct decompression_info {
+  Compression codec;
+  size_t num_pages;
+  size_t max_page_decompressed_size;
+  size_t total_decompressed_size;
+};
+
+/**
+ * @brief Functor which retrieves per-page decompression information.
+ *
+ */
+struct get_decomp_info {
+  device_span<const ColumnChunkDesc> chunks;
+
+  __device__ decompression_info operator()(PageInfo const& p)
+  {
+    return {static_cast<Compression>(chunks[p.chunk_idx].codec),
+            1,
+            static_cast<size_t>(p.uncompressed_page_size),
+            static_cast<size_t>(p.uncompressed_page_size)};
+  }
+};
+
+/**
+ * @brief Functor which accumulates per-page decompression information.
+ *
+ */
+struct decomp_sum {
+  __device__ decompression_info operator()(decompression_info const& a, decompression_info const& b)
+  {
+    return {a.codec,
+            a.num_pages + b.num_pages,
+            std::max(a.max_page_decompressed_size, b.max_page_decompressed_size),
+            a.total_decompressed_size + b.total_decompressed_size};
+  }
+};
+
+/**
+ * @brief Functor which returns total scratch space required based on computed decompression_info
+ * data.
+ *
+ */
+struct get_decomp_scratch {
+  size_t operator()(decompression_info const& di)
+  {
+    cudf::io::nvcomp::compression_type nvcomp_codec = cudf::io::nvcomp::compression_type::INVALID;
+
+    switch (di.codec) {
+      case UNCOMPRESSED:
+      case GZIP: return 0;
+
+      case BROTLI: return get_gpu_debrotli_scratch_size(di.num_pages);
+
+      case SNAPPY:
+        if (cudf::io::detail::nvcomp_integration::is_stable_enabled()) {
+          nvcomp_codec = cudf::io::nvcomp::compression_type::SNAPPY;
+        } else {
+          return 0;
+        }
+        break;
+      case ZSTD: nvcomp_codec = cudf::io::nvcomp::compression_type::ZSTD; break;
+
+      default: CUDF_FAIL("Invalid compression codec for parquet decompression");
+    }
+
+    CUDF_EXPECTS(nvcomp_codec != cudf::io::nvcomp::compression_type::INVALID,
+                 "Invalid nvcomp codec encountered");
+    return cudf::io::nvcomp::batched_decompress_temp_size(
+      nvcomp_codec, di.num_pages, di.max_page_decompressed_size, di.total_decompressed_size);
+  }
+};
+
+/**
+ * @brief Add the cost of decompression codec scratch space to the per-page cumulative
+ * size information.
+ *
+ */
+void include_decompression_scratch_size(device_span<const ColumnChunkDesc> chunks,
+                                        device_span<const PageInfo> pages,
+                                        device_span<cumulative_page_info> c_info,
+                                        rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(pages.size() == c_info.size(),
+               "Encountered page/cumulative_page_info size mismatch");
+
+  auto page_keys = make_page_key_iterator(pages);
+
+  // per-codec page counts and decompression sizes
+  rmm::device_uvector<decompression_info> decomp_info(pages.size(), stream);
+  auto decomp_iter = thrust::make_transform_iterator(pages.begin(), get_decomp_info{chunks});
+  thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+                                page_keys,
+                                page_keys + pages.size(),
+                                decomp_iter,
+                                decomp_info.begin(),
+                                thrust::equal_to<int32_t>{},
+                                decomp_sum{});
+
+  // retrieve to host so we can call nvcomp to get compression scratch sizes
+  std::vector<decompression_info> h_decomp_info =
+    cudf::detail::make_std_vector_sync(decomp_info, stream);
+  std::vector<size_t> temp_cost(pages.size());
+  thrust::transform(thrust::host,
+                    h_decomp_info.begin(),
+                    h_decomp_info.end(),
+                    temp_cost.begin(),
+                    get_decomp_scratch{});
+
+  // add to the cumulative_page_info data
+  rmm::device_uvector<size_t> d_temp_cost = cudf::detail::make_device_uvector_async(
+    temp_cost, stream, rmm::mr::get_current_device_resource());
+  auto iter = thrust::make_counting_iterator(size_t{0});
+  thrust::for_each(rmm::exec_policy(stream),
+                   iter,
+                   iter + pages.size(),
+                   [temp_cost = d_temp_cost.begin(), c_info = c_info.begin()] __device__(size_t i) {
+                     c_info[i].size_bytes += temp_cost[i];
+                   });
+}
+
 }  // anonymous namespace
 
 void reader::impl::handle_chunking(bool uses_custom_row_bounds)
@@ -1123,6 +1242,10 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
                                   thrust::equal_to{},
                                   cumulative_page_sum{});
 
+    // include scratch space needed for decompression. for certain codecs (eg ZSTD) this
+    // can be considerable.
+    include_decompression_scratch_size(pass.chunks, pass.pages, c_info, _stream);
+
     auto iter = thrust::make_counting_iterator(0);
     thrust::for_each(rmm::exec_policy(_stream),
                      iter,
@@ -1134,7 +1257,7 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
     return compute_next_subpass(c_info,
                                 pass.pages,
                                 pass.page_offsets,
-                                pass.processed_rows,
+                                pass.processed_rows + pass.skip_rows,
                                 remaining_read_limit,
                                 num_columns,
                                 _stream);

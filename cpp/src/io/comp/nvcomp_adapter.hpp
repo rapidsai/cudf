@@ -29,7 +29,7 @@
 
 namespace cudf::io::nvcomp {
 
-enum class compression_type { SNAPPY, ZSTD, DEFLATE };
+enum class compression_type { SNAPPY, ZSTD, DEFLATE, INVALID };
 
 /**
  * @brief Set of parameters that impact whether the use nvCOMP features is enabled.
@@ -110,6 +110,11 @@ void batched_decompress(compression_type compression,
                         size_t max_uncomp_chunk_size,
                         size_t max_total_uncomp_size,
                         rmm::cuda_stream_view stream);
+
+size_t batched_decompress_temp_size(compression_type compression,
+                                    size_t num_chunks,
+                                    size_t max_uncomp_chunk_size,
+                                    size_t max_total_uncomp_size);
 
 /**
  * @brief Gets the maximum size any chunk could compress to in the batch.
