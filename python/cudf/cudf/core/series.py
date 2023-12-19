@@ -371,6 +371,12 @@ class _SeriesLocIndexer(_FrameIndexer):
             arg = arg[0]
         if _is_scalar_or_zero_d_array(arg):
             index_dtype = self._frame.index.dtype
+            warn_msg = (
+                "Series.__getitem__ treating keys as positions is deprecated. "
+                "In a future version, integer keys will always be treated "
+                "as labels (consistent with DataFrame behavior). To access "
+                "a value by position, use `ser.iloc[pos]`"
+            )
             if not _is_non_decimal_numeric_dtype(index_dtype) and not (
                 isinstance(index_dtype, cudf.CategoricalDtype)
                 and is_integer_dtype(index_dtype.categories.dtype)
@@ -379,11 +385,13 @@ class _SeriesLocIndexer(_FrameIndexer):
                 if isinstance(arg, cudf.Scalar) and is_integer_dtype(
                     arg.dtype
                 ):
-                    found_index = arg.value
-                    return found_index
+                    # Do not remove until pandas 3.0 support is added.
+                    warnings.warn(warn_msg, FutureWarning)
+                    return arg.value
                 elif is_integer(arg):
-                    found_index = arg
-                    return found_index
+                    # Do not remove until pandas 3.0 support is added.
+                    warnings.warn(warn_msg, FutureWarning)
+                    return arg
             try:
                 indices = self._frame.index._indices_of(arg)
                 if (n := len(indices)) == 0:

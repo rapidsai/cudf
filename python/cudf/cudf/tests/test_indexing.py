@@ -9,11 +9,13 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_210
 from cudf.testing import _utils as utils
 from cudf.testing._utils import (
     INTEGER_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
 )
 
 index_dtypes = INTEGER_TYPES
@@ -151,8 +153,10 @@ def test_series_get_item_iloc_defer(arg):
     ps = pd.Series([1, 2, 3], index=pd.Index(["a", "b", "c"]))
     gs = cudf.from_pandas(ps)
 
-    expect = ps[arg]
-    got = gs[arg]
+    with expect_warning_if(PANDAS_GE_210 and not isinstance(arg, str)):
+        expect = ps[arg]
+    with expect_warning_if(not isinstance(arg, str)):
+        got = gs[arg]
 
     assert_eq(expect, got)
 
@@ -163,7 +167,7 @@ def test_series_iloc_defer_cudf_scalar():
 
     for t in index_dtypes:
         arg = cudf.Scalar(1, dtype=t)
-        got = gs[arg]
+        got = gs.iloc[arg]
         expect = 2
         assert_eq(expect, got)
 
