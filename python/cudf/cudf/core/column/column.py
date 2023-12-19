@@ -55,7 +55,6 @@ from cudf.api.types import (
     is_categorical_dtype,
     is_datetime64_dtype,
     is_datetime64tz_dtype,
-    is_decimal_dtype,
     is_dtype_equal,
     is_integer_dtype,
     is_interval_dtype,
