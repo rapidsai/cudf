@@ -2215,7 +2215,7 @@ def as_column(
             return as_column(
                 pd.Series(arbitrary), dtype=dtype, nan_as_null=nan_as_null
             )
-        elif arbitrary.dtype.kind == "f":
+        elif arbitrary.dtype.kind == "biuf":
             from_pandas = nan_as_null is None or nan_as_null
             return as_column(
                 pa.array(arbitrary, from_pandas=from_pandas),
@@ -2223,7 +2223,7 @@ def as_column(
                 nan_as_null=nan_as_null,
             )
         else:
-            # Align numpy array inputs behavior between cudf and pandas
+            # Align datetime resolution behavior between cudf and pandas
             return as_column(
                 pd.array(arbitrary), dtype=dtype, nan_as_null=nan_as_null
             )
