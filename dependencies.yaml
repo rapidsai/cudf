@@ -53,6 +53,7 @@ files:
     includes:
       - notebooks
       - py_version
+      - notebook_cuda_version
   checks:
     output: none
     includes:
@@ -481,8 +482,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          # TODO: Pin to numba<0.58 until #14160 is resolved
-          - &numba numba>=0.57,<0.58
+          - &numba numba>=0.57
           - nvtx>=0.2.1
           - packaging
           - rich
@@ -768,3 +768,8 @@ dependencies:
         packages:
           - ipython
           - openpyxl
+  notebook_cuda_version:
+    common:
+      - output_types: conda
+        packages:
+          - cuda-version=12.0

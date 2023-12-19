@@ -55,9 +55,6 @@ from cudf.api.types import (
     is_categorical_dtype,
     is_datetime64_dtype,
     is_datetime64tz_dtype,
-    is_decimal32_dtype,
-    is_decimal64_dtype,
-    is_decimal128_dtype,
     is_decimal_dtype,
     is_dtype_equal,
     is_integer_dtype,
@@ -65,7 +62,6 @@ from cudf.api.types import (
     is_list_dtype,
     is_scalar,
     is_string_dtype,
-    is_struct_dtype,
 )
 from cudf.core._compat import PANDAS_GE_150
 from cudf.core.abc import Serializable
@@ -1023,21 +1019,15 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                     "`.astype('str')` instead."
                 )
             return self.as_string_column(dtype, **kwargs)
-        elif is_list_dtype(dtype):
+        elif isinstance(dtype, (ListDtype, StructDtype)):
             if not self.dtype == dtype:
                 raise NotImplementedError(
-                    "Casting list columns not currently supported"
+                    f"Casting {self.dtype} columns not currently supported"
                 )
             return self
-        elif is_struct_dtype(dtype):
-            if not self.dtype == dtype:
-                raise NotImplementedError(
-                    "Casting struct columns not currently supported"
-                )
-            return self
-        elif is_interval_dtype(self.dtype):
+        elif isinstance(dtype, IntervalDtype):
             return self.as_interval_column(dtype, **kwargs)
-        elif is_decimal_dtype(dtype):
+        elif isinstance(dtype, cudf.core.dtypes.DecimalDtype):
             return self.as_decimal_column(dtype, **kwargs)
         elif np.issubdtype(cast(Any, dtype), np.datetime64):
             return self.as_datetime_column(dtype, **kwargs)
@@ -1578,7 +1568,7 @@ def build_column(
         )
         return col
 
-    if is_categorical_dtype(dtype):
+    if isinstance(dtype, CategoricalDtype):
         if not len(children) == 1:
             raise ValueError(
                 "Must specify exactly one child column for CategoricalColumn"
@@ -1604,7 +1594,7 @@ def build_column(
             offset=offset,
             null_count=null_count,
         )
-    elif is_datetime64tz_dtype(dtype):
+    elif isinstance(dtype, pd.DatetimeTZDtype):
         if data is None:
             raise TypeError("Must specify data buffer")
         return cudf.core.column.datetime.DatetimeTZColumn(
@@ -1634,7 +1624,7 @@ def build_column(
             children=children,
             null_count=null_count,
         )
-    elif is_list_dtype(dtype):
+    elif isinstance(dtype, ListDtype):
         return cudf.core.column.ListColumn(
             size=size,
             dtype=dtype,
@@ -1643,7 +1633,7 @@ def build_column(
             null_count=null_count,
             children=children,
         )
-    elif is_interval_dtype(dtype):
+    elif isinstance(dtype, IntervalDtype):
         return cudf.core.column.IntervalColumn(
             dtype=dtype,
             mask=mask,
@@ -1652,7 +1642,7 @@ def build_column(
             children=children,
             null_count=null_count,
         )
-    elif is_struct_dtype(dtype):
+    elif isinstance(dtype, StructDtype):
         if size is None:
             raise TypeError("Must specify size")
         return cudf.core.column.StructColumn(
@@ -1664,7 +1654,7 @@ def build_column(
             null_count=null_count,
             children=children,
         )
-    elif is_decimal64_dtype(dtype):
+    elif isinstance(dtype, cudf.Decimal64Dtype):
         if size is None:
             raise TypeError("Must specify size")
         return cudf.core.column.Decimal64Column(
@@ -1676,7 +1666,7 @@ def build_column(
             null_count=null_count,
             children=children,
         )
-    elif is_decimal32_dtype(dtype):
+    elif isinstance(dtype, cudf.Decimal32Dtype):
         if size is None:
             raise TypeError("Must specify size")
         return cudf.core.column.Decimal32Column(
@@ -1688,7 +1678,7 @@ def build_column(
             null_count=null_count,
             children=children,
         )
-    elif is_decimal128_dtype(dtype):
+    elif isinstance(dtype, cudf.Decimal128Dtype):
         if size is None:
             raise TypeError("Must specify size")
         return cudf.core.column.Decimal128Column(
@@ -1697,15 +1687,6 @@ def build_column(
             offset=offset,
             dtype=dtype,
             mask=mask,
-            null_count=null_count,
-            children=children,
-        )
-    elif is_interval_dtype(dtype):
-        return cudf.core.column.IntervalColumn(
-            dtype=dtype,
-            mask=mask,
-            size=size,
-            offset=offset,
             null_count=null_count,
             children=children,
         )
@@ -1909,6 +1890,13 @@ def _make_copy_replacing_NaT_with_null(column):
         null,
     )
     return out_col
+
+
+def as_memoryview(arbitrary: Any) -> Optional[memoryview]:
+    try:
+        return memoryview(arbitrary)
+    except TypeError:
+        return None
 
 
 def as_column(
@@ -2322,26 +2310,81 @@ def as_column(
         if delayed_cast:
             data = data.astype(cudf.dtype(dtype))
 
-    elif isinstance(arbitrary, memoryview):
-        data = as_column(
-            np.asarray(arbitrary), dtype=dtype, nan_as_null=nan_as_null
+    elif (view := as_memoryview(arbitrary)) is not None:
+        return as_column(
+            np.asarray(view), dtype=dtype, nan_as_null=nan_as_null
         )
     elif isinstance(arbitrary, cudf.Scalar):
         data = ColumnBase.from_scalar(arbitrary, length if length else 1)
     else:
+        if dtype is not None:
+            # Arrow throws a type error if the input is of
+            # mixed-precision and cannot fit into the provided
+            # decimal type properly, see:
+            # https://github.com/apache/arrow/pull/9948
+            # Hence we should let the exception propagate to
+            # the user.
+            if isinstance(dtype, cudf.core.dtypes.Decimal128Dtype):
+                data = pa.array(
+                    arbitrary,
+                    type=pa.decimal128(
+                        precision=dtype.precision, scale=dtype.scale
+                    ),
+                )
+                return cudf.core.column.Decimal128Column.from_arrow(data)
+            elif isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
+                data = pa.array(
+                    arbitrary,
+                    type=pa.decimal128(
+                        precision=dtype.precision, scale=dtype.scale
+                    ),
+                )
+                return cudf.core.column.Decimal64Column.from_arrow(data)
+            elif isinstance(dtype, cudf.core.dtypes.Decimal32Dtype):
+                data = pa.array(
+                    arbitrary,
+                    type=pa.decimal128(
+                        precision=dtype.precision, scale=dtype.scale
+                    ),
+                )
+                return cudf.core.column.Decimal32Column.from_arrow(data)
+
+        pa_type = None
+        np_type = None
         try:
-            data = as_column(
-                memoryview(arbitrary), dtype=dtype, nan_as_null=nan_as_null
-            )
-        except TypeError:
             if dtype is not None:
-                # Arrow throws a type error if the input is of
-                # mixed-precision and cannot fit into the provided
-                # decimal type properly, see:
-                # https://github.com/apache/arrow/pull/9948
-                # Hence we should let the exception propagate to
-                # the user.
-                if isinstance(dtype, cudf.core.dtypes.Decimal128Dtype):
+                if is_categorical_dtype(dtype) or is_interval_dtype(dtype):
+                    raise TypeError
+                if is_datetime64tz_dtype(dtype):
+                    raise NotImplementedError(
+                        "Use `tz_localize()` to construct "
+                        "timezone aware data."
+                    )
+                elif is_datetime64_dtype(dtype):
+                    # Error checking only, actual construction happens
+                    # below.
+                    pa_array = pa.array(arbitrary)
+                    if (
+                        isinstance(pa_array.type, pa.TimestampType)
+                        and pa_array.type.tz is not None
+                    ):
+                        raise NotImplementedError(
+                            "cuDF does not yet support timezone-aware "
+                            "datetimes"
+                        )
+                if is_list_dtype(dtype):
+                    data = pa.array(arbitrary)
+                    if type(data) not in (pa.ListArray, pa.NullArray):
+                        raise ValueError(
+                            "Cannot create list column from given data"
+                        )
+                    return as_column(data, nan_as_null=nan_as_null)
+                elif isinstance(dtype, cudf.StructDtype) and not isinstance(
+                    dtype, cudf.IntervalDtype
+                ):
+                    data = pa.array(arbitrary, type=dtype.to_arrow())
+                    return as_column(data, nan_as_null=nan_as_null)
+                elif isinstance(dtype, cudf.core.dtypes.Decimal128Dtype):
                     data = pa.array(
                         arbitrary,
                         type=pa.decimal128(
@@ -2365,196 +2408,122 @@ def as_column(
                         ),
                     )
                     return cudf.core.column.Decimal32Column.from_arrow(data)
-
-            pa_type = None
-            np_type = None
-            try:
-                if dtype is not None:
-                    if is_categorical_dtype(dtype) or is_interval_dtype(dtype):
-                        raise TypeError
-                    if is_datetime64tz_dtype(dtype):
+                if is_bool_dtype(dtype):
+                    # Need this special case handling for bool dtypes,
+                    # since 'boolean' & 'pd.BooleanDtype' are not
+                    # understood by np.dtype below.
+                    dtype = "bool"
+                np_dtype = np.dtype(dtype)
+                if np_dtype.kind in {"m", "M"}:
+                    unit = np.datetime_data(np_dtype)[0]
+                    if unit not in {"ns", "us", "ms", "s", "D"}:
                         raise NotImplementedError(
-                            "Use `tz_localize()` to construct "
-                            "timezone aware data."
+                            f"{dtype=} is not supported."
                         )
-                    elif is_datetime64_dtype(dtype):
-                        # Error checking only, actual construction happens
-                        # below.
-                        pa_array = pa.array(arbitrary)
-                        if (
-                            isinstance(pa_array.type, pa.TimestampType)
-                            and pa_array.type.tz is not None
-                        ):
-                            raise NotImplementedError(
-                                "cuDF does not yet support timezone-aware "
-                                "datetimes"
-                            )
-                    if is_list_dtype(dtype):
-                        data = pa.array(arbitrary)
-                        if type(data) not in (pa.ListArray, pa.NullArray):
-                            raise ValueError(
-                                "Cannot create list column from given data"
-                            )
-                        return as_column(data, nan_as_null=nan_as_null)
-                    elif isinstance(
-                        dtype, cudf.StructDtype
-                    ) and not isinstance(dtype, cudf.IntervalDtype):
-                        data = pa.array(arbitrary, type=dtype.to_arrow())
-                        return as_column(data, nan_as_null=nan_as_null)
-                    elif isinstance(dtype, cudf.core.dtypes.Decimal128Dtype):
-                        data = pa.array(
-                            arbitrary,
-                            type=pa.decimal128(
-                                precision=dtype.precision, scale=dtype.scale
-                            ),
-                        )
-                        return cudf.core.column.Decimal128Column.from_arrow(
-                            data
-                        )
-                    elif isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
-                        data = pa.array(
-                            arbitrary,
-                            type=pa.decimal128(
-                                precision=dtype.precision, scale=dtype.scale
-                            ),
-                        )
-                        return cudf.core.column.Decimal64Column.from_arrow(
-                            data
-                        )
-                    elif isinstance(dtype, cudf.core.dtypes.Decimal32Dtype):
-                        data = pa.array(
-                            arbitrary,
-                            type=pa.decimal128(
-                                precision=dtype.precision, scale=dtype.scale
-                            ),
-                        )
-                        return cudf.core.column.Decimal32Column.from_arrow(
-                            data
-                        )
-                    if is_bool_dtype(dtype):
-                        # Need this special case handling for bool dtypes,
-                        # since 'boolean' & 'pd.BooleanDtype' are not
-                        # understood by np.dtype below.
-                        dtype = "bool"
-                    np_dtype = np.dtype(dtype)
-                    if np_dtype.kind in {"m", "M"}:
-                        unit = np.datetime_data(np_dtype)[0]
-                        if unit not in {"ns", "us", "ms", "s", "D"}:
-                            raise NotImplementedError(
-                                f"{dtype=} is not supported."
-                            )
-                    np_type = np_dtype.type
-                    pa_type = np_to_pa_dtype(np_dtype)
-                else:
-                    # By default cudf constructs a 64-bit column. Setting
-                    # the `default_*_bitwidth` to 32 will result in a 32-bit
-                    # column being created.
-                    if (
-                        cudf.get_option("default_integer_bitwidth")
-                        and infer_dtype(arbitrary) == "integer"
-                    ):
-                        pa_type = np_to_pa_dtype(
-                            _maybe_convert_to_default_type("int")
-                        )
-                    if cudf.get_option(
-                        "default_float_bitwidth"
-                    ) and infer_dtype(arbitrary) in (
-                        "floating",
-                        "mixed-integer-float",
-                    ):
-                        pa_type = np_to_pa_dtype(
-                            _maybe_convert_to_default_type("float")
-                        )
-
+                np_type = np_dtype.type
+                pa_type = np_to_pa_dtype(np_dtype)
+            else:
+                # By default cudf constructs a 64-bit column. Setting
+                # the `default_*_bitwidth` to 32 will result in a 32-bit
+                # column being created.
                 if (
-                    cudf.get_option("mode.pandas_compatible")
-                    and isinstance(
-                        arbitrary, (pd.Index, pd.api.extensions.ExtensionArray)
-                    )
-                    and _is_pandas_nullable_extension_dtype(arbitrary.dtype)
+                    cudf.get_option("default_integer_bitwidth")
+                    and infer_dtype(arbitrary) == "integer"
                 ):
-                    raise NotImplementedError("not supported")
+                    pa_type = np_to_pa_dtype(
+                        _maybe_convert_to_default_type("int")
+                    )
+                if cudf.get_option("default_float_bitwidth") and infer_dtype(
+                    arbitrary
+                ) in (
+                    "floating",
+                    "mixed-integer-float",
+                ):
+                    pa_type = np_to_pa_dtype(
+                        _maybe_convert_to_default_type("float")
+                    )
 
-                pyarrow_array = pa.array(
-                    arbitrary,
-                    type=pa_type,
-                    from_pandas=True if nan_as_null is None else nan_as_null,
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and isinstance(
+                    arbitrary, (pd.Index, pd.api.extensions.ExtensionArray)
                 )
+                and _is_pandas_nullable_extension_dtype(arbitrary.dtype)
+            ):
+                raise NotImplementedError("not supported")
 
-                if (
-                    isinstance(pyarrow_array, pa.NullArray)
-                    and pa_type is None
-                    and dtype is None
-                    and getattr(arbitrary, "dtype", None)
-                    == cudf.dtype("object")
-                ):
-                    # pa.array constructor returns a NullArray
-                    # for empty arrays, instead of a StringArray.
-                    # This issue is only specific to this dtype,
-                    # all other dtypes, result in their corresponding
-                    # arrow array creation.
-                    dtype = cudf.dtype("str")
-                    pyarrow_array = pyarrow_array.cast(np_to_pa_dtype(dtype))
+            pyarrow_array = pa.array(
+                arbitrary,
+                type=pa_type,
+                from_pandas=True if nan_as_null is None else nan_as_null,
+            )
 
-                if (
-                    isinstance(arbitrary, pd.Index)
-                    and arbitrary.dtype == cudf.dtype("object")
-                    and (
-                        cudf.dtype(pyarrow_array.type.to_pandas_dtype())
-                        != cudf.dtype(arbitrary.dtype)
-                    )
-                ):
-                    raise MixedTypeError(
-                        "Cannot create column with mixed types"
-                    )
+            if (
+                isinstance(pyarrow_array, pa.NullArray)
+                and pa_type is None
+                and dtype is None
+                and getattr(arbitrary, "dtype", None) == cudf.dtype("object")
+            ):
+                # pa.array constructor returns a NullArray
+                # for empty arrays, instead of a StringArray.
+                # This issue is only specific to this dtype,
+                # all other dtypes, result in their corresponding
+                # arrow array creation.
+                dtype = cudf.dtype("str")
+                pyarrow_array = pyarrow_array.cast(np_to_pa_dtype(dtype))
 
-                if (
-                    cudf.get_option("mode.pandas_compatible")
-                    and pa.types.is_integer(pyarrow_array.type)
-                    and pyarrow_array.null_count
-                ):
-                    pyarrow_array = pyarrow_array.cast("float64").fill_null(
-                        np.nan
-                    )
+            if (
+                isinstance(arbitrary, pd.Index)
+                and arbitrary.dtype == cudf.dtype("object")
+                and (
+                    cudf.dtype(pyarrow_array.type.to_pandas_dtype())
+                    != cudf.dtype(arbitrary.dtype)
+                )
+            ):
+                raise MixedTypeError("Cannot create column with mixed types")
 
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and pa.types.is_integer(pyarrow_array.type)
+                and pyarrow_array.null_count
+            ):
+                pyarrow_array = pyarrow_array.cast("float64").fill_null(np.nan)
+
+            data = as_column(
+                pyarrow_array,
+                dtype=dtype,
+                nan_as_null=nan_as_null,
+            )
+        except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError) as e:
+            if isinstance(e, MixedTypeError):
+                raise TypeError(str(e))
+            if is_categorical_dtype(dtype):
+                sr = pd.Series(arbitrary, dtype="category")
+                data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
+            elif np_type == np.str_:
+                sr = pd.Series(arbitrary, dtype="str")
+                data = as_column(sr, nan_as_null=nan_as_null)
+            elif is_interval_dtype(dtype):
+                sr = pd.Series(arbitrary, dtype="interval")
+                data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
+            elif (
+                isinstance(arbitrary, Sequence)
+                and len(arbitrary) > 0
+                and any(
+                    cudf.utils.dtypes.is_column_like(arb) for arb in arbitrary
+                )
+            ):
+                return cudf.core.column.ListColumn.from_sequences(arbitrary)
+            elif isinstance(arbitrary, abc.Iterable) or isinstance(
+                arbitrary, abc.Sequence
+            ):
                 data = as_column(
-                    pyarrow_array,
+                    _construct_array(arbitrary, dtype),
                     dtype=dtype,
                     nan_as_null=nan_as_null,
                 )
-            except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError) as e:
-                if isinstance(e, MixedTypeError):
-                    raise TypeError(str(e))
-                if is_categorical_dtype(dtype):
-                    sr = pd.Series(arbitrary, dtype="category")
-                    data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
-                elif np_type == np.str_:
-                    sr = pd.Series(arbitrary, dtype="str")
-                    data = as_column(sr, nan_as_null=nan_as_null)
-                elif is_interval_dtype(dtype):
-                    sr = pd.Series(arbitrary, dtype="interval")
-                    data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
-                elif (
-                    isinstance(arbitrary, Sequence)
-                    and len(arbitrary) > 0
-                    and any(
-                        cudf.utils.dtypes.is_column_like(arb)
-                        for arb in arbitrary
-                    )
-                ):
-                    return cudf.core.column.ListColumn.from_sequences(
-                        arbitrary
-                    )
-                elif isinstance(arbitrary, abc.Iterable) or isinstance(
-                    arbitrary, abc.Sequence
-                ):
-                    data = as_column(
-                        _construct_array(arbitrary, dtype),
-                        dtype=dtype,
-                        nan_as_null=nan_as_null,
-                    )
-                else:
-                    raise e
+            else:
+                raise e
     return data
 
 
