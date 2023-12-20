@@ -38,12 +38,11 @@ namespace detail {
  * @brief Class that provides RAII for file handling.
  */
 class file_wrapper {
-  int fd = -1;
-  size_t _size;
+  int fd       = -1;
+  size_t _size = 0;
 
  public:
-  explicit file_wrapper(std::string const& filepath, int flags);
-  explicit file_wrapper(std::string const& filepath, int flags, mode_t mode);
+  explicit file_wrapper(std::string const& filepath, int flags, mode_t mode = 0);
   ~file_wrapper();
   [[nodiscard]] auto size() const { return _size; }
   [[nodiscard]] auto desc() const { return fd; }
