@@ -60,31 +60,15 @@ cudf::test::TempDirTestEnvironment* const temp_env =
     ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
 // Declare typed test cases
-// TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5352
-using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool, float, double>;
 TYPED_TEST_SUITE(ParquetWriterNumericTypeTest, SupportedTypes);
-
-using ComparableAndFixedTypes =
-  cudf::test::Concat<cudf::test::ComparableTypes, cudf::test::FixedPointTypes>;
 TYPED_TEST_SUITE(ParquetWriterComparableTypeTest, ComparableAndFixedTypes);
 TYPED_TEST_SUITE(ParquetWriterChronoTypeTest, cudf::test::ChronoTypes);
-
-using SupportedTimestampTypes =
-  cudf::test::Types<cudf::timestamp_ms, cudf::timestamp_us, cudf::timestamp_ns>;
 TYPED_TEST_SUITE(ParquetWriterTimestampTypeTest, SupportedTimestampTypes);
 TYPED_TEST_SUITE(ParquetWriterSchemaTest, cudf::test::AllTypes);
-
-using ByteLikeTypes = cudf::test::Types<int8_t, char, uint8_t, unsigned char, std::byte>;
 TYPED_TEST_SUITE(ParquetReaderSourceTest, ByteLikeTypes);
 
 // Declare typed test cases
 TYPED_TEST_SUITE(ParquetChunkedWriterNumericTypeTest, SupportedTypes);
-
-// test the allowed bit widths for dictionary encoding
-INSTANTIATE_TEST_SUITE_P(ParquetDictionaryTest,
-                         ParquetSizedTest,
-                         testing::Range(1, 25),
-                         testing::PrintToStringParamName());
 
 INSTANTIATE_TEST_SUITE_P(ParquetV2ReadWriteTest,
                          ParquetV2Test,
@@ -1211,57 +1195,6 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
   }
 }
 
-TEST_P(ParquetSizedTest, DictionaryTest)
-{
-  unsigned int const cardinality = (1 << (GetParam() - 1)) + 1;
-  unsigned int const nrows       = std::max(cardinality * 3 / 2, 3'000'000U);
-
-  auto elements       = cudf::detail::make_counting_transform_iterator(0, [cardinality](auto i) {
-    return "a unique string value suffixed with " + std::to_string(i % cardinality);
-  });
-  auto const col0     = cudf::test::strings_column_wrapper(elements, elements + nrows);
-  auto const expected = table_view{{col0}};
-
-  auto const filepath = temp_env->get_temp_filepath("DictionaryTest.parquet");
-  // set row group size so that there will be only one row group
-  // no compression so we can easily read page data
-  cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .compression(cudf::io::compression_type::NONE)
-      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
-      .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
-      .row_group_size_rows(nrows)
-      .row_group_size_bytes(512 * 1024 * 1024);
-  cudf::io::write_parquet(out_opts);
-
-  cudf::io::parquet_reader_options default_in_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
-  auto const result = cudf::io::read_parquet(default_in_opts);
-
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
-
-  // make sure dictionary was used
-  auto const source = cudf::io::datasource::create(filepath);
-  cudf::io::parquet::detail::FileMetaData fmd;
-
-  read_footer(source, &fmd);
-  auto used_dict = [&fmd]() {
-    for (auto enc : fmd.row_groups[0].columns[0].meta_data.encodings) {
-      if (enc == cudf::io::parquet::detail::Encoding::PLAIN_DICTIONARY or
-          enc == cudf::io::parquet::detail::Encoding::RLE_DICTIONARY) {
-        return true;
-      }
-    }
-    return false;
-  };
-  EXPECT_TRUE(used_dict());
-
-  // and check that the correct number of bits was used
-  auto const oi    = read_offset_index(source, fmd.row_groups[0].columns[0]);
-  auto const nbits = read_dict_bits(source, oi.page_locations[0]);
-  EXPECT_EQ(nbits, GetParam());
-}
-
 TYPED_TEST(ParquetReaderSourceTest, BufferSourceTypes)
 {
   using T = TypeParam;
@@ -1503,14 +1436,6 @@ TEST_F(ParquetMetadataReaderTest, TestNested)
   EXPECT_EQ(out_float_col.type_kind(), cudf::io::parquet::TypeKind::FLOAT);
 }
 
-// These chrono types are not supported because parquet writer does not have a type to represent
-// them.
-using UnsupportedChronoTypes =
-  cudf::test::Types<cudf::timestamp_s, cudf::duration_D, cudf::duration_s>;
-// Also fixed point types unsupported, because AST does not support them yet.
-using SupportedTestTypes = cudf::test::RemoveIf<cudf::test::ContainedIn<UnsupportedChronoTypes>,
-                                                cudf::test::ComparableTypes>;
-
 TYPED_TEST_SUITE(ParquetReaderPredicatePushdownTest, SupportedTestTypes);
 
 TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
@@ -1563,104 +1488,6 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
   EXPECT_EQ(result_table.num_rows(), expected->num_rows());
   EXPECT_EQ(result_table.num_columns(), expected->num_columns());
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result_table);
-}
-
-// removing duration_D, duration_s, and timestamp_s as they don't appear to be supported properly.
-// see definition of UnsupportedChronoTypes above.
-using DeltaDecimalTypes = cudf::test::Types<numeric::decimal32, numeric::decimal64>;
-using DeltaBinaryTypes =
-  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::ChronoTypes, DeltaDecimalTypes>;
-using SupportedDeltaTestTypes =
-  cudf::test::RemoveIf<cudf::test::ContainedIn<UnsupportedChronoTypes>, DeltaBinaryTypes>;
-TYPED_TEST_SUITE(ParquetWriterDeltaTest, SupportedDeltaTestTypes);
-
-TYPED_TEST(ParquetWriterDeltaTest, SupportedDeltaTestTypes)
-{
-  using T   = TypeParam;
-  auto col0 = testdata::ascending<T>();
-  auto col1 = testdata::unordered<T>();
-
-  auto const expected = table_view{{col0, col1}};
-
-  auto const filepath = temp_env->get_temp_filepath("DeltaBinaryPacked.parquet");
-  cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .write_v2_headers(true)
-      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
-  cudf::io::write_parquet(out_opts);
-
-  cudf::io::parquet_reader_options in_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
-  auto result = cudf::io::read_parquet(in_opts);
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
-}
-
-TYPED_TEST(ParquetWriterDeltaTest, SupportedDeltaTestTypesSliced)
-{
-  using T                = TypeParam;
-  constexpr int num_rows = 4'000;
-  auto col0              = testdata::ascending<T>();
-  auto col1              = testdata::unordered<T>();
-
-  auto const expected = table_view{{col0, col1}};
-  auto expected_slice = cudf::slice(expected, {num_rows, 2 * num_rows});
-  ASSERT_EQ(expected_slice[0].num_rows(), num_rows);
-
-  auto const filepath = temp_env->get_temp_filepath("DeltaBinaryPackedSliced.parquet");
-  cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected_slice)
-      .write_v2_headers(true)
-      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
-  cudf::io::write_parquet(out_opts);
-
-  cudf::io::parquet_reader_options in_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
-  auto result = cudf::io::read_parquet(in_opts);
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_slice, result.tbl->view());
-}
-
-TYPED_TEST(ParquetWriterDeltaTest, SupportedDeltaListSliced)
-{
-  using T = TypeParam;
-
-  constexpr int num_slice = 4'000;
-  constexpr int num_rows  = 32 * 1024;
-
-  std::mt19937 gen(6542);
-  std::bernoulli_distribution bn(0.7f);
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
-  auto values = thrust::make_counting_iterator(0);
-
-  // list<T>
-  constexpr int vals_per_row = 4;
-  auto c1_offset_iter        = cudf::detail::make_counting_transform_iterator(
-    0, [vals_per_row](cudf::size_type idx) { return idx * vals_per_row; });
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> c1_offsets(c1_offset_iter,
-                                                                     c1_offset_iter + num_rows + 1);
-  cudf::test::fixed_width_column_wrapper<T> c1_vals(
-    values, values + (num_rows * vals_per_row), valids);
-  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
-
-  auto _c1 = cudf::make_lists_column(
-    num_rows, c1_offsets.release(), c1_vals.release(), null_count, std::move(null_mask));
-  auto c1 = cudf::purge_nonempty_nulls(*_c1);
-
-  auto const expected = table_view{{*c1}};
-  auto expected_slice = cudf::slice(expected, {num_slice, 2 * num_slice});
-  ASSERT_EQ(expected_slice[0].num_rows(), num_slice);
-
-  auto const filepath = temp_env->get_temp_filepath("DeltaBinaryPackedListSliced.parquet");
-  cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected_slice)
-      .write_v2_headers(true)
-      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
-  cudf::io::write_parquet(out_opts);
-
-  cudf::io::parquet_reader_options in_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
-  auto result = cudf::io::read_parquet(in_opts);
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_slice, result.tbl->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
