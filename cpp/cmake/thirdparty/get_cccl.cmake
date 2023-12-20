@@ -23,8 +23,8 @@ function(find_and_configure_cccl)
 
   # Make sure we install cccl into the `include/libcudf` subdirectory instead of the default
   include(GNUInstallDirs)
-  set(CMAKE_INSTALL_INCLUDEDIR "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/include")
   set(CMAKE_INSTALL_LIBDIR "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/lib")
+  set(CMAKE_INSTALL_INCLUDEDIR "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/include")
 
   # Store where CMake can find our custom CCCL install
   include("${rapids-cmake-dir}/export/find_package_root.cmake")
