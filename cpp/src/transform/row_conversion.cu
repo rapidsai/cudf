@@ -1560,14 +1560,8 @@ batch_data build_batches(size_type num_rows,
   size_type last_row_end = 0;
   device_uvector<uint64_t> cumulative_row_sizes(num_rows, stream);
 
-  // Evaluate the row size values before calling `inclusive_scan` to workaround
-  // memory issue in https://github.com/NVIDIA/spark-rapids-jni/issues/1567.
-  thrust::copy(
+  thrust::inclusive_scan(
     rmm::exec_policy(stream), row_sizes, row_sizes + num_rows, cumulative_row_sizes.begin());
-  thrust::inclusive_scan(rmm::exec_policy(stream),
-                         cumulative_row_sizes.begin(),
-                         cumulative_row_sizes.end(),
-                         cumulative_row_sizes.begin());
 
   // This needs to be split this into 2 gig batches. Care must be taken to avoid a batch larger than
   // 2 gigs. Imagine a table with 900 meg rows. The batches should occur every 2 rows, but if a
