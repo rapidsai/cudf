@@ -29,6 +29,7 @@
 #include <src/io/parquet/parquet.hpp>
 #include <src/io/parquet/parquet_gpu.hpp>
 
+#include <random>
 #include <type_traits>
 
 template <typename T, typename SourceElementT = T>
@@ -181,6 +182,31 @@ cudf::io::parquet::detail::Statistics const& get_statistics(
 cudf::io::parquet::detail::PageHeader read_page_header(
   std::unique_ptr<cudf::io::datasource> const& source,
   cudf::io::parquet::detail::PageLocation const& page_loc);
+
+// make a random validity iterator
+inline auto random_validity(std::mt19937& engine)
+{
+  static std::bernoulli_distribution bn(0.7f);
+  return cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(engine); });
+}
+
+// make a random list<T> column
+template <typename T>
+std::unique_ptr<cudf::column> make_parquet_list_col(std::mt19937& engine,
+                                                    int num_rows,
+                                                    int max_vals_per_row,
+                                                    bool include_validity);
+
+// return vector of random strings
+std::vector<std::string> string_values(std::mt19937& engine, int num_rows, int max_string_len);
+
+// make a random list<string> column, with random string lengths of 0..max_string_len,
+// and up to max_vals_per_row strings in each list.
+std::unique_ptr<cudf::column> make_parquet_string_list_col(std::mt19937& engine,
+                                                           int num_rows,
+                                                           int max_vals_per_row,
+                                                           int max_string_len,
+                                                           bool include_validity);
 
 // =============================================================================
 // ---- test data for stats sort order tests

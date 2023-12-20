@@ -542,3 +542,120 @@ template cudf::test::strings_column_wrapper descending<cudf::string_view>();
 template cudf::test::strings_column_wrapper unordered<cudf::string_view>();
 
 }  // namespace testdata
+
+template <typename T>
+std::unique_ptr<cudf::column> make_parquet_list_col(std::mt19937& engine,
+                                                    int num_rows,
+                                                    int max_vals_per_row,
+                                                    bool include_validity)
+{
+  std::vector<cudf::size_type> row_sizes(num_rows);
+
+  auto const min_values_per_row = include_validity ? 0 : 1;
+  std::uniform_int_distribution<cudf::size_type> dist{min_values_per_row, max_vals_per_row};
+  std::generate_n(row_sizes.begin(), num_rows, [&]() { return cudf::size_type{dist(engine)}; });
+
+  std::vector<cudf::size_type> offsets(num_rows + 1);
+  std::exclusive_scan(row_sizes.begin(), row_sizes.end(), offsets.begin(), 0);
+  offsets[num_rows] = offsets[num_rows - 1] + row_sizes.back();
+
+  std::vector<T> values = random_values<T>(offsets[num_rows]);
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets_col(offsets.begin(),
+                                                                      offsets.end());
+
+  if (include_validity) {
+    auto valids = random_validity(engine);
+    auto values_col =
+      cudf::test::fixed_width_column_wrapper<T>(values.begin(), values.end(), valids);
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
+
+    auto col = cudf::make_lists_column(
+      num_rows, offsets_col.release(), values_col.release(), null_count, std::move(null_mask));
+    return cudf::purge_nonempty_nulls(*col);
+  } else {
+    auto values_col = cudf::test::fixed_width_column_wrapper<T>(values.begin(), values.end());
+    return cudf::make_lists_column(num_rows,
+                                   offsets_col.release(),
+                                   values_col.release(),
+                                   0,
+                                   cudf::create_null_mask(num_rows, cudf::mask_state::ALL_VALID));
+  }
+}
+
+template std::unique_ptr<cudf::column> make_parquet_list_col<int8_t>(std::mt19937& engine,
+                                                                     int num_rows,
+                                                                     int max_vals_per_row,
+                                                                     bool include_validity);
+template std::unique_ptr<cudf::column> make_parquet_list_col<int16_t>(std::mt19937& engine,
+                                                                      int num_rows,
+                                                                      int max_vals_per_row,
+                                                                      bool include_validity);
+template std::unique_ptr<cudf::column> make_parquet_list_col<int32_t>(std::mt19937& engine,
+                                                                      int num_rows,
+                                                                      int max_vals_per_row,
+                                                                      bool include_validity);
+template std::unique_ptr<cudf::column> make_parquet_list_col<int64_t>(std::mt19937& engine,
+                                                                      int num_rows,
+                                                                      int max_vals_per_row,
+                                                                      bool include_validity);
+
+std::vector<std::string> string_values(std::mt19937& engine, int num_rows, int max_string_len)
+{
+  static std::uniform_int_distribution<char> char_dist{'a', 'z'};
+  static std::uniform_int_distribution<cudf::size_type> strlen_dist{1, max_string_len};
+
+  std::vector<std::string> values(num_rows);
+  std::generate_n(values.begin(), values.size(), [&]() {
+    int str_len     = strlen_dist(engine);
+    std::string res = "";
+    for (int i = 0; i < str_len; i++) {
+      res += char_dist(engine);
+    }
+    return res;
+  });
+
+  return values;
+}
+
+// make a random list<string> column, with random string lengths of 0..max_string_len,
+// and up to max_vals_per_row strings in each list.
+std::unique_ptr<cudf::column> make_parquet_string_list_col(std::mt19937& engine,
+                                                           int num_rows,
+                                                           int max_vals_per_row,
+                                                           int max_string_len,
+                                                           bool include_validity)
+{
+  auto const range_min = include_validity ? 0 : 1;
+
+  std::uniform_int_distribution<cudf::size_type> dist{range_min, max_vals_per_row};
+
+  std::vector<cudf::size_type> row_sizes(num_rows);
+  std::generate_n(row_sizes.begin(), num_rows, [&]() { return cudf::size_type{dist(engine)}; });
+
+  std::vector<cudf::size_type> offsets(num_rows + 1);
+  std::exclusive_scan(row_sizes.begin(), row_sizes.end(), offsets.begin(), 0);
+  offsets[num_rows] = offsets[num_rows - 1] + row_sizes.back();
+
+  std::uniform_int_distribution<cudf::size_type> strlen_dist{range_min, max_string_len};
+  auto const values = string_values(engine, offsets[num_rows], max_string_len);
+
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets_col(offsets.begin(),
+                                                                      offsets.end());
+
+  if (include_validity) {
+    auto valids     = random_validity(engine);
+    auto values_col = cudf::test::strings_column_wrapper(values.begin(), values.end(), valids);
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
+
+    auto col = cudf::make_lists_column(
+      num_rows, offsets_col.release(), values_col.release(), null_count, std::move(null_mask));
+    return cudf::purge_nonempty_nulls(*col);
+  } else {
+    auto values_col = cudf::test::strings_column_wrapper(values.begin(), values.end());
+    return cudf::make_lists_column(num_rows,
+                                   offsets_col.release(),
+                                   values_col.release(),
+                                   0,
+                                   cudf::create_null_mask(num_rows, cudf::mask_state::ALL_VALID));
+  }
+}
