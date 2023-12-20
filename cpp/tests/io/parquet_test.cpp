@@ -7280,6 +7280,24 @@ TEST_F(ParquetReaderTest, DeltaSkipRowsWithNulls)
     std::vector<cudf::table_view> expected = cudf::slice(tbl, slice_indices);
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view(), expected[0]);
+
+    // test writing the result back out as a further check of the delta writer's correctness
+    std::vector<char> out_buffer;
+    cudf::io::parquet_writer_options out_opts2 =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&out_buffer},
+                                                result.tbl->view())
+        .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+        .compression(cudf::io::compression_type::NONE)
+        .dictionary_policy(cudf::io::dictionary_policy::NEVER)
+        .max_page_size_rows(20'000)
+        .write_v2_headers(true);
+    cudf::io::write_parquet(out_opts2);
+
+    cudf::io::parquet_reader_options default_in_opts = cudf::io::parquet_reader_options::builder(
+      cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+    auto const result2 = cudf::io::read_parquet(default_in_opts);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view(), result2.tbl->view());
   }
 }
 
