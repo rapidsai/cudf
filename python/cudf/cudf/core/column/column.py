@@ -2041,6 +2041,8 @@ def as_column(
                 new_dtype = "str"
 
             col = col.astype(new_dtype)
+        elif dtype is not None:
+            col = col.astype(dtype)
 
         return col
 
@@ -2211,10 +2213,12 @@ def as_column(
                     dtype=dtype,
                     length=length,
                 )
+            if pd.isna(arbitrary).any():
+                arbitrary = pa.array(arbitrary)
+            else:
+                arbitrary = pd.Series(arbitrary)
             # Let pandas potentially infer object type
-            return as_column(
-                pd.Series(arbitrary), dtype=dtype, nan_as_null=nan_as_null
-            )
+            return as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null)
         elif arbitrary.dtype.kind in "biuf":
             from_pandas = nan_as_null is None or nan_as_null
             return as_column(
