@@ -1352,12 +1352,12 @@ def test_delta_binary(nrows, add_nulls, dtype, tmpdir):
 
 @pytest.mark.parametrize("nrows", delta_num_rows())
 @pytest.mark.parametrize("add_nulls", [True, False])
-@pytest.mark.parametrize("max_string_len", [12, 48, 96, 128])
+@pytest.mark.parametrize("max_string_length", [12, 48, 96, 128])
 @pytest.mark.parametrize(
     "str_encoding", ["DELTA_BYTE_ARRAY", "DELTA_LENGTH_BYTE_ARRAY"]
 )
 def test_delta_byte_array_roundtrip(
-    nrows, add_nulls, max_string_len, str_encoding, tmpdir
+    nrows, add_nulls, max_string_length, str_encoding, tmpdir
 ):
     null_frequency = 0.25 if add_nulls else 0
 
@@ -1368,7 +1368,7 @@ def test_delta_byte_array_roundtrip(
                 "dtype": "str",
                 "null_frequency": null_frequency,
                 "cardinality": nrows,
-                "max_string_length": max_string_len,
+                "max_string_length": max_string_length,
             },
         ],
         rows=nrows,
