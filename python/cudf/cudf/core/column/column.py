@@ -2200,7 +2200,7 @@ def as_column(
         # CUDF assumes values are always contiguous
         arbitrary = np.asarray(arbitrary, order="C")
 
-        if arbitrary.dtype.kind == "OSU":
+        if arbitrary.dtype.kind in "OSU":
             # Handle case that `arbitrary` elements are cupy arrays
             if len(arbitrary) > 0 and hasattr(
                 arbitrary[0], "__cuda_array_interface__"
