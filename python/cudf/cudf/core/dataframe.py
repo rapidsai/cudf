@@ -6251,7 +6251,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ]
 
         if len(mode_results) == 0:
-            return data_df.head(0)
+            result = data_df.head(0)
+            result.index = cudf.RangeIndex(0)
+            return result
 
         df = cudf.concat(mode_results, axis=1)
         if isinstance(df, Series):
