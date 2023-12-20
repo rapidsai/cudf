@@ -284,7 +284,7 @@ ConfigureTest(
   PERCENT 30
 )
 ConfigureTest(
-  PARQUET_TEST io/parquet_test.cpp io/parquet_chunked_reader_test.cpp
+  PARQUET_TEST io/parquet_test.cpp io/parquet_chunked_reader_test.cpp io/parquet_common.cpp
   GPUS 1
   PERCENT 30
 )
