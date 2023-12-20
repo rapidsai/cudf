@@ -692,9 +692,9 @@ std::pair<cudf::table, std::string> create_parquet_typed_with_stats(std::string 
   return std::pair{cudf::table{std::move(columns)}, filepath};
 }
 
-#define TYPED_WITH_STATS(type) \
-template std::pair<cudf::table, std::string> create_parquet_typed_with_stats<type>( \
-  std::string const& filename)
+#define TYPED_WITH_STATS(type)                                                        \
+  template std::pair<cudf::table, std::string> create_parquet_typed_with_stats<type>( \
+    std::string const& filename)
 
 TYPED_WITH_STATS(cudf::string_view);
 TYPED_WITH_STATS(bool);
@@ -721,3 +721,73 @@ TYPED_WITH_STATS(cudf::timestamp_ns);
 TYPED_WITH_STATS(numeric::decimal32);
 TYPED_WITH_STATS(numeric::decimal64);
 TYPED_WITH_STATS(numeric::decimal128);
+
+// utility functions for column index tests
+
+// compare two values.  return -1 if v1 < v2,
+// 0 if v1 == v2, and 1 if v1 > v2.
+template <typename T>
+int32_t compare(T& v1, T& v2)
+{
+  return (v1 > v2) - (v1 < v2);
+}
+
+// compare two binary statistics blobs based on their physical
+// and converted types. returns -1 if v1 < v2, 0 if v1 == v2, and
+// 1 if v1 > v2.
+int32_t compare_binary(std::vector<uint8_t> const& v1,
+                       std::vector<uint8_t> const& v2,
+                       cudf::io::parquet::detail::Type ptype,
+                       thrust::optional<cudf::io::parquet::detail::ConvertedType> const& ctype)
+{
+  auto ctype_val = ctype.value_or(cudf::io::parquet::detail::UNKNOWN);
+  switch (ptype) {
+    case cudf::io::parquet::detail::INT32:
+      switch (ctype_val) {
+        case cudf::io::parquet::detail::UINT_8:
+        case cudf::io::parquet::detail::UINT_16:
+        case cudf::io::parquet::detail::UINT_32:
+          return compare(*(reinterpret_cast<uint32_t const*>(v1.data())),
+                         *(reinterpret_cast<uint32_t const*>(v2.data())));
+        default:
+          return compare(*(reinterpret_cast<int32_t const*>(v1.data())),
+                         *(reinterpret_cast<int32_t const*>(v2.data())));
+      }
+
+    case cudf::io::parquet::detail::INT64:
+      if (ctype_val == cudf::io::parquet::detail::UINT_64) {
+        return compare(*(reinterpret_cast<uint64_t const*>(v1.data())),
+                       *(reinterpret_cast<uint64_t const*>(v2.data())));
+      }
+      return compare(*(reinterpret_cast<int64_t const*>(v1.data())),
+                     *(reinterpret_cast<int64_t const*>(v2.data())));
+
+    case cudf::io::parquet::detail::FLOAT:
+      return compare(*(reinterpret_cast<float const*>(v1.data())),
+                     *(reinterpret_cast<float const*>(v2.data())));
+
+    case cudf::io::parquet::detail::DOUBLE:
+      return compare(*(reinterpret_cast<double const*>(v1.data())),
+                     *(reinterpret_cast<double const*>(v2.data())));
+
+    case cudf::io::parquet::detail::BYTE_ARRAY: {
+      int32_t v1sz = v1.size();
+      int32_t v2sz = v2.size();
+      int32_t ret  = memcmp(v1.data(), v2.data(), std::min(v1sz, v2sz));
+      if (ret != 0 or v1sz == v2sz) { return ret; }
+      return v1sz - v2sz;
+    }
+
+    default: CUDF_FAIL("Invalid type in compare_binary");
+  }
+
+  return 0;
+}
+
+void expect_compression_stats_empty(std::shared_ptr<cudf::io::writer_compression_statistics> stats)
+{
+  EXPECT_EQ(stats->num_compressed_bytes(), 0);
+  EXPECT_EQ(stats->num_failed_bytes(), 0);
+  EXPECT_EQ(stats->num_skipped_bytes(), 0);
+  EXPECT_TRUE(std::isnan(stats->compression_ratio()));
+}
