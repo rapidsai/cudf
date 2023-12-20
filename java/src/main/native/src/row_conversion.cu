@@ -15,9 +15,9 @@
  */
 
 #include <cooperative_groups.h>
-#include <cuda/functional>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/sequence.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
@@ -61,6 +61,8 @@
 #include <optional>
 #include <tuple>
 
+#include <cuda/functional>
+
 namespace {
 
 constexpr auto JCUDF_ROW_ALIGNMENT = 8;
@@ -82,6 +84,7 @@ constexpr auto NUM_WARPS_IN_BLOCK = 32;
 
 using namespace cudf;
 using detail::make_device_uvector_async;
+using detail::make_device_uvector_sync;
 using rmm::device_uvector;
 
 #ifdef ASYNC_MEMCPY_SUPPORTED
@@ -90,8 +93,7 @@ using cuda::aligned_size_t;
 template <std::size_t> using aligned_size_t = size_t; // Local stub for cuda::aligned_size_t.
 #endif // ASYNC_MEMCPY_SUPPORTED
 
-namespace cudf {
-namespace jni {
+namespace cudf::jni {
 namespace detail {
 
 /*
@@ -227,8 +229,8 @@ build_string_row_offsets(table_view const &tbl, size_type fixed_width_and_validi
     std::copy_if(offsets_iter, offsets_iter + tbl.num_columns(),
                  std::back_inserter(offsets_iterators),
                  [](auto const &offset_ptr) { return offset_ptr != nullptr; });
-    return make_device_uvector_async(offsets_iterators, stream,
-                                     rmm::mr::get_current_device_resource());
+    return make_device_uvector_sync(offsets_iterators, stream,
+                                    rmm::mr::get_current_device_resource());
   }();
 
   auto const num_columns = static_cast<size_type>(d_offsets_iterators.size());
@@ -363,7 +365,7 @@ copy_from_rows_fixed_width_optimized(const size_type num_rows, const size_type n
     // But we might not use all of the threads if the number of rows does not go
     // evenly into the thread count. We don't want those threads to exit yet
     // because we may need them to copy data in for the next row group.
-    uint32_t active_mask = __ballot_sync(0xffff'ffffu, row_index < num_rows);
+    uint32_t active_mask = __ballot_sync(0xffffffff, row_index < num_rows);
     if (row_index < num_rows) {
       auto const col_index_start = threadIdx.y;
       auto const col_index_stride = blockDim.y;
@@ -612,7 +614,6 @@ __global__ void copy_to_rows(const size_type num_rows, const size_type num_colum
   // works on a row
   for (int relative_col = warp.meta_group_rank(); relative_col < num_tile_cols;
        relative_col += warp.meta_group_size()) {
-
     auto const absolute_col = relative_col + tile.start_col;
     auto const col_size = col_sizes[absolute_col];
     auto const col_offset = col_offsets[absolute_col];
@@ -626,7 +627,6 @@ __global__ void copy_to_rows(const size_type num_rows, const size_type num_colum
 
     for (int relative_row = warp.thread_rank(); relative_row < num_tile_rows;
          relative_row += warp.size()) {
-
       if (relative_row >= num_tile_rows) {
         // out of bounds
         continue;
@@ -756,7 +756,7 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
     auto const absolute_col = relative_col + tile.start_col;
     auto const absolute_row = relative_row + tile.start_row;
     auto const participating = absolute_col < num_columns && absolute_row < num_rows;
-    auto const participation_mask = __ballot_sync(0xFFFF'FFFFu, participating);
+    auto const participation_mask = __ballot_sync(0xFFFFFFFF, participating);
 
     if (participating) {
       auto my_data = input_nm[absolute_col] != nullptr ?
@@ -967,7 +967,6 @@ __global__ void copy_from_rows(const size_type num_rows, const size_type num_col
     // than rows, we do a global index instead of a double for loop with col/row.
     for (int relative_row = warp.thread_rank(); relative_row < rows_in_tile;
          relative_row += warp.size()) {
-
       auto const absolute_row = relative_row + tile.start_row;
       auto const shared_memory_row_offset = tile_row_size * relative_row;
 
@@ -1075,7 +1074,7 @@ copy_validity_from_rows(const size_type num_rows, const size_type num_columns,
     auto const row_batch_start =
         tile.batch_number == 0 ? 0 : batch_row_boundaries[tile.batch_number];
 
-    auto const participation_mask = __ballot_sync(0xFFFF'FFFFu, absolute_row < num_rows);
+    auto const participation_mask = __ballot_sync(0xFFFFFFFF, absolute_row < num_rows);
 
     if (absolute_row < num_rows) {
       auto const my_byte = input_data[row_offsets(absolute_row, row_batch_start) + validity_offset +
@@ -1224,8 +1223,8 @@ static int calc_fixed_width_kernel_dims(const size_type num_columns, const size_
   CUDF_EXPECTS(block_size != 0, "Row size is too large to fit in shared memory");
 
   // The maximum number of blocks supported in the x dimension is 2 ^ 31 - 1
-  // but in practice having too many can cause some overhead that I don't totally
-  // understand. Playing around with this having as little as 600 blocks appears
+  // but in practice haveing too many can cause some overhead that I don't totally
+  // understand. Playing around with this haveing as little as 600 blocks appears
   // to be able to saturate memory on V100, so this is an order of magnitude higher
   // to try and future proof this a bit.
   int const num_blocks = std::clamp((num_rows + block_size - 1) / block_size, 1, 10240);
@@ -1275,7 +1274,7 @@ static std::unique_ptr<column> fixed_width_convert_to_rows(
       input_data.data(), input_nm.data(), data->mutable_view().data<int8_t>());
 
   return make_lists_column(num_rows, std::move(offsets), std::move(data), 0,
-                           rmm::device_buffer{0, stream, mr}, stream, mr);
+                           rmm::device_buffer{0, cudf::get_default_stream(), mr}, stream, mr);
 }
 
 static inline bool are_all_fixed_width(std::vector<data_type> const &schema) {
@@ -1482,8 +1481,13 @@ batch_data build_batches(size_type num_rows, RowSize row_sizes, bool all_fixed_w
   batch_row_boundaries.push_back(0);
   size_type last_row_end = 0;
   device_uvector<uint64_t> cumulative_row_sizes(num_rows, stream);
-  thrust::inclusive_scan(rmm::exec_policy(stream), row_sizes, row_sizes + num_rows,
-                         cumulative_row_sizes.begin());
+
+  // Evaluate the row size values before calling `inclusive_scan` to workaround
+  // memory issue in https://github.com/NVIDIA/spark-rapids-jni/issues/1567.
+  thrust::copy(rmm::exec_policy(stream), row_sizes, row_sizes + num_rows,
+               cumulative_row_sizes.begin());
+  thrust::inclusive_scan(rmm::exec_policy(stream), cumulative_row_sizes.begin(),
+                         cumulative_row_sizes.end(), cumulative_row_sizes.begin());
 
   // This needs to be split this into 2 gig batches. Care must be taken to avoid a batch larger than
   // 2 gigs. Imagine a table with 900 meg rows. The batches should occur every 2 rows, but if a
@@ -1534,7 +1538,7 @@ batch_data build_batches(size_type num_rows, RowSize row_sizes, bool all_fixed_w
     // more global lookups are necessary.
     if (!all_fixed_width) {
       cudaMemcpy(batch_row_offsets.data() + last_row_end, output_batch_row_offsets.data(),
-                 num_rows_in_batch * sizeof(size_type), cudaMemcpyDefault);
+                 num_rows_in_batch * sizeof(size_type), cudaMemcpyDeviceToDevice);
     }
 
     batch_row_boundaries.push_back(row_end);
@@ -1701,8 +1705,8 @@ void determine_tiles(std::vector<size_type> const &column_sizes,
 
       row_size =
           util::round_up_unsafe((column_starts[col] + column_sizes[col]) & 7, alignment_needed);
-      row_size += col_size; // alignment required for shared memory tile boundary to match alignment
-                            // of output row
+      row_size += col_size; // alignment required for shared memory tile boundary to match
+                            // alignment of output row
       current_tile_start_col = col;
       current_tile_width = 0;
     } else {
@@ -2037,6 +2041,18 @@ convert_to_rows_fixed_width_optimized(table_view const &tbl, rmm::cuda_stream_vi
   }
 }
 
+namespace {
+
+/// @brief Calculates and sets null counts for specified columns
+void fixup_null_counts(std::vector<std::unique_ptr<column>> &output_columns,
+                       rmm::cuda_stream_view stream) {
+  for (auto &col : output_columns) {
+    col->set_null_count(cudf::detail::null_count(col->view().null_mask(), 0, col->size(), stream));
+  }
+}
+
+} // namespace
+
 /**
  * @brief convert from JCUDF row format to cudf columns
  *
@@ -2230,7 +2246,7 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
     std::vector<char *> string_data_col_ptrs;
     for (auto &col_string_lengths : string_lengths) {
       device_uvector<size_type> output_string_offsets(num_rows + 1, stream, mr);
-      auto tmp = cuda::proclaim_return_type<size_type>(
+      auto tmp = cuda::proclaim_return_type<int32_t>(
           [num_rows, col_string_lengths] __device__(auto const &i) {
             return i < num_rows ? col_string_lengths[i] : 0;
           });
@@ -2267,23 +2283,21 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
     for (int i = 0; i < static_cast<int>(schema.size()); ++i) {
       if (schema[i].id() == type_id::STRING) {
         // stuff real string column
-        auto const null_count = string_row_offset_columns[string_idx]->null_count();
         auto string_data = string_row_offset_columns[string_idx].release()->release();
-        output_columns[i] = make_strings_column(
-            num_rows,
-            std::make_unique<cudf::column>(std::move(string_col_offsets[string_idx]),
-                                           rmm::device_buffer{}, 0),
-            std::make_unique<cudf::column>(std::move(string_data_cols[string_idx]),
-                                           rmm::device_buffer{}, 0),
-            null_count, std::move(*string_data.null_mask.release()));
+        output_columns[i] = make_strings_column(num_rows, std::move(string_col_offsets[string_idx]),
+                                                std::move(string_data_cols[string_idx]),
+                                                std::move(*string_data.null_mask.release()), 0);
+        // Null count set to 0, temporarily. Will be fixed up before return.
         string_idx++;
       }
     }
   }
 
-  for (auto &col : output_columns) {
-    col->set_null_count(cudf::null_count(col->view().null_mask(), 0, col->size()));
-  }
+  // Set null counts, because output_columns are modified via mutable-view,
+  // in the kernel above.
+  // TODO(future): Consider setting null count in the kernel itself.
+  fixup_null_counts(output_columns, stream);
+
   return std::make_unique<table>(std::move(output_columns));
 }
 
@@ -2339,15 +2353,15 @@ std::unique_ptr<table> convert_from_rows_fixed_width_optimized(
         num_rows, num_columns, size_per_row, dev_column_start.data(), dev_column_size.data(),
         dev_output_data.data(), dev_output_nm.data(), child.data<int8_t>());
 
-    for (auto &col : output_columns) {
-      col->set_null_count(cudf::null_count(col->view().null_mask(), 0, col->size()));
-    }
+    // Set null counts, because output_columns are modified via mutable-view,
+    // in the kernel above.
+    // TODO(future): Consider setting null count in the kernel itself.
+    fixup_null_counts(output_columns, stream);
+
     return std::make_unique<table>(std::move(output_columns));
   } else {
     CUDF_FAIL("Only fixed width types are currently supported");
   }
 }
 
-} // namespace jni
-
-} // namespace cudf
+} // namespace cudf::jni

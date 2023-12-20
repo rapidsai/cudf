@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,8 +23,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
-namespace jni {
+namespace cudf::jni {
 
 std::vector<std::unique_ptr<cudf::column>> convert_to_rows_fixed_width_optimized(
     cudf::table_view const &tbl,
@@ -48,5 +47,4 @@ convert_from_rows(cudf::lists_column_view const &input, std::vector<cudf::data_t
                   rmm::cuda_stream_view stream = cudf::get_default_stream(),
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
-} // namespace jni
-} // namespace cudf
+} // namespace cudf::jni
