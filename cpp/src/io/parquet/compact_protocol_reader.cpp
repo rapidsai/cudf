@@ -69,9 +69,10 @@ void assert_field_type(int type, FieldType expected)
 
 void assert_bool_field_type(int type)
 {
-  CUDF_EXPECTS(type == static_cast<int>(FieldType::BOOLEAN_TRUE) ||
-                 type == static_cast<int>(FieldType::BOOLEAN_FALSE),
-               "expected bool field, got " + field_type_string(static_cast<FieldType>(type)) +
+  auto const field_type = static_cast<FieldType>(type);
+  CUDF_EXPECTS(field_type == FieldType::BOOLEAN_TRUE ||
+                 field_type == FieldType::BOOLEAN_FALSE,
+               "expected bool field, got " + field_type_string(field_type) +
                  " field instead");
 }
 
