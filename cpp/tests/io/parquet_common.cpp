@@ -169,6 +169,38 @@ std::unique_ptr<cudf::column> make_parquet_list_list_col(
 template std::unique_ptr<cudf::column> make_parquet_list_list_col<int>(
   int skip_rows, int num_rows, int lists_per_row, int list_size, bool include_validity);
 
+template <typename T>
+std::vector<T> random_values(size_t size)
+{
+  std::vector<T> values(size);
+
+  using T1 = T;
+  using uniform_distribution =
+    typename std::conditional_t<std::is_same_v<T1, bool>,
+                                std::bernoulli_distribution,
+                                std::conditional_t<std::is_floating_point_v<T1>,
+                                                   std::uniform_real_distribution<T1>,
+                                                   std::uniform_int_distribution<T1>>>;
+
+  static constexpr auto seed = 0xf00d;
+  static std::mt19937 engine{seed};
+  static uniform_distribution dist{};
+  std::generate_n(values.begin(), size, [&]() { return T{dist(engine)}; });
+
+  return values;
+}
+
+template std::vector<float> random_values<float>(size_t size);
+template std::vector<double> random_values<double>(size_t size);
+template std::vector<int8_t> random_values<int8_t>(size_t size);
+template std::vector<int16_t> random_values<int16_t>(size_t size);
+template std::vector<int32_t> random_values<int32_t>(size_t size);
+template std::vector<int64_t> random_values<int64_t>(size_t size);
+template std::vector<uint8_t> random_values<uint8_t>(size_t size);
+template std::vector<uint16_t> random_values<uint16_t>(size_t size);
+template std::vector<uint32_t> random_values<uint32_t>(size_t size);
+template std::vector<uint64_t> random_values<uint64_t>(size_t size);
+
 // given a datasource pointing to a parquet file, read the footer
 // of the file to populate the FileMetaData pointed to by file_meta_data.
 // throws cudf::logic_error if the file or metadata is invalid.

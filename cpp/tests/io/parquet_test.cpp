@@ -88,31 +88,6 @@ INSTANTIATE_TEST_SUITE_P(ParquetV2ReadWriteTest,
                          testing::Bool(),
                          testing::PrintToStringParamName());
 
-namespace {
-// Generates a vector of uniform random values of type T
-template <typename T>
-inline auto random_values(size_t size)
-{
-  std::vector<T> values(size);
-
-  using T1 = T;
-  using uniform_distribution =
-    typename std::conditional_t<std::is_same_v<T1, bool>,
-                                std::bernoulli_distribution,
-                                std::conditional_t<std::is_floating_point_v<T1>,
-                                                   std::uniform_real_distribution<T1>,
-                                                   std::uniform_int_distribution<T1>>>;
-
-  static constexpr auto seed = 0xf00d;
-  static std::mt19937 engine{seed};
-  static uniform_distribution dist{};
-  std::generate_n(values.begin(), size, [&]() { return T{dist(engine)}; });
-
-  return values;
-}
-
-}  // namespace
-
 TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumn)
 {
   auto sequence =

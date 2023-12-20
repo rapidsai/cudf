@@ -124,6 +124,10 @@ struct ParquetReaderPredicatePushdownTest : public ParquetReaderTest {};
 
 ////////////////////////////////////////////////////////////////////
 
+// Generates a vector of uniform random values of type T
+template <typename T>
+std::vector<T> random_values(size_t size);
+
 template <typename T>
 std::unique_ptr<cudf::table> create_random_fixed_table(cudf::size_type num_columns,
                                                        cudf::size_type num_rows,
