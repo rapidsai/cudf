@@ -26,9 +26,6 @@ function(find_and_configure_cccl)
   set(CMAKE_INSTALL_INCLUDEDIR "${CMAKE_INSTALL_INCLUDEDIR}/libcudf")
   set(CMAKE_INSTALL_LIBDIR "${CMAKE_INSTALL_INCLUDEDIR}/lib")
 
-  # Find or install CCCL with our custom set of patches
-  rapids_cpm_cccl(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
-
   # Store where CMake can find our custom CCCL install
   include("${rapids-cmake-dir}/export/find_package_root.cmake")
   rapids_export_find_package_root(
@@ -36,6 +33,10 @@ function(find_and_configure_cccl)
     EXPORT_SET cudf-exports
     CONDITION CCCL_SOURCE_DIR
   )
+
+  # Find or install CCCL with our custom set of patches
+  rapids_cpm_cccl(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
+
 endfunction()
 
 find_and_configure_cccl()
