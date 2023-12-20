@@ -25,20 +25,13 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/concatenate.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/detail/iterator.cuh>
-#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
-#include <cudf/io/parquet_metadata.hpp>
 #include <cudf/stream_compaction.hpp>
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
-#include <cudf/unary.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
@@ -51,8 +44,6 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <fstream>
-#include <random>
-#include <type_traits>
 
 // Global environment for temporary files
 cudf::test::TempDirTestEnvironment* const temp_env =
