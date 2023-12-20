@@ -31,7 +31,6 @@ function(find_and_configure_cccl)
   rapids_export_find_package_root(
     INSTALL CCCL [=[${CMAKE_CURRENT_LIST_DIR}/../../../include/libcudf/lib/rapids/cmake/cccl]=]
     EXPORT_SET cudf-exports
-    CONDITION CCCL_SOURCE_DIR
   )
 
   # Find or install CCCL with our custom set of patches
