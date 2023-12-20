@@ -53,9 +53,11 @@ std::string field_type_string(FieldType type)
     case FieldType::I64: return "int64";
     case FieldType::DOUBLE: return "double";
     case FieldType::BINARY: return "binary";
-    case FieldType::STRUCT: return "struct";
     case FieldType::LIST: return "list";
     case FieldType::SET: return "set";
+    case FieldType::MAP: return "map";
+    case FieldType::STRUCT: return "struct";
+    case FieldType::UUID: return "UUID";
     default: return "unknown(" + std::to_string(static_cast<uint8_t>(type)) + ")";
   }
 }
