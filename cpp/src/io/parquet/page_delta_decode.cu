@@ -323,9 +323,13 @@ __global__ void __launch_bounds__(96)
   auto* const db        = &db_state;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  auto const mask = decode_kernel_mask::DELTA_BINARY;
-  if (!setupLocalPageInfo(
-        s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{mask}, true)) {
+  if (!setupLocalPageInfo(s,
+                          &pages[page_idx],
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{decode_kernel_mask::DELTA_BINARY},
+                          page_processing_stage::DECODE)) {
     return;
   }
 
@@ -446,9 +450,13 @@ __global__ void __launch_bounds__(decode_block_size)
   auto* const dba       = &db_state;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  auto const mask = decode_kernel_mask::DELTA_BYTE_ARRAY;
-  if (!setupLocalPageInfo(
-        s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{mask}, true)) {
+  if (!setupLocalPageInfo(s,
+                          &pages[page_idx],
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{decode_kernel_mask::DELTA_BYTE_ARRAY},
+                          page_processing_stage::DECODE)) {
     return;
   }
 
