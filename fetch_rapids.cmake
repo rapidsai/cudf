@@ -11,8 +11,6 @@
 # or implied. See the License for the specific language governing permissions and limitations under
 # the License.
 # =============================================================================
-set(rapids-cmake-repo robertmaynard/rapids-cmake)
-set(rapids-cmake-branch bug/cccl-only-run-install-rules-once)
 if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake)
   file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-24.02/RAPIDS.cmake
        ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake
