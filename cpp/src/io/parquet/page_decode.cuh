@@ -1332,6 +1332,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           s->dict_run = 0;
         } break;
         case Encoding::DELTA_BINARY_PACKED:
+        case Encoding::DELTA_LENGTH_BYTE_ARRAY:
         case Encoding::DELTA_BYTE_ARRAY:
           // nothing to do, just don't error
           break;
