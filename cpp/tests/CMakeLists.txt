@@ -257,8 +257,7 @@ ConfigureTest(
   transform/one_hot_encode_tests.cpp
 )
 
-ConfigureTest(ROW_CONVERSION_TEST
-  transform/row_conversion.cpp)
+ConfigureTest(ROW_CONVERSION_TEST transform/row_conversion.cpp)
 
 # ##################################################################################################
 # * interop tests -------------------------------------------------------------------------
