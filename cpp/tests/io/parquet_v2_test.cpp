@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,42 +17,11 @@
 #include "parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/io_metadata_utilities.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
-#include <cudf_test/type_lists.hpp>
 
-#include <cudf/concatenate.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/detail/iterator.cuh>
-#include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/io/data_sink.hpp>
-#include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
-#include <cudf/io/parquet_metadata.hpp>
-#include <cudf/stream_compaction.hpp>
-#include <cudf/strings/strings_column_view.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
-#include <cudf/transform.hpp>
-#include <cudf/unary.hpp>
-#include <cudf/utilities/span.hpp>
-#include <cudf/wrappers/timestamps.hpp>
-
-#include <src/io/parquet/compact_protocol_reader.hpp>
-#include <src/io/parquet/parquet.hpp>
-#include <src/io/parquet/parquet_gpu.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
-
-#include <thrust/iterator/counting_iterator.h>
-
-#include <fstream>
-#include <random>
-#include <type_traits>
 
 TEST_P(ParquetV2Test, MultiColumn)
 {
