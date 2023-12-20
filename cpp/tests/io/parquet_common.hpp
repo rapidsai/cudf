@@ -18,6 +18,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/io/datasource.hpp>
@@ -43,6 +44,33 @@ using table_view = cudf::table_view;
 
 // Global environment for temporary files
 extern cudf::test::TempDirTestEnvironment* const temp_env;
+
+// TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5352
+using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool, float, double>;
+
+using ComparableAndFixedTypes =
+  cudf::test::Concat<cudf::test::ComparableTypes, cudf::test::FixedPointTypes>;
+
+using SupportedTimestampTypes =
+  cudf::test::Types<cudf::timestamp_ms, cudf::timestamp_us, cudf::timestamp_ns>;
+
+using ByteLikeTypes = cudf::test::Types<int8_t, char, uint8_t, unsigned char, std::byte>;
+
+// These chrono types are not supported because parquet writer does not have a type to represent
+// them.
+using UnsupportedChronoTypes =
+  cudf::test::Types<cudf::timestamp_s, cudf::duration_D, cudf::duration_s>;
+// Also fixed point types unsupported, because AST does not support them yet.
+using SupportedTestTypes = cudf::test::RemoveIf<cudf::test::ContainedIn<UnsupportedChronoTypes>,
+                                                cudf::test::ComparableTypes>;
+
+// removing duration_D, duration_s, and timestamp_s as they don't appear to be supported properly.
+// see definition of UnsupportedChronoTypes above.
+using DeltaDecimalTypes = cudf::test::Types<numeric::decimal32, numeric::decimal64>;
+using DeltaBinaryTypes =
+  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::ChronoTypes, DeltaDecimalTypes>;
+using SupportedDeltaTestTypes =
+  cudf::test::RemoveIf<cudf::test::ContainedIn<UnsupportedChronoTypes>, DeltaBinaryTypes>;
 
 //////////////////////////////////////////////////////////////////////
 // Test fixtures
