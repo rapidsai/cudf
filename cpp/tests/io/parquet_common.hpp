@@ -208,6 +208,9 @@ std::unique_ptr<cudf::column> make_parquet_string_list_col(std::mt19937& engine,
                                                            int max_string_len,
                                                            bool include_validity);
 
+template <typename T>
+std::pair<cudf::table, std::string> create_parquet_typed_with_stats(std::string const& filename);
+
 // =============================================================================
 // ---- test data for stats sort order tests
 // need at least 3 pages, and min page count is 5000, so need at least 15000 values.

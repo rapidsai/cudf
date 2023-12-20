@@ -16,6 +16,8 @@
 
 #include "parquet_common.hpp"
 
+#include <cudf/io/parquet.hpp>
+
 template <typename T, typename Elements>
 std::unique_ptr<cudf::table> create_fixed_table(cudf::size_type num_columns,
                                                 cudf::size_type num_rows,
@@ -659,3 +661,63 @@ std::unique_ptr<cudf::column> make_parquet_string_list_col(std::mt19937& engine,
                                    cudf::create_null_mask(num_rows, cudf::mask_state::ALL_VALID));
   }
 }
+
+template <typename T>
+std::pair<cudf::table, std::string> create_parquet_typed_with_stats(std::string const& filename)
+{
+  auto col0 = testdata::ascending<T>();
+  auto col1 = testdata::descending<T>();
+  auto col2 = testdata::unordered<T>();
+
+  auto const written_table = table_view{{col0, col1, col2}};
+  auto const filepath      = temp_env->get_temp_filepath("FilterTyped.parquet");
+  {
+    cudf::io::table_input_metadata expected_metadata(written_table);
+    expected_metadata.column_metadata[0].set_name("col0");
+    expected_metadata.column_metadata[1].set_name("col1");
+    expected_metadata.column_metadata[2].set_name("col2");
+
+    const cudf::io::parquet_writer_options out_opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, written_table)
+        .metadata(std::move(expected_metadata))
+        .row_group_size_rows(8000);
+    cudf::io::write_parquet(out_opts);
+  }
+
+  std::vector<std::unique_ptr<column>> columns;
+  columns.push_back(col0.release());
+  columns.push_back(col1.release());
+  columns.push_back(col2.release());
+
+  return std::pair{cudf::table{std::move(columns)}, filepath};
+}
+
+#define TYPED_WITH_STATS(type) \
+template std::pair<cudf::table, std::string> create_parquet_typed_with_stats<type>( \
+  std::string const& filename)
+
+TYPED_WITH_STATS(cudf::string_view);
+TYPED_WITH_STATS(bool);
+TYPED_WITH_STATS(int8_t);
+TYPED_WITH_STATS(int16_t);
+TYPED_WITH_STATS(int32_t);
+TYPED_WITH_STATS(int64_t);
+TYPED_WITH_STATS(uint8_t);
+TYPED_WITH_STATS(uint16_t);
+TYPED_WITH_STATS(uint32_t);
+TYPED_WITH_STATS(uint64_t);
+TYPED_WITH_STATS(float);
+TYPED_WITH_STATS(double);
+// TYPED_WITH_STATS(cudf::duration_D);
+// TYPED_WITH_STATS(cudf::duration_s);
+TYPED_WITH_STATS(cudf::duration_ms);
+TYPED_WITH_STATS(cudf::duration_us);
+TYPED_WITH_STATS(cudf::duration_ns);
+TYPED_WITH_STATS(cudf::timestamp_D);
+// TYPED_WITH_STATS(cudf::timestamp_s);
+TYPED_WITH_STATS(cudf::timestamp_ms);
+TYPED_WITH_STATS(cudf::timestamp_us);
+TYPED_WITH_STATS(cudf::timestamp_ns);
+TYPED_WITH_STATS(numeric::decimal32);
+TYPED_WITH_STATS(numeric::decimal64);
+TYPED_WITH_STATS(numeric::decimal128);
