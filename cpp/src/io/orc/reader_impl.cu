@@ -61,7 +61,6 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
                                        std::vector<std::vector<size_type>> const& stripes)
 {
   prepare_data(skip_rows, num_rows_opt, stripes);
-  compute_chunk_read_info();
   return read_chunk_internal();
 }
 
@@ -98,8 +97,6 @@ table_with_metadata reader::impl::read_chunk_internal()
     // Save the output table metadata into `_output_metadata` for reuse next time.
     _output_metadata = std::make_unique<table_metadata>(out_metadata);
   }
-
-  _out_buffers.resize(_selected_columns.num_levels());
 
   // If no rows or stripes to read, return empty columns
   if (_file_itm_data->rows_to_read == 0 || _file_itm_data->selected_stripes.empty()) {

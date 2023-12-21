@@ -709,6 +709,11 @@ void reader::impl::prepare_data(uint64_t skip_rows,
                                 std::optional<size_type> const& num_rows_opt,
                                 std::vector<std::vector<size_type>> const& stripes)
 {
+  // Selected columns at different levels of nesting are stored in different elements
+  // of `selected_columns`; thus, size == 1 means no nested columns
+  CUDF_EXPECTS(skip_rows == 0 or _selected_columns.num_levels() == 1,
+               "skip_rows is not supported by nested columns");
+
   // There are no columns in the table
   if (_selected_columns.num_levels() == 0) { return; }
 
@@ -740,8 +745,11 @@ void reader::impl::prepare_data(uint64_t skip_rows,
              : std::make_unique<cudf::table>();
   }();
 
-  std::vector<std::vector<rmm::device_buffer>> lvl_stripe_data(_selected_columns.num_levels());
-  std::vector<std::vector<rmm::device_uvector<uint32_t>>> null_count_prefix_sums;
+  auto& lvl_stripe_data        = _file_itm_data->lvl_stripe_data;
+  auto& null_count_prefix_sums = _file_itm_data->null_count_prefix_sums;
+  lvl_stripe_data.resize(_selected_columns.num_levels());
+
+  _out_buffers.resize(_selected_columns.num_levels());
 
   // Iterates through levels of nested columns, child column will be one level down
   // compared to parent column.
@@ -1043,6 +1051,8 @@ void reader::impl::prepare_data(uint64_t skip_rows,
       if (not buff_data.empty()) { generate_offsets_for_list(buff_data, _stream); }
     }
   }  // end loop level
+
+  compute_chunk_read_info();
 }
 
 }  // namespace cudf::io::detail::orc

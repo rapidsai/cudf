@@ -30,6 +30,9 @@ using namespace cudf::io::orc;
  * @brief Struct to store file-level data that remains constant for all chunks being read.
  */
 struct file_intermediate_data {
+  std::vector<std::vector<rmm::device_buffer>> lvl_stripe_data;
+  std::vector<std::vector<rmm::device_uvector<uint32_t>>> null_count_prefix_sums;
+
   cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> chunks;
   cudf::detail::hostdevice_2dvector<gpu::RowGroup> row_groups;
 
