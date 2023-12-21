@@ -33,12 +33,18 @@ namespace detail {
   auto const fd = open(filepath.c_str(), flags, mode);
   if (fd != -1) { return fd; }
 
+  // save errno because it may be overwritten by subsequent calls
   auto const err = errno;
-  if (not std::filesystem::exists(filepath)) {
+
+  if (auto const path = std::filesystem::path(filepath); flags & O_CREAT) {
+    if (not std::filesystem::exists(path.parent_path())) {
+      CUDF_FAIL("Cannot create output file; directory does not exist");
+    }
+  } else if (not std::filesystem::exists(path)) {
     CUDF_FAIL("Cannot open file; it does not exist");
-  } else {
-    CUDF_FAIL("Cannot open file; `open` failed with errno " + std::string{std::strerror(err)});
   }
+
+  CUDF_FAIL("Cannot open file; `open` failed with errno " + std::string{std::strerror(err)});
 }
 
 [[nodiscard]] size_t get_file_size(int file_descriptor)
