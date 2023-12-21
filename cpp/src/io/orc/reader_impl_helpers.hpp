@@ -18,11 +18,11 @@
 
 #include "aggregate_orc_metadata.hpp"
 #include "orc.hpp"
-#include "orc_gpu.hpp"
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/orc.hpp>
 #include <cudf/io/orc.hpp>
+#include <io/utilities/column_buffer.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -66,10 +66,10 @@ struct reader_column_meta {
 /**
  * @brief Function that translates ORC data kind to cuDF type enum
  */
-constexpr type_id to_cudf_type(orc::TypeKind kind,
-                               bool use_np_dtypes,
-                               type_id timestamp_type_id,
-                               type_id decimal_type_id)
+inline constexpr type_id to_cudf_type(orc::TypeKind kind,
+                                      bool use_np_dtypes,
+                                      type_id timestamp_type_id,
+                                      type_id decimal_type_id)
 {
   switch (kind) {
     case orc::BOOLEAN: return type_id::BOOL8;
@@ -105,9 +105,9 @@ constexpr type_id to_cudf_type(orc::TypeKind kind,
 /**
  * @brief Determines cuDF type of an ORC Decimal column.
  */
-type_id to_cudf_decimal_type(host_span<std::string const> decimal128_columns,
-                             cudf::io::orc::detail::aggregate_orc_metadata const& metadata,
-                             int column_index)
+inline type_id to_cudf_decimal_type(host_span<std::string const> decimal128_columns,
+                                    cudf::io::orc::detail::aggregate_orc_metadata const& metadata,
+                                    int column_index)
 {
   if (metadata.get_col_type(column_index).kind != DECIMAL) { return type_id::EMPTY; }
 
@@ -124,7 +124,10 @@ type_id to_cudf_decimal_type(host_span<std::string const> decimal128_columns,
   return type_id::DECIMAL128;
 }
 
-std::string get_map_child_col_name(std::size_t const idx) { return (idx == 0) ? "key" : "value"; }
+inline std::string get_map_child_col_name(std::size_t const idx)
+{
+  return (idx == 0) ? "key" : "value";
+}
 
 /**
  * @brief Create empty columns and respective schema information from the buffer.

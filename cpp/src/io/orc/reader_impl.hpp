@@ -31,10 +31,7 @@
 
 namespace cudf::io::detail::orc {
 using namespace cudf::io::orc;
-
-namespace {
 struct reader_column_meta;
-}
 
 /**
  * @brief Implementation for ORC reader.
