@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,33 +16,15 @@
 
 #include "sha_hash.cuh"
 
-#include <cudf/column/column_device_view.cuh>
-#include <cudf/column/column_factories.hpp>
-#include <cudf/detail/iterator.cuh>
-#include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/hashing/detail/hash_functions.cuh>
-#include <cudf/hashing/detail/hashing.hpp>
+#include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/detail/strings_children.cuh>
-#include <cudf/strings/string_view.hpp>
-#include <cudf/table/table_device_view.cuh>
-#include <cudf/utilities/traits.hpp>
+#include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/device/device_memory_resource.hpp>
 
-#include <thrust/execution_policy.h>
-#include <thrust/fill.h>
-#include <thrust/for_each.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/counting_iterator.h>
-
-#include <algorithm>
-#include <limits>
 #include <memory>
-#include <type_traits>
-#include <utility>
 
 namespace cudf {
 namespace hashing {
