@@ -2055,3 +2055,57 @@ TEST_F(ParquetReaderTest, DeltaSkipRowsWithNulls)
     CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view(), result2.tbl->view());
   }
 }
+
+TYPED_TEST_SUITE(ParquetReaderPredicatePushdownTest, SupportedTestTypes);
+
+TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
+{
+  using T = TypeParam;
+
+  auto const [src, filepath] = create_parquet_typed_with_stats<T>("FilterTyped.parquet");
+  auto const written_table   = src.view();
+
+  // Filtering AST
+  auto literal_value = []() {
+    if constexpr (cudf::is_timestamp<T>()) {
+      // table[0] < 10000 timestamp days/seconds/milliseconds/microseconds/nanoseconds
+      return cudf::timestamp_scalar<T>(T(typename T::duration(10000)));  // i (0-20,000)
+    } else if constexpr (cudf::is_duration<T>()) {
+      // table[0] < 10000 day/seconds/milliseconds/microseconds/nanoseconds
+      return cudf::duration_scalar<T>(T(10000));  // i (0-20,000)
+    } else if constexpr (std::is_same_v<T, cudf::string_view>) {
+      // table[0] < "000010000"
+      return cudf::string_scalar("000010000");  // i (0-20,000)
+    } else {
+      // table[0] < 0 or 100u
+      return cudf::numeric_scalar<T>((100 - 100 * std::is_signed_v<T>));  // i/100 (-100-100/ 0-200)
+    }
+  }();
+  auto literal           = cudf::ast::literal(literal_value);
+  auto col_name_0        = cudf::ast::column_name_reference("col0");
+  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_name_0, literal);
+  auto col_ref_0         = cudf::ast::column_reference(0);
+  auto ref_filter        = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+  // Expected result
+  auto predicate = cudf::compute_column(written_table, ref_filter);
+  EXPECT_EQ(predicate->view().type().id(), cudf::type_id::BOOL8)
+    << "Predicate filter should return a boolean";
+  auto expected = cudf::apply_boolean_mask(written_table, *predicate);
+
+  // Reading with Predicate Pushdown
+  cudf::io::parquet_reader_options read_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+      .filter(filter_expression);
+  auto result       = cudf::io::read_parquet(read_opts);
+  auto result_table = result.tbl->view();
+
+  // tests
+  EXPECT_EQ(int(written_table.column(0).type().id()), int(result_table.column(0).type().id()))
+    << "col0 type mismatch";
+  // To make sure AST filters out some elements
+  EXPECT_LT(expected->num_rows(), written_table.num_rows());
+  EXPECT_EQ(result_table.num_rows(), expected->num_rows());
+  EXPECT_EQ(result_table.num_columns(), expected->num_columns());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result_table);
+}
