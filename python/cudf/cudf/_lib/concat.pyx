@@ -1,7 +1,7 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from libcpp cimport bool
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
@@ -12,7 +12,6 @@ from cudf._lib.cpp.concatenate cimport (
     concatenate_masks as libcudf_concatenate_masks,
     concatenate_tables as libcudf_concatenate_tables,
 )
-from cudf._lib.cpp.libcpp.memory cimport make_unique
 from cudf._lib.cpp.table.table cimport table, table_view
 from cudf._lib.utils cimport (
     data_from_unique_ptr,

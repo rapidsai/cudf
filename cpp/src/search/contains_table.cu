@@ -28,6 +28,8 @@
 
 #include <cuco/static_set.cuh>
 
+#include <cuda/functional>
+
 #include <type_traits>
 
 namespace cudf::detail {
@@ -212,9 +214,13 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
   auto contained = rmm::device_uvector<bool>(needles.num_rows(), stream, mr);
 
   auto const haystack_iter = cudf::detail::make_counting_transform_iterator(
-    size_type{0}, [] __device__(auto idx) { return lhs_index_type{idx}; });
+    size_type{0}, cuda::proclaim_return_type<lhs_index_type>([] __device__(auto idx) {
+      return lhs_index_type{idx};
+    }));
   auto const needles_iter = cudf::detail::make_counting_transform_iterator(
-    size_type{0}, [] __device__(auto idx) { return rhs_index_type{idx}; });
+    size_type{0}, cuda::proclaim_return_type<rhs_index_type>([] __device__(auto idx) {
+      return rhs_index_type{idx};
+    }));
 
   auto const helper_func =
     [&](auto const& d_self_equal, auto const& d_two_table_equal, auto const& probing_scheme) {
