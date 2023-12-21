@@ -780,8 +780,9 @@ TEST_P(ParquetV2Test, Strings)
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
-TEST_F(ParquetWriterTest, StringsAsBinary)
+TEST_P(ParquetV2Test, StringsAsBinary)
 {
+  auto const is_v2 = GetParam();
   std::vector<char const*> unicode_strings{
     "Monday", "Wȅdnȅsday", "Friday", "Monday", "Friday", "Friday", "Friday", "Funday"};
   std::vector<char const*> ascii_strings{
@@ -815,11 +816,13 @@ TEST_F(ParquetWriterTest, StringsAsBinary)
   expected_metadata.column_metadata[1].set_name("col_string").set_output_as_binary(true);
   expected_metadata.column_metadata[2].set_name("col_another").set_output_as_binary(true);
   expected_metadata.column_metadata[3].set_name("col_binary");
-  expected_metadata.column_metadata[4].set_name("col_binary");
+  expected_metadata.column_metadata[4].set_name("col_binary2");
 
   auto filepath = temp_env->get_temp_filepath("BinaryStrings.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, write_tbl)
+      .write_v2_headers(is_v2)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER)
       .metadata(expected_metadata);
   cudf::io::write_parquet(out_opts);
 
@@ -7083,6 +7086,219 @@ TEST_F(ParquetReaderTest, RepeatedNoAnnotations)
   table_view expected{{col0, outer_struct}};
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view(), expected);
+}
+
+inline auto random_validity(std::mt19937& engine)
+{
+  static std::bernoulli_distribution bn(0.7f);
+  return cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(engine); });
+}
+
+template <typename T>
+std::unique_ptr<cudf::column> make_parquet_list_col(std::mt19937& engine,
+                                                    int num_rows,
+                                                    int max_vals_per_row,
+                                                    bool include_validity)
+{
+  std::vector<cudf::size_type> row_sizes(num_rows);
+
+  auto const min_values_per_row = include_validity ? 0 : 1;
+  std::uniform_int_distribution<cudf::size_type> dist{min_values_per_row, max_vals_per_row};
+  std::generate_n(row_sizes.begin(), num_rows, [&]() { return cudf::size_type{dist(engine)}; });
+
+  std::vector<cudf::size_type> offsets(num_rows + 1);
+  std::exclusive_scan(row_sizes.begin(), row_sizes.end(), offsets.begin(), 0);
+  offsets[num_rows] = offsets[num_rows - 1] + row_sizes.back();
+
+  std::vector<T> values = random_values<T>(offsets[num_rows]);
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets_col(offsets.begin(),
+                                                                      offsets.end());
+
+  if (include_validity) {
+    auto valids = random_validity(engine);
+    auto values_col =
+      cudf::test::fixed_width_column_wrapper<T>(values.begin(), values.end(), valids);
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
+
+    auto col = cudf::make_lists_column(
+      num_rows, offsets_col.release(), values_col.release(), null_count, std::move(null_mask));
+    return cudf::purge_nonempty_nulls(*col);
+  } else {
+    auto values_col = cudf::test::fixed_width_column_wrapper<T>(values.begin(), values.end());
+    return cudf::make_lists_column(num_rows,
+                                   offsets_col.release(),
+                                   values_col.release(),
+                                   0,
+                                   cudf::create_null_mask(num_rows, cudf::mask_state::ALL_VALID));
+  }
+}
+
+std::vector<std::string> string_values(std::mt19937& engine, int num_rows, int max_string_len)
+{
+  static std::uniform_int_distribution<char> char_dist{'a', 'z'};
+  static std::uniform_int_distribution<cudf::size_type> strlen_dist{1, max_string_len};
+
+  std::vector<std::string> values(num_rows);
+  std::generate_n(values.begin(), values.size(), [&]() {
+    int str_len     = strlen_dist(engine);
+    std::string res = "";
+    for (int i = 0; i < str_len; i++) {
+      res += char_dist(engine);
+    }
+    return res;
+  });
+
+  return values;
+}
+
+// make a random list<string> column, with random string lengths of 0..max_string_len,
+// and up to max_vals_per_row strings in each list.
+std::unique_ptr<cudf::column> make_parquet_string_list_col(std::mt19937& engine,
+                                                           int num_rows,
+                                                           int max_vals_per_row,
+                                                           int max_string_len,
+                                                           bool include_validity)
+{
+  auto const range_min = include_validity ? 0 : 1;
+
+  std::uniform_int_distribution<cudf::size_type> dist{range_min, max_vals_per_row};
+
+  std::vector<cudf::size_type> row_sizes(num_rows);
+  std::generate_n(row_sizes.begin(), num_rows, [&]() { return cudf::size_type{dist(engine)}; });
+
+  std::vector<cudf::size_type> offsets(num_rows + 1);
+  std::exclusive_scan(row_sizes.begin(), row_sizes.end(), offsets.begin(), 0);
+  offsets[num_rows] = offsets[num_rows - 1] + row_sizes.back();
+
+  std::uniform_int_distribution<cudf::size_type> strlen_dist{range_min, max_string_len};
+  auto const values = string_values(engine, offsets[num_rows], max_string_len);
+
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets_col(offsets.begin(),
+                                                                      offsets.end());
+
+  if (include_validity) {
+    auto valids     = random_validity(engine);
+    auto values_col = cudf::test::strings_column_wrapper(values.begin(), values.end(), valids);
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
+
+    auto col = cudf::make_lists_column(
+      num_rows, offsets_col.release(), values_col.release(), null_count, std::move(null_mask));
+    return cudf::purge_nonempty_nulls(*col);
+  } else {
+    auto values_col = cudf::test::strings_column_wrapper(values.begin(), values.end());
+    return cudf::make_lists_column(num_rows,
+                                   offsets_col.release(),
+                                   values_col.release(),
+                                   0,
+                                   cudf::create_null_mask(num_rows, cudf::mask_state::ALL_VALID));
+  }
+}
+
+TEST_F(ParquetReaderTest, DeltaSkipRowsWithNulls)
+{
+  constexpr int num_rows = 50'000;
+  constexpr auto seed    = 21337;
+
+  std::mt19937 engine{seed};
+  auto int32_list_nulls = make_parquet_list_col<int32_t>(engine, num_rows, 5, true);
+  auto int32_list       = make_parquet_list_col<int32_t>(engine, num_rows, 5, false);
+  auto int64_list_nulls = make_parquet_list_col<int64_t>(engine, num_rows, 5, true);
+  auto int64_list       = make_parquet_list_col<int64_t>(engine, num_rows, 5, false);
+  auto int16_list_nulls = make_parquet_list_col<int16_t>(engine, num_rows, 5, true);
+  auto int16_list       = make_parquet_list_col<int16_t>(engine, num_rows, 5, false);
+  auto int8_list_nulls  = make_parquet_list_col<int8_t>(engine, num_rows, 5, true);
+  auto int8_list        = make_parquet_list_col<int8_t>(engine, num_rows, 5, false);
+
+  auto str_list_nulls     = make_parquet_string_list_col(engine, num_rows, 5, 32, true);
+  auto str_list           = make_parquet_string_list_col(engine, num_rows, 5, 32, false);
+  auto big_str_list_nulls = make_parquet_string_list_col(engine, num_rows, 5, 256, true);
+  auto big_str_list       = make_parquet_string_list_col(engine, num_rows, 5, 256, false);
+
+  auto int32_data   = random_values<int32_t>(num_rows);
+  auto int64_data   = random_values<int64_t>(num_rows);
+  auto int16_data   = random_values<int16_t>(num_rows);
+  auto int8_data    = random_values<int8_t>(num_rows);
+  auto str_data     = string_values(engine, num_rows, 32);
+  auto big_str_data = string_values(engine, num_rows, 256);
+
+  auto const validity = random_validity(engine);
+  auto const no_nulls = cudf::test::iterators::no_nulls();
+  column_wrapper<int32_t> int32_nulls_col{int32_data.begin(), int32_data.end(), validity};
+  column_wrapper<int32_t> int32_col{int32_data.begin(), int32_data.end(), no_nulls};
+  column_wrapper<int64_t> int64_nulls_col{int64_data.begin(), int64_data.end(), validity};
+  column_wrapper<int64_t> int64_col{int64_data.begin(), int64_data.end(), no_nulls};
+
+  auto str_col = cudf::test::strings_column_wrapper(str_data.begin(), str_data.end(), no_nulls);
+  auto str_col_nulls = cudf::purge_nonempty_nulls(
+    cudf::test::strings_column_wrapper(str_data.begin(), str_data.end(), validity));
+  auto big_str_col =
+    cudf::test::strings_column_wrapper(big_str_data.begin(), big_str_data.end(), no_nulls);
+  auto big_str_col_nulls = cudf::purge_nonempty_nulls(
+    cudf::test::strings_column_wrapper(big_str_data.begin(), big_str_data.end(), validity));
+
+  cudf::table_view tbl({int32_col,   int32_nulls_col,    *int32_list,   *int32_list_nulls,
+                        int64_col,   int64_nulls_col,    *int64_list,   *int64_list_nulls,
+                        *int16_list, *int16_list_nulls,  *int8_list,    *int8_list_nulls,
+                        str_col,     *str_col_nulls,     *str_list,     *str_list_nulls,
+                        big_str_col, *big_str_col_nulls, *big_str_list, *big_str_list_nulls});
+
+  auto const filepath = temp_env->get_temp_filepath("DeltaSkipRowsWithNulls.parquet");
+  auto const out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tbl)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .compression(cudf::io::compression_type::NONE)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER)
+      .max_page_size_rows(20'000)
+      .write_v2_headers(true)
+      .build();
+  cudf::io::write_parquet(out_opts);
+
+  // skip_rows / num_rows
+  // clang-format off
+  std::vector<std::pair<int, int>> params{
+    // skip and then read rest of file
+    {-1, -1}, {1, -1}, {2, -1}, {32, -1}, {33, -1}, {128, -1}, {1000, -1},
+    // no skip but read fewer rows
+    {0, 1}, {0, 2}, {0, 31}, {0, 32}, {0, 33}, {0, 128}, {0, 129}, {0, 130},
+    // skip and truncate
+    {1, 32}, {1, 33}, {32, 32}, {33, 139},
+    // cross page boundaries
+    {10'000, 20'000}
+  };
+
+  // clang-format on
+  for (auto p : params) {
+    cudf::io::parquet_reader_options read_args =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+    if (p.first >= 0) { read_args.set_skip_rows(p.first); }
+    if (p.second >= 0) { read_args.set_num_rows(p.second); }
+    auto result = cudf::io::read_parquet(read_args);
+
+    p.first  = p.first < 0 ? 0 : p.first;
+    p.second = p.second < 0 ? num_rows - p.first : p.second;
+    std::vector<cudf::size_type> slice_indices{p.first, p.first + p.second};
+    std::vector<cudf::table_view> expected = cudf::slice(tbl, slice_indices);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view(), expected[0]);
+
+    // test writing the result back out as a further check of the delta writer's correctness
+    std::vector<char> out_buffer;
+    cudf::io::parquet_writer_options out_opts2 =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&out_buffer},
+                                                result.tbl->view())
+        .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+        .compression(cudf::io::compression_type::NONE)
+        .dictionary_policy(cudf::io::dictionary_policy::NEVER)
+        .max_page_size_rows(20'000)
+        .write_v2_headers(true);
+    cudf::io::write_parquet(out_opts2);
+
+    cudf::io::parquet_reader_options default_in_opts = cudf::io::parquet_reader_options::builder(
+      cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+    auto const result2 = cudf::io::read_parquet(default_in_opts);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view(), result2.tbl->view());
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()
