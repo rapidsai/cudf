@@ -78,29 +78,11 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_semi(
 
   // the code below can also be taken out in the context of semi & anti, but
   // i will leave that for another PR for sake of being conservative
-  std::size_t join_size;
-  if (output_size.has_value()) {
-    join_size = *output_size;
-  } else {
-    rmm::device_scalar<std::size_t> size(0, stream, mr);
-    if (has_nulls) {
-      compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
-        <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-          *left_table, *right_table, join_type, parser.device_expression_data, false, size.data());
-    } else {
-      compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
-        <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-          *left_table, *right_table, join_type, parser.device_expression_data, false, size.data());
-    }
-    join_size = size.value(stream);
-  }
-
-  if (join_size == 0) { return std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr); }
+  if (left_num_rows == 0) { return std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr); }
 
   rmm::device_scalar<size_type> write_index(0, stream);
 
-  auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
-  auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
+  auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(left_num_rows, stream, mr);
 
   auto const& join_output_l = left_indices->data();
   // i am allocating twice the default cache size for these joins, because, you aren't concerned
@@ -116,9 +98,9 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_semi(
         join_output_l,
         write_index.data(),
         parser.device_expression_data,
-        join_size);
+        left_num_rows);
   } else {
-    conditional_join_semi<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE * 2, false>
+    conditional_join_semi<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
@@ -126,7 +108,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_semi(
         join_output_l,
         write_index.data(),
         parser.device_expression_data,
-        join_size);
+        left_num_rows);
   }
 
   return left_indices;
