@@ -746,3 +746,101 @@ TEST_F(ParquetChunkedWriterTest, CompStatsEmptyTable)
 
   expect_compression_stats_empty(stats);
 }
+
+TYPED_TEST_SUITE(ParquetChunkedWriterNumericTypeTest, SupportedTypes);
+
+TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize)
+{
+  // write out two 31 row tables and make sure they get
+  // read back with all their validity bits in the right place
+
+  using T = TypeParam;
+
+  int num_els = 31;
+  std::vector<std::unique_ptr<cudf::column>> cols;
+
+  bool mask[] = {false, true, true, true, true, true, true, true, true, true, true,
+                 true,  true, true, true, true, true, true, true, true, true, true,
+
+                 true,  true, true, true, true, true, true, true, true};
+  T c1a[num_els];
+  std::fill(c1a, c1a + num_els, static_cast<T>(5));
+  T c1b[num_els];
+  std::fill(c1b, c1b + num_els, static_cast<T>(6));
+  column_wrapper<T> c1a_w(c1a, c1a + num_els, mask);
+  column_wrapper<T> c1b_w(c1b, c1b + num_els, mask);
+  cols.push_back(c1a_w.release());
+  cols.push_back(c1b_w.release());
+  cudf::table tbl1(std::move(cols));
+
+  T c2a[num_els];
+  std::fill(c2a, c2a + num_els, static_cast<T>(8));
+  T c2b[num_els];
+  std::fill(c2b, c2b + num_els, static_cast<T>(9));
+  column_wrapper<T> c2a_w(c2a, c2a + num_els, mask);
+  column_wrapper<T> c2b_w(c2b, c2b + num_els, mask);
+  cols.push_back(c2a_w.release());
+  cols.push_back(c2b_w.release());
+  cudf::table tbl2(std::move(cols));
+
+  auto expected = cudf::concatenate(std::vector<table_view>({tbl1, tbl2}));
+
+  auto filepath = temp_env->get_temp_filepath("ChunkedUnalignedSize.parquet");
+  cudf::io::chunked_parquet_writer_options args =
+    cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{filepath});
+  cudf::io::parquet_chunked_writer(args).write(tbl1).write(tbl2);
+
+  cudf::io::parquet_reader_options read_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+}
+
+TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize2)
+{
+  // write out two 33 row tables and make sure they get
+  // read back with all their validity bits in the right place
+
+  using T = TypeParam;
+
+  int num_els = 33;
+  std::vector<std::unique_ptr<cudf::column>> cols;
+
+  bool mask[] = {false, true, true, true, true, true, true, true, true, true, true,
+                 true,  true, true, true, true, true, true, true, true, true, true,
+                 true,  true, true, true, true, true, true, true, true, true, true};
+
+  T c1a[num_els];
+  std::fill(c1a, c1a + num_els, static_cast<T>(5));
+  T c1b[num_els];
+  std::fill(c1b, c1b + num_els, static_cast<T>(6));
+  column_wrapper<T> c1a_w(c1a, c1a + num_els, mask);
+  column_wrapper<T> c1b_w(c1b, c1b + num_els, mask);
+  cols.push_back(c1a_w.release());
+  cols.push_back(c1b_w.release());
+  cudf::table tbl1(std::move(cols));
+
+  T c2a[num_els];
+  std::fill(c2a, c2a + num_els, static_cast<T>(8));
+  T c2b[num_els];
+  std::fill(c2b, c2b + num_els, static_cast<T>(9));
+  column_wrapper<T> c2a_w(c2a, c2a + num_els, mask);
+  column_wrapper<T> c2b_w(c2b, c2b + num_els, mask);
+  cols.push_back(c2a_w.release());
+  cols.push_back(c2b_w.release());
+  cudf::table tbl2(std::move(cols));
+
+  auto expected = cudf::concatenate(std::vector<table_view>({tbl1, tbl2}));
+
+  auto filepath = temp_env->get_temp_filepath("ChunkedUnalignedSize2.parquet");
+  cudf::io::chunked_parquet_writer_options args =
+    cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{filepath});
+  cudf::io::parquet_chunked_writer(args).write(tbl1).write(tbl2);
+
+  cudf::io::parquet_reader_options read_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+}

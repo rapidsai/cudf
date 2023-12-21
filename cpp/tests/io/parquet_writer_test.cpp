@@ -1399,3 +1399,171 @@ TEST_F(ParquetWriterTest, EmptyMinStringStatistics)
   EXPECT_EQ(min_value, std::string(min_val));
   EXPECT_EQ(max_value, std::string(max_val));
 }
+
+// custom mem mapped data sink that supports device writes
+template <bool supports_device_writes>
+class custom_test_memmap_sink : public cudf::io::data_sink {
+ public:
+  explicit custom_test_memmap_sink(std::vector<char>* mm_writer_buf)
+  {
+    mm_writer = cudf::io::data_sink::create(mm_writer_buf);
+  }
+
+  virtual ~custom_test_memmap_sink() { mm_writer->flush(); }
+
+  void host_write(void const* data, size_t size) override { mm_writer->host_write(data, size); }
+
+  [[nodiscard]] bool supports_device_write() const override { return supports_device_writes; }
+
+  void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
+  {
+    this->device_write_async(gpu_data, size, stream).get();
+  }
+
+  std::future<void> device_write_async(void const* gpu_data,
+                                       size_t size,
+                                       rmm::cuda_stream_view stream) override
+  {
+    return std::async(std::launch::deferred, [=] {
+      char* ptr = nullptr;
+      CUDF_CUDA_TRY(cudaMallocHost(&ptr, size));
+      CUDF_CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDefault, stream.value()));
+      stream.synchronize();
+      mm_writer->host_write(ptr, size);
+      CUDF_CUDA_TRY(cudaFreeHost(ptr));
+    });
+  }
+
+  void flush() override { mm_writer->flush(); }
+
+  size_t bytes_written() override { return mm_writer->bytes_written(); }
+
+ private:
+  std::unique_ptr<data_sink> mm_writer;
+};
+
+TEST_F(ParquetWriterStressTest, LargeTableWeakCompression)
+{
+  std::vector<char> mm_buf;
+  mm_buf.reserve(4 * 1024 * 1024 * 16);
+  custom_test_memmap_sink<false> custom_sink(&mm_buf);
+
+  // exercises multiple rowgroups
+  srand(31337);
+  auto expected = create_random_fixed_table<int>(16, 4 * 1024 * 1024, false);
+
+  // write out using the custom sink (which uses device writes)
+  cudf::io::parquet_writer_options args =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&custom_sink}, *expected);
+  cudf::io::write_parquet(args);
+
+  cudf::io::parquet_reader_options custom_args =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{mm_buf.data(), mm_buf.size()});
+  auto custom_tbl = cudf::io::read_parquet(custom_args);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(custom_tbl.tbl->view(), expected->view());
+}
+
+TEST_F(ParquetWriterStressTest, LargeTableGoodCompression)
+{
+  std::vector<char> mm_buf;
+  mm_buf.reserve(4 * 1024 * 1024 * 16);
+  custom_test_memmap_sink<false> custom_sink(&mm_buf);
+
+  // exercises multiple rowgroups
+  srand(31337);
+  auto expected = create_compressible_fixed_table<int>(16, 4 * 1024 * 1024, 128 * 1024, false);
+
+  // write out using the custom sink (which uses device writes)
+  cudf::io::parquet_writer_options args =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&custom_sink}, *expected);
+  cudf::io::write_parquet(args);
+
+  cudf::io::parquet_reader_options custom_args =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{mm_buf.data(), mm_buf.size()});
+  auto custom_tbl = cudf::io::read_parquet(custom_args);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(custom_tbl.tbl->view(), expected->view());
+}
+
+TEST_F(ParquetWriterStressTest, LargeTableWithValids)
+{
+  std::vector<char> mm_buf;
+  mm_buf.reserve(4 * 1024 * 1024 * 16);
+  custom_test_memmap_sink<false> custom_sink(&mm_buf);
+
+  // exercises multiple rowgroups
+  srand(31337);
+  auto expected = create_compressible_fixed_table<int>(16, 4 * 1024 * 1024, 6, true);
+
+  // write out using the custom sink (which uses device writes)
+  cudf::io::parquet_writer_options args =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&custom_sink}, *expected);
+  cudf::io::write_parquet(args);
+
+  cudf::io::parquet_reader_options custom_args =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{mm_buf.data(), mm_buf.size()});
+  auto custom_tbl = cudf::io::read_parquet(custom_args);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(custom_tbl.tbl->view(), expected->view());
+}
+
+TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableWeakCompression)
+{
+  std::vector<char> mm_buf;
+  mm_buf.reserve(4 * 1024 * 1024 * 16);
+  custom_test_memmap_sink<true> custom_sink(&mm_buf);
+
+  // exercises multiple rowgroups
+  srand(31337);
+  auto expected = create_random_fixed_table<int>(16, 4 * 1024 * 1024, false);
+
+  // write out using the custom sink (which uses device writes)
+  cudf::io::parquet_writer_options args =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&custom_sink}, *expected);
+  cudf::io::write_parquet(args);
+
+  cudf::io::parquet_reader_options custom_args =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{mm_buf.data(), mm_buf.size()});
+  auto custom_tbl = cudf::io::read_parquet(custom_args);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(custom_tbl.tbl->view(), expected->view());
+}
+
+TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableGoodCompression)
+{
+  std::vector<char> mm_buf;
+  mm_buf.reserve(4 * 1024 * 1024 * 16);
+  custom_test_memmap_sink<true> custom_sink(&mm_buf);
+
+  // exercises multiple rowgroups
+  srand(31337);
+  auto expected = create_compressible_fixed_table<int>(16, 4 * 1024 * 1024, 128 * 1024, false);
+
+  // write out using the custom sink (which uses device writes)
+  cudf::io::parquet_writer_options args =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&custom_sink}, *expected);
+  cudf::io::write_parquet(args);
+
+  cudf::io::parquet_reader_options custom_args =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{mm_buf.data(), mm_buf.size()});
+  auto custom_tbl = cudf::io::read_parquet(custom_args);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(custom_tbl.tbl->view(), expected->view());
+}
+
+TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableWithValids)
+{
+  std::vector<char> mm_buf;
+  mm_buf.reserve(4 * 1024 * 1024 * 16);
+  custom_test_memmap_sink<true> custom_sink(&mm_buf);
+
+  // exercises multiple rowgroups
+  srand(31337);
+  auto expected = create_compressible_fixed_table<int>(16, 4 * 1024 * 1024, 6, true);
+
+  // write out using the custom sink (which uses device writes)
+  cudf::io::parquet_writer_options args =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&custom_sink}, *expected);
+  cudf::io::write_parquet(args);
+
+  cudf::io::parquet_reader_options custom_args =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{mm_buf.data(), mm_buf.size()});
+  auto custom_tbl = cudf::io::read_parquet(custom_args);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(custom_tbl.tbl->view(), expected->view());
+}
