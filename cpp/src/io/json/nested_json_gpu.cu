@@ -2068,11 +2068,13 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
 
   auto make_validity =
     [stream, mr](json_column const& json_col) -> std::pair<rmm::device_buffer, size_type> {
+    auto const null_count = json_col.current_offset - json_col.valid_count;
+    if (null_count == 0) { return {rmm::device_buffer{}, null_count}; }
     return {rmm::device_buffer{json_col.validity.data(),
                                bitmask_allocation_size_bytes(json_col.current_offset),
                                stream,
                                mr},
-            json_col.current_offset - json_col.valid_count};
+            null_count};
   };
 
   auto get_child_schema = [schema](auto child_name) -> std::optional<schema_element> {
@@ -2138,9 +2140,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       // This is to match the existing JSON reader's behaviour:
       // - Non-string columns will always be returned as nullable
       // - String columns will be returned as nullable, iff there's at least one null entry
-      if (target_type.id() == type_id::STRING and col->null_count() == 0) {
-        col->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
-      }
+      if (col->null_count() == 0) { col->set_null_mask(rmm::device_buffer{0, stream, mr}, 0); }
 
       // For string columns return ["offsets", "char"] schema
       if (target_type.id() == type_id::STRING) {

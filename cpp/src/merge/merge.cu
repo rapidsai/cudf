@@ -50,6 +50,8 @@
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
+#include <cuda/functional>
+
 #include <queue>
 #include <vector>
 
@@ -401,10 +403,11 @@ struct column_merger {
                       row_order_.begin(),
                       row_order_.end(),
                       merged_view.begin<Element>(),
-                      [d_lcol, d_rcol] __device__(index_type const& index_pair) {
-                        auto const [side, index] = index_pair;
-                        return side == side::LEFT ? d_lcol[index] : d_rcol[index];
-                      });
+                      cuda::proclaim_return_type<Element>(
+                        [d_lcol, d_rcol] __device__(index_type const& index_pair) {
+                          auto const [side, index] = index_pair;
+                          return side == side::LEFT ? d_lcol[index] : d_rcol[index];
+                        }));
 
     // CAVEAT: conditional call below is erroneous without
     // set_null_mask() call (see TODO above):
@@ -477,10 +480,12 @@ std::unique_ptr<column> column_merger::operator()<cudf::list_view>(
   auto concatenated_list = cudf::lists::detail::concatenate(columns, stream, mr);
 
   auto const iter_gather = cudf::detail::make_counting_transform_iterator(
-    0, [row_order = row_order_.data(), lsize = lcol.size()] __device__(auto const idx) {
-      auto const [side, index] = row_order[idx];
-      return side == side::LEFT ? index : lsize + index;
-    });
+    0,
+    cuda::proclaim_return_type<cudf::size_type>(
+      [row_order = row_order_.data(), lsize = lcol.size()] __device__(auto const idx) {
+        auto const [side, index] = row_order[idx];
+        return side == side::LEFT ? index : lsize + index;
+      }));
 
   auto result = cudf::detail::gather(table_view{{concatenated_list->view()}},
                                      iter_gather,

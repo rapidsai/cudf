@@ -53,6 +53,7 @@ files:
     includes:
       - notebooks
       - py_version
+      - notebook_cuda_version
   checks:
     output: none
     includes:
@@ -71,10 +72,8 @@ files:
     extras:
       table: build-system
     includes:
-      - build_all
       - build_python_common
       - build_python_cudf
-      - build_wheels
   py_run_cudf:
     output: pyproject
     pyproject_dir: python/cudf
@@ -99,7 +98,7 @@ files:
     pyproject_dir: python/cudf
     extras:
       table: project.optional-dependencies
-      key: pandas_tests
+      key: pandas-tests
     includes:
       - test_python_pandas_cudf
   py_test_cudf_pandas:
@@ -107,7 +106,7 @@ files:
     pyproject_dir: python/cudf
     extras:
       table: project.optional-dependencies
-      key: cudf_pandas_tests
+      key: cudf-pandas-tests
     includes:
       - test_python_cudf_pandas
   py_build_dask_cudf:
@@ -143,7 +142,6 @@ files:
       table: build-system
     includes:
       - build_python_common
-      - build_wheels
   py_run_cudf_kafka:
     output: pyproject
     pyproject_dir: python/cudf_kafka
@@ -193,12 +191,10 @@ channels:
 dependencies:
   build_all:
     common:
-      - output_types: [conda, requirements, pyproject]
-        packages:
-          - &cmake_ver cmake>=3.26.4
-          - ninja
       - output_types: conda
         packages:
+          - &cmake_ver cmake>=3.26.4
+          - &ninja ninja
           - c-compiler
           - cxx-compiler
           - dlpack>=0.5,<0.6.0a0
@@ -245,7 +241,7 @@ dependencies:
           - libkvikio==24.2.*
           - librdkafka>=1.9.0,<1.10.0a0
           # Align nvcomp version with rapids-cmake
-          - nvcomp==3.0.4
+          - nvcomp==3.0.5
           - spdlog>=1.12.0,<1.13
   build_wheels:
     common:
@@ -257,15 +253,20 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
+          - *cmake_ver
           - cython>=3.0.3
+          - *ninja
           # TODO: Pin to numpy<1.25 until cudf requires pandas 2
           - &numpy numpy>=1.21,<1.25
-          - scikit-build>=0.13.1
-      - output_types: [conda, requirements, pyproject]
-        packages:
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
           - pyarrow==14.0.1.*
+      - output_types: conda
+        packages:
+          - scikit-build-core>=0.7.0
+      - output_types: [requirements, pyproject]
+        packages:
+          - scikit-build-core[pyproject]>=0.7.0
   build_python_cudf:
     common:
       - output_types: conda
@@ -283,6 +284,7 @@ dependencies:
           # pip recognizes the index as a global option for the requirements.txt file
           # This index is needed for rmm-cu{11,12}.
           - --extra-index-url=https://pypi.nvidia.com
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
           - git+https://github.com/python-streamz/streamz.git@master
     specific:
       - output_types: [requirements, pyproject]
@@ -480,8 +482,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          # TODO: Pin to numba<0.58 until #14160 is resolved
-          - &numba numba>=0.57,<0.58
+          - &numba numba>=0.57
           - nvtx>=0.2.1
           - packaging
           - rich
@@ -495,6 +496,7 @@ dependencies:
           # pip recognizes the index as a global option for the requirements.txt file
           # This index is needed for rmm, cubinlinker, ptxcompiler.
           - --extra-index-url=https://pypi.nvidia.com
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
     specific:
       - output_types: [conda, requirements, pyproject]
         matrices:
@@ -648,6 +650,7 @@ dependencies:
           # pip recognizes the index as a global option for the requirements.txt file
           # This index is needed for rmm, cubinlinker, ptxcompiler.
           - --extra-index-url=https://pypi.nvidia.com
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -673,6 +676,7 @@ dependencies:
           # pip recognizes the index as a global option for the requirements.txt file
           # This index is needed for rmm, cubinlinker, ptxcompiler.
           - --extra-index-url=https://pypi.nvidia.com
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -764,3 +768,8 @@ dependencies:
         packages:
           - ipython
           - openpyxl
+  notebook_cuda_version:
+    common:
+      - output_types: conda
+        packages:
+          - cuda-version=12.0
