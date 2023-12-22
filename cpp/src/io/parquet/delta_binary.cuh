@@ -101,7 +101,7 @@ struct delta_binary_decoder {
   uint8_t const* cur_mb_start;   // pointer to the start of the current mini-block data
   uint8_t const* cur_bitwidths;  // pointer to the bitwidth array in the block
 
-  uleb128_t value[delta_rolling_buf_size];  // circular buffer of delta values
+  zigzag128_t value[delta_rolling_buf_size];  // circular buffer of delta values
 
   // returns the value stored in the `value` array at index
   // `rolling_index<delta_rolling_buf_size>(idx)`. If `idx` is `0`, then return `first_value`.
@@ -297,6 +297,49 @@ struct delta_binary_decoder {
       }
       __syncthreads();
     }
+  }
+
+  // Decodes and skips values until the block containing the value after `skip` is reached.
+  // Keeps a running sum of the values and returns that upon exit. Called by all threads in a
+  // warp 0. Result is only valid on thread 0.
+  // This is intended for use only by the DELTA_LENGTH_BYTE_ARRAY decoder.
+  inline __device__ size_t skip_values_and_sum(int skip)
+  {
+    using cudf::detail::warp_size;
+    // DELTA_LENGTH_BYTE_ARRAY lengths are encoded as INT32 by convention (since the PLAIN encoding
+    // uses 4-byte lengths).
+    using delta_length_type = int32_t;
+    using warp_reduce       = cub::WarpReduce<size_t>;
+    __shared__ warp_reduce::TempStorage temp_storage;
+    int const t = threadIdx.x;
+
+    // initialize sum with first value, which is stored in the block header. cast to
+    // `delta_length_type` to ensure the value is interpreted properly before promoting it
+    // back to `size_t`.
+    size_t sum = static_cast<delta_length_type>(value_at(0));
+
+    // if only skipping one value, we're done already
+    if (skip == 1) { return sum; }
+
+    // need to do in multiple passes if values_per_mb != 32
+    uint32_t const num_pass = values_per_mb / warp_size;
+
+    while (current_value_idx < skip && current_value_idx < num_encoded_values(true)) {
+      calc_mini_block_values(t);
+
+      int const idx = current_value_idx + t;
+
+      for (uint32_t p = 0; p < num_pass; p++) {
+        auto const pidx     = idx + p * warp_size;
+        size_t const val    = pidx < skip ? static_cast<delta_length_type>(value_at(pidx)) : 0;
+        auto const warp_sum = warp_reduce(temp_storage).Sum(val);
+        if (t == 0) { sum += warp_sum; }
+      }
+      if (t == 0) { setup_next_mini_block(true); }
+      __syncwarp();
+    }
+
+    return sum;
   }
 
   // decodes the current mini block and stores the values obtained. should only be called by
