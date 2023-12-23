@@ -138,7 +138,9 @@ cpdef read_orc(object filepaths_or_buffers,
         index = range_idx
     elif reset_index_name:
         index.names = [None] * len(index.names)
-    if columns is not None and len(columns) < 1:
+    if columns is not None and (isinstance(columns, list) and len(columns) == 0):
+        # When `columns=[]`, index needs to be
+        # established, but not the columns.
         index = cudf.RangeIndex(0, len(data[list(data.keys())[0]]))
         data = {}
 
