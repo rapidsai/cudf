@@ -21,7 +21,7 @@ from cudf.testing._utils import (
     gen_rand_series,
     supported_numpy_dtypes,
 )
-from cudf.core._compat import PANDAS_GE_200
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_201
 
 # Removal of these deprecated features is no longer imminent. They will not be
 # removed until a suitable alternative has been implemented. As a result, we
@@ -160,7 +160,7 @@ def test_orc_reader_datetimestamp(datadir, inputfile, use_index):
     pdf = orcfile.read().to_pandas(date_as_object=False)
     gdf = cudf.read_orc(path, use_index=use_index)
 
-    if PANDAS_GE_200:
+    if not PANDAS_GE_201:
         # TODO: Remove typecast to `ns` after following
         # issue is fixed:
         # https://github.com/pandas-dev/pandas/issues/52449
@@ -1676,16 +1676,7 @@ def run_orc_columns_and_index_param(index_obj, index, columns):
     expected = pd.read_orc(buffer, columns=columns)
     got = cudf.read_orc(buffer, columns=columns)
 
-    if columns:
-        # TODO: Remove workaround after this issue is fixed:
-        # https://github.com/pandas-dev/pandas/issues/47944
-        assert_eq(
-            expected.sort_index(axis=1),
-            got.sort_index(axis=1),
-            check_index_type=True,
-        )
-    else:
-        assert_eq(expected, got, check_index_type=True)
+    assert_eq(expected, got, check_index_type=True)
 
 
 @pytest.mark.parametrize("index_obj", [None, [10, 11, 12], ["x", "y", "z"]])

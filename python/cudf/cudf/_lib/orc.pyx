@@ -129,7 +129,8 @@ cpdef read_orc(object filepaths_or_buffers,
 
     data, index = data_from_unique_ptr(
         move(c_result.tbl),
-        col_names if columns is None else names,
+        col_names if columns is None
+        or (isinstance(columns, list) and len(columns) == 0) else names,
         actual_index_names
     )
 
@@ -137,6 +138,9 @@ cpdef read_orc(object filepaths_or_buffers,
         index = range_idx
     elif reset_index_name:
         index.names = [None] * len(index.names)
+    if columns is not None and len(columns) < 1:
+        index = cudf.RangeIndex(0, len(data[list(data.keys())[0]]))
+        data = {}
 
     data = {
         name: update_column_struct_field_names(
@@ -173,7 +177,6 @@ cdef tuple _get_index_from_metadata(
     range_idx = None
     if json_str != "":
         meta = json.loads(json_str)
-
         if 'index_columns' in meta and len(meta['index_columns']) > 0:
             index_col = meta['index_columns']
             if isinstance(index_col[0], dict) and \
@@ -353,7 +356,8 @@ cdef orc_reader_options make_orc_reader_options(
         c_column_names.reserve(len(column_names))
         for col in column_names:
             c_column_names.push_back(str(col).encode())
-        opts.set_columns(c_column_names)
+        if len(column_names) > 0:
+            opts.set_columns(c_column_names)
 
     return opts
 
