@@ -26,11 +26,11 @@ from uuid import uuid4
 
 import cupy as cp
 import numpy as np
+import pandas as pd
 from typing_extensions import Self
 
 import cudf
 import cudf._lib as libcudf
-import pandas as pd
 from cudf._lib.types import size_type_dtype
 from cudf._typing import (
     ColumnLike,
