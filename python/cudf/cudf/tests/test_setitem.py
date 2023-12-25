@@ -5,8 +5,12 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_150
-from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.core._compat import PANDAS_GE_150, PANDAS_GE_210
+from cudf.testing._utils import (
+    assert_eq,
+    assert_exceptions_equal,
+    expect_warning_if,
+)
 
 
 @pytest.mark.parametrize("df", [pd.DataFrame({"a": [1, 2, 3]})])
@@ -310,8 +314,10 @@ def test_series_setitem_upcasting(dtype, indices):
     # column dtype.
     new_value = np.float64(np.pi)
     col_ref = cr._column
-    sr[indices] = new_value
-    cr[indices] = new_value
+    with expect_warning_if(PANDAS_GE_210 and dtype != np.float64):
+        sr[indices] = new_value
+    with expect_warning_if(dtype != np.float64):
+        cr[indices] = new_value
     if PANDAS_GE_150:
         assert_eq(sr, cr)
     else:

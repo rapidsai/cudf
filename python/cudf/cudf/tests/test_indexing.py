@@ -930,8 +930,17 @@ def test_series_setitem_basics(key, value, nulls):
     elif nulls == "all":
         psr[:] = None
     gsr = cudf.from_pandas(psr)
-    psr[key] = value
-    gsr[key] = value
+    with expect_warning_if(
+        PANDAS_GE_210
+        and isinstance(value, list)
+        and len(value) == 0
+        and nulls == "none"
+    ):
+        psr[key] = value
+    with expect_warning_if(
+        isinstance(value, list) and len(value) == 0 and nulls == "none"
+    ):
+        gsr[key] = value
     assert_eq(psr, gsr, check_dtype=False)
 
 
@@ -974,8 +983,17 @@ def test_series_setitem_iloc(key, value, nulls):
     elif nulls == "all":
         psr[:] = None
     gsr = cudf.from_pandas(psr)
-    psr.iloc[key] = value
-    gsr.iloc[key] = value
+    with expect_warning_if(
+        PANDAS_GE_210
+        and isinstance(value, list)
+        and len(value) == 0
+        and nulls == "none"
+    ):
+        psr.iloc[key] = value
+    with expect_warning_if(
+        isinstance(value, list) and len(value) == 0 and nulls == "none"
+    ):
+        gsr.iloc[key] = value
     assert_eq(psr, gsr, check_dtype=False)
 
 
@@ -994,8 +1012,12 @@ def test_series_setitem_iloc(key, value, nulls):
 def test_series_setitem_dtype(key, value):
     psr = pd.Series([1, 2, 3], dtype="int32")
     gsr = cudf.from_pandas(psr)
-    psr[key] = value
-    gsr[key] = value
+
+    with expect_warning_if(isinstance(value, (float, list))):
+        psr[key] = value
+    with expect_warning_if(isinstance(value, (float, list))):
+        gsr[key] = value
+
     assert_eq(psr, gsr)
 
 
