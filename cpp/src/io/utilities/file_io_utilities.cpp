@@ -21,6 +21,7 @@
 
 #include <dlfcn.h>
 
+#include <filesystem>
 #include <fstream>
 #include <numeric>
 
