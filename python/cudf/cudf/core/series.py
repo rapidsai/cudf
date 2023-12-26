@@ -1429,7 +1429,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if max_rows not in (0, None) and len(self) > max_rows:
             top = self.head(int(max_rows / 2 + 1))
             bottom = self.tail(int(max_rows / 2 + 1))
-            preprocess = cudf.concat([top, bottom])
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", FutureWarning)
+                preprocess = cudf.concat([top, bottom])
         else:
             preprocess = self.copy()
         preprocess.index = preprocess.index._clean_nulls_from_index()

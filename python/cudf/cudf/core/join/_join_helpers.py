@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from collections import abc
 from typing import TYPE_CHECKING, Any, Tuple, cast
 
@@ -170,9 +171,11 @@ def _match_categorical_dtypes_both(
         return lcol, rcol.astype(ltype)
     else:
         # merge categories
-        merged_categories = cudf.concat(
-            [ltype.categories, rtype.categories]
-        ).unique()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            merged_categories = cudf.concat(
+                [ltype.categories, rtype.categories]
+            ).unique()
         common_type = cudf.CategoricalDtype(
             categories=merged_categories, ordered=False
         )

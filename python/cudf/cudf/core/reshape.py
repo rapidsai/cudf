@@ -5,6 +5,7 @@ from collections import abc
 from typing import Dict, Optional
 
 import cupy
+import warnings
 import numpy as np
 import pandas as pd
 
@@ -320,9 +321,20 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         df = cudf.DataFrame()
         _normalize_series_and_dataframe(objs, axis=axis)
 
+        any_empty = any(obj.empty for obj in objs)
+        if any_empty:
+            # Do not remove until pandas-3.0 support is added.
+            warnings.warn(
+                "The behavior of array concatenation with empty entries is "
+                "deprecated. In a future version, this will no longer exclude "
+                "empty items when determining the result dtype. "
+                "To retain the old behavior, exclude the empty entries before "
+                "the concat operation.",
+                FutureWarning,
+            )
         # Inner joins involving empty data frames always return empty dfs, but
         # We must delay returning until we have set the column names.
-        empty_inner = any(obj.empty for obj in objs) and join == "inner"
+        empty_inner = any_empty and join == "inner"
 
         objs = [obj for obj in objs if obj.shape != (0, 0)]
 
