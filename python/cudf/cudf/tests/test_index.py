@@ -1034,16 +1034,19 @@ def test_index_append(data, other):
     pd_data = pd.Index(data)
     pd_other = pd.Index(other)
 
-    gd_data = cudf.core.index.as_index(data)
-    gd_other = cudf.core.index.as_index(other)
+    gd_data = cudf.Index(data)
+    gd_other = cudf.Index(other)
 
     if cudf.utils.dtypes.is_mixed_with_object_dtype(gd_data, gd_other):
         gd_data = gd_data.astype("str")
         gd_other = gd_other.astype("str")
 
-    expected = pd_data.append(pd_other)
-
-    actual = gd_data.append(gd_other)
+    with expect_warning_if(
+        (len(data) == 0 or len(other) == 0) and pd_data.dtype != pd_other.dtype
+    ):
+        expected = pd_data.append(pd_other)
+    with expect_warning_if(len(data) == 0 or len(other) == 0):
+        actual = gd_data.append(gd_other)
     if len(data) == 0 and len(other) == 0:
         # Pandas default dtype to "object" for empty list
         # cudf default dtype to "float" for empty list
@@ -1233,8 +1236,13 @@ def test_index_append_list(data, other):
     gd_data = cudf.from_pandas(data)
     gd_other = [cudf.from_pandas(i) for i in other]
 
-    expected = pd_data.append(pd_other)
-    actual = gd_data.append(gd_other)
+    with expect_warning_if(
+        (len(data) == 0 or any(len(d) == 0 for d in other))
+        and (any(d.dtype != data.dtype for d in other))
+    ):
+        expected = pd_data.append(pd_other)
+    with expect_warning_if(len(data) == 0 or any(len(d) == 0 for d in other)):
+        actual = gd_data.append(gd_other)
 
     assert_eq(expected, actual)
 

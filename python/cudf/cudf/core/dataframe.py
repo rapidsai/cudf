@@ -910,7 +910,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             transpose = self.T
         else:
-            concat_df = cudf.concat(data, axis=1)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", FutureWarning)
+                concat_df = cudf.concat(data, axis=1)
 
             cols = concat_df._data.to_pandas_index()
             if cols.dtype == "object":
@@ -1920,9 +1922,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             lower_left = self.tail(lower_rows).iloc[:, :left_cols]
             lower_right = self.tail(lower_rows).iloc[:, right_cols:]
 
-            upper = cudf.concat([upper_left, upper_right], axis=1)
-            lower = cudf.concat([lower_left, lower_right], axis=1)
-            output = cudf.concat([upper, lower])
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", FutureWarning)
+                upper = cudf.concat([upper_left, upper_right], axis=1)
+                lower = cudf.concat([lower_left, lower_right], axis=1)
+                output = cudf.concat([upper, lower])
 
         output = self._clean_nulls_from_dataframe(output)
         output._index = output._index._clean_nulls_from_index()
@@ -5154,14 +5158,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 None,
             )
 
-            return cudf.concat(
-                [
-                    series.reindex(names, copy=False)
-                    for series in describe_series_list
-                ],
-                axis=1,
-                sort=False,
-            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", FutureWarning)
+                res = cudf.concat(
+                    [
+                        series.reindex(names, copy=False)
+                        for series in describe_series_list
+                    ],
+                    axis=1,
+                    sort=False,
+                )
+            return res
 
     @_cudf_nvtx_annotate
     def to_pandas(self, *, nullable: bool = False) -> pd.DataFrame:
@@ -6258,7 +6265,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if len(mode_results) == 0:
             return DataFrame()
 
-        df = cudf.concat(mode_results, axis=1)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            df = cudf.concat(mode_results, axis=1)
+
         if isinstance(df, Series):
             df = df.to_frame()
 

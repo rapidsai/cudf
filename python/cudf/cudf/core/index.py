@@ -1103,6 +1103,16 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     @_cudf_nvtx_annotate
     def _concat(cls, objs):
         non_empties = [index for index in objs if len(index)]
+        if len(objs) != len(non_empties):
+            # Do not remove until pandas-3.0 support is added.
+            warnings.warn(
+                "The behavior of array concatenation with empty entries is "
+                "deprecated. In a future version, this will no longer exclude "
+                "empty items when determining the result dtype. "
+                "To retain the old behavior, exclude the empty entries before "
+                "the concat operation.",
+                FutureWarning,
+            )
         if all(isinstance(obj, RangeIndex) for obj in non_empties):
             result = _concat_range_index(non_empties)
         else:
@@ -1300,7 +1310,9 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             top = self[0:mr]
             bottom = self[-1 * mr :]
 
-            preprocess = cudf.concat([top, bottom])
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", FutureWarning)
+                preprocess = cudf.concat([top, bottom])
         else:
             preprocess = self
 
