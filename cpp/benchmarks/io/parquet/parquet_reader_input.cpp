@@ -68,7 +68,7 @@ void BM_parquet_read_data(nvbench::state& state, nvbench::type_list<nvbench::enu
   auto const compression = cudf::io::compression_type::SNAPPY;
   cuio_source_sink_pair source_sink(source_type);
 
-  auto num_rows = [&]() {
+  auto num_rows_written = [&]() {
     auto const tbl = create_random_table(
       cycle_dtypes(d_type, num_cols),
       table_size_bytes{data_size},
@@ -82,7 +82,7 @@ void BM_parquet_read_data(nvbench::state& state, nvbench::type_list<nvbench::enu
     return view.num_rows();
   }();
 
-  parquet_read_common(num_rows, num_cols, source_sink, state);
+  parquet_read_common(num_rows_written, num_cols, source_sink, state);
 }
 
 void BM_parquet_read_io_compression(nvbench::state& state)
@@ -102,7 +102,7 @@ void BM_parquet_read_io_compression(nvbench::state& state)
   auto const compression = retrieve_compression_type_enum(state.get_string("compression_type"));
   cuio_source_sink_pair source_sink(source_type);
 
-  auto num_rows = [&]() {
+  auto num_rows_written = [&]() {
     auto const tbl = create_random_table(
       cycle_dtypes(d_type, num_cols),
       table_size_bytes{data_size},
@@ -116,7 +116,7 @@ void BM_parquet_read_io_compression(nvbench::state& state)
     return view.num_rows();
   }();
 
-  parquet_read_common(num_rows, num_cols, source_sink, state);
+  parquet_read_common(num_rows_written, num_cols, source_sink, state);
 }
 
 void BM_parquet_read_io_small_mixed(nvbench::state& state)
@@ -163,7 +163,7 @@ void BM_parquet_read_chunks(nvbench::state& state, nvbench::type_list<nvbench::e
   auto const compression = cudf::io::compression_type::SNAPPY;
   cuio_source_sink_pair source_sink(source_type);
 
-  auto num_rows = [&]() {
+  auto num_rows_written = [&]() {
     auto const tbl = create_random_table(
       cycle_dtypes(d_type, num_cols),
       table_size_bytes{data_size},
@@ -197,7 +197,7 @@ void BM_parquet_read_chunks(nvbench::state& state, nvbench::type_list<nvbench::e
       } while (reader.has_next());
       timer.stop();
 
-      CUDF_EXPECTS(num_rows_read == num_rows, "Benchmark did not read the entire table");
+      CUDF_EXPECTS(num_rows_read == num_rows_written, "Benchmark did not read the entire table");
     });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");

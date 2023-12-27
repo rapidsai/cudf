@@ -66,7 +66,7 @@ void BM_orc_read_data(nvbench::state& state,
   cudf::size_type const run_length  = state.get_int64("run_length");
   cuio_source_sink_pair source_sink(IOType);
 
-  auto const num_rows = [&]() {
+  auto const num_rows_written = [&]() {
     auto const tbl = create_random_table(
       cycle_dtypes(d_type, num_cols),
       table_size_bytes{data_size},
@@ -79,7 +79,7 @@ void BM_orc_read_data(nvbench::state& state,
     return view.num_rows();
   }();
 
-  orc_read_common(num_rows, source_sink, state);
+  orc_read_common(num_rows_written, source_sink, state);
 }
 
 template <cudf::io::io_type IOType, cudf::io::compression_type Compression>
@@ -99,7 +99,7 @@ void BM_orc_read_io_compression(
   cudf::size_type const run_length  = state.get_int64("run_length");
   cuio_source_sink_pair source_sink(IOType);
 
-  auto const num_rows = [&]() {
+  auto const num_rows_written = [&]() {
     auto const tbl = create_random_table(
       cycle_dtypes(d_type, num_cols),
       table_size_bytes{data_size},
@@ -113,7 +113,7 @@ void BM_orc_read_io_compression(
     return view.num_rows();
   }();
 
-  orc_read_common(num_rows, source_sink, state);
+  orc_read_common(num_rows_written, source_sink, state);
 }
 
 using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL_SIGNED,
