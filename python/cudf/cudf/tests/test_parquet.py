@@ -632,13 +632,6 @@ def test_parquet_reader_microsecond_timestamps(datadir):
     expect = pd.read_parquet(fname)
     got = cudf.read_parquet(fname)
 
-    if PANDAS_GE_200:
-        # TODO: Remove typecast to `ns` after following
-        # issue is fixed:
-        # https://github.com/pandas-dev/pandas/issues/52449
-        assert got["a"].dtype == cudf.dtype("datetime64[us]")
-        got = got.astype("datetime64[ns]")
-
     assert_eq(expect, got)
 
 
