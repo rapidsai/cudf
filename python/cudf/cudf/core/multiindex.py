@@ -1028,6 +1028,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 for level, name in enumerate(self.names)
             ]
         else:
+            if not is_list_like(name):
+                raise TypeError(
+                    "'name' must be a list / sequence of column names."
+                )
             if len(name) != len(self.levels):
                 raise ValueError(
                     "'name' should have the same length as "
