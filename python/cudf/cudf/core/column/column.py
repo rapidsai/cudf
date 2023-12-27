@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import builtins
 import pickle
+import warnings
+
 from collections import abc
 from functools import cached_property
 from itertools import chain
@@ -2596,7 +2598,11 @@ def _construct_array(
         ):
             # We may have date-like strings with timezones
             try:
-                pd_arbitrary = pd.to_datetime(arbitrary)
+                with warnings.catch_warnings():
+                    # Need to ignore userwarnings when
+                    # datetime format cannot be inferred.
+                    warnings.simplefilter("ignore", UserWarning)
+                    pd_arbitrary = pd.to_datetime(arbitrary)
                 if isinstance(pd_arbitrary.dtype, pd.DatetimeTZDtype):
                     raise NotImplementedError(
                         "cuDF does not yet support timezone-aware datetimes"

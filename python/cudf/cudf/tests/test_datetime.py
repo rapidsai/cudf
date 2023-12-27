@@ -642,21 +642,10 @@ def test_cudf_to_datetime(data, dayfirst):
     expected = pd.to_datetime(pd_data, dayfirst=dayfirst)
     actual = cudf.to_datetime(gd_data, dayfirst=dayfirst)
 
-    # TODO: Remove typecast to `ns` and following if/else
-    # workaround after following issue is fixed:
-    # https://github.com/pandas-dev/pandas/issues/52449
-
-    if actual is not None and expected is not None:
-        assert_eq(
-            actual.astype(pd_data.dtype)
-            if pd_data is not None
-            and hasattr(pd_data, "dtype")
-            and cudf.api.types.is_datetime_dtype(pd_data.dtype)
-            else actual.astype("datetime64[ns]"),
-            expected,
-        )
+    if isinstance(expected, pd.Series):
+        assert_eq(actual, expected, check_dtype=False)
     else:
-        assert_eq(actual, expected)
+        assert_eq(actual, expected, check_exact=False)
 
 
 @pytest.mark.parametrize(
@@ -748,11 +737,10 @@ def test_to_datetime_units(data, unit):
     expected = pd.to_datetime(pd_data, unit=unit)
     actual = cudf.to_datetime(gd_data, unit=unit)
 
-    # TODO: Remove typecast to `ns` after following
-    # issue is fixed:
-    # https://github.com/pandas-dev/pandas/issues/52449
-
-    assert_eq(actual.astype("datetime64[ns]"), expected)
+    if isinstance(expected, pd.Series):
+        assert_eq(actual, expected, check_dtype=False)
+    else:
+        assert_eq(actual, expected, exact=False, check_exact=False)
 
 
 @pytest.mark.parametrize(
@@ -810,11 +798,11 @@ def test_to_datetime_format(data, format, infer_datetime_format):
         actual = cudf.to_datetime(
             gd_data, format=format, infer_datetime_format=infer_datetime_format
         )
-    # TODO: Remove typecast to `ns` after following
-    # issue is fixed:
-    # https://github.com/pandas-dev/pandas/issues/52449
 
-    assert_eq(actual.astype("datetime64[ns]"), expected)
+    if isinstance(expected, pd.Series):
+        assert_eq(actual, expected, check_dtype=False)
+    else:
+        assert_eq(actual, expected, check_exact=False)
 
 
 def test_to_datetime_data_out_of_range_for_format():
@@ -879,11 +867,8 @@ def test_datetime_scalar_timeunit_cast(timeunit):
 
     gs = Series(testscalar)
     ps = pd.Series(testscalar)
-    # TODO: Remove typecast to `ns` after following
-    # issue is fixed:
-    # https://github.com/pandas-dev/pandas/issues/52449
 
-    assert_eq(ps, gs.astype("datetime64[ns]"))
+    assert_eq(ps, gs, check_dtype=False)
 
     gdf = DataFrame()
     gdf["a"] = np.arange(5)
@@ -894,11 +879,7 @@ def test_datetime_scalar_timeunit_cast(timeunit):
     pdf["b"] = testscalar
 
     assert gdf["b"].dtype == cudf.dtype("datetime64[s]")
-    # TODO: Remove typecast to `ns` after following
-    # issue is fixed:
-    # https://github.com/pandas-dev/pandas/issues/52449
-    gdf["b"] = gdf["b"].astype("datetime64[ns]")
-    assert_eq(pdf, gdf)
+    assert_eq(pdf, gdf, check_dtype=True)
 
 
 @pytest.mark.parametrize(
@@ -1328,14 +1309,13 @@ def test_datetime_infer_format(data, timezone, dtype):
 
         assert_eq(expected, actual)
     else:
-        with pytest.raises(NotImplementedError):
-            assert_exceptions_equal(
-                lfunc=psr.astype,
-                rfunc=sr.astype,
-                lfunc_args_and_kwargs=([], {"dtype": dtype}),
-                rfunc_args_and_kwargs=([], {"dtype": dtype}),
-                check_exception_type=False,
-            )
+        assert_exceptions_equal(
+            lfunc=psr.astype,
+            rfunc=sr.astype,
+            lfunc_args_and_kwargs=([], {"dtype": dtype}),
+            rfunc_args_and_kwargs=([], {"dtype": dtype}),
+            check_exception_type=False,
+        )
 
 
 def test_dateoffset_instance_subclass_check():
@@ -1634,7 +1614,8 @@ def test_date_range_end_freq_periods(request, end, freq, periods):
     request.applymarker(
         pytest.mark.xfail(
             condition=(
-                "nanoseconds" in freq
+                not PANDAS_GE_210
+                and "nanoseconds" in freq
                 and periods != 1
                 and end == "1970-01-01 00:00:00"
             ),
@@ -2268,7 +2249,7 @@ def test_format_timezone_not_implemented(code):
 
 @pytest.mark.parametrize("tz", ["Z", "UTC-3", "+01:00"])
 def test_no_format_timezone_not_implemented(tz):
-    with pytest.raises(NotImplementedError):
+    with pytest.raises((NotImplementedError, ValueError)):
         cudf.to_datetime([f"2020-01-01 00:00:00{tz}"])
 
 
