@@ -3016,7 +3016,7 @@ def _get_indexer_basic(index, positions, method, target_col, tolerance):
         # sentinel for missing values
     else:
         # Mark indices to the right of the largest value as not found
-        positions[positions == len(index)] = -1
+        positions[positions == len(index)] = np.int32(-1)
 
     if tolerance is not None:
         distance = abs(index[positions] - target_col)
