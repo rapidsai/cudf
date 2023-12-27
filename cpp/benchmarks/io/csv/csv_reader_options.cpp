@@ -76,7 +76,7 @@ void BM_csv_read_varying_options(
                  switch (RowSelection) {
                    case row_selection::ALL: break;
                    case row_selection::BYTE_RANGE:
-                     // only read the header in the first chunk
+                     // with byte_range, we can't read the header in any chunk but the first
                      read_options.set_header(chunk == 0 ? 0 : -1);
                      read_options.set_byte_range_offset(chunk * chunk_size);
                      read_options.set_byte_range_size(chunk_size);
