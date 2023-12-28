@@ -284,6 +284,15 @@ class _SeriesIlocIndexer(_FrameIndexer):
             to_dtype = np.result_type(value.dtype, self._frame._column.dtype)
             value = value.astype(to_dtype)
             if to_dtype != self._frame._column.dtype:
+                # Do not remove until pandas-3.0 support is added.
+                warnings.warn(
+                    f"Setting an item of incompatible dtype is deprecated "
+                    "and will raise in a future error of pandas. "
+                    f"Value '{value}' has dtype incompatible with "
+                    f"{self._frame._column.dtype}, "
+                    "please explicitly cast to a compatible dtype first.",
+                    FutureWarning,
+                )
                 self._frame._column._mimic_inplace(
                     self._frame._column.astype(to_dtype), inplace=True
                 )
@@ -1429,7 +1438,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if max_rows not in (0, None) and len(self) > max_rows:
             top = self.head(int(max_rows / 2 + 1))
             bottom = self.tail(int(max_rows / 2 + 1))
-            preprocess = cudf.concat([top, bottom])
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", FutureWarning)
+                preprocess = cudf.concat([top, bottom])
         else:
             preprocess = self.copy()
         preprocess.index = preprocess.index._clean_nulls_from_index()

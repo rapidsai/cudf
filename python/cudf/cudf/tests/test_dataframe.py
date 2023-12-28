@@ -93,6 +93,20 @@ def _hide_ufunc_warnings(eval_str):
         yield
 
 
+@contextmanager
+def _hide_concat_empty_dtype_warning():
+    with warnings.catch_warnings():
+        # Ignoring warnings in this test as warnings are
+        # being caught and validated in other tests.
+        warnings.filterwarnings(
+            "ignore",
+            "The behavior of array concatenation with empty "
+            "entries is deprecated.",
+            category=FutureWarning,
+        )
+        yield
+
+
 def test_init_via_list_of_tuples():
     data = [
         (5, "cats", "jump", np.nan),
@@ -1601,8 +1615,9 @@ def test_dataframe_concat_different_column_types():
     "df_2", [cudf.DataFrame({"a": [], "b": []}), cudf.DataFrame({})]
 )
 def test_concat_empty_dataframe(df_1, df_2):
-    got = cudf.concat([df_1, df_2])
-    expect = pd.concat([df_1.to_pandas(), df_2.to_pandas()], sort=False)
+    with _hide_concat_empty_dtype_warning():
+        got = cudf.concat([df_1, df_2])
+        expect = pd.concat([df_1.to_pandas(), df_2.to_pandas()], sort=False)
 
     # ignoring dtypes as pandas upcasts int to float
     # on concatenation with empty dataframes
@@ -1628,10 +1643,15 @@ def test_concat_empty_dataframe(df_1, df_2):
     ],
 )
 def test_concat_different_column_dataframe(df1_d, df2_d):
-    got = cudf.concat(
-        [cudf.DataFrame(df1_d), cudf.DataFrame(df2_d), cudf.DataFrame(df1_d)],
-        sort=False,
-    )
+    with _hide_concat_empty_dtype_warning():
+        got = cudf.concat(
+            [
+                cudf.DataFrame(df1_d),
+                cudf.DataFrame(df2_d),
+                cudf.DataFrame(df1_d),
+            ],
+            sort=False,
+        )
 
     pdf1 = pd.DataFrame(df1_d)
     pdf2 = pd.DataFrame(df2_d)
@@ -1670,8 +1690,9 @@ def test_concat_different_column_dataframe(df1_d, df2_d):
 )
 @pytest.mark.parametrize("ser_2", [pd.Series([], dtype="float64")])
 def test_concat_empty_series(ser_1, ser_2):
-    got = cudf.concat([cudf.Series(ser_1), cudf.Series(ser_2)])
-    expect = pd.concat([ser_1, ser_2])
+    with _hide_concat_empty_dtype_warning():
+        got = cudf.concat([cudf.Series(ser_1), cudf.Series(ser_2)])
+        expect = pd.concat([ser_1, ser_2])
 
     assert_eq(got, expect, check_index_type=True)
 
@@ -7500,8 +7521,13 @@ def test_dataframe_concat_dataframe(df, other, sort, ignore_index):
     gdf = cudf.from_pandas(df)
     other_gd = cudf.from_pandas(other)
 
-    expected = pd.concat([pdf, other_pd], sort=sort, ignore_index=ignore_index)
-    actual = cudf.concat([gdf, other_gd], sort=sort, ignore_index=ignore_index)
+    with _hide_concat_empty_dtype_warning():
+        expected = pd.concat(
+            [pdf, other_pd], sort=sort, ignore_index=ignore_index
+        )
+        actual = cudf.concat(
+            [gdf, other_gd], sort=sort, ignore_index=ignore_index
+        )
 
     # In empty dataframe cases, Pandas & cudf differ in columns
     # creation, pandas creates RangeIndex(0, 0)
@@ -7739,12 +7765,13 @@ def test_dataframe_concat_dataframe_lists(df, other, sort, ignore_index):
     gdf = cudf.from_pandas(df)
     other_gd = [cudf.from_pandas(o) for o in other]
 
-    expected = pd.concat(
-        [pdf] + other_pd, sort=sort, ignore_index=ignore_index
-    )
-    actual = cudf.concat(
-        [gdf] + other_gd, sort=sort, ignore_index=ignore_index
-    )
+    with _hide_concat_empty_dtype_warning():
+        expected = pd.concat(
+            [pdf] + other_pd, sort=sort, ignore_index=ignore_index
+        )
+        actual = cudf.concat(
+            [gdf] + other_gd, sort=sort, ignore_index=ignore_index
+        )
 
     # In some cases, Pandas creates an empty Index([], dtype="object") for
     # columns whereas cudf creates a RangeIndex(0, 0).
@@ -7854,12 +7881,13 @@ def test_dataframe_concat_lists(df, other, sort, ignore_index):
     gdf = cudf.from_pandas(df)
     other_gd = [cudf.from_pandas(o) for o in other_pd]
 
-    expected = pd.concat(
-        [pdf] + other_pd, sort=sort, ignore_index=ignore_index
-    )
-    actual = cudf.concat(
-        [gdf] + other_gd, sort=sort, ignore_index=ignore_index
-    )
+    with _hide_concat_empty_dtype_warning():
+        expected = pd.concat(
+            [pdf] + other_pd, sort=sort, ignore_index=ignore_index
+        )
+        actual = cudf.concat(
+            [gdf] + other_gd, sort=sort, ignore_index=ignore_index
+        )
 
     if expected.shape != df.shape:
         assert_eq(

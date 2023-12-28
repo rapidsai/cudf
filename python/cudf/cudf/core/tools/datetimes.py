@@ -923,10 +923,14 @@ def date_range(
     # FIXME: when `end_estim` is out of bound, but the actual `end` is not,
     # we shouldn't raise but compute the sequence as is. The trailing overflow
     # part should get trimmed at the end.
-    end_estim = (
-        pd.Timestamp(start.value)
-        + periods * offset._maybe_as_fast_pandas_offset()
-    ).to_datetime64()
+    with warnings.catch_warnings():
+        # Need to ignore userwarnings where nonzero nanoseconds
+        # are dropped in conversion during the binops
+        warnings.simplefilter("ignore", UserWarning)
+        end_estim = (
+            pd.Timestamp(start.value)
+            + periods * offset._maybe_as_fast_pandas_offset()
+        ).to_datetime64()
 
     if "months" in offset.kwds or "years" in offset.kwds:
         # If `offset` is non-fixed frequency, resort to libcudf.

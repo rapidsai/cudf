@@ -40,8 +40,8 @@ from cudf._typing import (
 )
 from cudf.api.extensions import no_default
 from cudf.api.types import (
-    _is_non_decimal_numeric_dtype,
     _is_categorical_dtype,
+    _is_non_decimal_numeric_dtype,
     is_bool_dtype,
     is_decimal_dtype,
     is_dict_like,
@@ -1067,6 +1067,14 @@ class IndexedFrame(Frame):
                 f"`limit_direction` must be 'backward' for method `{method}`"
             )
 
+        if method.lower() in {"ffill", "bfill", "pad", "backfill"}:
+            warnings.warn(
+                f"{type(self).__name__}.interpolate with method={method} is "
+                "deprecated and will raise in a future version. "
+                "Use obj.ffill() or obj.bfill() instead.",
+                FutureWarning,
+            )
+
         data = self
 
         if not isinstance(data._index, cudf.RangeIndex):
@@ -1082,6 +1090,12 @@ class IndexedFrame(Frame):
         interpolator = cudf.core.algorithms.get_column_interpolator(method)
         columns = {}
         for colname, col in data._data.items():
+            if isinstance(col, cudf.core.column.StringColumn):
+                warnings.warn(
+                    f"{type(self).__name__}.interpolate with object dtype is "
+                    "deprecated and will raise in a future version.",
+                    FutureWarning,
+                )
             if col.nullable:
                 col = col.astype("float64").fillna(np.nan)
 

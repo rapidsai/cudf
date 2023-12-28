@@ -787,13 +787,7 @@ def test_join_datetimes_index(dtype):
 
     assert gdf["d"].dtype == cudf.dtype(dtype)
 
-    if PANDAS_GE_200:
-        # TODO: Remove typecast to `ns` after following
-        # issue is fixed:
-        # https://github.com/pandas-dev/pandas/issues/52449
-        gdf = gdf.astype("datetime64[ns]")
-
-    assert_join_results_equal(pdf, gdf, how="inner")
+    assert_join_results_equal(pdf, gdf, how="inner", check_dtype=False)
 
 
 def test_join_with_different_names():

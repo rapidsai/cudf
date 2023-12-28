@@ -1953,13 +1953,13 @@ def test_multiindex_to_frame_allow_duplicates(
 ):
     gidx = cudf.from_pandas(pidx)
 
-    if (
+    if name is None or (
         (
             len(pidx.names) != len(set(pidx.names))
             and not all(x is None for x in pidx.names)
         )
         and not allow_duplicates
-        and (name is None or name is no_default)
+        and name is no_default
     ):
         assert_exceptions_equal(
             pidx.to_frame,

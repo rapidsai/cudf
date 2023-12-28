@@ -6,6 +6,7 @@ import itertools
 import numbers
 import operator
 import pickle
+import warnings
 from collections import abc
 from functools import cached_property
 from numbers import Integral
@@ -717,15 +718,17 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 continue
             lookup[i] = cudf.Series(row)
         frame = cudf.DataFrame(dict(enumerate(index._data.columns)))
-        data_table = cudf.concat(
-            [
-                frame,
-                cudf.DataFrame(
-                    {"idx": cudf.Series(column.arange(len(frame)))}
-                ),
-            ],
-            axis=1,
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            data_table = cudf.concat(
+                [
+                    frame,
+                    cudf.DataFrame(
+                        {"idx": cudf.Series(column.arange(len(frame)))}
+                    ),
+                ],
+                axis=1,
+            )
         # Sort indices in pandas compatible mode
         # because we want the indices to be fetched
         # in a deterministic order.
@@ -1028,6 +1031,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 for level, name in enumerate(self.names)
             ]
         else:
+            if not is_list_like(name):
+                raise TypeError(
+                    "'name' must be a list / sequence of column names."
+                )
             if len(name) != len(self.levels):
                 raise ValueError(
                     "'name' should have the same length as "
