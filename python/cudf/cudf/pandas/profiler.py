@@ -127,7 +127,15 @@ class Profiler:
         ]
     ):
         if isinstance(func_obj, _MethodProxy):
-            return func_obj._fsproxy_slow.__qualname__
+            # Extract classname from method object
+            try:
+                type_name = type(func_obj._fsproxy_wrapped.__self__).__name__
+            except Exception:
+                type_name = "<unknown>"
+            # Explicitly ask for __name__ on _fsproxy_wrapped to avoid
+            # getting a private attribute and forcing a slow-path copy
+            func_name = func_obj._fsproxy_wrapped.__name__
+            return ".".join([type_name, func_name])
         elif isinstance(func_obj, _FunctionProxy) or issubclass(
             func_obj, (_FinalProxy, _IntermediateProxy)
         ):
@@ -156,12 +164,12 @@ class Profiler:
             # Store per-function information for free functions and methods
             frame_locals = inspect.getargvalues(frame).locals
             if (
-                isinstance(func_obj := frame_locals["args"][0], _FunctionProxy)
-                or isinstance(func_obj, _MethodProxy)
-                or (
-                    isinstance(func_obj, type)
-                    and issubclass(func_obj, (_FinalProxy, _IntermediateProxy))
+                isinstance(
+                    func_obj := frame_locals["args"][0],
+                    (_MethodProxy, _FunctionProxy),
                 )
+                or isinstance(func_obj, type)
+                and issubclass(func_obj, (_FinalProxy, _IntermediateProxy))
             ):
                 func_name = self.get_namespaced_function_name(func_obj)
                 self._call_stack.append((func_name, time.perf_counter()))
@@ -186,11 +194,12 @@ class Profiler:
                     )
 
             frame_locals = inspect.getargvalues(frame).locals
-            if isinstance(
-                func_obj := frame_locals["args"][0],
-                (_MethodProxy, _FunctionProxy),
-            ) or (
-                isinstance(func_obj, type)
+            if (
+                isinstance(
+                    func_obj := frame_locals["args"][0],
+                    (_MethodProxy, _FunctionProxy),
+                )
+                or isinstance(func_obj, type)
                 and issubclass(func_obj, (_FinalProxy, _IntermediateProxy))
             ):
                 func_name, start = self._call_stack.pop()
