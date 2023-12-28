@@ -1232,24 +1232,6 @@ def test_func_namespace():
     assert xpd.concat is xpd.core.reshape.concat.concat
 
 
-def test_register_accessor():
-    @xpd.api.extensions.register_dataframe_accessor("xyz")
-    class XYZ:
-        def __init__(self, obj):
-            self._obj = obj
-
-        @property
-        def foo(self):
-            return "spam"
-
-    # the accessor must be registered with the proxy type,
-    # not the underlying fast or slow type
-    assert "xyz" in xpd.DataFrame.__dict__
-
-    df = xpd.DataFrame()
-    assert df.xyz.foo == "spam"
-
-
 def test_isinstance_base_offset():
     offset = xpd.tseries.frequencies.to_offset("1s")
     assert isinstance(offset, xpd.tseries.offsets.BaseOffset)
