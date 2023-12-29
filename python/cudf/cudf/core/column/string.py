@@ -4842,6 +4842,7 @@ class StringMethods(ColumnMethods):
         result = self._return_or_inplace(lc, retain_index=True)
 
         if isinstance(result, cudf.Series) and not as_list:
+            result = result[result.list.len() > 0] # before exploding, removes those lists which have 0 length
             return result.explode()
         return result
 
