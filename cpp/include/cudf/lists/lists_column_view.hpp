@@ -83,7 +83,7 @@ class lists_column_view : private column_view {
   /**
    * @brief Returns the internal column of offsets
    *
-   * @throw cudf::logic error if this is an empty column
+   * @throw cudf::logic_error if this is an empty column
    * @return The internal column of offsets
    */
   [[nodiscard]] column_view offsets() const;
@@ -91,7 +91,7 @@ class lists_column_view : private column_view {
   /**
    * @brief Returns the internal child column
    *
-   * @throw cudf::logic error if this is an empty column
+   * @throw cudf::logic_error if this is an empty column
    * @return The internal child column
    */
   [[nodiscard]] column_view child() const;
@@ -104,7 +104,7 @@ class lists_column_view : private column_view {
    * the child columns when recursing.  Most functions operating in a recursive manner
    * on lists columns should be using `get_sliced_child()` instead of `child()`.
    *
-   * @throw cudf::logic error if this is an empty column
+   * @throw cudf::logic_error if this is an empty column
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return A sliced child column view
    */

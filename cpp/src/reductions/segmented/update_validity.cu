@@ -38,7 +38,7 @@ void segmented_update_validity(column& result,
     offsets.end() - 1,
     offsets.begin() + 1,
     null_handling,
-    init.has_value() ? std::optional(init.value().get().is_valid()) : std::nullopt,
+    init.has_value() ? std::optional(init.value().get().is_valid(stream)) : std::nullopt,
     stream,
     mr);
   result.set_null_mask(std::move(output_null_mask), output_null_count);

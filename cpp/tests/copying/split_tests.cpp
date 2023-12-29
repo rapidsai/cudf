@@ -1950,11 +1950,11 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitTable)
 
   using LCW = cudf::test::lists_column_wrapper<int>;
 
-  cudf::test::lists_column_wrapper<int> col0{{{{1, 2, 3}, valids}, {4, 5}},
+  cudf::test::lists_column_wrapper<int> col0{{{1, 2, 3}, {4, 5}},
                                              {{LCW{}, LCW{}, {7, 8}, LCW{}}, valids},
                                              {{{6}}},
-                                             {{{7, 8}, {{9, 10, 11}, valids}, LCW{}}, valids},
-                                             {{LCW{}, {-1, -2, -3, -4, -5}}, valids},
+                                             {{{7, 8}, LCW{}, {{9, 10, 11}, valids}}, valids},
+                                             {{{-1, -2, -3, -4, -5}, LCW{}}, valids},
                                              {LCW{}},
                                              {{-10}, {-100, -200}}};
 

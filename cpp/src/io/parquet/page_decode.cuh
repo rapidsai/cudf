@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "error.hpp"
 #include "parquet_gpu.hpp"
 #include "rle_stream.cuh"
 
@@ -44,7 +45,7 @@ struct page_state_s {
   int32_t dict_val{};
   uint32_t initial_rle_run[NUM_LEVEL_TYPES]{};   // [def,rep]
   int32_t initial_rle_value[NUM_LEVEL_TYPES]{};  // [def,rep]
-  int32_t error{};
+  kernel_error::value_type error{};
   PageInfo page{};
   ColumnChunkDesc col{};
 
@@ -73,13 +74,13 @@ struct page_state_s {
 
   inline __device__ void set_error_code(decode_error err)
   {
-    cuda::atomic_ref<int32_t, cuda::thread_scope_block> ref{error};
-    ref.fetch_or(static_cast<int32_t>(err), cuda::std::memory_order_relaxed);
+    cuda::atomic_ref<kernel_error::value_type, cuda::thread_scope_block> ref{error};
+    ref.fetch_or(static_cast<kernel_error::value_type>(err), cuda::std::memory_order_relaxed);
   }
 
   inline __device__ void reset_error_code()
   {
-    cuda::atomic_ref<int32_t, cuda::thread_scope_block> ref{error};
+    cuda::atomic_ref<kernel_error::value_type, cuda::thread_scope_block> ref{error};
     ref.store(0, cuda::std::memory_order_release);
   }
 };
@@ -242,6 +243,10 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(page_state_s* s,
   int pos            = s->dict_pos;
   int str_len        = 0;
 
+  // NOTE: racecheck warns about a RAW involving s->dict_pos, which is likely a false positive
+  // because the only path that does not include a sync will lead to s->dict_pos being overwritten
+  // with the same value
+
   while (pos < target_pos) {
     int is_literal, batch_len;
     if (!t) {
@@ -355,6 +360,10 @@ inline __device__ int gpuDecodeRleBooleans(page_state_s* s, state_buf* sb, int t
 {
   uint8_t const* end = s->data_end;
   int64_t pos        = s->dict_pos;
+
+  // NOTE: racecheck warns about a RAW involving s->dict_pos, which is likely a false positive
+  // because the only path that does not include a sync will lead to s->dict_pos being overwritten
+  // with the same value
 
   while (pos < target_pos) {
     int is_literal, batch_len;
@@ -548,6 +557,9 @@ __device__ void gpuDecodeStream(
     batch_coded_count += batch_len;
     value_count += batch_len;
   }
+  // issue #14597
+  // racecheck reported race between reads at the start of this function and the writes below
+  __syncwarp();
 
   // update the stream info
   if (!t) {
@@ -680,6 +692,9 @@ __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value
                                                       level_t const* const def,
                                                       int t)
 {
+  // exit early if there's no work to do
+  if (s->input_value_count >= target_input_value_count) { return; }
+
   // max nesting depth of the column
   int const max_depth       = s->col.max_nesting_depth;
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
@@ -999,6 +1014,12 @@ struct mask_filter {
   }
 };
 
+enum class page_processing_stage {
+  PREPROCESS,
+  STRING_BOUNDS,
+  DECODE,
+};
+
 /**
  * @brief Sets up block-local page state information from the global pages.
  *
@@ -1008,7 +1029,7 @@ struct mask_filter {
  * @param[in] min_row Crop all rows below min_row
  * @param[in] num_rows Maximum number of rows to read
  * @param[in] filter Filtering function used to decide which pages to operate on
- * @param[in] is_decode_step If we are setting up for the decode step (instead of the preprocess)
+ * @param[in] stage What stage of the decoding process is this being called from
  * @tparam Filter Function that takes a PageInfo reference and returns true if the given page should
  * be operated on Currently only used by gpuComputePageSizes step)
  * @return True if this page should be processed further
@@ -1020,7 +1041,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
                                           size_t min_row,
                                           size_t num_rows,
                                           Filter filter,
-                                          bool is_decode_step)
+                                          page_processing_stage stage)
 {
   int t = threadIdx.x;
 
@@ -1111,7 +1132,8 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
   //
   // NOTE: this check needs to be done after the null counts have been zeroed out
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
-  if (is_decode_step && s->num_rows == 0 &&
+  if ((stage == page_processing_stage::STRING_BOUNDS || stage == page_processing_stage::DECODE) &&
+      s->num_rows == 0 &&
       !(has_repetition && (is_bounds_page(s, min_row, num_rows, has_repetition) ||
                            is_page_contained(s, min_row, num_rows)))) {
     return false;
@@ -1222,7 +1244,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
       // NOTE: in a chunked read situation, s->col.column_data_base and s->col.valid_map_base
       // will be aliased to memory that has been freed when we get here in the non-decode step, so
       // we cannot check against nullptr.  we'll just check a flag directly.
-      if (is_decode_step) {
+      if (stage == page_processing_stage::DECODE) {
         int max_depth = s->col.max_nesting_depth;
         for (int idx = 0; idx < max_depth; idx++) {
           PageNestingDecodeInfo* nesting_info = &s->nesting_info[idx];
@@ -1310,6 +1332,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           s->dict_run = 0;
         } break;
         case Encoding::DELTA_BINARY_PACKED:
+        case Encoding::DELTA_LENGTH_BYTE_ARRAY:
         case Encoding::DELTA_BYTE_ARRAY:
           // nothing to do, just don't error
           break;
@@ -1372,13 +1395,13 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
 
       // if we're in the decoding step, jump directly to the first
       // value we care about
-      if (is_decode_step) {
+      if (stage == page_processing_stage::DECODE) {
         s->input_value_count = s->page.skipped_values > -1 ? s->page.skipped_values : 0;
-      } else {
+      } else if (stage == page_processing_stage::PREPROCESS) {
         s->input_value_count = 0;
         s->input_leaf_count  = 0;
-        s->page.skipped_values =
-          -1;  // magic number to indicate it hasn't been set for use inside UpdatePageSizes
+        // magic number to indicate it hasn't been set for use inside UpdatePageSizes
+        s->page.skipped_values      = -1;
         s->page.skipped_leaf_values = 0;
       }
     }
