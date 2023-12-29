@@ -2041,6 +2041,9 @@ def as_column(
 
             col = col.astype(new_dtype)
 
+        elif dtype is not None:
+            col = col.astype(dtype)
+
         return col
 
     elif isinstance(
@@ -2311,6 +2314,8 @@ def as_column(
     elif isinstance(arbitrary, cudf.Scalar):
         data = ColumnBase.from_scalar(arbitrary, length if length else 1)
     else:
+        # TODO: Need to parse with cupy, as cupy 0D scalars are accepted
+        # test_series_from_cupy_scalars
         from_pandas = nan_as_null is None or nan_as_null
         if dtype is not None:
             if (
@@ -2335,7 +2340,7 @@ def as_column(
                     if not isinstance(dtype, np.dtype):
                         dtype = dtype.to_pandas()
                     arbitrary = pd.Series(arbitrary, dtype=dtype)
-            data = as_column(arbitrary, nan_as_null=nan_as_null)
+            data = as_column(arbitrary, nan_as_null=nan_as_null, dtype=dtype)
         else:
             try:
                 arbitrary = pa.array(arbitrary, from_pandas=from_pandas)
