@@ -6108,7 +6108,7 @@ def test_df_sr_mask_where(data, condition, other, error, inplace):
             got_mask = gs_mask
 
         if hasattr(expect_where, "dtype") and isinstance(
-            expect_where, pd.CategoricalDtype
+            expect_where.dtype, pd.CategoricalDtype
         ):
             np.testing.assert_array_equal(
                 expect_where.cat.codes,
