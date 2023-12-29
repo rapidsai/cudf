@@ -2640,6 +2640,15 @@ def test_astype_pandas_nullable_pandas_compat(dtype, klass, kind):
             ser.astype(kind(dtype))
 
 
+@pytest.mark.parametrize("klass", [cudf.Series, cudf.Index])
+@pytest.mark.parametrize(
+    "data", [pa.array([1, None]), pa.chunked_array([[1, None]])]
+)
+def test_from_arrow_array_dtype(klass, data):
+    obj = klass(data, dtype="int8")
+    assert obj.dtype == np.dtype("int8")
+
+
 def test_series_where_mixed_bool_dtype():
     s = cudf.Series([True, False, True])
     with pytest.raises(TypeError):
