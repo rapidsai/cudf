@@ -629,12 +629,18 @@ class BaseIndex(Serializable):
             common_dtype = cudf.utils.dtypes.find_common_type(
                 [self.dtype, other.dtype]
             )
-            return self._get_reconciled_name_object(other).astype(common_dtype)
+            res = self._get_reconciled_name_object(other).astype(common_dtype)
+            if sort is True:
+                return res.sort_values()
+            return res
         elif not len(self):
             common_dtype = cudf.utils.dtypes.find_common_type(
                 [self.dtype, other.dtype]
             )
-            return other._get_reconciled_name_object(self).astype(common_dtype)
+            res = other._get_reconciled_name_object(self).astype(common_dtype)
+            if sort is True:
+                return res.sort_values()
+            return res
 
         result = self._union(other, sort=sort)
         result.name = _get_result_name(self.name, other.name)
