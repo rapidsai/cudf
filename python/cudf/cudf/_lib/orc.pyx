@@ -116,6 +116,7 @@ cpdef read_orc(object filepaths_or_buffers,
     )
 
     cdef table_with_metadata c_result
+    cdef size_type nrows
 
     with nogil:
         c_result = move(libcudf_read_orc(c_orc_reader_options))
@@ -127,10 +128,15 @@ cpdef read_orc(object filepaths_or_buffers,
                                              skip_rows,
                                              num_rows)
 
+    if columns is not None and (isinstance(columns, list) and len(columns) == 0):
+        # When `columns=[]`, index needs to be
+        # established, but not the columns.
+        nrows = c_result.tbl.get()[0].view().num_rows()
+        return {}, cudf.RangeIndex(nrows)
+
     data, index = data_from_unique_ptr(
         move(c_result.tbl),
-        col_names if columns is None
-        or (isinstance(columns, list) and len(columns) == 0) else names,
+        col_names if columns is None else names,
         actual_index_names
     )
 
@@ -138,10 +144,6 @@ cpdef read_orc(object filepaths_or_buffers,
         index = range_idx
     elif reset_index_name:
         index.names = [None] * len(index.names)
-    if columns is not None and (isinstance(columns, list) and len(columns) == 0):
-        # When `columns=[]`, index needs to be
-        # established, but not the columns.
-        return {}, cudf.RangeIndex(0, len(data[list(data.keys())[0]]))
 
     data = {
         name: update_column_struct_field_names(
