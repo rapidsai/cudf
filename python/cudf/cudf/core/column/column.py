@@ -1939,20 +1939,18 @@ def as_column(
     * pyarrow array
     * pandas.Categorical objects
     """
-    if isinstance(arbitrary, ColumnBase):
-        if dtype is not None:
-            return arbitrary.astype(dtype)
+    if isinstance(arbitrary, (ColumnBase, cudf.Series, cudf.BaseIndex)):
+        if isinstance(arbitrary, cudf.Series):
+            column = arbitrary._column
+        elif isinstance(arbitrary, cudf.BaseIndex):
+            column = arbitrary._values
         else:
-            return arbitrary
-
-    elif isinstance(arbitrary, cudf.Series):
-        data = arbitrary._column
+            column = arbitrary
+        if column.dtype.kind == "f" and (nan_as_null is None or nan_as_null):
+            column = column.nans_to_nulls()
         if dtype is not None:
-            data = data.astype(dtype)
-    elif isinstance(arbitrary, cudf.BaseIndex):
-        data = arbitrary._values
-        if dtype is not None:
-            data = data.astype(dtype)
+            column = column.astype(dtype)
+        return column
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         desc = arbitrary.__cuda_array_interface__
