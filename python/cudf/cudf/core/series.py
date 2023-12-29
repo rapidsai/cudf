@@ -593,27 +593,18 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             )
         index_from_data = None
         name_from_data = None
-        if isinstance(data, (pd.Series, pd.Index)):
+        if isinstance(data, (pd.Series, pd.Index, BaseIndex, Series)):
             if copy:
                 data = data.copy(deep=True)
             name_from_data = data.name
             column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
-            if isinstance(data, pd.Series):
+            if isinstance(data, (pd.Series, Series)):
                 index, index_from_data = as_index(data.index), index
-        elif isinstance(data, BaseIndex):
-            name_from_data = data.name
-            column = data._values
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
                 "Use cudf.Series._from_data for constructing a Series from "
                 "ColumnAccessor"
             )
-        elif isinstance(data, Series):
-            if copy:
-                data = data.copy(deep=True)
-            name_from_data = data.name
-            index, index_from_data = as_index(data.index), index
-            column = data._column
         elif isinstance(data, dict) or data is None:
             if not data:
                 data = {}
