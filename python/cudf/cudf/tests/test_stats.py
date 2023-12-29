@@ -480,7 +480,7 @@ def test_corr1d(data1, data2, method):
     # Spearman allows for size 1 samples, but will error if all data in a
     # sample is identical since the covariance is zero and so the correlation
     # coefficient is not defined.
-    cond = (is_singular and method == "pearson") or (
+    cond = ((is_singular or is_identical) and method == "pearson") or (
         is_identical and not is_singular and method == "spearman"
     )
     if method == "spearman":
