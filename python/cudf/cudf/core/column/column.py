@@ -2314,9 +2314,25 @@ def as_column(
     elif isinstance(arbitrary, cudf.Scalar):
         data = ColumnBase.from_scalar(arbitrary, length if length else 1)
     else:
-        # TODO: Need to parse with cupy, as cupy 0D scalars are accepted
-        # test_series_from_cupy_scalars
         from_pandas = nan_as_null is None or nan_as_null
+        arbitrary = list(arbitrary)
+        for element in arbitrary:
+            # Carve-outs that cannot be parsed by pyarrow/pandas
+            if isinstance(element, cupy.array):
+                # 0-D cupy.arrays ("scalar"): test_series_from_cupy_scalars
+                return as_column(
+                    cupy.array(arbitrary),
+                    dtype=dtype,
+                    nan_as_null=nan_as_null,
+                    length=length,
+                )
+            elif is_column_like(element):
+                # e.g. cudf.Series: test_nested_series_from_sequence_data
+                return cudf.core.column.ListColumn.from_sequences(arbitrary)
+            elif not any(element is na for na in (None, pd.NA, np.nan)):
+                # Might have NA + element like above, but short-circuit if
+                # an element pyarrow/pandas might be able to parse
+                break
         if dtype is not None:
             if (
                 isinstance(dtype, (cudf.CategoricalDtype, cudf.IntervalDtype))
@@ -2357,10 +2373,6 @@ def as_column(
                     )
                     arbitrary = arbitrary.cast(typ)
             except (pa.ArrowInvalid, pa.ArrowTypeError):
-                if any(is_column_like(val) for val in arbitrary):
-                    return cudf.core.column.ListColumn.from_sequences(
-                        arbitrary
-                    )
                 arbitrary = pd.Series(arbitrary)
                 if cudf.get_option(
                     "default_integer_bitwidth"
