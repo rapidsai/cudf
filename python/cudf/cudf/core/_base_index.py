@@ -630,7 +630,7 @@ class BaseIndex(Serializable):
                 [self.dtype, other.dtype]
             )
             res = self._get_reconciled_name_object(other).astype(common_dtype)
-            if sort is True:
+            if sort:
                 return res.sort_values()
             return res
         elif not len(self):
@@ -638,7 +638,7 @@ class BaseIndex(Serializable):
                 [self.dtype, other.dtype]
             )
             res = other._get_reconciled_name_object(self).astype(common_dtype)
-            if sort is True:
+            if sort:
                 return res.sort_values()
             return res
 
@@ -1098,12 +1098,12 @@ class BaseIndex(Serializable):
 
         if not len(other):
             res = self._get_reconciled_name_object(other)
-            if sort is True:
+            if sort:
                 return res.sort_values()
             return res
         elif self.equals(other):
             res = self[:0]._get_reconciled_name_object(other)
-            if sort is True:
+            if sort:
                 return res.sort_values()
             return res
 
