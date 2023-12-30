@@ -15,11 +15,10 @@
  */
 
 #include "reader_impl.hpp"
-#include "reader_impl_chunking.hpp"
 
 namespace cudf::io::detail::orc {
 
-void reader::impl::compute_chunk_read_info()
+void reader::impl::compute_chunk_ranges()
 {
   // Currently, file is always read as one chunk.
   // TODO: Implement variable chunking.

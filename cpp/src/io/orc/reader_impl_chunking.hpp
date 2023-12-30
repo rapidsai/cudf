@@ -16,11 +16,15 @@
 
 #pragma once
 
+#include "orc.hpp"
 #include "orc_gpu.hpp"
 
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/types.hpp>
+
+#include <rmm/device_buffer.hpp>
+#include <rmm/device_uvector.hpp>
 
 namespace cudf::io::detail::orc {
 
@@ -53,7 +57,7 @@ struct row_range {
  * @brief Struct to store all data necessary for chunked reading.
  */
 struct chunk_read_info {
-  explicit chunk_read_info(std::size_t _chunk_size_limit = 0) : chunk_size_limit{_chunk_size_limit}
+  explicit chunk_read_info(std::size_t chunk_size_limit_ = 0) : chunk_size_limit{chunk_size_limit_}
   {
   }
 
