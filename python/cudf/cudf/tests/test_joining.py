@@ -1941,7 +1941,11 @@ def test_string_join_key(str_data, num_keys, how):
         gdf[i] = cudf.Series(str_data, dtype="str")
     pdf["a"] = other_data
     gdf["a"] = other_data
-
+    if PANDAS_GE_200 and len(other_data) == 0:
+        # TODO: Remove this workaround after
+        # the following bug is fixed:
+        # https://github.com/pandas-dev/pandas/issues/56679
+        pdf["a"] = pdf["a"].astype("str")
     pdf2 = pdf.copy()
     gdf2 = gdf.copy()
 
@@ -2017,6 +2021,11 @@ def test_string_join_non_key(str_data, num_cols, how):
         gdf[i] = cudf.Series(str_data, dtype="str")
     pdf["a"] = other_data
     gdf["a"] = other_data
+    if PANDAS_GE_200 and len(other_data) == 0:
+        # TODO: Remove this workaround after
+        # the following bug is fixed:
+        # https://github.com/pandas-dev/pandas/issues/56679
+        pdf["a"] = pdf["a"].astype("str")
 
     pdf2 = pdf.copy()
     gdf2 = gdf.copy()

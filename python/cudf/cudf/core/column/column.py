@@ -2039,8 +2039,8 @@ def as_column(
                 new_dtype = dtype
             elif len(arbitrary) == 0:
                 # If the column is empty, it has to be
-                # a `float64` dtype.
-                new_dtype = cudf.dtype("float64")
+                # a `str` dtype.
+                new_dtype = cudf.dtype("str")
             else:
                 # If the null column is not empty, it has to
                 # be of `object` dtype.

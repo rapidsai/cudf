@@ -6663,7 +6663,13 @@ def test_dataframe_init_from_arrays_cols(data, cols, index):
         None,
     ],
 )
-def test_dataframe_assign_scalar(col_data, assign_val):
+def test_dataframe_assign_scalar(request, col_data, assign_val):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=PANDAS_GE_200 and len(col_data) == 0,
+            reason="https://github.com/pandas-dev/pandas/issues/56679",
+        )
+    )
     pdf = pd.DataFrame({"a": col_data})
     gdf = cudf.DataFrame({"a": col_data})
 

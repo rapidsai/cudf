@@ -19,7 +19,8 @@ from pandas import testing as tm
 
 import cudf
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
-from cudf.api.types import is_scalar
+
+# from cudf.api.types import is_scalar
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.core.udf.strings_lowering import cast_string_view_to_udf_string
 from cudf.core.udf.strings_typing import StringView, string_view, udf_string
@@ -403,23 +404,23 @@ def _create_pandas_series_float64_default(
     # Wrapper around pd.Series using a float64
     # default dtype for empty data to silence warnings.
     # TODO: Remove this in pandas-2.0 upgrade
-    if dtype is None and (
-        data is None or (not is_scalar(data) and len(data) == 0)
-    ):
-        dtype = "float64"
+    # if dtype is None and (
+    #     data is None or (not is_scalar(data) and len(data) == 0)
+    # ):
+    #     dtype = "float64"
     return pd.Series(data=data, index=index, dtype=dtype, *args, **kwargs)
 
 
 def _create_cudf_series_float64_default(
     data=None, index=None, dtype=None, *args, **kwargs
 ):
-    # Wrapper around cudf.Series using a float64
-    # default dtype for empty data to silence warnings.
-    # TODO: Remove this in pandas-2.0 upgrade
-    if dtype is None and (
-        data is None or (not is_scalar(data) and len(data) == 0)
-    ):
-        dtype = "float64"
+    # # Wrapper around cudf.Series using a float64
+    # # default dtype for empty data to silence warnings.
+    # # TODO: Remove this in pandas-2.0 upgrade
+    # if dtype is None and (
+    #     data is None or (not is_scalar(data) and len(data) == 0)
+    # ):
+    #     dtype = "float64"
     return cudf.Series(data=data, index=index, dtype=dtype, *args, **kwargs)
 
 

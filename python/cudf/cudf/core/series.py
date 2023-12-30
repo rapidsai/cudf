@@ -14,7 +14,7 @@ from typing import (
     Dict,
     MutableMapping,
     Optional,
-    Sequence,
+    # Sequence,
     Set,
     Tuple,
     Union,
@@ -601,18 +601,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         copy=False,
         nan_as_null=True,
     ):
-        if (
-            isinstance(data, Sequence)
-            and len(data) == 0
-            and dtype is None
-            and getattr(data, "dtype", None) is None
-        ):
-            warnings.warn(
-                "The default dtype for empty Series will be 'object' instead "
-                "of 'float64' in a future version. Specify a dtype explicitly "
-                "to silence this warning.",
-                FutureWarning,
-            )
         if isinstance(data, pd.Series):
             if name is None:
                 name = data.name

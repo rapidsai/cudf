@@ -2305,15 +2305,12 @@ def test_series_round_builtin(data, digits):
     assert_eq(expected, actual)
 
 
-def test_series_empty_warning():
-    with pytest.warns(FutureWarning):
-        expected = pd.Series([])
-    with pytest.warns(FutureWarning):
-        actual = cudf.Series([])
-    assert_eq(expected, actual)
+def test_series_empty_dtype():
+    expected = pd.Series([])
+    actual = cudf.Series([])
+    assert_eq(expected, actual, check_dtype=True)
 
 
-@pytest.mark.filterwarnings("ignore::FutureWarning")  # tested above
 @pytest.mark.parametrize("data", [None, {}, []])
 def test_series_empty_index_rangeindex(data):
     expected = cudf.RangeIndex(0)
