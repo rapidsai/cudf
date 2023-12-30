@@ -1062,10 +1062,12 @@ def test_index_empty_append_name_conflict():
     non_empty = cudf.Index([1], name="bar")
     expected = cudf.Index([1])
 
-    result = non_empty.append(empty)
+    with pytest.warns(FutureWarning):
+        result = non_empty.append(empty)
     assert_eq(result, expected)
 
-    result = empty.append(non_empty)
+    with pytest.warns(FutureWarning):
+        result = empty.append(non_empty)
     assert_eq(result, expected)
 
 
@@ -2861,7 +2863,8 @@ def test_index_methods(index, func):
 
     if func == "append":
         expected = pidx.append(other=pidx)
-        actual = gidx.append(other=gidx)
+        with expect_warning_if(len(gidx) == 0):
+            actual = gidx.append(other=gidx)
     else:
         expected = getattr(pidx, func)()
         actual = getattr(gidx, func)()
