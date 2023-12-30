@@ -232,7 +232,11 @@ class Merge:
         key_order = list(
             itertools.chain.from_iterable(
                 libcudf.copying.gather(
-                    [cudf.core.column.arange(n, dtype=size_type_dtype)],
+                    [
+                        cudf.core.column.as_column(
+                            range(n), dtype=size_type_dtype
+                        )
+                    ],
                     map_,
                     nullify=null,
                 )
