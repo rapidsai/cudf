@@ -576,7 +576,7 @@ def test_int_overflow(tmpdir):
 
     # The number of rows and the large element trigger delta encoding
     num_rows = 513
-    df = cudf.DataFrame({"a": [None] * num_rows}, dtype="int32")
+    df = cudf.DataFrame({"a": [None] * num_rows}, dtype="int64")
     df["a"][0] = 1024 * 1024 * 1024
     df["a"][num_rows - 1] = 1
     df.to_orc(file_path)
@@ -1669,16 +1669,7 @@ def run_orc_columns_and_index_param(index_obj, index, columns):
     expected = pd.read_orc(buffer, columns=columns)
     got = cudf.read_orc(buffer, columns=columns)
 
-    if columns:
-        # TODO: Remove workaround after this issue is fixed:
-        # https://github.com/pandas-dev/pandas/issues/47944
-        assert_eq(
-            expected.sort_index(axis=1),
-            got.sort_index(axis=1),
-            check_index_type=True,
-        )
-    else:
-        assert_eq(expected, got, check_index_type=True)
+    assert_eq(expected, got, check_index_type=True)
 
 
 @pytest.mark.parametrize("index_obj", [None, [10, 11, 12], ["x", "y", "z"]])
