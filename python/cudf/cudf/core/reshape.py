@@ -429,11 +429,9 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         return result
 
     elif typ is cudf.Series:
-        objs = [obj for obj in objs if len(obj)]
-        if len(objs) == 0:
-            return cudf.Series()
-        elif len(objs) == 1 and not ignore_index:
-            return objs[0]
+        new_objs = [obj for obj in objs if len(obj)]
+        if len(new_objs) == 1 and not ignore_index:
+            return new_objs[0]
         else:
             return cudf.Series._concat(
                 objs, axis=axis, index=None if ignore_index else True

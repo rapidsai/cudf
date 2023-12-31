@@ -394,6 +394,6 @@ def test_dataframe_scatter_by_map_7513(ids):
 
 
 def test_dataframe_scatter_by_map_empty():
-    df = DataFrame({"a": [], "b": []})
+    df = DataFrame({"a": [], "b": []}, dtype="float64")
     scattered = df.scatter_by_map(df["a"])
     assert len(scattered) == 0

@@ -173,7 +173,12 @@ class NumericalColumn(NumericalBaseColumn):
         if isinstance(key, slice):
             out = self._scatter_by_slice(key, device_value)
         else:
-            key = as_column(key)
+            key = as_column(
+                key,
+                dtype="float64"
+                if isinstance(key, list) and len(key) == 0
+                else None,
+            )
             if not isinstance(key, cudf.core.column.NumericalColumn):
                 raise ValueError(f"Invalid scatter map type {key.dtype}.")
             out = self._scatter_by_column(key, device_value)
