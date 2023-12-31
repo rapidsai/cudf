@@ -1052,7 +1052,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
     }
   }  // end loop level
 
-  compute_chunk_read_info();
+  compute_chunk_ranges();
 }
 
 }  // namespace cudf::io::detail::orc

@@ -19,21 +19,8 @@
  * @brief cuDF-IO ORC reader class implementation
  */
 
-#include "orc.hpp"
-
 #include "reader_impl.hpp"
 #include "reader_impl_helpers.hpp"
-
-#include <io/comp/gpuinflate.hpp>
-#include <io/comp/nvcomp_adapter.hpp>
-#include <io/utilities/config_utils.hpp>
-
-#include <cudf/detail/timezone.hpp>
-#include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/utilities/bit.hpp>
-#include <cudf/utilities/error.hpp>
 
 namespace cudf::io::detail::orc {
 using namespace cudf::io::orc;
@@ -67,10 +54,11 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
 void reader::impl::populate_metadata(cudf::io::table_metadata& out_metadata) const
 {
   // Copy user data to the output metadata.
+  out_metadata.per_file_user_data.reserve(_metadata.per_file_metadata.size());
   std::transform(_metadata.per_file_metadata.cbegin(),
                  _metadata.per_file_metadata.cend(),
                  std::back_inserter(out_metadata.per_file_user_data),
-                 [](auto& meta) {
+                 [](auto const& meta) {
                    std::unordered_map<std::string, std::string> kv_map;
                    std::transform(meta.ff.metadata.cbegin(),
                                   meta.ff.metadata.cend(),
