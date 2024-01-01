@@ -84,7 +84,7 @@ class reader::impl {
    *
    * @param out_metadata The output table metadata to add to
    */
-  void populate_metadata(table_metadata& out_metadata) const;
+  table_metadata populate_metadata();
 
   /**
    * @brief Read a chunk of data and return an output table.

@@ -51,9 +51,12 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
   return read_chunk_internal();
 }
 
-void reader::impl::populate_metadata(cudf::io::table_metadata& out_metadata) const
+table_metadata reader::impl::populate_metadata()
 {
+  if (_output_metadata) { return table_metadata{*_output_metadata}; }
+
   // Copy user data to the output metadata.
+  table_metadata out_metadata;
   out_metadata.per_file_user_data.reserve(_metadata.per_file_metadata.size());
   std::transform(_metadata.per_file_metadata.cbegin(),
                  _metadata.per_file_metadata.cend(),
@@ -70,6 +73,11 @@ void reader::impl::populate_metadata(cudf::io::table_metadata& out_metadata) con
                  });
   out_metadata.user_data = {out_metadata.per_file_user_data[0].begin(),
                             out_metadata.per_file_user_data[0].end()};
+
+  // Save the output table metadata into `_output_metadata` for reuse next time.
+  _output_metadata = std::make_unique<table_metadata>(out_metadata);
+
+  return out_metadata;
 }
 
 table_with_metadata reader::impl::read_chunk_internal()
@@ -78,13 +86,7 @@ table_with_metadata reader::impl::read_chunk_internal()
   if (_selected_columns.num_levels() == 0) { return {std::make_unique<table>(), table_metadata{}}; }
 
   std::vector<std::unique_ptr<column>> out_columns;
-  table_metadata out_metadata;
-
-  if (!_output_metadata) {
-    populate_metadata(out_metadata);
-    // Save the output table metadata into `_output_metadata` for reuse next time.
-    _output_metadata = std::make_unique<table_metadata>(out_metadata);
-  }
+  auto out_metadata = populate_metadata();
 
   // If no rows or stripes to read, return empty columns
   if (_file_itm_data->rows_to_read == 0 || _file_itm_data->selected_stripes.empty()) {
