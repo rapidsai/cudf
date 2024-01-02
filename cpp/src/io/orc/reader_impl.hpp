@@ -32,6 +32,7 @@
 
 namespace cudf::io::detail::orc {
 using namespace cudf::io::orc;
+using namespace cudf::io::orc::detail;
 struct reader_column_meta;
 struct file_intermediate_data;
 
@@ -105,8 +106,8 @@ class reader::impl {
 
   // Intermediate data for internal processing.
   std::vector<std::unique_ptr<datasource>> const _sources;  // Unused but owns data for `_metadata`
-  cudf::io::orc::detail::aggregate_orc_metadata _metadata;
-  cudf::io::orc::detail::column_hierarchy const _selected_columns;  // Need to be after _metadata
+  aggregate_orc_metadata _metadata;
+  column_hierarchy const _selected_columns;  // Need to be after _metadata
   std::unique_ptr<file_intermediate_data> _file_itm_data;
   std::unique_ptr<table_metadata> _output_metadata;
   std::vector<std::vector<column_buffer>> _out_buffers;
