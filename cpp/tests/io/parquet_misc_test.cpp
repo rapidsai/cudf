@@ -23,18 +23,12 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/transform.hpp>
 
-// Typed test fixture for comparable type tests
-template <typename T>
-struct ParquetWriterComparableTypeTest : public ParquetWriterTest {
-  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
-};
+////////////////////////////////
+// delta encoding writer tests
 
 // Test fixture for delta encoding tests
 template <typename T>
 struct ParquetWriterDeltaTest : public ParquetWriterTest {};
-
-// Base test fixture for size-parameterized tests
-class ParquetSizedTest : public ::cudf::test::BaseFixtureWithParam<int> {};
 
 TYPED_TEST_SUITE(ParquetWriterDeltaTest, SupportedDeltaTestTypes);
 
@@ -127,6 +121,12 @@ TYPED_TEST(ParquetWriterDeltaTest, SupportedDeltaListSliced)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_slice, result.tbl->view());
 }
 
+////////////////////////
+// sized tests
+
+// Base test fixture for size-parameterized tests
+class ParquetSizedTest : public ::cudf::test::BaseFixtureWithParam<int> {};
+
 // test the allowed bit widths for dictionary encoding
 INSTANTIATE_TEST_SUITE_P(ParquetDictionaryTest,
                          ParquetSizedTest,
@@ -183,6 +183,15 @@ TEST_P(ParquetSizedTest, DictionaryTest)
   auto const nbits = read_dict_bits(source, oi.page_locations[0]);
   EXPECT_EQ(nbits, GetParam());
 }
+
+///////////////////////
+// comparable tests
+
+// Typed test fixture for comparable type tests
+template <typename T>
+struct ParquetWriterComparableTypeTest : public ParquetWriterTest {
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
+};
 
 TYPED_TEST_SUITE(ParquetWriterComparableTypeTest, ComparableAndFixedTypes);
 

@@ -29,10 +29,6 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
 
-// Test for Types - numeric, chrono, string.
-template <typename T>
-struct ParquetReaderPredicatePushdownTest : public ParquetReaderTest {};
-
 TEST_F(ParquetReaderTest, UserBounds)
 {
   // trying to read more rows than there are should result in
@@ -2059,6 +2055,13 @@ TEST_F(ParquetReaderTest, DeltaSkipRowsWithNulls)
     CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view(), result2.tbl->view());
   }
 }
+
+//////////////////////////////
+// predicate pushdown tests
+
+// Test for Types - numeric, chrono, string.
+template <typename T>
+struct ParquetReaderPredicatePushdownTest : public ParquetReaderTest {};
 
 TYPED_TEST_SUITE(ParquetReaderPredicatePushdownTest, SupportedTestTypes);
 
