@@ -17,6 +17,9 @@ cdef extern from "cudf/strings/udf/udf_string.hpp" namespace \
     cdef cppclass udf_string
     cdef cppclass managed_udf_string
 
+cdef extern from "_nrt.cuh" nogil:
+    struct NRT_MemSys
+
 cdef extern from "cudf/strings/udf/udf_apis.hpp"  namespace \
         "cudf::strings::udf" nogil:
     cdef unique_ptr[device_buffer] to_string_view_array(column_view) except +
@@ -32,6 +35,7 @@ cdef extern from "cudf/strings/udf/udf_apis.hpp"  namespace \
     cdef unique_ptr[column] column_from_managed_udf_string_array(
         managed_udf_string* managed_strings, size_type size
     ) except +
+    cdef NRT_MemSys* NRT_MemSys_new() except +
 
 cdef extern from "cudf/strings/detail/char_tables.hpp" namespace \
         "cudf::strings::detail" nogil:

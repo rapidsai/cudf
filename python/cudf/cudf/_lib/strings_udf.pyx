@@ -9,6 +9,7 @@ from cudf._lib.cpp.strings_udf cimport (
     get_character_flags_table as cpp_get_character_flags_table,
     get_special_case_mapping_table as cpp_get_special_case_mapping_table,
     managed_udf_string,
+    NRT_MemSys_new as cpp_NRT_MemSys_new
 )
 
 import numpy as np
@@ -80,3 +81,7 @@ def get_character_cases_table_ptr():
 def get_special_case_mapping_table_ptr():
     cdef const void* tbl_ptr = cpp_get_special_case_mapping_table()
     return np.uintp(<uintptr_t>tbl_ptr)
+
+def NRT_MemSys_new():
+    cdef const void* memsys_ptr = cpp_NRT_MemSys_new()
+    return np.uintp(<uintptr_t>memsys_ptr)

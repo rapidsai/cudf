@@ -28,6 +28,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
+
 namespace cudf {
 namespace strings {
 namespace udf {
@@ -178,6 +179,27 @@ void free_managed_udf_string_array(managed_udf_string* managed_strings, cudf::si
 {
   detail::free_managed_udf_string_array(managed_strings, size, cudf::get_default_stream());
 }
+
+__device__ void* malloc_wrapper(size_t size) { return malloc(size); }
+
+__device__ void free_wrapper(void* ptr) { free(ptr); }
+
+__global__ void initialize_memsys(NRT_MemSys* TheMSys) {
+  TheMSys->allocator.malloc = (NRT_malloc_func)malloc_wrapper;
+  TheMSys->allocator.free = (NRT_free_func)free_wrapper;
+  TheMSys->stats.mi_alloc = 0;
+  TheMSys->stats.mi_free = 0;
+  TheMSys->stats.alloc = 0;
+  TheMSys->stats.free = 0;
+}
+
+NRT_MemSys* NRT_MemSys_new() {
+    NRT_MemSys* TheMSys;
+    cudaMalloc((void**)&TheMSys, sizeof(NRT_MemSys));
+    initialize_memsys<<<1,1>>>(TheMSys);
+    return TheMSys;
+}
+
 
 }  // namespace udf
 }  // namespace strings

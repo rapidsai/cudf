@@ -22,6 +22,7 @@
 #include <rmm/device_buffer.hpp>
 
 #include <memory>
+#include <_nrt.cuh>
 
 namespace cudf {
 namespace strings {
@@ -29,6 +30,12 @@ namespace udf {
 
 class udf_string;
 class managed_udf_string;
+
+/**
+ * @brief return an NRT_MemSys* pointing to an initialized 
+ * memory system object persisted in device memory.
+ */
+NRT_MemSys* NRT_MemSys_new();
 
 /**
  * @brief Return a cudf::string_view array for the given strings column
