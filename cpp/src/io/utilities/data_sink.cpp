@@ -37,11 +37,14 @@ class file_sink : public data_sink {
   {
     _output_stream.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
     if (!_output_stream.is_open()) {
+      // Save errno because it may be overwritten by subsequent calls
+      auto const err = errno;
+
       auto const dir_path = std::filesystem::path(filepath).parent_path();
       if (not std::filesystem::exists(dir_path)) {
         CUDF_FAIL("Cannot open output file; directory does not exist");
       }
-      CUDF_FAIL("Cannot open output file");
+      CUDF_FAIL("Cannot open output file; failed with errno " + std::string{std::strerror(err)});
     }
 
     if (detail::cufile_integration::is_kvikio_enabled()) {

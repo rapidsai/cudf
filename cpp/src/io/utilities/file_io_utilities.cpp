@@ -45,7 +45,7 @@ namespace detail {
     CUDF_FAIL("Cannot open file; it does not exist");
   }
 
-  CUDF_FAIL("Cannot open file; `open` failed with errno " + std::string{std::strerror(err)});
+  CUDF_FAIL("Cannot open file; failed with errno " + std::string{std::strerror(err)});
 }
 
 [[nodiscard]] size_t get_file_size(int file_descriptor)
