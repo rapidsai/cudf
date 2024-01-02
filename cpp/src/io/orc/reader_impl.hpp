@@ -75,11 +75,6 @@ class reader::impl {
                     std::vector<std::vector<size_type>> const& stripes);
 
   /**
-   * @brief Compute the ranges (begin and end rows) to read each chunk.
-   */
-  void compute_chunk_ranges();
-
-  /**
    * @brief Populate the output table metadata from the file metadata.
    *
    * @param out_metadata The output table metadata to add to
