@@ -69,8 +69,6 @@
 #include <utility>
 
 namespace cudf::io::orc::detail {
-using namespace cudf::io::orc;
-using namespace cudf::io;
 
 template <typename T>
 [[nodiscard]] constexpr int varint_size(T val)

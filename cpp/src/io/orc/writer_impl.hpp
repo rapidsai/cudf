@@ -43,9 +43,7 @@ namespace cudf::io::orc::detail {
 // Forward internal classes
 class orc_column_view;
 
-using namespace cudf::io;
 using namespace cudf::io::detail;
-using namespace cudf::io::orc;
 using cudf::detail::device_2dspan;
 using cudf::detail::host_2dspan;
 using cudf::detail::hostdevice_2dvector;

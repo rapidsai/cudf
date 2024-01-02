@@ -54,7 +54,6 @@
 
 namespace cudf::io::orc::detail {
 using namespace cudf::io::detail;
-using namespace cudf::io::orc;
 
 namespace {
 

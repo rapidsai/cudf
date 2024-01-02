@@ -35,7 +35,6 @@
 #include <vector>
 
 namespace cudf::io::orc::detail {
-using namespace cudf::io::orc;
 
 namespace {
 struct reader_column_meta;
