@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include "orc.hpp"
 #include "orc_gpu.hpp"
 
 #include <io/utilities/hostdevice_vector.hpp>
@@ -27,8 +26,6 @@
 #include <rmm/device_uvector.hpp>
 
 namespace cudf::io::detail::orc {
-
-using namespace cudf::io::orc;
 
 /**
  * @brief Struct to store file-level data that remains constant for all chunks being read.

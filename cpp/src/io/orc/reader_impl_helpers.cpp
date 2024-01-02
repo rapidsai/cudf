@@ -18,14 +18,13 @@
 
 namespace cudf::io::detail::orc {
 
-std::unique_ptr<column> create_empty_column(
-  size_type orc_col_id,
-  cudf::io::orc::detail::aggregate_orc_metadata const& metadata,
-  host_span<std::string const> decimal128_columns,
-  bool use_np_dtypes,
-  data_type timestamp_type,
-  column_name_info& schema_info,
-  rmm::cuda_stream_view stream)
+std::unique_ptr<column> create_empty_column(size_type orc_col_id,
+                                            aggregate_orc_metadata const& metadata,
+                                            host_span<std::string const> decimal128_columns,
+                                            bool use_np_dtypes,
+                                            data_type timestamp_type,
+                                            column_name_info& schema_info,
+                                            rmm::cuda_stream_view stream)
 {
   schema_info.name = metadata.column_name(0, orc_col_id);
   auto const kind  = metadata.get_col_type(orc_col_id).kind;
@@ -108,8 +107,8 @@ std::unique_ptr<column> create_empty_column(
 column_buffer assemble_buffer(size_type orc_col_id,
                               std::size_t level,
                               reader_column_meta const& col_meta,
-                              cudf::io::orc::detail::aggregate_orc_metadata const& metadata,
-                              cudf::io::orc::detail::column_hierarchy const& selected_columns,
+                              aggregate_orc_metadata const& metadata,
+                              column_hierarchy const& selected_columns,
                               std::vector<std::vector<column_buffer>>& col_buffers,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
