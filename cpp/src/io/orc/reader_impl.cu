@@ -622,7 +622,7 @@ void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& 
  * @brief Aggregate child metadata from parent column chunks.
  */
 void aggregate_child_meta(std::size_t level,
-                          cudf::io::orc::detail::column_hierarchy const& selected_columns,
+                          column_hierarchy const& selected_columns,
                           cudf::detail::host_2dspan<gpu::ColumnDesc> chunks,
                           cudf::detail::host_2dspan<gpu::RowGroup> row_groups,
                           host_span<orc_column_meta const> list_col,
@@ -775,7 +775,7 @@ constexpr type_id to_cudf_type(orc::TypeKind kind,
  * @brief Determines cuDF type of an ORC Decimal column.
  */
 type_id to_cudf_decimal_type(host_span<std::string const> decimal128_columns,
-                             cudf::io::orc::detail::aggregate_orc_metadata const& metadata,
+                             aggregate_orc_metadata const& metadata,
                              int column_index)
 {
   if (metadata.get_col_type(column_index).kind != DECIMAL) { return type_id::EMPTY; }
@@ -798,14 +798,13 @@ std::string get_map_child_col_name(std::size_t const idx) { return (idx == 0) ? 
 /**
  * @brief Create empty columns and respective schema information from the buffer.
  */
-std::unique_ptr<column> create_empty_column(
-  size_type orc_col_id,
-  cudf::io::orc::detail::aggregate_orc_metadata const& metadata,
-  host_span<std::string const> decimal128_columns,
-  bool use_np_dtypes,
-  data_type timestamp_type,
-  column_name_info& schema_info,
-  rmm::cuda_stream_view stream)
+std::unique_ptr<column> create_empty_column(size_type orc_col_id,
+                                            aggregate_orc_metadata const& metadata,
+                                            host_span<std::string const> decimal128_columns,
+                                            bool use_np_dtypes,
+                                            data_type timestamp_type,
+                                            column_name_info& schema_info,
+                                            rmm::cuda_stream_view stream)
 {
   schema_info.name = metadata.column_name(0, orc_col_id);
   auto const kind  = metadata.get_col_type(orc_col_id).kind;
@@ -891,8 +890,8 @@ std::unique_ptr<column> create_empty_column(
 column_buffer assemble_buffer(size_type orc_col_id,
                               std::size_t level,
                               reader_column_meta const& col_meta,
-                              cudf::io::orc::detail::aggregate_orc_metadata const& metadata,
-                              cudf::io::orc::detail::column_hierarchy const& selected_columns,
+                              aggregate_orc_metadata const& metadata,
+                              column_hierarchy const& selected_columns,
                               std::vector<std::vector<column_buffer>>& col_buffers,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
