@@ -45,27 +45,4 @@ struct file_intermediate_data {
   std::vector<metadata::stripe_source_mapping> selected_stripes;
 };
 
-/**
- * @brief Struct to identify the range for each chunk of rows during a chunked reading pass.
- */
-struct row_range {
-  int64_t start_rows;
-  size_type end_rows;
-};
-
-/**
- * @brief Struct to store all data necessary for chunked reading.
- */
-struct chunk_read_info {
-  explicit chunk_read_info(std::size_t chunk_size_limit_ = 0) : chunk_size_limit{chunk_size_limit_}
-  {
-  }
-
-  std::size_t chunk_size_limit;  // Maximum size (in bytes) of an output chunk, or 0 for no limit
-
-  // The range of rows for output chunks.
-  std::vector<row_range> chunk_ranges;
-  std::size_t current_chunk_idx{0};
-};
-
 }  // namespace cudf::io::detail::orc

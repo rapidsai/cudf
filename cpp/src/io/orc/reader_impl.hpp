@@ -111,7 +111,6 @@ class reader::impl {
   std::unique_ptr<reader_column_meta> const _col_meta;  // Track of orc mapping and child details
 
   std::unique_ptr<file_intermediate_data> _file_itm_data;  // Intermediate data of the reading file.
-  chunk_read_info _chunk_read_info;                        // Data for chunked reading.
 };
 
 }  // namespace cudf::io::detail::orc

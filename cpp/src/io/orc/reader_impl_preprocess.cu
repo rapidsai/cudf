@@ -1051,8 +1051,6 @@ void reader::impl::prepare_data(uint64_t skip_rows,
       if (not buff_data.empty()) { generate_offsets_for_list(buff_data, _stream); }
     }
   }  // end loop level
-
-  compute_chunk_ranges();
 }
 
 }  // namespace cudf::io::detail::orc

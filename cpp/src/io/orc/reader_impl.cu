@@ -38,8 +38,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
     _use_index{options.is_enabled_use_index()},
     _use_np_dtypes{options.is_enabled_use_np_dtypes()},
     _decimal128_columns{options.get_decimal128_columns()},
-    _col_meta{std::make_unique<reader_column_meta>()},
-    _chunk_read_info{0}  // TODO: Initialize from `orc_reader_options.chunk_size_limit()`.
+    _col_meta{std::make_unique<reader_column_meta>()}
 {
 }
 
