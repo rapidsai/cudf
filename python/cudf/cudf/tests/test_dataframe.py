@@ -1427,6 +1427,11 @@ def test_dataframe_hash_values(nrows, method, seed):
     expected_dtypes = {
         "murmur3": np.uint32,
         "md5": object,
+        "sha1": object,
+        "sha224": object,
+        "sha256": object,
+        "sha384": object,
+        "sha512": object,
         "xxhash64": np.uint64,
     }
     assert out.dtype == expected_dtypes[method]
