@@ -286,6 +286,11 @@ class writer::impl {
    */
   void close();
 
+  /**
+   * @brief Skip writing the footer and close the writer.
+   */
+  void skip_close() { _closed = true; }
+
  private:
   /**
    * @brief Write the intermediate ORC data into the data sink.

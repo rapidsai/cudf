@@ -1298,20 +1298,29 @@ intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return The encoded statistic blobs
  */
-encoded_footer_statistics finish_statistic_blobs(int num_stripes,
+encoded_footer_statistics finish_statistic_blobs(FileFooter const& file_footer,
                                                  persisted_statistics& per_chunk_stats,
                                                  rmm::cuda_stream_view stream)
 {
   auto stripe_size_iter = thrust::make_transform_iterator(per_chunk_stats.stripe_stat_merge.begin(),
                                                           [](auto const& i) { return i.size(); });
 
-  auto const num_columns = per_chunk_stats.col_types.size();
+  auto const num_columns = file_footer.types.size() - 1;
+  auto const num_stripes = file_footer.stripes.size();
+
   auto const num_stripe_blobs =
     thrust::reduce(stripe_size_iter, stripe_size_iter + per_chunk_stats.stripe_stat_merge.size());
   auto const num_file_blobs = num_columns;
   auto const num_blobs      = static_cast<int>(num_stripe_blobs + num_file_blobs);
 
-  if (num_stripe_blobs == 0) { return {}; }
+  if (num_stripe_blobs == 0) {
+    // file_blobs will be empty with zero columns; can be a separate branch
+    std::vector<ColStatsBlob> file_blobs(num_file_blobs);
+    // TODO create empty file stats; encode and return
+    // statistics_chunk
+    // return {{}, std::move(file_blobs)};
+    return {};
+  }
 
   // merge the stripe persisted data and add file data
   rmm::device_uvector<statistics_chunk> stat_chunks(num_blobs, stream);
@@ -2642,36 +2651,39 @@ void writer::impl::close()
   _closed = true;
   PostScript ps;
 
-  auto const statistics =
-    finish_statistic_blobs(_ffooter.stripes.size(), _persisted_stripe_statistics, _stream);
+  if (_stats_freq != statistics_freq::STATISTICS_NONE) {
+    // Write column statistics
+    auto statistics = finish_statistic_blobs(_ffooter, _persisted_stripe_statistics, _stream);
 
-  // File-level statistics
-  if (not statistics.file_level.empty()) {
-    ProtobufWriter pbw;
-    pbw.put_uint(encode_field_number<size_type>(1));
-    pbw.put_uint(_persisted_stripe_statistics.num_rows);
-    // First entry contains total number of rows
-    _ffooter.statistics.reserve(_ffooter.types.size());
-    _ffooter.statistics.emplace_back(pbw.release());
-    // Add file stats, stored after stripe stats in `column_stats`
-    _ffooter.statistics.insert(_ffooter.statistics.end(),
-                               std::make_move_iterator(statistics.file_level.begin()),
-                               std::make_move_iterator(statistics.file_level.end()));
-  }
-
-  // Stripe-level statistics
-  if (not statistics.stripe_level.empty()) {
-    _orc_meta.stripeStats.resize(_ffooter.stripes.size());
-    for (size_t stripe_id = 0; stripe_id < _ffooter.stripes.size(); stripe_id++) {
-      _orc_meta.stripeStats[stripe_id].colStats.resize(_ffooter.types.size());
+    // File-level statistics
+    {
       ProtobufWriter pbw;
       pbw.put_uint(encode_field_number<size_type>(1));
-      pbw.put_uint(_ffooter.stripes[stripe_id].numberOfRows);
-      _orc_meta.stripeStats[stripe_id].colStats[0] = pbw.release();
-      for (size_t col_idx = 0; col_idx < _ffooter.types.size() - 1; col_idx++) {
-        size_t idx = _ffooter.stripes.size() * col_idx + stripe_id;
-        _orc_meta.stripeStats[stripe_id].colStats[1 + col_idx] =
-          std::move(statistics.stripe_level[idx]);
+      pbw.put_uint(_persisted_stripe_statistics.num_rows);
+      // First entry contains total number of rows
+      _ffooter.statistics.reserve(_ffooter.types.size());
+      _ffooter.statistics.emplace_back(pbw.release());
+      // Add file stats, stored after stripe stats in `column_stats`
+      _ffooter.statistics.insert(_ffooter.statistics.end(),
+                                 std::make_move_iterator(statistics.file_level.begin()),
+                                 std::make_move_iterator(statistics.file_level.end()));
+    }
+
+    // Stripe-level statistics
+    if (_stats_freq == statistics_freq::STATISTICS_ROWGROUP or
+        _stats_freq == statistics_freq::STATISTICS_PAGE) {
+      _orc_meta.stripeStats.resize(_ffooter.stripes.size());
+      for (size_t stripe_id = 0; stripe_id < _ffooter.stripes.size(); stripe_id++) {
+        _orc_meta.stripeStats[stripe_id].colStats.resize(_ffooter.types.size());
+        ProtobufWriter pbw;
+        pbw.put_uint(encode_field_number<size_type>(1));
+        pbw.put_uint(_ffooter.stripes[stripe_id].numberOfRows);
+        _orc_meta.stripeStats[stripe_id].colStats[0] = pbw.release();
+        for (size_t col_idx = 0; col_idx < _ffooter.types.size() - 1; col_idx++) {
+          size_t idx = _ffooter.stripes.size() * col_idx + stripe_id;
+          _orc_meta.stripeStats[stripe_id].colStats[1 + col_idx] =
+            std::move(statistics.stripe_level[idx]);
+        }
       }
     }
   }
@@ -2737,6 +2749,9 @@ writer::~writer() = default;
 
 // Forward to implementation
 void writer::write(table_view const& table) { _impl->write(table); }
+
+// Forward to implementation
+void writer::skip_close() { _impl->skip_close(); }
 
 // Forward to implementation
 void writer::close() { _impl->close(); }

@@ -126,6 +126,11 @@ class writer {
    * @brief Finishes the chunked/streamed write process.
    */
   void close();
+
+  /**
+   * @brief Skip writing the footer and close the writer.
+   */
+  void skip_close();
 };
 }  // namespace orc
 }  // namespace detail

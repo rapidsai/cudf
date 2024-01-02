@@ -439,7 +439,13 @@ void write_orc(orc_writer_options const& options)
   auto writer = std::make_unique<detail_orc::writer>(
     std::move(sinks[0]), options, io_detail::single_write_mode::YES, cudf::get_default_stream());
 
-  writer->write(options.get_table());
+  try {
+    writer->write(options.get_table());
+  } catch (const std::exception& e) {
+    // If an exception is thrown, make sure the writer does not throw while trying to close
+    writer->skip_close();
+    throw;
+  }
 }
 
 /**
