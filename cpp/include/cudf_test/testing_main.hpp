@@ -19,6 +19,8 @@
 #include <cudf_test/cxxopts.hpp>
 #include <cudf_test/stream_checking_resource_adaptor.hpp>
 
+#include <cudf/utilities/error.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/arena_memory_resource.hpp>
 #include <rmm/mr/device/binning_memory_resource.hpp>
