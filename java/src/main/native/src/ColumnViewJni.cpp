@@ -2078,7 +2078,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeDataAddress(JNIE
     if (column->type().id() == cudf::type_id::STRING) {
       if (column->size() > 0) {
         cudf::strings_column_view view = cudf::strings_column_view(*column);
-        result = reinterpret_cast<jlong>(view.chars_begin());
+        result = reinterpret_cast<jlong>(view.chars_begin(cudf::get_default_stream()));
       }
     } else if (column->type().id() != cudf::type_id::LIST &&
                column->type().id() != cudf::type_id::STRUCT) {

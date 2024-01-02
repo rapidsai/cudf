@@ -131,7 +131,7 @@ class strings_column_view : private column_view {
    * The offsets child must be used to properly address the char bytes.
    *
    * For example, to access the first character of string `i` (accounting for
-   * a sliced column offset) use: `chars_begin()[offsets_begin()[i]]`.
+   * a sliced column offset) use: `chars_begin(stream)[offsets_begin()[i]]`.
    *
    * @return Iterator pointing to the first char byte.
    */
