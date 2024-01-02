@@ -26,6 +26,8 @@
 #include <cudf/io/parquet.hpp>
 #include <cudf/unary.hpp>
 
+#include <fstream>
+
 template <typename mask_op_t>
 void test_durations(mask_op_t mask_op)
 {

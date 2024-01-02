@@ -23,6 +23,7 @@
 #include <cudf_test/io_metadata_utilities.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/io/data_sink.hpp>
@@ -47,7 +48,6 @@
 cudf::test::TempDirTestEnvironment* const temp_env =
   static_cast<cudf::test::TempDirTestEnvironment*>(
     ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
-
 
 ////////////////////////
 // Numeric type tests
