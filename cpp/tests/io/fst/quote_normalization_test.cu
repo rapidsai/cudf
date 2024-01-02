@@ -218,10 +218,6 @@ void run_test(std::string& input, std::string& output)
   stream.synchronize();
 
   // Verify results
-  std::cout << "Expected output: " << output << std::endl << "Computed output: ";
-  for (size_t i = 0; i < output_gpu_size[0]; i++)
-    std::cout << output_gpu[i];
-  std::cout << std::endl;
   ASSERT_EQ(output_gpu_size[0], output.size());
   CUDF_TEST_EXPECT_VECTOR_EQUAL(output_gpu, output, output.size());
 }
