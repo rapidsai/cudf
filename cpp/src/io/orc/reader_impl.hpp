@@ -30,9 +30,7 @@
 #include <optional>
 #include <vector>
 
-namespace cudf::io::detail::orc {
-using namespace cudf::io::orc;
-using namespace cudf::io::orc::detail;
+namespace cudf::io::orc::detail {
 struct reader_column_meta;
 struct file_intermediate_data;
 
@@ -113,4 +111,4 @@ class reader::impl {
   std::vector<std::vector<column_buffer>> _out_buffers;
 };
 
-}  // namespace cudf::io::detail::orc
+}  // namespace cudf::io::orc::detail
