@@ -50,13 +50,11 @@ from cudf.api.types import (
     is_datetime_dtype,
     is_dict_like,
     is_dtype_equal,
-    is_list_dtype,
     is_list_like,
     is_numeric_dtype,
     is_object_dtype,
     is_scalar,
     is_string_dtype,
-    is_struct_dtype,
 )
 from cudf.core import column, df_protocol, indexing_utils, reshape
 from cudf.core.abc import Serializable
@@ -1825,7 +1823,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         filling with `<NA>` values.
         """
         for col in df._data:
-            if is_list_dtype(df._data[col]) or is_struct_dtype(df._data[col]):
+            if isinstance(
+                df._data[col].dtype, (cudf.StructDtype, cudf.ListDtype)
+            ):
                 # TODO we need to handle this
                 pass
             elif df._data[col].has_nulls():
@@ -6080,7 +6080,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     source = self._get_columns_by_label(numeric_cols)
                     if source.empty:
                         if axis == 2:
-                            return getattr(as_column([]), op)(**kwargs)
+                            return getattr(column_empty(0), op)(**kwargs)
                         else:
                             return Series(index=cudf.Index([], dtype="str"))
                     try:
