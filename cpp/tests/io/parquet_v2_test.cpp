@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,14 @@
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/io/parquet.hpp>
+
+// Base test fixture for V2 header tests
+class ParquetV2Test : public ::cudf::test::BaseFixtureWithParam<bool> {};
+
+INSTANTIATE_TEST_SUITE_P(ParquetV2ReadWriteTest,
+                         ParquetV2Test,
+                         testing::Bool(),
+                         testing::PrintToStringParamName());
 
 TEST_P(ParquetV2Test, MultiColumn)
 {

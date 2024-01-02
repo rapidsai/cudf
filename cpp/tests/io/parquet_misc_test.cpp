@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,19 @@
 #include <cudf/io/parquet.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/transform.hpp>
+
+// Typed test fixture for comparable type tests
+template <typename T>
+struct ParquetWriterComparableTypeTest : public ParquetWriterTest {
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
+};
+
+// Test fixture for delta encoding tests
+template <typename T>
+struct ParquetWriterDeltaTest : public ParquetWriterTest {};
+
+// Base test fixture for size-parameterized tests
+class ParquetSizedTest : public ::cudf::test::BaseFixtureWithParam<int> {};
 
 TYPED_TEST_SUITE(ParquetWriterDeltaTest, SupportedDeltaTestTypes);
 

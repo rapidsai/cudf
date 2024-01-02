@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,15 @@
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/io/parquet.hpp>
+
+// Base test fixture for chunked writer tests
+struct ParquetChunkedWriterTest : public cudf::test::BaseFixture {};
+
+// Typed test fixture for numeric type tests
+template <typename T>
+struct ParquetChunkedWriterNumericTypeTest : public ParquetChunkedWriterTest {
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
+};
 
 TEST_F(ParquetChunkedWriterTest, SingleTable)
 {

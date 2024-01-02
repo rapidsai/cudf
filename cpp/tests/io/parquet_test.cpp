@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,30 +48,17 @@ cudf::test::TempDirTestEnvironment* const temp_env =
   static_cast<cudf::test::TempDirTestEnvironment*>(
     ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
+
+////////////////////////
+// Numeric type tests
+
 // Typed test fixture for numeric type tests
 template <typename T>
 struct ParquetWriterNumericTypeTest : public ParquetWriterTest {
   auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
-// Typed test fixture for timestamp type tests
-template <typename T>
-struct ParquetWriterTimestampTypeTest : public ParquetWriterTest {
-  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
-};
-
-template <typename T>
-struct ParquetReaderSourceTest : public ParquetReaderTest {};
-
-// Declare typed test cases
 TYPED_TEST_SUITE(ParquetWriterNumericTypeTest, SupportedTypes);
-TYPED_TEST_SUITE(ParquetWriterTimestampTypeTest, SupportedTimestampTypes);
-TYPED_TEST_SUITE(ParquetReaderSourceTest, ByteLikeTypes);
-
-INSTANTIATE_TEST_SUITE_P(ParquetV2ReadWriteTest,
-                         ParquetV2Test,
-                         testing::Bool(),
-                         testing::PrintToStringParamName());
 
 TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumn)
 {
@@ -118,6 +105,17 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
+
+/////////////////////////
+// timestamp type tests
+
+// Typed test fixture for timestamp type tests
+template <typename T>
+struct ParquetWriterTimestampTypeTest : public ParquetWriterTest {
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
+};
+
+TYPED_TEST_SUITE(ParquetWriterTimestampTypeTest, SupportedTimestampTypes);
 
 TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps)
 {
@@ -194,6 +192,14 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampOverflow)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
+///////////////////////
+// reader source tests
+
+template <typename T>
+struct ParquetReaderSourceTest : public ParquetReaderTest {};
+
+TYPED_TEST_SUITE(ParquetReaderSourceTest, ByteLikeTypes);
+
 TYPED_TEST(ParquetReaderSourceTest, BufferSourceTypes)
 {
   using T = TypeParam;
@@ -261,6 +267,21 @@ TYPED_TEST(ParquetReaderSourceTest, BufferSourceArrayTypes)
     CUDF_TEST_EXPECT_TABLES_EQUAL(*full_table, result.tbl->view());
   }
 }
+
+///////////////////
+// metadata tests
+
+// Test fixture for metadata tests
+struct ParquetMetadataReaderTest : public cudf::test::BaseFixture {
+  std::string print(cudf::io::parquet_column_schema schema, int depth = 0)
+  {
+    std::string child_str;
+    for (auto const& child : schema.children()) {
+      child_str += print(child, depth + 1);
+    }
+    return std::string(depth, ' ') + schema.name() + "\n" + child_str;
+  }
+};
 
 TEST_F(ParquetMetadataReaderTest, TestBasic)
 {

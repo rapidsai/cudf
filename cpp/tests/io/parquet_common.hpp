@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,49 +80,6 @@ struct ParquetWriterTest : public cudf::test::BaseFixture {};
 
 // Base test fixture for tests
 struct ParquetReaderTest : public cudf::test::BaseFixture {};
-
-// Base test fixture for "stress" tests
-struct ParquetWriterStressTest : public cudf::test::BaseFixture {};
-
-// Typed test fixture for comparable type tests
-template <typename T>
-struct ParquetWriterComparableTypeTest : public ParquetWriterTest {
-  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
-};
-
-template <typename T>
-struct ParquetWriterDeltaTest : public ParquetWriterTest {};
-
-// Base test fixture for chunked writer tests
-struct ParquetChunkedWriterTest : public cudf::test::BaseFixture {};
-
-// Typed test fixture for numeric type tests
-template <typename T>
-struct ParquetChunkedWriterNumericTypeTest : public ParquetChunkedWriterTest {
-  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
-};
-
-// Base test fixture for size-parameterized tests
-class ParquetSizedTest : public ::cudf::test::BaseFixtureWithParam<int> {};
-
-// Base test fixture for V2 header tests
-class ParquetV2Test : public ::cudf::test::BaseFixtureWithParam<bool> {};
-
-// Test fixture for metadata tests
-struct ParquetMetadataReaderTest : public cudf::test::BaseFixture {
-  std::string print(cudf::io::parquet_column_schema schema, int depth = 0)
-  {
-    std::string child_str;
-    for (auto const& child : schema.children()) {
-      child_str += print(child, depth + 1);
-    }
-    return std::string(depth, ' ') + schema.name() + "\n" + child_str;
-  }
-};
-
-// Test for Types - numeric, chrono, string.
-template <typename T>
-struct ParquetReaderPredicatePushdownTest : public ParquetReaderTest {};
 
 ////////////////////////////////////////////////////////////////////
 

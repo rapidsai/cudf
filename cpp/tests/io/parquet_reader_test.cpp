@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,10 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
+
+// Test for Types - numeric, chrono, string.
+template <typename T>
+struct ParquetReaderPredicatePushdownTest : public ParquetReaderTest {};
 
 TEST_F(ParquetReaderTest, UserBounds)
 {

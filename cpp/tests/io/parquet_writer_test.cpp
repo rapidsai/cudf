@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1441,6 +1441,12 @@ class custom_test_memmap_sink : public cudf::io::data_sink {
  private:
   std::unique_ptr<data_sink> mm_writer;
 };
+
+//////////////////////////////
+// writer stress tests
+
+// Base test fixture for "stress" tests
+struct ParquetWriterStressTest : public cudf::test::BaseFixture {};
 
 TEST_F(ParquetWriterStressTest, LargeTableWeakCompression)
 {
