@@ -28,9 +28,8 @@
 #include <memory>
 #include <vector>
 
-namespace cudf::io::detail::orc {
-using namespace cudf::io::orc;
-using namespace cudf::io::orc::detail;
+namespace cudf::io::orc::detail {
+using namespace cudf::io::detail;
 
 /**
  * @brief Keeps track of orc mapping and child column details.
@@ -151,4 +150,4 @@ column_buffer assemble_buffer(size_type orc_col_id,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr);
 
-}  // namespace cudf::io::detail::orc
+}  // namespace cudf::io::orc::detail

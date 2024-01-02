@@ -46,8 +46,7 @@
 #include <algorithm>
 #include <iterator>
 
-namespace cudf::io::detail::orc {
-using namespace cudf::io::orc;
+namespace cudf::io::orc::detail {
 
 namespace {
 
@@ -1046,4 +1045,4 @@ void reader::impl::prepare_data(uint64_t skip_rows,
   }  // end loop level
 }
 
-}  // namespace cudf::io::detail::orc
+}  // namespace cudf::io::orc::detail

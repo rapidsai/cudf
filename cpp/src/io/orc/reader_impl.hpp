@@ -31,6 +31,8 @@
 #include <vector>
 
 namespace cudf::io::orc::detail {
+using namespace cudf::io::detail;
+
 struct reader_column_meta;
 struct file_intermediate_data;
 

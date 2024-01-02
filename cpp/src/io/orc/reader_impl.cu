@@ -18,8 +18,7 @@
 #include "reader_impl_chunking.hpp"
 #include "reader_impl_helpers.hpp"
 
-namespace cudf::io::detail::orc {
-using namespace cudf::io::orc;
+namespace cudf::io::orc::detail {
 
 reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                    orc_reader_options const& options,
@@ -134,4 +133,4 @@ table_with_metadata reader::read(orc_reader_options const& options)
   return _impl->read(options.get_skip_rows(), options.get_num_rows(), options.get_stripes());
 }
 
-}  // namespace cudf::io::detail::orc
+}  // namespace cudf::io::orc::detail

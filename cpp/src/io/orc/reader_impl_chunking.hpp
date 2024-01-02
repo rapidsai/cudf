@@ -25,7 +25,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
-namespace cudf::io::detail::orc {
+namespace cudf::io::orc::detail {
 
 /**
  * @brief Struct to store file-level data that remains constant for all chunks being read.
@@ -42,4 +42,4 @@ struct file_intermediate_data {
   std::vector<metadata::stripe_source_mapping> selected_stripes;
 };
 
-}  // namespace cudf::io::detail::orc
+}  // namespace cudf::io::orc::detail

@@ -16,7 +16,7 @@
 
 #include "reader_impl_helpers.hpp"
 
-namespace cudf::io::detail::orc {
+namespace cudf::io::orc::detail {
 
 std::unique_ptr<column> create_empty_column(size_type orc_col_id,
                                             aggregate_orc_metadata const& metadata,
@@ -154,4 +154,4 @@ column_buffer assemble_buffer(size_type orc_col_id,
   return std::move(col_buffer);
 }
 
-}  // namespace cudf::io::detail::orc
+}  // namespace cudf::io::orc::detail
