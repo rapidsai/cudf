@@ -29,21 +29,26 @@
 constexpr size_t data_size         = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
 
-void json_read_common(cuio_source_sink_pair& source_sink, nvbench::state& state)
+void json_read_common(cuio_source_sink_pair& source_sink,
+                      cudf::size_type num_rows_to_read,
+                      nvbench::state& state)
 {
   cudf::io::json_reader_options read_opts =
     cudf::io::json_reader_options::builder(source_sink.make_source_info());
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
-             [&](nvbench::launch& launch, auto& timer) {
-               try_drop_l3_cache();
+  state.exec(
+    nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
+      try_drop_l3_cache();
 
-               timer.start();
-               cudf::io::read_json(read_opts);
-               timer.stop();
-             });
+      timer.start();
+      auto const result = cudf::io::read_json(read_opts);
+      timer.stop();
+
+      CUDF_EXPECTS(result.tbl->num_columns() == num_cols, "Unexpected number of columns");
+      CUDF_EXPECTS(result.tbl->num_rows() == num_rows_to_read, "Unexpected number of rows");
+    });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");
@@ -52,55 +57,45 @@ void json_read_common(cuio_source_sink_pair& source_sink, nvbench::state& state)
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
 }
 
+cudf::size_type json_write_bm_data(cudf::io::sink_info sink,
+                                   std::vector<cudf::type_id> const& dtypes)
+{
+  auto const tbl = create_random_table(
+    cycle_dtypes(dtypes, num_cols), table_size_bytes{data_size}, data_profile_builder());
+  auto const view = tbl->view();
+
+  cudf::io::json_writer_options const write_opts =
+    cudf::io::json_writer_options::builder(sink, view).na_rep("null").rows_per_chunk(100'000);
+  cudf::io::write_json(write_opts);
+  return view.num_rows();
+}
+
 template <cudf::io::io_type IO>
 void BM_json_read_io(nvbench::state& state, nvbench::type_list<nvbench::enum_type<IO>>)
 {
-  auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
-                                         static_cast<int32_t>(data_type::FLOAT),
-                                         static_cast<int32_t>(data_type::DECIMAL),
-                                         static_cast<int32_t>(data_type::TIMESTAMP),
-                                         static_cast<int32_t>(data_type::DURATION),
-                                         static_cast<int32_t>(data_type::STRING),
-                                         static_cast<int32_t>(data_type::LIST),
-                                         static_cast<int32_t>(data_type::STRUCT)});
+  cuio_source_sink_pair source_sink(IO);
+  auto const d_type   = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
+                                           static_cast<int32_t>(data_type::FLOAT),
+                                           static_cast<int32_t>(data_type::DECIMAL),
+                                           static_cast<int32_t>(data_type::TIMESTAMP),
+                                           static_cast<int32_t>(data_type::DURATION),
+                                           static_cast<int32_t>(data_type::STRING),
+                                           static_cast<int32_t>(data_type::LIST),
+                                           static_cast<int32_t>(data_type::STRUCT)});
+  auto const num_rows = json_write_bm_data(source_sink.make_sink_info(), d_type);
 
-  auto const source_type = IO;
-  cuio_source_sink_pair source_sink(source_type);
-
-  {
-    auto const tbl = create_random_table(
-      cycle_dtypes(d_type, num_cols), table_size_bytes{data_size}, data_profile_builder());
-    auto const view = tbl->view();
-
-    cudf::io::json_writer_options const write_opts =
-      cudf::io::json_writer_options::builder(source_sink.make_sink_info(), view)
-        .na_rep("null")
-        .rows_per_chunk(100'000);
-    cudf::io::write_json(write_opts);
-  }
-
-  json_read_common(source_sink, state);
+  json_read_common(source_sink, num_rows, state);
 }
 
 template <data_type DataType, cudf::io::io_type IO>
 void BM_json_read_data_type(
   nvbench::state& state, nvbench::type_list<nvbench::enum_type<DataType>, nvbench::enum_type<IO>>)
 {
-  auto const d_type      = get_type_or_group(static_cast<int32_t>(DataType));
-  auto const source_type = IO;
-  cuio_source_sink_pair source_sink(source_type);
-  {
-    auto const tbl = create_random_table(
-      cycle_dtypes(d_type, num_cols), table_size_bytes{data_size}, data_profile_builder());
-    auto const view = tbl->view();
+  cuio_source_sink_pair source_sink(IO);
+  auto const d_type   = get_type_or_group(static_cast<int32_t>(DataType));
+  auto const num_rows = json_write_bm_data(source_sink.make_sink_info(), d_type);
 
-    cudf::io::json_writer_options const write_opts =
-      cudf::io::json_writer_options::builder(source_sink.make_sink_info(), view)
-        .na_rep("null")
-        .rows_per_chunk(100'000);
-    cudf::io::write_json(write_opts);
-  }
-  json_read_common(source_sink, state);
+  json_read_common(source_sink, num_rows, state);
 }
 
 using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
