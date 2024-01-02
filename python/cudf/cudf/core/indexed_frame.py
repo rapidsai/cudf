@@ -43,7 +43,6 @@ from cudf.api.types import (
     is_bool_dtype,
     is_decimal_dtype,
     is_dict_like,
-    is_list_dtype,
     is_list_like,
     is_scalar,
 )
@@ -2576,7 +2575,7 @@ class IndexedFrame(Frame):
         Parameters
         ----------
         columns_names : array-like
-            The list of columns to select from the Frame,
+            array-like of columns to select from the Frame,
             if ``columns`` is a superset of ``Frame.columns`` new
             columns are created.
         dtypes : dict
@@ -2638,9 +2637,35 @@ class IndexedFrame(Frame):
                 df = df.take(index.argsort(ascending=True).argsort())
 
         index = index if index is not None else df.index
-        names = (
-            column_names if column_names is not None else list(df._data.names)
-        )
+
+        if column_names is None:
+            names = list(df._data.names)
+            level_names = self._data.level_names
+            multiindex = self._data.multiindex
+            rangeindex = self._data.rangeindex
+        elif isinstance(column_names, (pd.Index, cudf.Index)):
+            if isinstance(column_names, (pd.MultiIndex, cudf.MultiIndex)):
+                multiindex = True
+                if isinstance(column_names, cudf.MultiIndex):
+                    names = list(iter(column_names.to_pandas()))
+                else:
+                    names = list(iter(column_names))
+                rangeindex = False
+            else:
+                multiindex = False
+                names = column_names
+                if isinstance(names, cudf.Index):
+                    names = names.to_pandas()
+                rangeindex = isinstance(
+                    column_names, (pd.RangeIndex, cudf.RangeIndex)
+                )
+            level_names = tuple(column_names.names)
+        else:
+            names = column_names
+            level_names = None
+            multiindex = False
+            rangeindex = False
+
         cols = {
             name: (
                 df._data[name].copy(deep=deep)
@@ -2653,17 +2678,13 @@ class IndexedFrame(Frame):
             )
             for name in names
         }
-        if column_names is None:
-            level_names = self._data.level_names
-        elif isinstance(column_names, pd.Index):
-            level_names = tuple(column_names.names)
-        else:
-            level_names = None
+
         result = self.__class__._from_data(
             data=cudf.core.column_accessor.ColumnAccessor(
                 cols,
-                multiindex=self._data.multiindex,
+                multiindex=multiindex,
                 level_names=level_names,
+                rangeindex=rangeindex,
             ),
             index=index,
         )
@@ -4079,7 +4100,7 @@ class IndexedFrame(Frame):
         # specified nested column. Other columns' corresponding rows are
         # duplicated. If ignore_index is set, the original index is not
         # exploded and will be replaced with a `RangeIndex`.
-        if not is_list_dtype(self._data[explode_column].dtype):
+        if not isinstance(self._data[explode_column].dtype, ListDtype):
             data = self._data.copy(deep=True)
             idx = None if ignore_index else self._index.copy(deep=True)
             return self.__class__._from_data(data, index=idx)

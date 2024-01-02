@@ -43,6 +43,7 @@
 
 #include <cuda/functional>
 
+#include <bitset>
 #include <numeric>
 
 namespace cudf::io::parquet::detail {
@@ -271,8 +272,14 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
   DecodePageHeaders(chunks.device_ptr(), chunks.size(), error_code.data(), stream);
   chunks.device_to_host_sync(stream);
 
-  if (error_code.value() != 0) {
-    CUDF_FAIL("Parquet header parsing failed with code(s) " + error_code.str());
+  // It's required to ignore unsupported encodings in this function
+  // so that we can actually compile a list of all the unsupported encodings found
+  // in the pages. That cannot be done here since we do not have the pages vector here.
+  // see https://github.com/rapidsai/cudf/pull/14453#pullrequestreview-1778346688
+  if (error_code.value() != 0 and
+      error_code.value() != static_cast<uint32_t>(decode_error::UNSUPPORTED_ENCODING)) {
+    CUDF_FAIL("Parquet header parsing failed with code(s) while counting page headers " +
+              error_code.str());
   }
 
   for (size_t c = 0; c < chunks.size(); c++) {
@@ -280,6 +287,67 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
   }
 
   return total_pages;
+}
+
+/**
+ * @brief Returns a string representation of known encodings
+ *
+ * @param encoding Given encoding
+ * @return String representation of encoding
+ */
+std::string encoding_to_string(Encoding encoding)
+{
+  switch (encoding) {
+    case Encoding::PLAIN: return "PLAIN";
+    case Encoding::GROUP_VAR_INT: return "GROUP_VAR_INT";
+    case Encoding::PLAIN_DICTIONARY: return "PLAIN_DICTIONARY";
+    case Encoding::RLE: return "RLE";
+    case Encoding::BIT_PACKED: return "BIT_PACKED";
+    case Encoding::DELTA_BINARY_PACKED: return "DELTA_BINARY_PACKED";
+    case Encoding::DELTA_LENGTH_BYTE_ARRAY: return "DELTA_LENGTH_BYTE_ARRAY";
+    case Encoding::DELTA_BYTE_ARRAY: return "DELTA_BYTE_ARRAY";
+    case Encoding::RLE_DICTIONARY: return "RLE_DICTIONARY";
+    case Encoding::BYTE_STREAM_SPLIT: return "BYTE_STREAM_SPLIT";
+    case Encoding::NUM_ENCODINGS:
+    default: return "UNKNOWN(" + std::to_string(static_cast<int>(encoding)) + ")";
+  }
+}
+
+/**
+ * @brief Helper function to convert an encoding bitmask to a readable string
+ *
+ * @param bitmask Bitmask of found unsupported encodings
+ * @returns Human readable string with unsupported encodings
+ */
+[[nodiscard]] std::string encoding_bitmask_to_str(uint32_t encoding_bitmask)
+{
+  std::bitset<32> bits(encoding_bitmask);
+  std::string result;
+
+  for (size_t i = 0; i < bits.size(); ++i) {
+    if (bits.test(i)) {
+      auto const current = static_cast<Encoding>(i);
+      if (!is_supported_encoding(current)) { result.append(encoding_to_string(current) + " "); }
+    }
+  }
+  return result;
+}
+/**
+ * @brief Create a readable string for the user that will list out all unsupported encodings found.
+ *
+ * @param pages List of page information
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @returns Human readable string with unsupported encodings
+ */
+[[nodiscard]] std::string list_unsupported_encodings(device_span<PageInfo const> pages,
+                                                     rmm::cuda_stream_view stream)
+{
+  auto const to_mask = [] __device__(auto const& page) {
+    return is_supported_encoding(page.encoding) ? 0U : encoding_to_mask(page.encoding);
+  };
+  uint32_t const unsupported = thrust::transform_reduce(
+    rmm::exec_policy(stream), pages.begin(), pages.end(), to_mask, 0U, thrust::bit_or<uint32_t>());
+  return encoding_bitmask_to_str(unsupported);
 }
 
 /**
@@ -307,8 +375,13 @@ int decode_page_headers(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks
   DecodePageHeaders(chunks.device_ptr(), chunks.size(), error_code.data(), stream);
 
   if (error_code.value() != 0) {
-    // TODO(ets): if an unsupported encoding was detected, do extra work to figure out which one
-    CUDF_FAIL("Parquet header parsing failed with code(s)" + error_code.str());
+    if (BitAnd(error_code.value(), decode_error::UNSUPPORTED_ENCODING) != 0) {
+      auto const unsupported_str =
+        ". With unsupported encodings found: " + list_unsupported_encodings(pages, stream);
+      CUDF_FAIL("Parquet header parsing failed with code(s) " + error_code.str() + unsupported_str);
+    } else {
+      CUDF_FAIL("Parquet header parsing failed with code(s) " + error_code.str());
+    }
   }
 
   // compute max bytes needed for level data

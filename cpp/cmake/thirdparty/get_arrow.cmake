@@ -77,6 +77,7 @@ list(POP_BACK CMAKE_PREFIX_PATH)
   # benchmarks will not work without updating GBench (and possibly NVBench) builds. We are currently
   # ignoring these limitations since we don't anticipate using this feature except for building
   # wheels.
+  enable_language(C)
   execute_process(
     COMMAND ${CMAKE_C_COMPILER} -print-file-name=libc.so.6
     OUTPUT_VARIABLE GLIBC_EXECUTABLE
