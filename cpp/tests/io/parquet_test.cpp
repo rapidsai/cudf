@@ -48,11 +48,24 @@ cudf::test::TempDirTestEnvironment* const temp_env =
   static_cast<cudf::test::TempDirTestEnvironment*>(
     ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
+// Typed test fixture for numeric type tests
+template <typename T>
+struct ParquetWriterNumericTypeTest : public ParquetWriterTest {
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
+};
+
+// Typed test fixture for timestamp type tests
+template <typename T>
+struct ParquetWriterTimestampTypeTest : public ParquetWriterTest {
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
+};
+
+template <typename T>
+struct ParquetReaderSourceTest : public ParquetReaderTest {};
+
 // Declare typed test cases
 TYPED_TEST_SUITE(ParquetWriterNumericTypeTest, SupportedTypes);
-TYPED_TEST_SUITE(ParquetWriterChronoTypeTest, cudf::test::ChronoTypes);
 TYPED_TEST_SUITE(ParquetWriterTimestampTypeTest, SupportedTimestampTypes);
-TYPED_TEST_SUITE(ParquetWriterSchemaTest, cudf::test::AllTypes);
 TYPED_TEST_SUITE(ParquetReaderSourceTest, ByteLikeTypes);
 
 INSTANTIATE_TEST_SUITE_P(ParquetV2ReadWriteTest,

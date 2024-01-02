@@ -84,38 +84,11 @@ struct ParquetReaderTest : public cudf::test::BaseFixture {};
 // Base test fixture for "stress" tests
 struct ParquetWriterStressTest : public cudf::test::BaseFixture {};
 
-// Typed test fixture for numeric type tests
-template <typename T>
-struct ParquetWriterNumericTypeTest : public ParquetWriterTest {
-  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
-};
-
 // Typed test fixture for comparable type tests
 template <typename T>
 struct ParquetWriterComparableTypeTest : public ParquetWriterTest {
   auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
-
-// Typed test fixture for timestamp type tests
-template <typename T>
-struct ParquetWriterChronoTypeTest : public ParquetWriterTest {
-  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
-};
-
-// Typed test fixture for timestamp type tests
-template <typename T>
-struct ParquetWriterTimestampTypeTest : public ParquetWriterTest {
-  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
-};
-
-// Typed test fixture for all types
-template <typename T>
-struct ParquetWriterSchemaTest : public ParquetWriterTest {
-  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
-};
-
-template <typename T>
-struct ParquetReaderSourceTest : public ParquetReaderTest {};
 
 template <typename T>
 struct ParquetWriterDeltaTest : public ParquetWriterTest {};
