@@ -1994,12 +1994,11 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
     CUDF_EXPECTS(!variable_width_table.is_empty(), "No variable-width columns when expected!");
     CUDF_EXPECTS(variable_width_offsets.has_value(), "No variable width offset data!");
 
-    auto const variable_data_begin =
-        thrust::make_transform_iterator(variable_width_table.begin(), [](auto const& c) {
-          return is_compound(c.type()) ? c.template data<int8_t>() : nullptr;
-        });
+    auto const variable_data_begin = thrust::make_transform_iterator(
+      variable_width_table.begin(),
+      [](auto const& c) { return is_compound(c.type()) ? c.template data<int8_t>() : nullptr; });
     std::vector<int8_t const*> variable_width_input_data(
-        variable_data_begin, variable_data_begin + variable_width_table.num_columns());
+      variable_data_begin, variable_data_begin + variable_width_table.num_columns());
 
     auto dev_variable_input_data = make_device_uvector_async(
       variable_width_input_data, stream, rmm::mr::get_current_device_resource());

@@ -48,7 +48,7 @@ strings_column_view::offset_iterator strings_column_view::offsets_end() const
 size_type strings_column_view::chars_size(rmm::cuda_stream_view stream) const noexcept
 {
   if (size() == 0) return 0;
-  return detail::get_value<size_type>(offsets(), offsets.size()-1, stream);
+  return detail::get_value<size_type>(offsets(), offsets.size() - 1, stream);
 }
 
 strings_column_view::chars_iterator strings_column_view::chars_begin(rmm::cuda_stream_view) const
