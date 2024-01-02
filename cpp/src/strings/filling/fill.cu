@@ -33,25 +33,21 @@ namespace strings {
 namespace detail {
 namespace {
 struct fill_fn {
-  column_device_view d_strings;
-  size_type begin;
-  size_type end;
-  string_view d_value;
+  column_device_view const d_strings;
+  size_type const begin;
+  size_type const end;
+  string_view const d_value;
   size_type* d_offsets{};
   char* d_chars{};
 
   __device__ void operator()(size_type idx)
   {
-    if (d_strings.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
-      return;
-    }
-    auto const d_str =
-      ((begin <= idx) && (idx < end)) ? d_value : d_strings.element<string_view>(idx);
+    auto const d_str = d_strings.is_null(idx) ? string_view{} : d_strings.element<string_view>(idx);
+    auto const d_output = ((begin <= idx) && (idx < end)) ? d_value : d_str;
     if (!d_chars) {
-      d_offsets[idx] = d_str.size_bytes();
+      d_offsets[idx] = d_output.size_bytes();
     } else {
-      copy_string(d_chars + d_offsets[idx], d_str);
+      copy_string(d_chars + d_offsets[idx], d_output);
     }
   }
 };
