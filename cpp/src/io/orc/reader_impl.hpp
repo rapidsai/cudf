@@ -80,12 +80,12 @@ class reader::impl {
   /**
    * @brief Populate the output table metadata from the file metadata.
    *
-   * @param out_metadata The output table metadata to add to
+   * @return Columns' metadata to output along with the table read from file
    */
   table_metadata populate_metadata();
 
   /**
-   * @brief Read a chunk of data and return an output table.
+   * @brief Read a chunk of data from the input source and return an output table with metadata.
    *
    * This function is called internally and expects all preprocessing steps have already been done.
    *
@@ -96,19 +96,20 @@ class reader::impl {
   rmm::cuda_stream_view const _stream;
   rmm::mr::device_memory_resource* const _mr;
 
+  // Reader configs
   data_type const _timestamp_type;  // Override output timestamp resolution
   bool const _use_index;            // Enable or disable attempt to use row index for parsing
   bool const _use_np_dtypes;        // Enable or disable the conversion to numpy-compatible dtypes
   std::vector<std::string> const _decimal128_columns;   // Control decimals conversion
   std::unique_ptr<reader_column_meta> const _col_meta;  // Track of orc mapping and child details
 
+  // Intermediate data for internal processing.
   std::vector<std::unique_ptr<datasource>> const _sources;  // Unused but owns data for `_metadata`
   cudf::io::orc::detail::aggregate_orc_metadata _metadata;
   cudf::io::orc::detail::column_hierarchy const _selected_columns;  // Need to be after _metadata
+  std::unique_ptr<file_intermediate_data> _file_itm_data;
   std::unique_ptr<table_metadata> _output_metadata;
   std::vector<std::vector<column_buffer>> _out_buffers;
-
-  std::unique_ptr<file_intermediate_data> _file_itm_data;  // Intermediate data of the reading file.
 };
 
 }  // namespace cudf::io::detail::orc

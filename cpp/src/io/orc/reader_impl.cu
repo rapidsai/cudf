@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 
-/**
- * @file reader_impl.cu
- * @brief cuDF-IO ORC reader class implementation
- */
-
 #include "reader_impl.hpp"
 #include "reader_impl_chunking.hpp"
 #include "reader_impl_helpers.hpp"
