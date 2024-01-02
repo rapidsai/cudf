@@ -52,7 +52,8 @@
 #include <algorithm>
 #include <iterator>
 
-namespace cudf::io::detail::orc {
+namespace cudf::io::orc::detail {
+using namespace cudf::io::detail;
 using namespace cudf::io::orc;
 
 namespace {
@@ -1363,4 +1364,4 @@ table_with_metadata reader::read(orc_reader_options const& options)
   return _impl->read(options.get_skip_rows(), options.get_num_rows(), options.get_stripes());
 }
 
-}  // namespace cudf::io::detail::orc
+}  // namespace cudf::io::orc::detail

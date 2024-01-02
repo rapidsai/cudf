@@ -39,15 +39,13 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace orc {
+namespace cudf::io::orc::detail {
 // Forward internal classes
 class orc_column_view;
 
-using namespace cudf::io::orc;
 using namespace cudf::io;
+using namespace cudf::io::detail;
+using namespace cudf::io::orc;
 using cudf::detail::device_2dspan;
 using cudf::detail::host_2dspan;
 using cudf::detail::hostdevice_2dvector;
@@ -364,7 +362,4 @@ class writer::impl {
   bool _closed = false;  // To track if the output has been written to sink.
 };
 
-}  // namespace orc
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc::detail

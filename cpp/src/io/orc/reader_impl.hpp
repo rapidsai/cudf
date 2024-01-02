@@ -34,7 +34,7 @@
 #include <utility>
 #include <vector>
 
-namespace cudf::io::detail::orc {
+namespace cudf::io::orc::detail {
 using namespace cudf::io::orc;
 
 namespace {
@@ -86,4 +86,4 @@ class reader::impl {
   std::unique_ptr<reader_column_meta> const _col_meta;  // Track of orc mapping and child details
 };
 
-}  // namespace cudf::io::detail::orc
+}  // namespace cudf::io::orc::detail

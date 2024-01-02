@@ -68,10 +68,7 @@
 #include <tuple>
 #include <utility>
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace orc {
+namespace cudf::io::orc::detail {
 using namespace cudf::io::orc;
 using namespace cudf::io;
 
@@ -2741,7 +2738,4 @@ void writer::write(table_view const& table) { _impl->write(table); }
 // Forward to implementation
 void writer::close() { _impl->close(); }
 
-}  // namespace orc
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc::detail
