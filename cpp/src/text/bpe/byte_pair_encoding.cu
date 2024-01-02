@@ -360,7 +360,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
                                : cudf::detail::get_value<cudf::size_type>(
                                  input.offsets(), input.size() + input.offset(), stream);
   auto const chars_size    = last_offset - first_offset;
-  auto const d_input_chars = input.chars_begin() + first_offset;
+  auto const d_input_chars = input.chars_begin(stream) + first_offset;
 
   auto const offset_data_type = cudf::data_type{cudf::type_to_id<cudf::size_type>()};
   auto offsets                = cudf::make_numeric_column(
@@ -406,7 +406,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
       cudf::column_view(cudf::device_span<cudf::size_type const>(tmp_offsets));
     auto const tmp_size  = offsets_total - 1;
     auto const tmp_input = cudf::column_view(
-      input.parent().type(), tmp_size, input.chars_begin(), nullptr, 0, 0, {col_offsets});
+      input.parent().type(), tmp_size, input.chars_begin(stream), nullptr, 0, 0, {col_offsets});
     auto const d_tmp_strings = cudf::column_device_view::create(tmp_input, stream);
 
     // launch the byte-pair-encoding kernel on the temp column

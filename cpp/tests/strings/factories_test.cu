@@ -97,7 +97,7 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
 
   // check string data
   auto h_chars_data = cudf::detail::make_std_vector_sync(
-    cudf::device_span<char const>(strings_view.chars_begin(),
+    cudf::device_span<char const>(strings_view.chars_begin(stream),
                                   strings_view.chars_size(cudf::get_default_stream())),
     cudf::get_default_stream());
   auto h_offsets_data = cudf::detail::make_std_vector_sync(
@@ -171,7 +171,7 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
 
   // check string data
   auto h_chars_data = cudf::detail::make_std_vector_sync(
-    cudf::device_span<char const>(strings_view.chars_begin(),
+    cudf::device_span<char const>(strings_view.chars_begin(stream),
                                   strings_view.chars_size(cudf::get_default_stream())),
     cudf::get_default_stream());
   auto h_offsets_data = cudf::detail::make_std_vector_sync(

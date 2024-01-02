@@ -112,7 +112,7 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
   auto offsets_column = std::make_unique<column>(strings.offsets(), stream, mr);  // makes a copy
   auto d_new_offsets  = offsets_column->view().template data<int32_t>();
 
-  auto chars_buffer = rmm::device_buffer{strings.chars_begin(),
+  auto chars_buffer = rmm::device_buffer{strings.chars_begin(stream),
                                          static_cast<std::size_t>(strings.chars_size(stream)),
                                          stream,
                                          mr};  // makes a copy

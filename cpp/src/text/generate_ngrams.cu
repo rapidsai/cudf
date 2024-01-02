@@ -128,7 +128,7 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
   // create a temporary column view from the non-empty offsets and chars column views
   cudf::column_view strings_view(cudf::data_type{cudf::type_id::STRING},
                                  strings_count,
-                                 strings.chars_begin(),
+                                 strings.chars_begin(stream),
                                  nullptr,
                                  0,
                                  0,

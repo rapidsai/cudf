@@ -229,7 +229,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
   // The count_if is faster than any_of or all_of: https://github.com/NVIDIA/thrust/issues/1016
   bool const multi_byte_chars =
     thrust::count_if(rmm::exec_policy(stream),
-                     input.chars_begin(),
+                     input.chars_begin(stream),
                      input.chars_end(stream),
                      cuda::proclaim_return_type<bool>(
                        [] __device__(auto chr) { return is_utf8_continuation_char(chr); })) > 0;

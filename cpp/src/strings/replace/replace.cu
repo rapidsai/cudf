@@ -415,7 +415,7 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
   auto const strings_count = strings.size();
   auto const offset_count  = strings_count + 1;
   auto const d_offsets     = strings.offsets_begin();
-  auto const d_in_chars    = strings.chars_begin();
+  auto const d_in_chars    = strings.chars_begin(stream);
   auto const chars_bytes   = chars_end - chars_start;
   auto const target_size   = d_target.size_bytes();
 

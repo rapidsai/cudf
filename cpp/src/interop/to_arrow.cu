@@ -302,7 +302,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
   auto offset_buffer = child_arrays[strings_column_view::offsets_column_index]->data()->buffers[1];
   auto const sview   = strings_column_view{input_view};
   auto data_buffer   = fetch_data_buffer<char>(
-    device_span<char const>{sview.chars_begin(),
+    device_span<char const>{sview.chars_begin(stream),
                               static_cast<std::size_t>(sview.chars_size(stream))},
     ar_mr,
     stream);

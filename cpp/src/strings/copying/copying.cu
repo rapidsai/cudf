@@ -69,7 +69,7 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
   auto const data_size = static_cast<std::size_t>(
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream));
   auto chars_buffer =
-    rmm::device_buffer{strings.chars_begin() + chars_offset, data_size, stream, mr};
+    rmm::device_buffer{strings.chars_begin(stream) + chars_offset, data_size, stream, mr};
 
   // slice the null mask
   auto null_mask = cudf::detail::copy_bitmask(

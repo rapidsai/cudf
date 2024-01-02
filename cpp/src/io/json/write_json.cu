@@ -819,7 +819,7 @@ void write_chunked(data_sink* out_sink,
   CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
 
   auto const total_num_bytes = str_column_view.chars_size(stream) - skip_last_chars;
-  char const* ptr_all_bytes  = str_column_view.chars_begin();
+  char const* ptr_all_bytes  = str_column_view.chars_begin(stream);
 
   if (out_sink->is_device_write_preferred(total_num_bytes)) {
     // Direct write from device memory

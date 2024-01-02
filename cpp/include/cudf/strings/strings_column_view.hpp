@@ -135,7 +135,7 @@ class strings_column_view : private column_view {
    *
    * @return Iterator pointing to the first char byte.
    */
-  [[nodiscard]] chars_iterator chars_begin() const;
+  [[nodiscard]] chars_iterator chars_begin(rmm::cuda_stream_view) const;
 
   /**
    * @brief Return an end iterator for the offsets child column.

@@ -403,7 +403,7 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
                                : cudf::detail::get_value<cudf::size_type>(
                                  input.offsets(), input.size() + input.offset(), stream);
   auto const chars_size    = last_offset - first_offset;
-  auto const d_input_chars = input.chars_begin() + first_offset;
+  auto const d_input_chars = input.chars_begin(stream) + first_offset;
 
   rmm::device_uvector<cudf::size_type> d_token_counts(input.size(), stream);
   rmm::device_uvector<int8_t> d_marks(chars_size, stream);
