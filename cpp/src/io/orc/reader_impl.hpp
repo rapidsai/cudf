@@ -17,7 +17,8 @@
 #pragma once
 
 #include "aggregate_orc_metadata.hpp"
-#include "reader_impl_chunking.hpp"
+
+#include <io/utilities/column_buffer.hpp>
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/orc.hpp>
@@ -32,6 +33,7 @@
 namespace cudf::io::detail::orc {
 using namespace cudf::io::orc;
 struct reader_column_meta;
+struct file_intermediate_data;
 
 /**
  * @brief Implementation for ORC reader.
@@ -69,6 +71,7 @@ class reader::impl {
    *
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows_opt Optional number of rows to read, or `std::nullopt` to read all rows
+   * @param stripes Indices of individual stripes to load if non-empty
    */
   void prepare_data(uint64_t skip_rows,
                     std::optional<size_type> const& num_rows_opt,
@@ -93,17 +96,17 @@ class reader::impl {
   rmm::cuda_stream_view const _stream;
   rmm::mr::device_memory_resource* const _mr;
 
-  std::vector<std::unique_ptr<datasource>> const _sources;  // Unused but owns data for `_metadata`
-  cudf::io::orc::detail::aggregate_orc_metadata _metadata;
-  cudf::io::orc::detail::column_hierarchy const _selected_columns;  // Need to be after _metadata
-  std::unique_ptr<table_metadata> _output_metadata;
-  std::vector<std::vector<column_buffer>> _out_buffers;
-
   data_type const _timestamp_type;  // Override output timestamp resolution
   bool const _use_index;            // Enable or disable attempt to use row index for parsing
   bool const _use_np_dtypes;        // Enable or disable the conversion to numpy-compatible dtypes
   std::vector<std::string> const _decimal128_columns;   // Control decimals conversion
   std::unique_ptr<reader_column_meta> const _col_meta;  // Track of orc mapping and child details
+
+  std::vector<std::unique_ptr<datasource>> const _sources;  // Unused but owns data for `_metadata`
+  cudf::io::orc::detail::aggregate_orc_metadata _metadata;
+  cudf::io::orc::detail::column_hierarchy const _selected_columns;  // Need to be after _metadata
+  std::unique_ptr<table_metadata> _output_metadata;
+  std::vector<std::vector<column_buffer>> _out_buffers;
 
   std::unique_ptr<file_intermediate_data> _file_itm_data;  // Intermediate data of the reading file.
 };

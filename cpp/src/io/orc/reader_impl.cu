@@ -20,6 +20,7 @@
  */
 
 #include "reader_impl.hpp"
+#include "reader_impl_chunking.hpp"
 #include "reader_impl_helpers.hpp"
 
 namespace cudf::io::detail::orc {
@@ -31,14 +32,14 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                    rmm::mr::device_memory_resource* mr)
   : _stream(stream),
     _mr(mr),
-    _sources(std::move(sources)),
-    _metadata{_sources, stream},
-    _selected_columns{_metadata.select_columns(options.get_columns())},
     _timestamp_type{options.get_timestamp_type()},
     _use_index{options.is_enabled_use_index()},
     _use_np_dtypes{options.is_enabled_use_np_dtypes()},
     _decimal128_columns{options.get_decimal128_columns()},
-    _col_meta{std::make_unique<reader_column_meta>()}
+    _col_meta{std::make_unique<reader_column_meta>()},
+    _sources(std::move(sources)),
+    _metadata{_sources, stream},
+    _selected_columns{_metadata.select_columns(options.get_columns())}
 {
 }
 
