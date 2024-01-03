@@ -2317,7 +2317,7 @@ def test_utc_offset_not_implemented(tz):
         cudf.to_datetime([f"2020-01-01 00:00:00{tz}"])
 
 
-def test_Z_utcoffset():
+def test_Z_utc_offset():
     with cudf.option_context("mode.pandas_compatible", True):
         with pytest.raises(NotImplementedError):
             cudf.to_datetime(["2020-01-01 00:00:00Z"])
