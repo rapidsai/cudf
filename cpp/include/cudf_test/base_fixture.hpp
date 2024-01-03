@@ -16,15 +16,17 @@
 
 #pragma once
 
-#include <cudf/utilities/traits.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/file_utilities.hpp>
+
+#include <cudf/utilities/traits.hpp>
 
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
 namespace cudf {
 namespace test {
+
 /**
  * @brief Base test fixture class from which all libcudf tests should inherit.
  *
