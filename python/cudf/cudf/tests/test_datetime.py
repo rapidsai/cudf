@@ -2312,7 +2312,7 @@ def test_format_timezone_not_implemented(code):
 
 
 @pytest.mark.parametrize("tz", ["UTC-3", "+01:00"])
-def test_utcoffset_not_implemented(tz):
+def test_utc_offset_not_implemented(tz):
     with pytest.raises(NotImplementedError):
         cudf.to_datetime([f"2020-01-01 00:00:00{tz}"])
 
