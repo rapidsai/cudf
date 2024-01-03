@@ -62,7 +62,7 @@ print(tips_df.groupby("size").tip_percentage.mean())
 
 * CUDA 11.2+
 * NVIDIA driver 450.80.02+
-* Pascal architecture or better (Compute Capability >=6.0)
+* Volta architecture or better (Compute Capability >=7.0)
 
 ### Conda
 

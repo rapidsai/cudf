@@ -232,7 +232,10 @@ __global__ void __launch_bounds__(preprocess_block_size)
                                                                                       {rep_runs}};
 
   // setup page info
-  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, all_types_filter{}, false)) { return; }
+  if (!setupLocalPageInfo(
+        s, pp, chunks, min_row, num_rows, all_types_filter{}, page_processing_stage::PREPROCESS)) {
+    return;
+  }
 
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
   // the size of the rolling batch buffer
