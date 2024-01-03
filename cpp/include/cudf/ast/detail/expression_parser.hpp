@@ -67,8 +67,8 @@ struct alignas(8) device_data_reference {
 
   bool operator==(device_data_reference const& rhs) const
   {
-    return std::tie(data_index, reference_type, table_source) ==
-           std::tie(rhs.data_index, rhs.reference_type, rhs.table_source);
+    return std::tie(data_index, data_type, reference_type, table_source) ==
+           std::tie(rhs.data_index, rhs.data_type, rhs.reference_type, rhs.table_source);
   }
 };
 

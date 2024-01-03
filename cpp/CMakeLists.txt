@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 23.12.00
+  VERSION 24.02.00
   LANGUAGES C CXX CUDA
 )
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
@@ -78,6 +78,8 @@ option(CUDA_ENABLE_LINEINFO
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
+option(USE_LIBARROW_FROM_PYARROW "Only use the libarrow contained in pyarrow" OFF)
+mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
 
 set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
 if(CUDA_STATIC_RUNTIME OR NOT BUILD_SHARED_LIBS)
@@ -89,9 +91,6 @@ option(
   ${DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL}
 )
 mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
-
-option(USE_LIBARROW_FROM_PYARROW "Use the libarrow contained within pyarrow." OFF)
-mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
 
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
@@ -184,17 +183,15 @@ rapids_cpm_init()
 include(cmake/thirdparty/get_jitify.cmake)
 # find nvCOMP
 include(cmake/thirdparty/get_nvcomp.cmake)
-# find thrust/cub
-include(cmake/thirdparty/get_thrust.cmake)
+# find CCCL before rmm so that we get cudf's patched version of CCCL
+include(cmake/thirdparty/get_cccl.cmake)
 # find rmm
 include(cmake/thirdparty/get_rmm.cmake)
 # find arrow
 include(cmake/thirdparty/get_arrow.cmake)
 # find dlpack
 include(cmake/thirdparty/get_dlpack.cmake)
-# find libcu++
-include(cmake/thirdparty/get_libcudacxx.cmake)
-# find cuCollections Should come after including thrust and libcudacxx
+# find cuCollections, should come after including CCCL
 include(cmake/thirdparty/get_cucollections.cmake)
 # find or install GoogleTest
 if(CUDF_BUILD_TESTUTIL)
@@ -582,6 +579,7 @@ add_library(
   src/strings/replace/replace.cu
   src/strings/replace/replace_re.cu
   src/strings/reverse.cu
+  src/strings/scan/scan_inclusive.cu
   src/strings/search/findall.cu
   src/strings/search/find.cu
   src/strings/search/find_multiple.cu
@@ -598,6 +596,7 @@ add_library(
   src/strings/utilities.cu
   src/strings/wrap.cu
   src/structs/copying/concatenate.cu
+  src/structs/scan/scan_inclusive.cu
   src/structs/structs_column_factories.cu
   src/structs/structs_column_view.cpp
   src/structs/utilities.cpp
@@ -629,6 +628,7 @@ add_library(
   src/transform/nans_to_nulls.cu
   src/transform/one_hot_encode.cu
   src/transform/row_bit_count.cu
+  src/transform/row_conversion.cu
   src/transform/transform.cpp
   src/transpose/transpose.cu
   src/unary/cast_ops.cu
@@ -757,7 +757,7 @@ add_dependencies(cudf jitify_preprocess_run)
 # Specify the target module library dependencies
 target_link_libraries(
   cudf
-  PUBLIC ${ARROW_LIBRARIES} libcudacxx::libcudacxx cudf::Thrust rmm::rmm
+  PUBLIC ${ARROW_LIBRARIES} CCCL::CCCL rmm::rmm
   PRIVATE cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio
           $<TARGET_NAME_IF_EXISTS:cuFile_interface>
 )
@@ -1008,14 +1008,6 @@ following IMPORTED GLOBAL  targets:
     ]=]
 )
 
-set(common_code_string
-    [=[
-if(NOT TARGET cudf::Thrust)
-  thrust_create_target(cudf::Thrust FROM_OPTIONS)
-endif()
-]=]
-)
-
 if(CUDF_ENABLE_ARROW_PARQUET)
   string(
     APPEND
@@ -1039,7 +1031,6 @@ if(testing IN_LIST cudf_FIND_COMPONENTS)
 endif()
 ]=]
 )
-string(APPEND install_code_string "${common_code_string}")
 
 rapids_export(
   INSTALL cudf
@@ -1062,8 +1053,6 @@ if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
 endif()
 ]=]
 )
-
-string(APPEND build_code_string "${common_code_string}")
 
 rapids_export(
   BUILD cudf

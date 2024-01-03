@@ -62,6 +62,10 @@ def dtype(arbitrary):
     # `arbitrary` as a Pandas extension type.
     #  Return the corresponding NumPy/cuDF type.
     pd_dtype = pd.api.types.pandas_dtype(arbitrary)
+    if cudf.get_option(
+        "mode.pandas_compatible"
+    ) and cudf.api.types._is_pandas_nullable_extension_dtype(pd_dtype):
+        raise NotImplementedError("not supported")
     try:
         return dtype(pd_dtype.numpy_dtype)
     except AttributeError:
@@ -393,7 +397,7 @@ class ListDtype(_BaseDtype):
         elif isinstance(self._typ.value_type, pa.StructType):
             return StructDtype.from_arrow(self._typ.value_type)
         else:
-            return cudf.dtype(self._typ.value_type.to_pandas_dtype()).name
+            return cudf.dtype(self._typ.value_type.to_pandas_dtype())
 
     @cached_property
     def leaf_type(self):
@@ -490,7 +494,9 @@ class ListDtype(_BaseDtype):
         if isinstance(self.element_type, _BaseDtype):
             header["element-type"], frames = self.element_type.serialize()
         else:
-            header["element-type"] = self.element_type
+            header["element-type"] = getattr(
+                self.element_type, "name", self.element_type
+            )
         header["frame_count"] = len(frames)
         return header, frames
 
@@ -504,6 +510,10 @@ class ListDtype(_BaseDtype):
         else:
             element_type = header["element-type"]
         return klass(element_type=element_type)
+
+    @cached_property
+    def itemsize(self):
+        return self.element_type.itemsize
 
 
 class StructDtype(_BaseDtype):
@@ -1040,7 +1050,10 @@ def is_list_dtype(obj):
         or type(obj) is cudf.core.column.ListColumn
         or obj is cudf.core.column.ListColumn
         or (isinstance(obj, str) and obj == cudf.core.dtypes.ListDtype.name)
-        or (hasattr(obj, "dtype") and is_list_dtype(obj.dtype))
+        or (
+            hasattr(obj, "dtype")
+            and isinstance(obj.dtype, cudf.core.dtypes.ListDtype)
+        )
     )
 
 
@@ -1066,7 +1079,10 @@ def is_struct_dtype(obj):
         isinstance(obj, cudf.core.dtypes.StructDtype)
         or obj is cudf.core.dtypes.StructDtype
         or (isinstance(obj, str) and obj == cudf.core.dtypes.StructDtype.name)
-        or (hasattr(obj, "dtype") and is_struct_dtype(obj.dtype))
+        or (
+            hasattr(obj, "dtype")
+            and isinstance(obj.dtype, cudf.core.dtypes.StructDtype)
+        )
     )
 
 
@@ -1118,7 +1134,12 @@ def is_interval_dtype(obj):
         or (
             isinstance(obj, str) and obj == cudf.core.dtypes.IntervalDtype.name
         )
-        or (hasattr(obj, "dtype") and is_interval_dtype(obj.dtype))
+        or (
+            isinstance(
+                getattr(obj, "dtype", None),
+                (pd.IntervalDtype, cudf.core.dtypes.IntervalDtype),
+            )
+        )
     )
 
 

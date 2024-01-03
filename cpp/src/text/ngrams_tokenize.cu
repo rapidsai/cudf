@@ -39,6 +39,8 @@
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
+#include <cuda/functional>
+
 #include <stdexcept>
 
 namespace nvtext {
@@ -193,10 +195,11 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
     thrust::make_counting_iterator<cudf::size_type>(0),
     thrust::make_counting_iterator<cudf::size_type>(strings_count),
     d_ngram_offsets + 1,
-    [d_token_offsets, ngrams] __device__(cudf::size_type idx) {
-      auto token_count = d_token_offsets[idx + 1] - d_token_offsets[idx];
-      return (token_count >= ngrams) ? token_count - ngrams + 1 : 0;
-    },
+    cuda::proclaim_return_type<cudf::size_type>(
+      [d_token_offsets, ngrams] __device__(cudf::size_type idx) {
+        auto token_count = d_token_offsets[idx + 1] - d_token_offsets[idx];
+        return (token_count >= ngrams) ? token_count - ngrams + 1 : 0;
+      }),
     thrust::plus{});
   ngram_offsets.set_element_to_zero_async(0, stream);
   auto const total_ngrams = ngram_offsets.back_element(stream);

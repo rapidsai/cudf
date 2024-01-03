@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -112,6 +113,47 @@ std::vector<column_view> get_nullable_columns(table_view const& table)
     }
   }
   return result;
+}
+
+bool nullable(table_view const& view)
+{
+  return std::any_of(view.begin(), view.end(), [](auto const& col) { return col.nullable(); });
+}
+
+bool has_nulls(table_view const& view)
+{
+  return std::any_of(view.begin(), view.end(), [](auto const& col) { return col.has_nulls(); });
+}
+
+bool has_nested_nulls(table_view const& input)
+{
+  return std::any_of(input.begin(), input.end(), [](auto const& col) {
+    return col.has_nulls() ||
+           std::any_of(col.child_begin(), col.child_end(), [](auto const& child_col) {
+             return has_nested_nulls(table_view{{child_col}});
+           });
+  });
+}
+
+bool has_nested_nullable_columns(table_view const& input)
+{
+  return std::any_of(input.begin(), input.end(), [](auto const& col) {
+    return col.nullable() ||
+           std::any_of(col.child_begin(), col.child_end(), [](auto const& child_col) {
+             return has_nested_nullable_columns(table_view{{child_col}});
+           });
+  });
+}
+
+bool have_same_types(table_view const& lhs, table_view const& rhs)
+{
+  return std::equal(lhs.begin(),
+                    lhs.end(),
+                    rhs.begin(),
+                    rhs.end(),
+                    [](column_view const& lcol, column_view const& rcol) {
+                      return cudf::column_types_equal(lcol, rcol);
+                    });
 }
 
 namespace detail {

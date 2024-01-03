@@ -22,4 +22,9 @@ cdef class DeviceScalar:
     @staticmethod
     cdef DeviceScalar from_unique_ptr(unique_ptr[scalar] ptr, dtype=*)
 
+    @staticmethod
+    cdef DeviceScalar from_pylibcudf(pylibcudf.Scalar scalar, dtype=*)
+
+    cdef void _set_dtype(self, dtype=*)
+
     cpdef bool is_valid(DeviceScalar s)

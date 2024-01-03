@@ -2656,6 +2656,13 @@ def test_string_istimestamp():
     assert_eq(expected, got)
 
 
+def test_istimestamp_empty():
+    gsr = cudf.Series([], dtype="object")
+    result = gsr.str.istimestamp("%Y%m%d")
+    expected = cudf.Series([], dtype="bool")
+    assert_eq(result, expected)
+
+
 def test_string_ip4_to_int():
     gsr = cudf.Series(
         ["", None, "hello", "41.168.0.1", "127.0.0.1", "41.197.0.1"]
@@ -3468,3 +3475,9 @@ def test_str_find_multiple_error():
         match=re.escape("patterns can only be of 'string' dtype, got: int64"),
     ):
         s.str.find_multiple(t)
+
+
+def test_str_iterate_error():
+    s = cudf.Series(["abc", "xyz"])
+    with pytest.raises(TypeError):
+        iter(s.str)
