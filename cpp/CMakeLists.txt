@@ -183,17 +183,15 @@ rapids_cpm_init()
 include(cmake/thirdparty/get_jitify.cmake)
 # find nvCOMP
 include(cmake/thirdparty/get_nvcomp.cmake)
-# find thrust/cub
-include(cmake/thirdparty/get_thrust.cmake)
+# find CCCL before rmm so that we get cudf's patched version of CCCL
+include(cmake/thirdparty/get_cccl.cmake)
 # find rmm
 include(cmake/thirdparty/get_rmm.cmake)
 # find arrow
 include(cmake/thirdparty/get_arrow.cmake)
 # find dlpack
 include(cmake/thirdparty/get_dlpack.cmake)
-# find libcu++
-include(cmake/thirdparty/get_libcudacxx.cmake)
-# find cuCollections Should come after including thrust and libcudacxx
+# find cuCollections, should come after including CCCL
 include(cmake/thirdparty/get_cucollections.cmake)
 # find or install GoogleTest
 if(CUDF_BUILD_TESTUTIL)
@@ -630,6 +628,7 @@ add_library(
   src/transform/nans_to_nulls.cu
   src/transform/one_hot_encode.cu
   src/transform/row_bit_count.cu
+  src/transform/row_conversion.cu
   src/transform/transform.cpp
   src/transpose/transpose.cu
   src/unary/cast_ops.cu
@@ -758,7 +757,7 @@ add_dependencies(cudf jitify_preprocess_run)
 # Specify the target module library dependencies
 target_link_libraries(
   cudf
-  PUBLIC ${ARROW_LIBRARIES} libcudacxx::libcudacxx cudf::Thrust rmm::rmm
+  PUBLIC ${ARROW_LIBRARIES} CCCL::CCCL rmm::rmm
   PRIVATE cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio
           $<TARGET_NAME_IF_EXISTS:cuFile_interface>
 )
@@ -1009,14 +1008,6 @@ following IMPORTED GLOBAL  targets:
     ]=]
 )
 
-set(common_code_string
-    [=[
-if(NOT TARGET cudf::Thrust)
-  thrust_create_target(cudf::Thrust FROM_OPTIONS)
-endif()
-]=]
-)
-
 if(CUDF_ENABLE_ARROW_PARQUET)
   string(
     APPEND
@@ -1040,7 +1031,6 @@ if(testing IN_LIST cudf_FIND_COMPONENTS)
 endif()
 ]=]
 )
-string(APPEND install_code_string "${common_code_string}")
 
 rapids_export(
   INSTALL cudf
@@ -1063,8 +1053,6 @@ if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
 endif()
 ]=]
 )
-
-string(APPEND build_code_string "${common_code_string}")
 
 rapids_export(
   BUILD cudf
