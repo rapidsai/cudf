@@ -1132,7 +1132,7 @@ void set_stat_desc_leaf_cols(device_span<orc_column_device_view const> columns,
 
 cudf::detail::hostdevice_vector<uint8_t> allocate_and_encode_blobs(
   cudf::detail::hostdevice_vector<statistics_merge_group>& stats_merge_groups,
-  rmm::device_uvector<statistics_chunk>& stat_chunks,
+  device_span<statistics_chunk const> stat_chunks,
   int num_stat_blobs,
   rmm::cuda_stream_view stream)
 {
@@ -1151,6 +1151,24 @@ cudf::detail::hostdevice_vector<uint8_t> allocate_and_encode_blobs(
   stats_merge_groups.device_to_host_async(stream);
   blobs.device_to_host_sync(stream);
   return blobs;
+}
+
+[[nodiscard]] statistics_dtype kind_to_stats_type(TypeKind kind)
+{
+  switch (kind) {
+    case TypeKind::BOOLEAN: return dtype_bool;
+    case TypeKind::BYTE: return dtype_int8;
+    case TypeKind::SHORT: return dtype_int16;
+    case TypeKind::INT: return dtype_int32;
+    case TypeKind::LONG: return dtype_int64;
+    case TypeKind::FLOAT: return dtype_float32;
+    case TypeKind::DOUBLE: return dtype_float64;
+    case TypeKind::STRING: return dtype_string;
+    case TypeKind::DATE: return dtype_int32;
+    case TypeKind::TIMESTAMP: return dtype_timestamp64;
+    case TypeKind::DECIMAL: return dtype_decimal64;
+    default: return dtype_none;
+  }
 }
 
 /**
@@ -1185,22 +1203,9 @@ intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
 
   for (auto const& column : orc_table.columns) {
     stats_column_desc* desc = &stat_desc[column.index()];
-    switch (column.orc_kind()) {
-      case TypeKind::BYTE: desc->stats_dtype = dtype_int8; break;
-      case TypeKind::SHORT: desc->stats_dtype = dtype_int16; break;
-      case TypeKind::INT: desc->stats_dtype = dtype_int32; break;
-      case TypeKind::LONG: desc->stats_dtype = dtype_int64; break;
-      case TypeKind::FLOAT: desc->stats_dtype = dtype_float32; break;
-      case TypeKind::DOUBLE: desc->stats_dtype = dtype_float64; break;
-      case TypeKind::BOOLEAN: desc->stats_dtype = dtype_bool; break;
-      case TypeKind::DATE: desc->stats_dtype = dtype_int32; break;
-      case TypeKind::DECIMAL: desc->stats_dtype = dtype_decimal64; break;
-      case TypeKind::TIMESTAMP: desc->stats_dtype = dtype_timestamp64; break;
-      case TypeKind::STRING: desc->stats_dtype = dtype_string; break;
-      default: desc->stats_dtype = dtype_none; break;
-    }
-    desc->num_rows   = column.size();
-    desc->num_values = column.size();
+    desc->stats_dtype       = kind_to_stats_type(column.orc_kind());
+    desc->num_rows          = column.size();
+    desc->num_values        = column.size();
     if (desc->stats_dtype == dtype_timestamp64) {
       // Timestamp statistics are in milliseconds
       switch (column.scale()) {
@@ -1314,12 +1319,38 @@ encoded_footer_statistics finish_statistic_blobs(FileFooter const& file_footer,
   auto const num_blobs      = static_cast<int>(num_stripe_blobs + num_file_blobs);
 
   if (num_stripe_blobs == 0) {
-    // file_blobs will be empty with zero columns; can be a separate branch
+    if (num_file_blobs == 0) { return {}; }
+
+    // create empty file stats and merge groups
+    std::vector<statistics_chunk> h_stat_chunks(num_file_blobs);
+    cudf::detail::hostdevice_vector<statistics_merge_group> stats_merge(num_file_blobs, stream);
+    // TODO fill in stats_merge and stat_chunks on the host
+    for (auto i = 0u; i < num_file_blobs; ++i) {
+      // only need scale for decimal columns
+      if (file_footer.types[i + 1].kind == TypeKind::DECIMAL) {
+        stats_merge[i].col_dtype =
+          data_type{type_id::DECIMAL64, (int)file_footer.types[i + 1].scale.value()};
+      }
+      stats_merge[i].stats_dtype = kind_to_stats_type(file_footer.types[i + 1].kind);
+      std::cout << "stats dtype: " << (int)stats_merge[i].stats_dtype << std::endl;
+      h_stat_chunks[i].has_sum = true;
+    }
+    //  copy to device
+    auto const d_stat_chunks = cudf::detail::make_device_uvector_async<statistics_chunk>(
+      h_stat_chunks, stream, rmm::mr::get_current_device_resource());
+    stats_merge.host_to_device_async(stream);
+    //  encode and return
+    cudf::detail::hostdevice_vector<uint8_t> hd_file_blobs =
+      allocate_and_encode_blobs(stats_merge, d_stat_chunks, num_file_blobs, stream);
+
     std::vector<ColStatsBlob> file_blobs(num_file_blobs);
-    // TODO create empty file stats; encode and return
-    // statistics_chunk
-    // return {{}, std::move(file_blobs)};
-    return {};
+    for (auto i = 0u; i < num_file_blobs; i++) {
+      auto const stat_begin = hd_file_blobs.host_ptr(stats_merge[i].start_chunk);
+      auto const stat_end   = stat_begin + stats_merge[i].num_chunks;
+      file_blobs[i].assign(stat_begin, stat_end);
+    }
+
+    return {{}, std::move(file_blobs)};
   }
 
   // merge the stripe persisted data and add file data
