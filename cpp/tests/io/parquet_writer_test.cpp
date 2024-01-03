@@ -1444,6 +1444,149 @@ class custom_test_memmap_sink : public cudf::io::data_sink {
   std::unique_ptr<data_sink> mm_writer;
 };
 
+////////////////////////
+// Numeric type tests
+
+// Typed test fixture for numeric type tests
+template <typename T>
+struct ParquetWriterNumericTypeTest : public ParquetWriterTest {
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
+};
+
+TYPED_TEST_SUITE(ParquetWriterNumericTypeTest, SupportedTypes);
+
+TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumn)
+{
+  auto sequence =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i % 400); });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  constexpr auto num_rows = 800;
+  column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
+
+  auto expected = table_view{{col}};
+
+  auto filepath = temp_env->get_temp_filepath("SingleColumn.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls)
+{
+  auto sequence =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2); });
+
+  constexpr auto num_rows = 100;
+  column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
+
+  auto expected = table_view{{col}};
+
+  auto filepath = temp_env->get_temp_filepath("SingleColumnWithNulls.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+/////////////////////////
+// timestamp type tests
+
+// Typed test fixture for timestamp type tests
+template <typename T>
+struct ParquetWriterTimestampTypeTest : public ParquetWriterTest {
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
+};
+
+TYPED_TEST_SUITE(ParquetWriterTimestampTypeTest, SupportedTimestampTypes);
+
+TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps)
+{
+  auto sequence = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return ((std::rand() / 10000) * 1000); });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  constexpr auto num_rows = 100;
+  column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
+    sequence, sequence + num_rows, validity);
+
+  auto expected = table_view{{col}};
+
+  auto filepath = temp_env->get_temp_filepath("Timestamps.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+      .timestamp_type(this->type());
+  auto result = cudf::io::read_parquet(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampsWithNulls)
+{
+  auto sequence = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return ((std::rand() / 10000) * 1000); });
+  auto validity =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i > 30) && (i < 60); });
+
+  constexpr auto num_rows = 100;
+  column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
+    sequence, sequence + num_rows, validity);
+
+  auto expected = table_view{{col}};
+
+  auto filepath = temp_env->get_temp_filepath("TimestampsWithNulls.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+      .timestamp_type(this->type());
+  auto result = cudf::io::read_parquet(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampOverflow)
+{
+  constexpr int64_t max = std::numeric_limits<int64_t>::max();
+  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return max - i; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  constexpr auto num_rows = 100;
+  column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
+    sequence, sequence + num_rows, validity);
+  table_view expected({col});
+
+  auto filepath = temp_env->get_temp_filepath("ParquetTimestampOverflow.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+      .timestamp_type(this->type());
+  auto result = cudf::io::read_parquet(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
 //////////////////////////////
 // writer stress tests
 
