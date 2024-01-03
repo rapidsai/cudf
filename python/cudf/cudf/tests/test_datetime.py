@@ -1308,9 +1308,8 @@ def test_datetime_infer_format(data, timezone, dtype):
     else:
         with cudf.option_context("mode.pandas_compatible", True):
             with pytest.raises(NotImplementedError):
+                # pandas doesn't allow parsing "Z" to naive type
                 sr.astype(dtype)
-
-        # pandas doesn't allow parsing "Z" to naive type
 
 
 def test_dateoffset_instance_subclass_check():
