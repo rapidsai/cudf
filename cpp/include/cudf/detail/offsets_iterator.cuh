@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ struct input_offsetalator : base_normalator<input_offsetalator, int64_t> {
    * @param data      Pointer to an integer array in device memory.
    * @param dtype Type of data in data
    */
-  CUDF_HOST_DEVICE input_offsetalator(void const* data, data_type dtype)
+  CUDF_HOST_DEVICE input_offsetalator(void const* data, data_type dtype, size_type offset = 0)
     : base_normalator<input_offsetalator, int64_t>(
         dtype, dtype.id() == type_id::INT32 ? sizeof(int32_t) : sizeof(int64_t)),
       p_{static_cast<char const*>(data)}
@@ -78,6 +78,7 @@ struct input_offsetalator : base_normalator<input_offsetalator, int64_t> {
     cudf_assert((dtype.id() == type_id::INT32 || dtype.id() == type_id::INT64) &&
                 "Unexpected offsets type");
 #endif
+    p_ += (this->width_ * offset);
   }
 
  protected:
