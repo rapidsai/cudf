@@ -147,7 +147,7 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
 {
   CUDF_FUNC_RANGE();
 
-  if (null_count > 0) CUDF_EXPECTS(null_mask.size() > 0, "Column with nulls must be nullable.");
+  if (null_count > 0) { CUDF_EXPECTS(null_mask.size() > 0, "Column with nulls must be nullable."); }
   CUDF_EXPECTS(num_strings == offsets_column->size() - 1,
                "Invalid offsets column size for strings column.");
   CUDF_EXPECTS(offsets_column->null_count() == 0, "Offsets column should not contain nulls");

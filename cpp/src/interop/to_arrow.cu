@@ -51,16 +51,16 @@ namespace {
  * @brief Create arrow data buffer from given cudf column
  */
 template <typename T>
-std::shared_ptr<arrow::Buffer> fetch_data_buffer(device_span<T const> input_span,
+std::shared_ptr<arrow::Buffer> fetch_data_buffer(device_span<T const> input,
                                                  arrow::MemoryPool* ar_mr,
                                                  rmm::cuda_stream_view stream)
 {
-  int64_t const data_size_in_bytes = sizeof(T) * input_span.size();
+  int64_t const data_size_in_bytes = sizeof(T) * input.size();
 
   auto data_buffer = allocate_arrow_buffer(data_size_in_bytes, ar_mr);
 
   CUDF_CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
-                                input_span.data(),
+                                input.data(),
                                 data_size_in_bytes,
                                 cudaMemcpyDefault,
                                 stream.value()));
