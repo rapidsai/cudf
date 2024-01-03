@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,8 +34,7 @@
 #include <utility>
 #include <vector>
 
-namespace cudf::io::detail::orc {
-using namespace cudf::io::orc;
+namespace cudf::io::orc::detail {
 
 namespace {
 struct reader_column_meta;
@@ -76,8 +75,8 @@ class reader::impl {
   rmm::mr::device_memory_resource* const _mr;
 
   std::vector<std::unique_ptr<datasource>> const _sources;  // Unused but owns data for `_metadata`
-  cudf::io::orc::detail::aggregate_orc_metadata _metadata;
-  cudf::io::orc::detail::column_hierarchy const _selected_columns;  // Need to be after _metadata
+  aggregate_orc_metadata _metadata;
+  column_hierarchy const _selected_columns;  // Need to be after _metadata
 
   data_type const _timestamp_type;  // Override output timestamp resolution
   bool const _use_index;            // Enable or disable attempt to use row index for parsing
@@ -86,4 +85,4 @@ class reader::impl {
   std::unique_ptr<reader_column_meta> const _col_meta;  // Track of orc mapping and child details
 };
 
-}  // namespace cudf::io::detail::orc
+}  // namespace cudf::io::orc::detail
