@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import math
 import re
@@ -730,7 +730,7 @@ def _isin_datetimelike(
         rhs = cudf.core.column.as_column(values)
 
         if rhs.dtype.kind in {"f", "i", "u"}:
-            return cudf.core.column.full(len(lhs), False, dtype="bool")
+            return column.as_column(False, length=len(lhs), dtype="bool")
         rhs = rhs.astype(lhs.dtype)
         res = lhs._isin_earlystop(rhs)
         if res is not None:
@@ -738,7 +738,7 @@ def _isin_datetimelike(
     except ValueError:
         # pandas functionally returns all False when cleansing via
         # typecasting fails
-        return cudf.core.column.full(len(lhs), False, dtype="bool")
+        return column.as_column(False, length=len(lhs), dtype="bool")
 
     res = lhs._obtain_isin_result(rhs)
     return res

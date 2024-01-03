@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -877,7 +877,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         except ValueError:
             # pandas functionally returns all False when cleansing via
             # typecasting fails
-            return full(len(self), False, dtype="bool")
+            return as_column(False, length=len(self), dtype="bool")
 
         return lhs._obtain_isin_result(rhs)
 
@@ -904,9 +904,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             if self.null_count and rhs.null_count:
                 return self.isnull()
             else:
-                return cudf.core.column.full(len(self), False, dtype="bool")
+                return as_column(False, length=len(self), dtype="bool")
         elif self.null_count == 0 and (rhs.null_count == len(rhs)):
-            return cudf.core.column.full(len(self), False, dtype="bool")
+            return as_column(False, length=len(self), dtype="bool")
         else:
             return None
 
@@ -1388,9 +1388,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             na_sentinel = cudf.Scalar(-1)
 
         def _return_sentinel_column():
-            return cudf.core.column.full(
-                size=len(self), fill_value=na_sentinel, dtype=dtype
-            )
+            return as_column(na_sentinel, dtype=dtype, length=len(self))
 
         if dtype is None:
             dtype = min_scalar_type(max(len(cats), na_sentinel), 8)
@@ -1485,7 +1483,9 @@ def column_empty(
     elif isinstance(dtype, ListDtype):
         data = None
         children = (
-            full(row_count + 1, 0, dtype=libcudf.types.size_type_dtype),
+            as_column(
+                0, length=row_count + 1, dtype=libcudf.types.size_type_dtype
+            ),
             column_empty(row_count, dtype=dtype.element_type),
         )
     elif isinstance(dtype, CategoricalDtype):
@@ -1504,7 +1504,9 @@ def column_empty(
     elif dtype.kind in "OU" and not isinstance(dtype, DecimalDtype):
         data = None
         children = (
-            full(row_count + 1, 0, dtype=libcudf.types.size_type_dtype),
+            as_column(
+                0, length=row_count + 1, dtype=libcudf.types.size_type_dtype
+            ),
             build_column(
                 data=as_buffer(
                     rmm.DeviceBuffer(
@@ -2692,42 +2694,6 @@ def arange(
         as_device_scalar(start, dtype=dtype),
         as_device_scalar(step, dtype=dtype),
     )
-
-
-def full(
-    size: int, fill_value: ScalarLike, dtype: Optional[Dtype] = None
-) -> ColumnBase:
-    """
-    Returns a column of given size and dtype, filled with a given value.
-
-    Parameters
-    ----------
-    size : int
-        size of the expected column.
-    fill_value : scalar
-         A scalar value to fill a new array.
-    dtype : default None
-        Data type specifier. It is inferred from other arguments by default.
-
-    Returns
-    -------
-    Column
-
-    Examples
-    --------
-    >>> import cudf
-    >>> col = cudf.core.column.full(size=5, fill_value=7, dtype='int8')
-    >>> col
-    <cudf.core.column.numerical.NumericalColumn object at 0x7fa0912e8b90>
-    >>> cudf.Series(col)
-    0    7
-    1    7
-    2    7
-    3    7
-    4    7
-    dtype: int8
-    """
-    return ColumnBase.from_scalar(cudf.Scalar(fill_value, dtype), size)
 
 
 def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:

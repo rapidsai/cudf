@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import warnings
 from collections.abc import Iterator
@@ -106,8 +106,10 @@ def _get_non_empty_data(s):
         categories = (
             s.categories if len(s.categories) else [UNKNOWN_CATEGORIES]
         )
-        codes = cudf.core.column.full(
-            size=2, fill_value=0, dtype=cudf._lib.types.size_type_dtype
+        codes = cudf.core.column.as_column(
+            0,
+            dtype=cudf._lib.types.size_type_dtype,
+            length=2,
         )
         ordered = s.ordered
         data = cudf.core.column.build_categorical_column(

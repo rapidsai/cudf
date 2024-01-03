@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -5488,7 +5488,9 @@ class StringColumn(column.ColumnBase):
 
         if len(children) == 0 and size != 0:
             # all nulls-column:
-            offsets = column.full(size + 1, 0, dtype=size_type_dtype)
+            offsets = column.as_column(
+                0, length=size + 1, dtype=size_type_dtype
+            )
 
             chars = cudf.core.column.column_empty(0, dtype="int8")
             children = (offsets, chars)
@@ -5885,8 +5887,8 @@ class StringColumn(column.ColumnBase):
                     "__eq__",
                     "__ne__",
                 }:
-                    return column.full(
-                        len(self), op == "__ne__", dtype="bool"
+                    return column.as_column(
+                        op == "__ne__", length=len(self), dtype="bool"
                     ).set_mask(self.mask)
                 else:
                     return NotImplemented
@@ -5895,7 +5897,9 @@ class StringColumn(column.ColumnBase):
                 if isinstance(other, cudf.Scalar):
                     other = cast(
                         StringColumn,
-                        column.full(len(self), other, dtype="object"),
+                        column.as_column(
+                            other, length=len(self), dtype="object"
+                        ),
                     )
 
                 # Explicit types are necessary because mypy infers ColumnBase

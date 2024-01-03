@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION
+# Copyright (c) 2020-2024, NVIDIA CORPORATION
 
 import itertools
 
@@ -245,8 +245,8 @@ class Rolling(GetAttrGetItemMixin, Reducible):
             window = None
         else:
             preceding_window = as_column(self.window)
-            following_window = column.full(
-                self.window.size, 0, dtype=self.window.dtype
+            following_window = as_column(
+                0, length=self.window.size, dtype=self.window.dtype
             )
             window = None
 

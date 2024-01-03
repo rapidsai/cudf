@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -1388,7 +1388,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                             allow_non_unique=True,
                         )
                     if is_scalar(value):
-                        self._data[arg] = column.full(len(self), value)
+                        self._data[arg] = as_column(value, length=len(self))
                     else:
                         value = as_column(value)
                         self._data[arg] = value
@@ -1436,8 +1436,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 else:
                     for col in arg:
                         if is_scalar(value):
-                            self._data[col] = column.full(
-                                size=len(self), fill_value=value
+                            self._data[col] = as_column(
+                                value, length=len(self)
                             )
                         else:
                             self._data[col] = column.as_column(value)
@@ -3165,10 +3165,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         if _is_scalar_or_zero_d_array(value):
-            value = column.full(
-                len(self),
+            value = as_column(
                 value,
-                "str" if libcudf.scalar._is_null_host_scalar(value) else None,
+                length=len(self),
+                dtype="str"
+                if libcudf.scalar._is_null_host_scalar(value)
+                else None,
             )
 
         if len(self) == 0:
@@ -5830,7 +5832,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         fill_value = cudf.Scalar(False)
 
         def make_false_column_like_self():
-            return column.full(len(self), fill_value, "bool")
+            return column.as_column(fill_value, length=len(self), dtype="bool")
 
         # Preprocess different input types into a mapping from column names to
         # a list of values to check.
@@ -5952,7 +5954,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 {
                     name: filtered._data[name]._get_mask_as_column()
                     if filtered._data[name].nullable
-                    else column.full(len(filtered._data[name]), True)
+                    else as_column(True, length=len(filtered._data[name]))
                     for name in filtered._data.names
                 }
             )
@@ -7772,8 +7774,8 @@ def _make_replacement_func(value):
             return output
 
         for name in uncommon_columns:
-            output._data[name] = column.full(
-                size=len(output), fill_value=value, dtype="bool"
+            output._data[name] = as_column(
+                value, length=len(output), dtype="bool"
             )
         return output
 

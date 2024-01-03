@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import decimal
 import functools
@@ -396,8 +396,8 @@ def _all_bools_with_nulls(lhs, rhs, bool_fill_value):
     else:
         result_mask = None
 
-    result_col = column.full(
-        size=len(lhs), fill_value=bool_fill_value, dtype=cudf.dtype(np.bool_)
+    result_col = column.as_column(
+        bool_fill_value, dtype=cudf.dtype(np.bool_), length=len(lhs)
     )
     if result_mask is not None:
         result_col = result_col.set_mask(result_mask.as_mask())
