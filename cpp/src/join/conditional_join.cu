@@ -57,6 +57,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_semi(
   } else if (left_num_rows == 0) {
     switch (join_type) {
       case join_kind::LEFT_ANTI_JOIN:
+        [[fallthrough]];
       case join_kind::LEFT_SEMI_JOIN:
         return std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
       default: CUDF_FAIL("Invalid join kind."); break;
