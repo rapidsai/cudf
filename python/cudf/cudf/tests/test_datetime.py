@@ -1310,6 +1310,8 @@ def test_datetime_infer_format(data, timezone, dtype):
             with pytest.raises(NotImplementedError):
                 sr.astype(dtype)
 
+        # pandas doesn't allow parsing "Z" to naive type
+
 
 def test_dateoffset_instance_subclass_check():
     assert not issubclass(pd.DateOffset, cudf.DateOffset)
@@ -2316,13 +2318,13 @@ def test_utcoffset_not_implemented(tz):
 
 
 def test_Z_utcoffset():
-    if cudf.get_option("mode.pandas_compatible"):
+    with cudf.option_context("mode.pandas_compatible", True):
         with pytest.raises(NotImplementedError):
             cudf.to_datetime(["2020-01-01 00:00:00Z"])
-    else:
-        result = cudf.to_datetime(["2020-01-01 00:00:00Z"])
-        expected = cudf.to_datetime(["2020-01-01 00:00:00"])
-        assert_eq(result, expected)
+
+    result = cudf.to_datetime(["2020-01-01 00:00:00Z"])
+    expected = cudf.to_datetime(["2020-01-01 00:00:00"])
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize("arg", [True, False])
