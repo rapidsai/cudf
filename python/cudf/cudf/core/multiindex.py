@@ -503,9 +503,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             # a vector start/end points.
             indices = column.as_column(range(n))
             indices = indices.append(
-                column.as_column(
-                    range(start=len(self) - n, stop=len(self), step=1)
-                )
+                column.as_column(range(len(self) - n, len(self), 1))
             )
             preprocess = self.take(indices)
         else:
