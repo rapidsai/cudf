@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -1946,6 +1946,10 @@ def as_column(
             as_device_scalar(arbitrary.start, dtype=cudf.dtype("int64")),
             as_device_scalar(arbitrary.step, dtype=cudf.dtype("int64")),
         )
+        if cudf.get_option("default_integer_bitwidth") and dtype is None:
+            dtype = cudf.dtype(
+                f'i{cudf.get_option("default_integer_bitwidth")//8}'
+            )
         if dtype is not None:
             column = column.astype(dtype)
         return column

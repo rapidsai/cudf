@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -501,7 +501,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             # TODO: Update the following two arange calls to
             # a single arange call once arange has support for
             # a vector start/end points.
-            indices = column.as_column(range(start=0, stop=n, step=1))
+            indices = column.as_column(range(n))
             indices = indices.append(
                 column.as_column(
                     range(start=len(self) - n, stop=len(self), step=1)
