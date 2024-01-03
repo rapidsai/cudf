@@ -1324,16 +1324,16 @@ encoded_footer_statistics finish_statistic_blobs(FileFooter const& file_footer,
     // create empty file stats and merge groups
     std::vector<statistics_chunk> h_stat_chunks(num_file_blobs);
     cudf::detail::hostdevice_vector<statistics_merge_group> stats_merge(num_file_blobs, stream);
-    // TODO fill in stats_merge and stat_chunks on the host
+    // fill in stats_merge and stat_chunks on the host
     for (auto i = 0u; i < num_file_blobs; ++i) {
       // only need scale for decimal columns
+      // TODO very sketchy, col_dtype is invalid for non-decimal columns
       if (file_footer.types[i + 1].kind == TypeKind::DECIMAL) {
         stats_merge[i].col_dtype =
           data_type{type_id::DECIMAL64, (int)file_footer.types[i + 1].scale.value()};
       }
       stats_merge[i].stats_dtype = kind_to_stats_type(file_footer.types[i + 1].kind);
-      std::cout << "stats dtype: " << (int)stats_merge[i].stats_dtype << std::endl;
-      h_stat_chunks[i].has_sum = true;
+      h_stat_chunks[i].has_sum   = true;  // TODO only set for types that have sum?
     }
     //  copy to device
     auto const d_stat_chunks = cudf::detail::make_device_uvector_async<statistics_chunk>(
