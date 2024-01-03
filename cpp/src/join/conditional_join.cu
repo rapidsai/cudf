@@ -35,7 +35,7 @@
 namespace cudf {
 namespace detail {
 
-std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_semi(
+std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
