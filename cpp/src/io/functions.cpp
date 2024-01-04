@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,8 +38,7 @@
 
 #include <algorithm>
 
-namespace cudf {
-namespace io {
+namespace cudf::io {
 // Returns builder for csv_reader_options
 csv_reader_options_builder csv_reader_options::builder(source_info src)
 {
@@ -270,8 +269,6 @@ void write_csv(csv_writer_options const& options,
     mr);
 }
 
-namespace detail_orc = cudf::io::detail::orc;
-
 raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
 {
   auto stream = cudf::get_default_stream();
@@ -322,7 +319,7 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
   return result;
 }
 
-column_statistics::column_statistics(cudf::io::orc::column_statistics&& cs)
+column_statistics::column_statistics(orc::column_statistics&& cs)
 {
   number_of_values = cs.number_of_values;
   has_null         = cs.has_null;
@@ -418,7 +415,7 @@ table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_
   CUDF_FUNC_RANGE();
 
   auto datasources = make_datasources(options.get_source());
-  auto reader      = std::make_unique<detail_orc::reader>(
+  auto reader      = std::make_unique<orc::detail::reader>(
     std::move(datasources), options, cudf::get_default_stream(), mr);
 
   return reader->read(options);
@@ -436,7 +433,7 @@ void write_orc(orc_writer_options const& options)
   auto sinks = make_datasinks(options.get_sink());
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for ORC writing");
 
-  auto writer = std::make_unique<detail_orc::writer>(
+  auto writer = std::make_unique<orc::detail::writer>(
     std::move(sinks[0]), options, io_detail::single_write_mode::YES, cudf::get_default_stream());
 
   writer->write(options.get_table());
@@ -452,7 +449,7 @@ orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& options
   auto sinks = make_datasinks(options.get_sink());
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for ORC writing");
 
-  writer = std::make_unique<detail_orc::writer>(
+  writer = std::make_unique<orc::detail::writer>(
     std::move(sinks[0]), options, io_detail::single_write_mode::NO, cudf::get_default_stream());
 }
 
@@ -896,5 +893,4 @@ chunked_parquet_writer_options_builder::max_page_fragment_size(size_type val)
   return *this;
 }
 
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io

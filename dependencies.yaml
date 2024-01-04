@@ -215,9 +215,8 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
-              cuda: "12.0"
+              cuda: "12.*"
             packages:
-              - cuda-version=12.0
               - cuda-nvcc
           - matrix:
               arch: x86_64
@@ -229,6 +228,14 @@ dependencies:
               cuda: "11.8"
             packages:
               - nvcc_linux-aarch64=11.8
+      - output_types: conda
+        matrices:
+          - matrix:
+              cuda: "12.0"
+            packages:
+              - cuda-version=12.0
+          - matrix:  # Fallback for CUDA 11 or no matrix
+            packages:
   build_cpp:
     common:
       - output_types: conda
@@ -289,17 +296,12 @@ dependencies:
     specific:
       - output_types: [requirements, pyproject]
         matrices:
-          - matrix: {cuda: "12.2"}
+          - matrix: {cuda: "12.*"}
             packages: &build_python_packages_cu12
               - &rmm_cu12 rmm-cu12==24.2.*
-          - {matrix: {cuda: "12.1"}, packages: *build_python_packages_cu12}
-          - {matrix: {cuda: "12.0"}, packages: *build_python_packages_cu12}
-          - matrix: {cuda: "11.8"}
+          - matrix: {cuda: "11.*"}
             packages: &build_python_packages_cu11
               - &rmm_cu11 rmm-cu11==24.2.*
-          - {matrix: {cuda: "11.5"}, packages: *build_python_packages_cu11}
-          - {matrix: {cuda: "11.4"}, packages: *build_python_packages_cu11}
-          - {matrix: {cuda: "11.2"}, packages: *build_python_packages_cu11}
           - {matrix: null, packages: null }
       - output_types: pyproject
         matrices:
@@ -336,18 +338,25 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
-              cuda: "12.0"
+              cuda: "12.*"
             packages:
-              - cuda-version=12.0
               - cuda-cudart-dev
               - cuda-nvrtc-dev
               - cuda-nvtx-dev
               - libcurand-dev
+          - matrix:  # Fallback for CUDA 11 or no matrix
+            packages:
+              - cudatoolkit
+      - output_types: conda
+        matrices:
+          - matrix:
+              cuda: "12.0"
+            packages:
+              - cuda-version=12.0
           - matrix:
               cuda: "11.8"
             packages:
               - cuda-version=11.8
-              - cudatoolkit
               - cuda-nvtx=11.8
               - libcurand-dev=10.3.0.86
               - libcurand=10.3.0.86
@@ -383,7 +392,7 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
-              cuda: "12.0"
+              cuda: "12.*"
               arch: x86_64
             packages:
               - libcufile-dev
@@ -500,43 +509,30 @@ dependencies:
     specific:
       - output_types: [conda, requirements, pyproject]
         matrices:
-          - matrix: {cuda: "12.2"}
-            packages: &run_cudf_packages_all_cu12
+          - matrix: {cuda: "12.*"}
+            packages:
               - cuda-python>=12.0,<13.0a0
-          - {matrix: {cuda: "12.1"}, packages: *run_cudf_packages_all_cu12}
-          - {matrix: {cuda: "12.0"}, packages: *run_cudf_packages_all_cu12}
-          - matrix: {cuda: "11.8"}
+          - matrix: {cuda: "11.*"}
             packages: &run_cudf_packages_all_cu11
               - cuda-python>=11.7.1,<12.0a0
-          - {matrix: {cuda: "11.5"}, packages: *run_cudf_packages_all_cu11}
-          - {matrix: {cuda: "11.4"}, packages: *run_cudf_packages_all_cu11}
-          - {matrix: {cuda: "11.2"}, packages: *run_cudf_packages_all_cu11}
           - {matrix: null, packages: *run_cudf_packages_all_cu11}
       - output_types: conda
         matrices:
-          - matrix: {cuda: "11.8"}
-            packages: &run_cudf_packages_conda_cu11
+          - matrix: {cuda: "11.*"}
+            packages:
               - cubinlinker
               - ptxcompiler
-          - {matrix: {cuda: "11.5"}, packages: *run_cudf_packages_conda_cu11}
-          - {matrix: {cuda: "11.4"}, packages: *run_cudf_packages_conda_cu11}
-          - {matrix: {cuda: "11.2"}, packages: *run_cudf_packages_conda_cu11}
           - {matrix: null, packages: null}
       - output_types: [requirements, pyproject]
         matrices:
-          - matrix: {cuda: "12.2"}
-            packages: &run_cudf_packages_pip_cu12
+          - matrix: {cuda: "12.*"}
+            packages:
               - rmm-cu12==24.2.*
-          - {matrix: {cuda: "12.1"}, packages: *run_cudf_packages_pip_cu12}
-          - {matrix: {cuda: "12.0"}, packages: *run_cudf_packages_pip_cu12}
-          - matrix: {cuda: "11.8"}
-            packages: &run_cudf_packages_pip_cu11
+          - matrix: {cuda: "11.*"}
+            packages:
               - rmm-cu11==24.2.*
               - cubinlinker-cu11
               - ptxcompiler-cu11
-          - {matrix: {cuda: "11.5"}, packages: *run_cudf_packages_pip_cu11}
-          - {matrix: {cuda: "11.4"}, packages: *run_cudf_packages_pip_cu11}
-          - {matrix: {cuda: "11.2"}, packages: *run_cudf_packages_pip_cu11}
           - {matrix: null, packages: null}
       - output_types: pyproject
         matrices:
@@ -569,10 +565,17 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
+              cuda: "12.*"
+            packages:
+              - cuda-sanitizer-api
+          - matrix:  # Fallback for CUDA 11 or no matrix
+            packages:
+      - output_types: conda
+        matrices:
+          - matrix:
               cuda: "12.0"
             packages:
               - cuda-version=12.0
-              - cuda-sanitizer-api
           - matrix:
               cuda: "11.8"
             packages:
@@ -654,17 +657,12 @@ dependencies:
     specific:
       - output_types: [requirements, pyproject]
         matrices:
-          - matrix: {cuda: "12.2"}
-            packages: &cudf_packages_pip_cu12
+          - matrix: {cuda: "12.*"}
+            packages:
               - cudf-cu12==24.2.*
-          - {matrix: {cuda: "12.1"}, packages: *cudf_packages_pip_cu12}
-          - {matrix: {cuda: "12.0"}, packages: *cudf_packages_pip_cu12}
-          - matrix: {cuda: "11.8"}
-            packages: &cudf_packages_pip_cu11
+          - matrix: {cuda: "11.*"}
+            packages:
               - cudf-cu11==24.2.*
-          - {matrix: {cuda: "11.5"}, packages: *cudf_packages_pip_cu11}
-          - {matrix: {cuda: "11.4"}, packages: *cudf_packages_pip_cu11}
-          - {matrix: {cuda: "11.2"}, packages: *cudf_packages_pip_cu11}
           - {matrix: null, packages: [*cudf_conda]}
   depends_on_cudf_kafka:
     common:
@@ -680,17 +678,12 @@ dependencies:
     specific:
       - output_types: [requirements, pyproject]
         matrices:
-          - matrix: {cuda: "12.2"}
-            packages: &cudf_kafka_packages_pip_cu12
+          - matrix: {cuda: "12.*"}
+            packages:
               - cudf_kafka-cu12==24.2.*
-          - {matrix: {cuda: "12.1"}, packages: *cudf_kafka_packages_pip_cu12}
-          - {matrix: {cuda: "12.0"}, packages: *cudf_kafka_packages_pip_cu12}
-          - matrix: {cuda: "11.8"}
-            packages: &cudf_kafka_packages_pip_cu11
+          - matrix: {cuda: "11.*"}
+            packages:
               - cudf_kafka-cu11==24.2.*
-          - {matrix: {cuda: "11.5"}, packages: *cudf_kafka_packages_pip_cu11}
-          - {matrix: {cuda: "11.4"}, packages: *cudf_kafka_packages_pip_cu11}
-          - {matrix: {cuda: "11.2"}, packages: *cudf_kafka_packages_pip_cu11}
           - {matrix: null, packages: [*cudf_kafka_conda]}
   depends_on_cupy:
     common:
@@ -700,19 +693,12 @@ dependencies:
     specific:
       - output_types: [requirements, pyproject]
         matrices:
-          # All CUDA 12 versions
-          - matrix: {cuda: "12.2"}
-            packages: &cupy_packages_cu12
+          - matrix: {cuda: "12.*"}
+            packages:
               - cupy-cuda12x>=12.0.0
-          - {matrix: {cuda: "12.1"}, packages: *cupy_packages_cu12}
-          - {matrix: {cuda: "12.0"}, packages: *cupy_packages_cu12}
-          # All CUDA 11 versions
-          - matrix: {cuda: "11.8"}
+          - matrix: {cuda: "11.*"}
             packages: &cupy_packages_cu11
               - cupy-cuda11x>=12.0.0
-          - {matrix: {cuda: "11.5"}, packages: *cupy_packages_cu11}
-          - {matrix: {cuda: "11.4"}, packages: *cupy_packages_cu11}
-          - {matrix: {cuda: "11.2"}, packages: *cupy_packages_cu11}
           - {matrix: null, packages: *cupy_packages_cu11}
   test_python_pandas_cudf:
     common:
