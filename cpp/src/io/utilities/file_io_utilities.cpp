@@ -257,7 +257,7 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
       return sum + task.get();
     });
   };
-  // The future returned from this function is deferred, not async because we want to avoidcreating
+  // The future returned from this function is deferred, not async because we want to avoid creating
   // threads for each read_async call. This overhead is significant in case of multiple small reads.
   return std::async(std::launch::deferred, waiter, std::move(slice_tasks));
 }
