@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -675,16 +675,21 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 # TODO: Generically, an empty dtype-less container
                 # TODO: Why does as_index([]) return FloatIndex
                 as_idx_typ = object
-            columns = as_index(columns, dtype=as_idx_typ)
-            if not isinstance(
-                columns, MultiIndex
-            ) and columns.nunique() != len(columns):
-                raise ValueError("Columns cannot contain duplicate values")
-            columns = columns.to_pandas()
-            col_is_rangeindex = isinstance(columns, pd.RangeIndex)
-            col_is_multiindex = isinstance(columns, pd.MultiIndex)
-            if not isinstance(columns, pd.MultiIndex):
-                col_dtype = columns.dtype
+            try:
+                columns = as_index(columns, dtype=as_idx_typ)
+            except pa.lib.ArrowInvalid:
+                # mixed typed elements are allowed e.g. [(1, 2), "a"]
+                columns = list(columns)
+            else:
+                if not isinstance(
+                    columns, MultiIndex
+                ) and columns.nunique() != len(columns):
+                    raise ValueError("Columns cannot contain duplicate values")
+                columns = columns.to_pandas()
+                col_is_rangeindex = isinstance(columns, pd.RangeIndex)
+                col_is_multiindex = isinstance(columns, pd.MultiIndex)
+                if not isinstance(columns, pd.MultiIndex):
+                    col_dtype = columns.dtype
 
         if index is not None:
             index = as_index(index)
