@@ -34,6 +34,8 @@ namespace cudf {
 namespace io {
 namespace detail {
 
+[[noreturn]] void throw_on_file_open_failure(std::string const& filepath, bool is_create);
+
 /**
  * @brief Class that provides RAII for file handling.
  */

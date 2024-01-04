@@ -29,15 +29,12 @@ namespace cudf {
 namespace io {
 namespace detail {
 
-[[nodiscard]] int open_file_checked(std::string const& filepath, int flags, mode_t mode)
+[[noreturn]] void throw_on_file_open_failure(std::string const& filepath, bool is_create)
 {
-  auto const fd = open(filepath.c_str(), flags, mode);
-  if (fd != -1) { return fd; }
-
   // save errno because it may be overwritten by subsequent calls
   auto const err = errno;
 
-  if (auto const path = std::filesystem::path(filepath); flags & O_CREAT) {
+  if (auto const path = std::filesystem::path(filepath); is_create) {
     if (not std::filesystem::exists(path.parent_path())) {
       CUDF_FAIL("Cannot create output file; directory does not exist");
     }
@@ -46,6 +43,14 @@ namespace detail {
   }
 
   CUDF_FAIL("Cannot open file; failed with errno " + std::string{std::strerror(err)});
+}
+
+[[nodiscard]] int open_file_checked(std::string const& filepath, int flags, mode_t mode)
+{
+  auto const fd = open(filepath.c_str(), flags, mode);
+  if (fd == -1) { throw_on_file_open_failure(filepath, flags & O_CREAT); }
+
+  return fd;
 }
 
 [[nodiscard]] size_t get_file_size(int file_descriptor)
