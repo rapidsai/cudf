@@ -171,6 +171,8 @@ struct stripe_size_limits {
 struct intermediate_statistics {
   explicit intermediate_statistics(rmm::cuda_stream_view stream) : stripe_stat_chunks(0, stream) {}
 
+  intermediate_statistics(orc_table_view const& table, rmm::cuda_stream_view stream);
+
   intermediate_statistics(std::vector<ColStatsBlob> rb,
                           rmm::device_uvector<statistics_chunk> sc,
                           cudf::detail::hostdevice_vector<statistics_merge_group> smg,

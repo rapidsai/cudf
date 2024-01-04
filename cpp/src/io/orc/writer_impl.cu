@@ -384,11 +384,26 @@ __global__ void copy_string_data(char* string_pool,
 
 }  // namespace
 
+intermediate_statistics::intermediate_statistics(orc_table_view const& table,
+                                                 rmm::cuda_stream_view stream)
+  : stripe_stat_chunks(0, stream)
+{
+  std::transform(
+    table.columns.begin(), table.columns.end(), std::back_inserter(col_types), [](auto const& col) {
+      return col.type();
+    });
+}
+
 void persisted_statistics::persist(int num_table_rows,
                                    single_write_mode write_mode,
                                    intermediate_statistics&& intermediate_stats,
                                    rmm::cuda_stream_view stream)
 {
+  stats_dtypes = std::move(intermediate_stats.stats_dtypes);
+  col_types    = std::move(intermediate_stats.col_types);
+  num_rows     = num_table_rows;
+  if (num_rows == 0) { return; }
+
   if (write_mode == single_write_mode::NO) {
     // persist the strings in the chunks into a string pool and update pointers
     auto const num_chunks = static_cast<int>(intermediate_stats.stripe_stat_chunks.size());
@@ -422,9 +437,6 @@ void persisted_statistics::persist(int num_table_rows,
 
   stripe_stat_chunks.emplace_back(std::move(intermediate_stats.stripe_stat_chunks));
   stripe_stat_merge.emplace_back(std::move(intermediate_stats.stripe_stat_merge));
-  stats_dtypes = std::move(intermediate_stats.stats_dtypes);
-  col_types    = std::move(intermediate_stats.col_types);
-  num_rows     = num_table_rows;
 }
 
 namespace {
@@ -1189,7 +1201,7 @@ intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
   auto const num_stripe_blobs       = segmentation.num_stripes() * orc_table.num_columns();
   auto const are_statistics_enabled = stats_freq != statistics_freq::STATISTICS_NONE;
   if (not are_statistics_enabled or num_rowgroup_blobs + num_stripe_blobs == 0) {
-    return intermediate_statistics{stream};
+    return intermediate_statistics{orc_table, stream};
   }
 
   cudf::detail::hostdevice_vector<stats_column_desc> stat_desc(orc_table.num_columns(), stream);
@@ -1321,28 +1333,26 @@ encoded_footer_statistics finish_statistic_blobs(FileFooter const& file_footer,
   if (num_stripe_blobs == 0) {
     if (num_file_blobs == 0) { return {}; }
 
-    // create empty file stats and merge groups
+    // Create empty file stats and merge groups
     std::vector<statistics_chunk> h_stat_chunks(num_file_blobs);
     cudf::detail::hostdevice_vector<statistics_merge_group> stats_merge(num_file_blobs, stream);
-    // fill in stats_merge and stat_chunks on the host
+    // Fill in stats_merge and stat_chunks on the host
     for (auto i = 0u; i < num_file_blobs; ++i) {
-      // only need scale for decimal columns
-      // TODO very sketchy, col_dtype is invalid for non-decimal columns
-      if (file_footer.types[i + 1].kind == TypeKind::DECIMAL) {
-        stats_merge[i].col_dtype =
-          data_type{type_id::DECIMAL64, (int)file_footer.types[i + 1].scale.value()};
-      }
+      stats_merge[i].col_dtype   = per_chunk_stats.col_types[i];
       stats_merge[i].stats_dtype = kind_to_stats_type(file_footer.types[i + 1].kind);
-      h_stat_chunks[i].has_sum   = true;  // TODO only set for types that have sum?
+      // Write the sum for empty columns, equal to zero
+      h_stat_chunks[i].has_sum = true;
     }
-    //  copy to device
+    //  Copy to device
     auto const d_stat_chunks = cudf::detail::make_device_uvector_async<statistics_chunk>(
       h_stat_chunks, stream, rmm::mr::get_current_device_resource());
     stats_merge.host_to_device_async(stream);
-    //  encode and return
+
+    // Encode and return
     cudf::detail::hostdevice_vector<uint8_t> hd_file_blobs =
       allocate_and_encode_blobs(stats_merge, d_stat_chunks, num_file_blobs, stream);
 
+    // Copy blobs to host (actual size)
     std::vector<ColStatsBlob> file_blobs(num_file_blobs);
     for (auto i = 0u; i < num_file_blobs; i++) {
       auto const stat_begin = hd_file_blobs.host_ptr(stats_merge[i].start_chunk);
@@ -2322,7 +2332,7 @@ auto convert_table_to_orc_data(table_view const& input,
                       rmm::device_uvector<uint8_t>{0, stream},                // compressed_data
                       cudf::detail::hostdevice_vector<compression_result>{},  // comp_results
                       std::move(strm_descs),
-                      intermediate_statistics{stream},
+                      intermediate_statistics{orc_table, stream},
                       std::optional<writer_compression_statistics>{},
                       std::move(streams),
                       std::move(stripes),
@@ -2533,10 +2543,8 @@ void writer::impl::update_statistics(
   intermediate_statistics&& intermediate_stats,
   std::optional<writer_compression_statistics> const& compression_stats)
 {
-  if (intermediate_stats.stripe_stat_chunks.size() > 0) {
-    _persisted_stripe_statistics.persist(
-      num_rows, _single_write_mode, std::move(intermediate_stats), _stream);
-  }
+  _persisted_stripe_statistics.persist(
+    num_rows, _single_write_mode, std::move(intermediate_stats), _stream);
 
   if (compression_stats.has_value() and _compression_statistics != nullptr) {
     *_compression_statistics += compression_stats.value();
