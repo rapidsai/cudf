@@ -26,7 +26,7 @@ from cudf.utils.nvtx_annotation import _dask_cudf_nvtx_annotate
 
 from dask_cudf import sorting
 from dask_cudf.accessors import ListMethods, StructMethods
-from dask_cudf.sorting import _get_shuffle_type
+from dask_cudf.sorting import _get_shuffle_method
 
 
 class _Frame(dd.core._Frame, OperatorMethodMixin):
@@ -119,7 +119,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         return super().merge(
             other,
             on=on,
-            shuffle_method=_get_shuffle_type(shuffle_method),
+            shuffle_method=_get_shuffle_method(shuffle_method),
             **kwargs,
         )
 
@@ -137,7 +137,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             other,
             how=how,
             on=on,
-            shuffle_method=_get_shuffle_type(shuffle_method),
+            shuffle_method=_get_shuffle_method(shuffle_method),
             **kwargs,
         )
 
@@ -211,7 +211,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         return super().set_index(
             other,
             sorted=pre_sorted,
-            shuffle_method=_get_shuffle_type(shuffle_method),
+            shuffle_method=_get_shuffle_method(shuffle_method),
             divisions=divisions,
             **kwargs,
         )
@@ -302,7 +302,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
     def shuffle(self, *args, shuffle_method=None, **kwargs):
         """Wraps dask.dataframe DataFrame.shuffle method"""
         return super().shuffle(
-            *args, shuffle_method=_get_shuffle_type(shuffle_method), **kwargs
+            *args, shuffle_method=_get_shuffle_method(shuffle_method), **kwargs
         )
 
     @_dask_cudf_nvtx_annotate

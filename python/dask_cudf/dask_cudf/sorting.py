@@ -295,7 +295,7 @@ def sort_values(
         "_partitions",
         max_branch=max_branch,
         npartitions=len(divisions) - 1,
-        shuffle_method=_get_shuffle_type(shuffle_method),
+        shuffle_method=_get_shuffle_method(shuffle_method),
         ignore_index=ignore_index,
     ).drop(columns=["_partitions"])
     df3.divisions = (None,) * (df3.npartitions + 1)
@@ -320,7 +320,7 @@ def get_default_shuffle_method():
     return default
 
 
-def _get_shuffle_type(shuffle_method):
+def _get_shuffle_method(shuffle_method):
     # Utility to set the shuffle_method-kwarg default
     # and to validate user-specified options
     shuffle_method = shuffle_method or get_default_shuffle_method()
