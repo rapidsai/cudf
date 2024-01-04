@@ -38,16 +38,16 @@ namespace detail {
   auto const err = errno;
 
   if (auto const path = std::filesystem::path(filepath); is_create) {
-    if (not std::filesystem::exists(path.parent_path())) {
-      CUDF_FAIL("Cannot create output file; directory does not exist");
-    }
-  } else if (not std::filesystem::exists(path)) {
-    CUDF_FAIL("Cannot open file; it does not exist");
+    CUDF_EXPECTS(std::filesystem::exists(path.parent_path()),
+                 "Cannot create output file; directory does not exist");
+
+  } else {
+    CUDF_EXPECTS(std::filesystem::exists(path), "Cannot open file; it does not exist");
   }
 
   std::array<char, 1024> error_msg_buffer;
   auto const error_msg = strerror_r(err, error_msg_buffer.data(), 1024);
-  CUDF_FAIL("Cannot open file; failed with errno " + std::string{error_msg});
+  CUDF_FAIL("Cannot open file; failed with errno: " + std::string{error_msg});
 }
 
 [[nodiscard]] int open_file_checked(std::string const& filepath, int flags, mode_t mode)
