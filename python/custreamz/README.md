@@ -14,8 +14,8 @@ from custreamz import kafka
 
 # Full list of configurations can be found at: https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
 kafka_configs = {
-	"metadata.broker.list": "localhost:9092",
-	"group.id": "custreamz-client",
+    "metadata.broker.list": "localhost:9092",
+    "group.id": "custreamz-client",
 }
 
 # Create a reusable Kafka Consumer client; "datasource"
@@ -50,7 +50,7 @@ Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapids
 
 * CUDA 11.0+
 * NVIDIA driver 450.80.02+
-* Pascal architecture or better (Compute Capability >=6.0)
+* Volta architecture or better (Compute Capability >=7.0)
 
 ### Conda
 
