@@ -285,7 +285,7 @@ class writer::impl {
   void close();
 
   /**
-   * @brief Skip writing the footer and close the writer.
+   * @brief Skip writing the footer when closing/deleting the writer.
    */
   void skip_close() { _closed = true; }
 
