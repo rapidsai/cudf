@@ -297,6 +297,7 @@ __global__ void conditional_join_anti_semi(
   cudf::thread_index_type const right_num_rows = right_table.num_rows();
   cudf::thread_index_type const outer_num_rows = left_num_rows;
   cudf::thread_index_type const inner_num_rows = right_num_rows;
+  auto const stride    = cudf::detail::grid_1d::grid_stride();
 
   if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
 
@@ -312,7 +313,7 @@ __global__ void conditional_join_anti_semi(
   if (outer_row_index < outer_num_rows) {
     bool found_match = false;
     for (thread_index_type inner_row_index(0); inner_row_index < inner_num_rows;
-         ++inner_row_index) {
+         inner_row_index += stride) {
       auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
 
       evaluator.evaluate(
@@ -331,13 +332,13 @@ __global__ void conditional_join_anti_semi(
       auto const flush_mask = __ballot_sync(activemask, do_flush);
       if (do_flush) {
         flush_output_cache<num_warps, output_cache_size>(flush_mask,
-                                                       max_size,
-                                                       warp_id,
-                                                       lane_id,
-                                                       current_idx,
-                                                       current_idx_shared,
-                                                       join_shared_l,
-                                                       join_output_l);
+                                                         max_size,
+                                                         warp_id,
+                                                         lane_id,
+                                                         current_idx,
+                                                         current_idx_shared,
+                                                         join_shared_l,
+                                                         join_output_l);
         __syncwarp(flush_mask);
         if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
       }
@@ -354,13 +355,13 @@ __global__ void conditional_join_anti_semi(
     auto const flush_mask = __ballot_sync(activemask, do_flush);
     if (do_flush) {
       flush_output_cache<num_warps, output_cache_size>(flush_mask,
-                                                     max_size,
-                                                     warp_id,
-                                                     lane_id,
-                                                     current_idx,
-                                                     current_idx_shared,
-                                                     join_shared_l,
-                                                     join_output_l);
+                                                       max_size,
+                                                       warp_id,
+                                                       lane_id,
+                                                       current_idx,
+                                                       current_idx_shared,
+                                                       join_shared_l,
+                                                       join_output_l);
     }
   }
 }

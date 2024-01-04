@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -309,7 +309,7 @@ __device__ void flush_output_cache(unsigned int const activemask,
                                    size_type* join_output_r)
 {
   // count how many active threads participating here which could be less than warp_size
-  int num_threads               = __popc(activemask);
+  int const num_threads               = __popc(activemask);
   cudf::size_type output_offset = 0;
 
   if (0 == lane_id) { output_offset = atomicAdd(current_idx, current_idx_shared[warp_id]); }
@@ -341,7 +341,7 @@ __device__ void flush_output_cache(unsigned int const activemask,
                                  size_type join_shared_l[num_warps][output_cache_size],
                                  size_type* join_output_l)
 {
-  int num_threads               = __popc(activemask);
+  int const num_threads               = __popc(activemask);
   cudf::size_type output_offset = 0;
 
   if (0 == lane_id) { output_offset = atomicAdd(current_idx, current_idx_shared[warp_id]); }
