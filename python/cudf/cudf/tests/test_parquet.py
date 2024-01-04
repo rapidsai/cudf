@@ -1352,8 +1352,13 @@ def test_delta_binary(nrows, add_nulls, dtype, tmpdir):
 
 @pytest.mark.parametrize("nrows", delta_num_rows())
 @pytest.mark.parametrize("add_nulls", [True, False])
-@pytest.mark.parametrize("str_encoding", ["DELTA_BYTE_ARRAY"])
-def test_delta_byte_array_roundtrip(nrows, add_nulls, str_encoding, tmpdir):
+@pytest.mark.parametrize("max_string_length", [12, 48, 96, 128])
+@pytest.mark.parametrize(
+    "str_encoding", ["DELTA_BYTE_ARRAY", "DELTA_LENGTH_BYTE_ARRAY"]
+)
+def test_delta_byte_array_roundtrip(
+    nrows, add_nulls, max_string_length, str_encoding, tmpdir
+):
     null_frequency = 0.25 if add_nulls else 0
 
     # Create a pandas dataframe with random data of mixed lengths
@@ -1363,13 +1368,7 @@ def test_delta_byte_array_roundtrip(nrows, add_nulls, str_encoding, tmpdir):
                 "dtype": "str",
                 "null_frequency": null_frequency,
                 "cardinality": nrows,
-                "max_string_length": 10,
-            },
-            {
-                "dtype": "str",
-                "null_frequency": null_frequency,
-                "cardinality": nrows,
-                "max_string_length": 100,
+                "max_string_length": max_string_length,
             },
         ],
         rows=nrows,
@@ -1391,10 +1390,24 @@ def test_delta_byte_array_roundtrip(nrows, add_nulls, str_encoding, tmpdir):
     pcdf = cudf.from_pandas(test_pdf)
     assert_eq(cdf, pcdf)
 
+    # Test DELTA_LENGTH_BYTE_ARRAY writing as well
+    if str_encoding == "DELTA_LENGTH_BYTE_ARRAY":
+        cudf_fname = tmpdir.join("cdfdeltaba.parquet")
+        pcdf.to_parquet(
+            cudf_fname,
+            compression="snappy",
+            header_version="2.0",
+            use_dictionary=False,
+        )
+        cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
+        assert_eq(cdf2, cdf)
+
 
 @pytest.mark.parametrize("nrows", delta_num_rows())
 @pytest.mark.parametrize("add_nulls", [True, False])
-@pytest.mark.parametrize("str_encoding", ["DELTA_BYTE_ARRAY"])
+@pytest.mark.parametrize(
+    "str_encoding", ["DELTA_BYTE_ARRAY", "DELTA_LENGTH_BYTE_ARRAY"]
+)
 def test_delta_struct_list(tmpdir, nrows, add_nulls, str_encoding):
     # Struct<List<List>>
     lists_per_row = 3
@@ -1441,7 +1454,20 @@ def test_delta_struct_list(tmpdir, nrows, add_nulls, str_encoding):
     # sanity check to verify file is written properly
     assert_eq(test_pdf, pd.read_parquet(pdf_fname))
     cdf = cudf.read_parquet(pdf_fname)
-    assert_eq(cdf, cudf.from_pandas(test_pdf))
+    pcdf = cudf.from_pandas(test_pdf)
+    assert_eq(cdf, pcdf)
+
+    # Test DELTA_LENGTH_BYTE_ARRAY writing as well
+    if str_encoding == "DELTA_LENGTH_BYTE_ARRAY":
+        cudf_fname = tmpdir.join("cdfdeltaba.parquet")
+        pcdf.to_parquet(
+            cudf_fname,
+            compression="snappy",
+            header_version="2.0",
+            use_dictionary=False,
+        )
+        cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
+        assert_eq(cdf2, cdf)
 
 
 @pytest.mark.parametrize(
