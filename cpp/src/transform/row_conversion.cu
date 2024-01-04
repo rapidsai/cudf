@@ -2504,12 +2504,15 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const& input,
     for (int i = 0; i < static_cast<int>(schema.size()); ++i) {
       if (schema[i].id() == type_id::STRING) {
         // stuff real string column
-        auto string_data  = string_row_offset_columns[string_idx].release()->release();
-        output_columns[i] = make_strings_column(num_rows,
-                                                std::move(string_col_offsets[string_idx]),
-                                                std::move(string_data_cols[string_idx]),
-                                                std::move(*string_data.null_mask.release()),
-                                                0);
+        auto string_data = string_row_offset_columns[string_idx].release()->release();
+        output_columns[i] =
+          make_strings_column(num_rows,
+                              std::make_unique<cudf::column>(
+                                std::move(string_col_offsets[string_idx]), rmm::device_buffer{}, 0),
+                              std::make_unique<cudf::column>(
+                                std::move(string_data_cols[string_idx]), rmm::device_buffer{}, 0),
+                              0,
+                              std::move(*string_data.null_mask.release()));
         // Null count set to 0, temporarily. Will be fixed up before return.
         string_idx++;
       }
