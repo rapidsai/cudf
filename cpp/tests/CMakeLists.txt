@@ -314,6 +314,7 @@ ConfigureTest(
   PERCENT 30
 )
 target_link_libraries(DATA_CHUNK_SOURCE_TEST PRIVATE ZLIB::ZLIB)
+ConfigureTest(QUOTE_NORMALIZATION_TEST io/fst/quote_normalization_test.cu)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
 ConfigureTest(FST_TEST io/fst/fst_test.cu)
 ConfigureTest(TYPE_INFERENCE_TEST io/type_inference_test.cu)
