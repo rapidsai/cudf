@@ -24,8 +24,6 @@
 #include <kvikio/file_handle.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
-#include <filesystem>
-
 namespace cudf {
 namespace io {
 

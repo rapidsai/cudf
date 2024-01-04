@@ -257,9 +257,8 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
       return sum + task.get();
     });
   };
-  // The future returned from this function is deferred, not async because we want to avoid
-  // creating threads for each read_async call. This overhead is significant in case of multiple
-  // small reads.
+  // The future returned from this function is deferred, not async because we want to avoidcreating
+  // threads for each read_async call. This overhead is significant in case of multiple small reads.
   return std::async(std::launch::deferred, waiter, std::move(slice_tasks));
 }
 
@@ -291,9 +290,9 @@ std::future<void> cufile_output_impl::write_async(void const* data, size_t offse
       task.wait();
     }
   };
-  // The future returned from this function is deferred, not async because we want to avoid
-  // creating threads for each write_async call. This overhead is significant in case of multiple
-  // small writes.
+  // The future returned from this function is deferred, not async because we want to avoid creating
+  // threads for each write_async call. This overhead is significant in case of multiple small
+  // writes.
   return std::async(std::launch::deferred, waiter, std::move(slice_tasks));
 }
 #else
@@ -323,8 +322,7 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const& filepath
         throw;
       }
       CUDF_LOG_INFO(
-        "Failed to open file for reading with GDS. Data will be read from the file using a "
-        "bounce "
+        "Failed to open file for reading with GDS. Data will be read from the file using a bounce "
         "buffer (possible performance impact).");
     }
   }
@@ -346,8 +344,7 @@ std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const& filepa
         throw;
       }
       CUDF_LOG_INFO(
-        "Failed to open file for writing with GDS. Data will be written to the file using a "
-        "bounce "
+        "Failed to open file for writing with GDS. Data will be written to the file using a bounce "
         "buffer (possible performance impact).");
     }
   }
