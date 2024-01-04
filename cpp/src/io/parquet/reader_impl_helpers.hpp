@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,59 @@
 namespace cudf::io::parquet::detail {
 
 /**
+ * @brief page location and size info
+ */
+struct page_info {
+  // page location info from the offset index
+  PageLocation location;
+  // number of rows in the page, calculated from offset index
+  int64_t num_rows;
+  // number of valid values in page, calculated from definition level histogram if present
+  std::optional<int64_t> num_valid;
+  // number of null values in page, calculated from definition level histogram if present
+  std::optional<int64_t> num_nulls;
+  // number of bytes of variable-length data from the offset index (byte_array columns only)
+  std::optional<int64_t> var_bytes_size;
+};
+
+/**
+ * @brief column chunk metadata
+ */
+struct column_info {
+  // offset in file of the dictionary (if present)
+  std::optional<int64_t> dictionary_offset;
+  // size of dictionary (if present)
+  std::optional<int32_t> dictionary_size;
+  std::vector<page_info> pages;
+
+  /**
+   * @brief Determine if this column chunk has a dictionary page.
+   *
+   * @return `true` if this column chunk has a dictionary page.
+   */
+  [[nodiscard]] constexpr bool has_dictionary() const
+  {
+    return dictionary_offset.has_value() && dictionary_size.has_value();
+  }
+
+  /**
+   * @brief Determine if all pages to be read from this chunk are contiguous.
+   *
+   * When reading pages, an attempt is made to coalesce adjacent reads so fewer overall reads
+   * are performed. In the case where we are skipping early pages, but a dictionary is present,
+   * this read coalescing may not be possible. This will return `true` if there is no dictionary,
+   * or if the data pages immediately follow the dictionary page.
+   *
+   * @return `true` if all pages to be read are contiguous.
+   */
+  [[nodiscard]] constexpr bool is_contiguous() const
+  {
+    return !has_dictionary() ||
+           dictionary_offset.value() + dictionary_size.value() == pages[0].location.offset;
+  }
+};
+
+/**
  * @brief The row_group_info class
  */
 struct row_group_info {
@@ -43,12 +96,20 @@ struct row_group_info {
   size_t start_row;
   size_type source_index;  // file index.
 
+  // Optional metadata pulled from the column and offset indexes, if present.
+  std::optional<std::vector<column_info>> columns;
+
   row_group_info() = default;
 
   row_group_info(size_type index, size_t start_row, size_type source_index)
     : index{index}, start_row{start_row}, source_index{source_index}
   {
   }
+
+  /**
+   * @brief Indicates the presence of page-level indexes.
+   */
+  [[nodiscard]] bool has_page_index() const { return columns.has_value(); }
 };
 
 /**
@@ -103,6 +164,11 @@ class aggregate_reader_metadata {
    * @brief Sums up the number of row groups of each source
    */
   [[nodiscard]] size_type calc_num_row_groups() const;
+
+  /**
+   * @brief Calculate column index info for given row_group_info
+   */
+  void column_info_for_row_group(row_group_info& rgi, size_type chunk_start_row) const;
 
  public:
   aggregate_reader_metadata(host_span<std::unique_ptr<datasource> const> sources);

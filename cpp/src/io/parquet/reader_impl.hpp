@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -295,6 +295,10 @@ class reader::impl {
   std::unique_ptr<table_metadata> _output_metadata;
 
   bool _strings_to_categorical = false;
+
+  // are there usable page indexes available
+  bool _has_page_index = false;
+
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
   data_type _timestamp_type{type_id::EMPTY};
 

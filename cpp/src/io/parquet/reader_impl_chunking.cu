@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -380,6 +380,19 @@ void reader::impl::create_global_chunk_info()
                         schema.converted_type,
                         schema.type_length);
 
+      // grab the column_info for each chunk (if it exists)
+      column_info const* col_info = nullptr;
+      if (_has_page_index) {
+        // translate schema_idx into something we can use for the page indexes
+        size_type colidx = 0;
+        for (auto const& colchunk : _metadata->get_row_group(rg.index, rg.source_index).columns) {
+          if (colchunk.schema_idx == col.schema_idx) { break; }
+          colidx++;
+        }
+
+        col_info = &rg.columns.value()[colidx];
+      }
+
       chunks.push_back(ColumnChunkDesc(col_meta.total_compressed_size,
                                        nullptr,
                                        col_meta.num_values,
@@ -398,7 +411,8 @@ void reader::impl::create_global_chunk_info()
                                        schema.decimal_precision,
                                        clock_rate,
                                        i,
-                                       col.schema_idx));
+                                       col.schema_idx,
+                                       col_info));
     }
 
     remaining_rows -= row_group_rows;

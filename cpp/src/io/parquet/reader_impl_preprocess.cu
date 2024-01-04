@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -287,6 +287,40 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
   }
 
   return total_pages;
+}
+
+[[nodiscard]] size_t count_page_headers_with_pgidx(
+  cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks)
+{
+  size_t total_pages = 0;
+  for (auto& chunk : chunks) {
+    CUDF_EXPECTS(chunk.col_info != nullptr, "Expected non-null column info struct");
+    auto const& col_info = *chunk.col_info;
+    chunk.num_dict_pages = col_info.has_dictionary() ? 1 : 0;
+    chunk.num_data_pages = col_info.pages.size();
+    total_pages += chunk.num_data_pages + chunk.num_dict_pages;
+  }
+  return total_pages;
+}
+
+void fill_in_page_info(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks,
+                       cudf::detail::hostdevice_vector<PageInfo>& pages)
+{
+  // fill in page_info num_null using page index if available
+  // also fix page chunk_row and num_rows
+  for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
+    auto const& chunk = chunks[c];
+    CUDF_EXPECTS(chunk.col_info != nullptr, "Expected non-null column info struct");
+    auto const& col_info = *chunk.col_info;
+    size_t start_row     = 0;
+    page_count += chunk.num_dict_pages;
+    for (size_t p = 0; p < col_info.pages.size(); p++, page_count++) {
+      pages[page_count].num_rows  = col_info.pages[p].num_rows;
+      pages[page_count].chunk_row = start_row;
+      pages[page_count].num_nulls = col_info.pages[p].num_nulls.value_or(0);
+      start_row += pages[page_count].num_rows;
+    }
+  }
 }
 
 /**
@@ -830,12 +864,15 @@ void reader::impl::load_and_decompress_data()
   }
 
   // Process dataset chunk pages into output columns
-  auto const total_pages = count_page_headers(chunks, _stream);
+  auto const total_pages =
+    _has_page_index ? count_page_headers_with_pgidx(chunks) : count_page_headers(chunks, _stream);
   if (total_pages <= 0) { return; }
   pages = cudf::detail::hostdevice_vector<PageInfo>(total_pages, total_pages, _stream);
 
   // decoding of column/page information
   _pass_itm_data->level_type_size = decode_page_headers(chunks, pages, _stream);
+  if (_has_page_index) { fill_in_page_info(chunks, pages); }
+
   pages.device_to_host_sync(_stream);
   if (has_compressed_data) {
     decomp_page_data = decompress_page_data(chunks, pages, _stream);
@@ -1324,13 +1361,16 @@ void reader::impl::preprocess_pages(bool uses_custom_row_bounds, size_t chunk_re
     // PageInfo::chunk_row (the absolute start row index) for all pages
     // Note: this is doing some redundant work for pages in flat hierarchies.  chunk_row has already
     // been computed during header decoding. the overall amount of work here is very small though.
-    auto key_input  = thrust::make_transform_iterator(pages.device_ptr(), get_page_chunk_idx{});
-    auto page_input = thrust::make_transform_iterator(pages.device_ptr(), get_page_num_rows{});
-    thrust::exclusive_scan_by_key(rmm::exec_policy(_stream),
-                                  key_input,
-                                  key_input + pages.size(),
-                                  page_input,
-                                  chunk_row_output_iter{pages.device_ptr()});
+    // Note: chunk_row is already computed if we have column indexes
+    if (not _has_page_index) {
+      auto key_input  = thrust::make_transform_iterator(pages.device_ptr(), get_page_chunk_idx{});
+      auto page_input = thrust::make_transform_iterator(pages.device_ptr(), get_page_num_rows{});
+      thrust::exclusive_scan_by_key(rmm::exec_policy(_stream),
+                                    key_input,
+                                    key_input + pages.size(),
+                                    page_input,
+                                    chunk_row_output_iter{pages.device_ptr()});
+    }
 
     // retrieve pages back
     pages.device_to_host_sync(_stream);

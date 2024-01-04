@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -346,6 +346,135 @@ size_type aggregate_reader_metadata::calc_num_row_groups() const
     });
 }
 
+// Copies info from the column and offset indexes into the passed in row_group_info.
+void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rgi,
+                                                          size_type chunk_start_row) const
+{
+  auto const& fmd = per_file_metadata[rgi.source_index];
+  auto const& rg  = fmd.row_groups[rgi.index];
+
+  std::vector<column_info> columns;
+  columns.resize(rg.columns.size());
+
+  for (size_t col_idx = 0; col_idx < rg.columns.size(); col_idx++) {
+    auto const& col_chunk    = rg.columns[col_idx];
+    auto& schema             = get_schema(col_chunk.schema_idx);
+    auto const max_def_level = schema.max_definition_level;
+    auto const max_rep_level = schema.max_repetition_level;
+
+    // If any columns lack the page indexes then just return without modifying the
+    // row_group_info.
+    if (not col_chunk.offset_index.has_value() or not col_chunk.column_index.has_value()) {
+      rgi.columns = std::nullopt;
+      return;
+    }
+
+    auto const& offset_index = col_chunk.offset_index.value();
+    auto const& column_index = col_chunk.column_index.value();
+
+    auto& chunk_info     = columns[col_idx];
+    auto const num_pages = offset_index.page_locations.size();
+
+    // bug in parquet-mr does not write dictionary offsets, so check to
+    // see if data_page_offset differs from first entry in offsets index
+    if (col_chunk.meta_data.dictionary_page_offset > 0) {
+      chunk_info.dictionary_offset = col_chunk.meta_data.dictionary_page_offset;
+      chunk_info.dictionary_size =
+        col_chunk.meta_data.data_page_offset - chunk_info.dictionary_offset.value();
+    } else {
+      if (num_pages > 0 &&
+          col_chunk.meta_data.data_page_offset < offset_index.page_locations[0].offset) {
+        chunk_info.dictionary_offset = col_chunk.meta_data.data_page_offset;
+        chunk_info.dictionary_size =
+          offset_index.page_locations[0].offset - col_chunk.meta_data.data_page_offset;
+      }
+    }
+
+    // Use the definition_level_histogram to get num_valid and num_null. For now, these are
+    // only ever used for byte array columns. The repetition_level_histogram might be
+    // necessary to determine the total number of values in the page if the
+    // definition_level_histogram is absent.
+    //
+    // In the future we might want the full histograms saved in the `column_info` struct.
+    int64_t const* const def_hist = column_index.definition_level_histogram.has_value()
+                                      ? column_index.definition_level_histogram.value().data()
+                                      : nullptr;
+    int64_t const* const rep_hist = column_index.repetition_level_histogram.has_value()
+                                      ? column_index.repetition_level_histogram.value().data()
+                                      : nullptr;
+
+    for (size_t pg_idx = 0; pg_idx < num_pages; pg_idx++) {
+      auto const& page_loc = offset_index.page_locations[pg_idx];
+      // translate chunk-relative row nums to absolute within the file
+      auto const pg_start_row = chunk_start_row + page_loc.first_row_index;
+      auto const pg_end_row =
+        chunk_start_row + (pg_idx == (num_pages - 1)
+                             ? rg.num_rows
+                             : offset_index.page_locations[pg_idx + 1].first_row_index);
+
+      auto const num_rows = pg_end_row - pg_start_row;
+      page_info pg_info{page_loc, num_rows};
+
+      // check to see if we already have null counts for each page
+      if (column_index.null_counts.has_value()) {
+        pg_info.num_nulls = column_index.null_counts.value()[pg_idx];
+      }
+
+      // save variable length byte info if present
+      if (offset_index.unencoded_byte_array_data_bytes.has_value()) {
+        pg_info.var_bytes_size = offset_index.unencoded_byte_array_data_bytes.value()[pg_idx];
+      }
+
+      // if def histogram is present, then just use it
+      if (def_hist != nullptr) {
+        auto const h      = &def_hist[pg_idx * (max_def_level + 1)];
+        pg_info.num_valid = h[max_def_level];
+
+        // calculate num_nulls if not available from column index
+        if (not pg_info.num_nulls.has_value()) {
+          pg_info.num_nulls = std::reduce(h, h + max_def_level);
+        }
+      }
+      // there is no def histogram.
+      // if there is no repetition, then num_values == num_rows, and num_nulls can be
+      // obtained from the column index
+      else if (max_rep_level == 0) {
+        // if we already have num_nulls from column index
+        if (pg_info.num_nulls.has_value()) {
+          pg_info.num_valid = pg_info.num_rows - pg_info.num_nulls.value();
+        }
+        // if max_def is 0, there are no nulls
+        else if (max_def_level == 0) {
+          pg_info.num_nulls = 0;
+          pg_info.num_valid = pg_info.num_rows;
+        }
+      }
+      // if the rep level histogram is present, we can get the total number of values
+      // from that
+      else if (rep_hist != nullptr) {
+        if (pg_info.num_nulls.has_value()) {
+          auto const h          = &rep_hist[pg_idx * (max_rep_level + 1)];
+          auto const num_values = std::reduce(h, h + max_rep_level + 1);
+          pg_info.num_valid     = num_values - pg_info.num_nulls.value();
+        }
+      }
+
+      // If none of the ifs above triggered, then we have neither histogram (likely the writer
+      // doesn't produce them, the r:0 d:1 case should have been handled above). The column index
+      // doesn't give us value counts, so we'll have to rely on the page headers. If the histogram
+      // info is missing or insufficient, then just return without modifying the row_group_info.
+      if (not pg_info.num_nulls.has_value() or not pg_info.num_valid.has_value()) {
+        rgi.columns = std::nullopt;
+        return;
+      }
+
+      chunk_info.pages.push_back(std::move(pg_info));
+    }
+  }
+
+  rgi.columns = std::move(columns);
+}
+
 aggregate_reader_metadata::aggregate_reader_metadata(
   host_span<std::unique_ptr<datasource> const> sources)
   : per_file_metadata(metadatas_from_sources(sources)),
@@ -470,23 +599,32 @@ aggregate_reader_metadata::select_row_groups(
                  "Must specify row groups for each source");
 
     for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
+      auto const& fmd = per_file_metadata[src_idx];
       for (auto const& rowgroup_idx : row_group_indices[src_idx]) {
         CUDF_EXPECTS(
-          rowgroup_idx >= 0 &&
-            rowgroup_idx < static_cast<size_type>(per_file_metadata[src_idx].row_groups.size()),
+          rowgroup_idx >= 0 && rowgroup_idx < static_cast<size_type>(fmd.row_groups.size()),
           "Invalid rowgroup index");
-        selection.emplace_back(rowgroup_idx, rows_to_read, src_idx);
+        row_group_info rgi(rowgroup_idx, rows_to_read, src_idx);
+        // if page-level indexes are present, then collect extra chunk and page info.
+        column_info_for_row_group(rgi, 0);
+        selection.emplace_back(std::move(rgi));
         rows_to_read += get_row_group(rowgroup_idx, src_idx).num_rows;
       }
     }
   } else {
     size_type count = 0;
     for (size_t src_idx = 0; src_idx < per_file_metadata.size(); ++src_idx) {
-      for (size_t rg_idx = 0; rg_idx < per_file_metadata[src_idx].row_groups.size(); ++rg_idx) {
+      auto const& fmd = per_file_metadata[src_idx];
+      for (size_t rg_idx = 0; rg_idx < fmd.row_groups.size(); ++rg_idx) {
+        auto const& rg             = fmd.row_groups[rg_idx];
         auto const chunk_start_row = count;
-        count += get_row_group(rg_idx, src_idx).num_rows;
+        count += rg.num_rows;
         if (count > rows_to_skip || count == 0) {
-          selection.emplace_back(rg_idx, chunk_start_row, src_idx);
+          row_group_info rgi(rg_idx, chunk_start_row, src_idx);
+          // if page-level indexes are present, then collect extra chunk and page
+          // info. if using custom bounds, then figure out which pages to read
+          column_info_for_row_group(rgi, chunk_start_row);
+          selection.emplace_back(std::move(rgi));
         }
         if (count >= rows_to_skip + rows_to_read) { break; }
       }

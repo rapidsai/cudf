@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -356,6 +356,11 @@ void reader::impl::prepare_data(int64_t skip_rows,
       _file_itm_data.global_skip_rows, _file_itm_data.global_num_rows, _file_itm_data.row_groups) =
       _metadata->select_row_groups(
         row_group_indices, skip_rows, num_rows, output_types, filter, _stream);
+
+    // check for page indexes
+    _has_page_index = std::all_of(_file_itm_data.row_groups.begin(),
+                                  _file_itm_data.row_groups.end(),
+                                  [](auto const& row_group) { return row_group.has_page_index(); });
 
     if (_file_itm_data.global_num_rows > 0 && not _file_itm_data.row_groups.empty() &&
         not _input_columns.empty()) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -339,6 +339,9 @@ struct PageInfo {
   decode_kernel_mask kernel_mask;
 };
 
+// forward declaration
+struct column_info;
+
 /**
  * @brief Struct describing a particular chunk of column data
  */
@@ -362,7 +365,8 @@ struct ColumnChunkDesc {
                            int8_t decimal_precision_,
                            int32_t ts_clock_rate_,
                            int32_t src_col_index_,
-                           int32_t src_col_schema_)
+                           int32_t src_col_schema_,
+                           column_info const* col_info_)
     : compressed_data(compressed_data_),
       compressed_size(compressed_size_),
       num_values(num_values_),
@@ -386,7 +390,8 @@ struct ColumnChunkDesc {
       decimal_precision(decimal_precision_),
       ts_clock_rate(ts_clock_rate_),
       src_col_index(src_col_index_),
-      src_col_schema(src_col_schema_)
+      src_col_schema(src_col_schema_),
+      col_info(col_info_)
   {
   }
 
@@ -418,6 +423,8 @@ struct ColumnChunkDesc {
 
   int32_t src_col_index{};   // my input column index
   int32_t src_col_schema{};  // my schema index in the file
+
+  column_info const* col_info{};  // pointer to column_info struct for this chunk
 };
 
 /**
