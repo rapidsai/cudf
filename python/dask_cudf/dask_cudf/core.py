@@ -165,7 +165,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
 
             # Let upstream-dask handle "pre-sorted" case
             if pre_sorted:
-                return dd.shuffle_method.set_sorted_index(
+                return dd.shuffle.set_sorted_index(
                     self, other, divisions=divisions, **kwargs
                 )
 
