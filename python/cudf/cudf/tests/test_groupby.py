@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import collections
 import datetime
@@ -402,23 +402,18 @@ def groupby_jit_data_small():
     useful for very basic testing of result values
 
     """
-    np.random.seed(0)
+    rng = np.random.default_rng(42)
     df = DataFrame()
-    key1 = (
-        [1]  # group of size 1
-        + [2, 2]  # group of size 2
-        + [3, 3, 3]  # group of size 3
-        + [4, 4, 4, 4]  # group of size 4
-    )
+    key1 = [1] + [2] * 2 + [3] * 3 + [4] * 4
     key2 = [1, 2] * 5
     df["key1"] = key1
     df["key2"] = key2
 
-    df["val1"] = np.random.randint(0, 10, len(key1))
-    df["val2"] = np.random.randint(0, 10, len(key1))
+    df["val1"] = rng.integers(0, 10, len(key1))
+    df["val2"] = rng.integers(0, 10, len(key1))
 
     # randomly permute data
-    df = df.sample(frac=1).reset_index(drop=True)
+    df = df.sample(frac=1, ignore_index=True)
     return df
 
 
@@ -448,7 +443,7 @@ def groupby_jit_data_nans(groupby_jit_data_small):
     df = groupby_jit_data_small.sort_values(["key1", "key2"])
     df["val1"] = df["val1"].astype("float64")
     df["val1"][::2] = np.nan
-    df = df.sample(frac=1).reset_index(drop=True)
+    df = df.sample(frac=1, ignore_index=True)
     return df
 
 
@@ -558,7 +553,7 @@ def groupby_apply_jit_idx_reductions_special_vals_inner(
     run_groupby_apply_jit_test(data, func, ["key1"])
 
 
-@pytest.mark.parametrize("dtype", ["float64"])
+@pytest.mark.parametrize("dtype", ["float64", "float32"])
 @pytest.mark.parametrize("func", ["min", "max", "sum", "mean", "var", "std"])
 @pytest.mark.parametrize("special_val", [np.nan, np.inf, -np.inf])
 @pytest.mark.parametrize("dataset", ["small", "large", "nans"])
