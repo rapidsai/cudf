@@ -332,7 +332,7 @@ __device__ void flush_output_cache(unsigned int const activemask,
 }
 
 template <int num_warps, cudf::size_type output_cache_size>
-__device__ void flush_left_cache(unsigned int const activemask,
+__device__ void flush_output_cache(unsigned int const activemask,
                                  cudf::size_type const max_size,
                                  int const warp_id,
                                  int const lane_id,

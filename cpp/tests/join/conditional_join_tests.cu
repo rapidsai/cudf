@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -710,13 +710,28 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
     auto result = this->join(left, right, predicate);
     std::vector<cudf::size_type> resulting_indices;
     for (size_t i = 0; i < result->size(); ++i) {
-      // Note: Not trying to be terribly efficient here since these tests are
-      // small, otherwise a batch copy to host before constructing the tuples
-      // would be important.
       resulting_indices.push_back(result->element(i, cudf::get_default_stream()));
     }
+
     std::sort(resulting_indices.begin(), resulting_indices.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());
+
+    // Print resulting indices
+    std::cout << "Resulting Indices: [";
+    for (size_t i = 0; i < resulting_indices.size(); ++i) {
+      std::cout << resulting_indices[i];
+      if (i < resulting_indices.size() - 1) std::cout << ", ";
+    }
+    std::cout << "]" << std::endl;
+
+    // Print expected indices
+    std::cout << "Expected Indices: [";
+    for (size_t i = 0; i < expected_outputs.size(); ++i) {
+      std::cout << expected_outputs[i];
+      if (i < expected_outputs.size() - 1) std::cout << ", ";
+    }
+    std::cout << "]" << std::endl;
+
     EXPECT_TRUE(
       std::equal(resulting_indices.begin(), resulting_indices.end(), expected_outputs.begin()));
   }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -272,7 +272,7 @@ __global__ void conditional_join(table_device_view left_table,
 }
 
 template <cudf::size_type block_size, cudf::size_type output_cache_size, bool has_nulls>
-__global__ void conditional_join_semi(
+__global__ void conditional_join_anti_semi(
   table_device_view left_table,
   table_device_view right_table,
   join_kind join_type,
@@ -302,7 +302,7 @@ __global__ void conditional_join_semi(
 
   __syncwarp();
 
-  auto outer_row_index = cudf::detail::grid_1d::global_thread_id();
+  auto const outer_row_index = cudf::detail::grid_1d::global_thread_id();
 
   unsigned int const activemask = __ballot_sync(0xffff'ffffu, outer_row_index < left_num_rows);
 
@@ -330,7 +330,7 @@ __global__ void conditional_join_semi(
       auto const do_flush   = current_idx_shared[warp_id] + detail::warp_size >= output_cache_size;
       auto const flush_mask = __ballot_sync(activemask, do_flush);
       if (do_flush) {
-        flush_left_cache<num_warps, output_cache_size>(flush_mask,
+        flush_output_cache<num_warps, output_cache_size>(flush_mask,
                                                        max_size,
                                                        warp_id,
                                                        lane_id,
@@ -353,7 +353,7 @@ __global__ void conditional_join_semi(
     auto const do_flush   = current_idx_shared[warp_id] > 0;
     auto const flush_mask = __ballot_sync(activemask, do_flush);
     if (do_flush) {
-      flush_left_cache<num_warps, output_cache_size>(flush_mask,
+      flush_output_cache<num_warps, output_cache_size>(flush_mask,
                                                      max_size,
                                                      warp_id,
                                                      lane_id,
