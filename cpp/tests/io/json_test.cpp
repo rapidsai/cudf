@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2052,6 +2052,7 @@ TEST_F(JsonReaderTest, JSONLinesRecoveringIgnoreExcessChars)
 TEST_F(JsonReaderTest, MixedTypes)
 {
   {
+    // Simple test for mixed types
     std::string json_string = R"({ "foo": [1,2,3], "bar": 123 }
                                { "foo": { "a": 1 }, "bar": 456 })";
 
@@ -2073,6 +2074,7 @@ TEST_F(JsonReaderTest, MixedTypes)
                                    cudf::test::fixed_width_column_wrapper<int64_t>({123, 456}));
   }
 
+  // Testing function for mixed types in JSON (for spark json reader)
   auto test_fn = [](std::string_view json_string, cudf::column_view expected) {
     cudf::io::json_reader_options in_options =
       cudf::io::json_reader_options::builder(
