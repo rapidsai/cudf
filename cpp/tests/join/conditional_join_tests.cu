@@ -716,22 +716,6 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
     std::sort(resulting_indices.begin(), resulting_indices.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());
 
-    // Print resulting indices
-    std::cout << "Resulting Indices: [";
-    for (size_t i = 0; i < resulting_indices.size(); ++i) {
-      std::cout << resulting_indices[i];
-      if (i < resulting_indices.size() - 1) std::cout << ", ";
-    }
-    std::cout << "]" << std::endl;
-
-    // Print expected indices
-    std::cout << "Expected Indices: [";
-    for (size_t i = 0; i < expected_outputs.size(); ++i) {
-      std::cout << expected_outputs[i];
-      if (i < expected_outputs.size() - 1) std::cout << ", ";
-    }
-    std::cout << "]" << std::endl;
-
     EXPECT_TRUE(
       std::equal(resulting_indices.begin(), resulting_indices.end(), expected_outputs.begin()));
   }

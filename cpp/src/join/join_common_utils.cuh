@@ -309,7 +309,7 @@ __device__ void flush_output_cache(unsigned int const activemask,
                                    size_type* join_output_r)
 {
   // count how many active threads participating here which could be less than warp_size
-  int const num_threads               = __popc(activemask);
+  int const num_threads         = __popc(activemask);
   cudf::size_type output_offset = 0;
 
   if (0 == lane_id) { output_offset = atomicAdd(current_idx, current_idx_shared[warp_id]); }
@@ -333,15 +333,15 @@ __device__ void flush_output_cache(unsigned int const activemask,
 
 template <int num_warps, cudf::size_type output_cache_size>
 __device__ void flush_output_cache(unsigned int const activemask,
-                                 cudf::size_type const max_size,
-                                 int const warp_id,
-                                 int const lane_id,
-                                 cudf::size_type* current_idx,
-                                 cudf::size_type current_idx_shared[num_warps],
-                                 size_type join_shared_l[num_warps][output_cache_size],
-                                 size_type* join_output_l)
+                                   cudf::size_type const max_size,
+                                   int const warp_id,
+                                   int const lane_id,
+                                   cudf::size_type* current_idx,
+                                   cudf::size_type current_idx_shared[num_warps],
+                                   size_type join_shared_l[num_warps][output_cache_size],
+                                   size_type* join_output_l)
 {
-  int const num_threads               = __popc(activemask);
+  int const num_threads         = __popc(activemask);
   cudf::size_type output_offset = 0;
 
   if (0 == lane_id) { output_offset = atomicAdd(current_idx, current_idx_shared[warp_id]); }

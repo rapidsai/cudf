@@ -297,23 +297,23 @@ __global__ void conditional_join_anti_semi(
   cudf::thread_index_type const right_num_rows = right_table.num_rows();
   cudf::thread_index_type const outer_num_rows = left_num_rows;
   cudf::thread_index_type const inner_num_rows = right_num_rows;
-  auto const stride    = cudf::detail::grid_1d::grid_stride();
+  auto const stride                            = cudf::detail::grid_1d::grid_stride();
+  auto const start_idx                         = cudf::detail::grid_1d::global_thread_id();
 
   if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
 
   __syncwarp();
 
-  auto const outer_row_index = cudf::detail::grid_1d::global_thread_id();
-
-  unsigned int const activemask = __ballot_sync(0xffff'ffffu, outer_row_index < left_num_rows);
+  unsigned int const activemask = __ballot_sync(0xffff'ffffu, start_idx < left_num_rows);
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
 
-  if (outer_row_index < outer_num_rows) {
+  for (cudf::thread_index_type outer_row_index = start_idx; outer_row_index < outer_num_rows;
+       outer_row_index += stride) {
     bool found_match = false;
     for (thread_index_type inner_row_index(0); inner_row_index < inner_num_rows;
-         inner_row_index += stride) {
+         ++inner_row_index) {
       auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
 
       evaluator.evaluate(
