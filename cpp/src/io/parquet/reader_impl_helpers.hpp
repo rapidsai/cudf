@@ -69,22 +69,6 @@ struct column_info {
   {
     return dictionary_offset.has_value() && dictionary_size.has_value();
   }
-
-  /**
-   * @brief Determine if all pages to be read from this chunk are contiguous.
-   *
-   * When reading pages, an attempt is made to coalesce adjacent reads so fewer overall reads
-   * are performed. In the case where we are skipping early pages, but a dictionary is present,
-   * this read coalescing may not be possible. This will return `true` if there is no dictionary,
-   * or if the data pages immediately follow the dictionary page.
-   *
-   * @return `true` if all pages to be read are contiguous.
-   */
-  [[nodiscard]] constexpr bool is_contiguous() const
-  {
-    return !has_dictionary() ||
-           dictionary_offset.value() + dictionary_size.value() == pages[0].location.offset;
-  }
 };
 
 /**
