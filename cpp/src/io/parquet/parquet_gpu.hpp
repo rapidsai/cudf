@@ -424,7 +424,7 @@ struct ColumnChunkDesc {
   int32_t src_col_index{};   // my input column index
   int32_t src_col_schema{};  // my schema index in the file
 
-  column_info const* col_info{};  // pointer to column_info struct for this chunk
+  column_info const* col_info{};  // pointer to column_info struct for this chunk (host only)
 };
 
 /**
