@@ -63,13 +63,15 @@ cudf::table construct_table()
     auto col6_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
       return numeric::decimal128{ones[i], numeric::scale_type{12}};
     });
-    return cudf::test::fixed_width_column_wrapper<numeric::decimal128>(col6_data, col6_data + num_rows);
+    return cudf::test::fixed_width_column_wrapper<numeric::decimal128>(col6_data,
+                                                                       col6_data + num_rows);
   }();
   cudf::test::fixed_width_column_wrapper<numeric::decimal128> col7 = [&ones, num_rows] {
     auto col7_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
       return numeric::decimal128{ones[i], numeric::scale_type{-12}};
     });
-    return cudf::test::fixed_width_column_wrapper<numeric::decimal128>(col7_data, col7_data + num_rows);
+    return cudf::test::fixed_width_column_wrapper<numeric::decimal128>(col7_data,
+                                                                       col7_data + num_rows);
   }();
 
   cudf::test::lists_column_wrapper<int64_t> col8{
@@ -101,7 +103,7 @@ cudf::table construct_table()
 
 TEST_F(ORCTest, ORCWriter)
 {
-  auto tab = construct_table();
+  auto tab      = construct_table();
   auto filepath = temp_env->get_temp_filepath("OrcMultiColumn.orc");
   cudf::io::orc_writer_options out_opts =
     cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, tab);
@@ -110,7 +112,7 @@ TEST_F(ORCTest, ORCWriter)
 
 TEST_F(ORCTest, ORCReader)
 {
-  auto tab = construct_table();
+  auto tab      = construct_table();
   auto filepath = temp_env->get_temp_filepath("OrcMultiColumn.orc");
   cudf::io::orc_writer_options out_opts =
     cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, tab);
