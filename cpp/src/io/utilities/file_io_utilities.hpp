@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,16 +34,17 @@ namespace cudf {
 namespace io {
 namespace detail {
 
+[[noreturn]] void throw_on_file_open_failure(std::string const& filepath, bool is_create);
+
 /**
  * @brief Class that provides RAII for file handling.
  */
 class file_wrapper {
-  int fd = -1;
-  size_t _size;
+  int fd       = -1;
+  size_t _size = 0;
 
  public:
-  explicit file_wrapper(std::string const& filepath, int flags);
-  explicit file_wrapper(std::string const& filepath, int flags, mode_t mode);
+  explicit file_wrapper(std::string const& filepath, int flags, mode_t mode = 0);
   ~file_wrapper();
   [[nodiscard]] auto size() const { return _size; }
   [[nodiscard]] auto desc() const { return fd; }
