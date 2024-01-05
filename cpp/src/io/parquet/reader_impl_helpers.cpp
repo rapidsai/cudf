@@ -468,6 +468,13 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rgi,
         return;
       }
 
+      // if using older page indexes that lack size info, don't use
+      // TODO: might be ok if an empty page doesn't have var_byte_size set
+      if (schema.type == BYTE_ARRAY && not pg_info.var_bytes_size.has_value()) {
+        rgi.columns = std::nullopt;
+        return;
+      }
+
       chunk_info.pages.push_back(std::move(pg_info));
     }
   }
