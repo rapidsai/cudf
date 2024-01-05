@@ -34,14 +34,16 @@ auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
 
 class ParquetTest : public cudf::test::BaseFixture {};
 
-template<typename ... UniqPtrs>
-std::vector<std::unique_ptr<cudf::column>> make_uniqueptrs_vector(UniqPtrs&& ... uniqptrs) {
+template <typename... UniqPtrs>
+std::vector<std::unique_ptr<cudf::column>> make_uniqueptrs_vector(UniqPtrs&&... uniqptrs)
+{
   std::vector<std::unique_ptr<cudf::column>> ptrsvec;
   (ptrsvec.push_back(std::forward<UniqPtrs>(uniqptrs)), ...);
   return ptrsvec;
 }
 
-cudf::table construct_table() {
+cudf::table construct_table()
+{
   constexpr auto num_rows = 10;
 
   std::vector<size_t> zeros(num_rows, 0);
@@ -71,13 +73,23 @@ cudf::table construct_table() {
   std::vector<std::string> col10_data(num_rows, "rapids");
   cudf::test::strings_column_wrapper col10(col10_data.begin(), col10_data.end());
 
-  auto colsptr = make_uniqueptrs_vector(col0.release(), col1.release(), col2.release(), col3.release(), col4.release(), col5.release(), col6.release(), col7.release(), col8.release(), col9.release(), col10.release());
+  auto colsptr = make_uniqueptrs_vector(col0.release(),
+                                        col1.release(),
+                                        col2.release(),
+                                        col3.release(),
+                                        col4.release(),
+                                        col5.release(),
+                                        col6.release(),
+                                        col7.release(),
+                                        col8.release(),
+                                        col9.release(),
+                                        col10.release());
   return cudf::table(std::move(colsptr));
 }
 
 TEST_F(ParquetTest, ParquetWriter)
 {
-  auto tab = construct_table();
+  auto tab      = construct_table();
   auto filepath = temp_env->get_temp_filepath("MultiColumn.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tab);
@@ -86,7 +98,7 @@ TEST_F(ParquetTest, ParquetWriter)
 
 TEST_F(ParquetTest, ParquetReader)
 {
-  auto tab = construct_table();
+  auto tab      = construct_table();
   auto filepath = temp_env->get_temp_filepath("MultiColumn.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tab);
@@ -100,7 +112,7 @@ TEST_F(ParquetTest, ParquetReader)
 
 TEST_F(ParquetTest, ChunkedOperations)
 {
-  auto tab = construct_table();
+  auto tab      = construct_table();
   auto filepath = temp_env->get_temp_filepath("MultiColumn.parquet");
   cudf::io::chunked_parquet_writer_options out_opts =
     cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{filepath});
