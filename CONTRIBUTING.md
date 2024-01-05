@@ -79,7 +79,7 @@ CUDA/GPU:
 
 * CUDA 11.5+
 * NVIDIA driver 450.80.02+
-* Pascal architecture or better
+* Volta architecture or better (Compute Capability >=7.0)
 
 You can obtain CUDA from
 [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads).

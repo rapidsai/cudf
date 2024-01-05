@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,15 +39,11 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace orc {
+namespace cudf::io::orc::detail {
 // Forward internal classes
 class orc_column_view;
 
-using namespace cudf::io::orc;
-using namespace cudf::io;
+using namespace cudf::io::detail;
 using cudf::detail::device_2dspan;
 using cudf::detail::host_2dspan;
 using cudf::detail::hostdevice_2dvector;
@@ -358,13 +354,10 @@ class writer::impl {
 
   // Internal states, filled during `write()` and written to sink during `write` and `close()`.
   std::unique_ptr<table_input_metadata> _table_meta;
-  cudf::io::orc::FileFooter _ffooter;
-  cudf::io::orc::Metadata _orc_meta;
+  FileFooter _ffooter;
+  Metadata _orc_meta;
   persisted_statistics _persisted_stripe_statistics;  // Statistics data saved between calls.
   bool _closed = false;  // To track if the output has been written to sink.
 };
 
-}  // namespace orc
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc::detail
