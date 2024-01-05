@@ -3165,12 +3165,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         if _is_scalar_or_zero_d_array(value):
+            dtype = None
+            if hasattr(value, "ndim"):
+                dtype = value.dtype
+                value = value.item()
+            if libcudf.scalar._is_null_host_scalar(value):
+                dtype = "str"
             value = as_column(
                 value,
                 length=len(self),
-                dtype="str"
-                if libcudf.scalar._is_null_host_scalar(value)
-                else None,
+                dtype=dtype,
             )
 
         if len(self) == 0:
