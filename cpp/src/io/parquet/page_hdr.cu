@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -388,6 +388,10 @@ __global__ void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chu
       bs->page.skipped_values      = -1;
       bs->page.skipped_leaf_values = 0;
       bs->page.str_bytes           = 0;
+      bs->page.num_valids          = 0;
+      bs->page.start_val           = 0;
+      bs->page.end_val             = 0;
+      bs->page.has_page_index      = false;
       bs->page.temp_string_size    = 0;
       bs->page.temp_string_buf     = nullptr;
       bs->page.kernel_mask         = decode_kernel_mask::NONE;

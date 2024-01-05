@@ -289,6 +289,9 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
   return total_pages;
 }
 
+/**
+ * @brief Count the total number of pages using page index information.
+ */
 [[nodiscard]] size_t count_page_headers_with_pgidx(
   cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks)
 {
@@ -303,6 +306,11 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
   return total_pages;
 }
 
+/**
+ * @brief Set fields on the pages that can be derived from page indexes.
+ *
+ * This replaces some preprocessing steps, such as page string size calculation.
+ */
 void fill_in_page_info(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks,
                        cudf::detail::hostdevice_vector<PageInfo>& pages)
 {
@@ -315,10 +323,19 @@ void fill_in_page_info(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks,
     size_t start_row     = 0;
     page_count += chunk.num_dict_pages;
     for (size_t p = 0; p < col_info.pages.size(); p++, page_count++) {
-      pages[page_count].num_rows  = col_info.pages[p].num_rows;
-      pages[page_count].chunk_row = start_row;
-      pages[page_count].num_nulls = col_info.pages[p].num_nulls.value_or(0);
-      start_row += pages[page_count].num_rows;
+      auto& page          = pages[page_count];
+      page.num_rows       = col_info.pages[p].num_rows;
+      page.chunk_row      = start_row;
+      page.has_page_index = true;
+      // the following fields will need to be updated for bounds pages
+      page.num_nulls  = col_info.pages[p].num_nulls.value_or(0);
+      page.num_valids = col_info.pages[p].num_valid.value_or(0);
+      // TODO(ets): if we don't have str_bytes for a byte_array column, then don't use page indexes
+      page.str_bytes = col_info.pages[p].var_bytes_size.value_or(0);
+      page.start_val = 0;
+      page.end_val   = page.num_valids;
+
+      start_row += page.num_rows;
     }
   }
 }
@@ -871,7 +888,6 @@ void reader::impl::load_and_decompress_data()
 
   // decoding of column/page information
   _pass_itm_data->level_type_size = decode_page_headers(chunks, pages, _stream);
-  if (_has_page_index) { fill_in_page_info(chunks, pages); }
 
   pages.device_to_host_sync(_stream);
   if (has_compressed_data) {
@@ -905,6 +921,9 @@ void reader::impl::load_and_decompress_data()
 
     // level decode space
     allocate_level_decode_space();
+
+    // TODO(ets): what in the above 2 can be skipped if we have stats
+    if (_has_page_index) { fill_in_page_info(chunks, pages); }
   }
   pages.host_to_device_async(_stream);
 }

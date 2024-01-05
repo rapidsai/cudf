@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -349,7 +349,7 @@ __global__ void __launch_bounds__(preprocess_block_size)
 
   // retrieve total string size.
   // TODO: make this block-based instead of just 1 warp
-  if (compute_string_sizes) {
+  if (compute_string_sizes && !pp->has_page_index) {
     if (t < 32) { s->page.str_bytes = gpuDecodeTotalPageStringSize(s, t); }
   }
 
@@ -376,7 +376,8 @@ __global__ void __launch_bounds__(preprocess_block_size)
   if (!t) {
     pp->skipped_values      = s->page.skipped_values;
     pp->skipped_leaf_values = s->page.skipped_leaf_values;
-    pp->str_bytes           = s->page.str_bytes;
+    // don't clobber if we already have str_bytes from page indexes
+    if (!pp->has_page_index) { pp->str_bytes = s->page.str_bytes; }
   }
 }
 

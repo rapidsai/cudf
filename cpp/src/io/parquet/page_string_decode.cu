@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -594,11 +594,11 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBou
   int const t           = threadIdx.x;
   PageInfo* const pp    = &pages[page_idx];
 
-  if (t == 0) {
+  // don't clobber values from page indexes
+  if (!pp->has_page_index && t == 0) {
     s->page.num_nulls  = 0;
     s->page.num_valids = 0;
     // reset str_bytes to 0 in case it's already been calculated (esp needed for chunked reads).
-    // TODO: need to rethink this once str_bytes is in the statistics
     pp->str_bytes = 0;
   }
 
@@ -623,10 +623,15 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBou
                           num_rows,
                           mask_filter{STRINGS_MASK},
                           page_processing_stage::STRING_BOUNDS)) {
+    // if we're not using this page, go ahead and clobber some fields
+    if (t == 0) { pp->str_bytes = 0; }
     return;
   }
 
   bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
+
+  // if we have size info, then we only need to do this for bounds pages
+  if (pp->has_page_index && !is_bounds_pg) { return; }
 
   // find start/end value indices
   auto const [start_value, end_value] =

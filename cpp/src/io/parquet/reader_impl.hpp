@@ -245,7 +245,7 @@ class reader::impl {
    * @param skip_rows Minimum number of rows from start
    * @param num_rows Number of rows to output
    */
-  void decode_page_data(size_t skip_rows, size_t num_rows);
+  void decode_page_data(bool uses_custom_row_bounds, size_t skip_rows, size_t num_rows);
 
   /**
    * @brief Creates file-wide parquet chunk information.

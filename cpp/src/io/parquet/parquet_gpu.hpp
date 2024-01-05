@@ -318,7 +318,8 @@ struct PageInfo {
   // for string columns only, the size of all the chars in the string for
   // this page. only valid/computed during the base preprocess pass
   int32_t str_bytes;
-  int32_t str_offset;  // offset into string data for this page
+  int32_t str_offset;   // offset into string data for this page
+  bool has_page_index;  // true if str_bytes, num_valids, etc are derivable from page indexes
 
   // nesting information (input/output) for each page. this array contains
   // input column nesting information, output column nesting information and

@@ -27,7 +27,7 @@
 
 namespace cudf::io::parquet::detail {
 
-void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
+void reader::impl::decode_page_data(bool uses_custom_row_bounds, size_t skip_rows, size_t num_rows)
 {
   auto& chunks               = _pass_itm_data->chunks;
   auto& pages                = _pass_itm_data->pages_info;
@@ -59,8 +59,15 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   auto const has_strings = (kernel_mask & STRINGS_MASK) != 0;
   std::vector<size_t> col_sizes(_input_columns.size(), 0L);
   if (has_strings) {
-    ComputePageStringSizes(
-      pages, chunks, delta_temp_buf, skip_rows, num_rows, level_type_size, kernel_mask, _stream);
+    // need to compute pages bounds/sizes if we lack page indexes or are using custom bounds
+    // FIXME(ets): need to take into account fixed_len_byte_array data...that uses the strings
+    // preprocessing, but will not have string sizes in the page index. might pre-compute it
+    // when reading the page indexes, or can just call ComputePageStringSizes in that case.
+    // need some data...
+    if (!_has_page_index || uses_custom_row_bounds) {
+      ComputePageStringSizes(
+        pages, chunks, delta_temp_buf, skip_rows, num_rows, level_type_size, kernel_mask, _stream);
+    }
 
     col_sizes = calculate_page_string_offsets();
 
@@ -443,7 +450,7 @@ table_with_metadata reader::impl::read_chunk_internal(
   allocate_columns(read_info.skip_rows, read_info.num_rows, uses_custom_row_bounds);
 
   // Parse data into the output buffers.
-  decode_page_data(read_info.skip_rows, read_info.num_rows);
+  decode_page_data(uses_custom_row_bounds, read_info.skip_rows, read_info.num_rows);
 
   // Create the final output cudf columns.
   for (size_t i = 0; i < _output_buffers.size(); ++i) {
