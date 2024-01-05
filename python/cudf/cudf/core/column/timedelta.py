@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -17,13 +17,6 @@ from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column import ColumnBase, column, string
 from cudf.utils.dtypes import np_to_pa_dtype
 from cudf.utils.utils import _all_bools_with_nulls
-
-_dtype_to_format_conversion = {
-    "timedelta64[ns]": "%D days %H:%M:%S",
-    "timedelta64[us]": "%D days %H:%M:%S",
-    "timedelta64[ms]": "%D days %H:%M:%S",
-    "timedelta64[s]": "%D days %H:%M:%S",
-}
 
 _unit_to_nanoseconds_conversion = {
     "ns": 1,
@@ -318,9 +311,7 @@ class TimeDeltaColumn(ColumnBase):
         self, dtype: Dtype, format=None, **kwargs
     ) -> "cudf.core.column.StringColumn":
         if format is None:
-            format = _dtype_to_format_conversion.get(
-                self.dtype.name, "%D days %H:%M:%S"
-            )
+            format = "%D days %H:%M:%S"
         if len(self) > 0:
             return string._timedelta_to_str_typecast_functions[
                 cudf.dtype(self.dtype)
