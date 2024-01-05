@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -123,5 +123,5 @@ def test_disk_shuffle():
         pytest.skip("need a version of dask that has partd_encode_dispatch")
     df = cudf.DataFrame({"a": [1, 2, 3] * 20, "b": [4, 5, 6, 7] * 15})
     ddf = dd.from_pandas(df, npartitions=4)
-    got = dd.DataFrame.shuffle(ddf, "a", shuffle="disk")
+    got = dd.DataFrame.shuffle(ddf, "a", shuffle_method="disk")
     dd.assert_eq(got, df)
