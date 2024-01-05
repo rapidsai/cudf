@@ -330,10 +330,9 @@ void fill_in_page_info(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks,
       // the following fields will need to be updated for bounds pages
       page.num_nulls  = col_info.pages[p].num_nulls.value_or(0);
       page.num_valids = col_info.pages[p].num_valid.value_or(0);
-      // TODO(ets): if we don't have str_bytes for a byte_array column, then don't use page indexes
-      page.str_bytes = col_info.pages[p].var_bytes_size.value_or(0);
-      page.start_val = 0;
-      page.end_val   = page.num_valids;
+      page.str_bytes  = col_info.pages[p].var_bytes_size.value_or(0);
+      page.start_val  = 0;
+      page.end_val    = page.num_valids;
 
       start_row += page.num_rows;
     }
