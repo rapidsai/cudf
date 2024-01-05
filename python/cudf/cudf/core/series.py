@@ -602,7 +602,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             name_from_data = data.name
             column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
             if isinstance(data, (pd.Series, Series)):
-                index, index_from_data = as_index(data.index), index
+                index_from_data = as_index(data.index)
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
                 "Use cudf.Series._from_data for constructing a Series from "
@@ -611,12 +611,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         elif isinstance(data, dict):
             if not data:
                 column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
-                index, index_from_data = RangeIndex(0), index
+                index_from_data = RangeIndex(0)
             else:
                 column = as_column(
                     list(data.values()), nan_as_null=nan_as_null, dtype=dtype
                 )
-                index, index_from_data = as_index(list(data.keys())), index
+                index_from_data = as_index(list(data.keys()))
         else:
             # Using `getattr_static` to check if
             # `data` is on device memory and perform
@@ -649,20 +649,28 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if dtype is not None:
             column = column.astype(dtype)
 
-        if index is not None:
-            index = as_index(index)
-        else:
-            index = RangeIndex(len(column))
-
         if name_from_data is not None and name is None:
             name = name_from_data
-        super().__init__({name: column}, index=index)
+
+        if index is not None:
+            index = as_index(index)
+
         if index_from_data is not None:
+            first_index = index_from_data
+            second_index = index
+        elif index is None:
+            first_index = RangeIndex(len(column))
+            second_index = None
+        else:
+            first_index = index
+            second_index = None
+
+        super().__init__({name: column}, index=first_index)
+        if second_index is not None:
             # TODO: This there a better way to do this?
-            index_from_data = as_index(index_from_data)
-            reindexed = self.reindex(index=index_from_data, copy=False)
+            reindexed = self.reindex(index=second_index, copy=False)
             self._data = reindexed._data
-            self._index = index_from_data
+            self._index = second_index
         self._check_data_index_length_match()
 
     @classmethod
