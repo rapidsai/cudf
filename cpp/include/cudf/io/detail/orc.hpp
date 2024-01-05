@@ -126,7 +126,10 @@ class writer {
   void close();
 
   /**
-   * @brief Skip writing the footer and close the writer.
+   * @brief Skip work done in `close()`; should be called if `write()` failed.
+   *
+   * Calling skip_close() prevents the writer from writing the (invalid) file footer and the
+   * postscript.
    */
   void skip_close();
 };
