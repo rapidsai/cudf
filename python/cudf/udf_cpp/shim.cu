@@ -728,9 +728,6 @@ make_definition_corr(BlockCorr, int64, int64_t);
 NRT CUDA functions
 */
 
-__device__ NRT_MemSys TheMSys = {
-  .allocator = {(NRT_malloc_func)malloc_wrapper, NULL, (NRT_free_func)free_wrapper},
-  .stats     = {0, 0, 0, 0}};
 
 __device__ void udf_str_dtor(void* udf_str, size_t size, void* dtor_info)
 {

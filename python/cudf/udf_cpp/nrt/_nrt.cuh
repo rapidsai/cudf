@@ -7,9 +7,6 @@
 typedef __device__ void (*NRT_dtor_function)(void* ptr, size_t size, void* info);
 typedef __device__ void (*NRT_dealloc_func)(void* ptr, void* dealloc_info);
 
-typedef __device__ void* (*NRT_malloc_func)(size_t size);
-typedef __device__ void* (*NRT_realloc_func)(void* ptr, size_t new_size);
-typedef __device__ void (*NRT_free_func)(void* ptr);
 
 extern "C" {
 struct MemInfo {
@@ -23,12 +20,6 @@ struct MemInfo {
 
 // Globally needed variables
 struct NRT_MemSys {
-  /* System allocation functions */
-  struct {
-    NRT_malloc_func malloc;
-    NRT_realloc_func realloc;
-    NRT_free_func free;
-  } allocator;
   struct {
     bool enabled;
     cuda::atomic<size_t, cuda::thread_scope_device> alloc;
@@ -37,5 +28,9 @@ struct NRT_MemSys {
     cuda::atomic<size_t, cuda::thread_scope_device> mi_free;
   } stats;
 };
+// TODO: add the rest of the declarations
+extern "C" __device__ void NRT_Free(void* ptr);
+
+void setGlobalMemSys(NRT_MemSys* allocated_memsys);
 
 #endif

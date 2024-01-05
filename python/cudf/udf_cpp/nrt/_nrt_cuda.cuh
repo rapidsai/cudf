@@ -34,19 +34,18 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 typedef struct MemInfo NRT_MemInfo;
 
-
-__device__ void* malloc_wrapper(size_t size) { return malloc(size); }
-
-__device__ void free_wrapper(void* ptr) { free(ptr); }
-
 /* The Memory System object */
-extern __device__ NRT_MemSys TheMSys;
+__device__ NRT_MemSys* TheMSys;
+
+void setGlobalMemSys(NRT_MemSys* allocated_memsys) {
+  TheMSys = allocated_memsys;
+}
 
 extern "C" __device__ void* NRT_Allocate(size_t size)
 {
   void* ptr = NULL;
-  ptr       = TheMSys.allocator.malloc(size);
-  if (TheMSys.stats.enabled) { TheMSys.stats.alloc++; }
+  ptr       = malloc(size);
+  if (TheMSys->stats.enabled) { TheMSys->stats.alloc++; }
   return ptr;
 }
 
@@ -58,7 +57,7 @@ extern "C" __device__ void NRT_MemInfo_init(
   mi->dtor_info = dtor_info;
   mi->data      = data;
   mi->size      = size;
-  if (TheMSys.stats.enabled) { TheMSys.stats.mi_alloc++; }
+  if (TheMSys->stats.enabled) { TheMSys->stats.mi_alloc++; }
 }
 
 __device__ NRT_MemInfo* NRT_MemInfo_new(void* data,
@@ -73,8 +72,8 @@ __device__ NRT_MemInfo* NRT_MemInfo_new(void* data,
 
 extern "C" __device__ void NRT_Free(void* ptr)
 {
-  TheMSys.allocator.free(ptr);
-  if (TheMSys.stats.enabled) { TheMSys.stats.free++; }
+  free(ptr);
+  if (TheMSys->stats.enabled) { TheMSys->stats.free++; }
 }
 
 extern "C" __device__ void NRT_dealloc(NRT_MemInfo* mi) { NRT_Free(mi); }
@@ -82,7 +81,7 @@ extern "C" __device__ void NRT_dealloc(NRT_MemInfo* mi) { NRT_Free(mi); }
 extern "C" __device__ void NRT_MemInfo_destroy(NRT_MemInfo* mi)
 {
   NRT_dealloc(mi);
-  if (TheMSys.stats.enabled) { TheMSys.stats.mi_free++; }
+  if (TheMSys->stats.enabled) { TheMSys->stats.mi_free++; }
 }
 extern "C" __device__ void NRT_MemInfo_call_dtor(NRT_MemInfo* mi)
 {
