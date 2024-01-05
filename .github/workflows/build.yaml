@@ -69,7 +69,7 @@ jobs:
       sha: ${{ inputs.sha }}
   wheel-build-cudf:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.02
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@test-cuda-12.2
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       build-2_28-wheels: "true"
@@ -90,7 +90,7 @@ jobs:
   wheel-build-dask-cudf:
     needs: wheel-publish-cudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.02
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@test-cuda-12.2
     with:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: ${{ inputs.build_type || 'branch' }}
