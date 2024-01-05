@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -2318,7 +2318,7 @@ def as_column(
         arbitrary = list(arbitrary)
         for element in arbitrary:
             # Carve-outs that cannot be parsed by pyarrow/pandas
-            if isinstance(element, cupy.array):
+            if isinstance(element, cupy.ndarray):
                 # 0-D cupy.arrays ("scalar"): test_series_from_cupy_scalars
                 return as_column(
                     cupy.array(arbitrary),
