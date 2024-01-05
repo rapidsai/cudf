@@ -374,6 +374,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Get the code point values (integers) for each character of each string.
+   *
+   * @return ColumnVector, with code point integer values for each character as INT32
+   */
+  public final ColumnVector codePoints() {
+    assert type.equals(DType.STRING) : "type has to be a String";
+    return new ColumnVector(codePoints(getNativeView()));
+  }
+
+  /**
    * Get the number of elements for each list. Null lists will have a value of null.
    * @return the number of elements in each list as an INT32 value.
    */
@@ -4509,6 +4519,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long countElements(long viewHandle);
 
   private static native long byteCount(long viewHandle) throws CudfException;
+
+  private static native long codePoints(long viewHandle);
 
   private static native long extractListElement(long nativeView, int index);
 

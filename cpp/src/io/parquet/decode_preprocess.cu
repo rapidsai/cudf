@@ -61,7 +61,7 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
   } else if ((s->col.data_type & 7) == BYTE_ARRAY) {
     str_len = gpuInitStringDescriptors<true, unused_state_buf>(s, nullptr, target_pos, t);
   }
-  if (!t) { *(int32_t volatile*)&s->dict_pos = target_pos; }
+  if (!t) { s->dict_pos = target_pos; }
   return str_len;
 }
 
@@ -232,7 +232,10 @@ __global__ void __launch_bounds__(preprocess_block_size)
                                                                                       {rep_runs}};
 
   // setup page info
-  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, all_types_filter{}, false)) { return; }
+  if (!setupLocalPageInfo(
+        s, pp, chunks, min_row, num_rows, all_types_filter{}, page_processing_stage::PREPROCESS)) {
+    return;
+  }
 
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
   // the size of the rolling batch buffer

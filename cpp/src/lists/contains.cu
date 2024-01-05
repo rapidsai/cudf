@@ -41,6 +41,8 @@
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
 
+#include <cuda/functional>
+
 #include <type_traits>
 
 namespace cudf::lists {
@@ -204,9 +206,10 @@ std::unique_ptr<column> dispatch_index_of(lists_column_view const& lists,
   auto const lists_cdv_ptr = column_device_view::create(lists.parent(), stream);
   auto const input_it      = cudf::detail::make_counting_transform_iterator(
     size_type{0},
-    [lists = cudf::detail::lists_column_device_view{*lists_cdv_ptr}] __device__(auto const idx) {
-      return list_device_view{lists, idx};
-    });
+    cuda::proclaim_return_type<list_device_view>(
+      [lists = cudf::detail::lists_column_device_view{*lists_cdv_ptr}] __device__(auto const idx) {
+        return list_device_view{lists, idx};
+      }));
 
   auto out_positions = make_numeric_column(
     data_type{type_to_id<size_type>()}, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
@@ -254,10 +257,10 @@ std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
                     positions_begin,
                     positions_begin + key_positions->size(),
                     result->mutable_view().template begin<bool>(),
-                    [] __device__(auto const i) {
+                    cuda::proclaim_return_type<bool>([] __device__(auto const i) {
                       // position == NOT_FOUND_SENTINEL: the list does not contain the search key.
                       return i != NOT_FOUND_SENTINEL;
-                    });
+                    }));
 
   auto const null_count                             = key_positions->null_count();
   [[maybe_unused]] auto [data, null_mask, children] = key_positions->release();
@@ -346,18 +349,19 @@ std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
   auto const out_begin     = output->mutable_view().template begin<bool>();
   auto const lists_cdv_ptr = column_device_view::create(lists_cv, stream);
 
-  thrust::tabulate(rmm::exec_policy(stream),
-                   out_begin,
-                   out_begin + lists.size(),
-                   [lists = cudf::detail::lists_column_device_view{*lists_cdv_ptr}] __device__(
-                     auto const list_idx) {
-                     auto const list = list_device_view{lists, list_idx};
-                     return list.is_null() ||
-                            thrust::any_of(thrust::seq,
-                                           thrust::make_counting_iterator(0),
-                                           thrust::make_counting_iterator(list.size()),
-                                           [&list](auto const idx) { return list.is_null(idx); });
-                   });
+  thrust::tabulate(
+    rmm::exec_policy(stream),
+    out_begin,
+    out_begin + lists.size(),
+    cuda::proclaim_return_type<bool>([lists = cudf::detail::lists_column_device_view{
+                                        *lists_cdv_ptr}] __device__(auto const list_idx) {
+      auto const list = list_device_view{lists, list_idx};
+      return list.is_null() ||
+             thrust::any_of(thrust::seq,
+                            thrust::make_counting_iterator(0),
+                            thrust::make_counting_iterator(list.size()),
+                            [&list](auto const idx) { return list.is_null(idx); });
+    }));
 
   return output;
 }

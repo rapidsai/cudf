@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -257,6 +257,8 @@ ConfigureTest(
   transform/one_hot_encode_tests.cpp
 )
 
+ConfigureTest(ROW_CONVERSION_TEST transform/row_conversion.cpp)
+
 # ##################################################################################################
 # * interop tests -------------------------------------------------------------------------
 ConfigureTest(
@@ -304,6 +306,7 @@ ConfigureTest(
   PERCENT 30
 )
 target_link_libraries(DATA_CHUNK_SOURCE_TEST PRIVATE ZLIB::ZLIB)
+ConfigureTest(QUOTE_NORMALIZATION_TEST io/fst/quote_normalization_test.cu)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
 ConfigureTest(FST_TEST io/fst/fst_test.cu)
 ConfigureTest(TYPE_INFERENCE_TEST io/type_inference_test.cu)
@@ -393,6 +396,7 @@ set_tests_properties(
 ConfigureTest(
   ITERATOR_TEST
   iterator/indexalator_test.cu
+  iterator/offsetalator_test.cu
   iterator/optional_iterator_test_chrono.cu
   iterator/optional_iterator_test_numeric.cu
   iterator/pair_iterator_test_chrono.cu
@@ -621,6 +625,11 @@ ConfigureTest(
 ConfigureTest(LABEL_BINS_TEST labeling/label_bins_tests.cpp)
 
 # ##################################################################################################
+# * jit tests ----------------------------------------------------------------------------------
+ConfigureTest(JIT_PARSER_TEST jit/parse_ptx_function.cpp)
+target_include_directories(JIT_PARSER_TEST PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
+
+# ##################################################################################################
 # * stream testing ---------------------------------------------------------------------------------
 ConfigureTest(
   STREAM_IDENTIFICATION_TEST identify_stream_usage/test_default_stream_identification.cu
@@ -629,14 +638,20 @@ ConfigureTest(
 ConfigureTest(STREAM_BINARYOP_TEST streams/binaryop_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_CONCATENATE_TEST streams/concatenate_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_COPYING_TEST streams/copying_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_CSVIO_TEST streams/io/csv_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_DICTIONARY_TEST streams/dictionary_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_FILLING_TEST streams/filling_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_GROUPBY_TEST streams/groupby_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_HASHING_TEST streams/hash_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_INTEROP_TEST streams/interop_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_JSONIO_TEST streams/io/json_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_LISTS_TEST streams/lists_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_NULL_MASK_TEST streams/null_mask_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_ORCIO_TEST streams/io/orc_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_POOL_TEST streams/pool_test.cu STREAM_MODE testing)
 ConfigureTest(STREAM_REPLACE_TEST streams/replace_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_SEARCH_TEST streams/search_test.cpp STREAM_MODE testing)
-ConfigureTest(STREAM_DICTIONARY_TEST streams/dictionary_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_SORTING_TEST streams/sorting_test.cpp STREAM_MODE testing)
 ConfigureTest(
   STREAM_STRINGS_TEST
   streams/strings/case_test.cpp
@@ -653,13 +668,17 @@ ConfigureTest(
   STREAM_MODE
   testing
 )
-ConfigureTest(STREAM_SORTING_TEST streams/sorting_test.cpp STREAM_MODE testing)
 ConfigureTest(
-  STREAM_TEXT_TEST streams/text/ngrams_test.cpp streams/text/tokenize_test.cpp STREAM_MODE testing
+  STREAM_TEXT_TEST
+  streams/text/edit_distance_test.cpp
+  streams/text/ngrams_test.cpp
+  streams/text/replace_test.cpp
+  streams/text/stemmer_test.cpp
+  streams/text/tokenize_test.cpp
+  STREAM_MODE
+  testing
 )
-ConfigureTest(STREAM_LISTS_TEST streams/lists_test.cpp STREAM_MODE testing)
-ConfigureTest(STREAM_JSONIO_TEST streams/io/json_test.cpp STREAM_MODE testing)
-ConfigureTest(STREAM_ORCIO_TEST streams/io/orc_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_UNARY_TEST streams/unary_test.cpp STREAM_MODE testing)
 
 # ##################################################################################################
 # Install tests ####################################################################################

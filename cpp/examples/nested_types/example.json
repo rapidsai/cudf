@@ -1,0 +1,5 @@
+{"features": {"key": "a1", "values": [{"info": "message_1", "type": "device_a", "dt": 1688750001}]}, "source": "network_a", "quality": 0.7}
+{"features": {"key": "a2", "values": [{"info": "message_2", "type": "device_a", "dt": 1688750002}]}, "source": "network_a", "quality": 0.7}
+{"features": {"key": "a3", "values": [{"info": "message_3", "type": "device_a", "dt": 1688750003}]}, "source": "network_b", "quality": 0.8}
+{"features": {"key": "a1", "values": [{"info": "message_1", "type": "device_a", "dt": 1688750001}]}, "source": "network_b", "quality": 0.9}
+{"features": {"key": "a4", "values": [{"info": "message_4", "type": "device_a", "dt": 1688750004}]}, "source": "network_b", "quality": 0.9}
