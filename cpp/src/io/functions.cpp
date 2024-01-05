@@ -438,7 +438,7 @@ void write_orc(orc_writer_options const& options)
 
   try {
     writer->write(options.get_table());
-  } catch (const std::exception& e) {
+  } catch (...) {
     // If an exception is thrown, make sure the writer does not throw while trying to close
     writer->skip_close();
     throw;
