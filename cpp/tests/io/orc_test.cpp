@@ -2046,7 +2046,6 @@ TEST_F(OrcStatisticsTest, Empty)
   EXPECT_FALSE(ts5.minimum_nanos.has_value());
   EXPECT_FALSE(ts5.maximum_nanos.has_value());
 
-  return;
   auto& s6 = fstats[6];
   EXPECT_EQ(*s6.number_of_values, 0ul);
   EXPECT_FALSE(*s6.has_null);
