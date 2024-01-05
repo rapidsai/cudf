@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 
 namespace cudf {
 namespace io {
+
 /**
  * @brief Implementation class for storing data into a local file.
  */
@@ -34,7 +35,7 @@ class file_sink : public data_sink {
   explicit file_sink(std::string const& filepath)
   {
     _output_stream.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
-    CUDF_EXPECTS(_output_stream.is_open(), "Cannot open output file");
+    if (!_output_stream.is_open()) { detail::throw_on_file_open_failure(filepath, true); }
 
     if (detail::cufile_integration::is_kvikio_enabled()) {
       _kvikio_file = kvikio::FileHandle(filepath, "w");
