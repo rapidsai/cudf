@@ -48,12 +48,6 @@ cudf::table construct_table()
 
   std::vector<size_t> zeros(num_rows, 0);
   std::vector<size_t> ones(num_rows, 1);
-  auto col6_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return numeric::decimal128{ones[i], numeric::scale_type{12}};
-  });
-  auto col7_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return numeric::decimal128{ones[i], numeric::scale_type{-12}};
-  });
 
   cudf::test::fixed_width_column_wrapper<bool> col0(zeros.begin(), zeros.end());
   cudf::test::fixed_width_column_wrapper<int8_t> col1(zeros.begin(), zeros.end());
@@ -61,17 +55,33 @@ cudf::table construct_table()
   cudf::test::fixed_width_column_wrapper<int32_t> col3(zeros.begin(), zeros.end());
   cudf::test::fixed_width_column_wrapper<float> col4(zeros.begin(), zeros.end());
   cudf::test::fixed_width_column_wrapper<double> col5(zeros.begin(), zeros.end());
-  cudf::test::fixed_width_column_wrapper<numeric::decimal128> col6(col6_data, col6_data + num_rows);
-  cudf::test::fixed_width_column_wrapper<numeric::decimal128> col7(col7_data, col7_data + num_rows);
+  cudf::test::fixed_width_column_wrapper<numeric::decimal128> col6 = [&ones, num_rows] {
+    auto col6_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+      return numeric::decimal128{ones[i], numeric::scale_type{12}};
+    });
+    return cudf::test::fixed_width_column_wrapper<numeric::decimal128>(col6_data,
+                                                                       col6_data + num_rows);
+  }();
+  cudf::test::fixed_width_column_wrapper<numeric::decimal128> col7 = [&ones, num_rows] {
+    auto col7_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+      return numeric::decimal128{ones[i], numeric::scale_type{-12}};
+    });
+    return cudf::test::fixed_width_column_wrapper<numeric::decimal128>(col7_data,
+                                                                       col7_data + num_rows);
+  }();
 
   cudf::test::lists_column_wrapper<int64_t> col8{
     {1, 1}, {1, 1, 1}, {}, {1}, {1, 1, 1, 1}, {1, 1, 1, 1, 1}, {}, {1, -1}, {}, {-1, -1}};
 
-  cudf::test::fixed_width_column_wrapper<int32_t> child_col(ones.begin(), ones.end());
-  cudf::test::structs_column_wrapper col9{child_col};
+  cudf::test::structs_column_wrapper col9 = [&ones] {
+    cudf::test::fixed_width_column_wrapper<int32_t> child_col(ones.begin(), ones.end());
+    return cudf::test::structs_column_wrapper{child_col};
+  }();
 
-  std::vector<std::string> col10_data(num_rows, "rapids");
-  cudf::test::strings_column_wrapper col10(col10_data.begin(), col10_data.end());
+  cudf::test::strings_column_wrapper col10 = [] {
+    std::vector<std::string> col10_data(num_rows, "rapids");
+    return cudf::test::strings_column_wrapper(col10_data.begin(), col10_data.end());
+  }();
 
   auto colsptr = make_uniqueptrs_vector(col0.release(),
                                         col1.release(),
