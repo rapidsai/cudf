@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -593,6 +593,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             )
         index_from_data = None
         name_from_data = None
+        if data is None:
+            data = {}
+
         if isinstance(data, (pd.Series, pd.Index, BaseIndex, Series)):
             if copy:
                 data = data.copy(deep=True)
@@ -605,9 +608,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 "Use cudf.Series._from_data for constructing a Series from "
                 "ColumnAccessor"
             )
-        elif isinstance(data, dict) or data is None:
+        elif isinstance(data, dict):
             if not data:
-                data = {}
                 column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
                 index, index_from_data = RangeIndex(0), index
             else:
