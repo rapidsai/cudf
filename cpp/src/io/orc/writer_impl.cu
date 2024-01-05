@@ -2691,12 +2691,17 @@ void writer::impl::close()
 
     // File-level statistics
     {
+      _ffooter.statistics.reserve(_ffooter.types.size());
       ProtobufWriter pbw;
+
+      // Root column: number of rows
       pbw.put_uint(encode_field_number<size_type>(1));
       pbw.put_uint(_persisted_stripe_statistics.num_rows);
-      // First entry contains total number of rows
-      _ffooter.statistics.reserve(_ffooter.types.size());
+      // Root column: has nulls
+      pbw.put_uint(encode_field_number<size_type>(10));
+      pbw.put_uint(0);
       _ffooter.statistics.emplace_back(pbw.release());
+
       // Add file stats, stored after stripe stats in `column_stats`
       _ffooter.statistics.insert(_ffooter.statistics.end(),
                                  std::make_move_iterator(statistics.file_level.begin()),
@@ -2710,9 +2715,15 @@ void writer::impl::close()
       for (size_t stripe_id = 0; stripe_id < _ffooter.stripes.size(); stripe_id++) {
         _orc_meta.stripeStats[stripe_id].colStats.resize(_ffooter.types.size());
         ProtobufWriter pbw;
+
+        // Root column: number of rows
         pbw.put_uint(encode_field_number<size_type>(1));
         pbw.put_uint(_ffooter.stripes[stripe_id].numberOfRows);
+        // Root column: has nulls
+        pbw.put_uint(encode_field_number<size_type>(10));
+        pbw.put_uint(0);
         _orc_meta.stripeStats[stripe_id].colStats[0] = pbw.release();
+
         for (size_t col_idx = 0; col_idx < _ffooter.types.size() - 1; col_idx++) {
           size_t idx = _ffooter.stripes.size() * col_idx + stripe_id;
           _orc_meta.stripeStats[stripe_id].colStats[1 + col_idx] =

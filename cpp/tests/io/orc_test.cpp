@@ -1021,6 +1021,8 @@ TEST_F(OrcStatisticsTest, Basic)
     ASSERT_EQ(stats.size(), expected.num_columns() + 1);
     auto& s0 = stats[0];
     EXPECT_EQ(*s0.number_of_values, 9ul);
+    EXPECT_TRUE(s0.has_null.has_value());
+    EXPECT_FALSE(*s0.has_null);
 
     auto& s1 = stats[1];
     EXPECT_EQ(*s1.number_of_values, 4ul);
@@ -1992,7 +1994,10 @@ TEST_F(OrcStatisticsTest, Empty)
   auto const& fstats = stats.file_stats;
   ASSERT_EQ(fstats.size(), 7);
   auto& s0 = fstats[0];
+  EXPECT_TRUE(s0.number_of_values.has_value());
   EXPECT_EQ(*s0.number_of_values, 0ul);
+  EXPECT_TRUE(s0.has_null.has_value());
+  EXPECT_FALSE(*s0.has_null);
 
   auto& s1 = fstats[1];
   EXPECT_EQ(*s1.number_of_values, 0ul);
