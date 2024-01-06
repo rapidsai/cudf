@@ -79,6 +79,8 @@ class TimeDeltaColumn(ColumnBase):
         null_count: Optional[int] = None,
     ):
         dtype = cudf.dtype(dtype)
+        if self.dtype.kind != "m":
+            raise TypeError(f"{self.dtype} is not a supported duration type")
 
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
@@ -94,14 +96,9 @@ class TimeDeltaColumn(ColumnBase):
             null_count=null_count,
         )
 
-        if self.dtype.type is not np.timedelta64:
-            raise TypeError(f"{self.dtype} is not a supported duration type")
-
-        self._time_unit, _ = np.datetime_data(self.dtype)
-
     def __contains__(self, item: DatetimeLikeScalar) -> bool:
         try:
-            item = np.timedelta64(item, self._time_unit)
+            item = np.timedelta64(item, self.time_unit)
         except ValueError:
             # If item cannot be converted to duration type
             # np.timedelta64 raises ValueError, hence `item`
@@ -228,16 +225,12 @@ class TimeDeltaColumn(ColumnBase):
             "Cannot perform binary operation on timezone-naive columns"
             " and timezone-aware timestamps."
         )
-        if isinstance(other, pd.Timestamp):
-            if other.tz is not None:
+        if isinstance(other, datetime.datetime):
+            if other.tzinfo is not None:
                 raise NotImplementedError(tz_error_msg)
-            other = other.to_datetime64()
-        elif isinstance(other, pd.Timedelta):
-            other = other.to_timedelta64()
+            other = pd.Timestamp(other).to_datetime64()
         elif isinstance(other, datetime.timedelta):
-            other = np.timedelta64(other)
-        elif isinstance(other, datetime.datetime) and other.tzinfo is not None:
-            raise NotImplementedError(tz_error_msg)
+            other = pd.Timedelta(other).to_timedelta64()
 
         if isinstance(other, np.timedelta64):
             other_time_unit = cudf.utils.dtypes.get_time_unit(other)
@@ -249,7 +242,7 @@ class TimeDeltaColumn(ColumnBase):
             else:
                 common_dtype = determine_out_dtype(self.dtype, other.dtype)
             return cudf.Scalar(other.astype(common_dtype))
-        elif np.isscalar(other):
+        elif is_scalar(other):
             return cudf.Scalar(other)
         return NotImplemented
 
@@ -268,7 +261,7 @@ class TimeDeltaColumn(ColumnBase):
 
     @property
     def time_unit(self) -> str:
-        return self._time_unit
+        return np.datetime_data(self.dtype)[0]
 
     def fillna(
         self,
