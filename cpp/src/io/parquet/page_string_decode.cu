@@ -699,6 +699,11 @@ __global__ void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageS
       }
     }
   } else {
+    bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
+
+    // if we have size info, then we only need to do this for bounds pages
+    if (pp->has_page_index && !is_bounds_pg) { return; }
+
     // now process string info in the range [start_value, end_value)
     // set up for decoding strings...can be either plain or dictionary
     uint8_t const* data      = s->data_start;
@@ -759,6 +764,9 @@ __global__ void __launch_bounds__(delta_length_block_size) gpuComputeDeltaLength
   }
 
   bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
+
+  // if we have size info, then we only need to do this for bounds pages
+  if (pp->has_page_index && !is_bounds_pg) { return; }
 
   // for DELTA_LENGTH_BYTE_ARRAY, string size is page_data_size - size_of_delta_binary_block.
   // so all we need to do is skip the encoded string size info and then do pointer arithmetic,
@@ -857,6 +865,9 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
   if ((col.data_type & 7) == FIXED_LEN_BYTE_ARRAY) {
     str_bytes = pp->num_valids * s->dtype_len_in;
   } else {
+    // if we have size info, then we only need to do this for bounds pages
+    if (pp->has_page_index && !is_bounds_pg) { return; }
+
     // now process string info in the range [start_value, end_value)
     // set up for decoding strings...can be either plain or dictionary
     uint8_t const* data      = s->data_start;
