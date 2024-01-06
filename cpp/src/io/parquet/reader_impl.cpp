@@ -62,7 +62,7 @@ void reader::impl::decode_page_data(bool uses_custom_row_bounds, size_t skip_row
     // need to compute pages bounds/sizes if we lack page indexes or are using custom bounds
     // TODO: we could probably dummy up size stats for FLBA data since we know the width
     auto const has_flba = std::any_of(chunks.begin(), chunks.end(), [](auto const& chunk) {
-      return (chunk.data_type & 7) == FIXED_LEN_BYTE_ARRAY;
+      return (chunk.data_type & 7) == FIXED_LEN_BYTE_ARRAY && chunk.converted_type != DECIMAL;
     });
 
     if (!_has_page_index || uses_custom_row_bounds || has_flba) {
