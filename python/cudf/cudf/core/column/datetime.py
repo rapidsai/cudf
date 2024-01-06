@@ -1,8 +1,9 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 import datetime
+import functools
 import locale
 import re
 from locale import nl_langinfo
@@ -236,6 +237,8 @@ class DatetimeColumn(column.ColumnBase):
         null_count: Optional[int] = None,
     ):
         dtype = cudf.dtype(dtype)
+        if self.dtype.kind != "M":
+            raise TypeError(f"{self.dtype} is not a supported datetime type")
 
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
@@ -251,14 +254,9 @@ class DatetimeColumn(column.ColumnBase):
             null_count=null_count,
         )
 
-        if self.dtype.type is not np.datetime64:
-            raise TypeError(f"{self.dtype} is not a supported datetime type")
-
-        self._time_unit, _ = np.datetime_data(self.dtype)
-
     def __contains__(self, item: ScalarLike) -> bool:
         try:
-            item_as_dt64 = np.datetime64(item, self._time_unit)
+            item_as_dt64 = np.datetime64(item, self.time_unit)
         except ValueError:
             # If item cannot be converted to datetime type
             # np.datetime64 raises ValueError, hence `item`
@@ -266,9 +264,9 @@ class DatetimeColumn(column.ColumnBase):
             return False
         return item_as_dt64.astype("int64") in self.as_numerical
 
-    @property
+    @functools.cached_property
     def time_unit(self) -> str:
-        return self._time_unit
+        return np.datetime_data(self.dtype)[0]
 
     @property
     def year(self) -> ColumnBase:

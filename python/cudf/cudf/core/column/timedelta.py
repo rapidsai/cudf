@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import functools
 from typing import Any, Optional, Sequence, cast
 
 import numpy as np
@@ -259,7 +260,7 @@ class TimeDeltaColumn(ColumnBase):
             ),
         )
 
-    @property
+    @functools.cached_property
     def time_unit(self) -> str:
         return np.datetime_data(self.dtype)[0]
 
