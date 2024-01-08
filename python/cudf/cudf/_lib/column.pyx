@@ -122,9 +122,15 @@ cdef class Column:
             self._data = self.base_data[start:end]
             # special case of string column
             if self.dtype == cudf.api.types.dtype("object"):
-                self._data = Column.from_unique_ptr(
-                    move(make_unique[column](self.view()))
-                ).base_data
+                if (
+                    self.offset == 0 and len(self.base_children) > 0 and
+                    self.size == self.base_children[0].size - 1
+                ):
+                    self._data = self.base_data
+                else:
+                    self._data = Column.from_unique_ptr(
+                        move(make_unique[column](self.view()))
+                    ).base_data
                 # could set self._children as well.
         return self._data
 
