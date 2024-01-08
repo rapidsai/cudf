@@ -292,8 +292,7 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
 /**
  * @brief Count the total number of pages using page index information.
  */
-[[nodiscard]] size_t count_page_headers_with_pgidx(
-  cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks)
+[[nodiscard]] size_t count_page_headers_with_pgidx(host_span<ColumnChunkDesc> chunks)
 {
   size_t total_pages = 0;
   for (auto& chunk : chunks) {
@@ -311,8 +310,7 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
  *
  * This replaces some preprocessing steps, such as page string size calculation.
  */
-void fill_in_page_info(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks,
-                       cudf::detail::hostdevice_vector<PageInfo>& pages)
+void fill_in_page_info(host_span<ColumnChunkDesc> chunks, host_span<PageInfo> pages)
 {
   // fill in page_info num_null using page index if available
   // also fix page chunk_row and num_rows
