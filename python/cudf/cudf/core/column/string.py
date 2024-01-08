@@ -5491,7 +5491,6 @@ class StringColumn(column.ColumnBase):
             # all nulls-column:
             offsets = column.full(size + 1, 0, dtype=size_type_dtype)
 
-            # chars = cudf.core.column.column_empty(0, dtype="int8")
             children = (offsets,)
 
         super().__init__(
@@ -5555,7 +5554,6 @@ class StringColumn(column.ColumnBase):
             child1_size = (
                 self.end_offset - self.start_offset
             ) * cudf.api.types.dtype("int8").itemsize
-            # self.base_children[1].dtype.itemsize
 
             n += child0_size + child1_size
         if self.nullable:
@@ -5614,14 +5612,6 @@ class StringColumn(column.ColumnBase):
             ).element_indexing(0)
         else:
             return result_col
-
-    def set_base_data(self, value):
-        # if value is not None:
-        #     raise RuntimeError(
-        #         "StringColumns do not use data attribute of Column, use "
-        #         "`set_base_children` instead"
-        #     )
-        super().set_base_data(value)
 
     def __contains__(self, item: ScalarLike) -> bool:
         if is_scalar(item):
@@ -5941,7 +5931,6 @@ class StringColumn(column.ColumnBase):
             self.offset + self.size
         )
         char_dtype_size = cudf.api.types.dtype("int8").itemsize
-        # self.base_children[1].dtype.itemsize
 
         n_bytes_to_view = (
             str_end_byte_offset - str_byte_offset
