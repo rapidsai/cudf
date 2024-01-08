@@ -431,5 +431,5 @@ def test_series_to_numeric_bool(data, downcast):
 def test_series_to_numeric_preserve_index_name(klass):
     ser = klass(["1"] * 8, index=range(2, 10), name="name")
     result = cudf.to_numeric(ser)
-    expected = klass([1] * 8, index=range(2, 10), name="name")
+    expected = cudf.Series([1] * 8, index=range(2, 10), name="name")
     assert_eq(result, expected)
