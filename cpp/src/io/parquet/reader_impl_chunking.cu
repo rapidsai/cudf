@@ -364,22 +364,21 @@ void reader::impl::create_global_chunk_info()
 
   if (_has_page_index and not row_groups_info.empty()) {
     // use first row group to define mappings (assumes same schema for each file)
-    auto const& rg = row_groups_info[0];
+    auto const& rg      = row_groups_info[0];
+    auto const& columns = _metadata->get_row_group(rg.index, rg.source_index).columns;
     column_mapping.resize(num_input_columns);
     std::transform(
       _input_columns.begin(), _input_columns.end(), column_mapping.begin(), [&](auto const& col) {
         // translate schema_idx into something we can use for the page indexes
-        size_type colidx = 0;
-        for (auto const& colchunk : _metadata->get_row_group(rg.index, rg.source_index).columns) {
-          if (colchunk.schema_idx == col.schema_idx) { return colidx; }
-          colidx++;
+        if (auto it = std::find_if(
+              columns.begin(),
+              columns.end(),
+              [&col](auto const& col_chunk) { return col_chunk.schema_idx == col.schema_idx; });
+            it != columns.end()) {
+          return std::distance(columns.begin(), it);
         }
-        return -1;
+        CUDF_FAIL("cannot find column mapping");
       });
-
-    CUDF_EXPECTS(
-      std::all_of(column_mapping.begin(), column_mapping.end(), [](auto idx) { return idx >= 0; }),
-      "invalid column mappings");
   }
 
   // Initialize column chunk information
