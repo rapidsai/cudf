@@ -53,7 +53,6 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.scalar cimport DeviceScalar
 
 
-# @acquire_spill_lock()
 cdef get_element(column_view col_view, size_type index):
 
     cdef unique_ptr[scalar] c_output
@@ -123,33 +122,11 @@ cdef class Column:
             self._data = self.base_data[start:end]
             # special case of string column
             if self.dtype == cudf.api.types.dtype("object"):
-                self._data = self.base_data
+                self._data = Column.from_unique_ptr(
+                    move(make_unique[column](self.view()))
+                ).base_data
+                # could set self._children as well.
         return self._data
-
-    @property
-    def chars_data(self):
-        # special case of string column
-        # if dtype == np.dtype("object"):
-        # this is true for STRING, STRUCT. how to ensure it's string only?
-        if self.dtype != cudf.api.types.dtype("object"):
-            raise TypeError(
-                "Expected a Strings column, "
-                f"got {self.dtype}"
-            )
-        if self.base_data is None:
-            return None
-        cv = self.view()
-        if cv.num_children() == 0:
-            return self.base_data
-        # get the size from offset child column (device to host copy)
-        offsets_column_index = 0
-        offset_child_column = cv.child(offsets_column_index)
-        start = 0
-        end = self.base_data.size
-        if offset_child_column.size() != 0:
-            start = get_element(offset_child_column, cv.offset()).value
-            end = get_element(offset_child_column, cv.offset()+cv.size()).value
-        return self.base_data[start:end]
 
     @property
     def data_ptr(self):
@@ -695,8 +672,8 @@ cdef class Column:
             mask_owner = mask_owner.base_mask
             base_size = owner.base_size
         base_nbytes = base_size * dtype_itemsize
+        # special case for string column
         is_string_column = (cv.type().id() == libcudf_types.type_id.STRING)
-        # if dtype == np.dtype("object"): # this is true for STRING, STRUCT.
         if is_string_column:
             # get the size from offset child column (device to host copy)
             offsets_column_index = 0
