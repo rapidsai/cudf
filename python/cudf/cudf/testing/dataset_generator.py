@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 # This module is for generating "synthetic" datasets. It was originally
 # designed for testing filtered reading. Generally, it should be useful
@@ -11,11 +11,9 @@ import string
 import uuid
 from multiprocessing import Pool
 
-import mimesis
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from mimesis import Generic
 from pyarrow import parquet as pq
 
 import cudf
@@ -51,7 +49,10 @@ class ColumnParameters:
         self,
         cardinality=100,
         null_frequency=0.1,
-        generator=lambda g: [g.address.country for _ in range(100)],
+        generator=lambda: [
+            _generate_string(string.ascii_letters, random.randint(4, 8))
+            for _ in range(100)
+        ],
         is_sorted=True,
         dtype=None,
     ):
@@ -237,13 +238,8 @@ def get_dataframe(parameters, use_threads):
 
     # For each column, use a generic Mimesis producer to create an Iterable
     # for generating data
-    for i, column_params in enumerate(parameters.column_parameters):
-        if column_params.dtype is None:
-            column_params.generator = column_params.generator(
-                Generic("en", seed=parameters.seed)
-            )
-        else:
-            column_params.generator = column_params.generator()
+    for column_params in parameters.column_parameters:
+        column_params.generator = column_params.generator()
 
     # Get schema for each column
     table_fields = []
@@ -343,7 +339,6 @@ def rand_dataframe(
     # Apply seed
     random.seed(seed)
     np.random.seed(seed)
-    mimesis.random.random.seed(seed)
 
     column_params = []
     for meta in dtypes_meta:
