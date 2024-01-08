@@ -269,6 +269,8 @@ class DatetimeColumn(column.ColumnBase):
 
     @functools.cached_property
     def time_unit(self) -> str:
+        if isinstance(self.dtype, pd.DatetimeTZDtype):
+            return self.dtype.unit
         return np.datetime_data(self.dtype)[0]
 
     @property
