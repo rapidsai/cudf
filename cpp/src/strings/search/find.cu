@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -364,7 +364,7 @@ __global__ void contains_warp_parallel_fn(column_device_view const d_strings,
   // each thread of the warp will check just part of the string
   auto found = false;
   for (auto i = static_cast<size_type>(idx % cudf::detail::warp_size);
-       !found && (i + d_target.size_bytes()) < d_str.size_bytes();
+       !found && ((i + d_target.size_bytes()) <= d_str.size_bytes());
        i += cudf::detail::warp_size) {
     // check the target matches this part of the d_str data
     if (d_target.compare(d_str.data() + i, d_target.size_bytes()) == 0) { found = true; }
