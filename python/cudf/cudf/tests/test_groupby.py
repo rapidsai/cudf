@@ -394,13 +394,10 @@ def test_groupby_apply_grouped():
 @pytest.fixture(scope="module")
 def groupby_jit_data_small():
     """
-    Small dataset for testing groupby apply with jit
-    returns a dataframe whose keys columns define
-    4 groups of size 1, 2, 3, 4 as well as an additional
-    key column that can be used to test subgroups
-
-    useful for very basic testing of result values
-
+    Return a small dataset for testing JIT Groupby Apply. The dataframe
+    contains 4 groups of size 1, 2, 3, 4 as well as an additional key
+    column that can be used to test subgroups within groups. This data
+    is useful for smoke testing basic numeric results
     """
     rng = np.random.default_rng(42)
     df = DataFrame()
@@ -420,10 +417,10 @@ def groupby_jit_data_small():
 @pytest.fixture(scope="module")
 def groupby_jit_data_large(groupby_jit_data_small):
     """
-    Large dataset for testing groupby apply with jit
-    useful for validating that block level algorithms
-    return the correct result for groups larger than
-    the maximum thread per block size
+    Larger version of groupby_jit_data_small which contains enough data
+    to require more than one block per group. This data is useful for
+    testing if JIT GroupBy algorithms scale to larger dastasets without
+    manifesting numerical issues such as overflow.
     """
     max_tpb = 1024
     factor = (
@@ -437,7 +434,8 @@ def groupby_jit_data_large(groupby_jit_data_small):
 @pytest.fixture(scope="module")
 def groupby_jit_data_nans(groupby_jit_data_small):
     """
-    Small dataset containing nans
+    Returns a modified version of groupby_jit_data_small which contains
+    nan values.
     """
 
     df = groupby_jit_data_small.sort_values(["key1", "key2"])
