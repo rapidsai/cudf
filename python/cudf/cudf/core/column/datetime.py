@@ -103,6 +103,9 @@ def infer_format(element: str, **kwargs) -> str:
     """
     Infers datetime format from a string, also takes cares for `ms` and `ns`
     """
+    if not cudf.get_option("mode.pandas_compatible"):
+        # We allow "Z" but don't localize it to datetime64[ns, UTC] type (yet)
+        element = element.replace("Z", "")
     fmt = _guess_datetime_format(element, **kwargs)
 
     if fmt is not None:
