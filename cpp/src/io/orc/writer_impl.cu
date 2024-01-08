@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,12 +68,7 @@
 #include <tuple>
 #include <utility>
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace orc {
-using namespace cudf::io::orc;
-using namespace cudf::io;
+namespace cudf::io::orc::detail {
 
 template <typename T>
 [[nodiscard]] constexpr int varint_size(T val)
@@ -2741,7 +2736,4 @@ void writer::write(table_view const& table) { _impl->write(table); }
 // Forward to implementation
 void writer::close() { _impl->close(); }
 
-}  // namespace orc
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc::detail
