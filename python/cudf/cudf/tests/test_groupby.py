@@ -639,7 +639,7 @@ def test_groupby_apply_jit_correlation(dataset, groupby_jit_datasets, dtype):
         return group["val1"].corr(group["val2"])
 
     if np.dtype(dtype).kind == "f":
-        # Feature Request:
+        # Correlation of floating types is not yet supported:
         # https://github.com/rapidsai/cudf/issues/13839
         m = (
             f"Series.corr\\(Series\\) is not "
