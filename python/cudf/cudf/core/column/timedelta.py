@@ -80,7 +80,7 @@ class TimeDeltaColumn(ColumnBase):
         null_count: Optional[int] = None,
     ):
         dtype = cudf.dtype(dtype)
-        if self.dtype.kind != "m":
+        if dtype.kind != "m":
             raise TypeError(f"{self.dtype} is not a supported duration type")
 
         if data.size % dtype.itemsize:
