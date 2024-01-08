@@ -119,5 +119,6 @@ def test_cudf_import_no_device():
         env=env,
         capture_output=True,
         text=True,
+        cwd="/",
     )
     assert output.returncode == 0
