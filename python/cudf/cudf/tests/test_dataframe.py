@@ -40,7 +40,6 @@ from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
-    _create_cudf_series_float64_default,
     assert_eq,
     assert_exceptions_equal,
     assert_neq,
@@ -1376,6 +1375,11 @@ def test_dataframe_setitem_from_masked_object():
 def test_dataframe_append_to_empty():
     pdf = pd.DataFrame()
     pdf["a"] = []
+    if PANDAS_GE_200:
+        # TODO: Remove this workaround after
+        # the following bug is fixed:
+        # https://github.com/pandas-dev/pandas/issues/56679
+        pdf["a"] = pdf["a"].astype("str")
     pdf["b"] = [1, 2, 3]
 
     gdf = cudf.DataFrame()
@@ -2713,8 +2717,8 @@ def test_decimal_quantile(q, interpolation, decimal_type):
 
 
 def test_empty_quantile():
-    pdf = pd.DataFrame({"x": []})
-    df = cudf.DataFrame({"x": []})
+    pdf = pd.DataFrame({"x": []}, dtype="float64")
+    df = cudf.DataFrame({"x": []}, dtype="float64")
 
     actual = df.quantile()
     expected = pdf.quantile()
@@ -2972,7 +2976,7 @@ def test_series_all_null(num_elements, null_type):
 @pytest.mark.parametrize("num_elements", [0, 2, 10, 100])
 def test_series_all_valid_nan(num_elements):
     data = [np.nan] * num_elements
-    sr = _create_cudf_series_float64_default(data, nan_as_null=False)
+    sr = cudf.Series(data, nan_as_null=False)
     np.testing.assert_equal(sr.null_count, 0)
 
 
@@ -4653,7 +4657,7 @@ def test_dataframe_columns_empty_data_preserves_dtype(dtype, idx_data, data):
 )
 def test_series_values_host_property(data):
     pds = pd.Series(data=data, dtype=None if data else float)
-    gds = _create_cudf_series_float64_default(data)
+    gds = cudf.Series(data=data, dtype=None if data else float)
 
     np.testing.assert_array_equal(pds.values, gds.values_host)
 
@@ -4676,7 +4680,7 @@ def test_series_values_host_property(data):
 )
 def test_series_values_property(data):
     pds = pd.Series(data=data, dtype=None if data else float)
-    gds = _create_cudf_series_float64_default(data)
+    gds = cudf.from_pandas(pds)
     gds_vals = gds.values
     assert isinstance(gds_vals, cupy.ndarray)
     np.testing.assert_array_equal(gds_vals.get(), pds.values)
@@ -6663,7 +6667,13 @@ def test_dataframe_init_from_arrays_cols(data, cols, index):
         None,
     ],
 )
-def test_dataframe_assign_scalar(col_data, assign_val):
+def test_dataframe_assign_scalar(request, col_data, assign_val):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=PANDAS_GE_200 and len(col_data) == 0,
+            reason="https://github.com/pandas-dev/pandas/issues/56679",
+        )
+    )
     pdf = pd.DataFrame({"a": col_data})
     gdf = cudf.DataFrame({"a": col_data})
 

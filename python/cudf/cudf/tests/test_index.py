@@ -31,8 +31,6 @@ from cudf.testing._utils import (
     SERIES_OR_INDEX_NAMES,
     SIGNED_INTEGER_TYPES,
     UNSIGNED_TYPES,
-    _create_cudf_series_float64_default,
-    _create_pandas_series_float64_default,
     assert_column_memory_eq,
     assert_column_memory_ne,
     assert_eq,
@@ -987,8 +985,8 @@ def test_index_equal_misc(data, other):
     actual = gd_data.equals(np.array(gd_other))
     assert_eq(expected, actual)
 
-    expected = pd_data.equals(_create_pandas_series_float64_default(pd_other))
-    actual = gd_data.equals(_create_cudf_series_float64_default(gd_other))
+    expected = pd_data.equals(pd.Series(pd_other))
+    actual = gd_data.equals(cudf.Series(gd_other))
     assert_eq(expected, actual)
 
     expected = pd_data.astype("category").equals(pd_other)
@@ -2559,7 +2557,7 @@ def test_index_nan_as_null(data, nan_idx, NA_idx, nan_as_null):
     ],
 )
 def test_isin_index(data, values):
-    psr = _create_pandas_series_float64_default(data)
+    psr = pd.Series(data)
     gsr = cudf.Series.from_pandas(psr)
 
     got = gsr.index.isin(values)

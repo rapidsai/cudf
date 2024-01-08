@@ -938,7 +938,7 @@ def test_series_setitem_basics(key, value, nulls):
     ):
         psr[key] = value
     with expect_warning_if(
-        isinstance(value, list) and len(value) == 0 and nulls == "none"
+        isinstance(value, list) and len(value) == 0 and not len(key) == 0
     ):
         gsr[key] = value
     assert_eq(psr, gsr, check_dtype=False)
@@ -991,7 +991,7 @@ def test_series_setitem_iloc(key, value, nulls):
     ):
         psr.iloc[key] = value
     with expect_warning_if(
-        isinstance(value, list) and len(value) == 0 and nulls == "none"
+        isinstance(value, list) and len(value) == 0 and not len(key) == 0
     ):
         gsr.iloc[key] = value
     assert_eq(psr, gsr, check_dtype=False)
@@ -1610,9 +1610,12 @@ def test_dataframe_loc_inplace_update_with_invalid_RHS_df_columns():
     actual = gdf.loc[[0, 2], ["x", "y"]] = cudf.DataFrame(
         {"b": [10, 20], "y": [30, 40]}, index=cudf.Index([0, 2])
     )
-    expected = pdf.loc[[0, 2], ["x", "y"]] = pd.DataFrame(
-        {"b": [10, 20], "y": [30, 40]}, index=pd.Index([0, 2])
-    )
+    with pytest.warns(FutureWarning):
+        # Seems to be a false warning from pandas,
+        # but nevertheless catching it.
+        expected = pdf.loc[[0, 2], ["x", "y"]] = pd.DataFrame(
+            {"b": [10, 20], "y": [30, 40]}, index=pd.Index([0, 2])
+        )
 
     assert_eq(expected, actual)
 

@@ -11,8 +11,6 @@ import cudf
 from cudf.api.extensions import no_default
 from cudf.datasets import randomdata
 from cudf.testing._utils import (
-    _create_cudf_series_float64_default,
-    _create_pandas_series_float64_default,
     assert_eq,
     assert_exceptions_equal,
     expect_warning_if,
@@ -225,8 +223,8 @@ def test_approx_quantiles_int():
 )
 def test_misc_quantiles(data, q):
 
-    pdf_series = _create_pandas_series_float64_default(data)
-    gdf_series = _create_cudf_series_float64_default(data)
+    pdf_series = pd.Series(data, dtype="float64" if len(data) == 0 else None)
+    gdf_series = cudf.from_pandas(pdf_series)
 
     expected = pdf_series.quantile(q.get() if isinstance(q, cp.ndarray) else q)
     actual = gdf_series.quantile(q)
@@ -539,14 +537,16 @@ def test_df_corr(method):
 )
 @pytest.mark.parametrize("skipna", [True, False])
 def test_nans_stats(data, ops, skipna):
-    psr = _create_pandas_series_float64_default(data)
-    gsr = _create_cudf_series_float64_default(data, nan_as_null=False)
+    psr = pd.Series(data, dtype="float64" if len(data) == 0 else None)
+    gsr = cudf.from_pandas(psr)
 
     assert_eq(
         getattr(psr, ops)(skipna=skipna), getattr(gsr, ops)(skipna=skipna)
     )
 
-    gsr = _create_cudf_series_float64_default(data, nan_as_null=False)
+    gsr = cudf.Series(
+        data, dtype="float64" if len(data) == 0 else None, nan_as_null=False
+    )
     # Since there is no concept of `nan_as_null` in pandas,
     # nulls will be returned in the operations. So only
     # testing for `skipna=True` when `nan_as_null=False`

@@ -20,8 +20,6 @@ from cudf.testing._utils import (
     NUMERIC_TYPES,
     SERIES_OR_INDEX_NAMES,
     TIMEDELTA_TYPES,
-    _create_cudf_series_float64_default,
-    _create_pandas_series_float64_default,
     assert_eq,
     assert_exceptions_equal,
     expect_warning_if,
@@ -392,8 +390,8 @@ def test_series_tolist(data):
     [[], [None, None], ["a"], ["a", "b", "c"] * 500, [1.0, 2.0, 0.3] * 57],
 )
 def test_series_size(data):
-    psr = _create_pandas_series_float64_default(data)
-    gsr = _create_cudf_series_float64_default(data)
+    psr = pd.Series(data)
+    gsr = cudf.Series(data)
 
     assert_eq(psr.size, gsr.size)
 
@@ -475,7 +473,7 @@ def test_series_describe_other_types(ps):
 )
 @pytest.mark.parametrize("use_na_sentinel", [True, False])
 def test_series_factorize_use_na_sentinel(data, use_na_sentinel):
-    gsr = _create_cudf_series_float64_default(data)
+    gsr = cudf.Series(data)
     psr = gsr.to_pandas(nullable=True)
 
     expected_labels, expected_cats = psr.factorize(
@@ -499,7 +497,7 @@ def test_series_factorize_use_na_sentinel(data, use_na_sentinel):
 )
 @pytest.mark.parametrize("sort", [True, False])
 def test_series_factorize_sort(data, sort):
-    gsr = _create_cudf_series_float64_default(data)
+    gsr = cudf.Series(data)
     psr = gsr.to_pandas(nullable=True)
 
     expected_labels, expected_cats = psr.factorize(sort=sort)
@@ -1665,7 +1663,7 @@ def test_series_nunique_index(data):
     ],
 )
 def test_axes(data):
-    csr = _create_cudf_series_float64_default(data)
+    csr = cudf.Series(data)
     psr = csr.to_pandas()
 
     expected = psr.axes
@@ -1743,7 +1741,7 @@ def test_series_truncate_datetimeindex():
 )
 def test_isin_numeric(data, values):
     index = np.random.randint(0, 100, len(data))
-    psr = _create_pandas_series_float64_default(data, index=index)
+    psr = pd.Series(data, index=index)
     gsr = cudf.Series.from_pandas(psr, nan_as_null=False)
 
     expected = psr.isin(values)
@@ -1803,7 +1801,7 @@ def test_fill_new_category():
     ],
 )
 def test_isin_datetime(data, values):
-    psr = _create_pandas_series_float64_default(data)
+    psr = pd.Series(data)
     gsr = cudf.Series.from_pandas(psr)
 
     got = gsr.isin(values)
@@ -1832,7 +1830,7 @@ def test_isin_datetime(data, values):
     ],
 )
 def test_isin_string(data, values):
-    psr = _create_pandas_series_float64_default(data)
+    psr = pd.Series(data)
     gsr = cudf.Series.from_pandas(psr)
 
     got = gsr.isin(values)
@@ -1861,7 +1859,7 @@ def test_isin_string(data, values):
     ],
 )
 def test_isin_categorical(data, values):
-    psr = _create_pandas_series_float64_default(data)
+    psr = pd.Series(data)
     gsr = cudf.Series.from_pandas(psr)
 
     got = gsr.isin(values)
@@ -2082,7 +2080,7 @@ def test_series_to_dict(into):
     ],
 )
 def test_series_hasnans(data):
-    gs = _create_cudf_series_float64_default(data, nan_as_null=False)
+    gs = cudf.Series(data, nan_as_null=False)
     ps = gs.to_pandas(nullable=True)
 
     # Check type to avoid mixing Python bool and NumPy bool
@@ -2155,8 +2153,8 @@ def test_series_init_dict_with_index(data, index):
     "index", [None, ["b", "c"], ["d", "a", "c", "b"], ["a"]]
 )
 def test_series_init_scalar_with_index(data, index):
-    pandas_series = _create_pandas_series_float64_default(data, index=index)
-    cudf_series = _create_cudf_series_float64_default(data, index=index)
+    pandas_series = pd.Series(data, index=index)
+    cudf_series = cudf.Series(data, index=index)
 
     assert_eq(
         pandas_series,
@@ -2305,15 +2303,12 @@ def test_series_round_builtin(data, digits):
     assert_eq(expected, actual)
 
 
-def test_series_empty_warning():
-    with pytest.warns(FutureWarning):
-        expected = pd.Series([])
-    with pytest.warns(FutureWarning):
-        actual = cudf.Series([])
-    assert_eq(expected, actual)
+def test_series_empty_dtype():
+    expected = pd.Series([])
+    actual = cudf.Series([])
+    assert_eq(expected, actual, check_dtype=True)
 
 
-@pytest.mark.filterwarnings("ignore::FutureWarning")  # tested above
 @pytest.mark.parametrize("data", [None, {}, []])
 def test_series_empty_index_rangeindex(data):
     expected = cudf.RangeIndex(0)

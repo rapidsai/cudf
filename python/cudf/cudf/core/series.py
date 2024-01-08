@@ -14,7 +14,6 @@ from typing import (
     Dict,
     MutableMapping,
     Optional,
-    Sequence,
     Set,
     Tuple,
     Union,
@@ -601,18 +600,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         copy=False,
         nan_as_null=True,
     ):
-        if (
-            isinstance(data, Sequence)
-            and len(data) == 0
-            and dtype is None
-            and getattr(data, "dtype", None) is None
-        ):
-            warnings.warn(
-                "The default dtype for empty Series will be 'object' instead "
-                "of 'float64' in a future version. Specify a dtype explicitly "
-                "to silence this warning.",
-                FutureWarning,
-            )
         if isinstance(data, pd.Series):
             if name is None:
                 name = data.name
@@ -1621,7 +1608,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             if isinstance(objs[0].index, cudf.MultiIndex):
                 index = cudf.MultiIndex._concat([o.index for o in objs])
             else:
-                index = cudf.core.index.Index._concat([o.index for o in objs])
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", FutureWarning)
+                    index = cudf.core.index.Index._concat(
+                        [o.index for o in objs]
+                    )
 
         names = {obj.name for obj in objs}
         if len(names) == 1:
