@@ -171,7 +171,7 @@ struct aggregate_writer_metadata {
     std::vector<std::vector<uint8_t>> column_indexes;
   };
   std::vector<per_file_metadata> files;
-  std::string created_by = "CUDF Version " CUDF_STRINGIFY(CUDF_VERSION);
+  std::string created_by = "cuDF Version " CUDF_STRINGIFY(CUDF_VERSION);
   thrust::optional<std::vector<ColumnOrder>> column_orders = thrust::nullopt;
 };
 
