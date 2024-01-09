@@ -99,6 +99,10 @@ struct aggregate_writer_metadata {
     }
   }
 
+#ifndef CUDF_VERSION
+#error "CUDF_VERSION is not defined"
+#endif
+
   FileMetaData get_metadata(size_t part)
   {
     CUDF_EXPECTS(part < files.size(), "Invalid part index queried");
